@@ -80,13 +80,8 @@ pin of a commit; "Consuming isomer" in the README says how, and isomer's
 root-only overrides are listed in [`examples/MODULE.bazel`](../examples/MODULE.bazel)):
 
 ```starlark
-# MODULE.bazel
-bazel_dep(name = "isomer", version = "0.1.0")
-git_override(
-    module_name = "isomer",
-    remote = "https://github.com/AttilaTheFun/isomer.git",
-    commit = "<main commit>",
-)
+# MODULE.bazel (with the project's registry listed before the BCR in .bazelrc)
+bazel_dep(name = "isomer", version = "0.36.0")
 ```
 
 Using swift_ffi alone builds nothing else of Isomer.

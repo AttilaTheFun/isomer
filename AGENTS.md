@@ -61,7 +61,12 @@ patches; swift-foundation 6.3.2.isomer.1). A change to a fork or to those
 patches is a new entry (.isomer.2), made with the registry's
 tools/add_version.py --fork and approved there like any version. Swift
 packages are SwiftPM's, through rules_swift_package_manager, never Bazel
-modules.
+modules. tools/released_pins.sh says whether every pin is a released
+version (the Playground's and examples' Package.swift by version, no
+git/archive override, a local_path_override only inside this repository);
+CI's `pins` job runs it on main's commits, and Reviews holds a release until
+its commit's `pins` passes. isomer's own module() version is the release's
+(0.36.0), and its release is added to the registry once tagged.
 
 Things the fold taught:
 
