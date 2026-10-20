@@ -34,7 +34,29 @@ bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "platforms", version = "1.1.0")
 
 # Apple platform (uses the locally installed Xcode, as all Bazel apple builds do).
-bazel_dep(name = "rules_swift", version = "3.6.1")
+# rules_swift from this project's registry (AttilaTheFun/bazel_registry,
+# listed before the BCR in .bazelrc): 3.6.1.isomer.1 is upstream main with the
+# Swift-SDK cross-compilation work all merged (#1817 wasm, #1818 Android,
+# #1819 Windows, #1820 linkshared, #1821 SDK framework, #1830 concurrency
+# dispatch autolink, #1859 the Android API-level triple fix), from the fork
+# branch of #1860 (a metadata-driven wasm SDK and its threads variant), with
+# two patches of ours until rules_swift has them, kept in tools/patches and
+# copied into the registry entry:
+#   * rules_swift_wasm_threads_beside.patch: a wasi-threads SDK declared
+#     beside the single-threaded one (two `swift.wasm_sdk` tags), chosen by a
+#     platform's `@rules_swift//swift/toolchains/wasm:threads` constraint;
+#   * rules_swift_wasm_clang_resource_dir.patch: C compiled for wasm gets the
+#     Swift SDK's clang resource directory (-resource-dir, as links already
+#     do), so clang's own headers (<stdarg.h>, <stddef.h>) come from the SDK,
+#     among the action's inputs, not by an absolute path into the host
+#     toolchain that Bazel's inclusion check rejects. C such as SQLite's
+#     amalgamation (swift_sql) builds as is.
+# The version sorts above 3.6.1, so it is what every module that asks for
+# rules_swift gets, and a consumer needs no override of its own. A change to
+# either patch, or a newer fork commit, is a new entry (3.6.1.isomer.2) made
+# with the registry's tools/add_version.py --fork. Back to a plain BCR version
+# at the next rules_swift release that has them.
+bazel_dep(name = "rules_swift", version = "3.6.1.isomer.1")
 bazel_dep(name = "rules_apple", version = "4.5.3", repo_name = "build_bazel_rules_apple")
 bazel_dep(name = "apple_support", version = "2.6.1")
 # Declared after apple_support so apple_support's apple cc toolchain keeps
@@ -42,35 +64,6 @@ bazel_dep(name = "apple_support", version = "2.6.1")
 # lacks CC_TARGET_TRIPLE and breaks the Xcode Swift toolchain). Needed as a
 # direct dep so the native linux/windows BUILD files can load @rules_cc//cc:defs.
 bazel_dep(name = "rules_cc", version = "0.2.18")
-
-# rules_swift pinned to upstream main: the Swift-SDK cross-compilation work
-# is all merged (#1817 wasm, #1818 Android, #1819 Windows, #1820 linkshared,
-# #1821 SDK framework, #1830 concurrency dispatch autolink, and #1859 the
-# Android API-level triple fix — the last carry off the AttilaTheFun fork).
-# Drop this override entirely for the next rules_swift release.
-git_override(
-    module_name = "rules_swift",
-    # The fork branch (metadata-driven wasm SDK + threads variant, rules_swift
-    # #1860) rebased on upstream main past #1853/#1856/#1833; switch back to
-    # bazelbuild once it merges.
-    remote = "https://github.com/AttilaTheFun/rules_swift.git",
-    commit = "308114d6137984df946333776d93a08fc21df66a",
-    # Ours, until rules_swift has it: a wasi-threads SDK declared beside the
-    # single-threaded one (two `swift.wasm_sdk` tags), chosen by a platform's
-    # `@rules_swift//swift/toolchains/wasm:threads` constraint. A root-only
-    # override's patches are the root module's files: consumers carry a copy.
-    patch_strip = 1,
-    patches = [
-        "//tools/patches:rules_swift_wasm_threads_beside.patch",
-        # Ours, until rules_swift has it: C compiled for wasm gets the Swift
-        # SDK's clang resource directory (-resource-dir, as links already
-        # do), so clang's own headers (<stdarg.h>, <stddef.h>) come from the
-        # SDK, among the action's inputs, not by an absolute path into the
-        # host toolchain that Bazel's inclusion check rejects. C such as
-        # SQLite's amalgamation (swift_sql) builds as is.
-        "//tools/patches:rules_swift_wasm_clang_resource_dir.patch",
-    ],
-)
 
 # Hermetic Android NDK for the Swift Android cross-compile toolchain. rules_swift
 # consumes the stock @androidndk (only targets it already exposes), so no
@@ -93,16 +86,12 @@ bazel_dep(name = "swift-syntax", version = "603.0.2")
 # from FoundationEssentials (and FoundationInternationalization when an app
 # asks for it). Apple platforms use Apple's Foundation.
 #
-# Not in the Bazel Central Registry: a consumer repeats this override (as it
-# does rules_swift's). Developing the fork beside isomer: put
-# `common --override_module=swift-foundation=<path to the checkout>` in an
-# untracked .bazelrc.user.
-bazel_dep(name = "swift-foundation", version = "6.3.2")
-git_override(
-    module_name = "swift-foundation",
-    remote = "https://github.com/AttilaTheFun/swift-foundation.git",
-    commit = "b04a54975a53d4447ea6ccad0cf6c68e4e2685e0",
-)
+# From this project's registry, as rules_swift is: 6.3.2.isomer.1 is the fork
+# at b04a549 (its module() version set to the entry's). A newer fork commit is
+# a new entry (6.3.2.isomer.2, tools/add_version.py --fork). Developing the
+# fork beside isomer: put `common --override_module=swift-foundation=<path to
+# the checkout>` in an untracked .bazelrc.user.
+bazel_dep(name = "swift-foundation", version = "6.3.2.isomer.1")
 
 # CLI parsing for the analyzer / generator tools.
 bazel_dep(name = "swift_argument_parser", version = "1.7.0")

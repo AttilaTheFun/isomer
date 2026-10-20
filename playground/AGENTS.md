@@ -41,11 +41,12 @@ of its own (pinning isomer by commit), back in isomer as `playground/` at
   `playground/`. Labels here are this module's (`//apple/...`); isomer's are
   `@isomer//...`.
 - **Root-only overrides are repeated** (bzlmod honours them from the root
-  module only): rules_swift's `git_override` with its two patches,
-  swift-foundation's fork, flatbuffers' two patches, rules_foreign_cc, the
-  Swift and Android toolchain tags and registrations, the Maven install over
-  a vendored lock. `examples/MODULE.bazel` is the reference: when isomer
-  changes an override there, change it here the same way.
+  module only): flatbuffers' two patches, rules_foreign_cc, the Swift and
+  Android toolchain tags and registrations, the Maven install over a
+  vendored lock. The rules_swift and swift-foundation forks come by version
+  from the project's registry (.bazelrc lists it before the BCR), patches
+  and all. `examples/MODULE.bazel` is the reference: when isomer changes an
+  override or a version there, change it here the same way.
   `tools/patches/*.patch` are copies of `examples/tools/patches`
   (`cmp` them). The Playground declares only the single-threaded wasm SDK.
 - **The SwiftPM graph** (agent_ui and open_router_cli, public) is pinned by

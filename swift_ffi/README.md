@@ -75,7 +75,8 @@ annotated library directly — the macros are inert there.
 ## Getting started
 
 swift_ffi is part of the [isomer](../README.md) Bazel module. Depend on that
-(a `git_override` pin, until it is published to a registry; isomer's
+(by version from the project's registry from 0.36.0, or a `git_override`
+pin of a commit; "Consuming isomer" in the README says how, and isomer's
 root-only overrides are listed in [`examples/MODULE.bazel`](../examples/MODULE.bazel)):
 
 ```starlark
