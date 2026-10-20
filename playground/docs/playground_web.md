@@ -246,9 +246,10 @@ in 2.0 s (1.3 s again), runs, and a tap reads "Tapped 1 times"; the Pokédex
 (`@Observable`: the macro plugins) compiles in 2.4 s. Every request stayed
 under `/isomer/`, none to `/compile`.
 
-Before 0.35 the site was published as committed files (`web/`) in a Pages
-repository of its own, playground_isomer_releases, which still serves the
-hot-reload demo feed (`publish_hot_reload.sh`, `versions.json` at its root).
+Before 0.35 the site was published as committed files in a Pages repository
+of its own, removed in 0.35. The hot-reload demo feed
+(`publish_hot_reload.sh`: `versions.json` and its reactors) can be served
+from any static host; the Playground takes its URL in the hot reloader.
 
 ## Tests
 
