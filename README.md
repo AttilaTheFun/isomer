@@ -670,25 +670,36 @@ platform-specific modifiers (`.androidStatusBarStyle`, `.webDocumentTitle`,
 
 ## Consuming isomer
 
-Add isomer as a `bazel_dep` with a `git_override`. Because bzlmod
-honours `git_override` / `single_version_override` **only from the root
-module**, your MODULE.bazel must also repeat isomer's overrides — the
-pinned rules_swift fork, the flatbuffers patches (vendored: bzlmod applies
-override patches only from the root repo), and the toolchain registrations.
-That is the whole list: the bridge generator, the GPU layer and the map
+List the project's registry before the Bazel Central Registry in your
+`.bazelrc`:
+
+```
+common --registry=https://raw.githubusercontent.com/AttilaTheFun/bazel_registry/main
+common --registry=https://bcr.bazel.build
+```
+
+and add isomer as a `bazel_dep` by its release's version (0.36.0 on; a
+`git_override` of a commit between releases). The rules_swift and
+swift-foundation forks isomer needs come from that registry by version,
+patches and all. Because bzlmod honours `single_version_override` **only
+from the root module**, your MODULE.bazel must still repeat isomer's other
+overrides — the flatbuffers patches (vendored: bzlmod applies override
+patches only from the root repo) and rules_foreign_cc — and the toolchain
+registrations. That is the whole list: the bridge generator, the GPU layer and the map
 renderer are all part of this one module (`@isomer//swift_ffi/...`,
 `@isomer//swift_gpu/...`, `@isomer//swift_map/...`), so one commit pins all of
 them. SQLite (swift_sql, a Swift package: list it in the Package.swift
 your rules_swift_package_manager graph reads) left this module at 0.34; the
 examples use it. C compiled for wasm, swift_sql's included, needs the
-rules_swift patch `tools/patches/rules_swift_wasm_clang_resource_dir.patch`
-in your rules_swift override, as the examples carry it.
+rules_swift patch `tools/patches/rules_swift_wasm_clang_resource_dir.patch`,
+which the registry's rules_swift carries.
 
 **The complete, always-current reference is
 [`examples/MODULE.bazel`](examples/MODULE.bazel)** — the examples are
 themselves an external consumer (a standalone module over
 `local_path_override`), so that file is exactly the block to copy, with
-`local_path_override` swapped for your `git_override`, plus
+`local_path_override` dropped (isomer by version) or swapped for your
+`git_override`, plus
 [`examples/.bazelrc`](examples/.bazelrc) for the required flags (Android
 license acceptance, `--strategy=SwiftCompile=local`, …) and
 `.bazelversion` for the Bazel release.

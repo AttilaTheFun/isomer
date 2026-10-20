@@ -45,8 +45,23 @@ the Playground:
 Layering still points one way: CoreGraphics < Foundation < swift_ffi <
 Metal < swift_gpu < swift_map < the SwiftUI libraries < the Isomer module;
 nothing under `swift_ffi/` may depend on anything outside it but Foundation,
-and so on up. A consumer pins ONE commit (isomer) and repeats the root-only
-overrides (rules_swift, flatbuffers + patches, rules_foreign_cc).
+and so on up. A consumer pins ONE version of isomer (by version from the
+project's registry, AttilaTheFun/bazel_registry, from 0.36.0; a commit
+between releases), lists that registry before the BCR in its .bazelrc, and
+repeats the root-only overrides (flatbuffers + patches, rules_foreign_cc).
+
+**Pins by version (2026-10-20).** Release tags are semver (v0.36.0), app
+versions match them (0.36.0 (N)), and pins between the project's repos are
+by version at a release (a commit is fine on a branch, or on main between
+releases). Bazel modules come from bazel_registry, before the BCR: isomer's
+releases, visor's, and the forks isomer carries until upstream takes their
+changes, as patched versions that sort above upstream's (rules_swift
+3.6.1.isomer.1: the fork's commit plus tools/patches' two rules_swift
+patches; swift-foundation 6.3.2.isomer.1). A change to a fork or to those
+patches is a new entry (.isomer.2), made with the registry's
+tools/add_version.py --fork and approved there like any version. Swift
+packages are SwiftPM's, through rules_swift_package_manager, never Bazel
+modules.
 
 Things the fold taught:
 
@@ -73,7 +88,8 @@ Things the fold taught:
 - **The Playground lives in `playground/`** (since 0.35), a Bazel module of
   its own (`isomer_playground`) that consumes the parent checkout exactly as
   `examples/` does (`bazel_dep` + `local_path_override(path = "..")`,
-  isomer's root-only overrides repeated; the root's .bazelignore lists it):
+  isomer's root-only overrides repeated, its registry in .bazelrc; the
+  root's .bazelignore lists it):
   the iOS, web and Android apps, the splash page, the compilers' build
   scripts (`tools/playground_toolchain`, `tools/browser_toolchain`), its
   docs and tests; `playground/AGENTS.md` is its guide. It was
@@ -117,7 +133,7 @@ a repository of its own):
   toolchain by an absolute path that Bazel's inclusion check rejects; C
   compiled for wasm had to avoid them (-nobuiltininc and shims, a
   hand-declared pthread_self). tools/patches/rules_swift_wasm_clang_resource_dir.patch
-  (0.34; a root-only override's patch, so consumers carry a copy) gives
+  (0.34; in the registry's rules_swift 3.6.1.isomer.1 since 0.36) gives
   compiles the Swift SDK's clang resource directory, as links already had:
   the headers come from the SDK, among the action's inputs. A package's C
   (swift_sql's amalgamation, through rules_swift_package_manager) then
@@ -376,7 +392,7 @@ WAMR on the same reactor); what is here is how Isomer runs it.
   The engine tests (examples //tests/wasm_engines) run it beside WAMR.
 - **The threads SDK beside the stock one.** rules_swift takes one
   `swift.wasm_sdk`; tools/patches/rules_swift_wasm_threads_beside.patch
-  (a root-only override's patch: consumers carry a copy) takes two, the
+  (in the registry's rules_swift 3.6.1.isomer.1 since 0.36) takes two, the
   threads one's toolchains requiring
   `@rules_swift//swift/toolchains/wasm:threaded`. A reactor transitioned to
   `@isomer//swift_ffi/rules:wasm32-wasip1-threads` builds with
@@ -515,7 +531,7 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
 
 - **Foundation** (//foundation, `@isomer//:foundation`): built from Isomer's
   fork of swift-foundation (AttilaTheFun/swift-foundation, branch `isomer`;
-  MODULE.bazel pins it, consumers repeat the git_override; develop against a
+  the registry's 6.3.2.isomer.1 is its commit; develop against a
   checkout with `common --override_module=swift-foundation=<path>` in an
   untracked .bazelrc.user). FoundationEssentials, plus what corelibs has
   that apps reach for, written in Swift here: NSRange, NSRegularExpression

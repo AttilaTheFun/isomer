@@ -2,6 +2,12 @@
 
 common --enable_bzlmod
 
+# Modules come from this project's registry first (Bazel modules by released
+# version: the rules_swift and swift-foundation forks Isomer needs, and its own
+# releases), then the Bazel Central Registry. A consumer lists both too.
+common --registry=https://raw.githubusercontent.com/AttilaTheFun/bazel_registry/main
+common --registry=https://bcr.bazel.build
+
 # Release builds run the wasm reactor as a wamrc-produced native .aot instead of
 # under the fast interpreter: `--define wamr_aot=1` compiles the AOT loader into
 # the WAMR host (//swift_ffi/runtime/wamr) and swaps the bundled reactor

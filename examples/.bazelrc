@@ -116,6 +116,11 @@ build:windows --action_env=PATH
 # exact versions). Don't read or write it.
 common --lockfile_mode=off
 
+# Modules from the project's registry first (isomer's rules_swift and
+# swift-foundation forks, by version), then the Bazel Central Registry.
+common --registry=https://raw.githubusercontent.com/AttilaTheFun/bazel_registry/main
+common --registry=https://bcr.bazel.build
+
 # rules_swift_package_manager wraps every package target in a minimum-OS
 # transition keyed on --apple_platform_type (macos here, even in the wasm
 # configuration). With the flag already at the value the examples' SwiftPM

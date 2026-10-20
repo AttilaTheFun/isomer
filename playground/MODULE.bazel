@@ -36,40 +36,13 @@ local_path_override(
     path = "..",
 )
 
-# --- Overrides isomer needs (root-only, so consumers repeat them) -------
+# --- What isomer needs from its consumer -------------------------------
 
-# rules_swift: pinned to the fork branch (metadata-driven wasm SDK + threads
-# variant, rules_swift #1860) rebased on upstream main; switch back to
-# bazelbuild once it merges.
-bazel_dep(name = "rules_swift", version = "3.6.1")
-git_override(
-    module_name = "rules_swift",
-    remote = "https://github.com/AttilaTheFun/rules_swift.git",
-    commit = "308114d6137984df946333776d93a08fc21df66a",
-    # Isomer's, until rules_swift has them, and the examples' too (a root-only
-    # override's patches are the root module's files: consumers carry a copy,
-    # tools/patches). A wasi-threads SDK may be declared beside the
-    # single-threaded one (two `swift.wasm_sdk` tags; the Playground declares
-    # only the single-threaded one, which the patch leaves as it was), and C
-    # compiled for wasm gets the Swift SDK's clang resource directory, so
-    # clang's own headers (<stdarg.h>, <stddef.h>) come from the SDK, among
-    # the action's inputs, not by an absolute path into the host toolchain.
-    patch_strip = 1,
-    patches = [
-        "//tools/patches:rules_swift_wasm_threads_beside.patch",
-        "//tools/patches:rules_swift_wasm_clang_resource_dir.patch",
-    ],
-)
-
-# swift-foundation: Isomer's fork, from which isomer builds Foundation for
-# wasm and Android (not in the Bazel Central Registry; the commit isomer
-# and the examples pin).
-bazel_dep(name = "swift-foundation", version = "6.3.2")
-git_override(
-    module_name = "swift-foundation",
-    remote = "https://github.com/AttilaTheFun/swift-foundation.git",
-    commit = "b04a54975a53d4447ea6ccad0cf6c68e4e2685e0",
-)
+# rules_swift and swift-foundation: isomer's forks come from the project's
+# registry by version (.bazelrc lists it before the BCR), patches and all:
+# rules_swift 3.6.1.isomer.1 sorts above every release a module asks for,
+# and swift-foundation 6.3.2.isomer.1 comes with isomer. Nothing to override.
+bazel_dep(name = "rules_swift", version = "3.6.1.isomer.1")
 
 # swift_ffi, swift_gpu and swift_map are part of the isomer module
 # (`@isomer//swift_ffi/...`, `@isomer//swift_gpu/...`, `@isomer//swift_map/...`):

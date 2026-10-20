@@ -68,8 +68,9 @@ directories are the instructions.
   site's packaging script and the hot-reload publish script.
 - `MODULE.bazel` repeats isomer's root-only overrides (bzlmod honours them
   from the root module only), as `examples/MODULE.bazel` does; keep the two in
-  step. Outside this repository an application swaps the
-  `local_path_override` for a `git_override` of isomer's commit.
+  step. Outside this repository an application depends on an isomer release
+  by version from the project's registry (or a `git_override` of a commit)
+  instead of the `local_path_override`.
 - `AGENTS.md`: how the module is laid out, built and tested, and its rules.
 
 The web site is https://attilathefun.github.io/isomer/ (the Playground at
