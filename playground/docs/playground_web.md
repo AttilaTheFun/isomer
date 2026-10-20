@@ -202,17 +202,53 @@ still to be confirmed then.
 
 ## Publishing
 
-The site is live at https://attilathefun.github.io/playground_isomer_releases/web/
-(the Playground at `web/playground/`), in the same GitHub Pages repo the iOS
-Playground's hot reloader polls (its `versions.json` stays at the root).
-`tools/playground/publish_site.sh <site> <toolchain-stage> <checkout> web`
-copies the bazel-bin site (dereferenced — bazel-bin is a symlink tree; the
-first attempt pushed dangling symlinks) plus the staged toolchain into the
-checkout and pushes `main`; `.github/workflows/pages.yml` there deploys
-through Actions (`build_type: workflow`) because the legacy Pages builder
-fails silently on a deployment of this size. Verified live 2026-09-09 with
-`cdp_eval.js`: compile (toolchain download included) 1.1 s, run, tap,
-"Tapped 1 times".
+The site is https://attilathefun.github.io/isomer/ (the Playground at
+`playground/`), deployed to GitHub Pages by isomer's
+`.github/workflows/pages.yml` from an asset of a GitHub release. No compiled
+output goes into git: the site is about 115 MB with the in-browser
+toolchain, and the compiler in it is built by tools/browser_toolchain from a
+Swift/LLVM workspace no CI runner has. So the site is built and packaged
+locally and attached to the release:
+
+    tools/playground/package_site.sh --toolchain-from <staged toolchain dir>
+    gh release upload <tag> isomer-site.tar.gz
+
+`package_site.sh` builds `-c opt //web/splash_web_application:site` and
+`//apple/playground_ios_application:playground_sdk`, stages the toolchain
+with `stage_bundle.sh` against that SDK and the Swift SDK's
+`wasm32-unknown-wasip1` slice (from the module's output base), puts what the
+page fetches in `playground/toolchain/`, and writes `isomer-site.tar.gz`:
+the site at the archive's root, dereferenced (Bazel's site is a symlink
+tree), with a `.nojekyll`, every file under 95 MB. The compiler, the linker
+and the macro plugins don't depend on Isomer, so they come from an earlier
+toolchain (`--toolchain-from`: a deployed site's `playground/toolchain`, or
+a directory `stage_bundle.sh` staged from a fresh compiler build); the
+script unpacks them (the binaries' gzipped parts joined as the manifest
+lists them, the plugins sliced out of `bundle.bin.gz` at the manifest's
+offsets). The archive is about 90 MB; its largest file is
+`swift-frontend.wasm.gz` (33 MB).
+
+Publishing the release runs pages.yml, which downloads the release's
+`isomer-site.tar.gz`, unpacks it and deploys it through Actions. Attach the
+archive while the release is still a draft; for a release published before
+it (or to redeploy one) run the workflow by hand: `gh workflow run pages.yml
+-f tag=<tag>` (no tag: the latest release). The repository needs Pages'
+source set to "GitHub Actions", and a tag rule (`v*`) on the `github-pages`
+environment: a release's run is on its tag, and the environment's default
+rule lets only `main` deploy.
+
+Every URL in the site is relative, so it runs under Pages' `/isomer/`
+prefix (or any other). Verified 2026-10-19 by serving the unpacked archive
+under `/isomer/` from a static server and driving it with `cdp_eval.js`
+(Chrome, a fresh profile): the front page renders; in the Playground the
+in-browser toolchain is ready 1 s after the page loads, the Counter compiles
+in 2.0 s (1.3 s again), runs, and a tap reads "Tapped 1 times"; the Pokédex
+(`@Observable`: the macro plugins) compiles in 2.4 s. Every request stayed
+under `/isomer/`, none to `/compile`.
+
+Before 0.35 the site was published as committed files (`web/`) in a Pages
+repository of its own, playground_isomer_releases, which still serves the
+hot-reload demo feed (`publish_hot_reload.sh`, `versions.json` at its root).
 
 ## Tests
 
@@ -235,9 +271,9 @@ bundle the worker loads: `manifest.json`, `bundle.bin.gz` (the pruned
 resource dir, sysroot subset and Playground SDK — 91 MB raw, 21 MB gzip —
 sliced by offsets into the MemFS), and the two binaries gzipped, split into
 <90 MB parts when needed. Copy those into `<site>/playground/toolchain/`
-(the publish script does). Verified in headless Chrome: the worker
-streams-compiles the frontend from the Cache API (Chrome's code cache makes
-later loads instant), the Counter compiles in ~1 s and re-compiles in
+(`tools/playground/package_site.sh` does). Verified in headless Chrome: the
+worker streams-compiles the frontend from the Cache API (Chrome's code cache
+makes later loads instant), the Counter compiles in ~1 s and re-compiles in
 0.5 s, links with wasm-ld.wasm, runs in the overlay, and `tap` reads
 "Tapped 1 times" back — with no compile server involved. User code's
 Foundation is Isomer's, from the Playground SDK; since 2026-10-12 macros
