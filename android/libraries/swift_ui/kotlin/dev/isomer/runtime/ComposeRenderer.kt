@@ -2280,11 +2280,21 @@ private fun IsoPresentation(n: UNode) {
             // afresh (a half-open state saved in portrait can't be restored
             // into a sheet that has none).
             val compactHeight = LocalConfiguration.current.screenHeightDp < 480
+            // Material centres the sheet (at most 640dp) on the whole window;
+            // a navigation bar or cutout beside the screen (three-button
+            // navigation in landscape) is taken off first, as SafeAreaScreen
+            // takes it off a screen, so the sheet centres on the app's area
+            // and stops short of the bar.
+            val density = LocalDensity.current
+            val direction = LocalLayoutDirection.current
+            val sides = WindowInsets.navigationBars.union(WindowInsets.displayCutout)
+            val left = with(density) { sides.getLeft(density, direction).toDp() }
+            val right = with(density) { sides.getRight(density, direction).toDp() }
             key(compactHeight) {
             ModalBottomSheet(
                 onDismissRequest = { sendEvent(dismiss, "") },
                 // Below the status bar, as a sheet sits on a phone.
-                modifier = Modifier.statusBarsPadding().padding(top = 8.dp),
+                modifier = Modifier.statusBarsPadding().absolutePadding(left = left, right = right).padding(top = 8.dp),
                 containerColor = ground,
                 sheetState = rememberModalBottomSheetState(
                     skipPartiallyExpanded = !detents.contains("medium") || compactHeight,
