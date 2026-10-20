@@ -29,7 +29,7 @@ of its own (pinning isomer by commit), back in isomer as `playground/` at
 | `android/` | the Android app (Kotlin host: compile, run, chat, the web run), `platform_services` (the services a run gets), the transcript stress app |
 | `web/` | the web Playground, the splash page (the whole site is `//web/splash_web_application:site`), the transcript stress app |
 | `shared/` | `playground_ui` (the shared screens), `sample_sources` (the templates' sources), `transcript_stress_application` |
-| `tools/` | `playground_toolchain` (the iOS and Android compilers), `browser_toolchain` (the compiler as WebAssembly), `playground` (dev compile server, headless Chrome drivers, publish scripts, template history), `patches` and `signing` (below) |
+| `tools/` | `playground_toolchain` (the iOS and Android compilers), `browser_toolchain` (the compiler as WebAssembly), `playground` (dev compile server, headless Chrome drivers, the site's packaging and the hot-reload publish scripts, template history), `patches` and `signing` (below) |
 | `tests/` | `templates` (every template compiles), `e2e` (what a reader does, on an emulator and a simulator), `ios_ui_probe` (a manual XCUITest) |
 | `docs/` | `playground.md` (the iOS app), `playground_web.md` (the web app, the site, publishing) |
 | `third_party/swift_packages` | the module's SwiftPM graph: AgentUI and OpenRouterKit |
@@ -91,8 +91,14 @@ of its own (pinning isomer by commit), back in isomer as `playground/` at
 - **The web-run site** of the iOS and Android apps takes its bridge from the
   web app's compiled bindings (`//web/playground_web_application:app_bridge_js_files`):
   a platform service the page injects must exist there.
-- **Publishing** the web site or a hot-reload feed (`tools/playground/publish_*.sh`)
-  is deliberate, never part of a build or a test.
+- **Publishing** the web site or a hot-reload feed is deliberate, never part
+  of a build or a test. The site: `tools/playground/package_site.sh` makes
+  `isomer-site.tar.gz`, `gh release upload <tag> isomer-site.tar.gz` attaches
+  it to a release, and the repository's `.github/workflows/pages.yml` deploys
+  it to https://attilathefun.github.io/isomer/ when the release is published
+  (or by hand; docs/playground_web.md "Publishing"). Never commit the site:
+  it is about 115 MB of compiled output. A hot-reload feed:
+  `tools/playground/publish_hot_reload.sh`.
 - **A person's own phone is not a test device.** Install a build there only
   when its owner asks, read the installed version back, and stop: no
   launching, tapping, screenshots or autorun hooks unless they ask for

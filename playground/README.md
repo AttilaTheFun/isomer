@@ -64,17 +64,20 @@ directories are the instructions.
 
 - `docs/playground.md`: the iOS app. `docs/playground_web.md`: the web app,
   the site and publishing.
-- `tools/playground`: the web dev compile server, headless Chrome drivers and
-  the publish scripts.
+- `tools/playground`: the web dev compile server, headless Chrome drivers, the
+  site's packaging script and the hot-reload publish script.
 - `MODULE.bazel` repeats isomer's root-only overrides (bzlmod honours them
   from the root module only), as `examples/MODULE.bazel` does; keep the two in
   step. Outside this repository an application swaps the
   `local_path_override` for a `git_override` of isomer's commit.
 - `AGENTS.md`: how the module is laid out, built and tested, and its rules.
 
-The web site is published to the
-[playground_isomer_releases](https://github.com/AttilaTheFun/playground_isomer_releases)
-repository (compiled output only): https://attilathefun.github.io/playground_isomer_releases/web/
+The web site is https://attilathefun.github.io/isomer/ (the Playground at
+`playground/`): `tools/playground/package_site.sh` packages it as
+`isomer-site.tar.gz`, which is attached to a GitHub release
+(`gh release upload <tag> isomer-site.tar.gz`), and the repository's
+`.github/workflows/pages.yml` deploys it to GitHub Pages when the release is
+published, or by hand (`docs/playground_web.md`, "Publishing").
 
 This was `examples/{apple,web,android}/playground_*` in this repository until
 Isomer 0.15 (tag `v0.14`), then a repository of its own until it came back

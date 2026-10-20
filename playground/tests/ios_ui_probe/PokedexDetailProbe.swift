@@ -225,7 +225,7 @@ final class PokedexDetailProbe: XCTestCase {
     func testSafariWebPlayground() throws {
         let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
         safari.launch()
-        let url = ProcessInfo.processInfo.environment["ISO_WEB_PLAYGROUND_URL"] ?? "https://attilathefun.github.io/playground_isomer_releases/web/playground/"
+        let url = ProcessInfo.processInfo.environment["ISO_WEB_PLAYGROUND_URL"] ?? "https://attilathefun.github.io/isomer/playground/"
         let bar = safari.textFields.firstMatch.exists ? safari.textFields.firstMatch : safari.otherElements["Address"].firstMatch
         if !bar.waitForExistence(timeout: 10) { safari.buttons["Address"].firstMatch.tap() }
         let field = safari.textFields.firstMatch

@@ -1,0 +1,62 @@
+# Deploys Isomer's web site to GitHub Pages (https://attilathefun.github.io/isomer/):
+# the front page at the root, the web Playground under playground/ and the
+# Playground's in-browser Swift toolchain under playground/toolchain/
+# (playground/docs/playground_web.md, "Publishing").
+#
+# The site is not built here. It is the `isomer-site.tar.gz` asset of a
+# GitHub release, made by playground/tools/playground/package_site.sh (a
+# Bazel `-c opt` build of //web/splash_web_application:site plus the staged
+# toolchain) and attached with `gh release upload <tag> isomer-site.tar.gz`.
+# Compiled output never goes into git: the site is over 100 MB with the
+# compiler, and building it needs the compiler built by
+# playground/tools/browser_toolchain, which no runner has.
+#
+# Runs when a release is published (attach the asset to the draft before
+# publishing it), or by hand for any release that carries one:
+#   gh workflow run pages.yml [-f tag=<tag>]     (no tag: the latest release)
+#
+# Settings this needs: Pages' source is "GitHub Actions", and the
+# github-pages environment lets tags deploy (Settings > Environments >
+# github-pages: add a tag rule such as `v*` beside `main`): a release's run
+# is on its tag, which the environment's default rule refuses.
+name: Deploy Pages
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release whose isomer-site.tar.gz to deploy (empty for the latest release)
+        required: false
+        default: ""
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+# One deployment at a time; a newer one waits for the one in progress.
+concurrency:
+  group: pages
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download the release's site
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # The published release's tag, or the input; none means the
+          # latest release.
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          if [ -n "$TAG" ]; then set -- "$TAG"; else set --; fi
+          gh release download "$@" --repo "$GITHUB_REPOSITORY" --pattern isomer-site.tar.gz
+          mkdir site
+          tar -xzf isomer-site.tar.gz -C site
+          test -f site/index.html && test -f site/playground/toolchain/manifest.json
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
