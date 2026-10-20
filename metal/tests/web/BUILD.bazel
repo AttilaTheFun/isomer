@@ -1,0 +1,62 @@
+# Isomer's Metal end to end on a browser's WebGPU: MetalCheck.swift as a
+# wasm reactor, its page (app.ts, bundled with the bindings and the
+# executor), and the driver that runs it in headless Chrome (needs Chrome
+# on the Mac, hence manual):
+#
+#   bazel build //metal/tests/web:metal_check_bundle //metal/tests/web:metal_check_web.wasm
+#   node tools/metal/run_metal_check.js \
+#     bazel-bin/metal/tests/web/metal_check_bundle.js bazel-bin/metal/tests/web/metal_check_web.wasm
+
+load("@aspect_rules_esbuild//esbuild:defs.bzl", "esbuild")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("//swift_ffi/rules:ts_swift_wasm_library.bzl", "ts_swift_wasm_library")
+
+swift_library(
+    name = "metal_check",
+    package_name = "isomer",
+    srcs = ["MetalCheck.swift"],
+    module_name = "MetalCheck",
+    tags = ["manual"],
+    deps = [
+        "//metal/metal",
+        "//metal/web",
+        "//swift_ffi/swift_ffi",
+    ],
+)
+
+ts_swift_wasm_library(
+    name = "metal_check_web",
+    # Swift's generic-metadata code needs more than wasm-ld's default stack.
+    linkopts = [
+        "-Xlinker",
+        "-z",
+        "-Xlinker",
+        "stack-size=16777216",
+    ],
+    swift = ":metal_check",
+    tags = ["manual"],
+)
+
+# The executor beside the page's sources (esbuild takes no entry points
+# from other packages).
+genrule(
+    name = "executor",
+    srcs = ["//metal/runtime:runtime_js"],
+    outs = ["isomer_metal_webgpu.js"],
+    cmd = "cp -L $< $@",
+)
+
+esbuild(
+    name = "metal_check_bundle",
+    srcs = [
+        "app.ts",
+        ":executor",
+        ":metal_check_web_gen_ts",
+        ":metal_check_web_runtime_ts",
+    ],
+    entry_point = "app.ts",
+    format = "iife",
+    output = "metal_check_bundle.js",
+    tags = ["manual"],
+    target = "es2022",
+)

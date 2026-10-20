@@ -1,0 +1,135 @@
+wamrc looks its native symbols up (in XIP mode each constant is one, tens of
+thousands in a large Swift reactor) by walking their list with strcmp, which
+made compiling quadratic: most of a ten-minute build at any --opt-level. A
+hash table beside the list finds them; the list, its order and the .aot are
+unchanged. Worth offering upstream.
+
+diff --git a/core/iwasm/compilation/aot_llvm.c b/core/iwasm/compilation/aot_llvm.c
+index e9f8681..f6f2736 100644
+--- a/core/iwasm/compilation/aot_llvm.c
++++ b/core/iwasm/compilation/aot_llvm.c
+@@ -3552,6 +3552,9 @@ aot_destroy_comp_context(AOTCompContext *comp_ctx)
+         }
+     }
+ 
++    if (comp_ctx->native_symbol_table)
++        wasm_runtime_free(comp_ctx->native_symbol_table);
++
+     if (comp_ctx->target_cpu) {
+         wasm_runtime_free(comp_ctx->target_cpu);
+     }
+@@ -3563,6 +3566,65 @@ aot_destroy_comp_context(AOTCompContext *comp_ctx)
+     wasm_runtime_free(comp_ctx);
+ }
+ 
++static uint32
++native_symbol_hash(const char *symbol)
++{
++    /* FNV-1a */
++    uint32 hash = 2166136261u;
++    while (*symbol) {
++        hash ^= (uint8)*symbol++;
++        hash *= 16777619u;
++    }
++    return hash;
++}
++
++/* The table's slot holding `symbol`, or the empty slot where it would go. */
++static AOTNativeSymbol **
++native_symbol_slot(AOTNativeSymbol **table, uint32 size, const char *symbol)
++{
++    uint32 mask = size - 1;
++    uint32 i = native_symbol_hash(symbol) & mask;
++    while (table[i] && strcmp(table[i]->symbol, symbol) != 0)
++        i = (i + 1) & mask;
++    return &table[i];
++}
++
++/* Adds a symbol just inserted in the list to the table. The list is
++   searched from its head, where insertion puts a symbol, so of two with one
++   name the later is found: it replaces the earlier here too. */
++static bool
++add_native_symbol_to_table(AOTCompContext *comp_ctx, AOTNativeSymbol *sym)
++{
++    uint32 count = bh_list_length(&comp_ctx->native_symbols);
++
++    if ((uint64)count * 2 > comp_ctx->native_symbol_table_size) {
++        uint32 old_size = comp_ctx->native_symbol_table_size;
++        uint32 size = old_size ? old_size * 2 : 4096;
++        uint64 bytes = sizeof(AOTNativeSymbol *) * (uint64)size;
++        AOTNativeSymbol **old = comp_ctx->native_symbol_table, **table;
++        uint32 i;
++
++        if (bytes >= UINT32_MAX
++            || !(table = wasm_runtime_malloc((uint32)bytes))) {
++            aot_set_last_error("alloc native symbol table failed.");
++            return false;
++        }
++        memset(table, 0, (uint32)bytes);
++        for (i = 0; i < old_size; i++) {
++            if (old[i])
++                *native_symbol_slot(table, size, old[i]->symbol) = old[i];
++        }
++        if (old)
++            wasm_runtime_free(old);
++        comp_ctx->native_symbol_table = table;
++        comp_ctx->native_symbol_table_size = size;
++    }
++
++    *native_symbol_slot(comp_ctx->native_symbol_table,
++                        comp_ctx->native_symbol_table_size, sym->symbol) = sym;
++    return true;
++}
++
+ static bool
+ insert_native_symbol(AOTCompContext *comp_ctx, const char *symbol, int32 idx)
+ {
+@@ -3590,7 +3652,8 @@ insert_native_symbol(AOTCompContext *comp_ctx, const char *symbol, int32 idx)
+         return false;
+     }
+ 
+-    return true;
++    /* (On failure the symbol stays in the list, which frees it.) */
++    return add_native_symbol_to_table(comp_ctx, sym);
+ }
+ 
+ int32
+@@ -3599,16 +3662,13 @@ aot_get_native_symbol_index(AOTCompContext *comp_ctx, const char *symbol)
+     int32 idx = -1;
+     AOTNativeSymbol *sym = NULL;
+ 
+-    sym = bh_list_first_elem(&comp_ctx->native_symbols);
+-
+     /* Lookup an existing symbol record */
+ 
+-    while (sym) {
+-        if (strcmp(sym->symbol, symbol) == 0) {
++    if (comp_ctx->native_symbol_table) {
++        sym = *native_symbol_slot(comp_ctx->native_symbol_table,
++                                  comp_ctx->native_symbol_table_size, symbol);
++        if (sym)
+             idx = sym->index;
+-            break;
+-        }
+-        sym = bh_list_elem_next(sym);
+     }
+ 
+     /* Given symbol is not exist in list, then we alloc a new index for it */
+diff --git a/core/iwasm/compilation/aot_llvm.h b/core/iwasm/compilation/aot_llvm.h
+index 5bd75a3..185bee9 100644
+--- a/core/iwasm/compilation/aot_llvm.h
++++ b/core/iwasm/compilation/aot_llvm.h
+@@ -413,6 +413,13 @@ typedef struct AOTCompContext {
+     bool is_indirect_mode;
+     bh_list native_symbols;
+ 
++    /* native_symbols by name: an open-addressing table of the list's
++       entries (its size a power of two, at most half full). Looked up by
++       walking the list, a module with tens of thousands of symbols (each
++       XIP constant is one) took wamrc minutes of strcmp. */
++    AOTNativeSymbol **native_symbol_table;
++    uint32 native_symbol_table_size;
++
+     /* Bulk memory feature */
+     bool enable_bulk_memory;
+ 

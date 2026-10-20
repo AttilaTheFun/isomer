@@ -1,0 +1,24 @@
+load("@isomer//tools/wasm:defs.bzl", "electron_application", "windows_electron_package")
+
+# The Level 4 example in a desktop Electron window under the React
+# ReactRenderer (docs/renderer_layers.md) — the same site as
+# //web/example_full_react_web_application.
+electron_application(
+    name = "example_full_react_electron_application",
+    env = {"ISO_RENDERER": "react"},
+    main_js = "//electron:main.js",
+    package_json = "//electron:package.json",
+    site = "//web/example_full_react_web_application:site",
+)
+
+# Native Swift cannot be cross-compiled from macOS to Windows (no official
+# Swift SDK exists for that direction), but the wasm build runs anywhere
+# Chromium does: this target zips the app with the Windows x64 Electron
+# runtime. Copy the zip to a Windows machine, extract, run Isomer.exe.
+windows_electron_package(
+    name = "example_windows_package",
+    app_name = "Isomer",
+    main_js = "//electron:main.js",
+    package_json = "//electron:package.json",
+    site = "//web/example_full_react_web_application:site",
+)

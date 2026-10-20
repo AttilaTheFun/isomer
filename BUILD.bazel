@@ -1,0 +1,100 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+# Marks the repository root as a Bazel package. rules_jvm_external reads the
+# rules_android Maven lock file via the `//:rules_android_maven_install.json`
+# label (see MODULE.bazel), which requires the root to be a loadable package.
+
+# The reimplementation's `SwiftUI` module for the current platform — ONE
+# label a SwiftPM package's generated target (rules_swift_package_manager
+# `target_deps`) can depend on: the per-platform library on wasm, Linux,
+# Windows and Android; nothing on Apple, where the system SwiftUI is implicit.
+alias(
+    name = "swift_ui",
+    actual = select({
+        # A feature compiled into an Apple app against Isomer's frameworks
+        # (apple/compiled): Isomer's SwiftUI on Apple platforms too.
+        "//apple/compiled:feature_on": "//apple/libraries/compiled_swift_ui:sdk",
+        "@platforms//os:wasi": "//wasm/libraries/swift_ui:sdk",
+        "@platforms//os:linux": "//linux/libraries/swift_ui",
+        "@platforms//os:windows": "//windows/libraries/swift_ui",
+        "@platforms//os:android": "//android/libraries/swift_ui:sdk",
+        "//conditions:default": ":system_swift_ui",
+    }),
+    visibility = ["//visibility:public"],
+)
+
+# The Isomer module for the current platform: Isomer's additions over
+# Apple's frameworks (docs/isomer_031_plan.md), on Apple platforms too.
+alias(
+    name = "isomer",
+    actual = select({
+        "//apple/compiled:feature_on": "//apple/libraries/compiled_swift_ui:isomer",
+        "@platforms//os:wasi": "//wasm/libraries/swift_ui:isomer",
+        "@platforms//os:linux": "//linux/libraries/swift_ui:isomer",
+        "@platforms//os:windows": "//windows/libraries/swift_ui:isomer",
+        "@platforms//os:android": "//android/libraries/swift_ui:isomer",
+        "//conditions:default": "//apple/libraries/swift_ui:isomer",
+    }),
+    visibility = ["//visibility:public"],
+)
+
+# Where `import Foundation` and `import CoreGraphics` come from: Apple's on
+# Apple platforms (nothing to link), Isomer's on wasm and Android. A library that
+# imports Foundation and is built for a non-Apple platform depends on
+# `@isomer//:foundation`, which an application's other libraries (a SwiftPM
+# package through rules_swift_package_manager's `target_deps`, a label flag)
+# can be pointed at.
+alias(
+    name = "foundation",
+    actual = select({
+        # A compiled feature (apple/compiled): Apple's Foundation with
+        # Isomer's Observation and Synchronization.
+        "//apple/compiled:feature_on": "//apple/libraries/compiled_swift_ui:foundation",
+        "@platforms//os:wasi": "//foundation:for_dependents",
+        "@platforms//os:android": "//foundation:for_dependents",
+        # Apple's frameworks; on Linux and Windows still the toolchain's
+        # Foundation (with Isomer's CoreGraphics beside it, :core_graphics).
+        "//conditions:default": ":system_framework",
+    }),
+    visibility = ["//visibility:public"],
+)
+
+# What a host installs beneath Isomer's Foundation (URLSession's transports,
+# UserDefaults' store): IsomerFoundation, on the platforms with Isomer's
+# Foundation; nothing on Apple platforms, where it has no place (code that
+# builds for both guards with `#if canImport(IsomerFoundation)`).
+alias(
+    name = "isomer_foundation",
+    actual = select({
+        "@platforms//os:wasi": "//foundation/isomer_foundation:for_dependents",
+        "@platforms//os:android": "//foundation/isomer_foundation:for_dependents",
+        "//conditions:default": ":system_framework",
+    }),
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "core_graphics",
+    actual = select({
+        "@platforms//os:wasi": "//core_graphics:for_dependents",
+        "@platforms//os:android": "//core_graphics:for_dependents",
+        # Beside the toolchain's Foundation there: what it lacks
+        # (CGAffineTransform, CGPath, CGColor...; core_graphics/BUILD.bazel).
+        "@platforms//os:linux": "//core_graphics:for_dependents",
+        "@platforms//os:windows": "//core_graphics:for_dependents",
+        "//conditions:default": ":system_framework",
+    }),
+    visibility = ["//visibility:public"],
+)
+
+# Apple: a system framework (an empty dependency).
+cc_library(
+    name = "system_framework",
+    visibility = ["//visibility:public"],
+)
+
+# Apple: the system SwiftUI (an empty dependency).
+cc_library(
+    name = "system_swift_ui",
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,54 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# Apple uses the real SwiftUI; this keeps the per-platform structure uniform.
+# What Isomer provides beyond Apple's SwiftUI API, on Apple: the
+# `Platform` enum, the platform-command modifiers (no-ops here), WebView
+# (WKWebView) and the JSON helpers shared with the other platforms.
+# The Isomer module on Apple platforms: Isomer's additions over Apple's
+# frameworks (the web view, the platform shims, JSON, the SwiftMap-drawn
+# `Map`, the platform bridge), with IsomerFFI re-exported.
+swift_library(
+    name = "isomer",
+    package_name = "isomer",
+    srcs = [
+        "AppleClipboard.swift",
+        "AppleMetalView.swift",
+        "AppleWebView.swift",
+        "IsomerBridge.swift",
+        "Map.swift",
+        "SwiftUIShim.swift",
+        "//shared/isomer:Exports.swift",
+        "//shared/swift_ui_extensions:JSON.swift",
+    ],
+    module_name = "Isomer",
+    deps = [
+        "//shared:map_engine_apple",
+        "//swift_ffi/swift_ffi",
+    ],
+)
+
+# What `swift_ui` named before 0.31 (SwiftUIExtensions, now re-exporting
+# Isomer).
+alias(
+    name = "swift_ui",
+    actual = ":swift_ui_extensions",
+)
+
+# The names the Isomer module had before 0.31: each re-exports it.
+swift_library(
+    name = "swift_ui_extensions",
+    package_name = "isomer",
+    srcs = ["//shared/isomer:Compatibility.swift"],
+    module_name = "SwiftUIExtensions",
+    deps = [":isomer"],
+)
+
+swift_library(
+    name = "isomer_bridge",
+    package_name = "isomer",
+    srcs = ["//shared/isomer:Compatibility.swift"],
+    module_name = "IsomerBridge",
+    deps = [":isomer"],
+)

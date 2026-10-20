@@ -1,0 +1,19 @@
+# The shared SwiftUI feature the Level 3 (incremental-adoption) examples
+# embed inside existing native apps — see docs/adoption_levels.md and the
+# example_partial_* application packages under
+# {android,web,electron}/applications.
+filegroup(
+    name = "srcs",
+    srcs = glob(["*.swift"]),
+    visibility = ["//visibility:public"],
+)
+
+# Just the embeddable feature view (no @main App). Hosts that own their own app
+# entry and drop the feature in as a plain SwiftUI `View` — Apple's
+# example_partial_compiled native host — depend on this to avoid a duplicate
+# `main` symbol from EmbeddedExampleApp.swift.
+filegroup(
+    name = "card",
+    srcs = ["OrderStatusCard.swift"],
+    visibility = ["//visibility:public"],
+)

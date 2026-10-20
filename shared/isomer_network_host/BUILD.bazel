@@ -1,0 +1,43 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("//swift_ffi/rules:swift_wasm_library.bzl", "swift_wasm_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# IsomerNetworkHost: Foundation's networking on a host's own (phase 11). The
+# swift_ffi interfaces a host implements (the browser's fetch and WebSocket,
+# Android's HttpURLConnection and socket client, Apple's URLSession in a WAMR
+# shell) and their adapters, installed as IsomerFoundation's transports by
+# the platform runtime when it starts. Above IsomerFFI and IsomerFoundation;
+# Isomer's SwiftUI modules link it.
+swift_library(
+    name = "isomer_network_host",
+    package_name = "isomer",
+    srcs = glob(["*.swift"]),
+    module_name = "IsomerNetworkHost",
+    # Built where IsomerFoundation is (wasm, Android), through the SwiftUI
+    # libraries that link it; on an Apple host there is none (the wasm_host
+    # bindings below read this target's sources, not its build).
+    tags = ["manual"],
+    deps = [
+        # Both through their one-configuration wrappers (//foundation:defs.bzl):
+        # depended on directly, IsomerFoundation (and the FoundationEssentials
+        # beneath it) would build again in this target's configuration, and an
+        # app would link two of each.
+        "//:foundation",
+        "//:isomer_foundation",
+        "//swift_ffi/swift_ffi",
+    ],
+)
+
+# The hosts' side for a native Swift process running a reactor under WAMR
+# (generated `swift-host-wasm` bindings): the interfaces and structs as
+# Swift declarations of their own, and `Dependencies.hTTPHost` /
+# `.webSocketHost`, which wrap a host's implementations as the guest's
+# injected dependencies. Apple's WasmView injects its URLSession hosts
+# through them.
+swift_wasm_library(
+    name = "wasm_host",
+    host_module_name = "IsomerNetworkWasmHost",
+    module_name = "IsomerNetworkHost",
+    swift = ":isomer_network_host",
+)

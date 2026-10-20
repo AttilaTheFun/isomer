@@ -1,0 +1,79 @@
+load("@rules_python//python:defs.bzl", "py_binary")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@isomer//tools/android:defs.bzl", "isomer_android_app")
+
+# Foundation's networking and app files on Android (the runtime's
+# IsomerHTTP, IsomerWebSockets and AppDirectories), checked from the app's
+# side; see NetworkProbe.swift. network_check.py serves what the probe asks
+# for, points the emulator's localhost:18080 at itself (`adb reverse`),
+# launches the probe twice and prints its checks. Emulators only: it
+# refuses a serial that is not one.
+#
+#   bazel run //android/network_probe_android_application:network_check -- --serial emulator-5554
+#
+# The wasm delivery's twin, the same source as a reactor under WasmView
+# (//android/network_probe_wasm_android_application), checks the networking
+# once:
+#
+#   bazel run //android/network_probe_android_application:network_check_wasm -- --serial emulator-5554
+
+exports_files(
+    ["NetworkProbe.swift"],
+    visibility = ["//android/network_probe_wasm_android_application:__pkg__"],
+)
+
+swift_library(
+    name = "app_swift",
+    srcs = ["NetworkProbe.swift"],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "NetworkProbe",
+    tags = ["manual"],
+    deps = [
+        "@isomer//:foundation",
+        "@isomer//:swift_ui",
+        "@isomer//android/libraries/swift_ui",
+        "@isomer//android/libraries/swift_ui:isomer",
+    ],
+)
+
+isomer_android_app(
+    name = "network_probe_android_application",
+    default_renderer = "jetpackCompose",
+    label = "Network Probe",
+    package = "dev.isomer.networkprobe",
+    swift_library = ":app_swift",
+    # The probe's server is plain HTTP and ws: on localhost.
+    uses_cleartext_traffic = True,
+)
+
+py_binary(
+    name = "network_check",
+    srcs = ["network_check.py"],
+    args = [
+        "$(rlocationpath :network_probe_android_application_apk.apk)",
+        "$(rlocationpath @android_platform_tools//:adb)",
+    ],
+    data = [
+        ":network_probe_android_application_apk.apk",
+        "@android_platform_tools//:adb",
+    ],
+)
+
+py_binary(
+    name = "network_check_wasm",
+    srcs = ["network_check.py"],
+    args = [
+        "$(rlocationpath //android/network_probe_wasm_android_application:network_probe_wasm_android_application_apk.apk)",
+        "$(rlocationpath @android_platform_tools//:adb)",
+        "--package",
+        "dev.isomer.networkprobe.wasm",
+        "--launches",
+        "1",
+    ],
+    data = [
+        "//android/network_probe_wasm_android_application:network_probe_wasm_android_application_apk.apk",
+        "@android_platform_tools//:adb",
+    ],
+    main = "network_check.py",
+)

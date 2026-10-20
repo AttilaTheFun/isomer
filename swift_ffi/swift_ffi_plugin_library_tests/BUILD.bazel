@@ -1,0 +1,44 @@
+load("@rules_swift//swift:swift_test.bzl", "swift_test")
+
+package(
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+# Unit tests for the macro implementations: expansion + diagnostics via
+# SwiftSyntaxMacrosTestSupport, against test-local conformances of the
+# plugin-library protocols (no plugin executable involved).
+swift_test(
+    name = "swift_ffi_plugin_library_tests",
+    srcs = [
+        "ExportedFunctionMacroTests.swift",
+        "ExportedInterfaceMacroTests.swift",
+        "ExportedStructMacroTests.swift",
+        "MacroTypes.swift",
+    ],
+    # The Xcode toolchain's default @rpath entries resolve through the
+    # /var/db/xcode_select_link symlink, which dyld does not follow when the
+    # test wrapper runs through /bin/bash — point rpath at Xcode directly
+    # (same workaround as swift_map's tests).
+    linkopts = [
+        "-Wl,-rpath,/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",  # keep
+        "-Wl,-rpath,/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",  # keep
+        "-Wl,-rpath,/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",  # keep
+    ],
+    module_name = "SwiftFFIPluginLibraryTests",
+    deps = [
+        "//swift_ffi/swift_ffi_plugin_library",
+        "@swift-syntax//:SwiftParser",
+        "@swift-syntax//:SwiftSyntax",
+        "@swift-syntax//:SwiftSyntaxMacroExpansion",
+        "@swift-syntax//:SwiftSyntaxMacros",
+        "@swift-syntax//:SwiftSyntaxMacrosTestSupport",
+    ],
+)

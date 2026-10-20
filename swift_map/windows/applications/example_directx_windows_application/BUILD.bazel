@@ -1,0 +1,25 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+# SwiftMap as a native Windows `.exe`: a pure-Swift Win32 window (WinSDK)
+# over swift_gpu's D3D11 backend. Like isomer's Windows target this
+# builds on the Windows host with rules_swift's host toolchain; skipped
+# cleanly in `//...` builds elsewhere.
+swift_binary(
+    name = "example_directx_windows_application",
+    srcs = ["ExampleApp.swift"],
+    copts = [
+        "-parse-as-library",
+        "-enable-experimental-feature",
+        "Extern",  # sm_decode_rgba / sm_free_rgba bind against :stb_decode
+    ],
+    linkopts = ["user32.lib"],
+    module_name = "ExampleApplication",
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        "//swift_map/shared/stb_decode",
+        "//swift_map/windows/libraries/swift_map",
+        "//swift_gpu/windows:swift_gpu",
+    ],
+)

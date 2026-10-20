@@ -1,0 +1,23 @@
+// The greeter message for the cross-platform SwiftProtobuf example: enough
+// shape to exercise scalar, string, repeated, and enum codepaths in the
+// generated Swift on every platform.
+syntax = "proto3";
+
+package iso.example;
+
+enum Mood {
+  MOOD_UNSPECIFIED = 0;
+  MOOD_CHEERFUL = 1;
+  MOOD_FORMAL = 2;
+}
+
+message GreetingRequest {
+  string name = 1;
+  Mood mood = 2;
+}
+
+message GreetingResponse {
+  string message = 1;
+  int64 sequence = 2;
+  repeated string tags = 3;
+}

@@ -1,0 +1,28 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@isomer//tools/wasm:defs.bzl", "isomer_web_app")
+
+# The transcript stress app (//shared/transcript_stress_application) under
+# the React renderer with document scrolling, as Visor's web client runs:
+# a long AgentUI conversation whose newest reply streams in (?stream starts
+# it), for watching how the page follows new messages in mobile Safari.
+
+swift_library(
+    name = "app_lib",
+    srcs = ["//shared/transcript_stress_application:srcs"],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "TranscriptStressApp",
+    tags = ["manual"],
+    deps = [
+        "@swiftpkg_agent_ui//:AgentUI",
+        "@isomer//:swift_ui",
+        "@isomer//wasm/libraries/swift_ui:isomer",
+    ],
+)
+
+isomer_web_app(
+    name = "transcript_stress_web_application",
+    index = "index.html",
+    query = "stream",
+    swift_library = ":app_lib",
+)

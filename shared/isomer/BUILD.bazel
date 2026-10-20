@@ -1,0 +1,9 @@
+# Sources every platform's `Isomer` module shares (see Exports.swift), and
+# the one-line modules that keep the names it had before 0.31.
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "Compatibility.swift",
+    "Exports.swift",
+])

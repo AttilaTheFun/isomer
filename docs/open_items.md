@@ -1,0 +1,164 @@
+# Open items (2026-10-13, 0.31 pre-release)
+
+What is left after 0.31's work, to choose the next work from. Where Isomer
+is a subset of Apple's interfaces, declaration by declaration (with the
+conformances, Sendable and overloads its types lack), is
+[parity/missing/](parity/missing/) (SwiftUI's is
+[parity/missing/SwiftUI.md](parity/missing/SwiftUI.md)); where it is a
+superset (what `--check` keeps out, what it does not see, and what Isomer
+adds in modules of its own) is [parity/superset.md](parity/superset.md).
+This file is everything else. Check the code before relying on an item: it may be done
+by the time you read it.
+
+## Platform tiers
+
+Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
+
+| Tier | Platforms | Verified on a change |
+|---|---|---|
+| T1 | iOS, macOS | simulators, the Mac |
+| T2 | wasm (web, Electron), Android | headless Chrome, the hermetic emulator |
+| T3 | Linux, Windows | Linux builds in a container from the Mac (`tools/linux/build.sh`); Windows only loads and parses (below). Both are run on their own hosts. |
+
+## Releases
+
+- isomer 0.31 is a pre-release on `release-0.31` (isomer, visor_isomer,
+  the Playground, the swift-foundation fork's `isomer` branch), not
+  tagged; Visor's v0.31 is released. Tagging and merging to main wait for
+  the maintainer's review.
+- rules_swift is pinned with a `git_override` (MODULE.bazel and
+  examples/MODULE.bazel): replace it with a plain `bazel_dep` at the next
+  rules_swift release.
+
+## Linux and Windows (T3)
+
+- **Windows is not built from here.** No Swift toolchain cross-compiles to
+  Windows from macOS or Linux (rules_swift has no Windows SDK path), so a
+  change is checked by `bazel query 'deps(//windows/...)'` in both modules
+  (the BUILD graph loads) and `swiftc -parse` of the changed files. Type
+  errors show only on a Windows host. The 0.31 changes made there mirror
+  Linux's, which build: the wasm cell's public entry moved to
+  `IsomerWasmHost` (`WindowsWasmApp`), the WAMR callbacks' new fields, the
+  render calls on the main actor, CoreGraphics over corelibs Foundation.
+- **Linux builds, but does not run here.** `tools/linux/build.sh` builds
+  `//linux/...` in isomer and in the examples (the compiled app, the wasm
+  cell with its reactor) in an arm64 Ubuntu container; nothing
+  has been launched since 0.31.
+- **Linux and Windows still use the toolchain's Foundation**
+  (swift-corelibs-foundation), not Isomer's: `URLSession` is in
+  FoundationNetworking there (code imports it under `os(Linux) ||
+  os(Windows)`), and Isomer's CoreGraphics is built over it as the part it
+  lacks (`ISOMER_CORELIBS_FOUNDATION`: CGVector, CGAffineTransform, CGPath,
+  CGColor; CGFloat, CGPoint, CGSize and CGRect are corelibs'). Moving them
+  onto Isomer's Foundation would make every platform's Foundation one
+  source.
+- **The WAMR hosts give a guest no home or platform channel** on Linux and
+  Windows (`home_dir`, `bundle_identifier`, `on_platform_command`,
+  `host_value` are NULL): a guest's FileManager directories are not
+  writable, `@AppStorage` does not persist, the clipboard does nothing. Nor
+  do they install network transports, so a guest's `URLSession` fails with
+  `notConnectedToInternet`.
+
+## Android (T2)
+
+- **WasmView on Android gives a guest no home** (it passes none), so a
+  wasm feature's files and `@AppStorage` do not persist there; Apple's
+  WasmView passes the app's container. The network transports are
+  injected (WasmNetworkHosts.kt).
+- SwiftGPU on Android works as a library but is not an endorsed app path;
+  Compose is the renderer.
+
+## The web (T2)
+
+- **The web Playground's fastbuild overflows the stack** loading
+  ("RangeError: Maximum call stack size exceeded", a WebAssembly native
+  stack overflow); `-c opt` builds work and are what ships
+  (playground/docs/playground_web.md).
+- Browsers cannot speak gRPC: a web client goes through gRPC-Web and a
+  proxy (Envoy).
+
+## Apple's interfaces (all platforms but Apple's)
+
+- **Most of each interface is not there yet**: SwiftUI 24% of Apple's
+  counted declarations, Foundation 39%, CoreGraphics 31%, Metal 24%
+  (docs/parity/README.md has the table; parity/missing/ the lists). The
+  SwiftUI areas planned next are in parity/missing/SwiftUI.md's table.
+- **Sendable is reported, not enforced.** `--check` fails on a conformance
+  Apple's type lacks, but not on Sendable and the other marker protocols:
+  some Isomer types are Sendable where Apple's are not (Apple marks its
+  button and form styles `~Sendable`), and some of Apple's are where
+  Isomer's are not (`Text`, `Image`, the shapes): parity/superset.md and
+  each module's missing list name them.
+- **ImageIO is not a strict subset yet** (it came before the rule): it
+  declares `CGImage` (CoreGraphics' on Apple), CF typealiases of Swift
+  types where Apple's are classes, and public underscored host hooks.
+  parity.py reports it as a known gap without failing `--check`
+  (tools/parity/reasons/ImageIO.json says what the fix is).
+- **`.keyboardType(_:)` is iOS-only**: its parameter is UIKit's
+  `UIKeyboardType`, which no Apple-named module off Apple has (IsomerUIKit
+  is gone), so code asks for a number pad under `#if canImport(UIKit)` (a
+  number-entry field's `numberPad()`), and the reimplementation's text fields get
+  the default keyboard (the hosts still read a node's keyboard type; nothing
+  sets it). A way to choose one off Apple without Isomer API in SwiftUI is
+  open. (On iOS, in a compiled feature, Isomer's SwiftUI has it, as Apple's.)
+- **A compiled feature (an Apple app's Swift against Isomer's frameworks)
+  is iOS 16** (AGENTS.md, "Apple apps compiled against Isomer"), by choice:
+  15 would need Isomer's own `Duration`, `Clock` and `Regex` (the standard
+  library's are iOS 16), and overriding the standard library is not wanted
+  library. Isomer's Synchronization there is `Mutex` only, Observation lacks
+  `Observations` (iOS 18 concurrency runtime), CoreTransferable is the
+  built-in conformances only (no `transferRepresentation`), and Foundation
+  is still Apple's.
+- **A text field's `selection` where a host doesn't report it**
+  (shared/swift_ui_core/TextSelection.swift): the web, Compose and the Apple
+  tree view on iOS 18 and macOS 15 report the caret and show a selection the
+  app sets (0.33, examples' selection_probe_* apps); below iOS 18 (the
+  compiled blue Visor's iOS 16), and in the GPU renderer's, Linux's and
+  Windows' fields, the binding still follows the end of the text.
+- **QuickLook (`quickLookPreview`) is only in compiled Apple features**:
+  the web and Android have no preview to present (an AgentUI attachment
+  there opens its own viewer). A host-presented one on each would let the
+  module join their SDKs.
+- **Attributed text on Apple platforms reads Apple's attribute scope**
+  (AGENTS.md, "Apple apps compiled against Isomer"): only the system's
+  named colours and text styles (at each weight, bold, italic) come
+  through; another colour or a sized font is drawn as the text's own.
+- **Link runs' own colours**: the Apple host draws a link run in its own
+  colour when it has one (as SwiftUI does an attributed link with a
+  foreground colour); whether the React and Compose hosts do is unchecked.
+- **Combine's side of SwiftUI is not planned** (`ObservableObject`,
+  `@StateObject`, `onReceive`): Observation and Swift concurrency instead.
+  On Android a library's `DispatchQueue.main.async` still runs (the host
+  drains libdispatch's main queue); wasm has no Dispatch at all (`#if
+  canImport(Dispatch)`).
+- Later, not 0.31 (docs/isomer_031_plan.md): Metal backends for Android,
+  Windows and Linux; wasm to native Metal on Apple platforms; SwiftUI's
+  shader effects; Metal 4; a MapKit subset for `Map`; `URLSession` and
+  `FileManager` over the web's own APIs; a separate `IsomerServer`; SwiftPM.
+
+## Applications
+
+- **A WasmView guest's first requests wait for its first draw** (0.35
+  candidate, 2026-10-17: acceptable for now, a possible improvement): at a cold start the blue Visor's
+  sign-in leaves about 0.4 s after the store asks for it on the simulator,
+  because WasmKitRuntime (and WamrRuntime) hold the guest's main-actor jobs
+  while a tree is undrawn (`treeUndrawn`, which keeps a chat's place while
+  pages load in above it) and a guest thread's swift_ffi calls wait for the
+  main thread (`onMain`), which is drawing the first screen. Options: start
+  work enqueued before the first tree without waiting for its draw (but not
+  later trees'), or a faster first commit.
+
+- **Consumers on Foundation's services** (the plan's phase 12): Visor
+  Isomer moved (visor_isomer db8894b). Other applications' file stores and
+  host HTTP are their own to move; not checked here.
+- **Playground projects**: an unedited project made from a template by any
+  earlier build is brought to the current template at launch (the Playground
+  `TemplateHistory`, rebuilt from git history by
+  `playground/tools/playground/template_history.py`); an edited one keeps its source and
+  needs a manual update where 0.31 removed API it used (`ObservableObject`,
+  `DispatchQueue`, the injected services).
+- **The Playground's macro toolchain is built outside Bazel**:
+  `playground/tools/browser_toolchain`'s scripts build the WASI
+  compiler and `MacroPlugins.wasm` (ObservationMacros, SwiftMacros), and
+  Android's prebuilt plugins are staged by `stage_toolchain.sh`; a toolchain
+  bump means running them again by hand.

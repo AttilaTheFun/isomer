@@ -1,0 +1,10 @@
+# The minimal "Tap me" counter benchmark app, shared source compiled for every
+# delivery mode (compiled-Swift .so, wasm reactor). Its native-Compose, Valdi,
+# and React Native twins live in their own app dirs / repos; all four are behavior-
+# identical so the cross-framework benchmark isolates runtime overhead, not app
+# content. See docs/benchmarks.md.
+filegroup(
+    name = "srcs",
+    srcs = glob(["*.swift"]),
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,30 @@
+# The other Apple frameworks SwiftUI's interface names, for the platforms
+# without Apple's (docs/isomer_031_plan.md): CoreTransferable,
+# UniformTypeIdentifiers and PhotosUI under Apple's names. Each platform's
+# SwiftUI depends on them; its PhotosUI (over that SwiftUI) is built beside
+# it. Not Combine, UIKit or Dispatch: their APIs are for backward
+# compatibility, and Isomer's apps use Observation and Swift concurrency.
+
+load("@rules_swift//swift:swift_library_group.bzl", "swift_library_group")
+
+# What a module compiled from Isomer's SwiftUI core depends on (the core's
+# Frameworks.swift imports these): on Apple platforms (Isomer's core hosted
+# there: the Apple GPU path, the tests) the Apple-named ones are Apple's own.
+swift_library_group(
+    name = "for_core",
+    visibility = ["//visibility:public"],
+    deps = select({
+        "@platforms//os:macos": [],
+        "@platforms//os:ios": [],
+        "@platforms//os:tvos": [],
+        "@platforms//os:watchos": [],
+        "@platforms//os:visionos": [],
+        "//conditions:default": [
+            # Through Isomer's Foundation on wasm and Android; on Linux and
+            # Windows beside the toolchain's (core_graphics/BUILD.bazel).
+            "//:core_graphics",
+            "//frameworks/core_transferable",
+            "//frameworks/uniform_type_identifiers",
+        ],
+    }),
+)

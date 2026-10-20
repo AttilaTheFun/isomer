@@ -1,0 +1,151 @@
+diff --git a/clang/include/clang/Support/Compiler.h b/clang/include/clang/Support/Compiler.h
+index e1ae3eda4ccc..3c77324756ff 100644
+--- a/clang/include/clang/Support/Compiler.h
++++ b/clang/include/clang/Support/Compiler.h
+@@ -54,7 +54,8 @@
+ #define CLANG_ABI LLVM_ATTRIBUTE_VISIBILITY_DEFAULT
+ #define CLANG_TEMPLATE_ABI LLVM_ATTRIBUTE_VISIBILITY_DEFAULT
+ #define CLANG_EXPORT_TEMPLATE
+-#elif defined(__MACH__) || defined(__WASM__) || defined(__EMSCRIPTEN__)
++#elif defined(__MACH__) || defined(__WASM__) || defined(__wasm__) ||        \
++    defined(__EMSCRIPTEN__)
+ #define CLANG_ABI LLVM_ATTRIBUTE_VISIBILITY_DEFAULT
+ #define CLANG_TEMPLATE_ABI
+ #define CLANG_EXPORT_TEMPLATE
+diff --git a/llvm/include/llvm/ADT/bit.h b/llvm/include/llvm/ADT/bit.h
+index d6e33c3e6133..0b86b90b3da2 100644
+--- a/llvm/include/llvm/ADT/bit.h
++++ b/llvm/include/llvm/ADT/bit.h
+@@ -30,7 +30,8 @@
+ 
+ #if defined(__linux__) || defined(__GNU__) || defined(__HAIKU__) ||            \
+     defined(__Fuchsia__) || defined(__EMSCRIPTEN__) || defined(__NetBSD__) ||  \
+-    defined(__OpenBSD__) || defined(__DragonFly__) || defined(__managarm__)
++    defined(__OpenBSD__) || defined(__DragonFly__) || defined(__managarm__) || \
++    defined(__wasi__)
+ #include <endian.h>
+ #elif defined(_AIX)
+ #include <sys/machine.h>
+diff --git a/llvm/lib/Support/CrashRecoveryContext.cpp b/llvm/lib/Support/CrashRecoveryContext.cpp
+index fc30d421506a..a2fe2919221c 100644
+--- a/llvm/lib/Support/CrashRecoveryContext.cpp
++++ b/llvm/lib/Support/CrashRecoveryContext.cpp
+@@ -14,7 +14,9 @@
+ #include "llvm/Support/thread.h"
+ #include <cassert>
+ #include <mutex>
++#if !defined(__wasi__)
+ #include <setjmp.h>
++#endif
+ 
+ using namespace llvm;
+ 
+@@ -31,7 +33,11 @@ struct CrashRecoveryContextImpl {
+   const CrashRecoveryContextImpl *Next;
+ 
+   CrashRecoveryContext *CRC;
++#if defined(__wasi__)
++  int JumpBuffer;
++#else
+   ::jmp_buf JumpBuffer;
++#endif
+   volatile unsigned Failed : 1;
+   unsigned SwitchedThread : 1;
+   unsigned ValidJumpBuffer : 1;
+@@ -74,7 +80,11 @@ public:
+ 
+     // Jump back to the RunSafely we were called under.
+     if (ValidJumpBuffer)
++#if defined(__wasi__)
++      abort();
++#else
+       longjmp(JumpBuffer, 1);
++#endif
+ 
+     // Otherwise let the caller decide of the outcome of the crash. Currently
+     // this occurs when using SEH on Windows with MSVC or clang-cl.
+@@ -417,10 +427,16 @@ bool CrashRecoveryContext::RunSafely(function_ref<void()> Fn) {
+     CrashRecoveryContextImpl *CRCI = new CrashRecoveryContextImpl(this);
+     Impl = CRCI;
+ 
++#if defined(__wasi__)
++    // No setjmp/longjmp without wasm exception handling, and no signals to
++    // recover from: a crash in Fn is a trap that ends the instance.
++    CRCI->ValidJumpBuffer = false;
++#else
+     CRCI->ValidJumpBuffer = true;
+     if (setjmp(CRCI->JumpBuffer) != 0) {
+       return false;
+     }
++#endif
+   }
+ 
+   Fn();
+diff --git a/llvm/lib/Support/Signals.cpp b/llvm/lib/Support/Signals.cpp
+index f8a14a45ddc3..aa88085f6ea2 100644
+--- a/llvm/lib/Support/Signals.cpp
++++ b/llvm/lib/Support/Signals.cpp
+@@ -110,6 +110,16 @@ void sys::RunSignalHandlers() {
+ // Signal-safe.
+ static void insertSignalHandler(sys::SignalHandlerCallback FnPtr,
+                                 void *Cookie) {
++  // In-process re-entry (an app calling swift::mainEntry repeatedly): each
++  // InitLLVM registers the same callbacks again; re-point the existing
++  // slot instead of consuming another until the table overflows.
++  for (CallbackAndCookie &Existing : CallBacksToRun()) {
++    if (Existing.Flag.load() == CallbackAndCookie::Status::Initialized &&
++        Existing.Callback == FnPtr) {
++      Existing.Cookie = Cookie;
++      return;
++    }
++  }
+   for (CallbackAndCookie &SetMe : CallBacksToRun()) {
+     auto Expected = CallbackAndCookie::Status::Empty;
+     auto Desired = CallbackAndCookie::Status::Initializing;
+diff --git a/llvm/lib/Support/Unix/Path.inc b/llvm/lib/Support/Unix/Path.inc
+index 362eec5ebee8..998d3960bbb6 100644
+--- a/llvm/lib/Support/Unix/Path.inc
++++ b/llvm/lib/Support/Unix/Path.inc
+@@ -555,6 +555,9 @@ static bool is_local_impl(struct STATVFS &Vfs) {
+   // The file system can have an arbitrary structure on z/OS; must go with the
+   // conservative answer.
+   return false;
++#elif defined(__wasi__)
++  // Preopened directories only: everything the sandbox sees is local.
++  return true;
+ #else
+   return !!(STATVFS_F_FLAG(Vfs) & MNT_LOCAL);
+ #endif
+diff --git a/llvm/lib/Support/Unix/Program.inc b/llvm/lib/Support/Unix/Program.inc
+index 4f17b2257a75..26fff0410243 100644
+--- a/llvm/lib/Support/Unix/Program.inc
++++ b/llvm/lib/Support/Unix/Program.inc
+@@ -461,7 +461,7 @@ ProcessInfo llvm::sys::Wait(const ProcessInfo &PI,
+     std::chrono::microseconds UserT = toDuration(Info.ru_utime);
+     std::chrono::microseconds KernelT = toDuration(Info.ru_stime);
+     uint64_t PeakMemory = 0;
+-#if !defined(__HAIKU__) && !defined(__MVS__)
++#if !defined(__HAIKU__) && !defined(__MVS__) && !defined(__wasi__)
+     PeakMemory = static_cast<uint64_t>(Info.ru_maxrss);
+ #endif
+     *ProcStat = ProcessStatistics{UserT + KernelT, UserT, PeakMemory};
+diff --git a/llvm/lib/Support/raw_socket_stream.cpp b/llvm/lib/Support/raw_socket_stream.cpp
+index fd1c68167213..374a4b033cc7 100644
+--- a/llvm/lib/Support/raw_socket_stream.cpp
++++ b/llvm/lib/Support/raw_socket_stream.cpp
+@@ -39,6 +39,10 @@
+ #include <unistd.h>
+ #endif
+ 
++// WASI has no sockets; the compiler never opens one. Compile the
++// implementation out (nothing in the wasm tools references it).
++#if !defined(__wasi__)
++
+ using namespace llvm;
+ 
+ #ifdef _WIN32
+@@ -356,3 +360,4 @@ ssize_t raw_socket_stream::read(char *Ptr, size_t Size,
+   }
+   return raw_fd_stream::read(Ptr, Size);
+ }
++#endif // !__wasi__

@@ -1,0 +1,32 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+# The C half of the native host transport — the fourth peer of
+# swift_ffi/runtime/{ts,swift,swift_wasm_host,kotlin}. Engine-agnostic C
+# (a `SwiftFFIEngine` vtable is injected), so a plain C host with NO compiled
+# Swift can drive a swift_ffi wasm reactor and satisfy its foreign imports. The
+# generated `c-host-wasm` bindings build the per-interface dispatch on top.
+cc_library(
+    name = "swift_ffi_host",
+    srcs = ["swift_ffi_host.c"],
+    hdrs = ["swift_ffi_host.h"],
+    # On Windows a C host (e.g. //shared/wamr_host) that consumes this runtime
+    # links it across a DLL boundary, so its `swift_ffi_host_*` entry points must
+    # be exported. The generated c-host-wasm dispatchers are `static` and call
+    # these as ordinary externals; without exports the dependent DLL fails to
+    # link (LNK2019). No-op on non-Windows toolchains.
+    features = ["windows_export_all_symbols"],
+    includes = ["."],
+    visibility = ["//visibility:public"],
+)

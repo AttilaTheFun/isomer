@@ -1,0 +1,23 @@
+load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The selection probe on iOS (see iOSApp.swift). Simulator builds:
+# `--ios_multi_cpus=sim_arm64`.
+swift_library(
+    name = "ios_lib",
+    srcs = ["iOSApp.swift"],
+    module_name = "SelectionProbeIOSHost",
+    deps = ["@isomer//apple/libraries/wasm_view"],
+)
+
+ios_application(
+    name = "selection_probe_wasm_ios_application",
+    bundle_id = "com.LoganShire.Isomer.SelectionProbe",
+    families = ["iphone"],
+    infoplists = ["Info.plist"],
+    minimum_os_version = "15.0",
+    resources = ["//wasm/selection_probe_feature:selection_probe"],
+    deps = [":ios_lib"],
+)

@@ -1,0 +1,73 @@
+load("@rules_python//python:defs.bzl", "py_binary")
+load("@rules_swift//swift:swift_library.bzl", "swift_library")
+
+# The swift_ffi rule definitions — one file per public macro:
+#   bridge_cc_library.bzl / cc_swift_library.bzl / kt_swift_library.bzl /
+#   ts_swift_wasm_library.bzl / swift_wasm_reactor.bzl / swift_wasm_library.bzl /
+#   c_host_library.bzl / rs_swift_library.bzl
+# (utils.bzl is internal). Target platforms for the cross-compiled bridges
+# live here too; the Swift-SDK toolchains registered in MODULE.bazel match
+# these constraints.
+package(
+    default_visibility = ["//visibility:public"],
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+exports_files(glob(["*.bzl"]) + ["reactor_stub.swift"])
+
+# A reactor's host entries, read from a link of it exporting everything
+# (swift_wasm_reactor.bzl's wasm_export_list).
+py_binary(
+    name = "export_list",
+    srcs = ["export_list.py"],
+)
+
+platform(
+    name = "wasm32-wasip1",
+    constraint_values = [
+        "@platforms//cpu:wasm32",
+        "@platforms//os:wasi",
+    ],
+)
+
+# wasm32-unknown-wasip1-threads: shared memory, atomics and wasi-threads,
+# built with the threads SDK a module declares beside the single-threaded
+# one (`swift.wasm_sdk(threads = True, ...)`; see isomer's MODULE.bazel).
+platform(
+    name = "wasm32-wasip1-threads",
+    constraint_values = [
+        "@platforms//cpu:wasm32",
+        "@platforms//os:wasi",
+        "@rules_swift//swift/toolchains/wasm:threaded",
+    ],
+)
+
+platform(
+    name = "android-aarch64",
+    constraint_values = [
+        "@platforms//cpu:aarch64",
+        "@platforms//os:android",
+    ],
+)
+
+platform(
+    name = "android-x86_64",
+    constraint_values = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:android",
+    ],
+)
+
+swift_library(
+    name = "rules",
+    srcs = ["reactor_stub.swift"],
+    module_name = "Rules",
+)

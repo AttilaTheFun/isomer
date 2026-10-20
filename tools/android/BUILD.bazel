@@ -1,0 +1,41 @@
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "debug.keystore",
+    "defs.bzl",
+    "extensions.bzl",
+    "main_activity.kt.tpl",
+    "manifest.xml.tpl",
+])
+
+# Public aliases for the Maven artifacts example/consumer BENCH harnesses use
+# directly (the app macros reach @rules_android_maven internally). The maven
+# install lives in THIS module's MODULE.bazel; aliases give external modules a
+# stable path to the same pinned jars.
+[
+    alias(
+        name = "maven_" + artifact,
+        actual = "@rules_android_maven//:" + artifact,
+        visibility = ["//visibility:public"],
+    )
+    for artifact in [
+        "androidx_benchmark_benchmark_common",
+        "androidx_benchmark_benchmark_macro",
+        "androidx_benchmark_benchmark_macro_junit4",
+        "com_squareup_wire_wire_runtime_jvm",
+        "androidx_test_ext_junit",
+        "androidx_test_runner",
+        "androidx_test_uiautomator_uiautomator",
+        "junit_junit",
+        "androidx_profileinstaller_profileinstaller",
+        "androidx_startup_startup_runtime",
+        "androidx_activity_activity_compose",
+        "androidx_compose_foundation_foundation",
+        "androidx_compose_material3_material3",
+        "androidx_compose_runtime_runtime",
+        "androidx_compose_ui_ui",
+        "androidx_browser_browser",
+        "org_jetbrains_kotlinx_kotlinx_coroutines_android",
+        "org_jetbrains_kotlinx_kotlinx_coroutines_core",
+    ]
+]

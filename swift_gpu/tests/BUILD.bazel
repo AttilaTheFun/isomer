@@ -1,0 +1,16 @@
+load("@rules_swift//swift:swift.bzl", "swift_test")
+
+swift_test(
+    name = "metal_backend_tests",
+    srcs = ["MetalBackendTests.swift"],
+    # The xctest bundle resolves XCTest dylibs through the
+    # /var/db/xcode_select_link symlink, which not every machine has (and
+    # SIP strips DYLD_* under the bash test wrapper); point rpath at the
+    # standard Xcode install (see swift_map's tests for the history).
+    linkopts = [
+        "-Wl,-rpath,/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-Wl,-rpath,/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Wl,-rpath,/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+    ],
+    deps = ["//swift_gpu/apple:swift_gpu"],
+)

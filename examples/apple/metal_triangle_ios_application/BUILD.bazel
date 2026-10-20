@@ -1,0 +1,29 @@
+load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+# The Metal triangle (//shared/metal_triangle_application) on iOS:
+# MetalView is an MTKView and Metal is Apple's. A simulator build (no
+# provisioning profile): bazel build --ios_multi_cpus=sim_arm64.
+swift_library(
+    name = "app_lib",
+    srcs = ["//shared/metal_triangle_application:srcs"],
+    module_name = "MetalTriangle",
+    tags = ["manual"],
+    deps = [
+        "@isomer//apple/libraries/swift_ui",
+        "@isomer//apple/libraries/swift_ui:isomer",
+    ],
+)
+
+ios_application(
+    name = "metal_triangle_ios_application",
+    bundle_id = "com.LoganShire.Isomer",
+    families = [
+        "ipad",
+        "iphone",
+    ],
+    infoplists = ["Info.plist"],
+    minimum_os_version = "17.0",
+    tags = ["manual"],
+    deps = [":app_lib"],
+)

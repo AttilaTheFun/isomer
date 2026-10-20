@@ -1,0 +1,19 @@
+diff --git a/SwiftCompilerSources/Sources/Optimizer/PassManager/PassRegistration.swift b/SwiftCompilerSources/Sources/Optimizer/PassManager/PassRegistration.swift
+index 47dbfb787c1..f5c241448b3 100644
+--- a/SwiftCompilerSources/Sources/Optimizer/PassManager/PassRegistration.swift
++++ b/SwiftCompilerSources/Sources/Optimizer/PassManager/PassRegistration.swift
+@@ -14,8 +14,14 @@ import AST
+ import SIL
+ import OptimizerBridging
+ 
++// Idempotent for EMBEDDED use (the Playground app calls swift::mainEntry
++// repeatedly in one process; re-registering bridged classes aborts).
++nonisolated(unsafe) private var swiftModulesInitialized = false
++
+ @_cdecl("initializeSwiftModules")
+ public func initializeSwiftModules() {
++  if swiftModulesInitialized { return }
++  swiftModulesInitialized = true
+   registerAST()
+   registerSIL()
+   registerSwiftAnalyses()

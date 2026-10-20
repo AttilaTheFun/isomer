@@ -1,0 +1,28 @@
+load("@rules_swift//swift:swift_binary.bzl", "swift_binary")
+
+package(
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+# Consumes merged IR and emits one bridge artifact per invocation. Built for
+# the exec (host) configuration so it runs during the build of cross-compiled
+# targets.
+swift_binary(
+    name = "swift_ffi_generator",
+    srcs = ["Generate.swift"],
+    module_name = "SwiftFFIGenerator",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//swift_ffi/swift_ffi_generator_library",
+        "//swift_ffi/swift_ffi_ir_library",
+        "@swift_argument_parser//:ArgumentParser",
+    ],
+)

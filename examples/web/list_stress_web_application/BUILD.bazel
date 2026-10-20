@@ -1,0 +1,25 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@isomer//tools/wasm:defs.bzl", "isomer_web_app")
+
+# The list stress app (//shared/list_stress_application) under the React
+# renderer: what a streaming update costs the web on a long List.
+
+swift_library(
+    name = "app_lib",
+    srcs = ["//shared/list_stress_application:srcs"],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "ListStressApp",
+    tags = ["manual"],
+    deps = [
+        "@isomer//:swift_ui",
+        "@isomer//wasm/libraries/swift_ui:isomer",
+    ],
+)
+
+isomer_web_app(
+    name = "list_stress_web_application",
+    index = "index.html",
+    query = "renderer=react",
+    swift_library = ":app_lib",
+)

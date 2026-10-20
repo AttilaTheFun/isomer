@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Isomer</title>
+  <link rel="icon" type="image/png" href="./assets/Playground-1024.png">
+  <link rel="apple-touch-icon" href="./assets/Playground-1024.png">
+  <style>
+    :root { color-scheme: light dark; }
+    html, body { margin: 0; height: 100%; background: light-dark(#fff, rgb(18, 18, 20)); }
+    #canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <script src="./runtime/react.production.min.js"></script>
+  <script src="./runtime/react-dom.production.min.js"></script>
+  <script type="module">
+    // Surface uncaught errors on the page (no devtools on a phone).
+    const showError = (message) => {
+      let box = document.getElementById("iso-error");
+      if (!box) { box = document.createElement("pre"); box.id = "iso-error"; box.style.cssText = "position:fixed;left:8px;right:8px;bottom:8px;max-height:40%;overflow:auto;margin:0;padding:10px;font:12px monospace;color:#fff;background:#b00;border-radius:8px;z-index:2000;white-space:pre-wrap"; document.body.appendChild(box); }
+      box.textContent += message + "\n";
+    };
+    window.addEventListener("error", (e) => showError((e.message || String(e.error)) + (e.error && e.error.stack ? "\n" + String(e.error.stack).split("\n").slice(0, 6).join("\n") : "")));
+    window.addEventListener("unhandledrejection", (e) => showError("unhandled: " + (e.reason && e.reason.stack ? String(e.reason.stack).split("\n").slice(0, 6).join("\n") : String(e.reason))));
+    import { boot } from "./runtime/boot.js";
+    // The demo runs use the Playground's service builders (its bridge links
+    // the platform services; the splash's own does not).
+    import { Dependencies } from "./playground/app_bridge.js";
+
+    // The inline examples reach the network and their files through Foundation
+    // (URLSession over fetch, FileManager over IndexedDB: the runtime's own);
+    // the services left are the keychain, analytics and flags.
+    const prefix = "isomer.splash.";
+    const b64 = (bytes) => { let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); };
+    const unb64 = (t) => Uint8Array.from(atob(t), (c) => c.charCodeAt(0));
+    const runDependencies = {
+      keychain: Dependencies.keychainService(() => ({
+        async get(key) { const v = localStorage.getItem(prefix + "keychain:" + key); if (v === null) throw new Error("absent"); return unb64(v); },
+        async set(value, key) { localStorage.setItem(prefix + "keychain:" + key, b64(value)); },
+        async delete(key) { localStorage.removeItem(prefix + "keychain:" + key); },
+      })),
+      analytics: Dependencies.analyticsService(() => ({ track(event) { console.log("[analytics]", event); } })),
+      configuration: Dependencies.configurationService(() => ({ flag(key) { return key === "promo_banner"; } })),
+    };
+    // The page's commands (Splash.swift → platformCommand("splash", …)):
+    // the Playground, or the Playground opened on one of the examples' source.
+    window.isoPlatformCommand = (key, value) => {
+      if (key !== "splash") return;
+      const command = value.split("#")[0];
+      if (command === "playground") location.href = "./playground/";
+      else if (command === "edit") location.href = "./playground/?template=This%20website";
+      else if (command.startsWith("template:")) location.href = "./playground/?template=" + encodeURIComponent(command.slice(9));
+    };
+
+    boot({ canvas: document.getElementById("canvas"), wasmURL: "./app.wasm", rendererName: "react", dependencies: runDependencies, bundleIdentifier: "dev.isomer.splash" })
+      .catch((error) => { document.body.insertAdjacentHTML("beforeend", '<pre id="error"></pre>'); document.getElementById("error").textContent = String(error); });
+  </script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+# The shared "native Swift host" building block: exercises the
+# `swift_wasm_library` macro and, by building `:greeter_host`,
+# compile-checks the `swift-host-wasm` generator over the full greeter surface —
+# functions, foreign interfaces both directions, structs, throwing, async,
+# bytes. `:greeter_reactor` is the explicit wasm hop producing the reactor
+# artifact; `:greeter_host` is the native host bindings library (Swift module
+# `GreeterHost`, facade class `Greeter`). A concrete engine (e.g. a WasmKit
+# adapter) and a round-trip live in the native Swift host application that
+# consumes these bindings — the Swift-host peer of the C-host driver in
+# //swift_ffi/examples/shared/greeter_wasm_host.
+#
+#   bazel build //swift_ffi/examples/shared/greeter_host:greeter_host            # host bindings
+#   bazel build //swift_ffi/examples/shared/greeter_host:greeter_reactor.wasm    # reactor
+
+load("//swift_ffi/rules:swift_wasm_library.bzl", "swift_wasm_library")
+load("//swift_ffi/rules:swift_wasm_reactor.bzl", "swift_wasm_reactor")
+
+package(
+    default_visibility = ["//visibility:public"],
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+# The explicit wasm hop: the reactor artifact (`:greeter_reactor.wasm`) a
+# native process loads and drives through the bindings below.
+swift_wasm_reactor(
+    name = "greeter_reactor",
+    swift = "//swift_ffi/examples/shared/greeter",
+    module_name = "Greeter",
+)
+
+swift_wasm_library(
+    name = "greeter_host",
+    module_name = "Greeter",
+    swift = "//swift_ffi/examples/shared/greeter",
+)

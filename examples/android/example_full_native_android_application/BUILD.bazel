@@ -1,0 +1,40 @@
+load("@rules_android//rules:rules.bzl", "android_binary")
+load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
+load("@isomer//tools/android:defs.bzl", "apk_install_run")
+
+# The NATIVE Jetpack Compose baseline — the benchmarking "ceiling" for the
+# Android [full|partial] x [compiled|wasm] matrix. Unlike the four matrix apps,
+# this shares NO Isomer code: no Swift, no wasm, no IsoNode interpreter —
+# just hand-written Compose rendering the same Apps list + tap counter. Run it
+# next to //android/example_full_{compiled,wasm}_android_application
+# to feel native Compose vs. our compiled-Swift and wasm-delivered renderers, and
+# compare its [native-tap] latency log against the wasm reactor's [wamr-event].
+
+kt_android_library(
+    name = "host_app",
+    srcs = glob(["kotlin/**/*.kt"]),
+    custom_package = "dev.isomer.nativefull",
+    manifest = "AndroidManifest.xml",
+    plugins = ["@isomer//android/libraries/swift_ui:compose_compiler_plugin"],
+    tags = ["manual"],
+    deps = [
+        "@isomer//tools/android:maven_androidx_activity_activity_compose",
+        "@isomer//tools/android:maven_androidx_compose_foundation_foundation",
+        "@isomer//tools/android:maven_androidx_compose_material3_material3",
+        "@isomer//tools/android:maven_androidx_compose_runtime_runtime",
+        "@isomer//tools/android:maven_androidx_compose_ui_ui",
+    ],
+)
+
+android_binary(
+    name = "example_full_native_android_application_apk",
+    manifest = "AndroidManifest.xml",
+    deps = [":host_app"],
+)
+
+# `bazel run` installs + launches on the connected device / hermetic emulator.
+apk_install_run(
+    name = "example_full_native_android_application",
+    activity = "dev.isomer.nativefull/.MainActivity",
+    apk = ":example_full_native_android_application_apk.apk",
+)

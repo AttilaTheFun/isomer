@@ -1,0 +1,10 @@
+# The network probe (NetworkProbe.swift): URLSession's HTTP and WebSocket
+# checks from the app's side, built for the web
+# (//web/network_probe_web_application) and as a WasmView reactor
+# (//wasm/network_probe_feature, run by
+# //apple/network_probe_wasm_ios_application).
+filegroup(
+    name = "srcs",
+    srcs = glob(["*.swift"]),
+    visibility = ["//visibility:public"],
+)

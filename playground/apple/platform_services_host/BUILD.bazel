@@ -1,0 +1,22 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The Apple implementations of isomer's platform services (HTTP, storage,
+# clipboard, ...) that the Playground hands to WasmView, so a project the
+# user runs can reach the network and the device. A copy of the examples'
+# (examples/apple/platform_services_host in the parent checkout, another
+# module), kept in step by hand.
+swift_library(
+    name = "platform_services_host",
+    srcs = [
+        "ApplePlatformServices.swift",
+        "@isomer//shared/platform_services:native_srcs",
+    ],
+    module_name = "ApplePlatformServices",
+    tags = ["manual"],
+    deps = [
+        "@isomer//shared/platform_services:platform_services_host",
+        "@isomer//swift_ffi/runtime/swift_wasm_host",
+    ],
+)

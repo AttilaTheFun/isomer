@@ -1,0 +1,19 @@
+package(default_visibility = ["//visibility:public"])
+
+# The Playground's icon as an Icon Composer document: what the iOS app
+# compiles through `app_icons` (the platform supplies the shape and the
+# material treatment).
+filegroup(
+    name = "app_icon",
+    srcs = glob(["Playground.icon/**"]),
+)
+
+# The Android launcher icon: the 1024 px export at 192 px
+# (sips -z 192 192 Playground-1024.png --out ic_launcher.png).
+exports_files(["ic_launcher.png"])
+
+# The 1024 px export: the web Playground's favicon and touch icon.
+filegroup(
+    name = "web_icon",
+    srcs = ["Playground-1024.png"],
+)

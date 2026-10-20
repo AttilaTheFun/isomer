@@ -1,0 +1,23 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("//tools/platforms:transition.bzl", "transition_binary")
+
+# Compile checks: the module under its real name, for wasm and Android.
+swift_library(
+    name = "conversion_check",
+    package_name = "isomer",
+    srcs = ["ConversionCheck.swift"],
+    module_name = "CoreGraphicsConversionCheck",
+    deps = ["//core_graphics"],
+)
+
+transition_binary(
+    name = "conversion_check_wasm",
+    binary = ":conversion_check",
+    platform = "//tools/platforms:wasm32",
+)
+
+transition_binary(
+    name = "conversion_check_android",
+    binary = ":conversion_check",
+    platform = "//tools/platforms:android_arm64",
+)

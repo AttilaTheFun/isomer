@@ -1,0 +1,34 @@
+load("@rules_swift//swift:swift_binary.bzl", "swift_binary")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+# The portable (Linux / Windows) hot-reload server — the cross-platform peer of
+# the macOS `//examples/apple/example_partial_wasm_macos_application:
+# hot_reload_server` (which uses Network.framework). Plain Foundation + BSD
+# sockets, so ONE server can drive a Linux wasm cell and a Windows wasm cell at
+# once: each polls `/version` and re-fetches `/wasm` on a build bump. It watches
+# the reactor's source dir, rebuilds the wasm on every edit, and serves the
+# byte snapshot to any number of clients concurrently.
+#
+# Currently gated to Linux (verified there); the socket code has `#if
+# os(Windows)` WinSock branches so a Windows build follows once Foundation's
+# Process is exercised there. A Linux server is enough for the multi-client
+# demo — a Windows wasm cell reaches it over the LAN / localhost all the same.
+swift_binary(
+    name = "hot_reload_server_bin",
+    package_name = "isomer",
+    srcs = ["HotReloadServer.swift"],
+    copts = ["-parse-as-library"],
+    target_compatible_with = ["@platforms//os:linux"],
+)
+
+# `bazel run //shared/hot_reload:hot_reload_server` starts the server; the
+# wrapper points LD_LIBRARY_PATH at the swift.org runtime (whose runfiles-
+# relative RUNPATH doesn't resolve under `bazel run`) and execs the real binary.
+sh_binary(
+    name = "hot_reload_server",
+    srcs = ["run_hot_reload.sh"],
+    data = [":hot_reload_server_bin"],
+    target_compatible_with = ["@platforms//os:linux"],
+)

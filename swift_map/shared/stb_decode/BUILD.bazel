@@ -1,0 +1,14 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# stb_image-backed tile decode for the desktop example hosts; Swift binds
+# sm_decode_rgba/sm_free_rgba via @_extern(c) (no headers needed).
+cc_library(
+    name = "stb_decode",
+    srcs = [
+        "stb_decode.c",
+        "stb_image.h",
+    ],
+    alwayslink = True,
+)

@@ -1,0 +1,182 @@
+load("@rules_swift//proto:proto.bzl", "swift_proto_compiler", "swift_proto_library")
+load("@rules_swift//swift:swift.bzl", "swift_binary")
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("@isomer//swift_ffi/rules:swift_wasm_reactor.bzl", "transition_binary")
+
+# The SwiftProtobuf greeter (the rules_swift_package_manager grpc_example's
+# protobuf pattern, cross-platform): proto_library -> swift_proto_library via
+# a custom swift_proto_compiler whose plugin (protoc-gen-swift, a HOST tool)
+# and runtime (SwiftProtobuf) both come from the SwiftPM package through
+# RSPM. The same greeter builds compiled for macOS/iOS, as a wasm32 binary
+# (the web delivery form), and for Android.
+
+# The custom compiler: protoc from the protobuf module, the Swift plugin and
+# runtime from the RSPM-generated SwiftProtobuf package.
+swift_proto_compiler(
+    name = "swift_proto",
+    plugin = "@swiftpkg_swift_protobuf//:protoc-gen-swift",
+    plugin_name = "swift",
+    plugin_option_allowlist = ["Visibility"],
+    plugin_options = {"Visibility": "Public"},
+    protoc = "@protobuf//:protoc",
+    suffixes = [".pb.swift"],
+    visibility = ["//visibility:public"],
+    deps = ["@swiftpkg_swift_protobuf//:SwiftProtobuf"],
+)
+
+proto_library(
+    name = "greeter_proto",
+    srcs = ["greeter.proto"],
+)
+
+swift_proto_library(
+    name = "greeter_swift_proto",
+    compilers = [":swift_proto"],
+    module_name = "GreeterProto",
+    protos = [":greeter_proto"],
+    visibility = ["//visibility:public"],
+)
+
+# The host / compiled form (macOS now; iOS via the app below).
+swift_binary(
+    name = "proto_greeter",
+    srcs = ["main.swift"],
+    visibility = ["//visibility:public"],
+    deps = [":greeter_swift_proto"],
+)
+
+# wasm32 — the web delivery form (SwiftWasm SDK toolchain).
+transition_binary(
+    name = "proto_greeter.wasm",
+    binary = ":proto_greeter",
+    platform = "@isomer//swift_ffi/rules:wasm32-wasip1",
+    tags = ["manual"],
+)
+
+# Android arm64 (Swift Android SDK toolchain).
+transition_binary(
+    name = "proto_greeter_android",
+    binary = ":proto_greeter",
+    platform = "@isomer//tools/platforms:android_arm64",
+    tags = ["manual"],
+)
+
+# --- gRPC Swift 2: the localhost NIO HTTP/2 greeter service ------------------
+# protoc-gen-grpc-swift-2 (grpc-swift-protobuf) generates client/server stubs;
+# GRPCCore + the NIO transport come from the grpc-swift-2 family, all via RSPM.
+
+GRPC_PLUGIN_OPTION_ALLOWLIST = [
+    "FileNaming",
+    "Visibility",
+    "KeepMethodCasing",
+    "ExtraModuleImports",
+    "GRPCModuleName",
+    "SwiftProtobufModuleName",
+    "Server",
+    "Client",
+]
+
+[
+    swift_proto_compiler(
+        name = "grpc_swift_" + variant.lower() + "_proto",
+        plugin = "@swiftpkg_grpc_swift_protobuf//:protoc-gen-grpc-swift-2",
+        plugin_name = "grpc_swift_" + variant.lower(),
+        plugin_option_allowlist = GRPC_PLUGIN_OPTION_ALLOWLIST,
+        plugin_options = {
+            "Visibility": "Public",
+            "Server": str(variant == "Server").lower(),
+            "Client": str(variant == "Client").lower(),
+        },
+        protoc = "@protobuf//:protoc",
+        suffixes = [".grpc.swift"],
+        visibility = ["//visibility:public"],
+        deps = [
+            "@swiftpkg_grpc_swift_2//:GRPCCore",
+            "@swiftpkg_grpc_swift_protobuf//:GRPCProtobuf",
+            "@swiftpkg_swift_protobuf//:SwiftProtobuf",
+        ],
+    )
+    for variant in ["Server", "Client"]
+]
+
+proto_library(
+    name = "greeter_service_proto",
+    srcs = ["greeter_service.proto"],
+    deps = [":greeter_proto"],
+)
+
+swift_proto_library(
+    name = "greeter_service_server_swift_proto",
+    compilers = [
+        ":swift_proto",
+        ":grpc_swift_server_proto",
+    ],
+    module_name = "GreeterServiceServer",
+    protos = [":greeter_service_proto"],
+    visibility = ["//visibility:public"],
+    deps = [":greeter_swift_proto"],
+)
+
+swift_proto_library(
+    name = "greeter_service_client_swift_proto",
+    compilers = [
+        ":swift_proto",
+        ":grpc_swift_client_proto",
+    ],
+    module_name = "GreeterServiceClient",
+    protos = [":greeter_service_proto"],
+    visibility = ["//visibility:public"],
+    deps = [":greeter_swift_proto"],
+)
+
+swift_binary(
+    name = "greeter_server",
+    srcs = ["grpc/server_main.swift"],
+    deps = [
+        ":greeter_service_server_swift_proto",
+        ":greeter_swift_proto",
+        "@swiftpkg_grpc_swift_2//:GRPCCore",
+        "@swiftpkg_grpc_swift_nio_transport//:GRPCNIOTransportHTTP2",
+    ],
+)
+
+swift_binary(
+    name = "greeter_client",
+    srcs = ["grpc/client_main.swift"],
+    deps = [
+        ":greeter_service_client_swift_proto",
+        ":greeter_swift_proto",
+        "@swiftpkg_grpc_swift_2//:GRPCCore",
+        "@swiftpkg_grpc_swift_nio_transport//:GRPCNIOTransportHTTP2",
+    ],
+)
+
+# --- Cross-platform probes: what of the gRPC stack builds where? -------------
+# The client binary (GRPCCore + NIO HTTP/2 transport) for Android:
+transition_binary(
+    name = "greeter_client_android",
+    binary = ":greeter_client",
+    platform = "@isomer//tools/platforms:android_arm64",
+    tags = ["manual"],
+)
+
+# GRPCCore + generated stubs + the in-process transport (no sockets): the
+# shared-logic layer, buildable everywhere including wasm32.
+swift_binary(
+    name = "greeter_inprocess",
+    srcs = ["grpc/inprocess_main.swift"],
+    deps = [
+        ":greeter_service_client_swift_proto",
+        ":greeter_service_server_swift_proto",
+        ":greeter_swift_proto",
+        "@swiftpkg_grpc_swift_2//:GRPCCore",
+        "@swiftpkg_grpc_swift_2//:GRPCInProcessTransport",
+    ],
+)
+
+transition_binary(
+    name = "greeter_inprocess.wasm",
+    binary = ":greeter_inprocess",
+    platform = "@isomer//swift_ffi/rules:wasm32-wasip1",
+    tags = ["manual"],
+)

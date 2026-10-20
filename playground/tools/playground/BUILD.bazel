@@ -1,0 +1,9 @@
+# Dev tooling for the Playgrounds: the web dev compile server, headless
+# Chrome drivers (cdp_shot / cdp_eval), and the publish scripts.
+exports_files([
+    "cdp_eval.js",
+    "cdp_shot.js",
+    "dev_compile_server.py",
+    "publish_hot_reload.sh",
+    "publish_site.sh",
+])

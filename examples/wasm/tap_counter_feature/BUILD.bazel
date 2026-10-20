@@ -1,0 +1,255 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary", "swift_library")
+load("@isomer//swift_ffi/rules:swift_wasm_reactor.bzl", "transition_binary")
+load("@isomer//tools/wasm:defs.bzl", "embedded_xip_aot", "reactor_artifact")
+
+package(default_visibility = ["//visibility:public"])
+
+# The minimal counter app as a `iso_hot` wasm reactor — the wasm-delivery cell of
+# the cross-framework benchmark (interpreted or AOT, chosen by `--config=release`).
+# Same shared TapCounter.swift the compiled Android cell builds; the reactor glue
+# (HotReloadBridge) is the standard app-agnostic iso_hot ABI. Mirrors
+# hot_demo_feature but with the minimal counter and no extra deps.
+
+swift_library(
+    name = "tap_counter_lib",
+    srcs = ["//shared/tap_counter_application:srcs"],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "TapCounterApp",
+    tags = ["manual"],
+    deps = ["@isomer//wasm/libraries/hot_swift_ui"],
+)
+
+# PRODUCTION reactor: ABI-only exports, --gc-sections, stripped (the shape the
+# APK ships). Matches hot_demo_reactor_release.
+swift_binary(
+    name = "tap_counter_reactor_release",
+    copts = [
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    linkopts = [
+        "-Xlinker",
+        "--gc-sections",
+        "-Xlinker",
+        "--strip-all",
+        "-Xlinker",
+        "--export=_initialize",
+        "-Xlinker",
+        "--export=iso_hot_start",
+        "-Xlinker",
+        "--export=iso_hot_render",
+        "-Xlinker",
+        "--export=iso_hot_resize",
+        "-Xlinker",
+        "--export=iso_hot_configure",
+        "-Xlinker",
+        "--export=iso_hot_set_color_scheme",
+        "-Xlinker",
+        "--export=iso_hot_event",
+        "-Xlinker",
+        "--export=iso_hot_alloc",
+        "-Xlinker",
+        "--export=iso_hot_free",
+        "-Xlinker",
+        "--export=iso_hot_shutdown",
+        "-Xlinker",
+        "--export=iso_hot_pending_tasks",
+        "-Xlinker",
+        "-z",
+        "-Xlinker",
+        "stack-size=16777216",
+    ],
+    linkshared = True,
+    module_name = "tap_counter_reactor",
+    tags = ["manual"],
+    deps = [
+        # The framework-owned iso_hot bridge (exports can't drift per app).
+        "@isomer//wasm/libraries/hot_swift_ui:hot_bridge",
+        ":tap_counter_lib",
+        "@isomer//wasm/libraries/hot_swift_ui",
+    ],
+)
+
+transition_binary(
+    name = "tap_counter_release.wasm",
+    binary = ":tap_counter_reactor_release",
+    platform = "@isomer//swift_ffi/rules:wasm32-wasip1",
+    tags = ["manual"],
+)
+
+# Config-selected reactor the Android APK packages: `.wasm` (interp) by default,
+# native `.aot` under `--config=release`.
+reactor_artifact(
+    name = "tap_counter_release",
+    wasm = ":tap_counter_release.wasm",
+)
+
+# The desktop (Linux/Windows) flavour: same reactor bytes, but the release
+# `.aot` is lowered with `wamrc --target=x86_64` for the x86_64 desktop hosts.
+# The Linux wasm benchmark cell loads this directly; the Windows cell needs the
+# msvc ABI, produced manually on a Linux/macOS build host with
+# `wamrc --target=x86_64 --target-abi=msvc --size-level=1` (see
+# docs/benchmarks.md#windows — Windows can't build wamrc, LLVM-under-MSVC).
+reactor_artifact(
+    name = "tap_counter_x86",
+    wasm = ":tap_counter_release.wasm",
+    target = "x86_64",
+)
+
+# ---- GPU reactor: the SAME app, self-drawing. SwiftGPURenderer runs inside
+# the module over swift_gpu's GLES backend; its gl* calls surface as "env"
+# imports (hence `--allow-undefined`) that the host binds to native OpenGL ES.
+# Only measurement/rasterization cross out (iso_gpu imports). ----
+
+swift_library(
+    name = "tap_counter_gpu_lib",
+    srcs = ["//shared/tap_counter_application:srcs"],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "TapCounterAppGpu",
+    tags = ["manual"],
+    deps = ["@isomer//wasm/libraries/hot_swift_ui_gpu"],
+)
+
+swift_binary(
+    name = "tap_counter_gpu_reactor_release",
+    copts = [
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    linkopts = [
+        "-Xlinker",
+        "--gc-sections",
+        "-Xlinker",
+        "--strip-all",
+        # The swift_gpu GLES backend's @_extern(c) gl* symbols intentionally
+        # stay undefined: wasm-ld turns them into "env" imports the WAMR host
+        # resolves to real native GL (see //shared/wamr_host + the JNI gles shim).
+        "-Xlinker",
+        "--allow-undefined",
+        "-Xlinker",
+        "--export=_initialize",
+        "-Xlinker",
+        "--export=iso_hot_start",
+        "-Xlinker",
+        "--export=iso_hot_render",
+        "-Xlinker",
+        "--export=iso_hot_resize",
+        "-Xlinker",
+        "--export=iso_hot_configure",
+        "-Xlinker",
+        "--export=iso_hot_set_color_scheme",
+        "-Xlinker",
+        "--export=iso_hot_surface_changed",
+        "-Xlinker",
+        "--export=iso_hot_pointer",
+        "-Xlinker",
+        "--export=iso_hot_alloc",
+        "-Xlinker",
+        "--export=iso_hot_free",
+        "-Xlinker",
+        "-z",
+        "-Xlinker",
+        "stack-size=16777216",
+    ],
+    linkshared = True,
+    module_name = "tap_counter_gpu_reactor",
+    tags = ["manual"],
+    deps = [
+        # The framework-owned iso_hot bridge (exports can't drift per app).
+        "@isomer//wasm/libraries/hot_swift_ui_gpu:gpu_reactor_bridge",
+        ":tap_counter_gpu_lib",
+        "@isomer//wasm/libraries/hot_swift_ui_gpu",
+    ],
+)
+
+transition_binary(
+    name = "tap_counter_gpu_release.wasm",
+    binary = ":tap_counter_gpu_reactor_release",
+    platform = "@isomer//swift_ffi/rules:wasm32-wasip1",
+    tags = ["manual"],
+)
+
+reactor_artifact(
+    name = "tap_counter_gpu_release",
+    wasm = ":tap_counter_gpu_release.wasm",
+)
+
+# The embedded-AOT image for platforms that ban runtime code loading (iOS):
+# `wamrc --xip` output linked into the app's signed __TEXT segment. The fast
+# tier of the hybrid delivery policy; the bundled .wasm above stays the
+# interpreter/hotfix tier.
+embedded_xip_aot(
+    name = "tap_counter_embedded_aot",
+    wasm = ":tap_counter_release.wasm",
+)
+
+# ---- The threaded twin (wasm32-unknown-wasip1-threads): the same reactor
+# built with the threads SDK, its memory imported and shared (every guest
+# thread's instance maps the one memory) with the maximum wasi-threads needs.
+# WasmKitRuntime runs it with guest threads where WasmKit can (the engine
+# tests). ----
+
+swift_binary(
+    name = "tap_counter_threads_reactor_release",
+    copts = [
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    linkopts = [
+        "-Xlinker",
+        "--gc-sections",
+        "-Xlinker",
+        "--strip-all",
+        "-Xlinker",
+        "--import-memory",
+        "-Xlinker",
+        "--export-memory",
+        "-Xlinker",
+        "--shared-memory",
+        "-Xlinker",
+        "--max-memory=268435456",
+        "-Xlinker",
+        "--export=_initialize",
+        "-Xlinker",
+        "--export=iso_hot_start",
+        "-Xlinker",
+        "--export=iso_hot_render",
+        "-Xlinker",
+        "--export=iso_hot_resize",
+        "-Xlinker",
+        "--export=iso_hot_configure",
+        "-Xlinker",
+        "--export=iso_hot_set_color_scheme",
+        "-Xlinker",
+        "--export=iso_hot_event",
+        "-Xlinker",
+        "--export=iso_hot_alloc",
+        "-Xlinker",
+        "--export=iso_hot_free",
+        "-Xlinker",
+        "--export=iso_hot_shutdown",
+        "-Xlinker",
+        "--export=iso_hot_pending_tasks",
+        "-Xlinker",
+        "-z",
+        "-Xlinker",
+        "stack-size=16777216",
+    ],
+    linkshared = True,
+    module_name = "tap_counter_threads_reactor",
+    tags = ["manual"],
+    deps = [
+        "@isomer//wasm/libraries/hot_swift_ui:hot_bridge",
+        ":tap_counter_lib",
+        "@isomer//wasm/libraries/hot_swift_ui",
+    ],
+)
+
+transition_binary(
+    name = "tap_counter_threads_release.wasm",
+    binary = ":tap_counter_threads_reactor_release",
+    platform = "@isomer//swift_ffi/rules:wasm32-wasip1-threads",
+    tags = ["manual"],
+)

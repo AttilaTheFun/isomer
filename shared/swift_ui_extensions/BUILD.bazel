@@ -1,0 +1,15 @@
+# The `Isomer` module's shared sources: what Isomer provides beyond Apple's
+# frameworks (Platform.current, the platform-command modifiers, WebView, the
+# JSON helpers, the calendar helpers the sample apps use). The `SwiftUI`
+# module carries only Apple's surface; code that wants these imports Isomer
+# (SwiftUIExtensions and IsomerBridge remain as names that re-export it).
+# Each platform compiles them against its own SwiftUI module.
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(glob(["*.swift"]))
+
+filegroup(
+    name = "srcs",
+    srcs = glob(["*.swift"]),
+)

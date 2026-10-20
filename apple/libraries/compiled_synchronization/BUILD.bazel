@@ -1,0 +1,17 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# Synchronization for a compiled feature: `Mutex` (Mutex.swift), available on
+# every OS the app supports (Apple's needs iOS 18 and macOS 15). Only in the
+# feature's configuration, where //apple/compiled:mapping compiles it as
+# IsomerCompiledSynchronization and points `import Synchronization` at it.
+swift_library(
+    name = "synchronization",
+    srcs = glob(["*.swift"]),
+    module_name = "Synchronization",
+    target_compatible_with = select({
+        "//apple/compiled:feature_on": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+)

@@ -1,0 +1,31 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@isomer//tools/android:defs.bzl", "isomer_android_app")
+
+# The minimal "Tap me" counter, COMPILED-Swift Android cell of the cross-framework
+# benchmark (docs/benchmarks.md). Same shared TapCounter.swift as the wasm cell
+# (//wasm/tap_counter_feature) and behavior-identical to the native
+# Compose, Valdi, and React Native twins — so the numbers isolate runtime overhead,
+# not app content. The `isomer_android_app` macro generates MainActivity +
+# manifest and links the Swift .so under the Jetpack Compose renderer.
+
+swift_library(
+    name = "app_swift",
+    srcs = ["//shared/tap_counter_application:srcs"],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "TapCounterApp",
+    tags = ["manual"],  # only meaningful through the android transition
+    deps = [
+        "@isomer//android/libraries/swift_ui",
+        "@isomer//android/libraries/swift_ui:isomer",
+    ],
+)
+
+isomer_android_app(
+    name = "tap_counter_compiled_android_application",
+    default_renderer = "jetpackCompose",
+    label = "Tap Counter (compiled)",
+    package = "dev.isomer.tapcounter.compiled",
+    swift_library = ":app_swift",
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,3 @@
+# WasmKit's Bazel build: BUILD.wasmkit.bazel is the overlay MODULE.bazel's
+# `wasmkit` archive is built with.
+exports_files(["BUILD.wasmkit.bazel"])

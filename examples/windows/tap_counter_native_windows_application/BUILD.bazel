@@ -1,0 +1,22 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+# The hand-written Win32 baseline of the counter benchmark: one STATIC label +
+# one owner-drawn BUTTON, no Swift, no Isomer — the floor for what the
+# platform's own widget system costs (the Win32 peer of the Android benchmark's
+# native-Views cell). See docs/benchmarks.md#windows and main.c for the
+# ISO_BENCH self-driving mode.
+cc_binary(
+    name = "tap_counter_native_windows_application",
+    srcs = ["main.c"],
+    # WINDOWS subsystem like the compiled ISO cell (no console allocated); the
+    # bench logs go to stderr, which the benchmark driver redirects to a pipe.
+    linkopts = [
+        "/SUBSYSTEM:WINDOWS",
+        "/ENTRY:mainCRTStartup",
+        "user32.lib",
+        "gdi32.lib",
+    ],
+    target_compatible_with = ["@platforms//os:windows"],
+)

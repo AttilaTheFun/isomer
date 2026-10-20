@@ -1,0 +1,30 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# Observation for a compiled feature (README.md): the toolchain's sources,
+# available on every OS the app supports. Only in the feature's
+# configuration, where //apple/compiled:mapping compiles it as
+# IsomerCompiledObservation and points `import Observation` at it.
+swift_library(
+    name = "observation",
+    srcs = glob(["*.swift"]),
+    copts = [
+        "-parse-as-library",
+        "-define-availability",
+        "SwiftStdlib 5.9:macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, visionOS 1.0",
+        "-define-availability",
+        "SwiftStdlib 6.0:macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, visionOS 1.0",
+        "-enable-experimental-feature",
+        "Macros",
+        "-enable-experimental-feature",
+        "ExtensionMacros",
+        "-Xfrontend",
+        "-disable-implicit-string-processing-module-import",
+    ],
+    module_name = "Observation",
+    target_compatible_with = select({
+        "//apple/compiled:feature_on": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+)

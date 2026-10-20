@@ -1,0 +1,10 @@
+package(default_visibility = ["//visibility:public"])
+
+# The Metal backend's device and render pass, portable across Apple's Metal
+# and Isomer's: compiled into each platform's `SwiftGPU` module with what
+# that platform adds (swift_gpu/apple's MTKView surface, swift_gpu/wasm's
+# canvas surface).
+filegroup(
+    name = "srcs",
+    srcs = ["MetalGPUDevice.swift"],
+)

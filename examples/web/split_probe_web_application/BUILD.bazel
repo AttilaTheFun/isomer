@@ -1,0 +1,37 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@isomer//tools/wasm:defs.bzl", "isomer_web_app")
+
+# A P2PRC-shaped NavigationSplitView for verifying the web renderer's
+# compact (phone-width) presentation headlessly; see SplitProbe.swift.
+filegroup(
+    name = "srcs",
+    srcs = [
+        "Model.swift",
+        "SplitProbe.swift",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+swift_library(
+    name = "app_lib",
+    srcs = [
+        "Model.swift",
+        "SplitProbe.swift",
+    ],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "SplitProbe",
+    tags = ["manual"],
+    # The per-platform `SwiftUI` through the one alias a SwiftPM package would use.
+    deps = [
+        "@isomer//:swift_ui",
+        "@isomer//wasm/libraries/swift_ui:isomer",
+    ],
+)
+
+isomer_web_app(
+    name = "split_probe_web_application",
+    index = "index.html",
+    query = "renderer=react",
+    swift_library = ":app_lib",
+)

@@ -1,0 +1,31 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+# The shared "wasm mode" driver for the Linux and Windows example cells: runs the
+# greeter reactor under WAMR with no compiled Swift, via the generated c-host
+# bindings. Each platform application is a thin `main` that supplies its reactor
+# path (built from source on Linux, a committed prebuilt on Windows). The c-host
+# header's functions are `static`, so this library is the single translation unit
+# that includes it.
+cc_library(
+    name = "greeter_wasm_host",
+    srcs = ["run.c"],
+    hdrs = ["run.h"],
+    includes = ["."],
+    visibility = ["//swift_ffi/examples:__subpackages__"],
+    deps = [
+        "//swift_ffi/examples/shared/greeter:greeter_c_host",
+        "//swift_ffi/runtime/c_host_wamr:swift_ffi_wamr",
+    ],
+)

@@ -1,0 +1,26 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+
+package(
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+# The Windows "compiled mode" cell of the example matrix: the shared greeter
+# compiled to native code and linked into this program, called over the generated
+# C ABI (no interpreter). The driver lives in
+# //swift_ffi/examples/shared/greeter_compiled_host (shared with the Linux cell). No runner
+# wrapper is needed — the swift.org runtime DLLs resolve via the PATH the
+# swift.org installer sets. The wasm peer is ../example_windows_wasm_application.
+cc_binary(
+    name = "example_windows_compiled_application",
+    srcs = ["main.c"],
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = ["//swift_ffi/examples/shared/greeter_compiled_host"],
+)

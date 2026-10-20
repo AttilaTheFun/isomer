@@ -1,0 +1,84 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary", "swift_library")
+load("@isomer//swift_ffi/rules:swift_wasm_reactor.bzl", "transition_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+# The shared `OrderStatusCard` feature (//shared/embedded_example) as a
+# `iso_hot` wasm reactor — the wasm-engine twin of the natively compiled
+# feature the `IsomerView` demo host embeds
+# (examples/apple/example_partial_compiled_ios_application). Same source,
+# two engines: the host ships the feature compiled and overrides it with this
+# bundle (`ISO_ENGINE=wasm`) — the dynamic-delivery / hotfix path. No
+# swift_ffi: the card consumes no native DI, so the slim no-AppServices
+# bridge is all it needs.
+
+swift_library(
+    name = "embedded_example_lib",
+    srcs = ["//shared/embedded_example:srcs"],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "EmbeddedExampleApp",
+    tags = ["manual"],
+    deps = ["@isomer//wasm/libraries/hot_swift_ui"],
+)
+
+# Production-shaped reactor: ABI-only exports, --gc-sections, stripped — the
+# shape a dynamically delivered feature bundle ships in.
+swift_binary(
+    name = "embedded_example_reactor",
+    copts = [
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    linkopts = [
+        "-Xlinker",
+        "--gc-sections",
+        "-Xlinker",
+        "--strip-all",
+        "-Xlinker",
+        "--export=_initialize",
+        "-Xlinker",
+        "--export=iso_hot_start",
+        "-Xlinker",
+        "--export=iso_hot_render",
+        "-Xlinker",
+        "--export=iso_hot_resize",
+        "-Xlinker",
+        "--export=iso_hot_configure",
+        "-Xlinker",
+        "--export=iso_hot_set_color_scheme",
+        "-Xlinker",
+        "--export=iso_hot_event",
+        "-Xlinker",
+        "--export=iso_hot_alloc",
+        "-Xlinker",
+        "--export=iso_hot_free",
+        "-Xlinker",
+        "--export=iso_hot_shutdown",
+        "-Xlinker",
+        "--export=iso_hot_pending_tasks",
+        "-Xlinker",
+        "-z",
+        "-Xlinker",
+        "stack-size=16777216",
+    ],
+    linkshared = True,
+    module_name = "embedded_example_reactor",
+    tags = ["manual"],
+    deps = [
+        # The framework-owned iso_hot bridge (exports can't drift per app).
+        "@isomer//wasm/libraries/hot_swift_ui:hot_bridge",
+        ":embedded_example_lib",
+        "@isomer//wasm/libraries/hot_swift_ui",
+    ],
+)
+
+# Always the plain `.wasm` (never an `.aot`): the iOS host runs this on WAMR's
+# interpreter — a dynamically deliverable bundle is data, not code, which is
+# the point of the wasm engine on iOS (docs/benchmarks.md#ios, the † note).
+transition_binary(
+    name = "embedded_example.wasm",
+    binary = ":embedded_example_reactor",
+    platform = "@isomer//swift_ffi/rules:wasm32-wasip1",
+    tags = ["manual"],
+)

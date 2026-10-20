@@ -1,0 +1,35 @@
+load("@rules_android//rules:rules.bzl", "android_binary")
+load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
+
+# The Jetpack Macrobenchmark instrumentation APK — the platform-native perf
+# harness for the Android benchmark cells (see CellBenchmarks.kt for the
+# metrics and the adb invocation). Self-instrumenting: install this APK plus
+# a release cell APK, then `am instrument` with -e targetAppId.
+
+kt_android_library(
+    name = "cell_benchmarks",
+    srcs = glob(["kotlin/**/*.kt"]),
+    custom_package = "dev.isomer.macrobenchmark",
+    manifest = "AndroidManifest.xml",
+    tags = ["manual"],
+    deps = [
+        # benchmark-common + wire explicitly: their wire-generated
+        # perfetto.protos classes get dropped from the transitive aar chain.
+        "@isomer//tools/android:maven_androidx_benchmark_benchmark_common",
+        "@isomer//tools/android:maven_androidx_benchmark_benchmark_macro",
+        "@isomer//tools/android:maven_androidx_benchmark_benchmark_macro_junit4",
+        "@isomer//tools/android:maven_com_squareup_wire_wire_runtime_jvm",
+        "@isomer//tools/android:maven_androidx_test_ext_junit",
+        "@isomer//tools/android:maven_androidx_test_runner",
+        "@isomer//tools/android:maven_androidx_test_uiautomator_uiautomator",
+        "@isomer//tools/android:maven_junit_junit",
+    ],
+)
+
+android_binary(
+    name = "android_macrobenchmark",
+    manifest = "AndroidManifest.xml",
+    tags = ["manual"],
+    visibility = ["//visibility:public"],
+    deps = [":cell_benchmarks"],
+)

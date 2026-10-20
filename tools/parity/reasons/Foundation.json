@@ -1,0 +1,285 @@
+{
+  "summary": "Isomer's Foundation, on the platforms that have no Foundation of Apple's, is swift-foundation's FoundationEssentials built from Isomer's fork (AttilaTheFun/swift-foundation, branch `isomer`, from the swift-6.3.2-RELEASE tag), with the Swift value types and API Swift code uses most: `Data`, `Date`, `URL`, `UUID`, `Decimal`, `AttributedString`, JSON and property-list coding, `Calendar` basics, `FileManager`, `ProcessInfo`, `Predicate`. The fork adds what Apple's framework and swift-corelibs-foundation give Swift code through Objective-C: `CharacterSet`, the `String` methods that come from `NSString` (searching, replacing, trimming, comparing, percent encoding) and `String(format:)`. Isomer's own module adds `Bundle`, `Stream`, English calendar symbols, and `URLSession` with its requests, responses, errors and WebSocket tasks, over transports the platform's host installs. There is no swift-corelibs-foundation layer: no `NS` classes, CoreFoundation, FoundationNetworking or FoundationXML. On Apple platforms an app uses Apple's Foundation.",
+  "deviations": [
+    "`Bundle`, `InputStream` and `OutputStream` are Swift classes, not `NSObject` subclasses. A bundle is a directory found on the file system (`ISOMER_BUNDLE_PATH`, else the executable's directory); it reads no Info.plist and no strings tables (`localizedString` returns the value or the key), and `Bundle(for:)` is the main bundle. Streams read and write memory and files synchronously, with no run loop or delegate events.",
+    "Without `--@isomer//foundation:internationalization`, `Calendar`'s symbol lists (`shortWeekdaySymbols`, `monthSymbols`, `amSymbol`…) are English whatever the calendar's locale; with it they are ICU's.",
+    "The \"localized\" string comparisons (`localizedCompare`, `localizedStandardCompare`, `localizedCaseInsensitiveContains`…) compare without locale data. `String(format:)` does not apply a locale.",
+    "`CharacterSet` equality between sets that are not explicit ranges compares every code point (slow, rare), and its hash reads only the ASCII and Latin-1 range.",
+    "Formatting and parsing, locales, calendars beyond the Gregorian and time zones beyond GMT (FoundationInternationalization, over ICU) are an app's choice: counted here as present, they are there when the app builds with `--@isomer//foundation:internationalization`. ICU's data then comes with the app; `isomer_web_app(icu_locales = [\"en\", …])` keeps only the languages it names (34 MB of data becomes 6 to 7 MB for one to five languages).",
+    "What corelibs adds to swift-foundation and apps reach for, written in Swift over swift-foundation and the C library: `NSRange` and its functions, `NSLock`, `NSRecursiveLock`, `NSCondition`, `Thread` (pthreads; in WebAssembly without threads there is one thread and starting another stops the program), `FileHandle` (reading, writing, seeking; not the run-loop background reads), `NSNumber` (not bridged: `intValue`, not `as? Int`), `NSRegularExpression` and `NSTextCheckingResult` (over Swift's `Regex`, matching by Unicode scalar with UTF-16 ranges; patterns in the syntax both read), `NSTemporaryDirectory()` and `NSHomeDirectory()`. They are Swift classes, not NSObject subclasses; `Thread.threadDictionary` is a Swift dictionary.",
+    "`URLSession` sends http and https requests through the HTTP transport the platform's host installs in IsomerFoundation (`IsomerNetwork.http`: the browser's `fetch`, Android's HTTP stack, Apple's URLSession under WAMR) and opens WebSockets through its WebSocket transport; without one a task fails with `URLError.notConnectedToInternet`. `file:` and `data:` URLs are read without a transport. A body is sent and received whole; the host's stack keeps its own cookies and cache and follows redirects. Completion handlers run on a task of their own, not on a delegate queue. `suspend()` keeps a task that has not started from starting; one already loading goes on. Configuration and request properties that steer Apple's network stack (cellular, expensive and constrained access, service types, connections per host, waiting for connectivity) are kept and not acted on. `URLSessionWebSocketTask.sendPing` answers once the connection is open (the transports carry no pings), and a close code `CloseCode` has no case for (an application's 4000s) reads as `.invalid`, where Apple's enum, imported from C, holds the number. `URLRequest.CachePolicy`, `NetworkServiceType` and `Attribution` are enums of `URLRequest`'s own (Apple's are typealiases of `NSURLRequest`'s); `URLResponse`, `URLSession` and its tasks and configuration are Swift classes. `Error.localizedDescription`, URLError's descriptions and `HTTPURLResponse.localizedString(forStatusCode:)` are English."
+  ],
+  "newer": {
+    "ios": 27,
+    "title": "Newer than Isomer's swift-foundation",
+    "why": "Introduced in iOS 27: newer than the swift-6.3.2-RELEASE swift-foundation Isomer's fork is built from.",
+    "intent": "arrives when Isomer moves to the next Swift release"
+  },
+  "groups": [
+    {
+      "title": "Objective-C classes and protocols",
+      "status": "excluded",
+      "intent": "not planned",
+      "why": "`NSObject` subclasses, Objective-C protocols, and Objective-C bridging (`NSString`, `NSArray`, `NSCoder`, `NSKeyedArchiver`, `NSPredicate`, `NSLock`…). Isomer is written in Swift; the Swift value types these bridge to (`String`, `Array`, `Data`, `URL`, `Date`…) are what it implements.",
+      "match": [
+        "^NS",
+        "^CFBridging",
+        "^kCF",
+        "^unichar",
+        "ReferenceConvertible",
+        "ObjectiveCConvertible",
+        "^CustomNSError",
+        "_bridgeToObjectiveC",
+        "^AttributeScopes\\.AppKit",
+        "^AttributeScopes\\.UIKit",
+        "^URLRequest\\.ReferenceType$",
+        "^URLResponse\\.init\\(coder:\\)$"
+      ]
+    },
+    {
+      "title": "Mach, ports and network services",
+      "status": "excluded",
+      "intent": "not planned",
+      "why": "Mach ports, message ports, Bonjour network services and socket streams are Apple-platform or Objective-C run-loop machinery.",
+      "match": [
+        "^Mach",
+        "^MessagePort",
+        "^Port",
+        "^SocketNativeHandle",
+        "^NetService",
+        "^Stream(Network|SOCKS|Socket)",
+        "^StreamDelegate"
+      ]
+    },
+    {
+      "title": "iCloud, file providers and file protection",
+      "status": "excluded",
+      "intent": "not planned",
+      "why": "Ubiquitous (iCloud) items, file protection classes and thumbnails are Apple platform services.",
+      "match": [
+        "Ubiquitous",
+        "^URLThumbnail",
+        "FileProtection",
+        "^FileWrapper"
+      ]
+    },
+    {
+      "title": "Progress and undo",
+      "status": "excluded",
+      "intent": "maybe",
+      "why": "`Progress`, `ProgressManager` and `UndoManager` are Objective-C classes woven into Apple's frameworks' own progress and undo.",
+      "match": [
+        "^Progress",
+        "^Subprogress",
+        "^UndoManager",
+        "^URLSessionTask\\.progress$"
+      ]
+    },
+    {
+      "title": "Background sessions, stream tasks, proxies and TLS settings",
+      "status": "excluded",
+      "intent": "not planned",
+      "why": "Background sessions hand their transfers to the system's download daemon, which wakes the app when they finish; stream tasks are raw TCP connections, which a browser cannot open; proxies, TLS versions and server trust (`SecTrust`, `tls_protocol_version_t`) belong to the platform's network stack and the Security framework. Under Isomer the host's stack (the browser, Android's) decides them.",
+      "match": [
+        "^URLSessionConfiguration\\.background\\(",
+        "^URLSessionStreamTask",
+        "^URLSession\\.streamTask\\(",
+        "^URLSessionStreamDelegate",
+        "^URLSessionConfiguration\\.(connectionProxyDictionary|tlsMinimumSupportedProtocolVersion|tlsMaximumSupportedProtocolVersion)$",
+        "^URLError\\.failureURLPeerTrust$"
+      ]
+    },
+    {
+      "title": "Streamed bodies",
+      "status": "not yet",
+      "intent": "planned (after 0.31)",
+      "why": "A body read as it arrives (`bytes(for:)`, `URLSession.AsyncBytes`, `URL.lines`, `resourceBytes`, the async line and character sequences over bytes) or sent as it is produced (`uploadTask(withStreamedRequest:)`). Isomer's transports hand a body over whole (a request's `httpBodyStream` is read whole before it is sent); these come with a streaming transport (a `fetch` response's `ReadableStream`, OkHttp's source).",
+      "match": [
+        "^URLSession\\.AsyncBytes",
+        "^URLSession\\.bytes\\(",
+        "^Async(Line|Character|UnicodeScalar)Sequence",
+        "^URL\\.(lines|resourceBytes)",
+        "^URLSession\\.uploadTask\\(withStreamedRequest:"
+      ]
+    },
+    {
+      "title": "Resumable transfers",
+      "status": "not yet",
+      "intent": "maybe",
+      "why": "Resume data for a download or upload that was cancelled or failed, and the tasks made from it: the platform's stack would have to keep the partial transfer and ask for the rest by range. An Isomer task that fails starts again from the beginning.",
+      "match": [
+        "^URL(Session|Error)[A-Za-z]*\\..*([Rr]esumeData|resumeFrom)"
+      ]
+    },
+    {
+      "title": "URLSession delegates and metrics",
+      "status": "not yet",
+      "intent": "maybe (Swift delegate protocols whose methods have default implementations, with the `delegate:` forms)",
+      "why": "Session and task delegates are Objective-C protocols (refinements of `NSObjectProtocol` with optional requirements), a session's called on its `delegateQueue`, an `OperationQueue`; the dispositions and the task metrics exist for them. Isomer's tasks report through completion handlers and the `async` forms. `data(for:)`, `upload(for:from:)`, `download(for:)` and the others are there as an app calls them without a delegate (the `delegate:` parameter's default is nil); the forms that take one are not.",
+      "match": [
+        "^URLSession[A-Za-z]*Delegate",
+        "^URLSession\\.delegate",
+        "^URLSessionTask\\.delegate$",
+        "^URLSession\\.[A-Za-z]+\\([^)]*delegate:",
+        "^URLSession\\.(ResponseDisposition|AuthChallengeDisposition|DelayedRequestDisposition)",
+        "^URLSessionTask(Transaction)?Metrics"
+      ]
+    },
+    {
+      "title": "Caches, cookies, credentials and URL protocols",
+      "status": "not yet",
+      "intent": "maybe",
+      "why": "Apple's network stack keeps a response cache, cookies and credentials of its own, and loads schemes of an app's through `URLProtocol` subclasses it registers; all of them are `NSObject` classes. Under Isomer the platform's stack keeps its own (a page's cookies and HTTP cache are the browser's), and a test installs a transport (IsomerFoundation's `IsomerNetwork`) where on Apple platforms it would register a `URLProtocol`.",
+      "match": [
+        "^URLCache",
+        "^CachedURLResponse",
+        "^HTTPCookie",
+        "^URLCredential",
+        "^URLProtectionSpace",
+        "^URLAuthenticationChallenge",
+        "^URLProtocol",
+        "^URLSessionConfiguration\\.(urlCache|httpCookieStorage|httpCookieAcceptPolicy|urlCredentialStorage|protocolClasses)$"
+      ]
+    },
+    {
+      "title": "URLSession's Combine publisher",
+      "status": "not yet",
+      "intent": "maybe (with a Combine subset)",
+      "why": "`URLSession.DataTaskPublisher` and `dataTaskPublisher(for:)` are Combine's; a `Combine` module is not part of 0.31.",
+      "match": [
+        "^URLSession\\.(DataTaskPublisher|dataTaskPublisher)"
+      ]
+    },
+    {
+      "title": "Formatting, locales, calendars and time zones",
+      "status": "not yet",
+      "intent": "planned: what of it remains once FoundationInternationalization is in",
+      "why": "Formatting and parsing (`FormatStyle`, `ParseStrategy`, `formatted()`), locale data, calendars other than the Gregorian and time zones other than GMT, measurement and person-name formatting, inflection: FoundationInternationalization, which needs ICU and is an app's choice.",
+      "match": [
+        "FormatStyle",
+        "ParseStrategy",
+        "formatted",
+        "^Locale",
+        "^Calendar",
+        "^TimeZone",
+        "^DateComponents",
+        "^Date\\.(init\\(_:strategy|ParseStrategy|FormatString|ISO8601|RelativeFormat|Anchored|IntervalFormat|ComponentsFormat|VerbatimFormat|FormatStyle|HTTP)",
+        "^PersonNameComponents",
+        "^Morphology",
+        "^TermOfAddress",
+        "^Inflection",
+        "^LocalizedStringResource",
+        "^String\\.(init\\(localized|LocalizationValue)",
+        "^StringStyle",
+        "^StringTransform",
+        "^Measurement",
+        "^FormatStyleCapitalizationContext",
+        "^DescriptiveNumberFormatConfiguration",
+        "^NumberFormatStyleConfiguration",
+        "^CurrencyFormatStyleConfiguration",
+        "^ListFormatStyle",
+        "^ByteCountFormatStyle",
+        "^Decimal\\.(FormatStyle|ParseStrategy|init\\(_:format|formatted)",
+        "^CustomLocalizedStringResourceConvertible",
+        "^InlinePresentationIntent",
+        "^PresentationIntent",
+        "^AttributeScopes\\.FoundationAttributes\\.(Morphology|InflectionRule|Inflection|LanguageIdentifier|PersonNameComponent|Agreement|LocalizedNumberFormat|LocalizedDateFormat)"
+      ]
+    },
+    {
+      "title": "Formatter classes",
+      "status": "not yet",
+      "intent": "maybe (DateFormatter and NumberFormatter as Swift classes over FormatStyle)",
+      "why": "Objective-C formatter classes (`DateFormatter`, `NumberFormatter`, `ISO8601DateFormatter`…), which `FormatStyle` replaces in Swift.",
+      "match": [
+        "Formatter$",
+        "Formatter\\.",
+        "^Formatter"
+      ]
+    },
+    {
+      "title": "Threads, run loops, timers and operations",
+      "status": "not yet",
+      "intent": "maybe",
+      "why": "`Thread`, `RunLoop`, `Timer`, `Operation` and `OperationQueue`, `NotificationQueue`: Objective-C run-loop machinery that Swift concurrency and Dispatch cover in Isomer apps.",
+      "match": [
+        "^Thread",
+        "^RunLoop",
+        "^Timer",
+        "^Operation",
+        "^BlockOperation",
+        "^QualityOfService",
+        "^NotificationQueue"
+      ]
+    },
+    {
+      "title": "Processes, file handles and file resources",
+      "status": "not yet",
+      "intent": "planned (after 0.31)",
+      "why": "`FileHandle`, `Pipe`, URL resource values and the rest of `FileManager` and `ProcessInfo` beyond what Essentials has.",
+      "match": [
+        "^FileHandle",
+        "^Pipe",
+        "^URLResource",
+        "^URLFileResourceType",
+        "^FileManager",
+        "^ProcessInfo",
+        "^FilePath",
+        "^URL\\.(resourceValues|setResourceValues|removeCachedResourceValue|removeAllCachedResourceValues|setTemporaryResourceValue|checkResourceIsReachable|checkPromisedItemIsReachable|promisedItemResourceValues|bookmark|init\\(resolvingBookmark|init\\(resolvingAlias|writeBookmark|startAccessing|stopAccessing|init\\(fileReferenceLiteral)"
+      ]
+    },
+    {
+      "title": "Serialization and parsing classes",
+      "status": "not yet",
+      "intent": "maybe",
+      "why": "`JSONSerialization`, `PropertyListSerialization`, `XMLParser`, `Scanner` and `ValueTransformer` are Objective-C classes; `JSONDecoder`, `PropertyListDecoder` and Swift's own parsing cover most uses.",
+      "match": [
+        "^JSONSerialization",
+        "^PropertyListSerialization",
+        "^XMLParser",
+        "^Scanner",
+        "^ValueTransformer"
+      ]
+    },
+    {
+      "title": "Units and measurements",
+      "status": "not yet",
+      "intent": "maybe",
+      "why": "`Unit`, `Dimension` and their subclasses are Objective-C classes.",
+      "match": [
+        "^Unit",
+        "^Dimension"
+      ]
+    },
+    {
+      "title": "User defaults and notifications",
+      "status": "not yet",
+      "intent": "planned (after 0.31)",
+      "why": "`UserDefaults` over each platform's own preferences (Isomer's SwiftUI keeps `@AppStorage` there already), and the rest of `NotificationCenter`.",
+      "match": [
+        "^UserDefaults",
+        "^Notification"
+      ]
+    },
+    {
+      "title": "Combine's observable objects",
+      "status": "excluded",
+      "intent": "not planned",
+      "why": "`ObservableObject` and `@Published` are Combine's, kept for backward compatibility; Isomer's apps use Observation's `@Observable` (2026-10-12).",
+      "match": [
+        "^ObservableObject",
+        "^Published"
+      ]
+    },
+    {
+      "title": "Other members",
+      "status": "not yet",
+      "intent": "planned, as apps need them",
+      "why": "Members of types Isomer's Foundation has (`Data`, `String`, `AttributedString`, `URL`, `Bundle`, `Stream`, errors, predicates, the standard library's types) that it lacks: often an overload taking an Objective-C type or a newer form.",
+      "match": [
+        "."
+      ]
+    }
+  ],
+  "additions": "Declarations Isomer's Foundation has that Apple's does not: implementation details of swift-foundation (public there for its own modules) and Isomer's helpers."
+}

@@ -1,0 +1,44 @@
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("@rules_swift//swift:swift.bzl", "swift_binary")
+load("//tools/platforms:transition.bzl", "transition_binary")
+
+# Translates the shaders in TranslatorCheck.swift (SwiftGPU's own among
+# them) and checks the WGSL against what each should contain; prints the
+# WGSL with --print. Runs on the Mac and, as the `Metal` module does, on
+# wasm.
+swift_binary(
+    name = "translator_check",
+    package_name = "isomer",
+    srcs = ["TranslatorCheck.swift"],
+    # The parser recurses: more than wasm-ld's default stack.
+    linkopts = select({
+        "@platforms//cpu:wasm32": [
+            "-Xlinker",
+            "-z",
+            "-Xlinker",
+            "stack-size=16777216",
+        ],
+        "//conditions:default": [],
+    }),
+    deps = ["//metal/isomer_metal"],
+)
+
+transition_binary(
+    name = "translator_check_wasm",
+    binary = ":translator_check",
+    platform = "//tools/platforms:wasm32",
+)
+
+sh_test(
+    name = "translator_test",
+    size = "small",
+    srcs = ["run_check.sh"],
+    args = [
+        "$(rootpath //tools/wasm/wasi_command:iwasm)",
+        "$(rootpath :translator_check_wasm)",
+    ],
+    data = [
+        ":translator_check_wasm",
+        "//tools/wasm/wasi_command:iwasm",
+    ],
+)

@@ -1,0 +1,59 @@
+load("@build_bazel_rules_apple//apple:apple.bzl", "local_provisioning_profile")
+load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@rules_xcodeproj//xcodeproj:defs.bzl", "xcode_provisioning_profile")
+load("@isomer_signing//:signing.bzl", "TEAM_ID")
+
+# The JavaScriptCore iOS cell of the counter benchmark (docs/benchmarks.md#ios):
+# the shared TapCounter reactor's `.wasm` run by JSC's WebAssembly inside a
+# JSContext (interpreter-only on device — no 3rd-party JIT pages). A fully
+# committable dynamic tier: JavaScriptCore is a system framework. Same bundle
+# id as the other iOS cells — install one at a time. Bench: `-bench` /
+# `-bench-signpost`.
+
+BUNDLE_ID = "com.LoganShire.Isomer"
+
+
+swift_library(
+    name = "app_lib",
+    srcs = [
+        "JSCApp.swift",
+        "@isomer//apple/libraries/bench:harness",
+        "@isomer//apple/libraries/bench:signpost_harness",
+    ],
+    module_name = "TapCounterJSCIOS",
+    tags = ["manual"],
+    deps = [
+        "@isomer//apple/libraries/bench:boot",
+        "@isomer//apple/libraries/wasm_view",
+        "@isomer//shared/wasm_host:jsc_runtime",
+        "@isomer//shared/wasm_host:wasm_host",
+    ],
+)
+
+local_provisioning_profile(
+    name = "_xcode_managed_profile",
+    profile_name = "iOS Team Provisioning Profile: *",
+    tags = ["manual"],
+    team_id = TEAM_ID,
+)
+
+xcode_provisioning_profile(
+    name = "_development_profile",
+    managed_by_xcode = True,
+    provisioning_profile = ":_xcode_managed_profile",
+    tags = ["manual"],
+)
+
+ios_application(
+    name = "tap_counter_jsc_ios_application",
+    bundle_id = BUNDLE_ID,
+    families = ["iphone"],
+    infoplists = ["Info.plist"],
+    minimum_os_version = "17.0",
+    provisioning_profile = ":_development_profile",
+    resources = ["//wasm/tap_counter_feature:tap_counter_release.wasm"],
+    tags = ["manual"],
+    visibility = ["//visibility:public"],
+    deps = [":app_lib"],
+)

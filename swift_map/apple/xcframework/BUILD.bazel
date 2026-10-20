@@ -1,0 +1,52 @@
+load("@build_bazel_rules_apple//apple:apple.bzl", "apple_xcframework")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+# apple_xcframework requires ONE swift_library with no transitive Swift
+# deps, so the distribution compiles swift_map's and swift_gpu's sources
+# into a single resilient `SwiftMap` module (their `import SwiftGPU` lines
+# are canImport-guarded away in this build). Dev builds keep the real
+# module split.
+swift_library(
+    name = "swift_map_distribution",
+    srcs = [
+        "//swift_map/apple/libraries/swift_map:srcs",
+        "//swift_map/swift_map/core:srcs",
+        "//swift_map/swift_map/renderer:srcs",
+        "//swift_gpu/apple:srcs",
+        "//swift_gpu/core:srcs",
+    ],
+    features = [
+        "swift.enable_library_evolution",
+        "swift.emit_swiftinterface",
+    ],
+    module_name = "SwiftMap",
+    tags = ["manual"],
+)
+
+# The binary distribution for non-Bazel consumers: a static SwiftMap
+# framework for iOS (device + simulator) and macOS, with .swiftinterface
+# (library evolution). `bazel build //swift_map/apple/xcframework:SwiftMap` produces
+# SwiftMap.xcframework.zip; distribution/Package.swift wraps it as a binary
+# Swift package (see README).
+apple_xcframework(
+    name = "SwiftMap",
+    bundle_id = "dev.swiftmap.SwiftMap",
+    infoplists = ["Info.plist"],
+    ios = {
+        "device": ["arm64"],
+        "simulator": [
+            "arm64",
+            "x86_64",
+        ],
+    },
+    macos = [
+        "arm64",
+        "x86_64",
+    ],
+    minimum_os_versions = {
+        "ios": "15.0",
+        "macos": "13.0",
+    },
+    visibility = ["//visibility:public"],
+    deps = [":swift_map_distribution"],
+)

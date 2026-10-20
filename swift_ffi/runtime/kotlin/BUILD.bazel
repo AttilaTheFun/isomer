@@ -1,0 +1,27 @@
+load("@rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
+
+package(
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+# The shared Kotlin half of the bridge runtime (package `swiftffi`).
+# Pure JVM Kotlin, so it serves kt_jvm_library and kt_android_library
+# consumers alike.
+kt_jvm_library(
+    name = "kotlin",
+    srcs = [
+        "BridgeBlob.kt",
+        "SwiftClosure.kt",
+        "SwiftError.kt",
+        "SwiftLazy.kt",
+    ],
+    visibility = ["//visibility:public"],
+)

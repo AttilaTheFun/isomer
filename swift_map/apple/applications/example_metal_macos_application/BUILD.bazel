@@ -1,0 +1,18 @@
+load("@build_bazel_rules_apple//apple:macos.bzl", "macos_application")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+swift_library(
+    name = "example_metal_macos_application_lib",
+    srcs = ["ExampleApp.swift"],
+    deps = ["//swift_map/apple/libraries/swift_map"],
+)
+
+# `bazel run //swift_map/apple/applications/example_metal_macos_application` launches the app.
+macos_application(
+    name = "example_metal_macos_application",
+    bundle_id = "dev.swiftmap.example",
+    infoplists = ["Info.plist"],
+    minimum_os_version = "13.0",
+    visibility = ["//visibility:public"],
+    deps = [":example_metal_macos_application_lib"],
+)

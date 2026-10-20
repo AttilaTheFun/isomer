@@ -1,0 +1,50 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary")
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+# The SDL2 window/input/attribution host half (rendering is Swift through
+# swift_gpu's GL backend). System SDL2 + SDL2_ttf, like isomer's
+# Linux target — both ship on essentially every desktop distro.
+cc_library(
+    name = "host",
+    srcs = ["host.c"],
+    copts = ["-std=c11"],
+    linkopts = [
+        "-lSDL2",
+        "-lSDL2_ttf",
+    ],
+    target_compatible_with = ["@platforms//os:linux"],
+    alwayslink = True,
+)
+
+# SwiftMap as a native Linux executable: SDL2 window over swift_gpu's
+# desktop GL backend; tiles via URLSession (FoundationNetworking) + stb.
+swift_binary(
+    name = "example_opengl_linux_application_bin",
+    srcs = ["ExampleApp.swift"],
+    copts = [
+        "-parse-as-library",
+        "-enable-experimental-feature",
+        "Extern",  # smw_* / sm_decode_rgba bind against :host / stb_decode
+    ],
+    module_name = "ExampleApplication",
+    target_compatible_with = ["@platforms//os:linux"],
+    deps = [
+        ":host",
+        "//swift_map/linux/libraries/swift_map",
+        "//swift_map/shared/stb_decode",
+        "//swift_gpu/linux:swift_gpu",
+    ],
+)
+
+# `bazel run` wrapper: points LD_LIBRARY_PATH at the swift.org runtime
+# (whose runfiles-relative RUNPATH doesn't resolve under `bazel run`) and
+# execs the real binary — the same pattern as isomer's Linux target.
+sh_binary(
+    name = "example_opengl_linux_application",
+    srcs = ["run_linux.sh"],
+    data = [":example_opengl_linux_application_bin"],
+    target_compatible_with = ["@platforms//os:linux"],
+)

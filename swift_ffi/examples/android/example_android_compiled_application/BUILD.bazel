@@ -1,0 +1,90 @@
+# The Android "compiled mode" cell of the example matrix: the shared greeter
+# (//swift_ffi/examples/shared/greeter) as a JNI shared library + Kotlin bindings, packaged
+# into a runnable rules_android APK. Android links Swift natively (via JNI), so
+# this is the compiled cell — there is no Android wasm cell here.
+#
+#   bazel run //swift_ffi/examples/android/example_android_compiled_application   # boots the hermetic emulator
+#
+# The call chain: MainActivity.kt -> GreeterBridge (generated Kotlin) -> JNI ->
+# generated @_cdecl glue -> the annotated Swift library.
+
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+load("@rules_android//rules:rules.bzl", "android_binary")
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+load("//swift_ffi/rules:kt_swift_library.bzl", "kt_swift_library")
+
+package(
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+# Android: a JNI shared library (`libgreeter_android.so`) + idiomatic Kotlin
+# bindings. The facade object is `GreeterBridge` by convention (the dep's
+# Swift module is `Greeter`).
+kt_swift_library(
+    name = "greeter_android",
+    swift = "//swift_ffi/examples/shared/greeter",
+    java_package = "com.example.greeter",
+)
+
+android_binary(
+    name = "app",
+    manifest = "AndroidManifest.xml",
+    deps = [
+        ":app_lib",
+        ":swift_bridge",
+    ],
+)
+
+kt_android_library(
+    name = "app_lib",
+    srcs = ["kotlin/com/example/greeter/MainActivity.kt"],
+    custom_package = "com.example.greeter",
+    manifest = "AndroidManifest.xml",
+    deps = [":greeter_android"],
+)
+
+# Wrap the swift_ffi JNI .so as a cc_library so android_binary's per-ABI
+# native split packages it under lib/arm64-v8a/.
+cc_library(
+    name = "swift_bridge",
+    srcs = [":libgreeter_android.so"],
+    target_compatible_with = ["@platforms//os:android"],
+)
+
+build_test(
+    name = "app_build_test",
+    targets = [":app"],
+)
+
+# `bazel run //swift_ffi/examples/android/example_android_compiled_application` installs
+# the APK on a connected device/emulator and launches it, booting the hermetic
+# emulator first if nothing is connected. macOS/arm64 only (see the emulator
+# archives in MODULE.bazel).
+sh_binary(
+    name = "example_android_compiled_application",
+    srcs = ["run_android.sh"],
+    args = [
+        "$(rlocationpath :app.apk)",
+        "$(rlocationpath @androidsdk//:adb)",
+        "$(rlocationpath @android_emulator//:emulator/emulator)",
+        "$(rlocationpath @android_system_image//:system.img)",
+    ],
+    data = [
+        ":app.apk",
+        "@android_emulator//:all",
+        "@android_emulator//:emulator/emulator",
+        "@android_system_image//:all",
+        "@android_system_image//:system.img",
+        "@androidsdk//:adb",
+    ],
+)

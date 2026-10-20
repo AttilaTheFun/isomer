@@ -1,0 +1,72 @@
+load("@rules_android//rules:rules.bzl", "android_binary")
+load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
+load("@isomer//tools/android:defs.bzl", "apk_install_run", "flat_assets")
+
+# Level 4 adoption, the "full x wasm" cell of the Android [full|partial] x
+# [compiled|wasm] matrix: the WHOLE shared SwiftUI @main App shipped as a wasm
+# bundle and hosted full-screen by `WasmView`. Its compiled twin (SAME app,
+# Swift built into the APK) is
+# //android/example_full_compiled_android_application.
+#
+# Like example_partial_wasm, this carries NO compiled Swift: the only native
+# library is libiso_wamr_jni.so (the WAMR C engine + host + JNI, ~344 KB). The
+# app's entire UI is the reactor //wasm/example_full_feature, run
+# in-process under WAMR and drawn by the Swift-free Compose interpreter.
+
+# assets/: the whole-app reactor (RELEASE build — gc'd, ABI-only exports,
+# stripped) PLUS the shared image PNGs flattened to the basenames the tree's
+# image nodes open (HostServices.loadBitmap → assets.open("tab-pokedex.png")).
+flat_assets(
+    name = "app_assets",
+    srcs = [
+        "//shared/example_application:assets",
+        # Config-selected reactor: `example_full_release.wasm` (interp) by
+        # default, or `example_full_release.aot` (native) under `--config=release`.
+        "//wasm/example_full_feature:example_full_release",
+    ],
+)
+
+# The host as ONE Kotlin/Compose library: the full-screen host (MainActivity),
+# the Swift-free Compose interpreter (interpreter_kotlin), and the wasm engine
+# glue (WasmView / WamrRuntime from //android/libraries/wasm_view). No
+# swift_library, no generated JNI bindings — nothing pulls compiled Swift.
+kt_android_library(
+    name = "host_app",
+    srcs = glob(["kotlin/**/*.kt"]) + [
+        "//android/platform_services_wasm:srcs",
+        "@isomer//android/libraries/swift_ui:interpreter_kotlin",
+        "@isomer//android/libraries/wasm_view:runtime_kotlin",
+    ],
+    custom_package = "dev.isomer.wasmfull",
+    manifest = "AndroidManifest.xml",
+    plugins = ["@isomer//android/libraries/swift_ui:compose_compiler_plugin"],
+    tags = ["manual"],
+    deps = [
+        "@isomer//tools/android:maven_androidx_activity_activity_compose",
+        "@isomer//tools/android:maven_androidx_compose_foundation_foundation",
+        "@isomer//tools/android:maven_androidx_compose_material3_material3",
+        "@isomer//tools/android:maven_androidx_compose_runtime_runtime",
+        "@isomer//tools/android:maven_androidx_compose_ui_ui",
+        "@isomer//tools/android:maven_org_jetbrains_kotlinx_kotlinx_coroutines_android",
+        "@isomer//tools/android:maven_org_jetbrains_kotlinx_kotlinx_coroutines_core",
+    ],
+)
+
+android_binary(
+    name = "example_full_wasm_android_application_apk",
+    assets = [":app_assets"],
+    assets_dir = "app_assets",
+    manifest = "AndroidManifest.xml",
+    deps = [
+        ":host_app",
+        # The ONLY native library: the WAMR C engine (no compiled Swift).
+        "@isomer//android/libraries/wasm_view:wamr_jni",
+    ],
+)
+
+# `bazel run` installs + launches on the connected device / hermetic emulator.
+apk_install_run(
+    name = "example_full_wasm_android_application",
+    activity = "dev.isomer.wasmfull/.MainActivity",
+    apk = ":example_full_wasm_android_application_apk.apk",
+)

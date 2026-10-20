@@ -1,0 +1,7 @@
+# A text field's selection (`TextField(_:text:selection:)`), shared by the
+# web and Android probes (web/ and android/selection_probe_*_application).
+filegroup(
+    name = "srcs",
+    srcs = glob(["*.swift"]),
+    visibility = ["//visibility:public"],
+)

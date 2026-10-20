@@ -1,0 +1,57 @@
+load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+_MACOS_PKG = "//apple/example_partial_wasm_macos_application"
+_FEATURE = "//wasm/hot_demo_feature"
+
+# The iOS host: WasmView + AppBundleProvider (the file-watch shadow handles the
+# sandbox's no-`bazel` constraint — it polls a shared bazel-bin artifact). Uses
+# the same demo `.wasm` as the macOS host so one HotDemo.swift drives both.
+swift_library(
+    name = "ios_lib",
+    srcs = ["iOSApp.swift"],
+    module_name = "WasmViewIOSHost",
+    deps = [
+        "@isomer//apple/libraries/wasm_view",
+        "//apple/platform_services_host",
+    ],
+)
+
+# `bazel run //apple/example_partial_wasm_ios_application` builds
+# and launches in the iOS Simulator. The demo `.wasm` is bundled, so it renders
+# out of the box; set ISO_WASM_PATH to the macOS host's rebuilt artifact to
+# hot-reload edits live (see iOSApp.swift). No provisioning profile (simulator).
+ios_application(
+    name = "example_partial_wasm_ios_application",
+    bundle_id = "com.LoganShire.Isomer.WasmView",
+    families = [
+        "iphone",
+        "ipad",
+    ],
+    infoplists = ["Info.plist"],
+    minimum_os_version = "17.0",
+    resources = [_FEATURE + ":hot_demo"],
+    deps = [":ios_lib"],
+)
+
+# The hot-reload server, exposed here so the whole iOS loop lives in one
+# package. It is the macOS server (it watches + compiles the shared
+# HotDemo.swift and serves the bytes over HTTP — platform-agnostic to whoever
+# connects). Run in its own shell:
+#   bazel run //apple/example_partial_wasm_ios_application:hot_reload_server
+alias(
+    name = "hot_reload_server",
+    actual = _MACOS_PKG + ":hot_reload_server",
+)
+
+# One command: build + boot a simulator + install + launch the app already
+# connected to the hot-reload server (default http://localhost:8787). Pairs
+# with `:hot_reload_server` running in another shell.
+#   bazel run //apple/example_partial_wasm_ios_application:run
+sh_binary(
+    name = "run",
+    srcs = ["run_ios.sh"],
+)

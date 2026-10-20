@@ -1,0 +1,199 @@
+diff --git a/cmake/modules/AddPureSwift.cmake b/cmake/modules/AddPureSwift.cmake
+index 72bcabb921a..aa0f83415df 100644
+--- a/cmake/modules/AddPureSwift.cmake
++++ b/cmake/modules/AddPureSwift.cmake
+@@ -66,6 +66,21 @@ function(_add_host_swift_compile_options name)
+       swift_android_tools_path(${SWIFT_HOST_VARIANT_ARCH} tools_path)
+       target_compile_options(${name} PRIVATE $<$<COMPILE_LANGUAGE:Swift>:-tools-directory;${tools_path};>)
+     endif()
++    if(SWIFT_HOST_VARIANT_SDK STREQUAL "WASI")
++      # The C++ these libraries import (LLVM's headers) needs WASI's emulations
++      # and the threading shims, as SwiftCompilerSources gets them.
++      # In pairs ("-Xcc -D…"), each as one SHELL: option: CMake drops a
++      # repeated single option, which would split -Xcc from its argument.
++      set(pending "")
++      foreach(flag ${SWIFT_COMPILER_SOURCES_SDK_FLAGS})
++        if(pending)
++          target_compile_options(${name} PRIVATE "$<$<COMPILE_LANGUAGE:Swift>:SHELL:${pending} ${flag}>")
++          set(pending "")
++        else()
++          set(pending "${flag}")
++        endif()
++      endforeach()
++    endif()
+   endif()
+ 
+   target_compile_options(${name} PRIVATE
+diff --git a/lib/AST/PluginRegistry.cpp b/lib/AST/PluginRegistry.cpp
+index 9495d91c4d7..bd905c83db6 100644
+--- a/lib/AST/PluginRegistry.cpp
++++ b/lib/AST/PluginRegistry.cpp
+@@ -34,6 +34,25 @@
+ 
+ using namespace swift;
+ 
++#if defined(__wasi__)
++// A compiler built for WebAssembly runs no processes: an executable plugin is a
++// WASI module (a macro plugin built for wasm32-wasip1, which serves requests
++// through swift-syntax's `swift_wasm_macro_v1_pump`) that the host
++// instantiates beside the compiler. These imports are the plugin's pipes:
++// `write` gives it bytes (the host pumps it once a whole message has come),
++// `read` takes back what it wrote. A handle stands for both pipes.
++extern "C" {
++__attribute__((import_module("iso_plugin"), import_name("open")))
++int iso_plugin_open(const char *path, size_t length);
++__attribute__((import_module("iso_plugin"), import_name("write")))
++long iso_plugin_write(int plugin, const void *bytes, size_t length);
++__attribute__((import_module("iso_plugin"), import_name("read")))
++long iso_plugin_read(int plugin, void *bytes, size_t length);
++__attribute__((import_module("iso_plugin"), import_name("close")))
++void iso_plugin_close(int plugin);
++}
++#endif
++
+ PluginRegistry::PluginRegistry() {
+   dumpMessaging = ::getenv("SWIFT_DUMP_PLUGIN_MESSAGING") != nullptr;
+ }
+@@ -152,10 +171,12 @@ PluginRegistry::loadExecutablePlugin(StringRef path, bool disableSandbox) {
+                                    "not found");
+   }
+ 
++#if !defined(__wasi__)
+   if (!llvm::sys::fs::can_execute(path)) {
+     return llvm::createStringError(std::errc::permission_denied,
+                                    "not executable");
+   }
++#endif
+ 
+   auto plugin = std::make_unique<LoadedExecutablePlugin>(
+       path, stat.getLastModificationTime(), disableSandbox);
+@@ -190,6 +211,21 @@ llvm::Error LoadedExecutablePlugin::spawnIfNeeded() {
+     return llvm::Error::success();
+   }
+ 
++#if defined(__wasi__)
++  StringRef path = getPath();
++  int plugin = iso_plugin_open(path.data(), path.size());
++  if (plugin < 0) {
++    return llvm::createStringError(std::errc::not_supported,
++                                   "the host cannot run this plugin");
++  }
++  Process = std::make_unique<PluginProcess>(llvm::sys::ProcessInfo(), plugin,
++                                            plugin);
++  for (auto *callback : getOnReconnectCallbacks()) {
++    (*callback)();
++  }
++  return llvm::Error::success();
++#endif
++
+   // Create command line arguments.
+   SmallVector<StringRef, 4> command{getPath()};
+ 
+@@ -217,6 +253,10 @@ llvm::Error LoadedExecutablePlugin::spawnIfNeeded() {
+ }
+ 
+ LoadedExecutablePlugin::PluginProcess::~PluginProcess() {
++#if defined(__wasi__)
++  iso_plugin_close(input);
++  return;
++#endif
+ #if defined(_WIN32)
+   _close(input);
+   _close(output);
+@@ -236,7 +276,9 @@ LoadedExecutablePlugin::PluginProcess::~PluginProcess() {
+ 
+ ssize_t LoadedExecutablePlugin::PluginProcess::read(void *buf,
+                                                     size_t nbyte) const {
+-#if defined(_WIN32)
++#if defined(__wasi__)
++  return iso_plugin_read(input, buf, nbyte);
++#elif defined(_WIN32)
+   size_t nread = 0;
+   while (nread < nbyte) {
+     int n = _read(input, static_cast<char*>(buf) + nread,
+@@ -274,7 +316,9 @@ ssize_t LoadedExecutablePlugin::PluginProcess::read(void *buf,
+ 
+ ssize_t LoadedExecutablePlugin::PluginProcess::write(const void *buf,
+                                                      size_t nbyte) const {
+-#if defined(_WIN32)
++#if defined(__wasi__)
++  return iso_plugin_write(output, buf, nbyte);
++#elif defined(_WIN32)
+   size_t nwritten = 0;
+   while (nwritten < nbyte) {
+     int n = _write(output, static_cast<const char *>(buf) + nwritten,
+diff --git a/lib/CompilerSwiftSyntax/CMakeLists.txt b/lib/CompilerSwiftSyntax/CMakeLists.txt
+index 52d0dc78775..86b329463b4 100644
+--- a/lib/CompilerSwiftSyntax/CMakeLists.txt
++++ b/lib/CompilerSwiftSyntax/CMakeLists.txt
+@@ -6,6 +6,13 @@ if(NOT EXISTS "${SWIFT_PATH_TO_SWIFT_SYNTAX_SOURCE}")
+   return()
+ endif()
+ 
++# CROSSCOMPILE's host Swift libraries wait for the stdlib this build makes; a
++# WebAssembly host takes the SDK's instead (SWIFT_BUILD_STDLIB=OFF), so there
++# is nothing to wait for.
++if(SWIFT_HOST_VARIANT_SDK STREQUAL "WASI" AND NOT TARGET swift-stdlib-wasi-wasm32)
++  add_custom_target(swift-stdlib-wasi-wasm32)
++endif()
++
+ # Build swift-syntax libraries with FetchContent.
+ function(includeSwiftSyntax)
+   set(CMAKE_SYSTEM_PROCESSOR ${SWIFT_HOST_VARIANT_ARCH})
+@@ -13,7 +20,12 @@ function(includeSwiftSyntax)
+   set(CMAKE_C_COMPILER_TARGET ${SWIFT_HOST_TRIPLE})
+   set(CMAKE_CXX_COMPILER_TARGET ${SWIFT_HOST_TRIPLE})
+   set(CMAKE_Swift_COMPILER_TARGET ${SWIFT_HOST_TRIPLE})
+-  set(BUILD_SHARED_LIBS ON)
++  # A WebAssembly host links everything statically.
++  if(SWIFT_HOST_VARIANT_SDK STREQUAL "WASI")
++    set(BUILD_SHARED_LIBS OFF)
++  else()
++    set(BUILD_SHARED_LIBS ON)
++  endif()
+   set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${SWIFT_HOST_LIBRARIES_DEST_DIR}/compiler")
+   set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${SWIFT_HOST_LIBRARIES_DEST_DIR}/compiler")
+   if(SWIFT_HOST_VARIANT_SDK MATCHES "LINUX|ANDROID|OPENBSD|FREEBSD")
+diff --git a/lib/SwiftSyntax/CMakeLists.txt b/lib/SwiftSyntax/CMakeLists.txt
+index 4beb2044689..9d81d3848e1 100644
+--- a/lib/SwiftSyntax/CMakeLists.txt
++++ b/lib/SwiftSyntax/CMakeLists.txt
+@@ -12,7 +12,12 @@ set(CMAKE_OSX_ARCHITECTURES ${SWIFT_HOST_VARIANT_ARCH})
+ set(CMAKE_C_COMPILER_TARGET ${SWIFT_HOST_TRIPLE})
+ set(CMAKE_CXX_COMPILER_TARGET ${SWIFT_HOST_TRIPLE})
+ set(CMAKE_Swift_COMPILER_TARGET ${SWIFT_HOST_TRIPLE})
+-set(BUILD_SHARED_LIBS ON)
++# A WebAssembly host links everything statically.
++if(SWIFT_HOST_VARIANT_SDK STREQUAL "WASI")
++  set(BUILD_SHARED_LIBS OFF)
++else()
++  set(BUILD_SHARED_LIBS ON)
++endif()
+ # All libraries in 'swift-syntax' goes to 'lib/swift/host'.
+ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${SWIFT_HOST_LIBRARIES_DEST_DIR}")
+ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${SWIFT_HOST_LIBRARIES_DEST_DIR}")
+diff --git a/tools/driver/CMakeLists.txt b/tools/driver/CMakeLists.txt
+index 1726f14d885..cc04ea6bfae 100644
+--- a/tools/driver/CMakeLists.txt
++++ b/tools/driver/CMakeLists.txt
+@@ -8,11 +8,15 @@ function(add_swift_parser_link_libraries target)
+     target_link_libraries(${target}
+                           PRIVATE swiftCore)
+ 
+-    get_property(SWIFT_MACRO_PLUGINS GLOBAL PROPERTY SWIFT_MACRO_PLUGINS)
+-    foreach(macrolib ${SWIFT_MACRO_PLUGINS})
+-      add_dependencies(${target} ${macrolib})
+-    endforeach()
+-    add_dependencies(${target} SwiftInProcPluginServer)
++    # A WebAssembly host loads no libraries: its plugins are wasm modules the
++    # host runs beside the compiler (PluginRegistry.cpp), not these.
++    if(NOT SWIFT_HOST_VARIANT_SDK STREQUAL "WASI")
++      get_property(SWIFT_MACRO_PLUGINS GLOBAL PROPERTY SWIFT_MACRO_PLUGINS)
++      foreach(macrolib ${SWIFT_MACRO_PLUGINS})
++        add_dependencies(${target} ${macrolib})
++      endforeach()
++      add_dependencies(${target} SwiftInProcPluginServer)
++    endif()
+   endif()
+ endfunction()
+ 

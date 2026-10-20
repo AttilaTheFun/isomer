@@ -1,0 +1,15 @@
+# The shared Electron shell (main.js + package.json), used by every
+# electron application package below and by //shared/example_application:run_all.
+exports_files(
+    [
+        "main.js",
+        "package.json",
+    ],
+    visibility = [
+        "//electron/example_full_react_electron_application:__pkg__",
+        "//electron/example_full_webgpu_electron_application:__pkg__",
+        "//electron/example_partial_react_electron_application:__pkg__",
+        "//electron/example_partial_webgpu_electron_application:__pkg__",
+        "//shared/example_application:__pkg__",
+    ],
+)

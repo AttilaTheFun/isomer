@@ -1,0 +1,152 @@
+The wasm loader keeps the module's strings (import, export and function
+names) in a list it searches before adding one, which made loading a name
+section quadratic: wamrc spent ~30 s reading the function names of Visor's
+reactor. A hash table beside the list finds them; the list and the strings
+are unchanged. Worth offering upstream.
+
+diff --git a/core/iwasm/interpreter/wasm.h b/core/iwasm/interpreter/wasm.h
+index c60349d..d3ed1b7 100644
+--- a/core/iwasm/interpreter/wasm.h
++++ b/core/iwasm/interpreter/wasm.h
+@@ -1004,6 +1004,12 @@ struct WASMModule {
+     bool possible_memory_grow;
+ 
+     StringList const_str_list;
++    /* const_str_list by content: an open-addressing table of its nodes (its
++       size a power of two, at most half full). Searched by walking the list,
++       a name section of a hundred thousand functions took minutes to load. */
++    StringNode **const_str_table;
++    uint32 const_str_table_size;
++    uint32 const_str_count;
+ #if WASM_ENABLE_FAST_INTERP == 0
+     bh_list br_table_cache_list_head;
+     bh_list *br_table_cache_list;
+diff --git a/core/iwasm/interpreter/wasm_loader.c b/core/iwasm/interpreter/wasm_loader.c
+index 0900223..f5316de 100644
+--- a/core/iwasm/interpreter/wasm_loader.c
++++ b/core/iwasm/interpreter/wasm_loader.c
+@@ -7478,6 +7478,10 @@ wasm_loader_unload(WASMModule *module)
+         }
+     }
+ 
++    if (module->const_str_table) {
++        wasm_runtime_free(module->const_str_table);
++    }
++
+ #if WASM_ENABLE_STRINGREF != 0
+     if (module->string_literal_ptrs) {
+         wasm_runtime_free((void *)module->string_literal_ptrs);
+diff --git a/core/iwasm/interpreter/wasm_mini_loader.c b/core/iwasm/interpreter/wasm_mini_loader.c
+index 84af801..5c5d63c 100644
+--- a/core/iwasm/interpreter/wasm_mini_loader.c
++++ b/core/iwasm/interpreter/wasm_mini_loader.c
+@@ -3675,6 +3675,10 @@ wasm_loader_unload(WASMModule *module)
+         }
+     }
+ 
++    if (module->const_str_table) {
++        wasm_runtime_free(module->const_str_table);
++    }
++
+ #if WASM_ENABLE_FAST_INTERP == 0
+     if (module->br_table_cache_list) {
+         BrTableCache *node = bh_list_first_elem(module->br_table_cache_list);
+diff --git a/core/iwasm/interpreter/wasm_runtime.c b/core/iwasm/interpreter/wasm_runtime.c
+index 879df37..ffa8209 100644
+--- a/core/iwasm/interpreter/wasm_runtime.c
++++ b/core/iwasm/interpreter/wasm_runtime.c
+@@ -5101,12 +5101,63 @@ wasm_check_utf8_str(const uint8 *str, uint32 len)
+     return (p == p_end);
+ }
+ 
++static uint32
++const_str_hash(const uint8 *str, uint32 len)
++{
++    /* FNV-1a */
++    uint32 hash = 2166136261u, i;
++    for (i = 0; i < len; i++) {
++        hash ^= str[i];
++        hash *= 16777619u;
++    }
++    return hash;
++}
++
++/* The table's slot holding the string, or the empty slot where it would go. */
++static StringNode **
++const_str_slot(StringNode **table, uint32 size, const uint8 *str, uint32 len)
++{
++    uint32 mask = size - 1;
++    uint32 i = const_str_hash(str, len) & mask;
++    while (table[i]
++           && !(strlen(table[i]->str) == len
++                && !memcmp(table[i]->str, str, len)))
++        i = (i + 1) & mask;
++    return &table[i];
++}
++
++/* Makes room in the table for one more string. */
++static bool
++const_str_table_reserve(WASMModule *module, char *error_buf,
++                        uint32 error_buf_size)
++{
++    uint32 old_size = module->const_str_table_size, size, i;
++    StringNode **old = module->const_str_table, **table;
++
++    if ((uint64)(module->const_str_count + 1) * 2 <= old_size)
++        return true;
++    size = old_size ? old_size * 2 : 256;
++    if (!(table = runtime_malloc(sizeof(StringNode *) * (uint64)size,
++                                 error_buf, error_buf_size)))
++        return false;
++    for (i = 0; i < old_size; i++) {
++        if (old[i])
++            *const_str_slot(table, size, (const uint8 *)old[i]->str,
++                            (uint32)strlen(old[i]->str)) = old[i];
++    }
++    if (old)
++        wasm_runtime_free(old);
++    module->const_str_table = table;
++    module->const_str_table_size = size;
++    return true;
++}
++
+ char *
+ wasm_const_str_list_insert(const uint8 *str, uint32 len, WASMModule *module,
+                            bool is_load_from_file_buf, char *error_buf,
+                            uint32 error_buf_size)
+ {
+-    StringNode *node, *node_next;
++    StringNode *node, **slot;
+ 
+     if (!wasm_check_utf8_str(str, len)) {
+         set_error_buf(error_buf, error_buf_size, "invalid UTF-8 encoding");
+@@ -5127,15 +5178,12 @@ wasm_const_str_list_insert(const uint8 *str, uint32 len, WASMModule *module,
+     }
+ 
+     /* Search const str list */
+-    node = module->const_str_list;
+-    while (node) {
+-        node_next = node->next;
+-        if (strlen(node->str) == len && !memcmp(node->str, str, len))
+-            break;
+-        node = node_next;
++    if (!const_str_table_reserve(module, error_buf, error_buf_size)) {
++        return NULL;
+     }
+-
+-    if (node) {
++    slot = const_str_slot(module->const_str_table, module->const_str_table_size,
++                          str, len);
++    if ((node = *slot)) {
+         return node->str;
+     }
+ 
+@@ -5158,6 +5206,8 @@ wasm_const_str_list_insert(const uint8 *str, uint32 len, WASMModule *module,
+         node->next = module->const_str_list;
+         module->const_str_list = node;
+     }
++    *slot = node;
++    module->const_str_count++;
+ 
+     return node->str;
+ }

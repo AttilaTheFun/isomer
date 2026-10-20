@@ -1,0 +1,6 @@
+{
+  "name": "isomer-example",
+  "version": "1.0.0",
+  "description": "Isomer wasm application in an Electron shell",
+  "main": "main.js"
+}

@@ -1,0 +1,33 @@
+# The common C ABI vocabulary shared by every swift_ffi bridge: the erased
+# bridge_value representation (generic positions, Result-as-value, closure
+# arguments, Lazy payloads) and the native closure vtable. Generated C headers
+# include swift_abi.h; generated Swift glue imports it as the clang module
+# `SwiftABI` (via the interop hint below). See docs/bridge_v2.md.
+
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_swift//swift:swift_interop_hint.bzl", "swift_interop_hint")
+
+package(
+    default_visibility = ["//visibility:public"],
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+cc_library(
+    name = "swift_abi",
+    hdrs = ["swift_abi.h"],
+    aspect_hints = [":swift_abi_interop"],
+    includes = ["."],
+)
+
+swift_interop_hint(
+    name = "swift_abi_interop",
+    module_name = "SwiftABI",
+)

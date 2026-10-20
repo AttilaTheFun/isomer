@@ -1,0 +1,23 @@
+# Platform-agnostic SwiftUI reimplementation sources. These are compiled into
+# the per-platform `SwiftUI` modules under wasm/libraries/swift_ui and
+# android/libraries/swift_ui (Apple uses the system SwiftUI instead).
+filegroup(
+    name = "srcs",
+    srcs = glob(["*.swift"]) + [":json_internal"],
+    visibility = ["//visibility:public"],
+)
+
+# The pure-Swift JSON parser is also compiled into the Apple shim (it has no
+# Foundation / CG dependency), so app code parses API responses identically.
+
+# The JSON helpers the renderers use internally (gradient paint on the wire),
+# generated from the ONE source in //shared/swift_ui_extensions with every
+# `public` stripped: the public API lives in SwiftUIExtensions, the `SwiftUI`
+# module keeps a private copy so it stays Apple's surface only.
+genrule(
+    name = "json_internal",
+    srcs = ["//shared/swift_ui_extensions:JSON.swift"],
+    outs = ["JSONInternal.swift"],
+    cmd = """{ echo '// GENERATED from //shared/swift_ui_extensions:JSON.swift (internal copy).';
+              grep -v '^import ' $(location //shared/swift_ui_extensions:JSON.swift) | sed -E 's/(^|[[:space:]])public[[:space:]]/\\1/g'; } > $@""",
+)

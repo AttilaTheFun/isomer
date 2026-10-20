@@ -1,0 +1,52 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_swift//swift:swift.bzl", "swift_interop_hint", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# A feature compiled into a host app against Isomer's frameworks
+# (apple/compiled), run where a wasm reactor would be: the iso_hot render ABI
+# natively. iso_hot_native.h is the callbacks the host hands over (what a
+# reactor imports), and the feature's HotBridge.swift reads them;
+# iso_hot_exports.h is what the host calls (what a reactor exports).
+cc_library(
+    name = "iso_hot_native",
+    hdrs = ["iso_hot_native.h"],
+    aspect_hints = [":iso_hot_native_swift"],
+)
+
+swift_interop_hint(
+    name = "iso_hot_native_swift",
+    module_name = "IsoHotNative",
+)
+
+cc_library(
+    name = "iso_hot_exports",
+    hdrs = ["iso_hot_exports.h"],
+    aspect_hints = [":iso_hot_exports_swift"],
+    deps = [":iso_hot_native"],
+)
+
+swift_interop_hint(
+    name = "iso_hot_exports_swift",
+    module_name = "IsoHotExports",
+)
+
+# The host's half: `NativeFeatureRuntime`, the wasm engine seam
+# (//shared/wasm_host:wasm_runtime) over the C exports, so `WasmView` runs a
+# compiled feature as it runs a reactor.
+swift_library(
+    name = "native_runtime",
+    package_name = "isomer",
+    srcs = ["NativeFeatureRuntime.swift"],
+    module_name = "IsomerNativeRuntime",
+    target_compatible_with = select({
+        "@platforms//os:macos": [],
+        "@platforms//os:ios": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    deps = [
+        ":iso_hot_exports",
+        "//shared/wasm_host:wasm_runtime",
+        "//swift_ffi/runtime/swift_wasm_host",
+    ],
+)

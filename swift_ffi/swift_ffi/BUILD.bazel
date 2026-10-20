@@ -1,0 +1,61 @@
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
+load("@rules_swift//swift:swift_library.bzl", "swift_library")
+
+package(
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+# DocC catalog inclusion: the articles ride along as data when
+# --//swift_ffi/swift_ffi:include_documentation=true, so documentation builds
+# see them without taxing every consumer build.
+bool_flag(
+    name = "include_documentation",
+    build_setting_default = False,
+)
+
+config_setting(
+    name = "include_documentation_enabled",
+    flag_values = {
+        ":include_documentation": "True",
+    },
+)
+
+# The public macro module. Application `swift_library` targets depend on this to
+# get `@ExportedFunction`, `@ExportedStruct`, and `@ExportedInterface` — and,
+# since the macros expand the whole C ABI into the consumer's module, the
+# runtime the expansions call (blob codec, boxes, dispatchers, the fixed-name
+# shared exports). One module, one dependency.
+swift_library(
+    name = "swift_ffi",
+    srcs = [
+        "Array+Bridgeable.swift",
+        "Blob.swift",
+        "BridgeValue.swift",
+        "Dependencies.swift",
+        "Dictionary+Bridgeable.swift",
+        "Lazy.swift",
+        "Lock.swift",
+        "Result+Bridgeable.swift",
+        "Runtime.swift",
+        "SharedABI.swift",
+        "IsomerFFI.swift",
+    ],
+    data = select({
+        ":include_documentation_enabled": glob(["swift_ffi.docc/**/*.md"]),
+        "//conditions:default": [],
+    }),
+    module_name = "IsomerFFI",
+    plugins = ["//swift_ffi/swift_ffi_plugin"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//swift_ffi/runtime/swift_abi",  # keep (the SwiftABI clang module)
+    ],
+)

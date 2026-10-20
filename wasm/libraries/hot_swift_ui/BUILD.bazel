@@ -1,0 +1,112 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# A slim `SwiftUI` module for the hot-reload / wasm-feature reactors: the shared
+# core plus the pluggable renderers MINUS SwiftGPURenderer — no swift_ffi / gpu /
+# map. A reactor binds `SwiftUIRenderer`, which serializes the tree and hands
+# the bytes to the host (WasmKit on Apple, WAMR on Android) where real
+# SwiftUI / Compose renders them, so nothing in the wasm needs to draw. Same
+# `import SwiftUI` for the app code.
+#
+# It lives in its OWN package (not alongside the full `//wasm/libraries/
+# swift_ui`) on purpose: both compile a module literally named `SwiftUI`, so if
+# they shared a package their `SwiftUI.swiftmodule` outputs would collide
+# ("conflicting actions") whenever a single `bazel build` pulls both — e.g. a
+# wildcard build that spans the partial-wasm app (this slim module) and the
+# full-wasm app (the full module). Distinct packages give distinct output dirs.
+# The framework-owned `iso_hot` bridge as a LIBRARY on the slim module, so
+# out-of-band toolchains (the Playground app's on-the-fly user builds) link a
+# prebuilt archive instead of recompiling HotBridge.swift with every user
+# compile. `alwayslink`: its @_cdecl exports are reached only by the host,
+# never by a Swift reference.
+swift_library(
+    name = "hot_bridge",
+    package_name = "isomer",
+    srcs = ["//wasm/libraries/swift_ui:HotBridge.swift"],
+    alwayslink = True,
+    copts = [
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    module_name = "HotBridge",
+    deps = [":hot_swift_ui"] + select({
+        # Natively (a host-configuration analysis, or apple/compiled): the
+        # host callbacks' C struct (apple/libraries/native_runtime).
+        "@platforms//os:wasi": [],
+        "//conditions:default": ["//apple/libraries/native_runtime:iso_hot_native"],
+    }),
+)
+
+# The same bridge with Foundation's networking, for reactors whose host speaks
+# swift_ffi (the Playground's builds): it installs the transports the host
+# injects (the page's fetch and WebSocket, WasmView's URLSession, Android's),
+# so URLSession reaches the network. The plain one above keeps the slim
+# reactors free of swift_ffi.
+swift_library(
+    name = "hot_bridge_network",
+    package_name = "isomer",
+    srcs = ["//wasm/libraries/swift_ui:HotBridge.swift"],
+    alwayslink = True,
+    copts = [
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    module_name = "HotBridge",
+    deps = [
+        ":hot_swift_ui",
+        "//shared/isomer_network_host",
+    ] + select({
+        # Natively (a host-configuration analysis, or apple/compiled): the
+        # host callbacks' C struct (apple/libraries/native_runtime).
+        "@platforms//os:wasi": [],
+        "//conditions:default": ["//apple/libraries/native_runtime:iso_hot_native"],
+    }),
+)
+
+# The Isomer module against the slim SwiftUI (the Playground SDK): what
+# Isomer adds to Apple's frameworks (//shared/swift_ui_extensions), without
+# IsomerFFI (the slim SDK has no swift_ffi).
+swift_library(
+    name = "isomer",
+    package_name = "isomer",
+    srcs = ["//shared/swift_ui_extensions:srcs"],
+    copts = [
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    module_name = "Isomer",
+    deps = [":hot_swift_ui"],
+)
+
+# The name the Isomer module had before 0.31: it re-exports it.
+swift_library(
+    name = "swift_ui_extensions",
+    package_name = "isomer",
+    srcs = ["//shared/isomer:Compatibility.swift"],
+    module_name = "SwiftUIExtensions",
+    deps = [":isomer"],
+)
+
+swift_library(
+    name = "hot_swift_ui",
+    package_name = "isomer",
+    srcs = [
+        "//shared/renderers:srcs_no_gpu",
+        "//shared/swift_ui_core:srcs",
+    ],
+    # The `Extern` feature is for the `@_extern(c, "main")` trampoline the
+    # reactor uses to run the app's @main (it has no _start).
+    copts = [
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    module_name = "SwiftUI",
+    deps = [
+        "//shared/isomer_swift_ui",
+        "@flatbuffers//swift",
+        "//:foundation",
+        "//frameworks/core_transferable",
+        "//frameworks/uniform_type_identifiers",
+    ],
+)

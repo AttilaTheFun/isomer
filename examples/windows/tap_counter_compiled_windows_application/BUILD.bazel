@@ -1,0 +1,29 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+# The COMPILED-Swift Windows cell of the counter benchmark: the shared
+# TapCounter.swift built natively into a `.exe` over the same
+# `//windows/libraries/swift_ui` host the full example app uses (Win32 window +
+# SwiftGPU/D3D11). The peer of Android's `tap_counter_compiled_android_application`;
+# baseline twin: `../tap_counter_native_windows_application` (Win32, no Swift).
+# The wasm cells reuse the example wasm loader with a tap-counter reactor path —
+# see docs/benchmarks.md#windows.
+swift_binary(
+    name = "tap_counter_compiled_windows_application",
+    srcs = ["//shared/tap_counter_application:srcs"],
+    copts = ["-parse-as-library"],
+    # Same link shape as the full compiled app: GUI subsystem, CRT entry running
+    # Swift's @main, 16 MiB stack for the recursive view build.
+    linkopts = [
+        "/SUBSYSTEM:WINDOWS",
+        "/ENTRY:mainCRTStartup",
+        "/STACK:16777216",
+    ],
+    module_name = "TapCounterApp",
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        "@isomer//windows/libraries/swift_ui",
+        "@isomer//windows/libraries/swift_ui:isomer",
+    ],
+)

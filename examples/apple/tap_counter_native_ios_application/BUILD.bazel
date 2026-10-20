@@ -1,0 +1,51 @@
+load("@build_bazel_rules_apple//apple:apple.bzl", "local_provisioning_profile")
+load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@rules_xcodeproj//xcodeproj:defs.bzl", "xcode_provisioning_profile")
+load("@isomer_signing//:signing.bzl", "TEAM_ID")
+
+# The NATIVE iOS baseline of the counter benchmark (docs/benchmarks.md#ios):
+# hand-written real SwiftUI, no Isomer code. All iOS benchmark cells
+# share ONE bundle id (a free personal team allows few app ids), so install
+# one cell at a time. Bench mode: launch with `-bench` (see
+# //apple/libraries/bench).
+
+BUNDLE_ID = "com.LoganShire.Isomer"
+
+
+swift_library(
+    name = "app_lib",
+    srcs = [
+        "NativeApp.swift",
+        "@isomer//apple/libraries/bench:harness",
+        "@isomer//apple/libraries/bench:signpost_harness",
+    ],
+    module_name = "TapCounterNativeIOS",
+    tags = ["manual"],
+    deps = ["@isomer//apple/libraries/bench:boot"],
+)
+
+local_provisioning_profile(
+    name = "_xcode_managed_profile",
+    profile_name = "iOS Team Provisioning Profile: *",
+    tags = ["manual"],
+    team_id = TEAM_ID,
+)
+
+xcode_provisioning_profile(
+    name = "_development_profile",
+    managed_by_xcode = True,
+    provisioning_profile = ":_xcode_managed_profile",
+    tags = ["manual"],
+)
+
+ios_application(
+    name = "tap_counter_native_ios_application",
+    bundle_id = BUNDLE_ID,
+    families = ["iphone"],
+    infoplists = ["Info.plist"],
+    minimum_os_version = "17.0",
+    provisioning_profile = ":_development_profile",
+    visibility = ["//visibility:public"],
+    deps = [":app_lib"],
+)

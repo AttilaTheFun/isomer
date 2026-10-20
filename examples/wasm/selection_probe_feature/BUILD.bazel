@@ -1,0 +1,60 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary", "swift_library")
+load("@isomer//swift_ffi/rules:swift_wasm_reactor.bzl", "transition_binary")
+load("@isomer//tools/wasm:defs.bzl", "reactor_artifact")
+
+package(default_visibility = ["//visibility:public"])
+
+# The selection probe (shared/selection_probe_application) as a wasm reactor,
+# for the Apple host (apple/selection_probe_wasm_ios_application): its tree
+# view's text field reporting the selection and showing the app's.
+swift_library(
+    name = "selection_probe_lib",
+    srcs = ["//shared/selection_probe_application:srcs"],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "SelectionProbe",
+    tags = ["manual"],
+    deps = [
+        "@isomer//wasm/libraries/swift_ui",
+        "@isomer//wasm/libraries/swift_ui:isomer",
+    ],
+)
+
+swift_binary(
+    name = "selection_probe_reactor",
+    copts = [
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    linkopts = [
+        "-Xlinker",
+        "--export-all",
+        "-Xlinker",
+        "--no-gc-sections",
+        "-Xlinker",
+        "-z",
+        "-Xlinker",
+        "stack-size=16777216",
+    ],
+    linkshared = True,
+    module_name = "selection_probe_reactor",
+    tags = ["manual"],
+    deps = [
+        "@isomer//wasm/libraries/swift_ui:hot_bridge",
+        ":selection_probe_lib",
+        "@isomer//wasm/libraries/swift_ui",
+        "@isomer//wasm/libraries/swift_ui:isomer",
+    ],
+)
+
+transition_binary(
+    name = "selection_probe.wasm",
+    binary = ":selection_probe_reactor",
+    platform = "@isomer//swift_ffi/rules:wasm32-wasip1",
+    tags = ["manual"],
+)
+
+reactor_artifact(
+    name = "selection_probe",
+    wasm = ":selection_probe.wasm",
+)

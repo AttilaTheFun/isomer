@@ -1,0 +1,8 @@
+# A menu floated over the navigation bar by its alignment guide (Isomer's
+# floating layers), for the Apple host's tree renderer
+# (apple/floating_probe_wasm_ios_application).
+filegroup(
+    name = "srcs",
+    srcs = glob(["*.swift"]),
+    visibility = ["//visibility:public"],
+)

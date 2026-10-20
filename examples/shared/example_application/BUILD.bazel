@@ -1,0 +1,60 @@
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+# The shared example application source, compiled for all platforms.
+filegroup(
+    name = "srcs",
+    srcs = glob(["*.swift"]) + ["//shared/platform_services:native_srcs"],
+    visibility = ["//visibility:public"],
+)
+
+# Bundled image assets. The same PNGs ship on every platform: the web site's
+# assets/ dir and the APK's assets/ use the flat image files; Apple bundles
+# consume the enclosing asset catalog (required for SwiftUI's Image(_:)).
+filegroup(
+    name = "assets",
+    srcs = glob(["assets/**/*.png"]),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "xcassets",
+    srcs = glob(["assets/Assets.xcassets/**"]),
+    visibility = ["//visibility:public"],
+)
+
+# `bazel run //shared/example_application:run_all` builds and launches the
+# example application on every platform at once: macOS app, iOS simulator,
+# Android emulator (auto-booted), and the Electron shell for the web build.
+sh_binary(
+    name = "run_all",
+    srcs = ["run_all.sh"],
+    args = [
+        "$(rlocationpath //apple/example_full_compiled_macos_application)",
+        "$(rlocationpath //apple/example_full_compiled_ios_application)",
+        "$(rlocationpath //android/example_full_compiled_android_application:example_full_compiled_android_application_apk.apk)",
+        "$(rlocationpath @android_platform_tools//:adb)",
+        "$(rlocationpath @isomer//tools/android/emulator:run_emulator.sh)",
+        "$(rlocationpath @android_emulator//:emulator/emulator)",
+        "$(rlocationpath @android_system_image//:system.img)",
+        "$(rlocationpath @android_platform_tools//:adb)",
+        "$(rlocationpath @electron//:electron_path.txt)",
+        "$(rlocationpath //electron:package.json)",
+        "$(rlocationpath //web/example_full_react_web_application:site)",
+    ],
+    data = [
+        ":assets",
+        "//android/example_full_compiled_android_application:example_full_compiled_android_application_apk.apk",
+        "//apple/example_full_compiled_ios_application",
+        "//apple/example_full_compiled_macos_application",
+        "@isomer//tools/android/emulator:run_emulator.sh",
+        "//electron:main.js",
+        "//electron:package.json",
+        "//web/example_full_react_web_application:site",
+        "@android_emulator//:all",
+        "@android_emulator//:emulator/emulator",
+        "@android_platform_tools//:adb",
+        "@android_system_image//:all",
+        "@android_system_image//:system.img",
+        "@electron//:electron_path.txt",
+    ],
+)

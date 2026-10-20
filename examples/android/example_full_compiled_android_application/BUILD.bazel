@@ -1,0 +1,57 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@isomer//tools/android:defs.bzl", "flat_assets", "isomer_android_app")
+
+# The platform services in Kotlin.
+exports_files(["AppServices.kt"])
+
+# Level 4 adoption (docs/adoption_levels.md): the whole app is the shared
+# SwiftUI `@main App`, built as COMPILED Swift (the "compiled" cell of the
+# Android [full|partial] x [compiled|wasm] matrix). The
+# `isomer_android_app` macro generates the MainActivity + manifest,
+# packages the Swift .so with the Kotlin runtime, and wires lifecycle ->
+# scenePhase, VIEW intents -> .onOpenURL, and system back into the runtime.
+# Compose is the only supported Android renderer.
+
+# The shared SwiftUI application as a plain library; the macro's swift_ffi
+# bridge target links it into the JNI .so and generates the Kotlin bindings.
+swift_library(
+    name = "app_swift",
+    srcs = ["//shared/example_application:srcs"],
+    # Whole-archive: the only reference to the app's synthesized @main is the
+    # nativeStart trampoline in the SwiftUI archive, which links after it.
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "ExampleApplication",
+    tags = ["manual"],  # only meaningful through the android transition
+    deps = [
+        "//shared/platform_services",
+        "@isomer//android/libraries/swift_ui",
+        "@isomer//android/libraries/swift_ui:isomer",
+    ],
+)
+
+# The shared image assets, flattened to the basenames the app's AssetManager
+# opens (assets.open("tab-pokedex.png")); packaged into the APK's assets/.
+flat_assets(
+    name = "flat_assets",
+    srcs = ["//shared/example_application:assets"],
+)
+
+# `bazel run //android/example_full_compiled_android_application` =
+# install + launch under the Jetpack Compose renderer. `iso://` links arrive
+# via `.onOpenURL`. The wasm-delivered twin is
+# //android/example_full_wasm_android_application.
+isomer_android_app(
+    name = "example_full_compiled_android_application",
+    assets = ":flat_assets",
+    default_renderer = "jetpackCompose",
+    label = "Isomer",
+    package = "dev.isomer.example",
+    # The app's platform services (shared/platform_services), installed into
+    # the swift_ffi dependency dictionary before start.
+    services_installer = "dev.isomer.runtime.ExampleAppServices.install()",
+    services_kt = "AppServices.kt",
+    swift_library = ":app_swift",
+    url_scheme = "iso",
+    visibility = ["//shared/example_application:__pkg__"],
+)

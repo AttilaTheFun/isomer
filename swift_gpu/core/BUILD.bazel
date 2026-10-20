@@ -1,0 +1,8 @@
+package(default_visibility = ["//visibility:public"])
+
+# The platform packages compile these sources into their `SwiftGPU` module
+# together with their backend.
+filegroup(
+    name = "srcs",
+    srcs = glob(["*.swift"]),
+)

@@ -1,0 +1,37 @@
+load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The "full x wasm" cell of the Apple matrix on iOS: the WHOLE shared example
+# app (//wasm/example_full_feature) delivered as a wasm bundle and
+# rendered full-screen with `WasmView`. Simulator build (no provisioning
+# profile). Runtime-updatable twin of example_full_compiled_ios_application.
+#
+# iOS 15, the oldest OS WasmView and Isomer's tree renderer support (each
+# newer API behind an availability check, NavigationView before
+# NavigationStack and NavigationSplitView): built here so they stay that way.
+# The guest is wasm, so nothing of the app's is bound by the OS.
+
+swift_library(
+    name = "ios_lib",
+    srcs = ["iOSApp.swift"],
+    module_name = "FullWasmIOSHost",
+    deps = [
+        "//apple/platform_services_host",
+        "@isomer//apple/libraries/wasm_view",
+    ],
+)
+
+ios_application(
+    name = "example_full_wasm_ios_application",
+    bundle_id = "com.LoganShire.Isomer.FullWasm",
+    families = [
+        "iphone",
+        "ipad",
+    ],
+    infoplists = ["Info.plist"],
+    minimum_os_version = "15.0",
+    resources = ["//wasm/example_full_feature:example_full"],
+    deps = [":ios_lib"],
+)

@@ -1,0 +1,50 @@
+load("@rules_android//rules:rules.bzl", "android_binary")
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
+load("//swift_ffi/rules:kt_swift_library.bzl", "kt_swift_library")
+load("//swift_map/tools/android:defs.bzl", "apk_install_run")
+
+# The JNI .so + generated Kotlin bindings for the SwiftMap Android module.
+# The Kotlin object loads System.loadLibrary("swift_map_bindings").
+kt_swift_library(
+    name = "swift_map_bindings",
+    java_package = "dev.swiftmap.runtime",
+    module_name = "SwiftMap",
+    swift = "//swift_map/android/libraries/swift_map",
+)
+
+cc_library(
+    name = "swift_map_native",
+    srcs = [":libswift_map_bindings.so"],
+    tags = ["manual"],
+)
+
+kt_android_library(
+    name = "example_opengl_android_application_lib",
+    srcs = [
+        "MainActivity.kt",
+        "//swift_map/android/libraries/swift_map:runtime_kotlin",
+    ],
+    custom_package = "dev.swiftmap.example",
+    manifest = "AndroidManifest.xml",
+    deps = [":swift_map_bindings"],
+)
+
+android_binary(
+    name = "example_opengl_android_application_apk",
+    manifest = "AndroidManifest.xml",
+    visibility = ["//visibility:public"],
+    deps = [
+        ":example_opengl_android_application_lib",
+        ":swift_map_native",
+    ],
+)
+
+# `bazel run //swift_map/android/applications/example_opengl_android_application` boots the
+# hermetic emulator if needed, installs, launches, and tails logcat.
+apk_install_run(
+    name = "example_opengl_android_application",
+    activity = "dev.swiftmap.example/.MainActivity",
+    apk = ":example_opengl_android_application_apk.apk",
+    visibility = ["//visibility:public"],
+)

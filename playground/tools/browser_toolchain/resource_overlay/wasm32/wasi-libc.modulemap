@@ -1,0 +1,31 @@
+// SwiftWASILibc as ONE header (the glibc shape): the SDK's per-header map
+// puts inttypes.h & co. in the module while libc++'s wrappers include_next
+// them from their own std_*_h modules — a cycle that breaks C++ interop.
+// A single umbrella header keeps every libc header textual.
+module SwiftWASILibc [system] {
+  header "SwiftWASILibc.h"
+  export *
+}
+module wasi_emulated_mman {
+  header "sys/mman.h"
+  link "wasi-emulated-mman"
+  export *
+}
+
+module wasi_emulated_process_clock {
+  header "sys/times.h"
+  header "sys/resource.h"
+  link "wasi-emulated-process-clocks"
+  export *
+}
+
+module wasi_emulated_signal {
+  header "signal.h"
+  link "wasi-emulated-signal"
+  export *
+}
+
+module wasi_pthread {
+  header "pthread.h"
+  export *
+}

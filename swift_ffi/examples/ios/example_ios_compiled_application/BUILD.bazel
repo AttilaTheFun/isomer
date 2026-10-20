@@ -1,0 +1,65 @@
+# The iOS "compiled mode" cell of the example matrix: a plain SwiftUI app that
+# imports the shared greeter (//swift_ffi/examples/shared/greeter) directly — no bridge, no
+# generated bindings; on Apple platforms the swift_ffi macros are inert
+# validating markers and Swift is linked natively.
+#
+#   bazel run //swift_ffi/examples/ios/example_ios_compiled_application                                          # iOS simulator
+#   bazel run //swift_ffi/examples/ios/example_ios_compiled_application:example_ios_compiled_application_project  # Xcode project
+
+load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
+load("@build_bazel_rules_apple//apple:versioning.bzl", "apple_bundle_version")
+load("@rules_swift//swift:swift_library.bzl", "swift_library")
+load("@rules_xcodeproj//xcodeproj:defs.bzl", "top_level_target", "xcodeproj")
+
+package(
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+swift_library(
+    name = "example_ios_compiled_application_lib",
+    srcs = ["GreeterApplication.swift"],
+    deps = ["//swift_ffi/examples/shared/greeter"],
+)
+
+apple_bundle_version(
+    name = "_version",
+    build_version = "1",
+    short_version_string = "1.0",
+    tags = ["manual"],
+)
+
+# `bazel run //swift_ffi/examples/ios/example_ios_compiled_application` installs and
+# launches the app in the iOS simulator. No provisioning profile is configured
+# (this is an example repo); building for a device requires adding one.
+ios_application(
+    name = "example_ios_compiled_application",
+    bundle_id = "com.example.greeter",
+    families = ["iphone", "ipad"],
+    infoplists = ["Info.plist"],
+    minimum_os_version = "16.0",
+    version = ":_version",
+    # Public so rules_xcodeproj's external generator can depend on it.
+    visibility = ["//visibility:public"],
+    deps = [":example_ios_compiled_application_lib"],
+)
+
+# Generates GreeterApplication.xcodeproj in this directory (gitignored).
+xcodeproj(
+    name = "example_ios_compiled_application_project",
+    project_name = "GreeterApplication",
+    tags = ["manual"],
+    top_level_targets = [
+        top_level_target(
+            ":example_ios_compiled_application",
+            target_environments = ["simulator"],
+        ),
+    ],
+)

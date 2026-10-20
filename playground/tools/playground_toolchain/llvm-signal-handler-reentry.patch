@@ -1,0 +1,21 @@
+diff --git a/llvm/lib/Support/Signals.cpp b/llvm/lib/Support/Signals.cpp
+index f8a14a45ddc3..aa88085f6ea2 100644
+--- a/llvm/lib/Support/Signals.cpp
++++ b/llvm/lib/Support/Signals.cpp
+@@ -110,6 +110,16 @@ void sys::RunSignalHandlers() {
+ // Signal-safe.
+ static void insertSignalHandler(sys::SignalHandlerCallback FnPtr,
+                                 void *Cookie) {
++  // In-process re-entry (an app calling swift::mainEntry repeatedly): each
++  // InitLLVM registers the same callbacks again; re-point the existing
++  // slot instead of consuming another until the table overflows.
++  for (CallbackAndCookie &Existing : CallBacksToRun()) {
++    if (Existing.Flag.load() == CallbackAndCookie::Status::Initialized &&
++        Existing.Callback == FnPtr) {
++      Existing.Cookie = Cookie;
++      return;
++    }
++  }
+   for (CallbackAndCookie &SetMe : CallBacksToRun()) {
+     auto Expected = CallbackAndCookie::Status::Empty;
+     auto Desired = CallbackAndCookie::Status::Initializing;

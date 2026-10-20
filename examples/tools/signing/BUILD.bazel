@@ -1,0 +1,2 @@
+# Signing values that are the builder's own, kept out of the repository:
+# see extension.bzl.

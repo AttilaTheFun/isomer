@@ -1,0 +1,3 @@
+# The examples module's root package: just the vendored maven lock the
+# MODULE.bazel install reads.
+exports_files(["rules_android_maven_install.json"])

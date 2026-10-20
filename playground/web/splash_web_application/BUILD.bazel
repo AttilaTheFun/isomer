@@ -1,0 +1,65 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@isomer//tools/wasm:defs.bzl", "combine_sites", "isomer_web_app", "site_imports_test", "web_server")
+
+# The site's front page (docs/playground_web.md): a post about the framework
+# in Isomer SwiftUI with the example screens embedded inline, and the
+# Playground at playground/ — where "Edit this page" opens Splash.swift itself.
+swift_library(
+    name = "splash_lib",
+    srcs = [
+        "Splash.swift",
+        # The embedded examples: the example apps' own screens.
+        "//shared/sample_sources:Availability.swift",
+        "//shared/sample_sources:Counter.swift",
+        "//shared/sample_sources:Game2048.swift",
+        "//shared/sample_sources:PlatformServicesAccess.swift",
+        "//shared/sample_sources:Pokedex.swift",
+        "//shared/sample_sources:URLEncoding.swift",
+    ],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "SplashSite",
+    tags = ["manual"],
+    deps = [
+        "@isomer//shared/platform_services",
+        "@isomer//wasm/libraries/swift_ui",
+        "@isomer//wasm/libraries/swift_ui:isomer",
+    ],
+)
+
+exports_files(["Splash.swift"])
+
+isomer_web_app(
+    name = "splash_web_application",
+    # Its page imports the Playground's bridge, which the combined site has.
+    check_site_imports = False,
+    assets = ["//artwork/playground_icon:web_icon"],
+    index = "index.html",
+    query = "renderer=react",
+    site_visibility = ["//visibility:public"],
+    swift_library = ":splash_lib",
+)
+
+# The whole site: the splash at the root, the Playground under playground/.
+combine_sites(
+    name = "site",
+    sites = {
+        ":splash_web_application_site": ".",
+        "//web/playground_web_application:playground_web_application_site": "playground",
+    },
+)
+
+site_imports_test(
+    name = "site_imports_test",
+    entries = [
+        "index.html",
+        "playground/index.html",
+    ],
+    site = ":site",
+)
+
+web_server(
+    name = "serve",
+    port = "8091",
+    site = ":site",
+)

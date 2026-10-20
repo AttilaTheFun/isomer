@@ -1,0 +1,8 @@
+# The sources of the Playground's sample projects, and of the screens the
+# site's front page embeds. They are the example apps' own sources, copies
+# of examples/shared/example_application in the parent checkout (another
+# module), kept in step by hand: samples.bzl wraps each in a `@main` App to make a
+# one-file project that compiles against the Playground SDK.
+package(default_visibility = ["//visibility:public"])
+
+exports_files(glob(["*.swift"]))

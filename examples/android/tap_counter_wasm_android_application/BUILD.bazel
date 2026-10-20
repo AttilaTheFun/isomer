@@ -1,0 +1,57 @@
+load("@rules_android//rules:rules.bzl", "android_binary")
+load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
+load("@isomer//tools/android:defs.bzl", "apk_install_run", "flat_assets")
+
+# The wasm-delivered cell of the minimal counter benchmark (docs/benchmarks.md):
+# the SAME shared TapCounter.swift @main App as the compiled cell
+# (//android/tap_counter_compiled_android_application), shipped as ONE
+# wasm reactor and hosted full-screen by `WasmView`. Carries NO compiled Swift —
+# the only native library is libiso_wamr_jni.so (the WAMR C engine + host + JNI).
+
+# assets/: just the counter reactor (RELEASE build). No image assets — the counter
+# UI has none. Config-selected: `tap_counter_release.wasm` (interp) by default, or
+# `tap_counter_release.aot` (native) under `--config=release`.
+flat_assets(
+    name = "app_assets",
+    srcs = ["//wasm/tap_counter_feature:tap_counter_release"],
+)
+
+kt_android_library(
+    name = "host_app",
+    srcs = glob(["kotlin/**/*.kt"]) + [
+        "@isomer//android/libraries/swift_ui:interpreter_kotlin",
+        "@isomer//android/libraries/wasm_view:runtime_kotlin",
+    ],
+    custom_package = "dev.isomer.tapcounter.wasm",
+    manifest = "AndroidManifest.xml",
+    plugins = ["@isomer//android/libraries/swift_ui:compose_compiler_plugin"],
+    tags = ["manual"],
+    deps = [
+        "@isomer//tools/android:maven_androidx_activity_activity_compose",
+        "@isomer//tools/android:maven_androidx_compose_foundation_foundation",
+        "@isomer//tools/android:maven_androidx_compose_material3_material3",
+        "@isomer//tools/android:maven_androidx_compose_runtime_runtime",
+        "@isomer//tools/android:maven_androidx_compose_ui_ui",
+        "@isomer//tools/android:maven_org_jetbrains_kotlinx_kotlinx_coroutines_android",
+        "@isomer//tools/android:maven_org_jetbrains_kotlinx_kotlinx_coroutines_core",
+    ],
+)
+
+android_binary(
+    name = "tap_counter_wasm_android_application_apk",
+    assets = [":app_assets"],
+    assets_dir = "app_assets",
+    manifest = "AndroidManifest.xml",
+    deps = [
+        "@isomer//tools/android:maven_androidx_profileinstaller_profileinstaller",
+        ":host_app",
+        # The ONLY native library: the WAMR C engine (no compiled Swift).
+        "@isomer//android/libraries/wasm_view:wamr_jni",
+    ],
+)
+
+apk_install_run(
+    name = "tap_counter_wasm_android_application",
+    activity = "dev.isomer.tapcounter.wasm/.MainActivity",
+    apk = ":tap_counter_wasm_android_application_apk.apk",
+)

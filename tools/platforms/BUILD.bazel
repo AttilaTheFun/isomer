@@ -1,0 +1,54 @@
+"""Target platforms for the Swift-SDK cross-compilation toolchains registered in
+MODULE.bazel (wasm32 / Android). `swift_binary`/`swift_library` build for these
+when a `//tools/platforms:transition.bzl` `transition_binary` (or a
+`--platforms` flag) selects them.
+"""
+
+package(default_visibility = ["//visibility:public"])
+
+platform(
+    name = "wasm32",
+    constraint_values = [
+        "@platforms//cpu:wasm32",
+        "@platforms//os:wasi",
+    ],
+)
+
+platform(
+    name = "android_arm64",
+    constraint_values = [
+        "@platforms//cpu:aarch64",
+        "@platforms//os:android",
+    ],
+)
+
+platform(
+    name = "android_x86_64",
+    constraint_values = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:android",
+    ],
+)
+
+# Native Windows is built on the Windows host (no Swift SDK), using rules_swift's
+# Windows host toolchain. The transition lets the app target be built for Windows
+# explicitly even when the host's default platform differs.
+platform(
+    name = "windows_x86_64",
+    constraint_values = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:windows",
+    ],
+)
+
+# Native Linux (e.g. SteamOS / Ubuntu) is built on the Linux host using the
+# swift.org `ubuntu24.04` standalone toolchain registered in MODULE.bazel as the
+# host exec toolchain. Like Windows, the app owns `main`, creates its window and
+# runs the render loop itself; nothing cross-compiles to this platform.
+platform(
+    name = "linux_x86_64",
+    constraint_values = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+    ],
+)

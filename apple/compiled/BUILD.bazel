@@ -1,0 +1,50 @@
+# Apple apps compiled against Isomer's frameworks (0.32): a feature (an app's
+# Swift: its views, its models) built natively, with Isomer's SwiftUI where
+# Apple's would be, inside a host app that draws its tree with Apple's
+# SwiftUI (WasmView over the native engine, apple/libraries/native_runtime).
+# The same source as an Apple app built against Apple's frameworks: an A/B of
+# the two, and Isomer's own frameworks where Apple's are too new (older
+# iOS). defs.bzl's `isomer_compiled_feature` builds a feature this way.
+
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
+load("@rules_swift//swift:swift_module_mapping.bzl", "swift_module_mapping")
+
+package(default_visibility = ["//visibility:public"])
+
+# Set by isomer_compiled_feature's transition: the configuration a feature
+# builds in. `@isomer//:swift_ui` is then Isomer's SwiftUI on Apple platforms
+# too (//apple/libraries/compiled_swift_ui).
+bool_flag(
+    name = "feature",
+    build_setting_default = False,
+)
+
+config_setting(
+    name = "feature_on",
+    flag_values = {":feature": "True"},
+)
+
+# Every module the feature's configuration compiles that the host app's
+# compiles too, or that has an Apple framework's name, under a name of its
+# own: the two sides link into one binary with no symbol in common, and the
+# feature's `import SwiftUI` is Isomer's. (rules_swift's module mapping: a
+# module named on the left is compiled under the name on the right, and
+# every importer is told so with `-module-alias`.)
+swift_module_mapping(
+    name = "mapping",
+    aliases = {
+        "CoreTransferable": "IsomerCompiledCoreTransferable",
+        "FlatBuffers": "IsomerCompiledFlatBuffers",
+        "HotBridge": "IsomerCompiledHotBridge",
+        "Isomer": "IsomerCompiledIsomer",
+        "IsomerFFI": "IsomerCompiledFFI",
+        "IsomerFoundation": "IsomerCompiledFoundationHost",
+        "IsomerNetworkHost": "IsomerCompiledNetworkHost",
+        "IsomerSwiftUI": "IsomerCompiledIsomerSwiftUI",
+        "Observation": "IsomerCompiledObservation",
+        "PhotosUI": "IsomerCompiledPhotosUI",
+        "QuickLook": "IsomerCompiledQuickLook",
+        "SwiftUI": "IsomerCompiledSwiftUI",
+        "Synchronization": "IsomerCompiledSynchronization",
+    },
+)

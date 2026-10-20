@@ -1,0 +1,10 @@
+// The greeter service for the gRPC Swift 2 (NIO HTTP/2) localhost example.
+syntax = "proto3";
+
+package iso.example;
+
+import "proto_greeter/greeter.proto";
+
+service Greeter {
+  rpc Greet(GreetingRequest) returns (GreetingResponse);
+}

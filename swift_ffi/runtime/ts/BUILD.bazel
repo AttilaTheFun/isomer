@@ -1,0 +1,19 @@
+package(
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+# The shared TypeScript half of the bridge runtime. `ts_swift_library`
+# stages a copy next to each generated module (`<name>_runtime_ts`), which
+# imports it as "./swift_ffi_runtime.js".
+exports_files(
+    ["swift_ffi_runtime.ts"],
+    visibility = ["//visibility:public"],
+)

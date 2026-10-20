@@ -1,0 +1,131 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The native-Swift wasm-host platforms: macOS + iOS (Apple's `WasmView`) and the
+# native Linux host. NOT Android — there the reactor runs under the JNI C host
+# (//shared/wamr_host) + Kotlin, never this Swift stack. Windows is not yet
+# enabled: @wamr needs its Windows platform layer (core/shared/platform/windows)
+# wired up first — see docs/linux_windows_wasm.md.
+_NATIVE_WASM_HOSTS = select({
+    "@platforms//os:macos": [],
+    "@platforms//os:ios": [],
+    "@platforms//os:linux": [],
+    "//conditions:default": ["@platforms//:incompatible"],
+})
+
+# The engine seam, engine-free: the `WasmRuntime` protocol + `WasmHostImports` +
+# `WasmScalar`. Split out of the host so the concrete engine (`WamrRuntime`) and
+# the driver (`WasmFeatureRuntime`) share one small protocol module with no
+# interpreter dependency. Deps are only the swift_ffi scalar + the swift_ffi DI.
+swift_library(
+    name = "wasm_runtime",
+    package_name = "isomer",
+    srcs = [
+        "TypingSignposts.swift",
+        "WasmRuntime.swift",
+    ],
+    module_name = "IsomerWasmRuntime",
+    target_compatible_with = _NATIVE_WASM_HOSTS,
+    deps = [
+        "//swift_ffi/runtime/swift_wasm_host",
+    ],
+)
+
+# `WamrRuntime` — the default wasm engine on the native-Swift hosts, backed by
+# the shared WAMR C host (//shared/wamr_host, as `CIsoWamr`). It conforms to the
+# `WasmRuntime` seam, so `WasmFeatureRuntime` drives it uniformly.
+swift_library(
+    name = "wamr_runtime",
+    package_name = "isomer",
+    srcs = ["WamrRuntime.swift"],
+    module_name = "IsomerWamrRuntime",
+    target_compatible_with = _NATIVE_WASM_HOSTS,
+    deps = [
+        ":wasm_runtime",
+        "//shared/wamr_host:iso_wamr",
+        "//swift_ffi/runtime/swift_wasm_host",
+    ],
+)
+
+# `WasmKitRuntime` — the Apple hosts' engine beside WAMR, on WasmKit (the
+# Swift interpreter; MODULE.bazel's `wasmkit`): WASI, the render callbacks and
+# the swift_ffi transport in Swift, and WASI Threads for a reactor built for
+# wasm32-unknown-wasip1-threads where WasmKit can make a shared memory. An
+# app registers it (WasmRuntimeRegistry.register) to run on it.
+swift_library(
+    name = "wasmkit_runtime",
+    package_name = "isomer",
+    srcs = ["WasmKitRuntime.swift"],
+    module_name = "IsomerWasmKitRuntime",
+    target_compatible_with = select({
+        "@platforms//os:macos": [],
+        "@platforms//os:ios": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    deps = [
+        ":wasm_runtime",
+        "//swift_ffi/runtime/swift_wasm_host",
+        "@wasmkit//:WasmKit",
+        "@wasmkit//:WasmKitWASI",
+        "@wasmkit//:WasmKitWASIThreads",
+    ],
+)
+
+# `JSCRuntime` — the EXPERIMENTAL JavaScriptCore engine: the reactor runs on
+# JSC's own WebAssembly implementation inside a JSContext (JIT wasm tiers on
+# macOS; interpreter-only on iOS devices, where 3rd-party processes get no
+# JIT pages). Proves the engine seam with a JS runtime AS the wasm runtime.
+swift_library(
+    name = "jsc_runtime",
+    package_name = "isomer",
+    srcs = ["JSCRuntime.swift"],
+    module_name = "IsomerJSCRuntime",
+    target_compatible_with = select({
+        "@platforms//os:macos": [],
+        "@platforms//os:ios": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    deps = [
+        ":wasm_runtime",
+        "//swift_ffi/runtime/swift_wasm_host",
+    ],
+)
+
+# `WasmEdgeRuntime` — the EXPERIMENTAL WasmEdge engine (interpreter,
+# built-in WASI) over the prebuilt C API SDK. macOS-only, dev-only.
+swift_library(
+    name = "wasmedge_runtime",
+    package_name = "isomer",
+    srcs = ["WasmEdgeRuntime.swift"],
+    module_name = "IsomerWasmEdgeRuntime",
+    target_compatible_with = ["@platforms//os:macos"],
+    deps = [
+        ":wasm_runtime",
+        "//shared/wasm_host/engine_shims:cwasmedge",
+        "//swift_ffi/runtime/swift_wasm_host",
+    ],
+)
+
+# The cross-platform native wasm-host runtime: it runs one wasm feature reactor
+# (a swift_ui_core UI compiled to a `iso_hot` reactor) under the REGISTERED
+# engine (WasmRuntimeRegistry — WAMR, WasmKit, or a consumer's own), in-process,
+# republishes the render tree, and injects native dependencies through the
+# swift_ffi dependency transport. UI-framework-free (no SwiftUI / Compose), so
+# every native host builds on it — Apple's `WasmView` (//apple/libraries/
+# wasm_view) and the Linux/Windows hosts. Bundle DELIVERY is platform-specific
+# and lives outside this lib. See docs/wasm_view_architecture.md.
+swift_library(
+    name = "wasm_host",
+    package_name = "isomer",
+    srcs = [
+        "WasmFeatureRuntime.swift",
+        "WasmServiceBundle.swift",
+    ],
+    module_name = "IsomerWasmHost",
+    target_compatible_with = _NATIVE_WASM_HOSTS,
+    deps = [
+        ":wasm_runtime",
+        "//swift_ffi/runtime/swift_wasm_host",
+    ],
+)

@@ -1,0 +1,31 @@
+{
+ "summary": "Isomer's CoreTransferable is the `Transferable` protocol as SwiftUI's pickers and drops take it: a type whose values a picker or a drop hands over, `Data` (the bytes) and `URL` (where they are), with `String`. Isomer's SwiftUI re-exports it, as Apple's does. On Apple platforms an app uses Apple's CoreTransferable.",
+ "deviations": [
+  "`Transferable` has no requirements here: the hosts hand over files, and `PhotosPickerItem.loadTransferable(type:)` and `.dropDestination(for:)` read them as `Data` or `URL`. A type of an app's own (with its `transferRepresentation`) is not loaded through it yet."
+ ],
+ "groups": [
+  {
+   "title": "Transfer representations",
+   "status": "not yet",
+   "intent": "planned",
+   "why": "How a type of an app's own says what it can be transferred as (`transferRepresentation`, `DataRepresentation`, `FileRepresentation`, `ProxyRepresentation`, `CodableRepresentation` and their builder), and the standard types' own representations. The hosts' pickers and drops hand over files; reading one as an app's type through its representation is the next step, for drag and drop between views and to other apps.",
+   "match": [
+    "Representation",
+    "transferRepresentation",
+    "^Transferable\\.",
+    "TransferredFile",
+    "^Never\\."
+   ]
+  },
+  {
+   "title": "NSItemProvider",
+   "status": "excluded",
+   "intent": "no",
+   "why": "`NSItemProvider` is an Objective-C class of Foundation's (drag and drop, sharing on Apple platforms); Isomer's Foundation has no Objective-C classes.",
+   "match": [
+    "^NSItemProvider"
+   ]
+  }
+ ],
+ "additions": "Isomer's CoreTransferable declares nothing Apple's lacks; anything listed here is a regression."
+}

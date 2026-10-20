@@ -1,0 +1,10 @@
+load("@isomer//tools/wasm:defs.bzl", "electron_application")
+
+# The Level 4 example in a desktop Electron window under the SwiftGPU
+# WebGPU renderer (docs/renderer_layers.md).
+electron_application(
+    name = "example_full_webgpu_electron_application",
+    main_js = "//electron:main.js",
+    package_json = "//electron:package.json",
+    site = "//web/example_full_react_web_application:site",
+)

@@ -1,0 +1,16 @@
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+# The cross-platform hot-reload demo:
+#
+#   bazel run //shared/hot_reload_demo
+#
+# Boots the iOS simulator + the hermetic Android emulator, installs the
+# embedded-wasm-feature app on both, starts the hot-reload server, and
+# launches both apps connected to it. Edit
+# examples/wasm/hot_demo_feature/HotDemo.swift and both re-render live.
+# A USB-attached Android device works the same way: ANDROID_SERIAL=<serial>.
+sh_binary(
+    name = "hot_reload_demo",
+    srcs = ["hot_reload_demo.sh"],
+    visibility = ["//visibility:public"],
+)

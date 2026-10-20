@@ -1,0 +1,57 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The `SwiftUI` module for the native Linux **wasm delivery cell**: the same
+# shared core + SDL2/OpenGL host bridge as //linux/libraries/swift_ui:swift_ui,
+# plus `LinuxWasmHost.swift` and the `CIsoWamr` (WAMR C host) dep, so the wasm
+# example binary can drive an `example_full.wasm` reactor under WAMR and draw its
+# decoded tree through the same SwiftGPU renderer. It carries the SAME
+# `module_name = "SwiftUI"` (so app code does `import SwiftUI` unchanged) and
+# therefore lives in its OWN package: two same-named swiftmodules in one package
+# collide on the `SwiftUI.swiftmodule` output path. `LinuxHost.swift` +
+# `renderer.h` are reused from the sibling package (exported there); the compiled
+# `swift_ui` never links the WAMR interpreter / swift_ffi C host.
+_LINUX_COPTS = [
+    "-import-objc-header",
+    "$(location //linux/libraries/swift_ui:renderer.h)",
+]
+
+swift_library(
+    name = "swift_ui_wasm",
+    package_name = "isomer",
+    srcs = [
+        "//linux/libraries/swift_ui:LinuxHost.swift",
+        "//linux/libraries/swift_ui:LinuxWasmHost.swift",
+        "//shared/renderers:srcs",
+        "//shared/swift_ui_core:srcs",
+    ],
+    copts = _LINUX_COPTS + ["-DISOMER_LINUX_HOST"],
+    module_name = "SwiftUI",
+    swiftc_inputs = ["//linux/libraries/swift_ui:renderer.h"],
+    target_compatible_with = ["@platforms//os:linux"],
+    deps = [
+        "//shared/isomer_swift_ui",
+        "//frameworks:for_core",
+        "//linux/libraries/swift_ui:renderer",
+        "//shared/wamr_host:iso_wamr",  # the WAMR C host, as Swift module CIsoWamr
+        "@flatbuffers//swift",
+        "//swift_gpu/linux:swift_gpu",
+    ] + [
+        # `Map` engine injection point: defaults to an empty stub; a consumer
+        # with its own swift_map dep points the flag at the real engine to
+        # light up canImport(SwiftMap). See //shared/BUILD.bazel.
+        "//shared:map_engine_linux",
+    ],
+)
+
+# IsomerWasmHost: the cell's public entry (LinuxWasmApp) for a host program,
+# over the `SwiftUI` module above, whose loop is package.
+swift_library(
+    name = "host",
+    package_name = "isomer",
+    srcs = ["LinuxWasmApp.swift"],
+    module_name = "IsomerWasmHost",
+    target_compatible_with = ["@platforms//os:linux"],
+    deps = [":swift_ui_wasm"],
+)

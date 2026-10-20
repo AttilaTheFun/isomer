@@ -1,0 +1,154 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@rules_swift//swift:swift_library_group.bzl", "swift_library_group")
+
+package(default_visibility = ["//visibility:public"])
+
+# Isomer's SwiftUI for a feature compiled into an Apple app (apple/compiled):
+# the same core and component-system renderers as the wasm reactors' slim
+# module (//wasm/libraries/hot_swift_ui), named `SwiftUI`. Only in the
+# feature's configuration, where //apple/compiled:mapping compiles it as
+# IsomerCompiledSwiftUI and points the feature's `import SwiftUI` at it;
+# anywhere else the name is Apple's.
+_FEATURE_ONLY = select({
+    "//apple/compiled:feature_on": [],
+    "//conditions:default": ["@platforms//:incompatible"],
+})
+
+swift_library(
+    name = "swift_ui",
+    package_name = "isomer",
+    # A compiled feature: Observation is Isomer's here
+    # (//apple/libraries/compiled_observation), its tracking scope reachable,
+    # and what is Isomer's own is available on every OS the app supports
+    # (no iOS 17 or 18 marks; what stands on Apple's newer types keeps them).
+    copts = ["-DISOMER_COMPILED_FEATURE"],
+    srcs = [
+        "//shared/renderers:srcs_no_gpu",
+        "//shared/swift_ui_core:srcs",
+    ],
+    # A compiled feature reads Apple's SwiftUI text attributes
+    # (shared/swift_ui_core/AttributedText.swift): their symbols are SwiftUI's.
+    linkopts = [
+        "-framework",
+        "SwiftUI",
+    ],
+    module_name = "SwiftUI",
+    target_compatible_with = _FEATURE_ONLY,
+    deps = [
+        ":core_transferable",
+        "//apple/libraries/compiled_backports:backports",
+        "//apple/libraries/compiled_observation:observation",
+        "//frameworks:for_core",
+        "//shared/isomer_swift_ui",
+        "@flatbuffers//swift",
+    ],
+)
+
+# CoreTransferable (//frameworks/core_transferable): `Transferable`, as far
+# as SwiftUI's pickers, drops and ShareLink take it, on every OS the app
+# supports (Apple's needs iOS 16). This SwiftUI re-exports it, as Apple's
+# does Apple's.
+swift_library(
+    name = "core_transferable",
+    package_name = "isomer",
+    srcs = ["//frameworks/core_transferable:srcs"],
+    module_name = "CoreTransferable",
+    target_compatible_with = _FEATURE_ONLY,
+)
+
+# PhotosUI's SwiftUI photo picker over this SwiftUI (//frameworks/photos_ui):
+# Apple's PhotosUI declares its picker over Apple's SwiftUI, which a feature
+# cannot mix with Isomer's.
+swift_library(
+    name = "photos_ui",
+    package_name = "isomer",
+    srcs = ["//frameworks/photos_ui:srcs"],
+    module_name = "PhotosUI",
+    target_compatible_with = _FEATURE_ONLY,
+    deps = [
+        ":core_transferable",
+        ":swift_ui",
+    ],
+)
+
+# QuickLook's SwiftUI preview over this SwiftUI (//frameworks/quick_look):
+# Apple's comes in an overlay over Apple's SwiftUI.
+swift_library(
+    name = "quick_look",
+    package_name = "isomer",
+    srcs = ["//frameworks/quick_look:srcs"],
+    module_name = "QuickLook",
+    target_compatible_with = _FEATURE_ONLY,
+    deps = [":swift_ui"],
+)
+
+# The Isomer module over this SwiftUI: what Isomer adds to Apple's frameworks
+# (//shared/swift_ui_extensions; Clipboard, cameraCapture and the platform
+# commands reach the host through the feature's HotBridge) and the umbrella
+# over Isomer's own modules.
+swift_library(
+    name = "isomer",
+    package_name = "isomer",
+    srcs = [
+        "//shared/isomer:Exports.swift",
+        "//shared/swift_ui_extensions:srcs",
+    ],
+    module_name = "Isomer",
+    target_compatible_with = _FEATURE_ONLY,
+    deps = [
+        ":swift_ui",
+        "//shared/isomer_swift_ui",
+        "//swift_ffi/swift_ffi",
+    ],
+)
+
+# Where a feature's `import Foundation` and what comes with it come from
+# (@isomer//:foundation in the feature's configuration): Apple's Foundation,
+# with Isomer's Observation and Synchronization, which Apple's need iOS 17
+# and 18 for (the mapping names them where code says `Observation` and
+# `Synchronization`, Apple's Foundation's re-export of Observation included).
+swift_library_group(
+    name = "foundation",
+    target_compatible_with = _FEATURE_ONLY,
+    deps = [
+        "//apple/libraries/compiled_observation:observation",
+        "//apple/libraries/compiled_synchronization:synchronization",
+    ],
+)
+
+# What a feature builds against (@isomer//:swift_ui in the feature's
+# configuration): SwiftUI (with CoreTransferable), PhotosUI, QuickLook and the
+# Isomer module, as on wasm and Android (//wasm/libraries/swift_ui:sdk).
+# Foundation, CoreGraphics and UniformTypeIdentifiers stay Apple's;
+# Observation and Synchronization are Isomer's (:foundation).
+swift_library_group(
+    name = "sdk",
+    target_compatible_with = _FEATURE_ONLY,
+    deps = [
+        ":core_transferable",
+        ":isomer",
+        ":photos_ui",
+        ":quick_look",
+        ":swift_ui",
+    ],
+)
+
+# The iso_hot render ABI natively (the reactor's HotBridge.swift): a feature
+# links it, and the host drives it through apple/libraries/native_runtime.
+# `alwayslink`: its @_cdecl exports are reached only by the host.
+swift_library(
+    name = "hot_bridge",
+    package_name = "isomer",
+    srcs = ["//wasm/libraries/swift_ui:HotBridge.swift"],
+    alwayslink = True,
+    copts = [
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    module_name = "HotBridge",
+    target_compatible_with = _FEATURE_ONLY,
+    deps = [
+        ":swift_ui",
+        "//apple/libraries/native_runtime:iso_hot_native",
+    ],
+)

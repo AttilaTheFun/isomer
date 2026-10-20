@@ -1,0 +1,101 @@
+# The web "wasm mode" cell of the example matrix: the shared greeter
+# (//swift_ffi/examples/shared/greeter) as a wasm reactor + TypeScript bindings,
+# typechecked with tsc and opened in a hermetic Electron shell. The web runs
+# Swift only as wasm (the browser's own WebAssembly, no WAMR), so there is no web
+# compiled cell.
+#
+#   bazel run //swift_ffi/examples/web/example_web_wasm_application                      # Electron window
+#   bazel test //swift_ffi/examples/web/example_web_wasm_application:greeter_web_test   # assertions
+
+load("@aspect_rules_esbuild//esbuild:defs.bzl", "esbuild")
+load("@aspect_rules_js//js:defs.bzl", "js_test")
+load("@aspect_rules_ts//ts:defs.bzl", "ts_project")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+load("//swift_ffi/rules:ts_swift_wasm_library.bzl", "ts_swift_wasm_library")
+
+package(
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+# WebAssembly: a wasm reactor (`greeter_web.wasm`) + TypeScript bindings
+# (`greeter_web.ts`).
+ts_swift_wasm_library(
+    name = "greeter_web",
+    swift = "//swift_ffi/examples/shared/greeter",
+)
+
+# Typechecks the example sources against the bridge's emitted declarations,
+# and emits the ES modules the test runs.
+ts_project(
+    name = "ts",
+    srcs = [
+        "app.ts",
+        "greeter_web_test.ts",
+        # What the test takes from Node, declared by hand (no @types/node).
+        "node.d.ts",
+        # `"type": "module"` classifies the files as ES modules under the
+        # nodenext module mode.
+        "package.json",
+    ],
+    transpiler = "tsc",
+    tsconfig = "tsconfig.json",
+    deps = [":greeter_web"],
+)
+
+# Executes the compiled test against the reactor under the hermetic Node.
+# package.json rides along so node treats the neighboring .js as ES modules.
+js_test(
+    name = "greeter_web_test",
+    args = ["$(rootpath :greeter_web.wasm)"],
+    data = [
+        "package.json",
+        ":greeter_web.wasm",
+        ":ts",
+    ],
+    entry_point = ":greeter_web_test.js",
+)
+
+# Bundle the renderer for Electron's Chromium (esbuild consumes the .ts
+# directly; the type checking happened in :ts above).
+esbuild(
+    name = "bundle",
+    srcs = [
+        "app.ts",
+        ":greeter_web_gen_ts",
+        ":greeter_web_runtime_ts",
+    ],
+    entry_point = "app.ts",
+    format = "esm",
+    output = "bundle.js",
+    # Top-level await + BigInt literals (rules_esbuild defaults to es2015).
+    target = "es2022",
+)
+
+# `bazel run //swift_ffi/examples/web/example_web_wasm_application` opens the example in a
+# desktop window: main.js serves index.html + bundle.js + greeter_web.wasm
+# over loopback HTTP and points a BrowserWindow at it. macOS/arm64 only (see
+# the electron repository in MODULE.bazel).
+sh_binary(
+    name = "example_web_wasm_application",
+    srcs = ["run_web.sh"],
+    args = [
+        "$(rlocationpath @electron//:electron_path.txt)",
+        "$(rlocationpath package.json)",
+    ],
+    data = [
+        "index.html",
+        "main.js",
+        "package.json",
+        ":bundle.js",
+        ":greeter_web.wasm",
+        "@electron//:electron_path.txt",
+    ],
+)

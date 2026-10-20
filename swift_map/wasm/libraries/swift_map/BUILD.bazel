@@ -1,0 +1,30 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The SwiftMap module for the web: the shared core engine plus the swift_ffi
+# host bridge. Built for wasm32 through ts_swift_wasm_library's platform
+# transition (see //swift_map/web/applications/example_webgpu_web_application).
+swift_library(
+    name = "swift_map",
+    srcs = [
+        "WebBridge.swift",
+        "//swift_map/swift_map/core:srcs",
+        "//swift_map/swift_map/renderer:srcs",
+    ],
+    module_name = "SwiftMap",
+    deps = [
+        "//swift_ffi/swift_ffi",
+        "//swift_gpu/wasm:swift_gpu",
+    ],
+)
+
+# The browser runtime, served as raw ES modules (not bundled).
+filegroup(
+    name = "runtime_js",
+    srcs = glob(["runtime/*.js"]),
+)
+
+# The bridge-free engine variant lives in its own package
+# (//swift_map/wasm/libraries/swift_map_engine): both variants are module `SwiftMap`, and
+# equal module names in one package collide on the .swiftmodule output.

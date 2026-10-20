@@ -1,0 +1,21 @@
+load("@rules_swift//swift:swift.bzl", "swift_interop_hint")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+package(default_visibility = ["//shared/wasm_host:__pkg__"])
+
+# A Swift-importable umbrella over the prebuilt WasmEdge SDK (a dev-only
+# experiment; macOS arm64). The hint modularizes the umbrella header so the
+# engine wrapper can `import CWasmEdge`.
+cc_library(
+    name = "cwasmedge",
+    hdrs = ["cwasmedge.h"],
+    aspect_hints = [":cwasmedge_swift"],
+    includes = ["."],
+    target_compatible_with = ["@platforms//os:macos"],
+    deps = ["@wasmedge_static//:wasmedge"],
+)
+
+swift_interop_hint(
+    name = "cwasmedge_swift",
+    module_name = "CWasmEdge",
+)

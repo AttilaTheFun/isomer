@@ -1,0 +1,21 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_swift//swift:swift_interop_hint.bzl", "swift_interop_hint")
+
+package(default_visibility = ["//foundation:__subpackages__"])
+
+# The guest's main-thread identity on WASI (`Thread.isMainThread` in a
+# wasm32-unknown-wasip1-threads build): the thread that ran the reactor's
+# constructors. `alwayslink` keeps the constructor that records it.
+cc_library(
+    name = "wasi_thread_identity",
+    srcs = ["identity.c"],
+    hdrs = ["identity.h"],
+    alwayslink = True,
+    aspect_hints = [":swift"],
+    copts = ["-nobuiltininc"],
+)
+
+swift_interop_hint(
+    name = "swift",
+    module_name = "CWasiThreadIdentity",
+)

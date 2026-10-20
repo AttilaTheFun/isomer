@@ -1,0 +1,47 @@
+# Public re-exports of the vendored WAMR so the rest of the stack consumes ONE
+# WAMR — the main-pinned @wamr defined in this module's MODULE.bazel — instead of
+# each repo declaring its own http_archive. This keeps the interp feature flags,
+# the per-OS platform layers, and the AOT wiring (all in @wamr's build_file_content)
+# in a single place. Downstream modules (e.g. isomer) reference
+# `//swift_ffi/runtime/wamr:wamr` / `:wamrc`.
+
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+package(
+    default_visibility = ["//visibility:public"],
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+# The WAMR runtime library: fast interpreter + WASI, tuned for SwiftWasm reactors
+# (bulk-memory/ref-types/tail-call + the call-indirect-overlong & bulk-memory-opt
+# flags main needs). The AOT loader is compiled in transparently when built with
+# `--define wamr_aot=1`, so a consumer linking this gets .wasm loading by default
+# and .aot loading in release with no target change.
+# A cc_library (not an alias) so it can carry iso_c_api_weak_stub.c — the
+# weak wasm_trap_delete that satisfies WAMR core's one dangling wasm-c-api
+# reference now that wasm_c_api.c is excluded (engine coexistence).
+cc_library(
+    name = "wamr",
+    srcs = ["iso_c_api_weak_stub.c"],
+    deps = ["@wamr"],
+    # Force-load the stub object: it only DEFINES a weak symbol, so archive
+    # semantics would otherwise never extract it (Xcode 27's ld enforces
+    # this; older linkers happened to resolve it).
+    alwayslink = True,
+)
+
+# The LLVM-backed AOT compiler (.wasm -> native .aot), built from hermetic-llvm.
+# A build-host tool (macOS-only exec; see @wamr//:wamrc). Use as a genrule `tool`
+# to lower a reactor to a native .aot for release builds.
+alias(
+    name = "wamrc",
+    actual = "@wamr//:wamrc",
+)

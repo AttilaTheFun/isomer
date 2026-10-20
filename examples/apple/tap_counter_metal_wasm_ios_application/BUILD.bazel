@@ -1,0 +1,73 @@
+load("@build_bazel_rules_apple//apple:apple.bzl", "local_provisioning_profile")
+load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@rules_xcodeproj//xcodeproj:defs.bzl", "xcode_provisioning_profile")
+load("@isomer_signing//:signing.bzl", "TEAM_ID")
+
+# The wasm+METAL iOS cell of the counter benchmark (docs/benchmarks.md#ios),
+# mostly a curiosity: the shared TapCounter.swift as a wasm reactor, drawn by
+# the self-drawing SwiftGPURenderer through swift_gpu's Metal backend (the
+# iOS analogue of Android's wasm+GPU cell / the desktop wasm hosts). ONE
+# module compiles the reimplementation core + renderers + the UIKit host —
+# no real-SwiftUI import, so the core's View/Text/Color names can't clash.
+# Bench mode: launch with `-bench` (self-driving; the accessibility harness
+# can't see a self-drawn surface).
+
+BUNDLE_ID = "com.LoganShire.Isomer"
+
+
+swift_library(
+    name = "app_lib",
+    # Isomer's own sources: its package, for the runtime's `package` plumbing.
+    package_name = "isomer",
+    srcs = [
+        "MetalWasmApp.swift",
+        "@isomer//shared/renderers:srcs",
+        "@isomer//shared/swift_ui_core:srcs",
+    ],
+    # The shared core spells its own types `SwiftUI.X` where a generic
+    # parameter shadows the name (`Button where Label == SwiftUI.Label<…>`),
+    # as Apple's interface does; this module is that SwiftUI under another name.
+    copts = ["-module-alias", "SwiftUI=TapCounterMetalWasmIOS"],
+    module_name = "TapCounterMetalWasmIOS",
+    tags = ["manual"],
+    deps = [
+        "@isomer//shared/isomer_swift_ui",
+        "@isomer//frameworks:for_core",
+        "@isomer//shared/wamr_host:iso_wamr",
+        "@isomer//tools/wasm:embedded_aot_shim",
+        "//wasm/tap_counter_feature:tap_counter_embedded_aot",
+        "@flatbuffers//swift",
+        "@isomer//swift_gpu/apple:swift_gpu",
+    ],
+)
+
+local_provisioning_profile(
+    name = "_xcode_managed_profile",
+    profile_name = "iOS Team Provisioning Profile: *",
+    tags = ["manual"],
+    team_id = TEAM_ID,
+)
+
+xcode_provisioning_profile(
+    name = "_development_profile",
+    managed_by_xcode = True,
+    provisioning_profile = ":_xcode_managed_profile",
+    tags = ["manual"],
+)
+
+ios_application(
+    name = "tap_counter_metal_wasm_ios_application",
+    bundle_id = BUNDLE_ID,
+    families = ["iphone"],
+    infoplists = ["Info.plist"],
+    minimum_os_version = "17.0",
+    provisioning_profile = ":_development_profile",
+    # Always the plain `.wasm` (NOT the config-selected reactor_artifact, which
+    # becomes a `.aot` under --define=wamr_aot=1): on iOS the AOT tier is the
+    # EMBEDDED image in __TEXT; the bundled resource is the interpreter-tier
+    # fallback (ISO_FORCE_INTERP=1), which must stay interpretable data.
+    resources = ["//wasm/tap_counter_feature:tap_counter_release.wasm"],
+    visibility = ["//visibility:public"],
+    deps = [":app_lib"],
+)

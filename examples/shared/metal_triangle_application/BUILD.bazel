@@ -1,0 +1,9 @@
+# A triangle drawn with Metal through Isomer's MetalView: one source for
+# the web (//web/metal_triangle_web_application) and iOS
+# (//apple/metal_triangle_ios_application). Not on Android, Linux or
+# Windows yet: Isomer's Metal has no backend there in 0.31.
+filegroup(
+    name = "srcs",
+    srcs = ["MetalTriangle.swift"],
+    visibility = ["//visibility:public"],
+)

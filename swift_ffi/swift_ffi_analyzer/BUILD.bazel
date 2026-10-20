@@ -1,0 +1,27 @@
+load("@rules_swift//swift:swift_binary.bzl", "swift_binary")
+
+package(
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+# Parses one annotated Swift source file and writes its exported surface as JSON
+# IR. The analyzer aspect runs this once per source file; built for the exec
+# (host) configuration so it runs during the build of cross-compiled targets.
+swift_binary(
+    name = "swift_ffi_analyzer",
+    srcs = ["Analyze.swift"],
+    module_name = "SwiftFFIAnalyzer",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//swift_ffi/swift_ffi_analyzer_library",
+        "@swift_argument_parser//:ArgumentParser",
+    ],
+)

@@ -1,0 +1,44 @@
+load("@build_bazel_rules_apple//apple:apple.bzl", "local_provisioning_profile")
+load("@build_bazel_rules_apple//apple:ios.bzl", "ios_ui_test")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@isomer_signing//:signing.bzl", "TEAM_ID")
+
+# The platform-native iOS perf harness — XCUITest `measure` blocks
+# (XCTApplicationLaunchMetric + XCTOSSignpostMetric) driving a release cell
+# over real launches and real touches. See CellPerformanceTests.swift.
+#
+# The cells all share one bundle id, so the test_host is nominal: install the
+# cell you want to measure, then run this bundle against the device. Choose
+# the cell at run time with the ISO_TARGET_BUNDLE_ID launch env (they share
+# the id today, so this is future-proofing for distinct ids).
+
+BUNDLE_ID = "com.LoganShire.Isomer"
+
+
+swift_library(
+    name = "perf_tests_lib",
+    testonly = True,
+    srcs = ["CellPerformanceTests.swift"],
+    module_name = "CellPerformanceTests",
+    tags = ["manual"],
+)
+
+local_provisioning_profile(
+    name = "_xcode_managed_profile",
+    profile_name = "iOS Team Provisioning Profile: *",
+    tags = ["manual"],
+    team_id = TEAM_ID,
+)
+
+ios_ui_test(
+    name = "cell_performance_tests",
+    minimum_os_version = "16.0",
+    # Device-capable runner (drives xcodebuild test-without-building); pass
+    # --test_arg=--destination=platform=iOS,id=<udid> to target the phone.
+    runner = "@build_bazel_rules_apple//apple/testing/default_runner:ios_xctestrun_ordered_runner",
+    provisioning_profile = ":_xcode_managed_profile",
+    tags = ["manual"],
+    test_host = "//apple/tap_counter_wasm_ios_application:tap_counter_wasm_ios_application",
+    visibility = ["//visibility:public"],
+    deps = [":perf_tests_lib"],
+)

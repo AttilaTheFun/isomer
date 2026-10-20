@@ -1,0 +1,40 @@
+# Isomer's Metal: Apple's classic Metal API (devices, buffers, textures,
+# samplers, libraries from Metal Shading Language source, render and
+# compute pipelines, command buffers with render, compute and blit
+# encoders) written in Swift over IsomerMetal's backends. Built as a module
+# named `Metal` for the platforms that have no Metal (the web today);
+# Apple platforms use Apple's. docs/parity/Metal.md says what is
+# implemented, what is not, and why.
+
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+swift_library(
+    name = "metal",
+    package_name = "isomer",
+    # Apple platforms have the real one; this one would shadow it.
+    target_compatible_with = select({
+        "@platforms//os:macos": ["@platforms//:incompatible"],
+        "@platforms//os:ios": ["@platforms//:incompatible"],
+        "@platforms//os:tvos": ["@platforms//:incompatible"],
+        "@platforms//os:watchos": ["@platforms//:incompatible"],
+        "@platforms//os:visionos": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
+    srcs = glob(["*.swift"]),
+    module_name = "Metal",
+    deps = ["//metal/isomer_metal"],
+)
+
+# The same sources under another module name, for tests that run on the
+# Mac (where `Metal` is Apple's).
+swift_library(
+    name = "metal_testable",
+    package_name = "isomer",
+    srcs = glob(["*.swift"]),
+    module_name = "IsomerMetalTestable",
+    testonly = True,
+    visibility = ["//metal:__subpackages__"],
+    deps = ["//metal/isomer_metal"],
+)

@@ -1,0 +1,29 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@isomer//tools/android:defs.bzl", "isomer_android_app")
+
+# The list stress app (//shared/list_stress_application) as compiled Swift under
+# the Jetpack Compose renderer: measure a streaming update's cost on a long List
+# (main-thread CPU, frames) and check rows keep identity and the list follows
+# the bottom.
+
+swift_library(
+    name = "app_swift",
+    srcs = ["//shared/list_stress_application:srcs"],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "ListStressApp",
+    tags = ["manual"],  # only meaningful through the android transition
+    deps = [
+        "@isomer//android/libraries/swift_ui",
+        "@isomer//android/libraries/swift_ui:isomer",
+    ],
+)
+
+isomer_android_app(
+    name = "list_stress_android_application",
+    default_renderer = "jetpackCompose",
+    label = "List Stress",
+    package = "dev.isomer.liststress",
+    swift_library = ":app_swift",
+    visibility = ["//visibility:public"],
+)

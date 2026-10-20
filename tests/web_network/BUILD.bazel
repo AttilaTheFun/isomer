@@ -1,0 +1,29 @@
+load("@aspect_rules_js//js:defs.bzl", "js_test")
+
+# Foundation's networking on the web (wasm/libraries/swift_ui/runtime/
+# network.js): the HTTP and WebSocket hosts in the hermetic Node, whose fetch
+# and WebSocket are the browser's APIs, against tools/testing's server on a
+# loopback port. The guest's side, URLSession over them in a page, is
+# examples/web/network_probe_web_application with
+# tools/testing/run_network_check.js (headless Chrome, by hand).
+
+# The modules under test beside the test, which imports them as "./…".
+genrule(
+    name = "modules",
+    srcs = [
+        "//tools/testing:network_server.js",
+        "//wasm/libraries/swift_ui:runtime/network.js",
+    ],
+    outs = [
+        "network.js",
+        "network_server.js",
+    ],
+    cmd = "for f in $(SRCS); do cp $$f $(RULEDIR)/$$(basename $$f); done",
+)
+
+js_test(
+    name = "network_test",
+    size = "small",
+    data = [":modules"],
+    entry_point = "network_test.mjs",
+)

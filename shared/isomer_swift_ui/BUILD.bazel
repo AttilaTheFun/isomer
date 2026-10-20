@@ -1,0 +1,22 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# IsomerSwiftUI: what a host binds Isomer's SwiftUI with, public for hosts
+# and applications (the Isomer umbrella re-exports it). Isomer's SwiftUI
+# modules depend on it and read what a host gives them; they declare none
+# of it, so `import SwiftUI` stays Apple's interface (docs/isomer_031_plan.md,
+# phase 10). Here: `HostBridge` (a host's services and drawing calls, with
+# `HostColor` and `ImageStatus`), and the render tree's wire types (tree.fbs,
+# flatc's accessors), which each platform's SwiftUI encodes and the hosts
+# that decode trees in Swift (the Apple tree views, the tests) read.
+swift_library(
+    name = "isomer_swift_ui",
+    package_name = "isomer",
+    srcs = glob(["*.swift"]) + ["//shared/renderers:tree_swift"],
+    module_name = "IsomerSwiftUI",
+    deps = [
+        "//:foundation",
+        "@flatbuffers//swift",
+    ],
+)

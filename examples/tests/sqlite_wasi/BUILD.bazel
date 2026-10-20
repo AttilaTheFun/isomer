@@ -1,0 +1,53 @@
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("@rules_swift//swift:swift.bzl", "swift_binary")
+load("@isomer//tools/platforms:transition.bzl", "transition_binary")
+
+# swift_sql's SQLite as a guest links it (SwiftSQL over CSwiftSQL, the
+# amalgamation built for WASI, from the Swift package through
+# rules_swift_package_manager) in a WASI file: built for wasm and run under
+# WAMR's command runner with the test's temporary directory as the guest's
+# /tmp (SQLiteFileCheck.swift says what it checks). It was the typed SQL library's
+# until that left Isomer (0.34), then isomer's own //tests/sqlite_wasi.
+swift_binary(
+    name = "sqlite_file_check",
+    srcs = ["SQLiteFileCheck.swift"],
+    copts = [
+        "-swift-version",
+        "6",
+    ],
+    tags = ["manual"],
+    deps = [
+        "@swiftpkg_swift_sql//:CSwiftSQL",
+        "@swiftpkg_swift_sql//:SwiftSQL",
+    ],
+)
+
+transition_binary(
+    name = "sqlite_file_check_wasm",
+    binary = ":sqlite_file_check",
+    platform = "@isomer//tools/platforms:wasm32",
+)
+
+# The same, built for a threaded reactor (wasm32-wasip1-threads: SQLite
+# thread-safe over the threads SDK's pthreads). Built by `bazel build //...`,
+# not run: WAMR's command runner here has no wasi-threads (and as test data
+# its runfile would take the single-threaded module's name).
+transition_binary(
+    name = "sqlite_file_check_wasm_threads",
+    binary = ":sqlite_file_check",
+    platform = "@isomer//swift_ffi/rules:wasm32-wasip1-threads",
+)
+
+sh_test(
+    name = "sqlite_file_test",
+    size = "small",
+    srcs = ["@isomer//foundation/tests:run_foundation_check.sh"],
+    args = [
+        "$(rootpath @isomer//tools/wasm/wasi_command:iwasm)",
+        "$(rootpath :sqlite_file_check_wasm)",
+    ],
+    data = [
+        ":sqlite_file_check_wasm",
+        "@isomer//tools/wasm/wasi_command:iwasm",
+    ],
+)

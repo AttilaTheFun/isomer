@@ -1,0 +1,38 @@
+load("@rules_swift//swift:swift_binary.bzl", "swift_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+# The Windows **wasm** cell: the same shared example app, delivered as an
+# `example_full.wasm` reactor run under the WAMR interpreter instead of compiled
+# into the .exe. This binary is a loader — it reads the reactor bytes and runs
+# them through `WindowsWasmApp` (Win32 window + D3D11 SwiftGPU renderer +
+# `FlatTreeDecoder`), the wasm peer of
+# `example_full_directx_compiled_windows_application`.
+#
+# It links `swift_ui_wasm` (which adds the WAMR C host + its Windows @wamr
+# platform layer) rather than `swift_ui`, so the compiled cell never pulls in
+# the interpreter. Kept on the CONSOLE subsystem (unlike the compiled cell's
+# WINDOWS subsystem) so the reactor's load/render logs are visible during
+# bring-up; the window itself is created by iso_window_create either way.
+swift_binary(
+    name = "example_full_directx_wasm_windows_application",
+    srcs = ["WasmMain.swift"],
+    copts = ["-parse-as-library"],
+    # The SwiftWasm cross-compile toolchain is only registered on the Linux/macOS
+    # host, so a Windows build can't produce the reactor from source: build it
+    # under WSL/Linux/macOS and pass its path as argv[1], or point
+    # ISO_HOT_RELOAD_SERVER at a server. (No committed prebuilt — a stale
+    # reactor would rot against the always-patch wire format.) See
+    # windows/README.md.
+    data = ["//shared/example_application:assets"],
+    # 16 MiB main-thread stack: the host-side tree decode + SwiftGPU layout/draw
+    # recurse over the render tree (the compiled cell raises it for the same
+    # reason). The wasm interpreter uses its own linear stack inside WAMR.
+    linkopts = ["/STACK:16777216"],
+    module_name = "ExampleFullWasmCell",
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        "@isomer//windows/libraries/swift_ui_wasm:host",
+        "@isomer//windows/libraries/swift_ui_wasm:swift_ui_wasm",
+    ],
+)

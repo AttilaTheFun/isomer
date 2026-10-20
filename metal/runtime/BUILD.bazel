@@ -1,0 +1,8 @@
+package(default_visibility = ["//visibility:public"])
+
+# Isomer's Metal executor for browsers, served raw as an ES module by sites
+# (import { createIsomerMetalHost } from "./isomer_metal_webgpu.js").
+filegroup(
+    name = "runtime_js",
+    srcs = ["isomer_metal_webgpu.js"],
+)

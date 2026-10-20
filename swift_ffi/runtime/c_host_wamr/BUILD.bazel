@@ -1,0 +1,42 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+# The WAMR engine for swift_ffi's "wasm mode": binds a swift_ffi wasm reactor's
+# foreign imports to native impls and calls its exports, over a real WAMR
+# instance. The concrete `SwiftFFIEngine` the engine-agnostic c_host runtime
+# (:swift_ffi_host) leaves abstract. A C host with NO compiled Swift links this
+# plus the generated `<module>_c_host` bindings to run a reactor out of the box.
+cc_library(
+    name = "swift_ffi_wamr",
+    srcs = ["swift_ffi_wamr.c"],
+    hdrs = ["swift_ffi_wamr.h"],
+    # WAMR's wasm_export.h decorates its API `__declspec(dllimport)` by default
+    # (→ __imp_ references). @wamr is linked plainly on Windows, so define
+    # COMPILING_WASM_RUNTIME_API to flip the decls to plain externals that
+    # resolve against wamr.lib. No-op on GCC/Clang. (Same define @wamr builds
+    # with.)
+    copts = select({
+        "@platforms//os:windows": ["-DCOMPILING_WASM_RUNTIME_API"],
+        "//conditions:default": [],
+    }),
+    # A C host links these `swift_ffi_wamr_*` entry points across a DLL boundary
+    # on Windows; export them (mirrors :swift_ffi_host). No-op elsewhere.
+    features = ["windows_export_all_symbols"],
+    includes = ["."],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//swift_ffi/runtime/c_host:swift_ffi_host",
+        "//swift_ffi/runtime/wamr",
+    ],
+)

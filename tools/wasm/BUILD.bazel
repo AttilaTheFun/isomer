@@ -1,0 +1,78 @@
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "defs.bzl",
+    "serve.py",
+    "site_imports_test.py",
+])
+
+# The AOT delivery switch (see .bazelrc `build:release`). `--define wamr_aot=1`
+# compiles the AOT loader into the WAMR host (//swift_ffi/runtime/wamr)
+# and makes `reactor_artifact` (tools/wasm/defs.bzl) bundle a wamrc-produced
+# native .aot instead of the interpreted .wasm. Off by default.
+config_setting(
+    name = "aot",
+    values = {"define": "wamr_aot=1"},
+)
+
+# `--define wamr_aot_opt=<0|1|2>`: the LLVM optimization level of
+# embedded_xip_aot's wamrc run (defs.bzl), for a faster build of slower code;
+# unset, wamrc's default (3).
+# `-c opt`: the web app's reactor is shipped without its function names.
+config_setting(
+    name = "opt",
+    values = {"compilation_mode": "opt"},
+)
+
+[config_setting(
+    name = "aot_opt_%d" % level,
+    values = {"define": "wamr_aot_opt=%d" % level},
+) for level in range(3)]
+
+load("@rules_python//python:defs.bzl", "py_binary")
+load("@rules_swift//swift:swift.bzl", "swift_interop_hint")
+
+# The exports a program linked from a wasm_sdk_bundle needs (its hosts'
+# entries, from the archives' symbol indexes): written into the manifest.
+py_binary(
+    name = "sdk_exports",
+    srcs = ["sdk_exports.py"],
+    visibility = ["//visibility:public"],
+)
+
+# A module's ICU data, trimmed, as an object (defs.bzl's icu_data_library).
+py_binary(
+    name = "icu_data",
+    srcs = ["icu_data.py"],
+)
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+# Accessor for an embedded_xip_aot image (see defs.bzl): the app links ONE
+# image; this shim exposes it to Swift as module CIsoEmbeddedAot.
+cc_library(
+    name = "embedded_aot_shim",
+    srcs = ["embedded_aot_shim.c"],
+    hdrs = ["embedded_aot_shim.h"],
+    aspect_hints = [":embedded_aot_shim_swift"],
+    visibility = ["//visibility:public"],
+)
+
+swift_interop_hint(
+    name = "embedded_aot_shim_swift",
+    module_name = "CIsoEmbeddedAot",
+)
+
+# The React 18 UMD runtime files, re-exported so CONSUMER workspaces (the
+# Playground's web-run site) can bundle them without declaring the
+# @react_umd repos themselves.
+filegroup(
+    name = "react_umd_js",
+    srcs = ["@react_umd//:umd/react.production.min.js"],
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "react_dom_umd_js",
+    srcs = ["@react_dom_umd//:umd/react-dom.production.min.js"],
+    visibility = ["//visibility:public"],
+)

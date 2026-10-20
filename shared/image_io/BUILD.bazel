@@ -1,0 +1,9 @@
+# ImageIO's decoding subset for the platforms without Apple's (see
+# ImageIO.swift), compiled per platform as a module named `ImageIO` that the
+# platform's `SwiftUI` depends on, so `import ImageIO` resolves wherever the
+# portable SwiftUI does.
+filegroup(
+    name = "srcs",
+    srcs = ["ImageIO.swift"],
+    visibility = ["//visibility:public"],
+)

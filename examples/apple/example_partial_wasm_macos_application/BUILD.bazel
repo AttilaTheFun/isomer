@@ -1,0 +1,72 @@
+load("@build_bazel_rules_apple//apple:macos.bzl", "macos_application")
+load("@rules_swift//swift:swift.bzl", "swift_binary", "swift_library")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+# A macOS SwiftUI host that embeds the example wasm feature bundle
+# (//wasm/hot_demo_feature) with `WasmView` and renders the tree it
+# emits with real SwiftUI. Hot reload is not a dedicated app any more — it is an
+# optional mode of `AppBundleProvider`: run `:hot_reload_server` in another shell
+# and the host shadows the packaged bundle with a live stream. See
+# docs/wasm_view_architecture.md.
+
+# The hot-reload dev server (macOS only): watches the feature's HotDemo.swift,
+# rebuilds //wasm/hot_demo_feature:hot_demo.wasm, and serves it over
+# localhost HTTP. Apps opt in with ISO_HOT_RELOAD_SERVER. The client + file-watch
+# providers live in //apple/libraries/wasm_view (AppBundleProvider).
+swift_binary(
+    name = "hot_reload_server",
+    srcs = ["HotReloadServer.swift"],
+    target_compatible_with = ["@platforms//os:macos"],
+)
+
+# The host app: renders the packaged bundle via AppBundleProvider, which shadows
+# it with a hot-reload stream when ISO_HOT_RELOAD_SERVER is set. Identical
+# structure to the iOS host.
+swift_library(
+    name = "host_lib",
+    srcs = ["HostApp.swift"],
+    module_name = "WasmViewHost",
+    target_compatible_with = ["@platforms//os:macos"],
+    deps = [
+        "@isomer//apple/libraries/wasm_view",
+        "//apple/platform_services_host",
+    ],
+)
+
+# Headless verification of the wasm pipeline (no GUI): instantiates the
+# reactor and asserts it emits a tree containing the demo greeting.
+#   bazel run //…:hot_smoke -- $(pwd)/bazel-bin/examples/wasm/hot_demo_feature/hot_demo.wasm
+swift_binary(
+    name = "hot_smoke",
+    srcs = ["main.swift"],
+    target_compatible_with = ["@platforms//os:macos"],
+    deps = [
+        "@isomer//shared/wasm_host:wamr_runtime",
+        "@isomer//shared/wasm_host:wasm_runtime",
+        "//apple/platform_services_host",
+    ],
+)
+
+# The macOS host. Renders the bundled wasm out of the box; connect it to a
+# server (`:run`, or ISO_HOT_RELOAD_SERVER=… bazel run …) to hot-reload.
+macos_application(
+    name = "example_partial_wasm_macos_application",
+    bundle_id = "com.LoganShire.Isomer.WasmView",
+    infoplists = ["Info.plist"],
+    minimum_os_version = "14.0",
+    resources = ["//wasm/hot_demo_feature:hot_demo"],
+    target_compatible_with = ["@platforms//os:macos"],
+    deps = [":host_lib"],
+)
+
+# One command: launch the macOS host connected to the hot-reload server
+# (default http://localhost:8787). Pairs with `:hot_reload_server` in another
+# shell; edit //wasm/hot_demo_feature/HotDemo.swift and the window
+# re-renders.
+#   bazel run //apple/example_partial_wasm_macos_application:run
+sh_binary(
+    name = "run",
+    srcs = ["run_macos.sh"],
+)

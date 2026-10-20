@@ -1,0 +1,479 @@
+{
+  "summary": "Isomer's Metal is Apple's classic Metal API, written in Swift: devices, command queues and command buffers; render, compute and blit command encoders; buffers, textures and texture views, samplers, depth-stencil states; libraries made from Metal Shading Language source, their functions, and render and compute pipelines. Shaders are translated from MSL to WGSL by IsomerMetal's translator (in Swift, at `makeLibrary(source:options:)`); what a device records is handed to a backend as one command stream per command buffer, which runs it on WebGPU in a browser. Metal 4, ray tracing, machine learning and the features of Apple's GPUs that WebGPU does not have are left out. On Apple platforms an app uses Apple's Metal.",
+  "deviations": [
+    "The protocols are Swift protocols over `AnyObject` (Apple's are Objective-C protocols over `NSObjectProtocol`), and the descriptors are Swift classes; `copy()` is there for the descriptors apps copy.",
+    "A library is made from source only: there is no compiled default library (`makeDefaultLibrary()` returns nil) until a build rule embeds an app's `.metal` sources. The shader subset the translator reads, and what it reports as unsupported, is in `metal/isomer_metal/translator` (its errors name the line).",
+    "`waitUntilCompleted()` and `waitUntilScheduled()` return at once in a browser, where the GPU's work finishes on the page's event loop that a blocked call would hold. Completed handlers run when the work is done, after what it wrote has come back.",
+    "Memory the CPU sees: a buffer that is not `.storageModePrivate` sends its bytes to the GPU with every command buffer that uses it once `contents()` has been asked for, and what the GPU writes to it (a writable shader buffer, a blit's destination) comes back before the command buffer's completed handlers run. A texture's GPU contents come back after a blit encoder's `synchronize(resource:)` (macOS's rule for managed textures), not by themselves.",
+    "The level-of-detail clamps given with `setFragmentSamplerState(_:lodMinClamp:lodMaxClamp:index:)` and the like are not applied (a WebGPU sampler's clamps are fixed when it is made: MTLSamplerDescriptor's). WebGPU has one viewport and one scissor rectangle: `setViewports` and `setScissorRects` use the first.",
+    "WebGPU's limits apply: a buffer bound to a shader starts at a multiple of 256 bytes, a vertex function writes no buffer, threadgroup memory is declared in the kernel, `.lines` triangle fill and `.clamp` depth clip are not done, and multisampling is 1 or 4 samples.",
+    "Pixel formats are the ones WebGPU has (no compressed, packed 16-bit, YUV or extended-range formats); `.a8Unorm` and the sRGB single- and two-channel formats are missing."
+  ],
+  "newer": {
+    "ios": 27,
+    "title": "New in iOS 27",
+    "why": "Introduced in this year's SDK.",
+    "intent": "maybe, as they reach WebGPU"
+  },
+  "groups": [
+    {
+      "title": "Metal 4",
+      "status": "not yet",
+      "intent": "maybe",
+      "why": "Metal 4's command allocators, argument tables, compilers and pipeline descriptors (iOS 26). The classic API comes first; Metal 4's explicit model maps to WebGPU about as well, and is a candidate once apps use it.",
+      "match": [
+        "^MTL4",
+        "MTL4",
+        "ViewPool",
+        "unspecialized",
+        "makeCommandAllocator",
+        "makeArgumentTable",
+        "makeCompiler",
+        "makeArchive",
+        "makePipelineDataSetSerializer",
+        "maximumConcurrentCompilationTaskCount",
+        "^MTLDevice\\.makeCommandBuffer\\(\\)",
+        "MTLResourceViewPool",
+        "MTLTextureViewPool"
+      ]
+    },
+    {
+      "title": "Ray tracing",
+      "status": "excluded",
+      "intent": "not planned",
+      "why": "Acceleration structures, intersection functions and their descriptors. WebGPU has no ray tracing.",
+      "match": [
+        "AccelerationStructure",
+        "Intersection",
+        "^MTLMotion",
+        "^MTLAxisAlignedBoundingBox",
+        "^MTLPackedFloat",
+        "^MTLComponentTransform",
+        "^MTLCurve",
+        "^MTLMatrixLayout",
+        "^MTLTransformType",
+        "Raytracing",
+        "FunctionPointers",
+        "accelerationStructure"
+      ]
+    },
+    {
+      "title": "Machine learning and tensors",
+      "status": "excluded",
+      "intent": "not planned",
+      "why": "Tensors and machine-learning pipelines. WebGPU has neither; WebNN is the browser's way.",
+      "match": [
+        "Tensor",
+        "MachineLearning",
+        "tensor",
+        "TENSOR",
+        "sourceDimensions"
+      ]
+    },
+    {
+      "title": "Fast resource loading",
+      "status": "excluded",
+      "intent": "not planned",
+      "why": "`MTLIO` command queues and file handles load files straight into GPU resources. A browser has no files to load that way.",
+      "match": [
+        "^MTLIO",
+        "IOCommand",
+        "IOFileHandle",
+        "IOCompression"
+      ]
+    },
+    {
+      "title": "Residency sets",
+      "status": "excluded",
+      "intent": "not planned",
+      "why": "Residency sets make resources resident by hand. WebGPU keeps what a submission uses resident itself.",
+      "match": [
+        "Residency",
+        "residency"
+      ]
+    },
+    {
+      "title": "Heaps, fences and events",
+      "status": "not yet",
+      "intent": "maybe",
+      "why": "Sub-allocation from heaps, aliasing, fences and events between encoders and command buffers. WebGPU allocates and synchronizes resources itself; heaps could be emulated, events could order command buffers.",
+      "match": [
+        "Heap",
+        "heap",
+        "Fence",
+        "fence",
+        "Event",
+        "event",
+        "Aliasable",
+        "aliasable"
+      ]
+    },
+    {
+      "title": "Argument buffers and resource handles",
+      "status": "not yet",
+      "intent": "maybe",
+      "why": "Argument buffers, argument encoders, GPU addresses and resource IDs (bindless access). WebGPU binds through bind groups; bindless needs its extensions.",
+      "match": [
+        "ArgumentEncoder",
+        "ArgumentDescriptor",
+        "argumentBuffer",
+        "ArgumentBuffer",
+        "gpuAddress",
+        "gpuResourceID",
+        "MTLResourceID",
+        "useResource",
+        "useResources",
+        "MTLGPUAddress",
+        "makeArgumentEncoder",
+        "MTLResourceUsage"
+      ]
+    },
+    {
+      "title": "Indirect command buffers and indirect draws",
+      "status": "not yet",
+      "intent": "maybe",
+      "why": "Draws and dispatches whose arguments are in a buffer, and command buffers encoded on the GPU. WebGPU has indirect draws and dispatches (planned); it has no indirect command buffers.",
+      "match": [
+        "IndirectCommand",
+        "indirectBuffer",
+        "Indirect",
+        "indirect",
+        "executeCommandsInBuffer",
+        "resetCommandsInBuffer"
+      ]
+    },
+    {
+      "title": "Tessellation",
+      "status": "excluded",
+      "intent": "not planned",
+      "why": "Tessellation factors, patch functions and post-tessellation vertex functions. WebGPU has no tessellation stage.",
+      "match": [
+        "Tessellation",
+        "tessellation",
+        "Patch",
+        "patch"
+      ]
+    },
+    {
+      "title": "Apple GPU features",
+      "status": "excluded",
+      "intent": "not planned",
+      "why": "Tile shading, imageblocks, memoryless render targets, raster order groups, programmable sample positions, rasterization rate maps and vertex amplification: features of Apple's tile-based GPUs that WebGPU, made for every GPU, does not have.",
+      "match": [
+        "Tile",
+        "tile",
+        "Imageblock",
+        "imageblock",
+        "RasterizationRate",
+        "rasterizationRate",
+        "SamplePosition",
+        "samplePosition",
+        "Amplification",
+        "amplification",
+        "RasterOrder",
+        "rasterOrder",
+        "threadgroupMemoryLength",
+        "ThreadgroupMemoryLength",
+        "colorAttachmentMap",
+        "ColorAttachmentMap",
+        "LogicalToPhysical",
+        "dispatchThreadsPerTile",
+        "Coordinate2D",
+        "DepthTestBounds",
+        "depthTestBounds"
+      ]
+    },
+    {
+      "title": "Mesh and object shaders",
+      "status": "excluded",
+      "intent": "not planned",
+      "why": "Mesh and object (amplification) shader stages. WebGPU has no mesh shading.",
+      "match": [
+        "Mesh",
+        "mesh",
+        "Object",
+        "object"
+      ]
+    },
+    {
+      "title": "Linking, function pointers and binary archives",
+      "status": "not yet",
+      "intent": "maybe",
+      "why": "Visible and linked functions, dynamic libraries, binary archives, stitched functions, function descriptors and function constants. WGSL has no function pointers or separate linking; function constants could become WGSL overrides, and are the likeliest of these to come.",
+      "match": [
+        "VisibleFunction",
+        "LinkedFunctions",
+        "linkedFunctions",
+        "DynamicLibrary",
+        "dynamicLibrar",
+        "BinaryArchive",
+        "binaryArchive",
+        "Stitch",
+        "stitch",
+        "FunctionHandle",
+        "functionHandle",
+        "FunctionDescriptor",
+        "FunctionConstant",
+        "functionConstant",
+        "constantValues",
+        "preloadedLibraries",
+        "binaryFunctions",
+        "Specializ",
+        "makeFunction\\(descriptor",
+        "FunctionStitching",
+        "MTLFunctionOptions",
+        "options$",
+        "installName",
+        "MTLLibraryType",
+        "CallStackDepth",
+        "BinaryFunctions",
+        "binaryFunctions",
+        "PreloadedLibraries",
+        "FunctionsDescriptor",
+        "MTLFunctionType\\.(visible|intersection)",
+        "supportAddingBinaryFunctions",
+        "\\.libraries$"
+      ]
+    },
+    {
+      "title": "Counters, capture and shader logging",
+      "status": "excluded",
+      "intent": "not planned",
+      "why": "GPU counters and timestamps, programmatic capture, shader validation and shader logs. A browser's developer tools are where these live; WebGPU's timestamp queries are optional and coarse.",
+      "match": [
+        "Counter",
+        "counter",
+        "Capture",
+        "capture",
+        "LogState",
+        "logState",
+        "FunctionLog",
+        "Log",
+        "logs",
+        "ShaderValidation",
+        "shaderValidation",
+        "EncoderInfo",
+        "ErrorState",
+        "errorState",
+        "errorOptions",
+        "ErrorOption",
+        "sampleTimestamps",
+        "Timestamp",
+        "timestamp",
+        "SampleBuffer",
+        "sampleBuffer",
+        "PassDescriptor",
+        "makeComputeCommandEncoder\\(descriptor",
+        "makeBlitCommandEncoder\\(descriptor"
+      ]
+    },
+    {
+      "title": "Sparse textures, compression and swizzles",
+      "status": "not yet",
+      "intent": "maybe",
+      "why": "Sparse (placement) textures, lossless and lossy compression, and texture swizzles. WebGPU has none of the three in its core; swizzles may come to it.",
+      "match": [
+        "Sparse",
+        "sparse",
+        "Compression",
+        "compression",
+        "Swizzle",
+        "swizzle",
+        "Placement",
+        "placement",
+        "ResourceState",
+        "firstMipmapInTail",
+        "tailSizeInBytes",
+        "resourceStateCommandEncoder"
+      ]
+    },
+    {
+      "title": "Sharing across processes",
+      "status": "excluded",
+      "intent": "not planned",
+      "why": "Shared texture and event handles, IOSurface-backed textures and remote storage: resources shared with another process. A page has no other process to share them with.",
+      "match": [
+        "Shareable",
+        "SharedTextureHandle",
+        "SharedEvent",
+        "IOSurface",
+        "iosurface",
+        "Remote",
+        "remote",
+        "makeSharedTexture",
+        "MTLSharedTexture"
+      ]
+    },
+    {
+      "title": "Precompiled libraries",
+      "status": "not yet",
+      "intent": "planned",
+      "why": "Libraries from a bundle, a URL or compiled data. The plan is a build rule that embeds an app's `.metal` sources, translated at build time, as its default library.",
+      "match": [
+        "makeDefaultLibrary\\(bundle",
+        "makeLibrary\\(URL",
+        "makeLibrary\\(data",
+        "makeLibrary\\(stitched",
+        "makeLibrary\\(filepath"
+      ]
+    },
+    {
+      "title": "Parallel render encoding",
+      "status": "not yet",
+      "intent": "maybe",
+      "why": "A render pass encoded from several threads at once. The browser backend is single-threaded; the encoders could record into one pass in order.",
+      "match": [
+        "ParallelRenderCommandEncoder"
+      ]
+    },
+    {
+      "title": "Occlusion queries",
+      "status": "not yet",
+      "intent": "maybe",
+      "why": "Visibility results (occlusion queries). WebGPU has occlusion query sets they could map to.",
+      "match": [
+        "VisibilityResult",
+        "visibilityResult"
+      ]
+    },
+    {
+      "title": "Pipeline and function reflection",
+      "status": "not yet",
+      "intent": "maybe",
+      "why": "Reflection objects describing a pipeline's or function's arguments, bindings and types. The translator knows them (it reflects each entry point's bindings for WebGPU); the API to read them is not written.",
+      "match": [
+        "Reflection",
+        "reflection",
+        "^MTLArgument",
+        "^MTLStructType",
+        "^MTLStructMember",
+        "^MTLArrayType",
+        "^MTLPointerType",
+        "^MTLTextureReferenceType",
+        "^MTLType",
+        "^MTLDataType",
+        "^MTLAttribute",
+        "^MTLVertexAttribute$",
+        "^MTLVertexAttribute\\.",
+        "^MTLBinding",
+        "^MTLBufferBinding",
+        "^MTLTextureBinding",
+        "^MTLThreadgroupBinding",
+        "^MTLObjectPayloadBinding",
+        "BindingType",
+        "BindingAccess",
+        "stageInputAttributes",
+        "vertexAttributes",
+        "MTLArgumentAccess",
+        "MTLArgumentType",
+        "makeComputePipelineState\\(function:options:\\)",
+        "makeComputePipelineState\\(descriptor:options:\\)",
+        "makeRenderPipelineState\\(descriptor:options:\\)",
+        "options:completionHandler"
+      ]
+    },
+    {
+      "title": "Command buffer and pipeline options",
+      "status": "not yet",
+      "intent": "maybe",
+      "why": "Command buffer descriptors, pipeline buffer mutability, pipeline options, dispatch types and the rest of the knobs on how work is encoded and checked. Most have no WebGPU counterpart and would be accepted and ignored.",
+      "match": [
+        "MTLCommandBufferDescriptor",
+        "makeCommandBuffer\\(descriptor",
+        "PipelineBufferDescriptor",
+        "vertexBuffers$",
+        "fragmentBuffers$",
+        "Mutability",
+        "mutability",
+        "MTLPipelineOption",
+        "MTLCommandQueueDescriptor",
+        "makeCommandQueue\\(descriptor",
+        "MTLCommandQueueError",
+        "MTLCommandBufferError",
+        "MTLCommandEncoderErrorState",
+        "retainedReferences",
+        "makeCommandBufferWithUnretainedReferences",
+        "MTLDispatchType",
+        "dispatchType",
+        "barrier",
+        "Barrier",
+        "MTLRenderStages",
+        "MTLStages",
+        "Stages"
+      ]
+    },
+    {
+      "title": "Compute stage-in and attribute strides",
+      "status": "not yet",
+      "intent": "maybe",
+      "why": "Vertex-descriptor-style inputs for kernels (`MTLStageInputOutputDescriptor`, `setStageInRegion`) and buffers bound with a per-attribute stride. The translator would read the kernel's `[[stage_in]]` from buffers it binds; not written.",
+      "match": [
+        "StageInputOutput",
+        "stageInputDescriptor",
+        "StageInRegion",
+        "^MTLStepFunction",
+        "^MTLBufferLayout",
+        "attributeStride",
+        "computePipelineDescriptor\\.buffers",
+        "^MTLComputePipelineDescriptor\\.buffers"
+      ]
+    },
+    {
+      "title": "Formats WebGPU lacks",
+      "status": "excluded",
+      "intent": "not planned",
+      "why": "Compressed (BC, ETC2, EAC, ASTC, PVRTC), packed 16-bit, YUV, extended-range and the sRGB one- and two-channel pixel formats, and the vertex formats with no WebGPU counterpart. WebGPU's optional compressed formats could come with the features that enable them.",
+      "match": [
+        "^MTLPixelFormat\\.",
+        "^MTLVertexFormat\\."
+      ]
+    },
+    {
+      "title": "Sampler reduction and level-of-detail bias",
+      "status": "excluded",
+      "intent": "not planned",
+      "why": "Minimum and maximum reduction filters and a sampler's LOD bias. WebGPU's samplers have neither.",
+      "match": [
+        "reductionMode",
+        "ReductionMode",
+        "lodBias"
+      ]
+    },
+    {
+      "title": "NSError bridging",
+      "status": "excluded",
+      "intent": "not planned",
+      "why": "Metal's errors as `NSError`s (error domains, user info, codes as `Int`). Isomer is Swift without Objective-C: its errors are Swift errors with a `code`.",
+      "match": [
+        "ErrorDomain",
+        "errorDomain",
+        "userInfo",
+        "errorCode",
+        "errorUserInfo",
+        "init\\(_:userInfo:\\)",
+        "~=\\(_:_:\\)",
+        "^MTLDeviceError"
+      ]
+    },
+    {
+      "title": "Foundation's performance profiles",
+      "status": "excluded",
+      "intent": "not planned",
+      "why": "What Metal's overlay adds to Foundation (`ProcessInfo` performance profiles and device certification): Apple's device-management concepts with nothing to report in a browser.",
+      "match": [
+        "^NS",
+        "^ProcessInfo"
+      ]
+    },
+    {
+      "title": "Buffer-backed textures",
+      "status": "not yet",
+      "intent": "maybe",
+      "why": "A texture over a buffer's bytes (`MTLBuffer.makeTexture(descriptor:offset:bytesPerRow:)`). WebGPU textures cannot alias buffers; a copy on each use could stand in.",
+      "match": [
+        "^MTLBuffer\\.makeTexture"
+      ]
+    }
+  ],
+  "additions": "Isomer's Metal declares what Apple's has elsewhere or on macOS only: `CFTimeInterval` (CoreFoundation's), `MTLStorageMode.managed` with `didModifyRange(_:)` and the blit encoder's `synchronize` (macOS's), and `MTLRenderPipelineError`/`MTLLibraryError` as plain Swift errors. `_IsomerSurfaceDrawable` and `_isomerNextDrawable` are the hook IsomerMetalWeb's canvas layer uses, behind `@_spi(Isomer)`."
+}

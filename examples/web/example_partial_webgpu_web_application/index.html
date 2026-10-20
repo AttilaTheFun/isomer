@@ -1,0 +1,68 @@
+<!doctype html>
+<!--
+  Incremental-adoption (Level 3) demo, SwiftGPU edition: this page is a
+  plain web app owned by the host — ordinary HTML/CSS, no React. Only the
+  "Latest order" panel is SwiftUI, embedded with `mountIsomer` and
+  drawn into a WebGPU canvas, so it renders identically to the other GPU
+  backends (OpenGL on Android/Linux, Direct2D on Windows).
+  React host apps embed the same surface with the <Isomer/> component —
+  see //examples/web/example_partial_react_web_application.
+-->
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Acme Store</title>
+  <style>
+    :root { color-scheme: light; }
+    html, body { margin: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f2f2f7; color: #1c1c1e;
+    }
+    header {
+      background: #fff; border-bottom: 1px solid #e5e5ea;
+      padding: 14px 24px; display: flex; align-items: baseline; gap: 24px;
+    }
+    header h1 { margin: 0; font-size: 18px; }
+    header nav a { color: #636366; text-decoration: none; margin-right: 16px; font-size: 14px; }
+    main { max-width: 720px; margin: 0 auto; padding: 24px; }
+    h2 { font-size: 15px; color: #636366; margin: 24px 0 10px; }
+    .card {
+      background: #fff; border-radius: 14px; border: 1px solid #e5e5ea;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06); overflow: hidden;
+    }
+    .row { padding: 14px 16px; border-bottom: 1px solid #f2f2f7; }
+    .row:last-child { border-bottom: none; }
+    .row small { color: #8e8e93; display: block; margin-top: 2px; }
+    footer { color: #8e8e93; font-size: 13px; text-align: center; padding: 24px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Acme Store</h1>
+    <nav><a href="#">Orders</a><a href="#">Account</a><a href="#">Support</a></nav>
+  </header>
+  <main>
+    <h2>Account</h2>
+    <div class="card">
+      <div class="row">Payment methods<small>Visa ending 4242</small></div>
+      <div class="row">Addresses<small>Home, Work</small></div>
+    </div>
+
+    <h2>Latest order (SwiftUI, GPU-drawn)</h2>
+    <div class="card" id="order-panel" style="height:330px"></div>
+
+    <footer>Everything on this page is plain HTML — except the order panel,
+      which is SwiftUI drawn into a WebGPU canvas.</footer>
+  </main>
+
+  <script type="module">
+    import { mountIsomer } from "./runtime/boot.js";
+
+    mountIsomer(document.getElementById("order-panel"), {
+      wasmURL: "./app.wasm",
+      renderer: "webGPU",
+    });
+  </script>
+</body>
+</html>

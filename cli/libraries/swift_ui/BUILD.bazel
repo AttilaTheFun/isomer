@@ -1,0 +1,30 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The CLI platform module: the shared core + renderers compiled for the HOST
+# (macOS / Linux) plus the TerminalRenderer and its keyboard run loop. Same
+# `import SwiftUI` as every other platform; a CLI app is an `@main App`, whose
+# `main()` runs the terminal.
+#
+# Its own package for the same reason as the other platform SwiftUI twins:
+# the `SwiftUI.swiftmodule` output must not collide with another module of
+# the same name in one build.
+swift_library(
+    name = "swift_ui",
+    package_name = "isomer",
+    srcs = [
+        "TerminalApp.swift",
+        "TerminalRenderer.swift",
+        "//shared/renderers:srcs_no_gpu",
+        "//shared/swift_ui_core:srcs",
+    ],
+    # `App.main()` runs the terminal host (shared/swift_ui_core/App.swift).
+    copts = ["-DISOMER_CLI_HOST"],
+    module_name = "SwiftUI",
+    deps = [
+        "//shared/isomer_swift_ui",
+        "@flatbuffers//swift",
+        "//frameworks:for_core",
+    ],
+)

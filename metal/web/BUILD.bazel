@@ -1,0 +1,20 @@
+# IsomerMetalWeb: Isomer's Metal in a browser. The backend that sends the
+# `Metal` module's command streams over swift_ffi to the page's WebGPU
+# executor (//metal/runtime), and IsomerMetalLayer, a canvas's frames as
+# Metal drawables.
+
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+swift_library(
+    name = "web",
+    package_name = "isomer",
+    srcs = ["MetalWeb.swift"],
+    module_name = "IsomerMetalWeb",
+    deps = [
+        "//metal/isomer_metal",
+        "//metal/metal",
+        "//swift_ffi/swift_ffi",
+    ],
+)

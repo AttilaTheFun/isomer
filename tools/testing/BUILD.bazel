@@ -1,0 +1,8 @@
+# The browser drivers here (cdp.py, cdp_eval.js, cdp_shot.js, the
+# run_*_check.js scripts) are run by hand, against a Chrome on the Mac. The
+# network checks' server is also a test's: tests/web_network runs the web's
+# network hosts against it in the hermetic Node.
+exports_files(
+    ["network_server.js"],
+    visibility = ["//visibility:public"],
+)

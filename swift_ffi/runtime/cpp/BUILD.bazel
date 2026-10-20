@@ -1,0 +1,25 @@
+# The hand-written C++ half of the bridge runtime (header-only): blob codec,
+# swiftffi::Result / Lazy / Closure, box draining. Generated C++ bindings
+# (`cc_dependent_library`) include "swiftffi.hpp".
+
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+package(
+    default_visibility = ["//visibility:public"],
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+cc_library(
+    name = "cpp",
+    hdrs = ["swiftffi.hpp"],
+    includes = ["."],
+    deps = ["//swift_ffi/runtime/swift_abi"],
+)

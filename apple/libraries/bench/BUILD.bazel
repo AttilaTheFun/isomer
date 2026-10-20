@@ -1,0 +1,34 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The on-device benchmark harness (accessibility-driven auto-taps + the
+# content-frame startup signal), compiled INTO each tap-counter cell's app
+# sources. Dormant without the `-bench` launch argument. The `:boot`
+# constructor installs it with zero app-source changes (the compiled cell's
+# @main is the shared TapCounter.swift, which must stay untouched).
+# See docs/benchmarks.md#ios.
+filegroup(
+    name = "harness",
+    srcs = ["BenchHarness.swift"],
+)
+
+# The interaction-benchmark signpost (os_signpost interval read by XCUITest's
+# XCTOSSignpostMetric). Separate filegroup: only the ISO cells that link the
+# SwiftUI tree module compile it in (it references IsomerTreeBenchHook).
+filegroup(
+    name = "signpost_harness",
+    srcs = ["InteractionSignpost.swift"],
+)
+
+cc_library(
+    name = "boot",
+    srcs = ["bench_boot.c"],
+    # iso_bench_wire is optional per cell (weak_import): -U lets the static
+    # link leave it undefined; dyld resolves it to NULL where absent.
+    linkopts = [
+        "-Wl,-U,_iso_bench_wire",
+        "-Wl,-U,_iso_bench_install_signpost",
+    ],
+    alwayslink = True,
+)

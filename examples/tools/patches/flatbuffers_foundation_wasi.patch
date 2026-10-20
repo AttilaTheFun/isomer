@@ -1,0 +1,987 @@
+Swap 'import Foundation' for the C library on WASI and Android across the
+FlatBuffers + Common sources, and leave out the Foundation-typed API
+(`Data`) there: every Foundation USAGE is already WASI-guarded upstream,
+and the guards now name Android too. On those platforms `import
+Foundation` is Isomer's own (@isomer//foundation), which FlatBuffers does
+not depend on, and the bare imports would link the SDK's
+swift-corelibs-foundation (whose __CFInitialize static constructor traps
+under a minimal WASI shim). Isomer reads and writes buffers as bytes.
+Drop when upstream guards the imports.
+diff -ruN a/swift/Sources/Common/Int+extension.swift b/swift/Sources/Common/Int+extension.swift
+--- a/swift/Sources/Common/Int+extension.swift	2026-10-12 02:02:56
++++ b/swift/Sources/Common/Int+extension.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ extension Int {
+ 
+diff -ruN a/swift/Sources/Common/Scalar.swift b/swift/Sources/Common/Scalar.swift
+--- a/swift/Sources/Common/Scalar.swift	2026-10-12 02:02:56
++++ b/swift/Sources/Common/Scalar.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ /// A boolean to see if the system is littleEndian
+ public let isLitteEndian: Bool = {
+diff -ruN a/swift/Sources/Common/padding.swift b/swift/Sources/Common/padding.swift
+--- a/swift/Sources/Common/padding.swift	2026-10-12 02:02:56
++++ b/swift/Sources/Common/padding.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ /// Gets the padding for the current element
+ /// - Parameters:
+diff -ruN a/swift/Sources/FlatBuffers/ByteBuffer.swift b/swift/Sources/FlatBuffers/ByteBuffer.swift
+--- a/swift/Sources/FlatBuffers/ByteBuffer.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/ByteBuffer.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ /// `ByteBuffer` is the interface that stores the data for a `Flatbuffers` object
+ /// it allows users to write and read data directly from memory thus the use of its
+@@ -28,7 +34,7 @@
+   final class Storage {
+     @usableFromInline
+     enum Blob {
+-      #if !os(WASI)
++      #if !os(WASI) && !os(Android)
+       case data(Data)
+       case bytes(ContiguousBytes)
+       #endif
+@@ -101,7 +107,7 @@
+       switch retainedBlob {
+       case .byteBuffer(let byteBuffer):
+         return try byteBuffer.withUnsafeBytes(body)
+-      #if !os(WASI)
++      #if !os(WASI) && !os(Android)
+       case .data(let data):
+         return try data.withUnsafeBytes(body)
+       case .bytes(let contiguousBytes):
+@@ -123,7 +129,7 @@
+       switch retainedBlob {
+       case .byteBuffer(let byteBuffer):
+         return try byteBuffer.withUnsafeRawPointer(body)
+-      #if !os(WASI)
++      #if !os(WASI) && !os(Android)
+       case .data(let data):
+         return
+           try data
+@@ -157,7 +163,7 @@
+       switch retainedBlob {
+       case .byteBuffer(let byteBuffer):
+         return try byteBuffer.readWithUnsafeRawPointer(position: position, body)
+-      #if !os(WASI)
++      #if !os(WASI) && !os(Android)
+       case .data(let data):
+         return try data.withUnsafeBytes {
+           try body($0.baseAddress!.advanced(by: position))
+@@ -227,7 +233,7 @@
+     capacity = bytes.count
+   }
+ 
+-  #if !os(WASI)
++  #if !os(WASI) && !os(Android)
+   /// Constructor that creates a Flatbuffer from the Swift Data type object
+   /// - Parameter
+   ///   - data: Swift data Object
+@@ -365,7 +371,7 @@
+     }
+   }
+ 
+-  #if !os(WASI)
++  #if !os(WASI) && !os(Android)
+   /// Reads a string from the buffer and encodes it to a swift string
+   /// - Parameters:
+   ///   - index: index of the string in the buffer
+diff -ruN a/swift/Sources/FlatBuffers/Constants.swift b/swift/Sources/FlatBuffers/Constants.swift
+--- a/swift/Sources/FlatBuffers/Constants.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Constants.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ #if canImport(Common)
+ import Common
+diff -ruN a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_1.swift b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_1.swift
+--- a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_1.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_1.swift	2026-10-12 02:03:07
+@@ -1 +1,7 @@
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+diff -ruN a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_10.swift b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_10.swift
+--- a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_10.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_10.swift	2026-10-12 02:03:07
+@@ -1,5 +1,11 @@
+ import FlatBuffers
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ func run() {
+   // create a `FlatBufferBuilder`, which will be used to serialize objects
+diff -ruN a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_11.swift b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_11.swift
+--- a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_11.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_11.swift	2026-10-12 02:03:07
+@@ -1,5 +1,11 @@
+ import FlatBuffers
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ func run() {
+   // create a ByteBuffer(:) from an [UInt8] or Data()
+diff -ruN a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_12.swift b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_12.swift
+--- a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_12.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_12.swift	2026-10-12 02:03:07
+@@ -1,5 +1,11 @@
+ import FlatBuffers
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ func run() {
+   // create a ByteBuffer(:) from an [UInt8] or Data()
+diff -ruN a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_13.swift b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_13.swift
+--- a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_13.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_13.swift	2026-10-12 02:03:07
+@@ -1,5 +1,11 @@
+ import FlatBuffers
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ func run() {
+   // create a ByteBuffer(:) from an [UInt8] or Data()
+diff -ruN a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_2.swift b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_2.swift
+--- a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_2.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_2.swift	2026-10-12 02:03:07
+@@ -1,2 +1,8 @@
+ import FlatBuffers
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+diff -ruN a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_3.swift b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_3.swift
+--- a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_3.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_3.swift	2026-10-12 02:03:07
+@@ -1,5 +1,11 @@
+ import FlatBuffers
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ func run() {
+   // create a `FlatBufferBuilder`, which will be used to serialize objects
+diff -ruN a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_4.swift b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_4.swift
+--- a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_4.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_4.swift	2026-10-12 02:03:07
+@@ -1,5 +1,11 @@
+ import FlatBuffers
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ func run() {
+   // create a `FlatBufferBuilder`, which will be used to serialize objects
+diff -ruN a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_5.swift b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_5.swift
+--- a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_5.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_5.swift	2026-10-12 02:03:07
+@@ -1,5 +1,11 @@
+ import FlatBuffers
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ func run() {
+   // create a `FlatBufferBuilder`, which will be used to serialize objects
+diff -ruN a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_6.swift b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_6.swift
+--- a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_6.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_6.swift	2026-10-12 02:03:07
+@@ -1,5 +1,11 @@
+ import FlatBuffers
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ func run() {
+   // create a `FlatBufferBuilder`, which will be used to serialize objects
+diff -ruN a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_7.swift b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_7.swift
+--- a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_7.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_7.swift	2026-10-12 02:03:07
+@@ -1,5 +1,11 @@
+ import FlatBuffers
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ func run() {
+   // create a `FlatBufferBuilder`, which will be used to serialize objects
+diff -ruN a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_8.swift b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_8.swift
+--- a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_8.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_8.swift	2026-10-12 02:03:07
+@@ -1,5 +1,11 @@
+ import FlatBuffers
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ func run() {
+   // create a `FlatBufferBuilder`, which will be used to serialize objects
+diff -ruN a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_9.swift b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_9.swift
+--- a/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_9.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Documentation.docc/Resources/code/swift/swift_code_9.swift	2026-10-12 02:03:07
+@@ -1,5 +1,11 @@
+ import FlatBuffers
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ func run() {
+   // create a `FlatBufferBuilder`, which will be used to serialize objects
+diff -ruN a/swift/Sources/FlatBuffers/Enum.swift b/swift/Sources/FlatBuffers/Enum.swift
+--- a/swift/Sources/FlatBuffers/Enum.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Enum.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ #if canImport(Common)
+ import Common
+diff -ruN a/swift/Sources/FlatBuffers/FlatBufferBuilder.swift b/swift/Sources/FlatBuffers/FlatBufferBuilder.swift
+--- a/swift/Sources/FlatBuffers/FlatBufferBuilder.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/FlatBufferBuilder.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ #if canImport(Common)
+ import Common
+@@ -62,7 +68,7 @@
+   @inline(__always)
+   public var capacity: Int { _bb.capacity }
+ 
+-  #if !os(WASI)
++  #if !os(WASI) && !os(Android)
+   /// Data representation of the buffer
+   ///
+   /// Should only be used after ``finish(offset:addPrefix:)`` is called
+@@ -480,7 +486,7 @@
+     return endVector(len: size)
+   }
+ 
+-  #if !os(WASI)
++  #if !os(WASI) && !os(Android)
+   @inline(__always)
+   /// Creates a vector of bytes in the buffer.
+   ///
+diff -ruN a/swift/Sources/FlatBuffers/FlatBufferObject.swift b/swift/Sources/FlatBuffers/FlatBufferObject.swift
+--- a/swift/Sources/FlatBuffers/FlatBufferObject.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/FlatBufferObject.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ /// NativeStruct is a protocol that indicates if the struct is a native `swift` struct
+ /// since now we will be serializing native structs into the buffer.
+diff -ruN a/swift/Sources/FlatBuffers/FlatBuffersUtils.swift b/swift/Sources/FlatBuffers/FlatBuffersUtils.swift
+--- a/swift/Sources/FlatBuffers/FlatBuffersUtils.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/FlatBuffersUtils.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ /// FlatBuffersUtils hosts some utility functions that might be useful
+ public enum FlatBuffersUtils {
+diff -ruN a/swift/Sources/FlatBuffers/FlatbuffersErrors.swift b/swift/Sources/FlatBuffers/FlatbuffersErrors.swift
+--- a/swift/Sources/FlatBuffers/FlatbuffersErrors.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/FlatbuffersErrors.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ /// Collection of thrown from the Flatbuffer verifier
+ public enum FlatbuffersErrors: Error, Equatable {
+@@ -61,7 +67,7 @@
+ 
+ }
+ 
+-#if !os(WASI)
++#if !os(WASI) && !os(Android)
+ 
+ extension FlatbuffersErrors {
+   public static func == (
+diff -ruN a/swift/Sources/FlatBuffers/Message.swift b/swift/Sources/FlatBuffers/Message.swift
+--- a/swift/Sources/FlatBuffers/Message.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Message.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ /// FlatBufferGRPCMessage protocol that should allow us to invoke
+ /// initializers directly from the GRPC generated code
+diff -ruN a/swift/Sources/FlatBuffers/Mutable.swift b/swift/Sources/FlatBuffers/Mutable.swift
+--- a/swift/Sources/FlatBuffers/Mutable.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Mutable.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ #if canImport(Common)
+ import Common
+diff -ruN a/swift/Sources/FlatBuffers/NativeObject.swift b/swift/Sources/FlatBuffers/NativeObject.swift
+--- a/swift/Sources/FlatBuffers/NativeObject.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/NativeObject.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ /// NativeObject is a protocol that all of the `Object-API` generated code should be
+ /// conforming to since it allows developers the ease of use to pack and unpack their
+diff -ruN a/swift/Sources/FlatBuffers/Offset.swift b/swift/Sources/FlatBuffers/Offset.swift
+--- a/swift/Sources/FlatBuffers/Offset.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Offset.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ /// Offset object for all the Objects that are written into the buffer
+ public struct Offset {
+diff -ruN a/swift/Sources/FlatBuffers/Root.swift b/swift/Sources/FlatBuffers/Root.swift
+--- a/swift/Sources/FlatBuffers/Root.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Root.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ /// Takes in a prefixed sized buffer, where the prefixed size would be skipped.
+ /// And would verify that the buffer passed is a valid `Flatbuffers` Object.
+diff -ruN a/swift/Sources/FlatBuffers/String+extension.swift b/swift/Sources/FlatBuffers/String+extension.swift
+--- a/swift/Sources/FlatBuffers/String+extension.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/String+extension.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ extension String: Verifiable {
+ 
+diff -ruN a/swift/Sources/FlatBuffers/Struct.swift b/swift/Sources/FlatBuffers/Struct.swift
+--- a/swift/Sources/FlatBuffers/Struct.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Struct.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ #if canImport(Common)
+ import Common
+diff -ruN a/swift/Sources/FlatBuffers/Table.swift b/swift/Sources/FlatBuffers/Table.swift
+--- a/swift/Sources/FlatBuffers/Table.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Table.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ #if canImport(Common)
+ import Common
+diff -ruN a/swift/Sources/FlatBuffers/TableVerifier.swift b/swift/Sources/FlatBuffers/TableVerifier.swift
+--- a/swift/Sources/FlatBuffers/TableVerifier.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/TableVerifier.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ /// `TableVerifier` verifies a table object is within a provided memory.
+ /// It checks if all the objects for a specific generated table, are within
+diff -ruN a/swift/Sources/FlatBuffers/Vectors/FlatbufferVector.swift b/swift/Sources/FlatBuffers/Vectors/FlatbufferVector.swift
+--- a/swift/Sources/FlatBuffers/Vectors/FlatbufferVector.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Vectors/FlatbufferVector.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ public struct FlatbufferVector<
+   Element: FlatbuffersVectorInitializable
+diff -ruN a/swift/Sources/FlatBuffers/Vectors/FlatbuffersVectorInitializable.swift b/swift/Sources/FlatBuffers/Vectors/FlatbuffersVectorInitializable.swift
+--- a/swift/Sources/FlatBuffers/Vectors/FlatbuffersVectorInitializable.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Vectors/FlatbuffersVectorInitializable.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ #if canImport(Common)
+ import Common
+diff -ruN a/swift/Sources/FlatBuffers/Vectors/UnionFlatbufferVector.swift b/swift/Sources/FlatBuffers/Vectors/UnionFlatbufferVector.swift
+--- a/swift/Sources/FlatBuffers/Vectors/UnionFlatbufferVector.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Vectors/UnionFlatbufferVector.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ public struct UnionFlatbufferVector {
+ 
+diff -ruN a/swift/Sources/FlatBuffers/VeriferOptions.swift b/swift/Sources/FlatBuffers/VeriferOptions.swift
+--- a/swift/Sources/FlatBuffers/VeriferOptions.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/VeriferOptions.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ /// `VerifierOptions` is a set of options to verify a flatbuffer
+ public struct VerifierOptions {
+diff -ruN a/swift/Sources/FlatBuffers/Verifiable.swift b/swift/Sources/FlatBuffers/Verifiable.swift
+--- a/swift/Sources/FlatBuffers/Verifiable.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Verifiable.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ #if canImport(Common)
+ import Common
+diff -ruN a/swift/Sources/FlatBuffers/Verifier.swift b/swift/Sources/FlatBuffers/Verifier.swift
+--- a/swift/Sources/FlatBuffers/Verifier.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/Verifier.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ /// Verifier that check if the buffer passed into it is a valid,
+ /// safe, aligned Flatbuffers object since swift read from `unsafeMemory`
+diff -ruN a/swift/Sources/FlatBuffers/_InternalByteBuffer.swift b/swift/Sources/FlatBuffers/_InternalByteBuffer.swift
+--- a/swift/Sources/FlatBuffers/_InternalByteBuffer.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlatBuffers/_InternalByteBuffer.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ #if canImport(Common)
+ import Common
+@@ -143,7 +149,7 @@
+ 
+   /// Adds a `ContiguousBytes` to buffer memory
+   /// - Parameter value: bytes to copy
+-  #if !os(WASI)
++  #if !os(WASI) && !os(Android)
+   @inline(__always)
+   @usableFromInline
+   mutating func push(bytes: ContiguousBytes) {
+diff -ruN a/swift/Sources/FlexBuffers/ByteBuffer.swift b/swift/Sources/FlexBuffers/ByteBuffer.swift
+--- a/swift/Sources/FlexBuffers/ByteBuffer.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlexBuffers/ByteBuffer.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ /// `ByteBuffer` is the interface that stores the data for a `Flatbuffers` object
+ /// it allows users to write and read data directly from memory thus the use of its
+@@ -28,7 +34,7 @@
+   final class Storage {
+     @usableFromInline
+     enum Blob {
+-      #if !os(WASI)
++      #if !os(WASI) && !os(Android)
+       case data(Data)
+       case bytes(ContiguousBytes)
+       #endif
+@@ -101,7 +107,7 @@
+       switch retainedBlob {
+       case .byteBuffer(let byteBuffer):
+         return try byteBuffer.withUnsafeBytes(body)
+-      #if !os(WASI)
++      #if !os(WASI) && !os(Android)
+       case .data(let data):
+         return try data.withUnsafeBytes(body)
+       case .bytes(let contiguousBytes):
+@@ -123,7 +129,7 @@
+       switch retainedBlob {
+       case .byteBuffer(let byteBuffer):
+         return try byteBuffer.withUnsafeRawPointer(body)
+-      #if !os(WASI)
++      #if !os(WASI) && !os(Android)
+       case .data(let data):
+         return
+           try data
+@@ -157,7 +163,7 @@
+       switch retainedBlob {
+       case .byteBuffer(let byteBuffer):
+         return try byteBuffer.readWithUnsafeRawPointer(position: position, body)
+-      #if !os(WASI)
++      #if !os(WASI) && !os(Android)
+       case .data(let data):
+         return try data.withUnsafeBytes {
+           try body($0.baseAddress!.advanced(by: position))
+@@ -225,7 +231,7 @@
+     capacity = bytes.count
+   }
+ 
+-  #if !os(WASI)
++  #if !os(WASI) && !os(Android)
+   /// Constructor that creates a Flatbuffer from the Swift Data type object
+   /// - Parameter
+   ///   - data: Swift data Object
+diff -ruN a/swift/Sources/FlexBuffers/FlexBufferType.swift b/swift/Sources/FlexBuffers/FlexBufferType.swift
+--- a/swift/Sources/FlexBuffers/FlexBufferType.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlexBuffers/FlexBufferType.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ public enum FlexBufferType: UInt64 {
+   case null = 0
+diff -ruN a/swift/Sources/FlexBuffers/Reader/FixedTypedVector.swift b/swift/Sources/FlexBuffers/Reader/FixedTypedVector.swift
+--- a/swift/Sources/FlexBuffers/Reader/FixedTypedVector.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlexBuffers/Reader/FixedTypedVector.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ public struct FixedTypedVector: FlexBufferVector {
+   public let byteBuffer: ByteBuffer
+diff -ruN a/swift/Sources/FlexBuffers/Reader/FlexBufferVector.swift b/swift/Sources/FlexBuffers/Reader/FlexBufferVector.swift
+--- a/swift/Sources/FlexBuffers/Reader/FlexBufferVector.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlexBuffers/Reader/FlexBufferVector.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ protocol FlexBufferVector: Sized & FlexBufferContiguousBytes {
+   subscript(index: Int) -> Reference? { get }
+diff -ruN a/swift/Sources/FlexBuffers/Reader/Reference.swift b/swift/Sources/FlexBuffers/Reader/Reference.swift
+--- a/swift/Sources/FlexBuffers/Reader/Reference.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlexBuffers/Reader/Reference.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ enum FlexBuffersErrors: Error {
+   case sizeOfBufferIsTooSmall
+diff -ruN a/swift/Sources/FlexBuffers/Reader/TypedVector.swift b/swift/Sources/FlexBuffers/Reader/TypedVector.swift
+--- a/swift/Sources/FlexBuffers/Reader/TypedVector.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlexBuffers/Reader/TypedVector.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ public struct TypedVector: FlexBufferVector {
+   public let byteBuffer: ByteBuffer
+diff -ruN a/swift/Sources/FlexBuffers/Utils/BitWidth.swift b/swift/Sources/FlexBuffers/Utils/BitWidth.swift
+--- a/swift/Sources/FlexBuffers/Utils/BitWidth.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlexBuffers/Utils/BitWidth.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ @usableFromInline
+ enum BitWidth: UInt64, CaseIterable {
+diff -ruN a/swift/Sources/FlexBuffers/Utils/Constants.swift b/swift/Sources/FlexBuffers/Utils/Constants.swift
+--- a/swift/Sources/FlexBuffers/Utils/Constants.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlexBuffers/Utils/Constants.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ #if canImport(Common)
+ import Common
+diff -ruN a/swift/Sources/FlexBuffers/Utils/Value.swift b/swift/Sources/FlexBuffers/Utils/Value.swift
+--- a/swift/Sources/FlexBuffers/Utils/Value.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlexBuffers/Utils/Value.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ #if canImport(Common)
+ import Common
+diff -ruN a/swift/Sources/FlexBuffers/Utils/functions.swift b/swift/Sources/FlexBuffers/Utils/functions.swift
+--- a/swift/Sources/FlexBuffers/Utils/functions.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlexBuffers/Utils/functions.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ #if canImport(Common)
+ import Common
+diff -ruN a/swift/Sources/FlexBuffers/Writer/FlexBuffersWriter.swift b/swift/Sources/FlexBuffers/Writer/FlexBuffersWriter.swift
+--- a/swift/Sources/FlexBuffers/Writer/FlexBuffersWriter.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlexBuffers/Writer/FlexBuffersWriter.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ #if canImport(Common)
+ import Common
+@@ -73,7 +79,7 @@
+     return ByteBuffer(byteBuffer: _bb)
+   }
+ 
+-  #if !os(WASI)
++  #if !os(WASI) && !os(Android)
+   /// Data representation of the buffer
+   ///
+   /// Should only be used after ``finish(offset:addPrefix:)`` is called
+diff -ruN a/swift/Sources/FlexBuffers/_InternalByteBuffer.swift b/swift/Sources/FlexBuffers/_InternalByteBuffer.swift
+--- a/swift/Sources/FlexBuffers/_InternalByteBuffer.swift	2026-10-12 02:02:56
++++ b/swift/Sources/FlexBuffers/_InternalByteBuffer.swift	2026-10-12 02:03:07
+@@ -14,7 +14,13 @@
+  * limitations under the License.
+  */
+ 
++#if os(WASI)
++import WASILibc
++#elseif os(Android)
++import Android
++#else
+ import Foundation
++#endif
+ 
+ #if canImport(Common)
+ import Common

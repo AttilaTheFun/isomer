@@ -1,0 +1,28 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@isomer//tools/wasm:defs.bzl", "isomer_web_app")
+
+# Level 3 adoption (docs/adoption_levels.md): a NORMAL web page — its own
+# HTML, CSS, and React — that embeds one SwiftUI feature
+# (//shared/embedded_example's OrderStatusCard) with the <Isomer/>
+# React component, the web analogue of UIHostingController.
+
+swift_library(
+    name = "app_lib",
+    srcs = ["//shared/embedded_example:srcs"],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "EmbeddedExample",
+    deps = ["@isomer//wasm/libraries/swift_ui"],
+)
+
+# `bazel run //web/example_partial_react_web_application` serves the
+# host page with the embedded SwiftUI card.
+isomer_web_app(
+    name = "example_partial_react_web_application",
+    index = "index.html",
+    query = "",
+    site_visibility = [
+        "//electron/example_partial_react_electron_application:__pkg__",
+    ],
+    swift_library = ":app_lib",
+)

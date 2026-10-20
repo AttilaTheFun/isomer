@@ -1,0 +1,37 @@
+load("@build_bazel_rules_apple//apple:macos.bzl", "macos_application")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The "partial x compiled" cell of the Apple matrix: a native SwiftUI host that
+# embeds ONE shared Isomer feature (//shared/embedded_example) compiled to
+# native SwiftUI. The Apple analogue of the Android partial_compiled host. The
+# wasm-delivered twin is example_partial_wasm_macos_application.
+
+# The shared feature as a plain library. `-parse-as-library` keeps its @main
+# from becoming the executable entry (the host's @main owns that); the host
+# embeds `OrderStatusCard()` directly.
+swift_library(
+    name = "feature_lib",
+    srcs = ["//shared/embedded_example:card"],
+    module_name = "EmbeddedExample",
+    target_compatible_with = ["@platforms//os:macos"],
+    deps = ["@isomer//apple/libraries/swift_ui"],
+)
+
+swift_library(
+    name = "host_lib",
+    srcs = ["HostApp.swift"],
+    module_name = "PartialCompiledHost",
+    target_compatible_with = ["@platforms//os:macos"],
+    deps = [":feature_lib"],
+)
+
+macos_application(
+    name = "example_partial_compiled_macos_application",
+    bundle_id = "com.LoganShire.Isomer.PartialCompiled",
+    infoplists = ["Info.plist"],
+    minimum_os_version = "14.0",
+    target_compatible_with = ["@platforms//os:macos"],
+    deps = [":host_lib"],
+)

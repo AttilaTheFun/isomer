@@ -1,0 +1,41 @@
+{
+  "fill": {
+    "automatic-gradient": "extended-srgb:0.04500,0.07000,0.20000,1.00000"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "glass": false,
+          "image-name": "Orange-Ribbon.svg",
+          "name": "Orange-Ribbon"
+        },
+        {
+          "glass": false,
+          "image-name": "Blue-Ribbon.svg",
+          "name": "Blue-Ribbon"
+        },
+        {
+          "glass": false,
+          "image-name": "Purple-Ribbon.svg",
+          "name": "Purple-Ribbon"
+        }
+      ],
+      "name": "Flush Tangent Folds",
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      }
+    }
+  ],
+  "supported-platforms": {
+    "circles": [
+      "watchOS"
+    ],
+    "squares": "shared"
+  }
+}

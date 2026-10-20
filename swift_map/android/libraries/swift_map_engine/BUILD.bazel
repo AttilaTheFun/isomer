@@ -1,0 +1,20 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The SwiftMap module WITHOUT the swift_ffi host bridge, for consumers that
+# embed the engine behind their own bridge (isomer's SwiftGPURenderer
+# draws `Map` nodes through it; tiles ride the consumer's image services).
+# Its own package: this module and the bridge-carrying
+# //swift_map/android/libraries/swift_map:swift_map are both `SwiftMap.swiftmodule`, and
+# rules_swift derives the output path from the module name — equal names in
+# one package collide when a wildcard build analyzes both.
+swift_library(
+    name = "engine",
+    srcs = [
+        "//swift_map/swift_map/core:srcs",
+        "//swift_map/swift_map/renderer:srcs",
+    ],
+    module_name = "SwiftMap",
+    deps = ["//swift_gpu/android:swift_gpu"],
+)

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Jetpack Macrobenchmark instrumentation APK (self-instrumenting): the
+     platform-native perf harness for the benchmark cells. Driven over adb:
+
+       adb shell am instrument -w \
+         -e targetAppId dev.isomer.tapcounter.wasmviews \
+         -e class dev.isomer.macrobenchmark.CellBenchmarks \
+         dev.isomer.macrobenchmark/androidx.test.runner.AndroidJUnitRunner
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="dev.isomer.macrobenchmark">
+
+    <uses-sdk
+        android:minSdkVersion="28"
+        android:targetSdkVersion="34" />
+
+    <!-- Package visibility for the cells under test (API 30+). -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <!-- Normally merged in from the benchmark-macro AAR manifest (bazel does
+         not merge aar manifests): result/trace output + the runner's
+         self-granted permissions. -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <!-- The macro trace processor talks to its perfetto shell over a local
+         socket. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application>
+        <!-- Macrobenchmark profiles other processes via shell commands. -->
+        <property
+            android:name="android.security.ALLOW_SHELL_INSTRUMENTATION"
+            android:value="true" />
+    </application>
+
+    <instrumentation
+        android:name="androidx.test.runner.AndroidJUnitRunner"
+        android:targetPackage="dev.isomer.macrobenchmark" />
+</manifest>

@@ -1,0 +1,3 @@
+# The module's root package: the vendored maven lock MODULE.bazel's install
+# reads.
+exports_files(["rules_android_maven_install.json"])

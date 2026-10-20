@@ -1,0 +1,215 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Isomer Playground</title>
+  <link rel="icon" type="image/png" href="./assets/Playground-1024.png">
+  <link rel="apple-touch-icon" href="./assets/Playground-1024.png">
+  <style>
+    :root { color-scheme: light dark; }
+    html, body { margin: 0; height: 100%; background: light-dark(#fff, rgb(18, 18, 20)); overscroll-behavior: none; }
+    #canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+    #error { font: 14px monospace; color: #b00; padding: 16px; white-space: pre-wrap; }
+    /* The user's build, run full screen over the Playground. */
+    #playground-run { position: fixed; inset: 0; display: none; flex-direction: column; z-index: 1000;
+      background: light-dark(#fff, rgb(18, 18, 20)); }
+    #playground-run .run-bar { display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px; font: 13px -apple-system, system-ui, sans-serif; color: light-dark(#444, #bbb);
+      background: light-dark(#f2f2f4, #1c1c1e); border-bottom: 1px solid light-dark(#ddd, #333); }
+    #playground-run .run-stop { font: 13px -apple-system, system-ui, sans-serif; padding: 4px 12px; border-radius: 8px;
+      border: none; background: #e0382f; color: #fff; cursor: pointer; }
+    .run-host { flex: 1; position: relative; overflow: hidden; align-self: stretch; min-height: 0; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <script src="./runtime/react.production.min.js"></script>
+  <script src="./runtime/react-dom.production.min.js"></script>
+  <script type="module">
+    // Surface uncaught errors on the page (no devtools on a phone).
+    const showError = (message) => {
+      let box = document.getElementById("iso-error");
+      if (!box) { box = document.createElement("pre"); box.id = "iso-error"; box.style.cssText = "position:fixed;left:8px;right:8px;bottom:8px;max-height:40%;overflow:auto;margin:0;padding:10px;font:12px monospace;color:#fff;background:#b00;border-radius:8px;z-index:2000;white-space:pre-wrap"; document.body.appendChild(box); }
+      box.textContent += message + "\n";
+    };
+    window.addEventListener("error", (e) => showError((e.message || String(e.error)) + (e.error && e.error.stack ? "\n" + String(e.error.stack).split("\n").slice(0, 6).join("\n") : "")));
+    window.addEventListener("unhandledrejection", (e) => showError("unhandled: " + (e.reason && e.reason.stack ? String(e.reason.stack).split("\n").slice(0, 6).join("\n") : String(e.reason))));
+    import { boot } from "./runtime/boot.js";
+    import { Dependencies } from "./app_bridge.js";
+    import { createRunner } from "./hot_runner.js";
+
+    // --- Platform services (docs/wasm_di.md): browser implementations ----
+    const sandbox = "isomer.playground.";
+    const toBase64 = (bytes) => { let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); };
+    const fromBase64 = (text) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
+    const imagePicker = {
+      pickImage(maxDimension) {
+        return new Promise((resolve) => {
+          const input = document.createElement("input");
+          input.type = "file"; input.accept = "image/*"; input.style.display = "none";
+          document.body.appendChild(input);
+          const finish = (value) => { input.remove(); resolve(value); };
+          input.onchange = () => {
+            const file = input.files && input.files[0];
+            if (!file) return finish("");
+            const image = new Image();
+            const objectURL = URL.createObjectURL(file);
+            image.onload = () => {
+              const scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
+              const canvas = document.createElement("canvas");
+              canvas.width = Math.round(image.width * scale); canvas.height = Math.round(image.height * scale);
+              canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+              canvas.toBlob((blob) => { URL.revokeObjectURL(objectURL); finish(blob ? URL.createObjectURL(blob) : ""); }, "image/jpeg", 0.85);
+            };
+            image.onerror = () => finish("");
+            image.src = objectURL;
+          };
+          input.oncancel = () => finish("");
+          input.click();
+        });
+      },
+    };
+    // Device motion: `nextShake` resolves on the next shake — the
+    // accelerometer (iOS asks permission, which must come from a tap, so
+    // the first touch requests it) or Esc on a keyboard.
+    const shakeWaiters = [];
+    const fireShake = () => { const pending = shakeWaiters.splice(0); pending.forEach((resolve) => resolve()); };
+    const deviceMotion = { nextShake() { return new Promise((resolve) => shakeWaiters.push(resolve)); } };
+    let lastAccel = null, lastShake = 0;
+    window.addEventListener("devicemotion", (event) => {
+      const a = event.accelerationIncludingGravity;
+      if (!a || a.x == null) return;
+      if (lastAccel) {
+        const delta = Math.abs(a.x - lastAccel.x) + Math.abs(a.y - lastAccel.y) + Math.abs(a.z - lastAccel.z);
+        const now = Date.now();
+        if (delta > 25 && now - lastShake > 1000) { lastShake = now; fireShake(); }
+      }
+      lastAccel = { x: a.x, y: a.y, z: a.z };
+    });
+    if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function") {
+      const ask = () => { DeviceMotionEvent.requestPermission().catch(() => {}); window.removeEventListener("touchend", ask); };
+      window.addEventListener("touchend", ask);
+    }
+    window.addEventListener("keydown", (event) => { if (event.key === "Escape" && shakeWaiters.length) { event.preventDefault(); fireShake(); } });
+    window.__playgroundShake = fireShake;
+
+    // The renderer choice: read here before boot, so the page keeps it
+    // (Settings sets it through the host).
+    const rendererKey = sandbox + "preferences:renderer";
+    const storedRenderer = () => localStorage.getItem(rendererKey) || "";
+    const storeRenderer = (value) => { if (value) localStorage.setItem(rendererKey, value); else localStorage.removeItem(rendererKey); };
+
+    // The services the USER's build sees while it runs. Its network and files
+    // are Foundation's (the runtime's fetch and IndexedDB), its home its
+    // project's (hot_runner.js passes the bundle identifier).
+    const runDependencies = {
+      keychain: Dependencies.keychainService(() => ({
+        async get(key) { const v = localStorage.getItem(sandbox + "run-keychain:" + key); if (v === null) throw new Error("absent"); return fromBase64(v); },
+        async set(value, key) { localStorage.setItem(sandbox + "run-keychain:" + key, toBase64(value)); },
+        async delete(key) { localStorage.removeItem(sandbox + "run-keychain:" + key); },
+      })),
+      analytics: Dependencies.analyticsService(() => ({ track(event) { console.log("[analytics]", event); } })),
+      configuration: Dependencies.configurationService(() => ({ flag(key) { return key === "promo_banner"; } })),
+      imagePicker: Dependencies.imagePickerService(() => imagePicker),
+      deviceMotion: Dependencies.deviceMotionService(() => deviceMotion),
+    };
+
+    // --- The Playground host service: compile (worker), run (overlay), chat ----
+    const runner = createRunner({ dependencies: runDependencies });
+    // The app's run cover hosts the build: its `surface` host view mounts here.
+    window.isoSurfaceMount = (name, element, send) => { if (name === "run") runner.mount(element, send); };
+    const worker = new Worker("./compiler_worker.js", { type: "module" });
+    const pending = new Map();
+    let nextID = 1;
+    worker.onmessage = (event) => {
+      const { id } = event.data;
+      const entry = pending.get(id);
+      if (!entry) return;
+      pending.delete(id);
+      entry(event.data);
+    };
+    const ask = (message) => new Promise((resolve) => { const id = nextID++; pending.set(id, resolve); worker.postMessage({ id, ...message }); });
+    let lastBuild = null;
+    let toolchainStatus = "probing…";
+    ask({ probe: true }).then((r) => { toolchainStatus = r.status; });
+    const keyName = sandbox + "openrouter-key";
+    const host = {
+      async compile(source) {
+        const result = await ask({ source });
+        if (result.ok) { lastBuild = result.wasm; return ""; }
+        return result.diagnostics || "compile failed";
+      },
+      async run(project) {
+        if (!lastBuild) throw new Error("no successful build yet");
+        return runner.run(lastBuild, "dev.isomer.playground.run." + project);
+      },
+      stop() { runner.stop(); },
+      logs() { return runner.logs(); },
+      // The page is the browser already.
+      canRunOnWeb() { return false; },
+      async runOnWeb() { throw new Error("this is the web"); },
+      async chat(body) {
+        const key = localStorage.getItem(keyName);
+        if (!key) throw new Error("no OpenRouter key");
+        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: { "Authorization": "Bearer " + key, "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/AttilaTheFun/isomer", "X-Title": "Isomer Playground (web)" },
+          body,
+        });
+        return await response.text();
+      },
+      uiTree() { return runner.uiTree(); },
+      async tap(target) { return runner.drive("tap", target); },
+      async typeText(target, text) { return runner.drive("type", target, text); },
+      async submit(target) { return runner.drive("submit", target); },
+      async swipe(target, dx, dy) { return runner.drive("swipe", target, [dx, dy]); },
+      hasKey() { return !!localStorage.getItem(keyName); },
+      setKey(key) { if (key) localStorage.setItem(keyName, key); else localStorage.removeItem(keyName); },
+      requestedTemplate() { return new URLSearchParams(location.search).get("template") || ""; },
+      // The projects as the page kept them before 0.31 (its file service, in
+      // localStorage): path -> base64, read once by the app's store. Left in
+      // place, in case a 0.30 page is opened again.
+      legacyFiles() {
+        const files = {};
+        const prefix = sandbox + "file:";
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith(prefix + "playground/")) files[key.slice(prefix.length)] = localStorage.getItem(key);
+        }
+        return JSON.stringify(files);
+      },
+      renderer() { return storedRenderer(); },
+      setRenderer(value) { storeRenderer(value); },
+      toolchainStatus() {
+        return toolchainStatus === "wasm" ? "In-browser Swift toolchain (swift-frontend.wasm)"
+          : toolchainStatus === "dev" ? "Dev compile server (host toolchain)"
+          : "No compiler: " + toolchainStatus;
+      },
+    };
+
+    // Dev hook: headless verification drives the host directly.
+    window.__playgroundHost = host;
+    const dependencies = {
+      keychain: runDependencies.keychain,
+      analytics: runDependencies.analytics,
+      configuration: runDependencies.configuration,
+      imagePicker: Dependencies.imagePickerService(() => imagePicker),
+      deviceMotion: Dependencies.deviceMotionService(() => deviceMotion),
+      host: Dependencies.playgroundHostService(() => host),
+    };
+    // React (real DOM: text fields, scrolling) unless Settings chose the
+    // self-drawing WebGPU renderer (applied on refresh, like this).
+    // `?renderer=react|webGPU` overrides the stored preference (and stores
+    // it) — the way back if a renderer cannot show Settings.
+    const forced = new URLSearchParams(location.search).get("renderer");
+    if (forced === "react" || forced === "webGPU") storeRenderer(forced === "webGPU" ? "gpu" : "native");
+    const rendererName = storedRenderer() === "gpu" ? "webGPU" : "react";
+    // The Playground's own files (its projects) are kept under its bundle
+    // identifier; each run's under its project's.
+    boot({ canvas: document.getElementById("canvas"), wasmURL: "./app.wasm", rendererName, dependencies, bundleIdentifier: "dev.isomer.playground" })
+      .catch((error) => { document.body.insertAdjacentHTML("beforeend", '<pre id="error"></pre>'); document.getElementById("error").textContent = String(error); });
+  </script>
+</body>
+</html>

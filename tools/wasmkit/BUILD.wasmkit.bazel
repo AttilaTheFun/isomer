@@ -1,0 +1,141 @@
+# WasmKit (AttilaTheFun/WasmKit, the Swift WebAssembly interpreter) built by
+# Bazel the way its Package.swift builds it: each SwiftPM target a library of
+# the same module name, every Swift one in package `WasmKit` (its `package`
+# declarations cross modules) with the package's default traits as
+# compilation conditions (SwiftPM passes enabled traits to every target),
+# and the engine with the RawLayout feature its Cell needs. Only what a host
+# embeds is here: the engine, its parser and types, WASI, and WASI Threads.
+# Apple platforms only (Isomer's WasmKitRuntime runs on macOS and iOS).
+
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_swift//swift:swift_interop_hint.bzl", "swift_interop_hint")
+load("@rules_swift//swift:swift_library.bzl", "swift_library")
+
+package(
+    default_visibility = ["//visibility:public"],
+    # Swift 6, as its swift-tools-version 6.3 manifest compiles it.
+    features = ["swift.enable_v6"],
+)
+
+_APPLE = select({
+    "@platforms//os:macos": [],
+    "@platforms//os:ios": [],
+    "//conditions:default": ["@platforms//:incompatible"],
+})
+
+# Package.swift's default traits.
+_TRAITS = [
+    "-DFileSystem",
+    "-DMultiThread",
+    "-DDisassembler",
+]
+
+swift_library(
+    name = "WasmTypes",
+    srcs = glob(["Sources/WasmTypes/**/*.swift"]),
+    copts = _TRAITS,
+    module_name = "WasmTypes",
+    package_name = "WasmKit",
+    target_compatible_with = _APPLE,
+)
+
+swift_library(
+    name = "WasmParser",
+    srcs = glob(["Sources/WasmParser/**/*.swift"]),
+    copts = _TRAITS,
+    module_name = "WasmParser",
+    package_name = "WasmKit",
+    target_compatible_with = _APPLE,
+    deps = [":WasmTypes"],
+)
+
+# The hand-written module map declares the _CWasmKit.Platform and
+# _CWasmKit.InlineCode submodules WasmKit imports by name: kept, not
+# generated.
+swift_interop_hint(
+    name = "_CWasmKit_hint",
+    module_map = "Sources/_CWasmKit/include/module.modulemap",
+    module_name = "_CWasmKit",
+)
+
+cc_library(
+    name = "_CWasmKit",
+    srcs = [
+        "Sources/_CWasmKit/TrapGuard.c",
+        "Sources/_CWasmKit/_CWasmKit.c",
+    ],
+    hdrs = glob(["Sources/_CWasmKit/include/**"]),
+    aspect_hints = [":_CWasmKit_hint"],
+    includes = ["Sources/_CWasmKit/include"],
+    target_compatible_with = _APPLE,
+)
+
+swift_library(
+    name = "WasmKit",
+    srcs = glob(["Sources/WasmKit/**/*.swift"]),
+    copts = _TRAITS + [
+        "-enable-experimental-feature",
+        "RawLayout",
+    ],
+    module_name = "WasmKit",
+    package_name = "WasmKit",
+    target_compatible_with = _APPLE,
+    deps = [
+        ":WasmParser",
+        ":WasmTypes",
+        ":_CWasmKit",
+    ],
+)
+
+swift_library(
+    name = "WASI",
+    srcs = glob(["Sources/WASI/**/*.swift"]),
+    copts = _TRAITS,
+    module_name = "WASI",
+    package_name = "WasmKit",
+    target_compatible_with = _APPLE,
+    deps = [":WasmTypes"],
+)
+
+swift_library(
+    name = "WasmKitWASI",
+    srcs = glob(["Sources/WasmKitWASI/**/*.swift"]),
+    copts = _TRAITS,
+    module_name = "WasmKitWASI",
+    package_name = "WasmKit",
+    target_compatible_with = _APPLE,
+    deps = [
+        ":WASI",
+        ":WasmKit",
+    ],
+)
+
+swift_interop_hint(
+    name = "CWasmKitWASIThreads_hint",
+    module_map = "Sources/CWasmKitWASIThreads/include/module.modulemap",
+    module_name = "CWasmKitWASIThreads",
+)
+
+cc_library(
+    name = "CWasmKitWASIThreads",
+    srcs = ["Sources/CWasmKitWASIThreads/Thread.c"],
+    hdrs = glob(["Sources/CWasmKitWASIThreads/include/**"]),
+    aspect_hints = [":CWasmKitWASIThreads_hint"],
+    includes = ["Sources/CWasmKitWASIThreads/include"],
+    target_compatible_with = _APPLE,
+)
+
+swift_library(
+    name = "WasmKitWASIThreads",
+    srcs = glob(["Sources/WasmKitWASIThreads/**/*.swift"]),
+    copts = _TRAITS,
+    module_name = "WasmKitWASIThreads",
+    package_name = "WasmKit",
+    target_compatible_with = _APPLE,
+    deps = [
+        ":CWasmKitWASIThreads",
+        ":WasmKit",
+        ":WasmParser",
+        ":WasmTypes",
+    ],
+)

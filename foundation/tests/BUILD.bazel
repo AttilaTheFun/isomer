@@ -1,0 +1,166 @@
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("@rules_swift//swift:swift.bzl", "swift_binary")
+load("//tools/platforms:transition.bzl", "transition_binary")
+load("//tools/wasm:defs.bzl", "icu_data_library")
+
+# The runner, for other WASI checks (the examples' //tests/sqlite_wasi).
+exports_files(["run_foundation_check.sh"])
+
+swift_binary(
+    name = "foundation_check",
+    package_name = "isomer",
+    srcs = [
+        "ErrorCheck.swift",
+        "FoundationCheck.swift",
+        "NetworkCheck.swift",
+    ],
+    deps = [
+        "//foundation",
+        # The transports and the store, installed as a host installs them.
+        "//foundation/isomer_foundation",
+    ],
+    tags = ["manual"],
+)
+
+transition_binary(
+    name = "foundation_check_wasm",
+    binary = ":foundation_check",
+    platform = "//tools/platforms:wasm32",
+)
+
+sh_test(
+    name = "foundation_test",
+    size = "small",
+    srcs = ["run_foundation_check.sh"],
+    args = [
+        "$(rootpath //tools/wasm/wasi_command:iwasm)",
+        "$(rootpath :foundation_check_wasm)",
+    ],
+    data = [
+        ":foundation_check_wasm",
+        "//tools/wasm/wasi_command:iwasm",
+    ],
+)
+
+# With FoundationInternationalization and ICU (the build setting
+# //foundation:internationalization, set by the transition).
+swift_binary(
+    name = "internationalization_check",
+    package_name = "isomer",
+    srcs = ["InternationalizationCheck.swift"],
+    linkopts = [
+        "-Xlinker",
+        "-z",
+        "-Xlinker",
+        "stack-size=16777216",
+    ],
+    deps = ["//foundation"],
+    tags = ["manual"],
+)
+
+transition_binary(
+    name = "internationalization_check_wasm",
+    binary = ":internationalization_check",
+    internationalization = True,
+    platform = "//tools/platforms:wasm32",
+)
+
+sh_test(
+    name = "internationalization_test",
+    size = "small",
+    srcs = ["run_foundation_check.sh"],
+    args = [
+        "$(rootpath //tools/wasm/wasi_command:iwasm)",
+        "$(rootpath :internationalization_check_wasm)",
+    ],
+    data = [
+        ":internationalization_check_wasm",
+        "//tools/wasm/wasi_command:iwasm",
+    ],
+)
+
+# The same check against ICU data trimmed to English, French and German
+# (icu_data_library's `locales`, as isomer_web_app's `icu_locales` gives an
+# app): read from a link exporting everything, linked ahead of the SDK's.
+swift_binary(
+    name = "internationalization_check_all",
+    package_name = "isomer",
+    srcs = ["InternationalizationCheck.swift"],
+    linkopts = [
+        "-Xlinker",
+        "-z",
+        "-Xlinker",
+        "stack-size=16777216",
+        "-Xlinker",
+        "--export-all",
+        "-Xlinker",
+        "--no-gc-sections",
+    ],
+    deps = ["//foundation"],
+    tags = ["manual"],
+)
+
+transition_binary(
+    name = "internationalization_check_all_wasm",
+    binary = ":internationalization_check_all",
+    internationalization = True,
+    platform = "//tools/platforms:wasm32",
+)
+
+icu_data_library(
+    name = "icu_en_fr_de",
+    locales = [
+        "en",
+        "fr",
+        "de",
+    ],
+    wasm = ":internationalization_check_all_wasm",
+)
+
+swift_binary(
+    name = "internationalization_trimmed_check",
+    package_name = "isomer",
+    srcs = ["InternationalizationCheck.swift"],
+    copts = ["-DTRIMMED_TO_EN_FR_DE"],
+    linkopts = [
+        "-Xlinker",
+        "-z",
+        "-Xlinker",
+        "stack-size=16777216",
+    ],
+    deps = [
+        ":icu_en_fr_de",
+        "//foundation",
+    ],
+    tags = ["manual"],
+)
+
+transition_binary(
+    name = "internationalization_trimmed_check_wasm",
+    binary = ":internationalization_trimmed_check",
+    internationalization = True,
+    platform = "//tools/platforms:wasm32",
+)
+
+sh_test(
+    name = "internationalization_trimmed_test",
+    size = "small",
+    srcs = ["run_foundation_check.sh"],
+    args = [
+        "$(rootpath //tools/wasm/wasi_command:iwasm)",
+        "$(rootpath :internationalization_trimmed_check_wasm)",
+    ],
+    data = [
+        ":internationalization_trimmed_check_wasm",
+        "//tools/wasm/wasi_command:iwasm",
+    ],
+)
+
+# A link check on Android (ICU from the Android Swift SDK).
+transition_binary(
+    name = "internationalization_check_android",
+    binary = ":internationalization_check",
+    internationalization = True,
+    platform = "//tools/platforms:android_arm64",
+    tags = ["manual"],
+)

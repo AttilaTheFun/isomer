@@ -1,0 +1,40 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+# The hand-written GTK3 baseline of the counter benchmark: one GtkLabel + one
+# CSS-styled GtkButton, no Swift, no Isomer — the floor for what the
+# platform's own widget toolkit costs (the Linux peer of the Win32 baseline and
+# Android's native-Views cell). See docs/benchmarks.md#linux and main.c for the
+# ISO_BENCH self-driving mode.
+#
+# BENCHMARK-ONLY, tagged manual: it links the SYSTEM GTK3 (apt's libgtk-3-dev)
+# through fixed multiarch include/lib paths rather than a hermetic dependency —
+# a deliberate exception so the baseline is the platform's real toolkit. The
+# regular `//...` build never touches it.
+cc_binary(
+    name = "tap_counter_native_linux_application",
+    srcs = ["main.c"],
+    # The stable subset of `pkg-config --cflags gtk+-3.0` on Ubuntu 24.04
+    # (x86_64 multiarch). If GTK's headers move, re-derive with pkg-config.
+    copts = [
+        "-I/usr/include/gtk-3.0",
+        "-I/usr/include/glib-2.0",
+        "-I/usr/lib/x86_64-linux-gnu/glib-2.0/include",
+        "-I/usr/include/pango-1.0",
+        "-I/usr/include/harfbuzz",
+        "-I/usr/include/cairo",
+        "-I/usr/include/gdk-pixbuf-2.0",
+        "-I/usr/include/atk-1.0",
+        "-Wno-unused-parameter",
+    ],
+    linkopts = [
+        "-lgtk-3",
+        "-lgdk-3",
+        "-lgobject-2.0",
+        "-lglib-2.0",
+        "-lcairo",
+    ],
+    tags = ["manual"],
+    target_compatible_with = ["@platforms//os:linux"],
+)

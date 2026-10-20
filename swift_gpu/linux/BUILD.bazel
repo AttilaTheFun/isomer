@@ -1,0 +1,42 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The SwiftGPU module for Linux: the shared API plus the desktop OpenGL
+# backend (the Android GLES backend's twin — same @_extern(c) binding
+# pattern against libGL, shaders as desktop GLSL 1.10). The HOST owns the
+# window + GL context (isomer's Linux shell uses SDL2, which must
+# create a legacy/compatibility context — client-side vertex arrays) and
+# calls in with it current; builds natively on a Linux host only.
+swift_library(
+    name = "swift_gpu",
+    srcs = [
+        "GL.swift",
+        "GLGPUDevice.swift",
+        "//swift_gpu/core:srcs",
+    ],
+    copts = [
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    linkopts = ["-lGL"],
+    module_name = "SwiftGPU",
+    target_compatible_with = ["@platforms//os:linux"],
+)
+
+# Offscreen pixel checks mirroring the Metal/DirectX backends' — a plain
+# executable (exits non-zero on a mismatch) rendering into an EGL pbuffer:
+# clear + blended triangle, 2x2 texture sampling, SDF corner cut, scissor
+# halves, premultiplied blending.
+swift_binary(
+    name = "gl_backend_check",
+    srcs = ["GLBackendCheck.swift"],
+    copts = [
+        "-parse-as-library",
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    linkopts = ["-lEGL"],
+    target_compatible_with = ["@platforms//os:linux"],
+    deps = [":swift_gpu"],
+)

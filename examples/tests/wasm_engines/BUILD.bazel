@@ -1,0 +1,33 @@
+load("@rules_swift//swift:swift_test.bzl", "swift_test")
+
+# The engine-seam conformance suite: every WasmRuntime engine runs the real
+# tap-counter reactor (launch -> first frame -> tap -> updated tree). A new
+# engine passes this or it isn't an engine. macOS-only (the C engines are
+# host builds; JSC's wasm tiers need a real JSC).
+swift_test(
+    name = "wasm_engine_tests",
+    srcs = ["WasmEngineTests.swift"],
+    data = [
+        "//wasm/example_full_feature:example_full.wasm",
+        "//wasm/example_full_feature:example_full_threads.wasm",
+        "//wasm/tap_counter_feature:tap_counter_release.wasm",
+        "//wasm/tap_counter_feature:tap_counter_threads_release.wasm",
+    ],
+    linkopts = [
+        "-Wl,-rpath,/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",  # keep
+        "-Wl,-rpath,/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",  # keep
+        "-Wl,-rpath,/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",  # keep
+    ],
+    module_name = "WasmEngineTests",
+    target_compatible_with = ["@platforms//os:macos"],
+    deps = [
+        "@isomer//shared/wasm_host:jsc_runtime",
+        "@isomer//shared/wasm_host:wamr_runtime",
+        "@isomer//shared/wasm_host:wasmkit_runtime",
+        "@isomer//shared/wasm_host:wasmedge_runtime",
+        "@isomer//shared/wasm_host:wasm_runtime",
+        "//apple/platform_services_host",
+        "//shared/platform_services:platform_services_host",
+        "@isomer//shared/isomer_network_host:wasm_host",
+    ],
+)

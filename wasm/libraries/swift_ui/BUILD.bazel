@@ -1,0 +1,177 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@rules_swift//swift:swift_library_group.bzl", "swift_library_group")
+
+package(default_visibility = ["//visibility:public"])
+
+# Built for wasm32 through the bridge target's platform transition. The
+# `Extern` feature is for the `@_extern(c, "main")` trampoline that runs the
+# app's @main inside `isoStart` (the reactor has no _start).
+_WASM_COPTS = [
+    "-enable-experimental-feature",
+    "Extern",
+]
+
+# The SwiftUI reimplementation for the web: the shared core plus the wasm
+# host bridge — a swift_ffi surface (WebBridge.swift) that JavaScript
+# implements/consumes through generated TypeScript bindings. Compiled as a
+# module literally named `SwiftUI` so application code can `import SwiftUI`
+# unchanged.
+
+# ImageIO's decoding subset (//shared/image_io), under Apple's module name.
+swift_library(
+    name = "image_io",
+    package_name = "isomer",
+    srcs = ["//shared/image_io:srcs"],
+    module_name = "ImageIO",
+    deps = ["//:foundation"],
+)
+
+swift_library(
+    name = "swift_ui",
+    package_name = "isomer",
+    srcs = [
+        "WasmHost.swift",
+        "WebBridge.swift",
+        "//shared/renderers:srcs",
+        "//shared/swift_ui_core:srcs",
+    ],
+    copts = _WASM_COPTS,
+    module_name = "SwiftUI",
+    deps = [
+        "//shared/isomer_swift_ui",
+        ":image_io",
+        "//swift_ffi/swift_ffi",
+        "//shared/isomer_network_host",
+        "@flatbuffers//swift",
+        "//swift_gpu/wasm:swift_gpu",
+        "//frameworks/core_transferable",
+        "//frameworks/uniform_type_identifiers",
+    ] + ["//:foundation"] + [
+        # `Map` engine injection point: defaults to an empty stub; a consumer
+        # with its own swift_map dep points the flag at the real engine to
+        # light up canImport(SwiftMap). See //shared/BUILD.bazel.
+        "//shared:map_engine_wasm",
+    ],
+)
+
+# PhotosUI's SwiftUI photo picker, over this SwiftUI (//frameworks).
+swift_library(
+    name = "photos_ui",
+    package_name = "isomer",
+    srcs = ["//frameworks/photos_ui:srcs"],
+    copts = _WASM_COPTS,
+    module_name = "PhotosUI",
+    deps = [
+        ":swift_ui",
+        "//frameworks/core_transferable",
+        "//frameworks/uniform_type_identifiers",
+    ],
+)
+
+# What an application builds against (@isomer//:swift_ui): SwiftUI, the
+# other Apple frameworks it may import beside it (PhotosUI,
+# UniformTypeIdentifiers), as an Apple SDK has them, and the Isomer module
+# (Isomer's additions: `#if canImport(Isomer) import Isomer` in code that
+# also builds against Apple's frameworks).
+swift_library_group(
+    name = "sdk",
+    deps = [
+        ":isomer",
+        ":photos_ui",
+        ":swift_ui",
+        "//frameworks/uniform_type_identifiers",
+    ],
+)
+
+# The slim `SwiftUI` module for the hot-reload / wasm-feature reactors moved to
+# its own package, //wasm/libraries/hot_swift_ui, so its `SwiftUI.swiftmodule`
+# output no longer collides with this package's when a single build pulls both
+# (e.g. a wildcard spanning the partial-wasm and full-wasm Android apps).
+
+# Core native-bridging API (logging, clock, URLs), routed through the WebHost.
+# What Isomer provides beyond Apple's SwiftUI API (see
+# //shared/swift_ui_extensions); IsomerBridge re-exports it.
+swift_library(
+    name = "isomer",
+    package_name = "isomer",
+    srcs = [
+        "IsomerBridge.swift",
+        "MetalView.swift",
+        "//shared/isomer:Exports.swift",
+        "//shared/swift_ui_extensions:srcs",
+    ],
+    copts = _WASM_COPTS,
+    module_name = "Isomer",
+    deps = [
+        ":swift_ui",
+        "//metal/isomer_metal",
+        "//metal/metal",
+        "//metal/web",
+        "//swift_ffi/swift_ffi",
+        "//:isomer_foundation",
+        "//shared/isomer_network_host",
+        "//shared/isomer_swift_ui",
+    ],
+)
+
+# The names the Isomer module had before 0.31: each re-exports it.
+swift_library(
+    name = "swift_ui_extensions",
+    package_name = "isomer",
+    srcs = ["//shared/isomer:Compatibility.swift"],
+    module_name = "SwiftUIExtensions",
+    deps = [":isomer"],
+)
+
+swift_library(
+    name = "isomer_bridge",
+    package_name = "isomer",
+    srcs = ["//shared/isomer:Compatibility.swift"],
+    module_name = "IsomerBridge",
+    deps = [":isomer"],
+)
+
+
+# The framework-owned `iso_hot` reactor ABI over this SwiftUI: a reactor links
+# it (`deps`) next to its app library rather than copying the glue, which
+# drifts and silently loses exports. A library of Isomer's package, so it
+# reaches the runtime's `package` plumbing, which the app's own code cannot;
+# `alwayslink`: its @_cdecl exports are reached only by the host. The slim
+# SwiftUI has its own (//wasm/libraries/hot_swift_ui:hot_bridge), from the
+# same source.
+swift_library(
+    name = "hot_bridge",
+    package_name = "isomer",
+    srcs = ["HotBridge.swift"],
+    alwayslink = True,
+    copts = _WASM_COPTS,
+    module_name = "HotBridge",
+    deps = [
+        ":swift_ui",
+        "//shared/isomer_network_host",
+    ] + select({
+        # Natively (a host-configuration analysis, or apple/compiled): the
+        # host callbacks' C struct (apple/libraries/native_runtime).
+        "@platforms//os:wasi": [],
+        "//conditions:default": ["//apple/libraries/native_runtime:iso_hot_native"],
+    }),
+)
+
+exports_files(["HotBridge.swift"])
+
+# Runtime JS sources, staged per-app by `isomer_web_app`
+# (tools/wasm/defs.bzl) so each app's bundle carries its own bindings.
+exports_files([
+    "runtime/boot.js",
+    "runtime/bundle_provider.js",
+    "runtime/flat_tree.js",
+    "runtime/hot_host.js",
+    "runtime/react_renderer.js",
+    "runtime/react_embed.js",
+    "runtime/raster.js",
+    "runtime/symbols.js",
+    "runtime/platform_services.js",
+    "runtime/imported_files.js",
+    "runtime/file_system.js",
+    "runtime/network.js",
+])

@@ -1,0 +1,86 @@
+load("@build_bazel_rules_apple//apple:apple.bzl", "local_provisioning_profile")
+load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@rules_xcodeproj//xcodeproj:defs.bzl", "xcode_provisioning_profile")
+load("@isomer_signing//:signing.bzl", "TEAM_ID")
+
+# The compiled+METAL iOS cell of the counter benchmark (docs/benchmarks.md#ios):
+# the shared TapCounter.swift compiled natively against the SwiftUI
+# reimplementation core, drawn by the self-drawing SwiftGPURenderer through
+# swift_gpu's Metal backend — the iOS analogue of Android's compiled+GPU cell
+# and the compiled twin of tap_counter_metal_wasm_ios_application. One shared
+# bundle id across the iOS cells — install one at a time. Bench mode: launch
+# with the ISO_BENCH=1 environment.
+
+BUNDLE_ID = "com.LoganShire.Isomer"
+
+
+# The reimplementation core + renderers + the UIKit/Metal host, in ONE
+# module. On Apple platforms it CANNOT be named "SwiftUI" (the SDK's real
+# SwiftUI/SwiftUICore interfaces cross-reference the name and collide), so the
+# shared app source's `import SwiftUI` is routed here with `-module-alias` on
+# the app library instead. The define wires `App.main()` to
+# `IOSMetalApp.run()` (UIApplicationMain) — this cell owns its process like
+# the Windows/Linux hosts.
+swift_library(
+    name = "core_lib",
+    # Isomer's own sources: its package, for the runtime's `package` plumbing.
+    package_name = "isomer",
+    srcs = [
+        "MetalCompiledApp.swift",
+        "@isomer//shared/renderers:srcs",
+        "@isomer//shared/swift_ui_core:srcs",
+    ],
+    defines = ["ISOMER_IOS_METAL_HOST"],
+    # The shared core spells its own types `SwiftUI.X` where a generic
+    # parameter shadows the name (`Button where Label == SwiftUI.Label<…>`),
+    # as Apple's interface does; this module is that SwiftUI under another name.
+    copts = ["-module-alias", "SwiftUI=IsoSwiftUICore"],
+    module_name = "IsoSwiftUICore",
+    tags = ["manual"],
+    deps = [
+        "@isomer//shared/isomer_swift_ui",
+        "@isomer//frameworks:for_core",
+        "@flatbuffers//swift",
+        "@isomer//swift_gpu/apple:swift_gpu",
+    ],
+)
+
+# The UNMODIFIED shared app; its @main is the process entry.
+swift_library(
+    name = "app_lib",
+    srcs = ["//shared/tap_counter_application:srcs"],
+    copts = [
+        "-parse-as-library",
+        "-module-alias",
+        "SwiftUI=IsoSwiftUICore",
+    ],
+    module_name = "TapCounterMetalCompiled",
+    tags = ["manual"],
+    deps = [":core_lib"],
+)
+
+local_provisioning_profile(
+    name = "_xcode_managed_profile",
+    profile_name = "iOS Team Provisioning Profile: *",
+    tags = ["manual"],
+    team_id = TEAM_ID,
+)
+
+xcode_provisioning_profile(
+    name = "_development_profile",
+    managed_by_xcode = True,
+    provisioning_profile = ":_xcode_managed_profile",
+    tags = ["manual"],
+)
+
+ios_application(
+    name = "tap_counter_metal_compiled_ios_application",
+    bundle_id = BUNDLE_ID,
+    families = ["iphone"],
+    infoplists = ["Info.plist"],
+    minimum_os_version = "17.0",
+    provisioning_profile = ":_development_profile",
+    visibility = ["//visibility:public"],
+    deps = [":app_lib"],
+)

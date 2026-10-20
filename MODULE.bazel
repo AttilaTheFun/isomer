@@ -1,0 +1,1110 @@
+"""Isomer — SwiftUI for every platform, and the layers under it, as one module.
+
+One Bazel module builds the same SwiftUI application code for:
+  * web/     — Swift compiled to wasm32-unknown-wasip1 (React or WebGPU)
+  * apple/   — the real SwiftUI via rules_apple / rules_swift
+  * android/ — Swift cross-compiled to Android (Jetpack Compose or OpenGL ES)
+  * linux/, windows/ — native binaries drawn with SwiftGPU
+
+and carries the libraries it is built on, which were repositories of their
+own until 2026-10-02 (each still usable alone, by label):
+  * //swift_ffi/...       — the Swift <-> Kotlin/TypeScript/C bridge generator
+  * //swift_gpu/...       — the GPU abstraction (Metal, WebGPU, GL, D3D11)
+  * //swift_map/...       — the OpenStreetMap renderer behind `Map`
+(SQLite is swift_sql's since 0.34: see "SQLite" below.)
+
+Layering still only points downward (rules_swift < swift_ffi < swift_gpu <
+swift_map < the SwiftUI libraries); a package under swift_ffi/ must not
+depend on anything outside it, and so on up.
+
+Only `examples/` is a module of its own: it consumes this one the way an
+application outside the repository does.
+
+Cross-compilation to WebAssembly and Android uses rules_swift's Swift-SDK
+toolchains (see the `swift` extension below); the wasm/android targets are plain
+`swift_library`/`swift_binary` built through `//tools/platforms`.
+"""
+
+module(
+    name = "isomer",
+    version = "0.1.0",
+)
+
+bazel_dep(name = "bazel_skylib", version = "1.9.0")
+bazel_dep(name = "platforms", version = "1.1.0")
+
+# Apple platform (uses the locally installed Xcode, as all Bazel apple builds do).
+bazel_dep(name = "rules_swift", version = "3.6.1")
+bazel_dep(name = "rules_apple", version = "4.5.3", repo_name = "build_bazel_rules_apple")
+bazel_dep(name = "apple_support", version = "2.6.1")
+# Declared after apple_support so apple_support's apple cc toolchain keeps
+# resolution priority over rules_cc's local_config_cc darwin toolchain (which
+# lacks CC_TARGET_TRIPLE and breaks the Xcode Swift toolchain). Needed as a
+# direct dep so the native linux/windows BUILD files can load @rules_cc//cc:defs.
+bazel_dep(name = "rules_cc", version = "0.2.18")
+
+# rules_swift pinned to upstream main: the Swift-SDK cross-compilation work
+# is all merged (#1817 wasm, #1818 Android, #1819 Windows, #1820 linkshared,
+# #1821 SDK framework, #1830 concurrency dispatch autolink, and #1859 the
+# Android API-level triple fix — the last carry off the AttilaTheFun fork).
+# Drop this override entirely for the next rules_swift release.
+git_override(
+    module_name = "rules_swift",
+    # The fork branch (metadata-driven wasm SDK + threads variant, rules_swift
+    # #1860) rebased on upstream main past #1853/#1856/#1833; switch back to
+    # bazelbuild once it merges.
+    remote = "https://github.com/AttilaTheFun/rules_swift.git",
+    commit = "308114d6137984df946333776d93a08fc21df66a",
+    # Ours, until rules_swift has it: a wasi-threads SDK declared beside the
+    # single-threaded one (two `swift.wasm_sdk` tags), chosen by a platform's
+    # `@rules_swift//swift/toolchains/wasm:threads` constraint. A root-only
+    # override's patches are the root module's files: consumers carry a copy.
+    patch_strip = 1,
+    patches = [
+        "//tools/patches:rules_swift_wasm_threads_beside.patch",
+        # Ours, until rules_swift has it: C compiled for wasm gets the Swift
+        # SDK's clang resource directory (-resource-dir, as links already
+        # do), so clang's own headers (<stdarg.h>, <stddef.h>) come from the
+        # SDK, among the action's inputs, not by an absolute path into the
+        # host toolchain that Bazel's inclusion check rejects. C such as
+        # SQLite's amalgamation (swift_sql) builds as is.
+        "//tools/patches:rules_swift_wasm_clang_resource_dir.patch",
+    ],
+)
+
+# Hermetic Android NDK for the Swift Android cross-compile toolchain. rules_swift
+# consumes the stock @androidndk (only targets it already exposes), so no
+# override is needed here.
+bazel_dep(name = "hermetic_android_toolchains", version = "0.1.1")
+
+# --- swift_ffi (//swift_ffi/...) ---------------------------------------------
+# The idiomatic Swift <-> Kotlin/TypeScript/C bridge layer. The wasm and
+# Android host bridges are @ExportedInterface/@ExportedFunction surfaces;
+# kt/ts/c_swift_library generate the JNI .so + Kotlin bindings and the wasm
+# reactor + TypeScript bindings.
+
+# The macro plugin and the source analyzer.
+bazel_dep(name = "swift-syntax", version = "603.0.2")
+
+# --- Foundation (non-Apple platforms) -----------------------------------------
+# Isomer's Foundation is built from its fork of swift-foundation
+# (AttilaTheFun/swift-foundation, branch `isomer`, from swift-6.3.2-RELEASE),
+# a Bazel module of its own; //foundation assembles the `Foundation` module
+# from FoundationEssentials (and FoundationInternationalization when an app
+# asks for it). Apple platforms use Apple's Foundation.
+#
+# Not in the Bazel Central Registry: a consumer repeats this override (as it
+# does rules_swift's). Developing the fork beside isomer: put
+# `common --override_module=swift-foundation=<path to the checkout>` in an
+# untracked .bazelrc.user.
+bazel_dep(name = "swift-foundation", version = "6.3.2")
+git_override(
+    module_name = "swift-foundation",
+    remote = "https://github.com/AttilaTheFun/swift-foundation.git",
+    commit = "b04a54975a53d4447ea6ccad0cf6c68e4e2685e0",
+)
+
+# CLI parsing for the analyzer / generator tools.
+bazel_dep(name = "swift_argument_parser", version = "1.7.0")
+
+# WAMR (WebAssembly Micro Runtime) — the C interpreter behind swift_ffi's "wasm
+# mode": a swift_ffi module compiled to a wasm reactor is loaded and run under
+# WAMR by the engine-agnostic C host runtime (//swift_ffi/runtime/c_host_wamr),
+# with NO compiled Swift on the host. This is what makes the [compiled | wasm]
+# mode axis work out of the box for the C hosts (Linux/Windows) and, via a thin
+# JNI/Swift wrapper, the other native hosts. Vendored (not in BCR); we compile
+# the fast interpreter + WASI source set directly (see _COPTS).
+wamr_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+wamr_archive(
+    name = "wamr",
+    build_file_content = """\
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# Feature set: FAST interpreter, WASI on, bulk-memory/ref-types/tail-call on
+# (SwiftWasm emits them), AOT/JIT/GC off. WASM_ENABLE_MODULE_INST_CONTEXT is
+# required by libc-wasi.
+#
+# Fast- vs classic-interp is a load-vs-execution trade: fast-interp preprocesses
+# the bytecode into a threaded IR at load, so load is slower but every execution
+# is faster. Flip to classic (FAST_INTERP=0 + swap wasm_interp_fast.c ->
+# wasm_interp_classic.c in srcs) only if load latency ever outweighs throughput.
+_COPTS = [
+    "-DWASM_ENABLE_INTERP=1",
+    "-DWASM_ENABLE_FAST_INTERP=1",
+    "-DWASM_ENABLE_JIT=0",
+    "-DWASM_ENABLE_LIBC_BUILTIN=0",
+    "-DWASM_ENABLE_LIBC_WASI=1",
+    "-DWASM_ENABLE_MODULE_INST_CONTEXT=1",
+    "-DWASM_ENABLE_MULTI_MODULE=0",
+    # SHARED_MEMORY / THREAD_MGR / LIB_WASI_THREADS are set by the _THREADS_COPTS
+    # select below (off by default, on under `--define wamr_threads=1`), so the
+    # threaded and single-threaded builds differ only by that one define set.
+    "-DWASM_ENABLE_GC=0",
+    "-DWASM_ENABLE_BULK_MEMORY=1",
+    # SwiftWasm emits memory.copy (fc 0a). On WAMR main the loader only accepts
+    # the bulk-memory ops fc 0a/0b when this is set; without it: "unsupported
+    # opcode fc 0a". (The 2.4.5 tag accepted them under BULK_MEMORY alone.)
+    "-DWASM_ENABLE_BULK_MEMORY_OPT=1",
+    "-DWASM_ENABLE_REF_TYPES=1",
+    # SwiftWasm emits the call_indirect table index as an *overlong* LEB (e.g.
+    # `0x80 0x00` for table 0). The 2.4.5 tag always read it as a LEB, but WAMR
+    # main made single-byte the default and gated the LEB path behind this flag
+    # (|| WASM_ENABLE_GC). Without it the loader reads one byte (0x80 = 128),
+    # leaving the cursor mid-immediate -> "unknown table 128", and every
+    # subsequent opcode misparses. Required on main; the AOT compiler gets it for
+    # free via GC=1. See WASM_ENABLE_CALL_INDIRECT_OVERLONG in wasm_loader.c.
+    "-DWASM_ENABLE_CALL_INDIRECT_OVERLONG=1",
+    "-DWASM_ENABLE_TAIL_CALL=1",
+    "-DWASM_ENABLE_SIMD=0",
+    "-DWASM_ENABLE_MEMORY64=0",
+    "-DBH_MALLOC=wasm_runtime_malloc",
+    "-DBH_FREE=wasm_runtime_free",
+    "-w",
+]
+
+# The wamrc (AOT compiler) feature set, mirroring wamr-compiler/CMakeLists.txt.
+# Much fuller than the interp runtime (GC, memory64, shared-memory, thread-mgr,
+# stack frames, SIMD) because the compiler must be able to lower any module the
+# format supports. STRINGREF is off (needs a separate impl source; SwiftWasm
+# reactors never use it). JIT/LAZY_JIT off — wamrc only emits .aot, so the ORC
+# JIT sources (aot_orc_extra*.cpp, unported past LLVM 18) are excluded below.
+# Host-only tool for macOS and Linux build hosts (platform define + BUILD_TARGET
+# come from selects on the wamrc target). Cross-target via `--target=` /
+# `--target-abi=` (e.g. a Windows .aot is produced on a macOS/Linux host with
+# `--target=x86_64 --target-abi=msvc`).
+_COMPILER_COPTS = [
+    "-DWASM_ENABLE_INTERP=1",
+    # Classic interp frame layout (FAST_INTERP=0): aot_compiler.c's stack-frame
+    # lowering references WASMInterpFrame.sp, which only exists in the classic
+    # frame. This matches wamr-compiler's own build; wamrc never interprets.
+    "-DWASM_ENABLE_FAST_INTERP=0",
+    "-DWASM_ENABLE_WAMR_COMPILER=1",
+    "-DWASM_ENABLE_AOT=1",
+    "-DWASM_ENABLE_JIT=0",
+    "-DWASM_ENABLE_LAZY_JIT=0",
+    "-DWASM_ENABLE_BULK_MEMORY=1",
+    # main gates memory.copy/fill lowering + option.enable_bulk_memory_opt on
+    # this; without it wamrc's loader rejects the reactor's memory.copy (fc 0a).
+    "-DWASM_ENABLE_BULK_MEMORY_OPT=1",
+    "-DWASM_DISABLE_HW_BOUND_CHECK=1",
+    "-DWASM_ENABLE_SHARED_MEMORY=1",
+    "-DWASM_ENABLE_THREAD_MGR=1",
+    "-DWASM_ENABLE_TAIL_CALL=1",
+    "-DWASM_ENABLE_REF_TYPES=1",
+    "-DWASM_ENABLE_GC=1",
+    "-DWASM_ENABLE_STRINGREF=0",
+    "-DWASM_ENABLE_CUSTOM_NAME_SECTION=1",
+    "-DWASM_ENABLE_AOT_STACK_FRAME=1",
+    "-DWASM_ENABLE_DUMP_CALL_STACK=1",
+    "-DWASM_ENABLE_PERF_PROFILING=1",
+    "-DWASM_ENABLE_LOAD_CUSTOM_SECTION=1",
+    "-DWASM_ENABLE_MODULE_INST_CONTEXT=1",
+    "-DWASM_ENABLE_MEMORY64=1",
+    "-DWASM_ENABLE_EXTENDED_CONST_EXPR=1",
+    "-DWASM_ENABLE_SIMD=1",
+    "-DWASM_ENABLE_LIBC_BUILTIN=0",
+    "-DWASM_ENABLE_LIBC_WASI=0",
+    "-DWASM_ENABLE_MULTI_MODULE=0",
+    "-DBH_MALLOC=wasm_runtime_malloc",
+    "-DBH_FREE=wasm_runtime_free",
+    "-DCOMPILING_WASM_RUNTIME_API=1",
+    "-fno-rtti",
+    "-include",
+    "$(location :aot_build_target_h)",
+    "-w",
+]
+
+# Fully-specified (os + cpu) settings so the native-call trampoline asm is
+# chosen by CPU rather than hardcoded. Distinct from the plain os:linux
+# constraint so the asm select below stays unambiguous against os:android /
+# os:macos.
+config_setting(
+    name = "linux_x86_64",
+    constraint_values = ["@platforms//os:linux", "@platforms//cpu:x86_64"],
+)
+
+config_setting(
+    name = "linux_arm64",
+    constraint_values = ["@platforms//os:linux", "@platforms//cpu:aarch64"],
+)
+
+# Desktop Windows is x86_64 (the native .exe); selects the MASM em64 trampoline.
+config_setting(
+    name = "windows_x86_64",
+    constraint_values = ["@platforms//os:windows", "@platforms//cpu:x86_64"],
+)
+
+# --- wasi-threads / shared-memory support, opt-in via `--define wamr_threads=1`
+# Off by default (single-threaded, matching the swift.org wasm SDK). When on, the
+# thread manager + lib-wasi-threads + shared-memory atomics are compiled in, so a
+# reactor built for `wasm32-unknown-wasip1-threads` can `thread_spawn` real OS
+# threads that run in parallel (proven near-linear on macOS + a Pixel 3a). The
+# POSIX platform layer already carries posix_thread.c; only the two library
+# sources + the SHARED_MEMORY/THREAD_MGR/LIB_WASI_THREADS defines are added.
+# NOTE: Windows threads would additionally need win_atomic.cpp (currently an
+# empty TU under SHARED_MEMORY=0) — out of scope; threads target Android/desktop.
+config_setting(
+    name = "wamr_threads",
+    values = {"define": "wamr_threads=1"},
+)
+
+# --- The interpreter's own profiler, opt-in via `--define wamr_profile=1` ----
+# Per-function execution counts and times (inclusive, and of the callees),
+# named from the module's name section; a host dumps them with
+# iso_wamr_dump_profile (ISO_WAMR_PROFILE on Apple, see WamrRuntime). The
+# counts are exact; the times carry a clock read per call, so small, hot
+# functions read slower than they run.
+config_setting(
+    name = "wamr_profile",
+    values = {"define": "wamr_profile=1"},
+)
+
+_THREADS_COPTS = [
+    "-DWASM_ENABLE_SHARED_MEMORY=1",
+    "-DWASM_ENABLE_THREAD_MGR=1",
+    "-DWASM_ENABLE_LIB_WASI_THREADS=1",
+]
+
+_THREADS_SRCS = [
+    "core/iwasm/libraries/thread-mgr/thread_manager.c",
+    "core/iwasm/libraries/lib-wasi-threads/lib_wasi_threads_wrapper.c",
+    "core/iwasm/libraries/lib-wasi-threads/tid_allocator.c",
+]
+
+# --- AOT (ahead-of-time) support, opt-in via `--define wamr_aot=1` -------------
+# Off by default (the interp-only build stays lean). When on, the AOT loader +
+# runtime + per-CPU relocation sources are compiled in, so wasm_runtime_load()
+# transparently accepts a wamrc-produced .aot (dispatched by magic bytes) as well
+# as a .wasm. The matching .aot is produced by //:wamrc (built against LLVM).
+# Composes with `--define wamr_threads=1`: a threaded .aot needs the loader built
+# with SHARED_MEMORY (supplied by _THREADS_COPTS, which applies to all sources).
+config_setting(
+    name = "aot",
+    values = {"define": "wamr_aot=1"},
+)
+
+config_setting(
+    name = "aot_aarch64",
+    values = {"define": "wamr_aot=1"},
+    constraint_values = ["@platforms//cpu:aarch64"],
+)
+
+config_setting(
+    name = "aot_x86_64",
+    values = {"define": "wamr_aot=1"},
+    constraint_values = ["@platforms//cpu:x86_64"],
+)
+
+# MSVC spells the force-include flag /FI (see the copts select below); this is
+# strictly more specialized than :aot_x86_64, so it wins on Windows.
+config_setting(
+    name = "aot_windows_x86_64",
+    values = {"define": "wamr_aot=1"},
+    constraint_values = ["@platforms//os:windows", "@platforms//cpu:x86_64"],
+)
+
+# aot_reloc_<cpu>.c reads BUILD_TARGET as a string literal (`sizeof(BUILD_TARGET)`
+# + strcmp), and the AOT loader validates it against the .aot's stamped arch. It
+# must be a real string-literal macro; passing `-DBUILD_TARGET="AARCH64"` on the
+# command line is fragile across Bazel's params-file quoting, so we bake it into a
+# force-included header instead (the quote lives in a file, never on argv).
+genrule(
+    name = "aot_build_target_h",
+    outs = ["aot_build_target.h"],
+    cmd = select({
+        "@platforms//cpu:aarch64": "echo '#define BUILD_TARGET \\"AARCH64\\"' > $@",
+        "@platforms//cpu:x86_64": "echo '#define BUILD_TARGET \\"X86_64\\"' > $@",
+        "//conditions:default": "echo '#define BUILD_TARGET \\"UNKNOWN\\"' > $@",
+    }),
+)
+
+# The AOT loader/runtime source set (added only when `:aot` is selected).
+# aot_perf_map.c (the Linux `perf` symbol-map writer) is POSIX-only — it uses
+# getpid/pid_t unconditionally, so Windows drops it (its only caller is behind
+# WASM_ENABLE_LINUX_PERF, off here).
+_AOT_SRCS = [
+    "core/iwasm/aot/aot_loader.c",
+    "core/iwasm/aot/aot_runtime.c",
+    "core/iwasm/aot/aot_intrinsic.c",
+]
+
+_AOT_COPTS = [
+    "-DWASM_ENABLE_AOT=1",
+    "-DWASM_ENABLE_AOT_INTRINSICS=1",
+    # Software bounds checks, NOT signal/guard-page HW bound checks. Two reasons:
+    # (1) it must match wamrc, which produces the .aot with
+    # WASM_DISABLE_HW_BOUND_CHECK=1 (_COMPILER_COPTS) — a mismatch is a silent
+    # ABI hazard; (2) enabling AOT otherwise turns on HW bound checks, whose
+    # signal init (os_thread_signal_init -> touch_pages) SIGSEGVs on Android
+    # inside wasm_runtime_full_init, before any module loads. Verified on a
+    # Pixel 3a: without this the wasm-AOT app crashes on startup.
+    "-DWASM_DISABLE_HW_BOUND_CHECK=1",
+    # Enabling AOT turns on the memory.init path in main's fast interp, which
+    # reads `linear_mem_size` — a variable only declared when BULK_MEMORY_OPT is
+    # on (on aarch64). Enable it so the interp sources in this same lib compile.
+    "-DWASM_ENABLE_BULK_MEMORY_OPT=1",
+]
+
+cc_library(
+    name = "wamr",
+    srcs = glob([
+        # wasm_c_api.c (the spec's wasm_* C API) is EXCLUDED: no host here uses
+        # it (all drive wasm_runtime_*), and its wasm_* symbols would collide
+        # with any other engine implementing the spec's C API linked into the
+        # same binary (it exports the identical names) — worse than a link
+        # error, resolution order could silently cross-bind engines.
+        "core/iwasm/common/*.c",
+        "core/iwasm/libraries/libc-wasi/libc_wasi_wrapper.c",
+        "core/iwasm/libraries/libc-wasi/sandboxed-system-primitives/src/*.c",
+        "core/shared/utils/*.c",
+        "core/shared/mem-alloc/mem_alloc.c",
+        "core/shared/mem-alloc/ems/*.c",
+        "core/shared/platform/common/libc-util/*.c",
+        "core/**/*.h",
+    ], exclude = ["core/iwasm/common/wasm_c_api.c"]) + [
+        "core/iwasm/interpreter/wasm_loader.c",
+        "core/iwasm/interpreter/wasm_runtime.c",
+        "core/iwasm/interpreter/wasm_interp_fast.c",
+    ] + select({
+        # The per-OS platform layer. POSIX hosts (Android, desktop Linux, Darwin)
+        # share the common/posix/*.c sources (pulled out of the base glob above so
+        # they don't compile on Windows); Windows swaps in its own
+        # platform/windows/* (win_thread/memmap/socket/time/… + platform_init).
+        # win_atomic.cpp is the only C++ source and is entirely inside
+        # `#if WASM_ENABLE_SHARED_MEMORY != 0` (off here) — an empty TU — so we
+        # take only the .c sources and keep the whole library C (so the C-only
+        # /std:c11 below doesn't collide with the toolchain's /std:c++17).
+        "@platforms//os:windows": glob(["core/shared/platform/windows/*.c"]) + [
+            # WAMR's Windows platform has no native os_mremap; the portable
+            # common/memory fallback (os_mremap_slow, in shared/utils) supplies it
+            # — same as the Darwin branch.
+            "core/shared/platform/common/memory/mremap.c",
+        ],
+        "@platforms//os:android": glob(["core/shared/platform/common/posix/*.c"]) + [
+            "core/shared/platform/android/platform_init.c",
+        ],
+        "@platforms//os:macos": glob(["core/shared/platform/common/posix/*.c"]) + [
+            "core/shared/platform/darwin/platform_init.c",
+            "core/shared/platform/common/memory/mremap.c",
+        ],
+        # iOS is Darwin too (arm64 only — device + simulator), so it reuses the
+        # darwin platform layer.
+        "@platforms//os:ios": glob(["core/shared/platform/common/posix/*.c"]) + [
+            "core/shared/platform/darwin/platform_init.c",
+            "core/shared/platform/common/memory/mremap.c",
+        ],
+        # visionOS: Darwin and arm64, as iOS is (device + simulator).
+        "@platforms//os:visionos": glob(["core/shared/platform/common/posix/*.c"]) + [
+            "core/shared/platform/darwin/platform_init.c",
+            "core/shared/platform/common/memory/mremap.c",
+        ],
+        "//conditions:default": glob(["core/shared/platform/common/posix/*.c"]) + [
+            "core/shared/platform/linux/platform_init.c",
+        ],
+    }) + select({
+        # The native-call trampoline is per-CPU. macOS uses the universal
+        # wrapper (textual-includes both arches). iOS/Android are arm64. Desktop
+        # Linux is x86_64 (em64); arm64 Linux still resolves via :linux_arm64.
+        "@platforms//os:macos": ["core/iwasm/common/arch/invokeNative_osx_universal.s"],
+        "@platforms//os:ios": ["core/iwasm/common/arch/invokeNative_aarch64.s"],
+        "@platforms//os:visionos": ["core/iwasm/common/arch/invokeNative_aarch64.s"],
+        "@platforms//os:android": ["core/iwasm/common/arch/invokeNative_aarch64.s"],
+        ":linux_x86_64": ["core/iwasm/common/arch/invokeNative_em64.s"],
+        ":linux_arm64": ["core/iwasm/common/arch/invokeNative_aarch64.s"],
+        # Windows x64 ships the trampoline as MASM (.asm), assembled by ml64 via
+        # Bazel's MSVC toolchain (the GAS .s variants are for gcc/clang hosts).
+        ":windows_x86_64": ["core/iwasm/common/arch/invokeNative_em64.asm"],
+    }) + select({
+        # AOT loader/runtime + the per-CPU relocation engine + the force-included
+        # BUILD_TARGET header. Empty in interp-only builds.
+        ":aot_windows_x86_64": _AOT_SRCS + [
+            "core/iwasm/aot/arch/aot_reloc_x86_64.c",
+            ":aot_build_target_h",
+        ],
+        ":aot_aarch64": _AOT_SRCS + [
+            "core/iwasm/aot/aot_perf_map.c",
+            "core/iwasm/aot/arch/aot_reloc_aarch64.c",
+            ":aot_build_target_h",
+        ],
+        ":aot_x86_64": _AOT_SRCS + [
+            "core/iwasm/aot/aot_perf_map.c",
+            "core/iwasm/aot/arch/aot_reloc_x86_64.c",
+            ":aot_build_target_h",
+        ],
+        "//conditions:default": [],
+    }) + select({
+        # wasi-threads: the thread manager + wasi thread_spawn wrapper. Empty in
+        # the default single-threaded build (posix_thread.c is always compiled by
+        # the POSIX platform layer above, but stays inert with THREAD_MGR=0).
+        ":wamr_threads": _THREADS_SRCS,
+        "//conditions:default": [],
+    }),
+    # macOS uses invokeNative_osx_universal.s, which #includes the per-arch .s;
+    # stage those as textual headers (available for inclusion, not compiled).
+    textual_hdrs = select({
+        "@platforms//os:macos": [
+            "core/iwasm/common/arch/invokeNative_aarch64.s",
+            "core/iwasm/common/arch/invokeNative_em64.s",
+        ],
+        "//conditions:default": [],
+    }),
+    # Optimized in every build (-O3 / MSVC's /O2, after the toolchain's own
+    # -O0): the interpreter runs every frame of a guest's, and a fastbuild
+    # app's unoptimized one made Visor Isomer's frames several times slower.
+    copts = _COPTS + select({
+        "@platforms//os:macos": ["-DBH_PLATFORM_DARWIN", "-DWASM_HAVE_MREMAP=0", "-O3"],
+        "@platforms//os:ios": ["-DBH_PLATFORM_DARWIN", "-DWASM_HAVE_MREMAP=0", "-O3"],
+        "@platforms//os:visionos": ["-DBH_PLATFORM_DARWIN", "-DWASM_HAVE_MREMAP=0", "-O3"],
+        "@platforms//os:android": ["-DBH_PLATFORM_ANDROID", "-DWASM_HAVE_MREMAP=1", "-D_GNU_SOURCE", "-O3"],
+        # MSVC doesn't predefine __x86_64__, so WAMR's config.h can't auto-detect
+        # the CPU target — set it explicitly (the .s hosts get it from the
+        # compiler). /std:c11 gives MSVC the native `_Alignof`/`_Static_assert`
+        # keywords platform_wasi_types.h's WASI-layout asserts need.
+        "@platforms//os:windows": [
+            "-DBH_PLATFORM_WINDOWS",
+            "-DWASM_HAVE_MREMAP=0",
+            "-DBUILD_TARGET_X86_64",
+            # win_file.c uses CreateFile2 / CREATEFILE2_EXTENDED_PARAMETERS,
+            # gated behind a Win8+ SDK target — target Windows 10.
+            "-D_WIN32_WINNT=0x0A00",
+            # Bazel links this cc_library as a DLL on Windows; WAMR decorates its
+            # public API `__declspec(dllimport)` unless COMPILING_WASM_RUNTIME_API
+            # is set, so without it the DLL exports nothing and the c-host WAMR
+            # runtime can't link. Define it so the DLL exports the wasm_runtime_*
+            # API.
+            "-DCOMPILING_WASM_RUNTIME_API",
+            "/std:c11",
+            "/O2",
+        ],
+        "//conditions:default": ["-DBH_PLATFORM_LINUX", "-DWASM_HAVE_MREMAP=1", "-D_GNU_SOURCE", "-O3"],
+    }) + select({
+        ":aot_aarch64": _AOT_COPTS + ["-DBUILD_TARGET_AARCH64"],
+        ":aot_x86_64": _AOT_COPTS + ["-DBUILD_TARGET_X86_64"],
+        "//conditions:default": [],
+    }) + select({
+        # The BUILD_TARGET string macro rides a force-included header (see
+        # :aot_build_target_h); MSVC spells the flag /FI, gcc/clang -include.
+        # /FI resolves through the include search path (not the cwd like
+        # -include), so it takes the bare name — the `includes = ["."]` entry
+        # maps the package's generated-file root where the header lives.
+        ":aot_windows_x86_64": ["/FIaot_build_target.h"],
+        ":aot_aarch64": ["-include", "$(location :aot_build_target_h)"],
+        ":aot_x86_64": ["-include", "$(location :aot_build_target_h)"],
+        "//conditions:default": [],
+    }) + select({
+        # Threads on (`--define wamr_threads=1`) vs the default single-threaded
+        # build. Applies to ALL sources incl. the AOT loader, so a threaded .aot
+        # is loaded by a SHARED_MEMORY-matched runtime (wamrc emits with threads).
+        ":wamr_threads": _THREADS_COPTS,
+        "//conditions:default": [
+            "-DWASM_ENABLE_SHARED_MEMORY=0",
+            "-DWASM_ENABLE_THREAD_MGR=0",
+        ],
+    }) + select({
+        ":wamr_profile": ["-DWASM_ENABLE_PERF_PROFILING=1", "-DWASM_ENABLE_CUSTOM_NAME_SECTION=1"],
+        "//conditions:default": [],
+    }),
+    includes = [
+        # The package root itself: maps the generated-file root so MSVC's /FI
+        # (which searches include paths, not the cwd) finds :aot_build_target_h.
+        ".",
+        "core",
+        "core/iwasm/aot",
+        "core/iwasm/include",
+        "core/iwasm/common",
+        "core/iwasm/interpreter",
+        "core/iwasm/libraries/libc-wasi",
+        "core/iwasm/libraries/libc-wasi/sandboxed-system-primitives/include",
+        "core/iwasm/libraries/libc-wasi/sandboxed-system-primitives/src",
+        "core/shared/platform/include",
+        "core/shared/platform/common/libc-util",
+        "core/shared/utils",
+        "core/shared/mem-alloc",
+        "core/iwasm/common/arch",
+        "core/iwasm/libraries/thread-mgr",
+        "core/iwasm/libraries/lib-wasi-threads",
+    ] + select({
+        "@platforms//os:macos": ["core/shared/platform/darwin"],
+        "@platforms//os:ios": ["core/shared/platform/darwin"],
+        "@platforms//os:visionos": ["core/shared/platform/darwin"],
+        "@platforms//os:android": ["core/shared/platform/android"],
+        "@platforms//os:windows": ["core/shared/platform/windows"],
+        "//conditions:default": ["core/shared/platform/linux"],
+    }),
+    linkopts = select({
+        "@platforms//os:android": ["-llog"],
+        # win_socket.c needs Winsock; win_clock.c calls ntdll's
+        # NtQueryTimerResolution.
+        "@platforms//os:windows": ["ws2_32.lib", "ntdll.lib"],
+        "//conditions:default": [],
+    }),
+)
+
+# --- wamrc: the WAMR AOT compiler (.wasm -> native .aot) --------------------
+# wamrc never executes wasm (it only lowers it to .aot), so the runtime
+# native-call trampoline (invokeNative, hand-written per-CPU asm) is dead code
+# for it — but wasm_runtime.c still references the symbol. Provide a stub instead
+# of the real .s, which sidesteps the Darwin assembler rejecting the ELF-style
+# `.type` directives in the arm64 trampoline. Never called.
+genrule(
+    name = "invoke_native_stub",
+    outs = ["invoke_native_stub.c"],
+    cmd = "echo 'void invokeNative(void) {}' > $@",
+)
+
+# A host tool that links LLVM (via hermetic-llvm's @llvm-project overlay) to
+# lower a wasm reactor to a native .aot the AOT loader above runs. Single target:
+# the runtime (vmlib) + the AOT emitter (aotclib) + wamr-compiler/main.c, all
+# under _COMPILER_COPTS (this includes the ORC sources — wamrc uses ORC LLLazyJIT
+# for parallel codegen even for AOT output). Only builds when something depends
+# on it, so the LLVM source never compiles for a plain interp build. Builds on
+# macOS and Linux hosts (not Windows — LLVM-from-source under MSVC is not worth
+# it; produce Windows .aot files from a macOS/Linux host with
+# `--target=x86_64 --target-abi=msvc`).
+cc_binary(
+    name = "wamrc",
+    srcs = glob(
+        [
+            "core/iwasm/common/*.c",
+            "core/iwasm/common/gc/*.c",
+            "core/iwasm/aot/aot_loader.c",
+            "core/iwasm/aot/aot_runtime.c",
+            "core/iwasm/aot/aot_intrinsic.c",
+            "core/iwasm/aot/aot_perf_map.c",
+            "core/iwasm/compilation/*.c",
+            "core/iwasm/compilation/*.cpp",
+            "core/iwasm/compilation/simd/*.c",
+            "core/iwasm/compilation/simd/*.cpp",
+            "core/iwasm/libraries/thread-mgr/*.c",
+            "core/shared/utils/*.c",
+            "core/shared/utils/uncommon/*.c",
+            "core/shared/mem-alloc/mem_alloc.c",
+            "core/shared/mem-alloc/ems/*.c",
+            "core/shared/platform/common/libc-util/*.c",
+            "core/shared/platform/common/posix/*.c",
+            "core/**/*.h",
+            "core/**/*.inc",
+        ],
+        allow_empty = True,
+    ) + [
+        "core/iwasm/interpreter/wasm_loader.c",
+        "core/iwasm/interpreter/wasm_runtime.c",
+        "core/iwasm/interpreter/wasm_interp_classic.c",
+        "wamr-compiler/main.c",
+        ":aot_build_target_h",
+        ":invoke_native_stub",
+    ] + select({
+        # The per-OS platform layer (POSIX sources are in the glob above; only
+        # platform_init differs between the two supported build hosts). Darwin
+        # has no native mremap, so it takes the portable os_mremap_slow fallback;
+        # Linux's posix_memmap.c defines os_mremap natively (WASM_HAVE_MREMAP=1),
+        # and adding the fallback would double-define it.
+        "@platforms//os:macos": [
+            "core/shared/platform/darwin/platform_init.c",
+            "core/shared/platform/common/memory/mremap.c",
+        ],
+        "//conditions:default": ["core/shared/platform/linux/platform_init.c"],
+    }) + select({
+        # The reloc engine for the HOST cpu (aot_loader references it; each
+        # aot_reloc_<cpu>.c defines the same symbols, so exactly one compiles).
+        "@platforms//cpu:aarch64": ["core/iwasm/aot/arch/aot_reloc_aarch64.c"],
+        "@platforms//cpu:x86_64": ["core/iwasm/aot/arch/aot_reloc_x86_64.c"],
+    }),
+    copts = _COMPILER_COPTS + select({
+        "@platforms//os:macos": ["-DBH_PLATFORM_DARWIN", "-DWASM_HAVE_MREMAP=0"],
+        "//conditions:default": ["-DBH_PLATFORM_LINUX", "-DWASM_HAVE_MREMAP=1", "-D_GNU_SOURCE"],
+    }) + select({
+        # The host cpu is wamrc's DEFAULT --target; any target can be requested
+        # explicitly. Must agree with :aot_build_target_h (also cpu-selected).
+        "@platforms//cpu:aarch64": ["-DBUILD_TARGET_AARCH64"],
+        "@platforms//cpu:x86_64": ["-DBUILD_TARGET_X86_64"],
+    }),
+    includes = [
+        "core",
+        "core/iwasm/aot",
+        "core/iwasm/compilation",
+        "core/iwasm/include",
+        "core/iwasm/common",
+        "core/iwasm/common/gc",
+        "core/iwasm/interpreter",
+        "core/iwasm/libraries/thread-mgr",
+        "core/shared/platform/include",
+        "core/shared/platform/common/libc-util",
+        "core/shared/utils",
+        "core/shared/utils/uncommon",
+        "core/shared/mem-alloc",
+        "core/iwasm/common/arch",
+    ] + select({
+        "@platforms//os:macos": ["core/shared/platform/darwin"],
+        "//conditions:default": ["core/shared/platform/linux"],
+    }),
+    linkopts = select({
+        "@platforms//os:linux": ["-ldl", "-lpthread", "-lm"],
+        "//conditions:default": [],
+    }),
+    target_compatible_with = select({
+        "@platforms//os:macos": [],
+        "@platforms//os:linux": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    visibility = ["//visibility:public"],
+    deps = [
+        "@llvm-project//llvm:Core",
+        "@llvm-project//llvm:Support",
+        # aot_llvm.h unconditionally includes the Orc/ExecutionEngine llvm-c
+        # headers even in AOT-only builds; these provide them (and link the libs,
+        # harmless — the JIT code paths compile out under WASM_ENABLE_JIT=0).
+        "@llvm-project//llvm:OrcJIT",
+        "@llvm-project//llvm:ExecutionEngine",
+        "@llvm-project//llvm:IRReader",
+        "@llvm-project//llvm:BitReader",
+        "@llvm-project//llvm:BitWriter",
+        "@llvm-project//llvm:Analysis",
+        "@llvm-project//llvm:Target",
+        "@llvm-project//llvm:CodeGen",
+        "@llvm-project//llvm:MC",
+        "@llvm-project//llvm:Object",
+        "@llvm-project//llvm:Passes",
+        "@llvm-project//llvm:TransformUtils",
+        "@llvm-project//llvm:AArch64CodeGen",
+        "@llvm-project//llvm:AArch64AsmParser",
+        "@llvm-project//llvm:AArch64Disassembler",
+        # The overlay's config advertises LLVM_HAS_<T>_TARGET=1 for this whole
+        # set, so WAMR's aot_llvm.c references each target's initializers; link
+        # their codegen backends so those symbols resolve.
+        "@llvm-project//llvm:X86CodeGen",
+        "@llvm-project//llvm:RISCVCodeGen",
+        "@llvm-project//llvm:WebAssemblyCodeGen",
+        "@llvm-project//llvm:NVPTXCodeGen",
+    ],
+)
+""",
+    # Pinned to a WAMR `main` commit rather than the WAMR-2.4.5 tag: 2.4.5's AOT
+    # compiler targets LLVM 18 and doesn't build against hermetic-llvm's LLVM 22,
+    # whereas main carries the `LLVM_VERSION_MAJOR >= 22` codegen guards. Using
+    # one commit for BOTH the interp runtime and wamrc keeps the .aot format
+    # self-consistent (no cross-version stitching / source patches).
+    # TODO: switch back to the next tagged release (> 2.4.5) once it ships the
+    # LLVM 22 support, and drop this main pin.
+    #
+    # Two patches, each a list searched on every insert given a hash table
+    # beside it (the lists, their order and what wamrc writes are unchanged;
+    # each .aot came out byte for byte the same):
+    #   - wamrc's native symbols (each XIP constant is one, tens of thousands
+    #     in Visor's reactor): compiling was quadratic, more than half of a
+    #     ten-minute AOT build in strcmp, whatever the --opt-level;
+    #   - the loader's strings (import, export and function names): reading
+    #     a large reactor's name section took wamrc ~30 s. (The runtime reads
+    #     names only in profiling builds.)
+    patch_args = ["-p1"],
+    # And a third for profiling builds alone (--define wamr_profile=1):
+    # ISO_WAMR_CALLERS=<function> counts that function's calls by the chain
+    # of functions they came through (see the patch).
+    patches = [
+        "//tools/patches:wamr_native_symbol_table.patch",
+        "//tools/patches:wamr_const_str_table.patch",
+        "//tools/patches:wamr_profile_callers.patch",
+    ],
+    sha256 = "496d14332199af751d20bd19fdb51befd9bb6283137b18d5f92a703056c1b2a7",
+    strip_prefix = "wasm-micro-runtime-a23ddd9dd2a098c8cb7bebcf1b967469d9ebb434",
+    url = "https://github.com/bytecodealliance/wasm-micro-runtime/archive/a23ddd9dd2a098c8cb7bebcf1b967469d9ebb434.tar.gz",
+)
+
+# WasmKit (AttilaTheFun/WasmKit, a fork of swiftwasm/WasmKit) — the Swift
+# WebAssembly interpreter behind `WasmKitRuntime` (//shared/wasm_host), the
+# Apple hosts' second engine beside WAMR. The fork's commits are the engine
+# work measured in a private harness (interpreted, against WAMR on the same
+# reactor): the one accepted there (0de40a7), shared memory and WASI Threads
+# enabled on iOS (285def1), then the harness's dispatch fusions (5fbb9db,
+# branch hillclimb/add-branch-dispatch: 6.6% lower latency in aggregate, no
+# workload's median slower), pinned for 0.33 (9) on request before
+# the harness's per-workload confidence gates closed. Nothing of Isomer's is in the
+# fork: the Bazel build is ours (tools/wasmkit/BUILD.wasmkit.bazel, after its
+# Package.swift). Not in the BCR.
+wasmkit_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+wasmkit_archive(
+    name = "wasmkit",
+    build_file = "//tools/wasmkit:BUILD.wasmkit.bazel",
+    sha256 = "4618c7d55c0fe0d8756e2e29c557ad52d8ff8ef7fafe96ec7e53da9242748958",
+    strip_prefix = "WasmKit-5fbb9db8a130edf2971fc57b25186a62b689a693",
+    url = "https://github.com/AttilaTheFun/WasmKit/archive/5fbb9db8a130edf2971fc57b25186a62b689a693.tar.gz",
+)
+
+# hermetic-llvm (BCR module "llvm") — vendored LLVM 22, used ONLY to build the
+# WAMR AOT compiler //swift_ffi/runtime/wamr:wamrc (which links LLVM to turn a .wasm
+# reactor into a native .aot). We take just the Bazeled `@llvm-project` LLVM
+# LIBRARY targets (AArch64 backend only — all we need for Apple/Android arm64
+# .aot); we deliberately do NOT register its cc_toolchain, so the Xcode/Android
+# Swift toolchains keep resolution priority. Everything here is lazy: the LLVM
+# source only fetches/builds when a target that actually depends on wamrc is
+# built (i.e. `--define wamr_aot=1` paths), never for a plain interp build.
+bazel_dep(name = "llvm", version = "0.7.3")
+
+llvm_source = use_extension("@llvm//extensions:llvm_source.bzl", "llvm_source")
+use_repo(
+    llvm_source,
+    "compiler-rt",
+    "libcxx",
+    "libcxxabi",
+    "libunwind",
+    "llvm-libc",
+    "llvm-raw",
+    "llvm_config",
+    "llvm_zlib",
+    "llvm_zstd",
+    "openmp",
+)
+
+llvm = use_extension("@llvm//extensions:llvm.bzl", "llvm")
+llvm.configure(targets = ["AArch64"])
+use_repo(llvm, "llvm-project")
+
+# TypeScript: ts_swift_library wraps a real ts_project, so aspect_rules_ts
+# (+ rules_js and the hermetic node toolchain) are full dependencies.
+bazel_dep(name = "aspect_rules_js", version = "3.2.2")
+bazel_dep(name = "aspect_rules_ts", version = "3.8.11")
+bazel_dep(name = "rules_nodejs", version = "6.7.5")
+
+# The tsc that ts_project runs. Pins @npm_typescript (the tsc ts_swift_library
+# compiles bridges with) in this module's own repo mapping, so consumers need
+# no rules_ts setup. The version is given here rather than read from a
+# package.json: nothing in the module uses npm packages, and the root module
+# must not use rules_js's `npm` extension at all — flatbuffers (below) hands it
+# a tag rules_js 3 rejects, which only stays harmless while the extension is
+# never evaluated.
+rules_ts_ext = use_extension("@aspect_rules_ts//ts:extensions.bzl", "ext")
+rules_ts_ext.deps(ts_version = "5.8.3")
+use_repo(rules_ts_ext, "npm_typescript")
+
+# Rust (dev-only: swift_ffi's rs_dependent_library example cells; consumers
+# who want Rust bindings add rules_rust themselves and load
+# //swift_ffi/rules:rs.bzl).
+bazel_dep(name = "rules_rust", version = "0.71.3", dev_dependency = True)
+
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust", dev_dependency = True)
+rust.toolchain(edition = "2021")
+use_repo(rust, "rust_toolchains")
+
+register_toolchains("@rust_toolchains//:all", dev_dependency = True)
+
+# --- SQLite (swift_sql) ------------------------------------------------------
+# An app's SQLite is swift_sql's (AttilaTheFun/swift_sql, public: the C
+# API as CSwiftSQL, the Swift layer SwiftSQL), a Swift package an app takes
+# through rules_swift_package_manager; it left isomer at 0.34. The
+# examples consume it, and check SQLite's WebAssembly build under WAMR
+# (examples' //tests/sqlite_wasi). C compiled for wasm needs the rules_swift
+# patch above (the SDK's clang resource directory).
+
+# FlatBuffers: the render-tree wire format (tree.fbs in shared/renderers) —
+# flatc for codegen plus the Swift runtime the encoder/decoders link.
+bazel_dep(name = "flatbuffers", version = "25.12.19")
+
+single_version_override(
+    module_name = "flatbuffers",
+    # The release's swift BUILD glob misses Sources/FlatBuffers/Vectors/
+    # (fixed on upstream master) — patched in; drop at the next release.
+    patch_strip = 1,
+    patches = [
+        "//tools/patches:flatbuffers_foundation_wasi.patch",
+        "//tools/patches:flatbuffers_swift_vectors.patch",
+    ],
+    version = "25.12.19",
+)
+# flatbuffers -> grpc -> rules_foreign_cc 0.10.1 fails to even load under
+# this Bazel; force a compatible release (nothing of it is built here).
+single_version_override(
+    module_name = "rules_foreign_cc",
+    version = "0.15.1",
+)
+
+# swift_map (//swift_map/...) backs the SwiftUI `Map` view on Apple (Metal) and
+# on every SwiftGPURenderer platform; the platform SwiftUI modules reference
+# it behind `//shared:map` (`--config=map`) and every SwiftMap use is
+# `#if canImport(SwiftMap)`-gated, so an application that shows no map links
+# none of it. swift_gpu (//swift_gpu/...) is the GPU abstraction behind the
+# single self-drawing renderer; all direct GPU calls live there.
+
+# Bundles the web runtime (boot.js + the generated TypeScript bindings) into
+# one plain-JS file for the browser.
+bazel_dep(name = "aspect_rules_esbuild", version = "0.26.0")
+
+# React 18 UMD builds for the high-level web renderer
+# (Renderer.bind(.react)); served alongside the runtime bundle. React 19
+# dropped UMD, so 18.x is the last plain-script distribution.
+react_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+react_archive(
+    name = "react_umd",
+    build_file_content = """\
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["umd/react.production.min.js"])
+""",
+    sha256 = "8d9bed01a672e7eaf387942d781ad47c6a43089a30a0306060f9fd5ac7870347",
+    strip_prefix = "package",
+    url = "https://registry.npmjs.org/react/-/react-18.3.1.tgz",
+)
+
+react_archive(
+    name = "react_dom_umd",
+    build_file_content = """\
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["umd/react-dom.production.min.js"])
+""",
+    sha256 = "031d4427a99f2f3f6cac18bbbf308594a67e4f47d10f4896fdec446505b040e0",
+    strip_prefix = "package",
+    url = "https://registry.npmjs.org/react-dom/-/react-dom-18.3.1.tgz",
+)
+
+# Generates Xcode projects for the Apple example applications
+# (`bazel run //examples/apple/example_ios_application:example_ios_application_project`).
+bazel_dep(name = "rules_xcodeproj", version = "4.1.0")
+
+# Hermetic Python used to serve the web application from `bazel run`.
+bazel_dep(name = "rules_python", version = "2.0.2")
+
+# Shell rules for the adb install/run wrapper.
+bazel_dep(name = "rules_shell", version = "0.8.0")
+
+# Real-world Android APK assembly for the example app: rules_android's
+# `android_binary` + rules_kotlin's `kt_android_library` (what people actually
+# ship with), replacing the bespoke hermetic kotlinc/d8/aapt2 pipeline in
+# //tools/android. rules_jvm_external resolves rules_android's own Maven graph.
+bazel_dep(name = "rules_android", version = "0.7.3")
+bazel_dep(name = "rules_java", version = "9.3.0")
+bazel_dep(name = "rules_kotlin", version = "2.2.2")
+bazel_dep(name = "rules_jvm_external", version = "7.1")
+
+# rules_java's host JDK + java tools (needed by rules_android's Java actions).
+rules_java_toolchains = use_extension("@rules_java//java:extensions.bzl", "toolchains")
+use_repo(rules_java_toolchains, "remote_java_tools")
+
+# rules_android's Maven dependencies (resolved + pinned to a checked-in lock).
+#   REPIN=1 bazel run @rules_android_maven//:pin
+maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
+maven.install(
+    name = "rules_android_maven",
+    aar_import_bzl_label = "@rules_android//rules:rules.bzl",
+    # Jetpack Compose for the high-level Android renderer
+    # (Renderer.bind(.jetpackCompose)); the embeddable compose compiler must
+    # match rules_kotlin's kotlinc release (2.2.21).
+    artifacts = [
+        # Pinned to satisfy coursier's strict version-range resolution.
+        "androidx.collection:collection:1.4.0",
+        # The real ListenableFuture (androidx pulls the empty
+        # 9999.0-empty-to-avoid-conflict-with-guava marker by default).
+        "com.google.guava:listenablefuture:1.0",
+        "androidx.lifecycle:lifecycle-common:2.8.7",
+        "androidx.lifecycle:lifecycle-runtime:2.8.7",
+        "androidx.activity:activity-compose:1.9.3",
+        "androidx.compose.foundation:foundation:1.7.8",
+        "androidx.fragment:fragment:1.8.5",
+        "androidx.compose.material3:material3:1.3.2",
+        "androidx.compose.runtime:runtime:1.7.8",
+        "androidx.compose.ui:ui:1.7.8",
+        # Chrome Custom Tabs: the Playground's "Run on the web" opens its
+        # in-app server's page in one (the SFSafariViewController of Android).
+        "androidx.browser:browser:1.8.0",
+        "org.jetbrains.kotlin:kotlin-compose-compiler-plugin-embeddable:2.2.21",
+        # Jetpack Macrobenchmark: the platform-native perf harness
+        # (//tools/benchmark/android_macrobenchmark) - StartupTimingMetric +
+        # TraceSectionMetric instrumentation APK driven over adb.
+        "androidx.benchmark:benchmark-macro-junit4:1.3.4",
+        "androidx.test.uiautomator:uiautomator:2.3.0",
+        "androidx.test:runner:1.6.2",
+        "androidx.test.ext:junit:1.2.1",
+        "androidx.tracing:tracing:1.2.0",
+        # benchmark-common's perfetto proto classes extend wire's runtime;
+        # coursier resolves the KMP root (metadata-only jar) - pin the -jvm
+        # artifact that actually carries the classes.
+        "com.squareup.wire:wire-runtime-jvm:4.9.7",
+        # ProfileInstaller's ProfileInstallReceiver in each cell APK: macro's
+        # per-iteration DROP_SHADER_CACHE broadcast targets it.
+        "androidx.profileinstaller:profileinstaller:1.4.1",
+        "androidx.startup:startup-runtime:1.1.1",
+        "junit:junit:4.13.2",
+    ],
+    known_contributing_modules = ["rules_android"],
+    lock_file = "//:rules_android_maven_install.json",
+    # Compose's androidx graph mixes exact-pin ranges with old floors;
+    # resolve to the pinned/highest versions instead of failing.
+    version_conflict_policy = "pinned",
+    repositories = [
+        "https://maven.google.com",
+        "https://repo1.maven.org/maven2",
+    ],
+    use_starlark_android_rules = True,
+)
+use_repo(maven, "rules_android_maven")
+
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(
+    is_default = True,
+    python_version = "3.12",
+)
+
+# Swift-SDK cross-compilation to WebAssembly and Android, provided by the
+# overridden rules_swift (above). Downloads the swift.org 6.3.2 host toolchain
+# and the matching WebAssembly / Android Swift SDK artifact bundles; the Apple
+# build is unaffected (it uses the system Xcode toolchain).
+#
+# DEV-ONLY, with the two registrations below: rules_swift's `swift` extension
+# belongs to the root module ("packages meant to be used as deps should use
+# dev_dependency = True") — it takes its tags from the LAST module that uses
+# it, so a non-dev use here would silently replace a consumer's own SDK choice
+# (a wasi-threads build, say, picks a different wasm SDK). Every
+# consumer therefore declares these tags and registers these toolchains itself;
+# examples/MODULE.bazel is the block to copy.
+swift = use_extension("@rules_swift//swift:extensions.bzl", "swift", dev_dependency = True)
+swift.toolchain(
+    name = "swift_toolchain",
+    swift_version = "6.3.2",
+)
+swift.wasm_sdk()
+# The wasi-threads SDK beside it (wasm32-unknown-wasip1-threads; Swift's
+# concurrency on a thread pool of guest threads): what a reactor built for
+# `@isomer//swift_ffi/rules:wasm32-wasip1-threads` compiles with. swift.org
+# publishes none; this is AttilaTheFun/swift's build of 6.3.2 (branch
+# threads-sdk-6.3.2), the toolchain's own sources with swiftlang/swift#92018
+# and the thread-pool executor of swift-platform-executors#30.
+swift.wasm_sdk(
+    sha256 = "dda937f5f31d69ebf8609b430f3818020f5f3e683a72dd91d0875d8c814e0c48",
+    threads = True,
+    url = "https://github.com/AttilaTheFun/swift/releases/download/threads-sdk-6.3.2-1/swift-6.3.2-RELEASE_wasm-threads.artifactbundle.tar.gz",
+)
+swift.android_sdk()
+use_repo(
+    swift,
+    # Aggregator repo: holds the registered toolchains and a host-independent
+    # `:libcxx_shared_{arch}` alias for the NDK's libc++_shared.so (bundled into
+    # the APK alongside the app's .so).
+    "swift_toolchain",
+    "swift_toolchain_xcode",
+)
+
+# macOS host: register the `_xcode` Swift-SDK toolchains. They carry os:wasi /
+# os:android *target* constraints, so they never compete with the Xcode Swift
+# toolchain that the Apple build resolves.
+register_toolchains(
+    "@swift_toolchain//:cc_toolchain_wasm32_xcode",
+    "@swift_toolchain//:swift_toolchain_wasm32_xcode",
+    "@swift_toolchain//:cc_toolchain_wasm32_threads_xcode",
+    "@swift_toolchain//:swift_toolchain_wasm32_threads_xcode",
+    # SPIKE: android C/C++ + linking now go through @androidndk//:all (registered
+    # below); only the Swift toolchain comes from rules_swift.
+    "@swift_toolchain//:swift_toolchain_android_aarch64_xcode",
+    "@swift_toolchain//:swift_toolchain_android_x86_64_xcode",
+    dev_dependency = True,
+)
+
+# Linux host (e.g. SteamOS / Ubuntu): register the swift.org `ubuntu24.04`
+# standalone toolchain as the host *exec* Swift toolchain, so the native Linux
+# target (`//linux/...`) builds with `swift_library`/`swift_binary` the same way
+# the native Windows target builds on a Windows host. The downloads are lazy —
+# only fetched when a toolchain is actually resolved (i.e. on a Linux host) —
+# and their `exec_compatible_with = [os:linux, cpu:...]` constraints mean they
+# are simply ignored on the macOS/Windows hosts. Both architectures: x86_64
+# (SteamOS, most desktops) and aarch64 (ARM machines, and the arm64 podman
+# machine tools/linux/build.sh builds in on a Mac). The wasm/Android
+# *cross* SDK toolchains paired with this host are registered too, so
+# `bazel build //...` from a Linux host can target those as well. C++ (the GL
+# renderer) and final linking use Bazel's autoconfigured host cc toolchain
+# (system gcc).
+register_toolchains(
+    "@swift_toolchain//:swift_toolchain_exec_ubuntu24.04",
+    "@swift_toolchain//:cc_toolchain_wasm32_ubuntu24.04",
+    "@swift_toolchain//:swift_toolchain_wasm32_ubuntu24.04",
+    # SPIKE: android C/C++ via @androidndk//:all; only Swift from rules_swift.
+    "@swift_toolchain//:swift_toolchain_android_aarch64_ubuntu24.04",
+    "@swift_toolchain//:swift_toolchain_android_x86_64_ubuntu24.04",
+    "@swift_toolchain//:swift_toolchain_exec_ubuntu24.04-aarch64",
+    "@swift_toolchain//:cc_toolchain_wasm32_ubuntu24.04-aarch64",
+    "@swift_toolchain//:swift_toolchain_wasm32_ubuntu24.04-aarch64",
+    "@swift_toolchain//:swift_toolchain_android_aarch64_ubuntu24.04-aarch64",
+    "@swift_toolchain//:swift_toolchain_android_x86_64_ubuntu24.04-aarch64",
+    dev_dependency = True,
+)
+
+# @androidndk: the hermetic Android NDK that provides the C/C++ cc toolchains for
+# the Swift→Android cross-compile. rules_swift's Swift Android toolchain links
+# through these and reads the sysroot from them. The extension also requires an
+# android.sdk tag, but isomer packages its APK with its own `android_tools`
+# (below), so @androidsdk is never fetched.
+android = use_extension("@hermetic_android_toolchains//:extensions.bzl", "android")
+android.sdk(
+    build_tools_version = "35.0.0",
+    version = "35",
+)
+android.ndk(
+    api_level = 28,
+    version = "r27c",
+)
+
+# @androidndk supplies the Swift→Android C/C++ cc toolchains; @androidsdk is the
+# Android SDK that rules_android's `android_binary`/aapt2/resource pipeline uses.
+use_repo(android, "androidndk", "androidsdk")
+
+# Point rules_android at the hermetic @androidsdk (instead of $ANDROID_HOME).
+rules_android_sdk = use_extension(
+    "@rules_android//rules/android_sdk_repository:rule.bzl",
+    "android_sdk_repository_extension",
+)
+override_repo(rules_android_sdk, "androidsdk")
+
+# Register @androidndk's cc toolchains (Swift→Android C/C++ + linking) and
+# @androidsdk's Android toolchains (used by rules_android).
+register_toolchains(
+    "@androidndk//:all",
+    "@androidsdk//:all",
+)
+
+# Hermetic Electron for the desktop wrapper around the wasm app (and the
+# win32-x64 runtime used to package a Windows-runnable build from macOS).
+wasm_tools = use_extension("//tools/wasm:extensions.bzl", "wasm_tools")
+use_repo(wasm_tools, "electron", "electron_win64")
+
+android_tools = use_extension("//tools/android:extensions.bzl", "android_tools")
+use_repo(
+    android_tools,
+    "android_build_tools",
+    "android_emulator",
+    "android_platform_jar",
+    "android_platform_tools",
+    "android_system_image",
+    "hermetic_jdk",
+    "kotlin_compiler",
+)
+
+# --- Experimental wasm engine (dev-only): WasmEdge ---------------------------
+#
+# The prebuilt macOS arm64 C-API SDK for the pluggable-engine experiment
+# (//shared/wasm_host:wasmedge_runtime). It conforms to the same WasmRuntime
+# seam as WAMR, WasmKit and JSC; the engine conformance suite
+# (//tests/wasm_engines) drives all of them through the real reactor. A static
+# lib, so tests link hermetically. Never referenced by shipping targets.
+engine_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+engine_archive(
+    name = "wasmedge_static",
+    build_file_content = """
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+cc_library(
+    name = "wasmedge",
+    srcs = ["lib/libwasmedge.a"],
+    hdrs = glob(["include/**/*.h", "include/**/*.inc"]),
+    includes = ["include"],
+    linkopts = [
+        "-lc++",
+        "-lz",
+    ],
+    visibility = ["//visibility:public"],
+)
+""",
+    sha256 = "ca319dc10e0aaa70535b5b3023dc74763efe3fbecb37aff609bdb48a4d2653e9",
+    urls = ["https://github.com/WasmEdge/WasmEdge/releases/download/0.17.1/WasmEdge-0.17.1-darwin_arm64_static.tar.gz"],
+)
+

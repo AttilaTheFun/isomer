@@ -1,0 +1,248 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@rules_swift//swift:swift_library_group.bzl", "swift_library_group")
+load("@rules_kotlin//kotlin:core.bzl", "kt_compiler_plugin")
+
+package(default_visibility = ["//visibility:public"])
+
+# Built for Android through the app binary's platform transition (see
+# //examples/android/example_application). `jni_bridge.h` is imported so the
+# host bridge can name the JNI C types.
+_ANDROID_COPTS = [
+    "-enable-experimental-feature",
+    "Extern",
+    "-import-objc-header",
+    "$(location jni_bridge.h)",
+]
+
+# The SwiftUI reimplementation for Android: the shared core plus the JNI
+# host bridge, compiled as a module named `SwiftUI` (see web counterpart).
+
+# ImageIO's decoding subset (//shared/image_io), under Apple's module name.
+swift_library(
+    name = "image_io",
+    package_name = "isomer",
+    srcs = ["//shared/image_io:srcs"],
+    module_name = "ImageIO",
+    target_compatible_with = ["@platforms//os:android"],
+    deps = ["//:foundation"],
+)
+
+swift_library(
+    name = "swift_ui",
+    package_name = "isomer",
+    srcs = [
+        "AndroidBridge.swift",
+        "AndroidHost.swift",
+        "//shared/renderers:srcs",
+        "//shared/swift_ui_core:srcs",
+    ],
+    copts = _ANDROID_COPTS,
+    module_name = "SwiftUI",
+    swiftc_inputs = ["jni_bridge.h"],
+    # Reached through the app binaries' Android platform transition; the JNI
+    # bridging header can't compile in the host config, so wildcard builds
+    # must skip the bare target.
+    target_compatible_with = ["@platforms//os:android"],
+    deps = [
+        "//shared/isomer_swift_ui",
+        ":image_io",
+        "//swift_ffi/swift_ffi",
+        "//shared/isomer_network_host",
+        "@flatbuffers//swift",
+        "//swift_gpu/android:swift_gpu",
+        "//frameworks/core_transferable",
+        "//frameworks/uniform_type_identifiers",
+    ] + ["//:foundation"] + [
+        # `Map` engine injection point: defaults to an empty stub; a consumer
+        # with its own swift_map dep points the flag at the real engine to
+        # light up canImport(SwiftMap). See //shared/BUILD.bazel.
+        "//shared:map_engine_android",
+    ],
+)
+
+# PhotosUI's SwiftUI photo picker, over this SwiftUI (//frameworks).
+swift_library(
+    name = "photos_ui",
+    package_name = "isomer",
+    srcs = ["//frameworks/photos_ui:srcs"],
+    module_name = "PhotosUI",
+    target_compatible_with = ["@platforms//os:android"],
+    deps = [
+        ":swift_ui",
+        "//frameworks/core_transferable",
+        "//frameworks/uniform_type_identifiers",
+    ],
+)
+
+# What an application builds against (@isomer//:swift_ui): SwiftUI, the
+# other Apple frameworks it may import beside it (PhotosUI,
+# UniformTypeIdentifiers), as an Apple SDK has them, and the Isomer module
+# (Isomer's additions: `#if canImport(Isomer) import Isomer` in code that
+# also builds against Apple's frameworks).
+swift_library_group(
+    name = "sdk",
+    target_compatible_with = ["@platforms//os:android"],
+    deps = [
+        ":isomer",
+        ":photos_ui",
+        ":swift_ui",
+        "//frameworks/uniform_type_identifiers",
+    ],
+)
+
+# Core native-bridging API, Android implementation.
+# What Isomer provides beyond Apple's SwiftUI API (see
+# //shared/swift_ui_extensions); IsomerBridge re-exports it.
+swift_library(
+    name = "isomer",
+    package_name = "isomer",
+    srcs = [
+        "IsomerBridge.swift",
+        "//shared/isomer:Exports.swift",
+        "//shared/swift_ui_extensions:srcs",
+    ],
+    copts = _ANDROID_COPTS,
+    module_name = "Isomer",
+    swiftc_inputs = ["jni_bridge.h"],
+    target_compatible_with = ["@platforms//os:android"],
+    deps = [
+        ":swift_ui",
+        "//swift_ffi/swift_ffi",
+        "//:isomer_foundation",
+        "//shared/isomer_network_host",
+        "//shared/isomer_swift_ui",
+    ],
+)
+
+# The names the Isomer module had before 0.31: each re-exports it.
+swift_library(
+    name = "swift_ui_extensions",
+    package_name = "isomer",
+    srcs = ["//shared/isomer:Compatibility.swift"],
+    module_name = "SwiftUIExtensions",
+    target_compatible_with = ["@platforms//os:android"],
+    deps = [":isomer"],
+)
+
+swift_library(
+    name = "isomer_bridge",
+    package_name = "isomer",
+    srcs = ["//shared/isomer:Compatibility.swift"],
+    module_name = "IsomerBridge",
+    target_compatible_with = ["@platforms//os:android"],
+    deps = [":isomer"],
+)
+
+
+# The reusable Android runtime host (dev.isomer.runtime): the JNI host
+# implementation, the GL surface view, the Compose interpreter, and the
+# Level 3 embedding surfaces (Isomer() composable, IsomerFragment,
+# IsomerView). Compiled per-app together with the generated bindings by
+# `isomer_android_library` (tools/android/defs.bzl) — the bindings'
+# package is fixed at dev.isomer.runtime so these sources resolve them.
+# The Swift-FREE Compose interpreter: decode tree.fbs (FlatTree), render it as
+# Material composables (ComposeRenderer/IsoNode), and the pure-Kotlin host
+# services it needs (HostServices: image cache, scale, openURL), Foundation's
+# among them (:foundation_hosts_kotlin). It references
+# NO generated `SwiftUIBridge` — that is what lets the "wasm" delivery cell run
+# it with no compiled Swift in the app (//android/libraries/wasm_view). Both the
+# native compiled-Swift path and the wasm path render with THIS interpreter.
+filegroup(
+    name = "interpreter_kotlin",
+    srcs = [
+        ":foundation_hosts_kotlin",
+        "kotlin/dev/isomer/runtime/AppHostViews.kt",
+        "kotlin/dev/isomer/runtime/ComposeRenderer.kt",
+        "kotlin/dev/isomer/runtime/ContentFrame.kt",
+        "kotlin/dev/isomer/runtime/TapProbe.kt",
+        "kotlin/dev/isomer/runtime/FlatTree.kt",
+        "kotlin/dev/isomer/runtime/MaterialChrome.kt",
+        "kotlin/dev/isomer/runtime/HostServices.kt",
+        "kotlin/dev/isomer/runtime/ImagePickerHost.kt",
+        "kotlin/dev/isomer/runtime/MediaPickerHost.kt",
+        "kotlin/dev/isomer/runtime/Symbols.kt",
+        "kotlin/dev/isomer/runtime/UNode.kt",
+    ],
+)
+
+# What Isomer's Foundation asks of an Android host, in Kotlin and
+# Swift-free: HTTP over HttpURLConnection (IsomerHTTP), a WebSocket client
+# (IsomerWebSockets) and the app's directories in the environment
+# (AppDirectories). Both deliveries use them, so they ride with the
+# interpreter: the compiled one through NetworkHosts.kt's swift_ffi
+# interfaces, the wasm one through WasmView's dependencies
+# (//android/libraries/wasm_view).
+filegroup(
+    name = "foundation_hosts_kotlin",
+    srcs = [
+        "kotlin/dev/isomer/runtime/AppDirectories.kt",
+        "kotlin/dev/isomer/runtime/IsomerHTTP.kt",
+        "kotlin/dev/isomer/runtime/IsomerWebSockets.kt",
+    ],
+)
+
+# Benchmark instrumentation (the uniform [content-frame] startup signal),
+# standalone so the hand-written baseline apps can compile it too.
+filegroup(
+    name = "content_frame_kotlin",
+    srcs = [
+        "kotlin/dev/isomer/runtime/ContentFrame.kt",
+        "kotlin/dev/isomer/runtime/TapProbe.kt",
+    ],
+)
+
+# Just the pure host services (image cache, scale, text measurement, SwiftGPU
+# rasterization) — what a Compose-free wasm+GPU app compiles next to
+# //android/libraries/wasm_view:gpu_runtime_kotlin.
+filegroup(
+    name = "host_services_kotlin",
+    srcs = ["kotlin/dev/isomer/runtime/HostServices.kt"],
+)
+
+# The native compiled-Swift runtime glue: the SwiftUIBridge forwarders
+# (NativeBridge), the GL/SwiftGPU surface + renderer, the runtime lifecycle, and
+# the Level-3 embed surfaces. Depends on the interpreter + the generated
+# SwiftUIBridge bindings.
+filegroup(
+    name = "native_runtime_kotlin",
+    srcs = glob(
+        ["kotlin/**/*.kt"],
+        exclude = [
+            "kotlin/dev/isomer/runtime/AppDirectories.kt",
+            "kotlin/dev/isomer/runtime/IsomerHTTP.kt",
+            "kotlin/dev/isomer/runtime/IsomerWebSockets.kt",
+            "kotlin/dev/isomer/runtime/AppHostViews.kt",
+            "kotlin/dev/isomer/runtime/ComposeRenderer.kt",
+            "kotlin/dev/isomer/runtime/ContentFrame.kt",
+        "kotlin/dev/isomer/runtime/TapProbe.kt",
+            "kotlin/dev/isomer/runtime/FlatTree.kt",
+            "kotlin/dev/isomer/runtime/HostServices.kt",
+            "kotlin/dev/isomer/runtime/ImagePickerHost.kt",
+            "kotlin/dev/isomer/runtime/MediaPickerHost.kt",
+            "kotlin/dev/isomer/runtime/UNode.kt",
+        ],
+    ),
+)
+
+# The full native runtime = interpreter + native glue (what the compiled-Swift
+# apps compile via isomer_android_library).
+filegroup(
+    name = "runtime_kotlin",
+    srcs = [
+        ":interpreter_kotlin",
+        ":native_runtime_kotlin",
+    ],
+)
+
+exports_files(["RuntimeManifest.xml"])
+
+# The Compose compiler (matching rules_kotlin's kotlinc release), shared by
+# every kt_android_library the macros declare.
+kt_compiler_plugin(
+    name = "compose_compiler_plugin",
+    id = "androidx.compose.compiler",
+    target_embedded_compiler = True,
+    deps = [
+        "@rules_android_maven//:org_jetbrains_kotlin_kotlin_compose_compiler_plugin_embeddable",
+    ],
+)

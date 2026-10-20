@@ -1,0 +1,8 @@
+# Vendored copies of the override patches isomer's consumers carry (the same
+# files as examples/tools/patches): bzlmod applies a git_override's or a
+# single_version_override's patches only from the MAIN repository, so every
+# consumer keeps its own copy until the fixes are released upstream. Two for
+# flatbuffers (the swift BUILD glob, WASI's Foundation shim), two for
+# rules_swift (a wasi-threads SDK beside the single-threaded one; the Swift
+# SDK's clang resource directory for C compiled for wasm).
+exports_files(glob(["*.patch"]))

@@ -1,0 +1,13 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary")
+
+# Offscreen verification binary (macOS host): real tile fetch -> engine ->
+# Metal render -> PNG. Run with `bazel run //swift_map/apple/tools/map_snapshot -- /tmp/map.png`.
+swift_binary(
+    name = "map_snapshot",
+    srcs = ["main.swift"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//swift_map/apple/libraries/swift_map",
+        "//swift_gpu/apple:swift_gpu",
+    ],
+)

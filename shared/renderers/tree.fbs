@@ -1,0 +1,121 @@
+// The render-tree wire format: the canonical `RenderNode` tree, serialized
+// by FlatTreeEncoder (TreeEncoder.swift) for component-system renderers and
+// decoded by each consumer (react: runtime/flat_tree.js, compose:
+// FlatTree.kt, the Apple tree interpreter: flatc-generated Swift).
+//
+// Field slots are append-only FOREVER (flatbuffers evolution rule): new
+// fields go at the end. The JS/Kotlin readers are hand-written against the
+// standard wire format and hardcode these slot numbers — keep the numbered
+// comments in sync when appending.
+//
+// Regenerate the Swift accessors with:
+//   bazel build //shared/renderers:tree_swift
+// (a genrule runs @flatbuffers//:flatc — nothing is checked in).
+
+namespace IsoFlat;
+
+enum Kind : ubyte {
+  Box = 0, Text, Shape, Stack, Spacer, Divider, Scroll, Image, TextField,
+  Slider, Gradient, HostView, Progress, Presentation
+}
+
+enum Axis : ubyte { Horizontal = 0, Vertical, Depth }
+
+/// Leading/top, center, trailing/bottom (per the node's axis).
+enum Align : ubyte { Start = 0, Center, End }
+
+enum Shape : ubyte { Rect = 0, Circle, Capsule }
+
+enum PresentationStyle : ubyte { Sheet = 0, Popover, Alert }
+
+struct ColorRGBA { r: float; g: float; b: float; a: float; }
+
+struct ShadowSpec { color: ColorRGBA; radius: float; x: float; y: float; }
+
+table KV {
+  key: string (required);   // slot 0
+  value: string (required); // slot 1
+}
+
+table Node {
+  kind: Kind = Box;                 // slot 0
+  v: string;                        // slot 1  string value (text / textField / hostView)
+  num: double = null;               // slot 2  numeric value (slider fraction, progress)
+  id: string;                       // slot 3  textField identity
+  size: double = null;              // slot 4  font size
+  weight: int = null;               // slot 5  font weight
+  color: ColorRGBA;                 // slot 6  text color
+  lines: int = null;                // slot 7  lineLimit
+  shape: Shape = null;              // slot 8
+  fill: ColorRGBA;                  // slot 9
+  stroke: ColorRGBA;                // slot 10
+  stroke_width: double = null;      // slot 11
+  axis: Axis = null;                // slot 12
+  spacing: double = null;           // slot 13
+  min: double = null;               // slot 14  spacer min length
+  src: string;                      // slot 15  image source
+  remote: bool = null;              // slot 16
+  resizable: bool = null;           // slot 17
+  fit: bool = null;                 // slot 18
+  placeholder: string;              // slot 19
+  edit: string;                     // slot 20  edit-handler id
+  view: string;                     // slot 21  hostView kind
+  options: [string];                // slot 22
+  params: [KV];                     // slot 23
+  grow_w: bool = false;             // slot 24
+  grow_h: bool = false;             // slot 25
+  align_h: Align = null;            // slot 26
+  align_v: Align = null;            // slot 27
+  shadow: ShadowSpec;               // slot 28
+  padding: [double];                // slot 29  [top, leading, bottom, trailing]
+  width: double = null;             // slot 30
+  height: double = null;            // slot 31
+  expand_w: bool = false;           // slot 32
+  expand_h: bool = false;           // slot 33
+  radius: double = null;            // slot 34
+  opacity: double = null;           // slot 35
+  bg: ColorRGBA;                    // slot 36
+  gradient: string;                 // slot 37  paint JSON (same schema HostBridge.fillGradient takes)
+  tap: string;                      // slot 38  tap-handler id
+  feedback: int = null;             // slot 39
+  style: PresentationStyle = null;  // slot 40
+  title: string;                    // slot 41  alert title
+  message: string;                  // slot 42  alert message
+  dismiss: string;                  // slot 43  presentation dismiss-handler id
+  ch: [Node];                       // slot 44
+  offset_x: double = null;          // slot 45  visual translation (.offset)
+  offset_y: double = null;          // slot 46
+  scale: double = null;             // slot 47  uniform .scaleEffect about the center
+  drag: string;                     // slot 48  drag-handler id ("changed:x,y" / "ended:x,y" events)
+  key: string;                      // slot 49  identity among its siblings (absent: key by position)
+}
+
+// Diff-aware updates (retained mode) — `Patch` is the ONLY wire format: the
+// reactor keeps the previous tree and ships only what changed as a `Patch`
+// over the render_tree transport (the first patch after start is a single
+// full-tree op at "n"). Each op targets a node by its positional
+// path ("n", "n.0", "n.0.1", ...) in the tree as it stands when the op runs
+// (ops apply in order; a node's ops precede its children's). The reader
+// holds a retained tree and applies:
+//   - `order` present   => reorder: the node keeps its attributes; its new
+//     children are, for each `order` entry, the retained child at that index,
+//     or for -1 the next node of `inserts` (children matched by `key`, so a
+//     row inserted among others ships alone). `node` is absent.
+//   - attrs_only = false => replace the whole subtree at `path` with `node`
+//     (its `ch` are the complete new children; absent `ch` = zero children).
+//   - attrs_only = true  => replace only this node's attributes, keeping the
+//     retained node's existing children (`node` carries no `ch`).
+// The first patch after enabling diffs is a single op at "n" = the full tree.
+table PatchOp {
+  path: string;         // slot 0
+  node: Node;           // slot 1
+  attrs_only: bool = false; // slot 2
+  order: [int];         // slot 3
+  inserts: [Node];      // slot 4
+}
+
+table Patch {
+  ops: [PatchOp];  // slot 0
+}
+
+root_type Node;

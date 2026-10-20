@@ -1,0 +1,16 @@
+{
+ "summary": "Isomer's ImageIO is the part of Apple's an app uses to decode a picture off the main thread at the size it is drawn: `CGImageSourceCreateWithData`, the source's properties (pixel size, orientation) and `CGImageSourceCreateThumbnailAtIndex`, on wasm and Android (shared/image_io). A `CGImage` is a handle to a bitmap the host decoded. On Apple platforms an app uses Apple's ImageIO.",
+ "gap": "Isomer's ImageIO came before the strict-subset rule and is not a subset yet, so `--check` reports it without failing. What is not Apple's: (1) it declares `CGImage` (with `width` and `height` as stored `Int` properties), which on Apple is CoreGraphics' class, not ImageIO's; (2) `CFData`, `CFString`, `CFDictionary` and `CFTypeRef` are typealiases of `Data`, `String`, `[String: Any]` and `Any`, where Apple's are CoreFoundation's classes (so `CGImageSourceCreateWithData(_:_:)` and its siblings take other types than Apple's); (3) the host's hooks are public: `_ImageIOHost` (decode, release), `CGImage._source` and `CGImage._pendingBytes`. The fix: `CGImage` into Isomer's CoreGraphics, the CF names Apple's (or the functions' parameters spelled as Apple's interface spells them, `CFData` as a class of Isomer's CoreFoundation-shaped types), and the hooks `package` (as the SwiftUI runtime's plumbing is).",
+ "groups": [
+  {
+   "title": "Image sources and destinations",
+   "status": "not yet",
+   "intent": "planned, as apps need them",
+   "why": "The rest of ImageIO: incremental and URL sources, image destinations (encoding), metadata (`CGImageMetadata`), animation, auxiliary data and the property keys beyond the size and orientation ones Isomer reads.",
+   "match": [
+    "."
+   ]
+  }
+ ],
+ "additions": "Declarations Isomer's ImageIO has that Apple's lacks (see superset.md: a known gap)."
+}

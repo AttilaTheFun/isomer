@@ -1,0 +1,10 @@
+# PhotosUI's SwiftUI photo picker. Its sources are compiled per platform,
+# against that platform's SwiftUI (//<platform>/libraries/swift_ui:photos_ui),
+# as the Isomer module's are.
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "srcs",
+    srcs = glob(["*.swift"]),
+)

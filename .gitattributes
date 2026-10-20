@@ -1,0 +1,3 @@
+# Prebuilt WebAssembly reactors are binary — never apply text/CRLF conversion
+# (e.g. the committed windows wasm-cell bundle, see windows/README.md).
+*.wasm binary

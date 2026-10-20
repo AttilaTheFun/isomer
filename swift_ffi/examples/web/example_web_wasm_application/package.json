@@ -1,0 +1,7 @@
+{
+  "name": "greeter-example",
+  "version": "1.0.0",
+  "description": "swift_ffi wasm example in an Electron shell",
+  "type": "module",
+  "main": "main.js"
+}

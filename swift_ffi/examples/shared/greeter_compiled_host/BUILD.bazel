@@ -1,0 +1,37 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+
+package(
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+# The shared "compiled mode" driver for the Linux and Windows example cells:
+# the greeter linked natively and driven through the generated idiomatic C++
+# bindings (the C ABI underneath is an implementation detail). Each platform
+# application is a thin `main` over this.
+cc_library(
+    name = "greeter_compiled_host",
+    srcs = ["run.cc"],
+    hdrs = ["run.h"],
+    includes = ["."],
+    visibility = ["//swift_ffi/examples:__subpackages__"],
+    deps = [
+        "//swift_ffi/examples/shared/greeter:greeter_cpp",
+    ],
+)
+
+# Host-platform smoke runner (`bazel run`): executes the full compiled-mode
+# check suite — including the bridge-v2 surface (generics, closures, Lazy,
+# Result values) — on the development machine.
+cc_binary(
+    name = "smoke",
+    srcs = ["smoke.c"],
+    deps = [":greeter_compiled_host"],
+)

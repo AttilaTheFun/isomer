@@ -1,0 +1,75 @@
+{
+ "summary": "Isomer's UniformTypeIdentifiers is `UTType` as SwiftUI's pickers take it: a kind of content (`allowedContentTypes: [.image, .pdf]`), its identifier, and the MIME type and file extension a host filters by, for the common types (images, movies, audio, PDF, text, JSON, HTML, ZIP). An app imports it to name `UTType`, as on Apple platforms. On Apple platforms an app uses Apple's.",
+ "deviations": [
+  "A type is its identifier and MIME type: there is no type registry or conformance tree, so `UTType(_:)` knows the common identifiers and `UTType(mimeType:)` / `UTType(filenameExtension:)` the common MIME types and extensions, and other identifiers are dynamic types with no MIME type."
+ ],
+ "groups": [
+  {
+   "title": "Conformance and the type tree",
+   "status": "not yet",
+   "intent": "planned",
+   "why": "`conforms(to:)`, `supertypes`, `isSubtype(of:)`, and the declared/dynamic/public queries, which need a table of the system's types and how they relate. The pickers filter by MIME type, which needs none of it; apps that sort files by kind do.",
+   "match": [
+    "conforms\\(to:\\)",
+    "isSupertype",
+    "isSubtype",
+    "supertypes",
+    "isDeclared",
+    "isDynamic",
+    "isPublic",
+    "^UTType\\.(localizedDescription|version|referenceURL|tags|preferredMIMEType|preferredFilenameExtension|identifier|description|debugDescription|init\\(identifier:allowUndeclared:\\)|types\\(|init\\(tag:|init\\(exportedAs|init\\(importedAs)"
+   ]
+  },
+  {
+   "title": "More system types",
+   "status": "not yet",
+   "intent": "planned",
+   "why": "The rest of the system's named types (`UTType.swiftSource`, `.rtf`, `.mp3`, …): each is a constant with its MIME type and extension, added as apps name them.",
+   "match": [
+    "^UTType\\.[a-z]"
+   ]
+  },
+  {
+   "title": "Objective-C bridging and declared equality",
+   "status": "not yet",
+   "intent": "maybe",
+   "why": "`UTType.ReferenceType` (the bridge to `UTTypeReference`) and the `==` Apple declares (Isomer's is the synthesized one of a Hashable struct).",
+   "match": [
+    "^UTType\\.ReferenceType",
+    "^UTType\\.==\\(_:_:\\)"
+   ]
+  },
+  {
+   "title": "Tags and references",
+   "status": "not yet",
+   "intent": "maybe",
+   "why": "`UTTagClass` and `UTTypeReference` (the Objective-C bridge's reference type): the tags are the MIME type and extension `UTType` already has.",
+   "match": [
+    "^UTTagClass",
+    "^UTTypeReference"
+   ]
+  },
+  {
+   "title": "Foundation extensions",
+   "status": "not yet",
+   "intent": "maybe",
+   "why": "Paths with a type's extension (`URL.appendingPathExtension(for:)`) and a file's type (`URLResourceValues.contentType`); Isomer's Foundation has URL but not resource values.",
+   "match": [
+    "^URL\\.",
+    "^URLResourceValues",
+    "^NSURL",
+    "^NSString"
+   ]
+  },
+  {
+   "title": "NSItemProvider",
+   "status": "excluded",
+   "intent": "no",
+   "why": "`NSItemProvider` is an Objective-C class of Foundation's; Isomer's Foundation has no Objective-C classes.",
+   "match": [
+    "^NSItemProvider"
+   ]
+  }
+ ],
+ "additions": "Isomer's UniformTypeIdentifiers declares nothing Apple's lacks; anything listed here is a regression."
+}

@@ -1,0 +1,22 @@
+# The Apple WasmView hosts' platform services: the shared Foundation-backed
+# implementations (shared/platform_services/native) conformed to the
+# generated host protocols, plus the dependency-table builder every Apple
+# wasm host (the example apps) hands to WasmView.
+
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+swift_library(
+    name = "platform_services_host",
+    srcs = [
+        "ApplePlatformServices.swift",
+        "//shared/platform_services:native_srcs",
+    ],
+    module_name = "ApplePlatformServices",
+    tags = ["manual"],
+    deps = [
+        "//shared/platform_services:platform_services_host",
+        "@isomer//swift_ffi/runtime/swift_wasm_host",
+    ],
+)

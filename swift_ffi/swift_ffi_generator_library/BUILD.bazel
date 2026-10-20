@@ -1,0 +1,41 @@
+load("@rules_swift//swift:swift_library.bzl", "swift_library")
+
+package(
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+# The generator's implementation: merged IR in, one bridge artifact out per
+# kind (Swift glue, JNI glue, C header, TypeScript, Kotlin, Swift/C wasm
+# hosts). Pure strings — no swift-syntax. One backend per file, as
+# extensions of `Generator`.
+swift_library(
+    name = "swift_ffi_generator_library",
+    srcs = [
+        "FFIParameter+Naming.swift",
+        "Generator.swift",
+        "Generator+CHeader.swift",
+        "Generator+CHost.swift",
+        "Generator+Cpp.swift",
+        "Generator+JNIAdapter.swift",
+        "Generator+Kotlin.swift",
+        "Generator+Rust.swift",
+        "Generator+SwiftHost.swift",
+        "Generator+TypeScript.swift",
+        "Generator+Validation.swift",
+        "GeneratorError.swift",
+        "GeneratorKind.swift",
+    ],
+    module_name = "SwiftFFIGeneratorLibrary",
+    visibility = ["//visibility:public"],
+    # keep: gazelle reads `import` lines inside the emitted-code string
+    # literals and invents runtime deps this library does not have.
+    deps = ["//swift_ffi/swift_ffi_ir_library"],  # keep
+)

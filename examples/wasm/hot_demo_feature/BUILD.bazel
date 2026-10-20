@@ -1,0 +1,178 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary", "swift_library")
+load("@isomer//swift_ffi/rules:swift_wasm_reactor.bzl", "transition_binary")
+load("@isomer//tools/wasm:defs.bzl", "reactor_artifact")
+
+package(default_visibility = ["//visibility:public"])
+
+# The shared example wasm FEATURE bundle for the WasmView hosts (Apple
+# `example_wasm_view_{macos,ios}_application`, the Android
+# `example_partial_wasm_android_application`, and any web host). A
+# SwiftUI feature compiled to a `iso_hot` wasm reactor: it renders the demo
+# tree and consumes a native dependency (`ConfigurationService.flag` / `AnalyticsService.track`) through
+# the swift_ffi transport. Lives here — not inside any one host app — because
+# every platform's WasmView embeds the same bundle. See
+# docs/wasm_view_architecture.md.
+
+# The demo UI. `alwayslink` + `-parse-as-library`: the app's synthesized @main
+# is only reached through the reactor's `__main_argc_argv` trampoline
+# (HotReloadBridge), which links after this archive.
+swift_library(
+    name = "hot_demo_lib",
+    srcs = ["HotDemo.swift"],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "HotDemoApp",
+    tags = ["manual"],
+    deps = [
+        "//shared/platform_services",
+        "@isomer//wasm/libraries/hot_swift_ui",
+        "@isomer//wasm/libraries/hot_swift_ui:isomer",
+    ],
+)
+
+# The wasm reactor: HotReloadBridge (the slim ABI) + the demo app + the slim
+# SwiftUI module. `--export-all --no-gc-sections` keeps the `@_cdecl` exports;
+# the 16 MiB stack matches the web app (Swift's recursive view-tree /
+# generic-metadata instantiation overflows wasm-ld's ~1 MiB default).
+swift_binary(
+    name = "hot_demo_reactor",
+    copts = [
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    linkopts = [
+        "-Xlinker",
+        "--export-all",
+        "-Xlinker",
+        "--no-gc-sections",
+        "-Xlinker",
+        "-z",
+        "-Xlinker",
+        "stack-size=16777216",
+    ],
+    linkshared = True,
+    module_name = "hot_reactor",
+    tags = ["manual"],
+    deps = [
+        # The framework-owned iso_hot bridge (exports can't drift per app).
+        "@isomer//wasm/libraries/hot_swift_ui:hot_bridge",
+        ":hot_demo_lib",
+        "//shared/platform_services",
+        "@isomer//wasm/libraries/hot_swift_ui",
+    ],
+)
+
+# Cross-compiles the reactor to wasm32-wasip1 regardless of the (macOS) host,
+# republishing the artifact as `hot_demo.wasm`. This is the target the host's
+# file watcher rebuilds; its output path is stable across rebuilds.
+transition_binary(
+    name = "hot_demo.wasm",
+    binary = ":hot_demo_reactor",
+    platform = "@isomer//swift_ffi/rules:wasm32-wasip1",
+    tags = ["manual"],
+)
+
+# Config-selected dev reactor for the Apple partial-wasm hosts: `.wasm` by
+# default, native `.aot` under `--config=release`.
+reactor_artifact(
+    name = "hot_demo",
+    wasm = ":hot_demo.wasm",
+)
+
+# A PRODUCTION-style feature bundle: export only the iso_hot/iso_host ABI (not
+# --export-all), --gc-sections to dead-strip unreferenced stdlib/core, and strip
+# names/debug. This is the shape a shipped feature bundle takes — small(er) and
+# self-contained (see docs/wasm_view_architecture.md, "Bundle splitting" option
+# 2). `-c opt` further shrinks it. Not used by the demo host; here to measure.
+swift_binary(
+    name = "hot_demo_reactor_release",
+    copts = [
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    linkopts = [
+        "-Xlinker",
+        "--gc-sections",
+        "-Xlinker",
+        "--strip-all",
+        "-Xlinker",
+        "--export=_initialize",
+        "-Xlinker",
+        "--export=iso_hot_start",
+        "-Xlinker",
+        "--export=iso_hot_render",
+        "-Xlinker",
+        "--export=iso_hot_resize",
+        "-Xlinker",
+        "--export=iso_hot_configure",
+        "-Xlinker",
+        "--export=iso_hot_set_color_scheme",
+        "-Xlinker",
+        "--export=iso_hot_event",
+        "-Xlinker",
+        "--export=iso_hot_alloc",
+        "-Xlinker",
+        "--export=iso_hot_free",
+        "-Xlinker",
+        "--export=iso_hot_shutdown",
+        "-Xlinker",
+        "--export=iso_hot_pending_tasks",
+        # The DI activation entry: the host calls this after registering its
+        # dependency table so the guest's `dependencies` dictionary resolves.
+        "-Xlinker",
+        "--export=swift_ffi_platform_services_register_KeychainService",
+        "-Xlinker",
+        "--export=swift_ffi_platform_services_register_AnalyticsService",
+        "-Xlinker",
+        "--export=swift_ffi_platform_services_register_ConfigurationService",
+        "-Xlinker",
+        "--export=swift_ffi_async_resume",
+        "-Xlinker",
+        "--export-if-defined=swift_ffi_task_run",
+        "-Xlinker",
+        "--export-if-defined=swift_ffi_lazy_get",
+        "-Xlinker",
+        "--export-if-defined=swift_ffi_lazy_release",
+        "-Xlinker",
+        "--export=swift_ffi_alloc",
+        "-Xlinker",
+        "--export=swift_ffi_dealloc",
+        "-Xlinker",
+        "--export=swift_ffi_string_len",
+        "-Xlinker",
+        "--export=swift_ffi_string_copy",
+        "-Xlinker",
+        "--export=swift_ffi_string_release",
+        "-Xlinker",
+        "-z",
+        "-Xlinker",
+        "stack-size=16777216",
+    ],
+    linkshared = True,
+    # Distinct from the dev reactor's module name: both binaries live in this
+    # package and equal names collide on the .swiftmodule output when a
+    # wildcard build analyzes both (the name is internal — the iso_hot ABI is
+    # @_cdecl, unmangled).
+    module_name = "hot_reactor_release",
+    tags = ["manual"],
+    deps = [
+        # The framework-owned iso_hot bridge (exports can't drift per app).
+        "@isomer//wasm/libraries/hot_swift_ui:hot_bridge",
+        ":hot_demo_lib",
+        "//shared/platform_services",
+        "@isomer//wasm/libraries/hot_swift_ui",
+    ],
+)
+
+transition_binary(
+    name = "hot_demo_release.wasm",
+    binary = ":hot_demo_reactor_release",
+    platform = "@isomer//swift_ffi/rules:wasm32-wasip1",
+    tags = ["manual"],
+)
+
+# Config-selected RELEASE reactor the Android partial APK packages.
+reactor_artifact(
+    name = "hot_demo_release",
+    wasm = ":hot_demo_release.wasm",
+)

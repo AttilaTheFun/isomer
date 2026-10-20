@@ -1,0 +1,31 @@
+load("@rules_swift//swift:swift_library.bzl", "swift_library")
+
+package(
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+# The analyzer's implementation: parse one annotated Swift source file and
+# collect its exported surface as IR. The CLI (//swift_ffi/swift_ffi_analyzer)
+# is a thin argument-parsing shell over this.
+swift_library(
+    name = "swift_ffi_analyzer_library",
+    srcs = [
+        "Analyzer.swift",
+        "ExportCollector.swift",
+    ],
+    module_name = "SwiftFFIAnalyzerLibrary",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//swift_ffi/swift_ffi_ir_library",
+        "@swift-syntax//:SwiftParser",
+        "@swift-syntax//:SwiftSyntax",
+    ],
+)

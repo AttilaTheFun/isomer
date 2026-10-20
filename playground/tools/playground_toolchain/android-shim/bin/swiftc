@@ -1,0 +1,16 @@
+#!/bin/bash
+# swiftc for the compiler's own Swift sources (SwiftCompilerSources), built
+# for the Android host: the base 6.3.2 swiftc with the Android sysroot,
+# Swift resources and NDK tools added, which the build's plain
+# `-target aarch64-unknown-linux-android` invocations leave out. The
+# resource dir is android-swift-resources (build_phase_c2_android_swift.sh):
+# the bundle's, plus a `clang` link to this NDK's builtin headers (the
+# bundle's own link points at a Linux NDK).
+HERE="$(cd "$(dirname "$0")/../.." && pwd)"
+NDK="${ISO_NDK:-$(ls -d ~/Library/Caches/bazel/_bazel_*/*/external/hermetic_android_toolchains++android+androidndk_darwin 2>/dev/null | head -1)}"
+ANDROID_SDK="${ISO_ANDROID_SWIFT_SDK:-$(ls -d ~/Library/Caches/bazel/_bazel_*/*/external/rules_swift++swift+swift_toolchain_android_sdk_xcode/swift-6.3.2-RELEASE_android.artifactbundle 2>/dev/null | head -1)}"
+exec ~/Developer/swiftwasm-source/build/Packaging/base-toolchain/swift-6.3.2-RELEASE/usr/bin/swiftc \
+    -sdk "$HERE/android-sysroot" \
+    -resource-dir "$HERE/android-swift-resources" \
+    -tools-directory "$NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin" \
+    "$@"

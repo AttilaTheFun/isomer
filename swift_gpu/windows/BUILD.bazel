@@ -1,0 +1,52 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary", "swift_library")
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The D3D11 half of the backend: device/swapchain, the three compiled-at-
+# startup HLSL pipelines, textures, and draws behind flat C entry points.
+# Every direct D3D call in the ecosystem lives in this translation unit.
+cc_library(
+    name = "sgpu_d3d11",
+    srcs = ["sgpu_d3d11.cpp"],
+    linkopts = [
+        "d3d11.lib",
+        "d3dcompiler.lib",  # D3DCompile (shaders compile at startup)
+        "dxgi.lib",
+    ],
+    target_compatible_with = ["@platforms//os:windows"],
+    # The Swift side binds via @_extern(c); nothing links this library unless
+    # it also links the Swift backend below, which carries the real deps.
+    alwayslink = True,
+)
+
+# The SwiftGPU module for Windows: the shared API plus the Direct3D 11
+# backend. D3D binds via @_extern(c) against the C shim (no bridging header —
+# its PCH is flaky on Windows); builds natively on the Windows host only.
+swift_library(
+    name = "swift_gpu",
+    srcs = [
+        "D3D.swift",
+        "DirectXGPUDevice.swift",
+        "//swift_gpu/core:srcs",
+    ],
+    copts = [
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    module_name = "SwiftGPU",
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [":sgpu_d3d11"],
+)
+
+# Offscreen pixel checks mirroring //swift_gpu/tests:metal_backend_tests —
+# a plain executable (no XCTest; exits non-zero on a mismatch) so it runs on
+# the Windows host without a test framework: clear + blended triangle, 2x2
+# texture sampling, SDF corner cut, scissor halves.
+swift_binary(
+    name = "directx_backend_check",
+    srcs = ["DirectXBackendCheck.swift"],
+    copts = ["-parse-as-library"],
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [":swift_gpu"],
+)

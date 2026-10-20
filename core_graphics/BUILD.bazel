@@ -1,0 +1,56 @@
+# Isomer's CoreGraphics: the part of Apple's CoreGraphics that Swift code
+# (SwiftUI's interface above all) reaches for, written in Swift: geometry and
+# CGFloat, CGAffineTransform, CGColor and CGColorSpace, CGPath, line caps and
+# joins, blend modes. Built as a module named `CoreGraphics` for the
+# platforms that have no CoreGraphics (wasm, Android, Linux, Windows); Apple
+# platforms use Apple's. docs/parity/CoreGraphics.md says what is
+# implemented, what is not, and why.
+
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("//foundation:defs.bzl", "one_configuration")
+
+package(default_visibility = ["//visibility:public"])
+
+swift_library(
+    name = "core_graphics",
+    package_name = "isomer",
+    # Apple platforms have the real one; this one would shadow it.
+    target_compatible_with = select({
+        "@platforms//os:macos": ["@platforms//:incompatible"],
+        "@platforms//os:ios": ["@platforms//:incompatible"],
+        "@platforms//os:tvos": ["@platforms//:incompatible"],
+        "@platforms//os:watchos": ["@platforms//:incompatible"],
+        "@platforms//os:visionos": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
+    srcs = glob(["*.swift"]),
+    # Linux and Windows still build on the toolchain's Foundation
+    # (swift-corelibs-foundation), which declares CGFloat, CGPoint, CGSize and
+    # CGRect with most of their API: there this module is the rest of
+    # CoreGraphics over it (CGVector, CGAffineTransform, CGPath, CGColor, the
+    # functions), and leaves those out.
+    copts = select({
+        "@platforms//os:linux": ["-DISOMER_CORELIBS_FOUNDATION"],
+        "@platforms//os:windows": ["-DISOMER_CORELIBS_FOUNDATION"],
+        "//conditions:default": [],
+    }),
+    module_name = "CoreGraphics",
+)
+
+# What dependents use (through @isomer//:core_graphics): built in one
+# configuration whatever theirs (//foundation:defs.bzl).
+one_configuration(
+    name = "for_dependents",
+    actual = ":core_graphics",
+)
+
+# The same sources under another module name, for tests that run on the
+# Mac (where `CoreGraphics` is Apple's).
+swift_library(
+    name = "core_graphics_testable",
+    package_name = "isomer",
+    srcs = glob(["*.swift"]),
+    module_name = "IsomerCoreGraphicsTestable",
+    testonly = True,
+    visibility = ["//core_graphics/tests:__pkg__"],
+)

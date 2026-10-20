@@ -1,0 +1,3 @@
+# Marks the repository root as a Bazel package. rules_jvm_external reads the
+# rules_android Maven lock file via the `//:rules_android_maven_install.json`
+# label (see MODULE.bazel), which requires the root to be a loadable package.

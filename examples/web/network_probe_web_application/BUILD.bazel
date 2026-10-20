@@ -1,0 +1,32 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@isomer//tools/wasm:defs.bzl", "isomer_web_app")
+
+# Foundation's networking on the web (URLSession over the page's fetch and
+# WebSocket: wasm/libraries/swift_ui/runtime/network.js), checked from the
+# app's side; see //shared/network_probe_application. The driver serves the
+# site from the checks' own server (tools/testing/network_server.js, so the
+# page and its server share an origin) and runs it in headless Chrome
+# (needs Chrome on the Mac, hence by hand):
+#
+#   bazel build //web/network_probe_web_application:network_probe_web_application_site
+#   node ../tools/testing/run_network_check.js \
+#     bazel-bin/web/network_probe_web_application/network_probe_web_application_site
+swift_library(
+    name = "app_lib",
+    srcs = ["//shared/network_probe_application:srcs"],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "NetworkProbe",
+    tags = ["manual"],
+    deps = [
+        "@isomer//:foundation",
+        "@isomer//:swift_ui",
+    ],
+)
+
+isomer_web_app(
+    name = "network_probe_web_application",
+    index = "index.html",
+    query = "renderer=react",
+    swift_library = ":app_lib",
+)

@@ -1,0 +1,7 @@
+# A long agent conversation in AgentUI's AgentView, shared by the Android app:
+# how a large transcript scrolls and streams. See TranscriptStress.swift.
+filegroup(
+    name = "srcs",
+    srcs = glob(["*.swift"]),
+    visibility = ["//visibility:public"],
+)

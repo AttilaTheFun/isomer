@@ -1,0 +1,8 @@
+# A chat-shaped List under streaming load, shared by the Android and web
+# apps: what a streaming update costs a host on a long list. See
+# ListStress.swift.
+filegroup(
+    name = "srcs",
+    srcs = glob(["*.swift"]),
+    visibility = ["//visibility:public"],
+)

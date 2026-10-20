@@ -1,0 +1,20 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The SwiftMap module for Windows: the shared core + MapSceneRenderer over
+# swift_gpu's Direct3D 11 backend (the same shape as apple/android/wasm —
+# each platform compiles the core into its own `SwiftMap` module with the
+# matching GPU backend in deps). The host half (window/input/fetch/decode)
+# is the consumer's: see the example app here and isomer's Windows
+# bridge.
+swift_library(
+    name = "swift_map",
+    srcs = [
+        "//swift_map/swift_map/core:srcs",
+        "//swift_map/swift_map/renderer:srcs",
+    ],
+    module_name = "SwiftMap",
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = ["//swift_gpu/windows:swift_gpu"],
+)

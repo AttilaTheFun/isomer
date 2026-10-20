@@ -1,0 +1,254 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary", "swift_library")
+load("@isomer//swift_ffi/rules:swift_wasm_reactor.bzl", "transition_binary")
+load("@isomer//tools/wasm:defs.bzl", "reactor_artifact")
+
+package(default_visibility = ["//visibility:public"])
+
+# The WHOLE shared example app compiled to a `iso_hot` wasm reactor — the
+# "full x wasm" cell of the Android matrix (and the Apple full WasmView host).
+# Where hot_demo_feature is one small FEATURE bundle, this bundles the entire
+# multi-tab `@main App` (//shared/example_application). It renders under the
+# same Swift-free Compose interpreter the compiled path uses; the difference
+# from example_full_compiled is that the app's code ships as a wasm bundle
+# (runtime-updatable, no compiled Swift in the host APK) instead of a Swift .so.
+#
+# Unlike hot_demo (which builds on the slim `hot_swift_ui`), the full app uses
+# `Map` and `import IsomerBridge`, so it must build on the FULL `swift_ui`
+# module (same deps as the web's app_lib). The Map tab is GPU-backed
+# (SwiftGPU/SwiftMap), a de-endorsed path on Android — it degrades under the
+# WAMR + Compose interpreter; every other tab renders.
+
+# The app archive. `alwayslink` + `-parse-as-library`: the synthesized @main is
+# reached only through the reactor's `__main_argc_argv` trampoline, which links
+# after this archive. Same shape as the web's `app_lib`.
+swift_library(
+    name = "example_full_lib",
+    srcs = ["//shared/example_application:srcs"],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "ExampleApplication",
+    tags = ["manual"],
+    deps = [
+        "//shared/platform_services",
+        "@isomer//wasm/libraries/swift_ui",
+        "@isomer//wasm/libraries/swift_ui:isomer",
+    ],
+)
+
+# The reactor: the app-generic HotReloadBridge (iso_hot ABI) + the full app +
+# the full SwiftUI module. `--export-all --no-gc-sections` keeps the `@_cdecl`
+# exports; the 16 MiB stack matches the other reactors.
+swift_binary(
+    name = "example_full_reactor",
+    copts = [
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    linkopts = [
+        "-Xlinker",
+        "--export-all",
+        "-Xlinker",
+        "--no-gc-sections",
+        "-Xlinker",
+        "-z",
+        "-Xlinker",
+        "stack-size=16777216",
+    ],
+    linkshared = True,
+    module_name = "full_reactor",
+    tags = ["manual"],
+    deps = [
+        # The framework-owned iso_hot bridge (exports can't drift per app).
+        "@isomer//wasm/libraries/swift_ui:hot_bridge",
+        ":example_full_lib",
+        # The app's swift_ffi dependency surface — the macro-expanded @c
+        # exports (register_* / isoFetchComplete) + the dependency proxies
+        # ride inside the annotated module itself.
+        "//shared/platform_services",
+        "@isomer//wasm/libraries/swift_ui",
+        "@isomer//wasm/libraries/swift_ui:isomer",
+    ],
+)
+
+transition_binary(
+    name = "example_full.wasm",
+    binary = ":example_full_reactor",
+    platform = "@isomer//swift_ffi/rules:wasm32-wasip1",
+    tags = ["manual"],
+)
+
+# The threaded twin (wasm32-unknown-wasip1-threads): its memory imported and
+# shared, with the maximum wasi-threads needs. The engine tests run it on
+# WasmKit with guest threads: swift_ffi's dependencies and the main actor on
+# the host's thread, the rest of the app's tasks on the guest's pool.
+swift_binary(
+    name = "example_full_threads_reactor",
+    copts = [
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    linkopts = [
+        "-Xlinker",
+        "--export-all",
+        "-Xlinker",
+        "--no-gc-sections",
+        "-Xlinker",
+        "--import-memory",
+        "-Xlinker",
+        "--export-memory",
+        "-Xlinker",
+        "--shared-memory",
+        "-Xlinker",
+        "--max-memory=268435456",
+        "-Xlinker",
+        "-z",
+        "-Xlinker",
+        "stack-size=16777216",
+    ],
+    linkshared = True,
+    module_name = "full_threads_reactor",
+    tags = ["manual"],
+    deps = [
+        "@isomer//wasm/libraries/swift_ui:hot_bridge",
+        ":example_full_lib",
+        "//shared/platform_services",
+        "@isomer//wasm/libraries/swift_ui",
+        "@isomer//wasm/libraries/swift_ui:isomer",
+    ],
+)
+
+transition_binary(
+    name = "example_full_threads.wasm",
+    binary = ":example_full_threads_reactor",
+    platform = "@isomer//swift_ffi/rules:wasm32-wasip1-threads",
+    tags = ["manual"],
+)
+
+# The config-selected reactor the hosts bundle: `:example_full` is the `.wasm`
+# above by default, or a wamrc-produced native `example_full.aot` under
+# `--config=release` (`--define wamr_aot=1`). Hosts look up the "example_full"
+# resource and load by magic bytes, so the swap is transparent.
+reactor_artifact(
+    name = "example_full",
+    wasm = ":example_full.wasm",
+)
+
+# The x86_64 variant for the desktop Linux/Windows wasm cells (native .exe/ELF
+# are x86_64). Same interpreted `.wasm` by default; under `--config=release` the
+# reactor is lowered with `wamrc --target=x86_64`. NOTE: only verified to *build*
+# from a macOS host — running the desktop wasm cells needs a Linux/Windows host.
+reactor_artifact(
+    name = "example_full_x86",
+    wasm = ":example_full.wasm",
+    target = "x86_64",
+)
+
+# A PRODUCTION-style bundle: export only the iso_hot ABI, --gc-sections to
+# dead-strip, and strip names/debug. This is the shape the host APK packages.
+swift_binary(
+    name = "example_full_reactor_release",
+    copts = [
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    linkopts = [
+        "-Xlinker",
+        "--gc-sections",
+        "-Xlinker",
+        "--strip-all",
+        "-Xlinker",
+        "--export=_initialize",
+        "-Xlinker",
+        "--export=iso_hot_start",
+        "-Xlinker",
+        "--export=iso_hot_render",
+        "-Xlinker",
+        "--export=iso_hot_resize",
+        "-Xlinker",
+        "--export=iso_hot_configure",
+        "-Xlinker",
+        "--export=iso_hot_set_color_scheme",
+        "-Xlinker",
+        "--export=iso_hot_event",
+        "-Xlinker",
+        "--export=iso_hot_alloc",
+        "-Xlinker",
+        "--export=iso_hot_free",
+        "-Xlinker",
+        "--export=iso_hot_shutdown",
+        "-Xlinker",
+        "--export=iso_hot_pending_tasks",
+        # The swift_ffi DI entries: the interfaces' proxy-factory registration
+        # and the async fetch completion the native host calls back.
+        "-Xlinker",
+        "--export=swift_ffi_platform_services_register_KeychainService",
+        "-Xlinker",
+        "--export=swift_ffi_platform_services_register_AnalyticsService",
+        "-Xlinker",
+        "--export=swift_ffi_platform_services_register_ConfigurationService",
+        # Foundation's networking, which the hosts inject (WasmView's
+        # URLSession on Apple, WasmNetworkHosts.kt's on Android) and HotBridge
+        # installs at start: without its register exports URLSession finds
+        # no transport.
+        "-Xlinker",
+        "--export=swift_ffi_isomer_register_HTTPHost",
+        "-Xlinker",
+        "--export=swift_ffi_isomer_register_WebSocketHost",
+        "-Xlinker",
+        "--export=swift_ffi_async_resume",
+        "-Xlinker",
+        "--export-if-defined=swift_ffi_task_run",
+        "-Xlinker",
+        "--export-if-defined=swift_ffi_lazy_get",
+        "-Xlinker",
+        "--export-if-defined=swift_ffi_lazy_release",
+        # The C host STAGES string arguments (the fetch body!) through the
+        # FIXED guest allocator and drains +1 boxes through the string-box
+        # entries — without these exports staging silently fails.
+        "-Xlinker",
+        "--export=swift_ffi_alloc",
+        "-Xlinker",
+        "--export=swift_ffi_dealloc",
+        "-Xlinker",
+        "--export=swift_ffi_string_len",
+        "-Xlinker",
+        "--export=swift_ffi_string_copy",
+        "-Xlinker",
+        "--export=swift_ffi_string_release",
+        "-Xlinker",
+        "-z",
+        "-Xlinker",
+        "stack-size=16777216",
+    ],
+    linkshared = True,
+    # Distinct from the dev reactor's module name: both binaries live in this
+    # package and equal names collide on the .swiftmodule output when a
+    # wildcard build analyzes both (the name is internal — the iso_hot ABI is
+    # @_cdecl, unmangled).
+    module_name = "full_reactor_release",
+    tags = ["manual"],
+    deps = [
+        # The framework-owned iso_hot bridge (exports can't drift per app).
+        "@isomer//wasm/libraries/swift_ui:hot_bridge",
+        ":example_full_lib",
+        "//shared/platform_services",
+        "@isomer//wasm/libraries/swift_ui",
+        "@isomer//wasm/libraries/swift_ui:isomer",
+    ],
+)
+
+transition_binary(
+    name = "example_full_release.wasm",
+    binary = ":example_full_reactor_release",
+    platform = "@isomer//swift_ffi/rules:wasm32-wasip1",
+    tags = ["manual"],
+)
+
+# The config-selected RELEASE reactor the Android APK packages: the stripped
+# `.wasm` by default, or a wamrc-produced native `example_full_release.aot` under
+# `--config=release`. Default arm64 target = Android (and Apple). The Kotlin
+# PackagedWasmBundleProvider opens the `.aot` sibling first, else the `.wasm`.
+reactor_artifact(
+    name = "example_full_release",
+    wasm = ":example_full_release.wasm",
+)

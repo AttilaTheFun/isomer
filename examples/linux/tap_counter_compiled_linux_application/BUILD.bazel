@@ -1,0 +1,32 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+# The COMPILED-Swift Linux cell of the counter benchmark: the shared
+# TapCounter.swift built natively into an x86_64 ELF over the same
+# `//linux/libraries/swift_ui` host the full example app uses (SDL2/X11 window +
+# SwiftGPU/GL). The peer of Android's `tap_counter_compiled_android_application`;
+# baseline twin: `../tap_counter_native_linux_application` (GTK3, no Swift).
+# The wasm cells reuse the example wasm loader with a tap-counter reactor path —
+# see docs/benchmarks.md#linux.
+swift_binary(
+    name = "tap_counter_compiled_linux_application_bin",
+    srcs = ["//shared/tap_counter_application:srcs"],
+    copts = ["-parse-as-library"],
+    module_name = "TapCounterApp",
+    target_compatible_with = ["@platforms//os:linux"],
+    deps = [
+        "@isomer//linux/libraries/swift_ui",
+        "@isomer//linux/libraries/swift_ui:isomer",
+    ],
+)
+
+# `bazel run` wrapper: points LD_LIBRARY_PATH at the swift.org runtime (same
+# reason as the full example app's runner).
+sh_binary(
+    name = "tap_counter_compiled_linux_application",
+    srcs = ["run_linux.sh"],
+    data = [":tap_counter_compiled_linux_application_bin"],
+    target_compatible_with = ["@platforms//os:linux"],
+)

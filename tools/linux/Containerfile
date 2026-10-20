@@ -1,0 +1,16 @@
+# Building Isomer's Linux targets from a Mac (tools/linux/build.sh): Ubuntu
+# 24.04 with what they link (SDL2, SDL2_ttf, libcurl, OpenGL and EGL through
+# libglvnd; GTK 3 and WebKitGTK for the web view), clang and Bazel. The Swift
+# toolchain is Bazel's (MODULE.bazel's swift.org ubuntu24.04 toolchains, x86_64
+# and aarch64, with the wasm SDK for the wasm cell's reactor); the image's own
+# 6.3.2 brings the system libraries it runs on.
+FROM docker.io/library/swift:6.3.2-noble
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        clang lld curl ca-certificates git python3 unzip zip pkg-config \
+        libsdl2-dev libsdl2-ttf-dev libcurl4-openssl-dev libgl-dev libegl-dev libglvnd-dev libsqlite3-dev \
+        libgtk-3-dev libwebkit2gtk-4.1-dev \
+    && rm -rf /var/lib/apt/lists/*
+RUN arch="$(uname -m)"; case "$arch" in aarch64) arch=arm64;; x86_64) arch=x86_64;; *) exit 1;; esac; \
+    curl -fsSL "https://releases.bazel.build/9.1.1/release/bazel-9.1.1-linux-$arch" -o /usr/local/bin/bazel && chmod +x /usr/local/bin/bazel
+ENV CC=clang CXX=clang++
+WORKDIR /workspace

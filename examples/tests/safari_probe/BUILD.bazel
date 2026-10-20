@@ -1,0 +1,24 @@
+load("@build_bazel_rules_apple//apple:ios.bzl", "ios_ui_test")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+# Drives Safari in the simulator from a command file, to look at a web build
+# as an iPhone shows it (safe areas, the soft keyboard); see SafariDriver.swift.
+# `bazel test //tests/safari_probe:safari_driver --ios_multi_cpus=sim_arm64
+# --test_arg=--destination=platform=ios_simulator,id=<booted sim udid>
+# --spawn_strategy=local --test_timeout=3600`, then write commands to
+# /private/tmp/safari_probe/cmd.txt and read out.txt; `quit` ends it.
+swift_library(
+    name = "driver_lib",
+    testonly = True,
+    srcs = ["SafariDriver.swift"],
+    module_name = "SafariDriver",
+    tags = ["manual"],
+)
+
+ios_ui_test(
+    name = "safari_driver",
+    minimum_os_version = "17.0",
+    tags = ["manual"],
+    test_host = "//apple/example_full_compiled_ios_application:example_full_compiled_ios_sim_application",
+    deps = [":driver_lib"],
+)

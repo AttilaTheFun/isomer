@@ -1,0 +1,8 @@
+{
+  "summary": "Off Apple platforms, Observation is the Swift toolchain's own module (Isomer builds with Swift 6.3.2), the same open-source code as Apple's. What differs is what is newer in Apple's SDK than the toolchain.",
+  "groups": [
+    {"title": "Newer than the Swift 6.3.2 toolchain", "status": "not yet", "intent": "arrives when Isomer moves to the next Swift release",
+     "why": "Apple's SDK carries a newer Observation (observation options and tracking tokens, continuous observation) than Swift 6.3.2's.",
+     "match": ["."]}
+  ]
+}

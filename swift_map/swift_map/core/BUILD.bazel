@@ -1,0 +1,18 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The platform packages compile these sources into their own module together
+# with their renderer/bridge (mirroring how each platform names the module
+# `SwiftMap`); this filegroup is that shared source of truth.
+filegroup(
+    name = "srcs",
+    srcs = glob(["*.swift"]),
+)
+
+# Host-platform build of the core alone, for the unit tests.
+swift_library(
+    name = "core",
+    srcs = [":srcs"],
+    module_name = "SwiftMapCore",
+)

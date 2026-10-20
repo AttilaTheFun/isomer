@@ -1,0 +1,37 @@
+load("//swift_ffi/rules:ts_swift_wasm_library.bzl", "ts_swift_wasm_library")
+load("//swift_map/tools/wasm:defs.bzl", "static_site", "web_server")
+
+# The wasm reactor + TypeScript bindings for the SwiftMap web module. The
+# bridge's .js outputs land at the site root, where boot.js's
+# `../map_bridge.js` import resolves.
+ts_swift_wasm_library(
+    name = "map_bridge",
+    linkopts = [
+        # wasm-ld defaults the linear stack to ~1 MiB, which Swift's generic-
+        # metadata instantiation can overflow; give it room.
+        "-Xlinker",
+        "-z",
+        "-Xlinker",
+        "stack-size=16777216",
+    ],
+    module_name = "SwiftMap",
+    swift = "//swift_map/wasm/libraries/swift_map",
+)
+
+static_site(
+    name = "example_webgpu_web_application_site",
+    index = "index.html",
+    root_js = [":map_bridge"],
+    runtime_js = [
+        "//swift_map/wasm/libraries/swift_map:runtime_js",
+        "//metal/runtime:runtime_js",
+    ],
+    visibility = ["//visibility:public"],
+    wasm = ":map_bridge.wasm",
+)
+
+# `bazel run //swift_map/web/applications/example_webgpu_web_application` serves + opens it.
+web_server(
+    name = "example_webgpu_web_application",
+    site = ":example_webgpu_web_application_site",
+)

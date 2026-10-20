@@ -1,0 +1,28 @@
+load("@rules_swift//swift:swift_library.bzl", "swift_library")
+
+package(
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+# The engine-agnostic Swift half of the *native host* transport: it lets a
+# native Swift process load a swift_ffi wasm reactor and satisfy its foreign
+# interfaces with native implementations. The concrete WebAssembly engine is
+# injected (SwiftFFIWasmEngine), so this target has NO WebAssembly dependency;
+# the generated `swift-host-wasm` bindings import it. See the file header.
+swift_library(
+    name = "swift_wasm_host",
+    srcs = [
+        "SwiftFFIWasmHost.swift",
+        "WasmBundleProvider.swift",
+    ],
+    module_name = "SwiftFFIWasmHost",
+    visibility = ["//visibility:public"],
+)

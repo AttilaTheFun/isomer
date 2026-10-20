@@ -1,0 +1,55 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# WasmView: embed a wasm feature bundle (a swift_ui_core UI compiled to a wasm
+# reactor) in a native SwiftUI hierarchy, rendered with real SwiftUI via the
+# SwiftUIRenderer / IsomerTreeView. The cross-platform wasm-host runtime
+# (//shared/wasm_host, WasmKit-backed) does the actual work; this is the Apple
+# SwiftUI surface — `WasmView` plus the `WasmViewModel` ObservableObject binding.
+# The Android peer is //android/libraries/wasm_view (a Compose @Composable).
+# See docs/wasm_view_architecture.md.
+swift_library(
+    name = "wasm_view",
+    package_name = "isomer",
+    srcs = [
+        # The Apple bundle providers (packaged + dev hot-reload shadow) live
+        # here, not in //shared/wasm_host: they use URLSession, which drags
+        # FoundationNetworking (libcurl/OpenSSL) into a link — fine on Apple, but
+        # it breaks the Android .so. Each platform supplies its own provider (web:
+        # bundle_provider.js; Android: Kotlin WasmBundleProvider).
+        "BundleProvider.swift",
+        # Foundation's networking for the reactor: URLSession as
+        # IsomerNetworkHost's hosts, injected by WasmViewModel.
+        "NetworkHosts.swift",
+        "WasmViewModel.swift",
+        "WasmView.swift",
+    ],
+    module_name = "IsomerWasmView",
+    target_compatible_with = select({
+        "@platforms//os:macos": [],
+        "@platforms//os:ios": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    deps = [
+        "//apple/libraries/swift_ui_tree",
+        # The Apple host's batteries-included default engine (registered via
+        # WasmRuntimeRegistry.registerDefault; apps can register their own
+        # first). The core //shared/wasm_host is engine-free.
+        "//shared/wasm_host:wamr_runtime",
+        "//shared/wasm_host",
+        # IsomerNetworkHost's interfaces as a native host implements them
+        # (generated; imported, not re-exported: its `Dependencies` would
+        # meet an app's own).
+        "//shared/isomer_network_host:wasm_host",
+    ] + select({
+        # The iOS GPU renderer (SwiftGPU over Metal) for `WasmView(renderer: .gpu)`.
+        "@platforms//os:ios": ["//apple/libraries/gpu_tree_view"],
+        "//conditions:default": [],
+    }),
+    # WasmView.swift offers `.gpu` where the GPU renderer above is linked.
+    defines = select({
+        "@platforms//os:ios": ["ISO_GPU_TREE_VIEW"],
+        "//conditions:default": [],
+    }),
+)

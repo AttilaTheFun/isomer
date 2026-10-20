@@ -1,0 +1,33 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The SwiftUI `Map` view's engine (swift_map, the real OpenStreetMap
+# renderer), injected per platform host module as a label flag. Default: an
+# empty stub — the core libraries must not require swift_map (every SwiftMap
+# reference is `#if canImport(SwiftMap)`-gated, so `Map` renders a
+# placeholder pane without it). A consumer that wants real tiles declares its
+# own `bazel_dep` on swift_map and points these flags at its engine targets
+# (the examples module does, in examples/.bazelrc); label flags — not a
+# select on a repo — because swift_map is a DEV dependency here, invisible
+# from isomer's BUILD files when consumed as a non-root module.
+#
+# One flag per platform host module: the engine target differs per platform,
+# and a single label flag can't vary by configuration.
+[
+    label_flag(
+        name = "map_engine_" + platform,
+        build_setting_default = ":no_map_engine",
+    )
+    for platform in [
+        "apple",
+        "wasm",
+        "android",
+        "linux",
+        "windows",
+    ]
+]
+
+# The map-free default: an empty library, so the flag can sit unconditionally
+# in each platform module's deps.
+cc_library(name = "no_map_engine")

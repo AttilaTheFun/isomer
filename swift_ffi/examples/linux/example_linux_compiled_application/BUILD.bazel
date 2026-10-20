@@ -1,0 +1,37 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+package(
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+# The Linux "compiled mode" cell of the example matrix: the shared greeter
+# compiled to native code and linked into this C program, called over the
+# generated C ABI (no interpreter). `greeter_c` is the Swift glue static library
+# (the `swift_ffi_greeter_*` symbols); `greeter_c_header` puts greeter_c.h on the
+# include path. The wasm peer is ../example_linux_wasm_application.
+cc_binary(
+    name = "example_linux_compiled_application_bin",
+    srcs = ["main.c"],
+    target_compatible_with = ["@platforms//os:linux"],
+    deps = ["//swift_ffi/examples/shared/greeter_compiled_host"],
+)
+
+# `bazel run` this: a thin wrapper that points LD_LIBRARY_PATH at the swift.org
+# Swift runtime (whose runfiles-relative RUNPATH doesn't resolve under
+# `bazel run`) and execs the real binary. The wasm cell needs no wrapper — it
+# links no Swift.
+sh_binary(
+    name = "example_linux_compiled_application",
+    srcs = ["run_linux.sh"],
+    data = [":example_linux_compiled_application_bin"],
+    target_compatible_with = ["@platforms//os:linux"],
+)

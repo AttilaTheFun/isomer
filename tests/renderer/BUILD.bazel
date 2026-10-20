@@ -1,0 +1,25 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+
+# Exercises the pluggable-renderer contract with a MockRenderer against the
+# core + concrete-renderer sources compiled for the host (see
+# tests/snapshot for the pattern and the Linux LD_LIBRARY_PATH note).
+swift_binary(
+    name = "mock_renderer_check",
+    package_name = "isomer",
+    srcs = [
+        "APITests.swift",
+        "MockHost.swift",
+        "MockRendererTests.swift",
+    ],
+    copts = ["-parse-as-library"],
+    testonly = True,
+    deps = ["//tests/snapshot:core_host"],
+)
+
+sh_test(
+    name = "mock_renderer_test",
+    size = "small",
+    srcs = ["run_renderer_test.sh"],
+    data = [":mock_renderer_check"],
+)

@@ -1,0 +1,53 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The GPU flavour of the wasm-reactor `SwiftUI` module: the shared core plus
+# ALL the pluggable renderers INCLUDING SwiftGPURenderer, backed by swift_gpu's
+# OpenGL ES device compiled *to wasm*. The GLES backend's `@_extern(c)` gl*
+# calls become wasm imports (module "env") that the embedding host binds to its
+# real native GL at instantiation — the GPU implementation stays entirely
+# native code on the platform side; only the SwiftGPURenderer (layout + draw
+# orchestration) runs inside the module. See //shared/wamr_host/iso_wamr_gles.c
+# for the Android host half.
+#
+# Like //wasm/libraries/hot_swift_ui (the slim, tree-emitting flavour) this
+# compiles a module literally named `SwiftUI`, so it lives in its own package
+# to keep the .swiftmodule outputs from colliding in wildcard builds.
+swift_library(
+    name = "hot_swift_ui_gpu",
+    package_name = "isomer",
+    srcs = [
+        "//shared/renderers:srcs",
+        "//shared/swift_ui_core:srcs",
+    ],
+    copts = [
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    module_name = "SwiftUI",
+    deps = [
+        "//shared/isomer_swift_ui",
+        "//frameworks:for_core",
+        "@flatbuffers//swift",
+        "//:foundation",
+        "//swift_gpu/android:swift_gpu",
+    ],
+)
+
+# The app-agnostic GPU reactor glue (the `iso_hot`/`iso_gpu` ABI): a reactor
+# links it next to its app library. A library of Isomer's package (it reaches
+# the runtime's `package` plumbing); `alwayslink`, its exports reached only
+# by the host.
+swift_library(
+    name = "gpu_reactor_bridge",
+    package_name = "isomer",
+    srcs = ["GpuReactorBridge.swift"],
+    alwayslink = True,
+    copts = [
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    module_name = "GpuReactorBridge",
+    deps = [":hot_swift_ui_gpu"],
+)

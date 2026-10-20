@@ -1,0 +1,34 @@
+diff -ruN a/swift/internal/extensions/wasmsdk.BUILD b/swift/internal/extensions/wasmsdk.BUILD
+--- a/swift/internal/extensions/wasmsdk.BUILD
++++ b/swift/internal/extensions/wasmsdk.BUILD
+@@ -113,6 +113,22 @@
+ )
+ 
+ cc_args(
++    name = "cc_compile_args_wasm32",
++    actions = [
++        "@rules_cc//cc/toolchains/actions:compile_actions",
++    ],
++    # The Swift SDK's clang resource directory for compiles too: its
++    # include/ has clang's own headers (<stdarg.h>, <stddef.h>), which C
++    # compiled for wasm then reaches inside the SDK, among the action's
++    # inputs, rather than by an absolute path into the host toolchain that
++    # Bazel's inclusion check rejects.
++    args = [
++        "-resource-dir",
++        _RESOURCE_DIR + "/clang",
++    ],
++)
++
++cc_args(
+     name = "cc_link_args_wasm32",
+     actions = [
+         "@rules_cc//cc/toolchains/actions:link_actions",
+@@ -136,6 +152,7 @@
+     name = "cc_toolchain_wasm32",
+     args = [
+         ":cc_args_wasm32",
++        ":cc_compile_args_wasm32",
+         ":cc_link_args_wasm32",
+     ],
+     compiler = "clang",

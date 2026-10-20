@@ -1,0 +1,20 @@
+bazel-*
+.DS_Store
+.build/
+.index-build/
+.swiftpm/
+.tmp/
+__pycache__/
+*.pyc
+*.xcodeproj/
+examples/proto_greeter/.build/
+.bazelrc.user
+# The Playground (playground/, a module of its own): the staged compilers
+# (playground/apple/playground_ios_application/build_embedded_toolchain.sh and
+# playground/android/playground_android_application/stage_toolchain.sh, from
+# compilers built by playground/tools/playground_toolchain; about 1 GB, far
+# too large for git) and its SwiftPM resolution's checkouts. bazel-*, .build/,
+# .swiftpm/, __pycache__/, *.xcodeproj/ and .bazelrc.user above cover it too.
+playground/apple/playground_ios_application/embedded_toolchain/
+playground/android/playground_android_application/toolchain/
+playground/third_party/swift_packages/.build

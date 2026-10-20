@@ -1,0 +1,29 @@
+load("@rules_swift//swift:swift_compiler_plugin.bzl", "swift_compiler_plugin")
+
+package(
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+# The compiler plugin that provides the swift_ffi macros: one conforming
+# struct per macro protocol from //swift_ffi/swift_ffi_plugin_library plus
+# the @main entry. Built for the exec (host) configuration by rules_swift
+# even when the consuming `swift_library` cross-compiles to wasm / Android.
+swift_compiler_plugin(
+    name = "swift_ffi_plugin",
+    srcs = ["SwiftFFIPlugin.swift"],
+    module_name = "SwiftFFIPlugin",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//swift_ffi/swift_ffi_plugin_library",
+        "@swift-syntax//:SwiftCompilerPlugin",
+        "@swift-syntax//:SwiftSyntaxMacros",
+    ],
+)

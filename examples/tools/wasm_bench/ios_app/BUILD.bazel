@@ -1,0 +1,80 @@
+load("@build_bazel_rules_apple//apple:apple.bzl", "local_provisioning_profile")
+load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
+load("@build_bazel_rules_apple//apple:versioning.bzl", "apple_bundle_version")
+load("@rules_swift//swift:swift.bzl", "swift_interop_hint", "swift_library")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@isomer_signing//:signing.bzl", "TEAM_ID")
+
+# The on-device iOS engine benchmark app: runs the SAME console bench as the
+# Pixel/emulator passes (tools/wasm_bench/wamr_bench.c, `main` renamed) plus
+# a JSC pass over the Swift engine seam, on an iPhone via devicectl.
+# Everything here is `manual` and dev-only (a device build needs the
+# Xcode-managed provisioning profile).
+
+BUNDLE_ID = "com.LoganShire.Isomer"
+
+cc_library(
+    name = "bench_wamr_c",
+    srcs = ["//tools/wasm_bench:wamr_bench.c"],
+    copts = ["-Dmain=iso_wamr_bench_main"],
+    tags = ["manual"],
+    target_compatible_with = ["@platforms//os:ios"],
+    deps = ["@isomer//shared/wamr_host:iso_wamr"],
+)
+
+# A Swift-importable declaration of the renamed bench entry point.
+cc_library(
+    name = "bench_entries",
+    hdrs = ["bench_entry.h"],
+    aspect_hints = [":bench_entries_swift"],
+    includes = ["."],
+    tags = ["manual"],
+    target_compatible_with = ["@platforms//os:ios"],
+    deps = [":bench_wamr_c"],
+)
+
+swift_interop_hint(
+    name = "bench_entries_swift",
+    module_name = "CBenchEntries",
+)
+
+swift_library(
+    name = "bench_app_lib",
+    srcs = ["BenchApp.swift"],
+    data = ["//wasm/tap_counter_feature:tap_counter_release.wasm"],
+    tags = ["manual"],
+    deps = [
+        ":bench_entries",
+        "@isomer//shared/wasm_host:jsc_runtime",
+        "@isomer//shared/wasm_host:wasm_runtime",
+    ],
+)
+
+apple_bundle_version(
+    name = "_version",
+    build_version = "1",
+    short_version_string = "1.0",
+    tags = ["manual"],
+)
+
+local_provisioning_profile(
+    name = "_xcode_managed_profile",
+    profile_name = "iOS Team Provisioning Profile: *",
+    tags = ["manual"],
+    team_id = TEAM_ID,
+)
+
+# Reuses the example app's bundle id, so the bench app installs OVER the
+# example app on the phone.
+ios_application(
+    name = "wasm_engine_bench_ios_application",
+    bundle_id = BUNDLE_ID,
+    families = ["iphone"],
+    infoplists = ["Info.plist"],
+    minimum_os_version = "16.0",
+    provisioning_profile = ":_xcode_managed_profile",
+    tags = ["manual"],
+    version = ":_version",
+    visibility = ["//visibility:public"],
+    deps = [":bench_app_lib"],
+)

@@ -1,0 +1,78 @@
+# The shared example Swift module, annotated with the swift_ffi macros. Every
+# per-platform application under //swift_ffi/examples/<platform>/ depends on this one
+# library, unchanged, and delivers it in one of two modes — compiled (linked
+# natively over the C ABI) or wasm (a reactor run under an engine).
+
+load("@rules_swift//swift:swift_library.bzl", "swift_library")
+load("//swift_ffi/rules:c_host_library.bzl", "c_host_library")
+load("//swift_ffi/rules:cc_swift_library.bzl", "cc_swift_library")
+load("//swift_ffi/rules:swift_wasm_reactor.bzl", "swift_wasm_reactor")
+
+package(
+    default_visibility = ["//swift_ffi/examples:__subpackages__"],
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+swift_library(
+    name = "greeter",
+    srcs = [
+        "Greeter.swift",
+        "Lazy+Bridgeable.swift",
+    ],
+    module_name = "Greeter",
+    deps = ["//swift_ffi/swift_ffi"],
+)
+
+# The idiomatic C++ bindings (Linux/Windows compiled cells): RAII wrappers,
+# std::function closures, swiftffi::Result / swiftffi::Lazy, real templates
+# for the generic exports. Takes the annotated library directly — the C ABI
+# layer is internal.
+cc_swift_library(
+    name = "greeter_cpp",
+    swift = ":greeter",
+)
+
+# Wasm mode, C host (no compiled Swift): the generated `c-host-wasm` header the
+# Linux/Windows wasm example applications include to drive a greeter reactor
+# under WAMR. The generator emits the c-host-representable subset of the greeter
+# (scalars, String, [UInt8], the foreign Counter) and lists the rest in a header
+# comment.
+c_host_library(
+    name = "greeter_c_host",
+    swift = ":greeter",
+)
+
+# The greeter compiled to a standalone wasm reactor — the artifact the C hosts
+# (Linux/Windows wasm applications) load and drive under WAMR. Built once here
+# and shared, since it is platform-neutral.
+swift_wasm_reactor(
+    name = "greeter_reactor",
+    swift = ":greeter",
+)
+
+# The PRODUCTION reactor shape: a curated export list + --gc-sections (the
+# fixed runtime entries are appended by the rule). Pins the dead-stripped
+# mode; compare its size with :greeter_reactor.wasm to see what export-all
+# retains.
+swift_wasm_reactor(
+    name = "greeter_reactor_min",
+    exports = [
+        "swift_ffi_greeting",
+        "swift_ffi_add",
+        "swift_ffi_makeCounter",
+        "swift_ffi_describe",
+        "swift_ffi_Counter_invoke",
+        "swift_ffi_Counter_release",
+        "swift_ffi_register_Counter",
+        "swift_ffi_dependentCount",
+    ],
+    swift = ":greeter",
+)

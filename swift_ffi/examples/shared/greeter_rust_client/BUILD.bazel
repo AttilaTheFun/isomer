@@ -1,0 +1,31 @@
+# Rust *consuming* the bridged Swift greeter across its C ABI — the Rust peer
+# of the C++/Swift consumer cells (v1 surface: scalars, strings, bytes,
+# structs, throwing).
+
+load("@rules_rust//rust:defs.bzl", "rust_binary")
+load("//swift_ffi/rules:rs_swift_library.bzl", "rs_swift_library")
+
+package(
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+rs_swift_library(
+    name = "greeter_rust_client",
+    module_name = "Greeter",
+    swift = "//swift_ffi/examples/shared/greeter",
+)
+
+rust_binary(
+    name = "smoke",
+    srcs = ["main.rs"],
+    edition = "2021",
+    deps = [":greeter_rust_client"],
+)

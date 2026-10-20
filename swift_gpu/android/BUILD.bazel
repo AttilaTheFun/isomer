@@ -1,0 +1,31 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The SwiftGPU module for Android: the shared API plus the OpenGL ES 2
+# backend. GL binds via @_extern(c) against libGLESv2 (no headers); the
+# host's GLSurfaceView owns the EGL context and calls in on the GL thread.
+#
+# The SAME target also builds for wasm32: there the @_extern(c) gl* calls
+# become wasm imports (module "env", via the binary's `--allow-undefined`
+# link), and the embedding host binds them to its native GL at instantiation
+# — the GPU implementation stays entirely native either way; only the binding
+# moment moves from link time to instantiate time. The -lGLESv2 linkopt is
+# Android-only for that reason.
+swift_library(
+    name = "swift_gpu",
+    srcs = [
+        "GLES.swift",
+        "GLESGPUDevice.swift",
+        "//swift_gpu/core:srcs",
+    ],
+    copts = [
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    linkopts = select({
+        "@platforms//os:android": ["-lGLESv2"],
+        "//conditions:default": [],
+    }),
+    module_name = "SwiftGPU",
+)

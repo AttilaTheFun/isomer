@@ -1,0 +1,30 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+
+package(
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+# The Linux "wasm mode" cell of the example matrix: the shared greeter, compiled
+# to a WebAssembly reactor and run under WAMR by a plain C host with NO compiled
+# Swift. The driver lives in //swift_ffi/examples/shared/greeter_wasm_host (shared with the
+# Windows cell); this target just supplies the reactor. See swift_ffi's README
+# matrix and the compiled peer (../example_linux_compiled_application).
+cc_binary(
+    name = "example_linux_wasm_application",
+    srcs = ["main.c"],
+    # Bazel passes the reactor's runfiles path as argv[1] so `bazel run` needs no
+    # arguments; the reactor is a data dep (built from source on Linux, where the
+    # SwiftWasm cross-compile toolchain is registered).
+    args = ["$(rootpath //swift_ffi/examples/shared/greeter:greeter_reactor.wasm)"],
+    data = ["//swift_ffi/examples/shared/greeter:greeter_reactor.wasm"],
+    target_compatible_with = ["@platforms//os:linux"],
+    deps = ["//swift_ffi/examples/shared/greeter_wasm_host"],
+)

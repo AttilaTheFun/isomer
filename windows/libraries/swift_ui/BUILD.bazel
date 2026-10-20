@@ -1,0 +1,129 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# Native Windows host + Direct2D/DirectWrite/WIC renderer. Exposes a flat C API
+# (renderer.h) that the Swift host bridge calls; built with the MSVC C++
+# toolchain when the app target transitions to //tools/platforms:windows_x86_64.
+cc_library(
+    name = "renderer",
+    srcs = ["renderer.cpp"],
+    hdrs = ["renderer.h"],
+    linkopts = [
+        "d2d1.lib",
+        "dxguid.lib",  # CLSID_D2D1Shadow and other D2D effect GUIDs
+        "dwrite.lib",
+        "windowscodecs.lib",
+        "ole32.lib",
+        "oleaut32.lib",  # SysAllocString / VariantInit (WebView navigation)
+        "uuid.lib",  # CLSID_WebBrowser, IID_IWebBrowser2 and OLE site IIDs
+        "advapi32.lib",  # registry (FEATURE_BROWSER_EMULATION for the WebView)
+        "comctl32.lib",  # SysDateTimePick32 (DatePicker) + common-control init
+        "user32.lib",
+        "gdi32.lib",
+        "shell32.lib",
+        "winhttp.lib",
+        "dbghelp.lib",
+    ],
+    target_compatible_with = ["@platforms//os:windows"],
+)
+
+# The bridging header is imported so the Swift host can call the C renderer API.
+# `-disable-bridging-pch` parses the header directly instead of precompiling it;
+# the bridging-header PCH otherwise embeds an absolute module-cache path that the
+# worker can invalidate between actions on Windows ("precompiled file ... was
+# compiled with module cache path ...").
+_WINDOWS_COPTS = [
+    "-import-objc-header",
+    "$(location renderer.h)",
+    "-disable-bridging-pch",
+]
+
+# The SwiftUI reimplementation for Windows: the shared core plus the Direct2D
+# host bridge, compiled as a module named `SwiftUI` (see the wasm/Android
+# counterparts) so application code can `import SwiftUI` unchanged.
+
+swift_library(
+    name = "swift_ui",
+    package_name = "isomer",
+    srcs = [
+        "WindowsHost.swift",
+        "//shared/renderers:srcs",
+        "//shared/swift_ui_core:srcs",
+    ],
+    copts = _WINDOWS_COPTS + ["-DISOMER_WINDOWS_HOST"],
+    module_name = "SwiftUI",
+    swiftc_inputs = ["renderer.h"],
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        "//shared/isomer_swift_ui",
+        ":renderer",
+        "@flatbuffers//swift",
+        # Lights up canImport(SwiftGPU): the shared SwiftGPURenderer becomes
+        # the self-drawing renderer, drawing through swift_gpu's D3D11 backend.
+        "//swift_gpu/windows:swift_gpu",
+        "//frameworks:for_core",
+    ] + [
+        # `Map` engine injection point: defaults to an empty stub; a consumer
+        # with its own swift_map dep points the flag at the real engine to
+        # light up canImport(SwiftMap). See //shared/BUILD.bazel.
+        "//shared:map_engine_windows",
+    ],
+)
+
+# The wasm delivery cell's `SwiftUI` module lives in a sibling package
+# (//windows/libraries/swift_ui_wasm) — it reuses `WindowsHost.swift` +
+# `renderer.h` from here (exported below) plus its own `WindowsWasmHost.swift`.
+# It carries the SAME `module_name = "SwiftUI"`, so it MUST be a separate Bazel
+# package: two same-named swiftmodules in one package collide on the emitted
+# `SwiftUI.swiftmodule` output path (a `bazel build //...` action conflict), even
+# though the compiled and wasm cells are never linked together.
+exports_files([
+    "WindowsHost.swift",
+    "WindowsWasmHost.swift",
+    "renderer.h",
+])
+
+# Core native-bridging API (logging, clock, URLs), Windows implementation.
+# What Isomer provides beyond Apple's SwiftUI API (see
+# //shared/swift_ui_extensions); IsomerBridge re-exports it.
+swift_library(
+    name = "isomer",
+    package_name = "isomer",
+    srcs = [
+        "IsomerBridge.swift",
+        "//shared/isomer:Exports.swift",
+        "//shared/swift_ui_extensions:srcs",
+    ],
+    copts = _WINDOWS_COPTS,
+    module_name = "Isomer",
+    swiftc_inputs = ["renderer.h"],
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        ":renderer",
+        ":swift_ui",
+        "//swift_ffi/swift_ffi",
+        "//shared/isomer_swift_ui",
+    ],
+)
+
+# The names the Isomer module had before 0.31: each re-exports it.
+swift_library(
+    name = "swift_ui_extensions",
+    package_name = "isomer",
+    srcs = ["//shared/isomer:Compatibility.swift"],
+    module_name = "SwiftUIExtensions",
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [":isomer"],
+)
+
+swift_library(
+    name = "isomer_bridge",
+    package_name = "isomer",
+    srcs = ["//shared/isomer:Compatibility.swift"],
+    module_name = "IsomerBridge",
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [":isomer"],
+)
+

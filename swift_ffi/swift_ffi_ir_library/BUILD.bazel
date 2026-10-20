@@ -1,0 +1,32 @@
+load("@rules_swift//swift:swift_library.bzl", "swift_library")
+
+package(
+    features = [
+        # swift_ffi's own code is Swift 6, strict, and warning-free (this was
+        # the repository-wide REPO.bazel setting when it was a repo of its own).
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+# The IR data model shared by the analyzer and the generator: the JSON-coded
+# description of a module's exported FFI surface.
+swift_library(
+    name = "swift_ffi_ir_library",
+    srcs = [
+        "FFIClosureType.swift",
+        "FFIEnum.swift",
+        "FFIField.swift",
+        "FFIFunction.swift",
+        "FFIInterface.swift",
+        "FFIMethod.swift",
+        "FFIModule.swift",
+        "FFIParameter.swift",
+        "FFIStruct.swift",
+    ],
+    module_name = "SwiftFFIIRLibrary",
+    visibility = ["//visibility:public"],
+)

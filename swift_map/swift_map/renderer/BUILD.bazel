@@ -1,0 +1,8 @@
+package(default_visibility = ["//visibility:public"])
+
+# Compiled into each platform's `SwiftMap` module alongside the core; the
+# platform package adds the matching @swift_gpu backend to `deps`.
+filegroup(
+    name = "srcs",
+    srcs = glob(["*.swift"]),
+)

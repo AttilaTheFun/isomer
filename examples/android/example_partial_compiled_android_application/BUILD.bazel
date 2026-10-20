@@ -1,0 +1,66 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@rules_android//rules:rules.bzl", "android_binary")
+load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
+load("@isomer//tools/android:defs.bzl", "apk_install_run", "isomer_android_library")
+
+# Level 3 adoption (docs/adoption_levels.md): a NORMAL Kotlin/Compose app —
+# its own MainActivity, Material chrome, native screens — that embeds one
+# SwiftUI feature (//shared/embedded_example's OrderStatusCard) with the
+# `Isomer()` composable, the Compose analogue of UIHostingController.
+# The feature is COMPILED Swift (the "compiled" cell of the Android
+# [full|partial] x [compiled|wasm] matrix); the wasm-delivered twin is
+# //android/example_partial_wasm_android_application.
+
+# The embedded SwiftUI feature as a plain library; the macro links it into
+# the JNI .so and generates the Kotlin bindings the runtime consumes.
+swift_library(
+    name = "app_swift",
+    srcs = ["//shared/embedded_example:srcs"],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "EmbeddedExample",
+    tags = ["manual"],  # only meaningful through the android transition
+    deps = ["@isomer//android/libraries/swift_ui"],
+)
+
+# The embeddable Isomer runtime for this app: generated bindings +
+# dev.isomer.runtime Kotlin (Isomer() composable etc.).
+isomer_android_library(
+    name = "isomer",
+    swift_library = ":app_swift",
+)
+
+# The HOST app: plain Kotlin Compose code that owns the screen.
+kt_android_library(
+    name = "host_app",
+    srcs = glob(["kotlin/**/*.kt"]),
+    custom_package = "dev.isomer.embeddedexample",
+    manifest = "AndroidManifest.xml",
+    plugins = ["@isomer//android/libraries/swift_ui:compose_compiler_plugin"],
+    tags = ["manual"],
+    deps = [
+        ":isomer",
+        "@isomer//tools/android:maven_androidx_activity_activity_compose",
+        "@isomer//tools/android:maven_androidx_compose_foundation_foundation",
+        "@isomer//tools/android:maven_androidx_compose_material3_material3",
+        "@isomer//tools/android:maven_androidx_compose_runtime_runtime",
+        "@isomer//tools/android:maven_androidx_compose_ui_ui",
+    ],
+)
+
+android_binary(
+    name = "example_partial_compiled_android_application_apk",
+    manifest = "AndroidManifest.xml",
+    deps = [
+        ":host_app",
+        ":isomer_native",
+    ],
+)
+
+# `bazel run //android/example_partial_compiled_android_application` installs
+# and launches the host app on the connected device/emulator.
+apk_install_run(
+    name = "example_partial_compiled_android_application",
+    activity = "dev.isomer.embeddedexample/.MainActivity",
+    apk = ":example_partial_compiled_android_application_apk.apk",
+)

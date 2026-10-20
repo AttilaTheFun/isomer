@@ -1,0 +1,34 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# GPUTreeView: the self-drawing SwiftGPU renderer (over Metal) as a UIView
+# that draws a wasm feature's tree.fbs patches — the iOS "GPU" renderer for
+# WasmView, next to the real-SwiftUI IsomerTreeView. Compiles the
+# reimplementation core, so importers must use a scoped import
+# (`import class IsomerGPUTreeView.GPUTreeView`) beside real SwiftUI.
+swift_library(
+    name = "gpu_tree_view",
+    package_name = "isomer",
+    srcs = [
+        "GPUTreeServicesHost.swift",
+        "GPUTreeView.swift",
+        "//shared/renderers:srcs",
+        "//shared/swift_ui_core:srcs",
+    ],
+    # The shared core spells its own types `SwiftUI.X` where a generic
+    # parameter shadows the name (`Button where Label == SwiftUI.Label<…>`),
+    # as Apple's interface does; this module is that SwiftUI under another name.
+    copts = ["-module-alias", "SwiftUI=IsomerGPUTreeView"],
+    module_name = "IsomerGPUTreeView",
+    target_compatible_with = select({
+        "@platforms//os:ios": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    deps = [
+        "//shared/isomer_swift_ui",
+        "//frameworks:for_core",
+        "@flatbuffers//swift",
+        "//swift_gpu/apple:swift_gpu",
+    ],
+)

@@ -1,0 +1,20 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+# The native SwiftUIRenderer's Apple half: interprets the render-tree
+# FlatBuffer (shared/renderers/tree.fbs) as real SwiftUI. Consumed by the
+# hot-reload example host, which runs the tree PRODUCER (the wasm-compiled
+# runtime) under WasmKit and feeds the received buffers here.
+swift_library(
+    name = "swift_ui_tree",
+    package_name = "isomer",
+    srcs = [
+        "BridgedViewRegistry.swift",
+        "FlatPatchTree.swift",
+        "IsomerTreeView.swift",
+        "PickerRequests.swift",
+    ],
+    module_name = "IsomerTree",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//shared/isomer_swift_ui","@flatbuffers//swift"],
+)

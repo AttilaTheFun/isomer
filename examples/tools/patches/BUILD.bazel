@@ -1,0 +1,4 @@
+# Vendored copies of isomer's flatbuffers patches: bzlmod only applies
+# single_version_override patches from the MAIN repository, so every consumer
+# carries these two files until a flatbuffers release includes the fixes.
+exports_files(glob(["*.patch"]))

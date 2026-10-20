@@ -1,0 +1,43 @@
+load("@rules_android//rules:rules.bzl", "android_binary")
+load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
+load("@isomer//tools/android:defs.bzl", "apk_install_run")
+
+# The NATIVE Jetpack Compose baseline for the minimal counter benchmark — the
+# performance "ceiling". Shares NO Isomer code (no Swift, no wasm, no IsoNode
+# interpreter): just hand-written Compose rendering the same counter + "Tap me"
+# button as its compiled-Swift, wasm, Valdi, and React Native twins. See
+# docs/benchmarks.md.
+
+kt_android_library(
+    name = "host_app",
+    srcs = glob(["kotlin/**/*.kt"]) + [
+        # Benchmark instrumentation: the uniform [content-frame] signal.
+        "@isomer//android/libraries/swift_ui:content_frame_kotlin",
+    ],
+    custom_package = "dev.isomer.tapcounter.native",
+    manifest = "AndroidManifest.xml",
+    plugins = ["@isomer//android/libraries/swift_ui:compose_compiler_plugin"],
+    tags = ["manual"],
+    deps = [
+        "@isomer//tools/android:maven_androidx_activity_activity_compose",
+        "@isomer//tools/android:maven_androidx_compose_foundation_foundation",
+        "@isomer//tools/android:maven_androidx_compose_material3_material3",
+        "@isomer//tools/android:maven_androidx_compose_runtime_runtime",
+        "@isomer//tools/android:maven_androidx_compose_ui_ui",
+    ],
+)
+
+android_binary(
+    name = "tap_counter_native_android_application_apk",
+    manifest = "AndroidManifest.xml",
+    deps = [
+        ":host_app",
+        "@isomer//tools/android:maven_androidx_profileinstaller_profileinstaller",
+    ],
+)
+
+apk_install_run(
+    name = "tap_counter_native_android_application",
+    activity = "dev.isomer.tapcounter.native/.MainActivity",
+    apk = ":tap_counter_native_android_application_apk.apk",
+)

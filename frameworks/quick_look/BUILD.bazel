@@ -1,0 +1,13 @@
+# QuickLook's SwiftUI preview (`quickLookPreview`, which Apple declares in
+# QuickLook's SwiftUI overlay). Its sources are compiled against a SwiftUI of
+# Isomer's, as PhotosUI's are: for now in an Apple app's compiled feature
+# (//apple/libraries/compiled_swift_ui:quick_look), where Apple's QuickLook
+# would bring Apple's SwiftUI with it; the host presents the system's
+# preview.
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "srcs",
+    srcs = glob(["*.swift"]),
+)

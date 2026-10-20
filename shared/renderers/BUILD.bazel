@@ -1,0 +1,34 @@
+# The concrete pluggable renderers (component-system bases + SwiftGPU),
+# compiled into each platform's `SwiftUI` module ALONGSIDE the core sources.
+# Kept out of //shared/swift_ui_core so the core stays renderer-agnostic:
+# it defines the TreeRenderer protocol; these implement it.
+filegroup(
+    name = "srcs",
+    srcs = glob(["*.swift"]),
+    visibility = ["//visibility:public"],
+)
+
+# The renderers minus SwiftGPURenderer.swift (the only one that imports
+# swift_gpu). The wasm hot-reload demo binds SwiftUIRenderer and never draws,
+# so it links this slim set and skips the whole GPU stack.
+filegroup(
+    name = "srcs_no_gpu",
+    srcs = glob(
+        ["*.swift"],
+        exclude = ["SwiftGPURenderer.swift"],
+    ),
+    visibility = ["//visibility:public"],
+)
+
+# flatc-generated Swift accessors for tree.fbs (the render-tree wire
+# format); compiled once, into IsomerSwiftUI (//shared/isomer_swift_ui).
+genrule(
+    name = "tree_swift",
+    srcs = ["tree.fbs"],
+    outs = ["tree_generated.swift"],
+    cmd = "$(location @flatbuffers//:flatc) --swift -o $(RULEDIR) $(location tree.fbs)",
+    tools = ["@flatbuffers//:flatc"],
+    visibility = ["//shared/isomer_swift_ui:__pkg__"],
+)
+
+exports_files(["tree.fbs"])

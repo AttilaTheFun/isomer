@@ -1,0 +1,23 @@
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+exports_files(["run_emulator.sh"])
+
+# `bazel run //tools/android/emulator` boots a hermetic Android emulator
+# (downloaded emulator + ATD arm64 system image; no Android Studio needed).
+sh_binary(
+    name = "emulator",
+    srcs = ["run_emulator.sh"],
+    args = [
+        "$(rlocationpath @android_emulator//:emulator/emulator)",
+        "$(rlocationpath @android_system_image//:system.img)",
+        "$(rlocationpath @android_platform_tools//:adb)",
+    ],
+    data = [
+        "@android_emulator//:all",
+        "@android_emulator//:emulator/emulator",
+        "@android_platform_tools//:adb",
+        "@android_system_image//:all",
+        "@android_system_image//:system.img",
+    ],
+    visibility = ["//visibility:public"],
+)

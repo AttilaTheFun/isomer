@@ -1,0 +1,101 @@
+load("@rules_android//rules:rules.bzl", "android_binary")
+load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
+load("@rules_swift//swift:swift.bzl", "swift_binary", "swift_library")
+load("@isomer//swift_ffi/rules:swift_wasm_reactor.bzl", "transition_binary")
+load("@isomer//tools/android:defs.bzl", "flat_assets")
+
+# The network probe (//android/network_probe_android_application) in the wasm
+# delivery: NetworkProbe.swift as a reactor on the full SwiftUI, run under
+# WAMR by WasmView, whose dependencies carry Foundation's networking
+# (WasmNetworkHosts.kt) to the reactor's URLSession. The host carries no
+# compiled Swift. Run it with that package's network_check_wasm.
+
+swift_library(
+    name = "probe_lib",
+    srcs = ["//android/network_probe_android_application:NetworkProbe.swift"],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "NetworkProbe",
+    tags = ["manual"],
+    deps = [
+        "@isomer//:foundation",
+        "@isomer//wasm/libraries/swift_ui",
+        "@isomer//wasm/libraries/swift_ui:isomer",
+    ],
+)
+
+# The development shape (everything exported, nothing collected): the
+# register exports of IsomerNetworkHost's interfaces among them, which a
+# reactor with a list of its own must name
+# (swift_ffi_isomer_register_HTTPHost, swift_ffi_isomer_register_WebSocketHost).
+swift_binary(
+    name = "probe_reactor",
+    copts = [
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    linkopts = [
+        "-Xlinker",
+        "--export-all",
+        "-Xlinker",
+        "--no-gc-sections",
+        "-Xlinker",
+        "-z",
+        "-Xlinker",
+        "stack-size=16777216",
+    ],
+    linkshared = True,
+    module_name = "network_probe_reactor",
+    tags = ["manual"],
+    deps = [
+        "@isomer//wasm/libraries/swift_ui:hot_bridge",
+        ":probe_lib",
+        "@isomer//wasm/libraries/swift_ui",
+        "@isomer//wasm/libraries/swift_ui:isomer",
+    ],
+)
+
+transition_binary(
+    name = "network_probe.wasm",
+    binary = ":probe_reactor",
+    platform = "@isomer//swift_ffi/rules:wasm32-wasip1",
+    tags = ["manual"],
+)
+
+flat_assets(
+    name = "probe_assets",
+    srcs = [":network_probe.wasm"],
+)
+
+kt_android_library(
+    name = "host_app",
+    srcs = glob(["kotlin/**/*.kt"]) + [
+        "@isomer//android/libraries/swift_ui:interpreter_kotlin",
+        "@isomer//android/libraries/wasm_view:runtime_kotlin",
+    ],
+    custom_package = "dev.isomer.networkprobe.wasm",
+    manifest = "AndroidManifest.xml",
+    plugins = ["@isomer//android/libraries/swift_ui:compose_compiler_plugin"],
+    tags = ["manual"],
+    deps = [
+        "@isomer//tools/android:maven_androidx_activity_activity_compose",
+        "@isomer//tools/android:maven_androidx_compose_foundation_foundation",
+        "@isomer//tools/android:maven_androidx_compose_material3_material3",
+        "@isomer//tools/android:maven_androidx_compose_runtime_runtime",
+        "@isomer//tools/android:maven_androidx_compose_ui_ui",
+        "@isomer//tools/android:maven_org_jetbrains_kotlinx_kotlinx_coroutines_android",
+        "@isomer//tools/android:maven_org_jetbrains_kotlinx_kotlinx_coroutines_core",
+    ],
+)
+
+android_binary(
+    name = "network_probe_wasm_android_application_apk",
+    assets = [":probe_assets"],
+    assets_dir = "probe_assets",
+    manifest = "AndroidManifest.xml",
+    visibility = ["//android/network_probe_android_application:__pkg__"],
+    deps = [
+        ":host_app",
+        "@isomer//android/libraries/wasm_view:wamr_jni",
+    ],
+)

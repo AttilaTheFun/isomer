@@ -1,0 +1,196 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# Native Linux host + OpenGL renderer. Exposes a flat C API (renderer.h) that the
+# Swift host bridge calls; built with the system C toolchain (gcc) when the app
+# target resolves on a Linux host. Draws every UI primitive on the GPU with an
+# SDF fragment shader (rounded rects / borders / gradients / soft shadows), text
+# via SDL2_ttf, images via stb_image, and async HTTP via libcurl — all hosted in
+# an SDL2 window. The shared libraries (SDL2, SDL2_ttf, libGL via libglvnd,
+# libcurl) ship on essentially every desktop Linux / SteamOS install.
+cc_library(
+    name = "renderer",
+    srcs = [
+        "renderer.c",
+        "stb_impl.c",
+    ],
+    hdrs = [
+        "renderer.h",
+        "stb/stb_image.h",
+        "webview_linux.h",
+    ],
+    copts = [
+        "-std=c11",
+        "-D_REENTRANT",
+        "-Wno-unused-parameter",
+        "-Wno-format-truncation",
+    ],
+    linkopts = [
+        "-lSDL2",
+        "-lSDL2_ttf",
+        "-lGL",
+        "-lcurl",
+        "-lpthread",
+        "-lm",
+    ],
+    target_compatible_with = ["@platforms//os:linux"],
+    deps = [":webview_gtk"],
+)
+
+# Embedded WebView (WebKitGTK in an X11 child window). Isolated in its own
+# library so only this translation unit pulls in the GTK/WebKit headers. The
+# include dirs are the (broken-on-SteamOS) `pkg-config --cflags webkit2gtk-4.1
+# gtk+-3.0` set, hardcoded; the renderer falls back to a system-browser card at
+# runtime when WebKitGTK is unavailable (Wayland / not installed). Built with the
+# system C toolchain on a Linux host.
+cc_library(
+    name = "webview_gtk",
+    srcs = ["webview_linux.c"],
+    hdrs = ["webview_linux.h"],
+    copts = [
+        "-std=c11",
+        "-D_REENTRANT",
+        "-Wno-unused-parameter",
+        "-Wno-deprecated-declarations",
+        "-isystem",
+        "/usr/include/webkitgtk-4.1",
+        "-isystem",
+        "/usr/include/gtk-3.0",
+        "-isystem",
+        "/usr/include/glib-2.0",
+        "-isystem",
+        "/usr/include/cairo",
+        "-isystem",
+        "/usr/include/pango-1.0",
+        "-isystem",
+        "/usr/include/harfbuzz",
+        "-isystem",
+        "/usr/include/gdk-pixbuf-2.0",
+        "-isystem",
+        "/usr/include/atk-1.0",
+        "-isystem",
+        "/usr/include/freetype2",
+        "-isystem",
+        "/usr/include/libpng16",
+        "-isystem",
+        "/usr/include/fribidi",
+        "-isystem",
+        "/usr/include/libsoup-3.0",
+        "-isystem",
+        "/usr/include/at-spi2-atk/2.0",
+        "-isystem",
+        "/usr/include/at-spi-2.0",
+        # glibconfig.h (/usr/lib/glib-2.0/include) and dbus-arch-deps.h
+        # (/usr/lib/dbus-1.0/include) come in via C_INCLUDE_PATH (see .bazelrc) —
+        # Bazel rejects absolute -I paths outside /usr/include.
+    ],
+    linkopts = [
+        "-lwebkit2gtk-4.1",
+        "-lgtk-3",
+        "-lgdk-3",
+        "-lgobject-2.0",
+        "-lglib-2.0",
+        "-lgio-2.0",
+        "-lX11",
+    ],
+    target_compatible_with = ["@platforms//os:linux"],
+)
+
+# The bridging header is imported so the Swift host can call the C renderer API.
+_LINUX_COPTS = [
+    "-import-objc-header",
+    "$(location renderer.h)",
+]
+
+# The SwiftUI reimplementation for Linux: the shared core plus the SDL2/OpenGL
+# host bridge, compiled as a module named `SwiftUI` (see the wasm/Android/Windows
+# counterparts) so application code can `import SwiftUI` unchanged.
+
+swift_library(
+    name = "swift_ui",
+    package_name = "isomer",
+    srcs = [
+        "LinuxHost.swift",
+        "//shared/renderers:srcs",
+        "//shared/swift_ui_core:srcs",
+    ],
+    # The define activates the `os(Linux)` host entry point in `App.main()`
+    # (which calls `LinuxApp.run()`, defined here); the platform-agnostic core
+    # builds without it for a plain Linux host (e.g. the snapshot test).
+    copts = _LINUX_COPTS + ["-DISOMER_LINUX_HOST"],
+    module_name = "SwiftUI",
+    swiftc_inputs = ["renderer.h"],
+    target_compatible_with = ["@platforms//os:linux"],
+    deps = [
+        "//shared/isomer_swift_ui",
+        ":renderer",
+        "@flatbuffers//swift",
+        # Lights up canImport(SwiftGPU): the shared SwiftGPURenderer becomes
+        # the self-drawing renderer, drawing through swift_gpu's GL backend.
+        "//swift_gpu/linux:swift_gpu",
+        "//frameworks:for_core",
+    ] + [
+        # `Map` engine injection point: defaults to an empty stub; a consumer
+        # with its own swift_map dep points the flag at the real engine to
+        # light up canImport(SwiftMap). See //shared/BUILD.bazel.
+        "//shared:map_engine_linux",
+    ],
+)
+
+# The wasm delivery cell's `SwiftUI` module lives in a sibling package
+# (//linux/libraries/swift_ui_wasm) — it reuses `LinuxHost.swift` + `renderer.h`
+# from here (exported below) plus its own `LinuxWasmHost.swift`. It carries the
+# SAME `module_name = "SwiftUI"`, so it MUST be a separate Bazel package: two
+# same-named swiftmodules in one package collide on the emitted
+# `SwiftUI.swiftmodule` output path (a `bazel build //...` action conflict), even
+# though the compiled and wasm cells are never linked together.
+exports_files([
+    "LinuxHost.swift",
+    "LinuxWasmHost.swift",
+    "renderer.h",
+])
+
+# Core native-bridging API (logging, clock, URLs), Linux implementation.
+# What Isomer provides beyond Apple's SwiftUI API (see
+# //shared/swift_ui_extensions); IsomerBridge re-exports it.
+swift_library(
+    name = "isomer",
+    package_name = "isomer",
+    srcs = [
+        "IsomerBridge.swift",
+        "//shared/isomer:Exports.swift",
+        "//shared/swift_ui_extensions:srcs",
+    ],
+    copts = _LINUX_COPTS,
+    module_name = "Isomer",
+    swiftc_inputs = ["renderer.h"],
+    target_compatible_with = ["@platforms//os:linux"],
+    deps = [
+        ":renderer",
+        ":swift_ui",
+        "//swift_ffi/swift_ffi",
+        "//shared/isomer_swift_ui",
+    ],
+)
+
+# The names the Isomer module had before 0.31: each re-exports it.
+swift_library(
+    name = "swift_ui_extensions",
+    package_name = "isomer",
+    srcs = ["//shared/isomer:Compatibility.swift"],
+    module_name = "SwiftUIExtensions",
+    target_compatible_with = ["@platforms//os:linux"],
+    deps = [":isomer"],
+)
+
+swift_library(
+    name = "isomer_bridge",
+    package_name = "isomer",
+    srcs = ["//shared/isomer:Compatibility.swift"],
+    module_name = "IsomerBridge",
+    target_compatible_with = ["@platforms//os:linux"],
+    deps = [":isomer"],
+)
+

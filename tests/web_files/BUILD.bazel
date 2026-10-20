@@ -1,0 +1,36 @@
+load("@aspect_rules_js//js:defs.bzl", "js_test")
+
+# The web's app files (wasm/libraries/swift_ui/runtime/file_system.js) at the
+# WASI layer, in the hermetic Node: file_system_test.mjs drives the calls a
+# guest's Foundation makes. Persistence across page loads needs a browser:
+# examples/web/files_probe_web_application and tools/testing/run_files_check.js.
+
+# The modules under test beside the test, which imports them as "./…".
+genrule(
+    name = "runtime",
+    srcs = [
+        "//wasm/libraries/swift_ui:runtime/file_system.js",
+        "//wasm/libraries/swift_ui:runtime/imported_files.js",
+    ],
+    outs = [
+        "file_system.js",
+        "imported_files.js",
+    ],
+    cmd = "for f in $(SRCS); do cp $$f $(RULEDIR)/$$(basename $$f); done",
+)
+
+js_test(
+    name = "file_system_test",
+    size = "small",
+    data = [":runtime"],
+    entry_point = "file_system_test.mjs",
+)
+
+# The same files kept in blocks in IndexedDB (a write puts the blocks it
+# touched), with an IndexedDB and a localStorage of its own in memory.
+js_test(
+    name = "blocks_test",
+    size = "small",
+    data = [":runtime"],
+    entry_point = "blocks_test.mjs",
+)

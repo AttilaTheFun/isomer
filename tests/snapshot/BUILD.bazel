@@ -1,0 +1,50 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary", "swift_library")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+
+# The platform-agnostic core, compiled for the host so it can be exercised in a
+# plain unit test (no GPU / browser). Module renamed so it doesn't collide with
+# the system SwiftUI on macOS.
+swift_library(
+    name = "core_host",
+    package_name = "isomer",
+    srcs = [
+        "//shared/renderers:srcs",
+        "//shared/swift_ui_core:srcs",
+    ],
+    # The shared core spells its own types `SwiftUI.X` where a generic
+    # parameter shadows the name (`Button where Label == SwiftUI.Label<…>`),
+    # as Apple's interface does; this module is that SwiftUI under another name.
+    copts = ["-module-alias", "SwiftUI=IsomerCore"],
+    module_name = "IsomerCore",
+    testonly = True,
+    visibility = ["//tests:__subpackages__"],
+    deps = [
+        "//shared/isomer_swift_ui",
+        "@flatbuffers//swift",
+        # The Apple-named ones (CoreTransferable, UniformTypeIdentifiers)
+        # are the Mac's own here.
+    ],
+)
+
+# Hermetic golden snapshot checker: renders views through the real pipeline with
+# a recording HostBridge and compares the emitted draw list to inline goldens.
+# A plain executable (no XCTest) so it runs anywhere; exits non-zero on a
+# mismatch. Wrapped as a test below.
+swift_binary(
+    name = "snapshot_check",
+    package_name = "isomer",
+    srcs = [
+        "RecordingHost.swift",
+        "SnapshotTests.swift",
+    ],
+    copts = ["-parse-as-library"],
+    testonly = True,
+    deps = [":core_host"],
+)
+
+sh_test(
+    name = "snapshot_test",
+    size = "small",
+    srcs = ["run_snapshot_test.sh"],
+    data = [":snapshot_check"],
+)
