@@ -81,7 +81,7 @@ root-only overrides are listed in [`examples/MODULE.bazel`](../examples/MODULE.b
 
 ```starlark
 # MODULE.bazel (with the project's registry listed before the BCR in .bazelrc)
-bazel_dep(name = "isomer", version = "0.36.0")
+bazel_dep(name = "isomer", version = "0.36.1")
 ```
 
 Using swift_ffi alone builds nothing else of Isomer.

@@ -66,7 +66,7 @@ version (the Playground's and examples' Package.swift by version, no
 git/archive override, a local_path_override only inside this repository);
 CI's `pins` job runs it on main's commits, and Reviews holds a release until
 its commit's `pins` passes. isomer's own module() version is the release's
-(0.36.0), and its release is added to the registry once tagged.
+(0.36.1), and its release is added to the registry once tagged.
 
 Things the fold taught:
 

@@ -96,7 +96,7 @@ isomer_android_app(
     services_kt = ":host_kotlin",
     swift_library = ":app_swift",
     version_code = 19,
-    version_name = "0.36.0",
+    version_name = "0.36.1",
 )
 
 # The host, with the WasmView the run surface embeds (the wasm_view Kotlin
