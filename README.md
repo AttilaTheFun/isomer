@@ -682,7 +682,7 @@ and add isomer as a `bazel_dep` by its release's version (0.36.0 on; a
 `git_override` of a commit between releases):
 
 ```starlark
-bazel_dep(name = "isomer", version = "0.36.0")
+bazel_dep(name = "isomer", version = "0.36.1")
 ```
  The rules_swift and
 swift-foundation forks isomer needs come from that registry by version,
