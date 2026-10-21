@@ -196,4 +196,12 @@ def _android_tools_impl(mctx):
         build_file_content = _SYSTEM_IMAGE_BUILD,
     )
 
-android_tools = module_extension(implementation = _android_tools_impl)
+# Host-dependent (the JDK, build tools, platform tools and emulator are the
+# host's, and the system image its architecture's): a consumer's
+# MODULE.bazel.lock then records a result per OS and architecture instead of
+# handing a Linux CI runner the Mac's emulator ("Exec format error").
+android_tools = module_extension(
+    implementation = _android_tools_impl,
+    os_dependent = True,
+    arch_dependent = True,
+)
