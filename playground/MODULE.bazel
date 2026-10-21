@@ -199,6 +199,7 @@ swift_deps.configure_package(
     target_deps = {
         "AgentUI": ["@@isomer+//:swift_ui", "@@isomer+//:foundation"],
         "InboxUI": ["@@isomer+//:swift_ui", "@@isomer+//:foundation"],
+        "MarkdownViews": ["@@isomer+//:swift_ui", "@@isomer+//:foundation"],
         "MessagesCore": ["@@isomer+//:swift_ui", "@@isomer+//:foundation"],
         "MessagesUI": ["@@isomer+//:swift_ui", "@@isomer+//:foundation"],
         "NavigationUI": ["@@isomer+//:swift_ui", "@@isomer+//:foundation"],

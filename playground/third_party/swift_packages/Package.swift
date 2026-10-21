@@ -9,11 +9,11 @@ let package = Package(
     name: "isomer_playground_swift_packages",
     platforms: [.macOS("15.0")],
     dependencies: [
-        // AgentUI 0.36.1 (SwiftTerm at its 1.99.0 release, so a package
-        // pinned by version can depend on it).
+        // AgentUI 0.38.0, whose Markdown is a product of its own
+        // (MarkdownViews), shared with the other apps that render Markdown.
         .package(
             url: "https://github.com/AttilaTheFun/agent_ui.git",
-            exact: "0.36.1"
+            exact: "0.38.0"
         ),
         // OpenRouterKit (the OpenRouter client, agent loop and coding
         // tools), the library behind the openrouter CLI; shared with
