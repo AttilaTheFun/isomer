@@ -50,8 +50,16 @@ project's registry, AttilaTheFun/bazel_registry, from 0.36.0; a commit
 between releases), lists that registry before the BCR in its .bazelrc, and
 repeats the root-only overrides (flatbuffers + patches, rules_foreign_cc).
 
-**Pins by version (2026-10-20).** Release tags are semver (v0.36.0), app
-versions match them (0.36.0 (N)), and pins between the project's repos are
+**Versions (from 0.38).** A version is MAJOR.MINOR.BUILD; there are no
+point releases. MODULE.bazel and the Playground's apps commit MAJOR.MINOR.0
+(the iPhone's build number is always 1, Android's versionCode MAJOR×1,000,000
++ MINOR×1,000 + BUILD); CI stamps each build's own, 0.38.N, N the
+Playground's build from the release server's number, and a release is
+tagged v0.38.N, the build it releases. The registry's isomer 0.38.N entry is
+the tag with one patch setting module() to 0.38.N (its tools/add_version.py
+--stamped). The examples' apps are tests and stay at 1.0.
+
+**Pins by version (2026-10-20).** Pins between the project's repos are
 by version at a release (a commit is fine on a branch, or on main between
 releases). Bazel modules come from bazel_registry, before the BCR: isomer's
 releases, visor's, and the forks isomer carries until upstream takes their
@@ -65,8 +73,8 @@ modules. tools/released_pins.sh says whether every pin is a released
 version (the Playground's and examples' Package.swift by version, no
 git/archive override, a local_path_override only inside this repository);
 CI's `pins` job runs it on main's commits, and Reviews holds a release until
-its commit's `pins` passes. isomer's own module() version is the release's
-(0.36.1), and its release is added to the registry once tagged.
+its commit's `pins` passes. A release is added to the registry once
+tagged.
 
 Things the fold taught:
 
