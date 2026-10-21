@@ -5,7 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AttilaTheFun/agent_ui.git",
       "state" : {
-        "revision" : "7d6854f3b1320547e98e4e86f422448bd94ea30f"
+        "revision" : "7d4c213d05da4b035e493188013fe47fe52609aa",
+        "version" : "0.36.1"
       }
     },
     {
@@ -22,7 +23,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AttilaTheFun/open_router_cli.git",
       "state" : {
-        "revision" : "080cbe2746312ef9d2c3593e15105780877b399a"
+        "revision" : "080cbe2746312ef9d2c3593e15105780877b399a",
+        "version" : "0.4.0"
       }
     },
     {
@@ -48,7 +50,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/migueldeicaza/SwiftTerm.git",
       "state" : {
-        "revision" : "839d4fa1ffd4ea2ede5664e1c1fb13cc5771e11a"
+        "revision" : "2dad6a1e516f755bed77cf9bbd09455062f54758",
+        "version" : "1.99.0"
       }
     }
   ],

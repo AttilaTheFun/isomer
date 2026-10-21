@@ -9,17 +9,18 @@ let package = Package(
     name: "isomer_playground_swift_packages",
     platforms: [.macOS("15.0")],
     dependencies: [
-        // AgentUI v0.31 (its tag's commit: SwiftPM takes no two-part tags).
+        // AgentUI 0.36.1 (SwiftTerm at its 1.99.0 release, so a package
+        // pinned by version can depend on it).
         .package(
             url: "https://github.com/AttilaTheFun/agent_ui.git",
-            revision: "7d6854f3b1320547e98e4e86f422448bd94ea30f"
+            exact: "0.36.1"
         ),
         // OpenRouterKit (the OpenRouter client, agent loop and coding
         // tools), the library behind the openrouter CLI; shared with
         // Visor. The Playground's own OpenRouter loop is to move onto it.
         .package(
             url: "https://github.com/AttilaTheFun/open_router_cli.git",
-            revision: "080cbe2746312ef9d2c3593e15105780877b399a"
+            exact: "0.4.0"
         ),
     ]
 )

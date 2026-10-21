@@ -1,0 +1,18 @@
+# Whether every dependency of main's commit is pinned to a released version
+# (tools/released_pins.sh): SwiftPM packages by version, Bazel modules from
+# a registry. A pull request may still pin a revision while what it needs is
+# in development; a release may not, and Reviews holds a release until its
+# commit's `pins` check passes.
+name: Pins
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pins:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: tools/released_pins.sh
