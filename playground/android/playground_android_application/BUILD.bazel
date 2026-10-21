@@ -95,8 +95,8 @@ isomer_android_app(
     services_installer = "dev.isomer.runtime.PlaygroundAndroidServices.install(this)",
     services_kt = ":host_kotlin",
     swift_library = ":app_swift",
-    version_code = 19,
-    version_name = "0.36.1",
+    version_code = 38000,
+    version_name = "0.38.0",
 )
 
 # The host, with the WasmView the run surface embeds (the wasm_view Kotlin
