@@ -165,11 +165,27 @@ def _ffi_generate_impl(ctx):
 
     return [DefaultInfo(files = depset([output]))]
 
+_ANDROID_AARCH64 = Label("//swift_ffi/rules:android-aarch64")
+_ANDROID_X86_64 = Label("//swift_ffi/rules:android-x86_64")
+
+def _android_abi(platform, incoming):
+    """An Android library follows the ABI it is built for. Android's default
+    platform here is aarch64; under rules_android's split for an x86_64 APK
+    (`--android_platforms=@rules_android//:x86_64`, an x86_64 emulator's) the
+    library is built for x86_64, as the APK's lib/x86_64 expects, instead of
+    an aarch64 one the device can't load. Any other platform is as given."""
+    if platform != _ANDROID_AARCH64:
+        return platform
+    for incoming_platform in incoming:
+        if "x86_64" in str(incoming_platform):
+            return _ANDROID_X86_64
+    return platform
+
 def _dep_platform_transition_impl(settings, attr):
     # Optional: no `platform` keeps the caller's configuration.
     if not attr.platform:
         return {"//command_line_option:platforms": settings["//command_line_option:platforms"]}
-    return {"//command_line_option:platforms": [attr.platform]}
+    return {"//command_line_option:platforms": [_android_abi(attr.platform, settings["//command_line_option:platforms"])]}
 
 _dep_platform_transition = transition(
     implementation = _dep_platform_transition_impl,
@@ -219,8 +235,8 @@ ffi_generate = rule(
 
 # --- The platform transition --------------------------------------------------
 
-def _platform_transition_impl(_settings, attr):
-    return {"//command_line_option:platforms": [attr.platform]}
+def _platform_transition_impl(settings, attr):
+    return {"//command_line_option:platforms": [_android_abi(attr.platform, settings["//command_line_option:platforms"])]}
 
 
 _platform_transition = transition(
