@@ -59,6 +59,10 @@ PlayStore.enabled=false
 EOF
 fi
 
+# The emulator reads ANDROID_HOME before ANDROID_SDK_ROOT: both name the
+# hermetic SDK assembled here, so a machine's own (a CI runner's preinstalled
+# SDK, which has no system image of this AVD) is never what it finds.
+export ANDROID_HOME="$SDK"
 export ANDROID_SDK_ROOT="$SDK"
 export ANDROID_AVD_HOME="$AVD_HOME"
 
