@@ -16,8 +16,12 @@
 #
 # The container is the one this script started last (its id kept in
 # ~/.cache/isomer/linux-build-container; started again when it is gone). Its
-# home, /root there, is a folder on this Mac, so the checkout is unpacked into
-# it directly. The image is built with Apple's `container build` when this
+# home, /root there, is a folder on this Mac shared into the container: the
+# checkout arrives there and what's packaged leaves there, but the checkout is
+# unpacked into /work and Bazel's tree kept in /var/cache/bazel, on the
+# container's own disk. A shared folder costs the Mac a file handle for every
+# file the container has looked at in it: a Bazel tree there held 160,000
+# and ran macOS out of them. The image is built with Apple's `container build` when this
 # machine lacks it. Nothing is run there but the build.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -56,15 +60,19 @@ home="$(oss container list 2>/dev/null | awk -v id="$id" '$1 == id {print $NF}')
 # into the container's home.
 (cd "$ROOT" && git ls-files -co --exclude-standard -z | COPYFILE_DISABLE=1 tar --no-xattrs -czf "$home/isomer-src.tgz" --null -T -)
 
+# Every bazel in the container (a packaging command's too) keeps its tree
+# on the container's disk.
+echo "startup --output_user_root=/var/cache/bazel" > "$home/.bazelrc"
+
 flags="--keep_going"
 if [ -n "$module" ]; then
-    command="cd /root/isomer/$module && bazel build $flags $*"
+    command="cd /work/isomer/$module && bazel build $flags $*"
     [ -n "$after" ] && command="$command && $after"
 elif [ $# -gt 0 ]; then
-    command="cd /root/isomer && bazel build $flags $*"
+    command="cd /work/isomer && bazel build $flags $*"
 else
-    command="cd /root/isomer && bazel build $flags //linux/... && cd examples && bazel build $flags //linux/... && cd ../playground && bazel build $flags //linux/..."
+    command="cd /work/isomer && bazel build $flags //linux/... && cd examples && bazel build $flags //linux/... && cd ../playground && bazel build $flags //linux/..."
 fi
 # A fresh copy of the checkout each run (files deleted here go there too);
 # Bazel's output base is outside it.
-oss container exec "$id" -- bash -lc "rm -rf /root/isomer && mkdir -p /root/isomer && tar -xzf /root/isomer-src.tgz -C /root/isomer && rm /root/isomer-src.tgz && $command"
+oss container exec "$id" -- bash -lc "rm -rf /work/isomer && mkdir -p /work/isomer && tar -xzf /root/isomer-src.tgz -C /work/isomer && rm /root/isomer-src.tgz && $command"
