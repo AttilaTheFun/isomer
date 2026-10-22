@@ -77,13 +77,15 @@ def oss_shot(env, path):
 
 
 class Review:
-    """The run's snapshot folders, in the review store's manifest format."""
+    """The run's snapshot folders, in the review store's manifest format:
+    review-<cell>, the folders the review server files (publish_proof's
+    `runs` sends the folder that holds them)."""
     def __init__(self, folder, commit, version):
         self.folder, self.commit, self.version = folder, commit, version
 
     def cell(self, name, device, orientation, shots):
         """`shots`: (item name, capture file) pairs already in the cell's folder."""
-        out = os.path.join(self.folder, name)
+        out = os.path.join(self.folder, f"review-{name}")
         items = [{"name": item, "status": "new", "capture": capture} for item, capture in shots
                  if os.path.exists(os.path.join(out, capture))]
         missing = [item for item, capture in shots if not os.path.exists(os.path.join(out, capture))]
@@ -95,7 +97,7 @@ class Review:
         log(f"{name}: {len(items)} screens" + (f", MISSING {missing}" if missing else ""))
 
     def dir(self, name):
-        path = os.path.join(self.folder, name)
+        path = os.path.join(self.folder, f"review-{name}")
         os.makedirs(path, exist_ok=True)
         return path
 

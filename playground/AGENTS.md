@@ -163,7 +163,7 @@ of its own (pinning isomer by commit), back in isomer as `playground/` at
 - **The Gallery on every platform**: `tests/proof/proof.py [ios] [macos]
   [android] [web] [linux] [windows] --review <dir>` shoots the main menu and
   every Gallery entry with each platform's renderers, in the app and as
-  wasm (folders `<platform>-<renderer>`, e.g. `ios-wasm-metal`), on oss
+  wasm (folders `review-<platform>-<renderer>`, e.g. `review-ios-wasm-metal`: the review server files only `review-` folders), on oss
   leases (the web in headless Chrome here). Linux builds in an oss container
   (isomer's tools/linux/build.sh); Windows builds on the oss Windows VM
   (`--config=swift-6.3.2`: Visual Studio's build tools, Swift, Python; isomer's

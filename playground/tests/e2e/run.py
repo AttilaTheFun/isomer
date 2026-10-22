@@ -142,7 +142,8 @@ class Proof:
 
     def screens(self, orientation, screens, show):
         """Each screen as show(steps) leaves it, shot."""
-        folder = f"{self.name}-{orientation}"
+        # review-<run>: the folders the review server files.
+        folder = f"review-{self.name}-{orientation}"
         os.makedirs(os.path.join(self.folder, folder), exist_ok=True)
         items = []
         for name, steps in screens:
@@ -153,7 +154,7 @@ class Proof:
 
     def road(self, name):
         self.end()
-        folder = os.path.join(self.folder, f"{self.name}-e2e-portrait")
+        folder = os.path.join(self.folder, f"review-{self.name}-e2e-portrait")
         os.makedirs(folder, exist_ok=True)
         slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
         self.current = {"name": name, "slug": slug, "folder": folder, "lines": [], "ok": True, "shot": False}
@@ -183,7 +184,7 @@ class Proof:
     def finish(self):
         self.end()
         if getattr(self, "items", None):
-            self.manifest(f"{self.name}-e2e-portrait", "ui-test", f"{self.name}-e2e", "portrait", self.items)
+            self.manifest(f"review-{self.name}-e2e-portrait", "ui-test", f"{self.name}-e2e", "portrait", self.items)
         self.items = []
 
 # --- Android
