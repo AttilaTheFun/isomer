@@ -17,7 +17,7 @@ swift_library(
 
 ios_application(
     name = "metal_triangle_ios_application",
-    bundle_id = "com.LoganShire.Isomer",
+    bundle_id = "com.LoganShire.IsomerExamples",
     families = [
         "ipad",
         "iphone",

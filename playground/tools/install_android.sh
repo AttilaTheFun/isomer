@@ -16,7 +16,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 SERIAL="${1:-${ANDROID_SERIAL:-}}"
 TARGET=//android/playground_android_application:playground_android_application_apk
-PACKAGE=dev.isomer.playground
+PACKAGE=com.LoganShire.Isomer
 bazel build -c opt "$TARGET"
 APK="$(bazel cquery -c opt --output=files "$TARGET" 2>/dev/null | grep -v unsigned | grep '\.apk$' | head -1)"
 # The "Run on the web" site inside it holds every module its page imports

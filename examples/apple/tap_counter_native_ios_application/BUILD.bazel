@@ -10,7 +10,7 @@ load("@isomer_signing//:signing.bzl", "TEAM_ID")
 # one cell at a time. Bench mode: launch with `-bench` (see
 # //apple/libraries/bench).
 
-BUNDLE_ID = "com.LoganShire.Isomer"
+BUNDLE_ID = "com.LoganShire.IsomerExamples"
 
 
 swift_library(

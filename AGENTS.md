@@ -330,9 +330,12 @@ pushed (docs/*_plan.md files record how each landed). Android builds with
 rules_android's `android_binary` + rules_kotlin's `kt_android_library`; the
 old bespoke kotlinc/d8/aapt2 pipeline is gone from use, but `tools/android`
 still hosts the emulator runner (`apk_install_run`) and the Level 4 codegen
-templates. iOS `bazel build` fails on machines without the
-'iOS Team Provisioning Profile: com.LoganShire.Isomer' — that's an
-environment issue, not code; exclude iOS from wildcard verification builds.
+templates. iOS device builds need the team's Xcode-managed wildcard
+profile ('iOS Team Provisioning Profile: *'); a machine without it fails
+them — an environment issue, not code; exclude iOS from wildcard
+verification builds. The Playground's app is Isomer (com.LoganShire.Isomer,
+Isomer.app; Android com.LoganShire.Isomer, "Isomer"); the examples' apps
+share com.LoganShire.IsomerExamples.
 
 ## Build & run (macOS host)
 

@@ -12,7 +12,7 @@ load("@isomer_signing//:signing.bzl", "TEAM_ID")
 # bundle id across the iOS cells — install one at a time. Bench mode: launch
 # with the ISO_BENCH=1 environment.
 
-BUNDLE_ID = "com.LoganShire.Isomer"
+BUNDLE_ID = "com.LoganShire.IsomerExamples"
 
 
 # The reimplementation core + renderers + the UIKit/Metal host, in ONE

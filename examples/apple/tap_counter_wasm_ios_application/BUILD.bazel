@@ -10,7 +10,7 @@ load("@isomer_signing//:signing.bzl", "TEAM_ID")
 # shape). One shared bundle id across the iOS cells — install one at a time.
 # Bench mode: launch with `-bench`.
 
-BUNDLE_ID = "com.LoganShire.Isomer"
+BUNDLE_ID = "com.LoganShire.IsomerExamples"
 
 
 swift_library(

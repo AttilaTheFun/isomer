@@ -46,8 +46,8 @@ import json, os, re, subprocess, sys, time
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # The isomer checkout this module lives in (playground/ is its subdirectory).
 ISOMER = os.environ.get("ISOMER", os.path.dirname(ROOT))
-ANDROID_PACKAGE = "dev.isomer.playground"
-IOS_BUNDLE = "com.LoganShire.Playground"
+ANDROID_PACKAGE = "com.LoganShire.Isomer"
+IOS_BUNDLE = "com.LoganShire.Isomer"
 SIMULATOR_NAME, SIMULATOR_TYPE = "playground-e2e", "iPhone 17 Pro"
 BOARD = "Swipe the board to merge tiles."
 # The web/Android templates (WebTemplate.all) and what each one's page shows

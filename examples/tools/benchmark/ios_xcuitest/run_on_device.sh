@@ -9,7 +9,7 @@
 # profile, sign everything with its team's Apple Development cert, then drive
 # `xcodebuild test-without-building` against a hand-built .xctestrun.
 #
-#   ISO_TARGET_BUNDLE_ID=com.LoganShire.Isomer \
+#   ISO_TARGET_BUNDLE_ID=com.LoganShire.IsomerExamples \
 #   DEVICE_UDID=00008110-001E219A1E44801E \
 #   TEST=CellPerformanceTests/testStartup \
 #   tools/benchmark/ios_xcuitest/run_on_device.sh
@@ -19,7 +19,7 @@
 set -euo pipefail
 
 RUNNER_BUNDLE_ID="${RUNNER_BUNDLE_ID:-com.LoganShire.IsomerUITestRunner}"
-TARGET_BUNDLE_ID="${ISO_TARGET_BUNDLE_ID:-com.LoganShire.Isomer}"
+TARGET_BUNDLE_ID="${ISO_TARGET_BUNDLE_ID:-com.LoganShire.IsomerExamples}"
 DEVICE_UDID="${DEVICE_UDID:?set DEVICE_UDID (xcrun xctrace list devices)}"
 TEST="${TEST:-CellPerformanceTests}"
 # The app under test as a bundle ON DISK (xctestrun's UITargetAppPath is

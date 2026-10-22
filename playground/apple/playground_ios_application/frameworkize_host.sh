@@ -83,7 +83,7 @@ for d in $DYLIBS; do
 <plist version="1.0"><dict>
   <key>CFBundleDevelopmentRegion</key><string>en</string>
   <key>CFBundleExecutable</key><string>$bin</string>
-  <key>CFBundleIdentifier</key><string>com.LoganShire.Playground.$(echo "$bin" | tr '_.' '--')</string>
+  <key>CFBundleIdentifier</key><string>com.LoganShire.Isomer.$(echo "$bin" | tr '_.' '--')</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
   <key>CFBundleName</key><string>$bin</string>
   <key>CFBundlePackageType</key><string>FMWK</string>

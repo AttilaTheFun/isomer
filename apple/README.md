@@ -23,7 +23,7 @@ Xcode project for IDE work.
 ## Benchmark cells (the minimal "Tap me" counter, iOS on-device)
 
 The cells behind [docs/benchmarks.md#ios](../docs/benchmarks.md#ios). All share
-ONE bundle id (`com.LoganShire.Isomer` — free personal teams allow few app
+ONE bundle id (`com.LoganShire.IsomerExamples` — free personal teams allow few app
 ids), so install one at a time; build with `--ios_multi_cpus=arm64 -c opt`.
 Adding `--define=wamr_aot=1` builds the wasm cells **hybrid**: a
 `wamrc --xip` AOT image linked into the signed `__TEXT` segment executes in

@@ -10,7 +10,7 @@ set -euo pipefail
 cd "$BUILD_WORKSPACE_DIRECTORY"
 
 APP="//apple/playground_ios_application"
-BUNDLE_ID="com.LoganShire.Playground"
+BUNDLE_ID="com.LoganShire.Isomer"
 
 echo "==> Building the Playground app for the simulator..."
 IOS_FLAGS=(--ios_multi_cpus=sim_arm64)
