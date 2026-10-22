@@ -11,7 +11,7 @@ load("@isomer_signing//:signing.bzl", "TEAM_ID")
 # Everything here is `manual` and dev-only (a device build needs the
 # Xcode-managed provisioning profile).
 
-BUNDLE_ID = "com.LoganShire.Isomer"
+BUNDLE_ID = "com.LoganShire.IsomerExamples"
 
 cc_library(
     name = "bench_wamr_c",

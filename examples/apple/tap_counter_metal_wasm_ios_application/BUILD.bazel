@@ -13,7 +13,7 @@ load("@isomer_signing//:signing.bzl", "TEAM_ID")
 # Bench mode: launch with `-bench` (self-driving; the accessibility harness
 # can't see a self-drawn surface).
 
-BUNDLE_ID = "com.LoganShire.Isomer"
+BUNDLE_ID = "com.LoganShire.IsomerExamples"
 
 
 swift_library(

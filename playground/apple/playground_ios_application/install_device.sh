@@ -24,7 +24,7 @@ FLAGS=(--ios_multi_cpus=arm64 --define iso_playground_embedded=1 -c opt)
 bazel build //apple/playground_ios_application "${FLAGS[@]}"
 IPA="$(bazel cquery --output=files //apple/playground_ios_application "${FLAGS[@]}" 2>/dev/null | grep -E '\.ipa$' | head -1)"
 xcrun devicectl device install app --device "$DEV" "$IPA"
-BUNDLE=com.LoganShire.Playground
+BUNDLE=com.LoganShire.Isomer
 xcrun devicectl device info apps --device "$DEV" 2>/dev/null | grep "$BUNDLE" || true
 [ -n "$MODE" ] || exit 0
 # The first launch after an install is sometimes refused while the device

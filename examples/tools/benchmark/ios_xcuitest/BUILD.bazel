@@ -12,7 +12,7 @@ load("@isomer_signing//:signing.bzl", "TEAM_ID")
 # the cell at run time with the ISO_TARGET_BUNDLE_ID launch env (they share
 # the id today, so this is future-proofing for distinct ids).
 
-BUNDLE_ID = "com.LoganShire.Isomer"
+BUNDLE_ID = "com.LoganShire.IsomerExamples"
 
 
 swift_library(

@@ -35,7 +35,7 @@ enum Harness: String, CaseIterable, Identifiable {
 
 /// Minimal Keychain string storage (generic passwords under the app).
 enum Keychain {
-    private static let service = "com.LoganShire.Playground"
+    private static let service = "com.LoganShire.Isomer"
 
     static func get(_ account: String) -> String? {
         let query: [String: Any] = [

@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDisplayName</key>
-	<string>Playground</string>
+	<string>Isomer</string>
 	<key>CFBundleName</key>
-	<string>Playground</string>
+	<string>Isomer</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -14,7 +14,7 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.LoganShire.Playground.auth</string>
+			<string>com.LoganShire.Isomer.auth</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>iso-playground</string>

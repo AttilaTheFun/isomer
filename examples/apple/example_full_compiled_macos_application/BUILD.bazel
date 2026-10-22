@@ -2,7 +2,7 @@ load("@build_bazel_rules_apple//apple:macos.bzl", "macos_application")
 load("@rules_swift//swift:swift.bzl", "swift_library")
 load("@rules_xcodeproj//xcodeproj:defs.bzl", "top_level_target", "xcodeproj")
 
-BUNDLE_ID = "com.LoganShire.Isomer"
+BUNDLE_ID = "com.LoganShire.IsomerExamples"
 
 # The shared SwiftUI application, compiled against the real SwiftUI.
 swift_library(

@@ -24,7 +24,7 @@ import XCTest
 final class CellPerformanceTests: XCTestCase {
     private var bundleID: String {
         ProcessInfo.processInfo.environment["ISO_TARGET_BUNDLE_ID"]
-            ?? "com.LoganShire.Isomer"
+            ?? "com.LoganShire.IsomerExamples"
     }
 
     private func makeApp() -> XCUIApplication {

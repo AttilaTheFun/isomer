@@ -340,7 +340,9 @@ local_provisioning_profile(
 ios_application(
     name = "playground_ios_application",
     app_icons = ["//artwork/playground_icon:app_icon"],
-    bundle_id = "com.LoganShire.Playground",
+    bundle_id = "com.LoganShire.Isomer",
+    # The app is Isomer (Isomer.app, "Isomer" under its icon); the project is the Playground.
+    bundle_name = "Isomer",
     # Its own app ID and keychain group: a wildcard profile's entitlements
     # would otherwise be copied as-is (application-identifier TEAM.*).
     entitlements = "Playground.entitlements",

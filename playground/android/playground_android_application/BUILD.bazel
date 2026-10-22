@@ -84,9 +84,9 @@ isomer_android_app(
         ":native_toolchain",
         "@isomer//android/libraries/wasm_view:wamr_jni",
     ],
-    label = "Playground",
+    label = "Isomer",
     icon = "//artwork/playground_icon:ic_launcher.png",
-    package = "dev.isomer.playground",
+    package = "com.LoganShire.Isomer",
     services_deps = [
         "@isomer//tools/android:maven_androidx_browser_browser",
         "@isomer//tools/android:maven_org_jetbrains_kotlinx_kotlinx_coroutines_android",
