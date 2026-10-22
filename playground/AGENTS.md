@@ -170,8 +170,9 @@ of its own (pinning isomer by commit), back in isomer as `playground/` at
   tools/ci/oss/windows-swift.ps1), in MSVC's environment with Git's bash.
 - **A release's proof**: `tests/e2e/run.py --review <dir> [--commit <sha>]`
   also writes the review store's runs (app "Isomer", the version
-  `version_name` says: stamp the release's into the working tree first, as
-  CI does): each app's screens in portrait and landscape, and each road of
+  `version_name` says: stamp the build's into the working tree first, as
+  CI does, with `tools/playground/stamp.py 0.38.N`, and check the files out
+  after; tests/proof/proof.py reads it too): each app's screens in portrait and landscape, and each road of
   the run recorded. They go to the review server with the review tooling's
   `publish_proof` (`bazel run //reviews/harnesses:publish_proof -- runs
   <folder of review-<run> folders> --commit <sha>` in the reviews checkout,
