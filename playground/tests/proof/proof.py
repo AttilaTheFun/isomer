@@ -423,7 +423,9 @@ def windows(review, entries):
                f"Set-Content C:\\isomer-app\\run.cmd 'cd /d C:\\isomer-app && {sets} start \"\" isomer.exe'; "
                "schtasks /create /f /tn IsomerProof /tr C:\\isomer-app\\run.cmd /sc once /st 23:59 /ru runner /it | Out-Null; "
                "schtasks /run /tn IsomerProof | Out-Null")
-            time.sleep(pause or (wait if slug else 10))
+            # The menu is the first launch after packaging, which Windows
+            # scans first: it gets longer.
+            time.sleep(pause or (wait if slug else 30))
             oss_shot(env, path)
         return shoot
 
