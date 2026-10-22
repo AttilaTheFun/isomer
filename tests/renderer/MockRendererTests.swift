@@ -1357,6 +1357,55 @@ func checkLargeTitleOnce(_ previous: MockRenderer) {
     expect(countTexts(drawing.lastTree!, "Sidebar") == 1, "the large title is there once after three frames (got \(countTexts(drawing.lastTree!, "Sidebar")))")
 }
 
+/// A drawn compact split (a phone under the GPU renderer) shows its detail
+/// column's back to the sidebar, however the detail's stack is made: the
+/// Gallery's page is a view whose body is a NavigationStack(path:), under an
+/// `.id`.
+nonisolated(unsafe) var compactSplitCase = 0
+struct CompactSplitPage: View {
+    @State private var path: [Int] = []
+    var body: some View {
+        NavigationStack(path: $path) {
+            Text("Page body").navigationTitle("Page")
+        }
+    }
+}
+struct CompactSplitScreen: View {
+    @State private var column: NavigationSplitViewColumn = .detail
+    var body: some View {
+        NavigationSplitView(preferredCompactColumn: $column) {
+            List { Text("Row") }.navigationTitle("Sidebar")
+        } detail: {
+            switch compactSplitCase {
+            case 0: NavigationStack { Text("Page body").navigationTitle("Page") }
+            case 1: CompactSplitPage()
+            default: CompactSplitPage().id(1)
+            }
+        }
+    }
+}
+
+func flatNavbarParam(_ node: IsoFlat_Node, _ key: String) -> String? {
+    if node.view == "navbar" { for kv in node.params where kv.key == key { return kv.value } }
+    for child in node.ch { if let found = flatNavbarParam(child, key) { return found } }
+    return nil
+}
+
+@MainActor
+func checkCompactSplitBack(_ previous: MockRenderer) {
+    let drawing = DrawingMockRenderer()
+    Renderer.bind(drawing)
+    defer { Renderer.bind(previous) }
+    for (index, label) in ["a NavigationStack", "a view whose body is a NavigationStack(path:)", "that view under an id"].enumerated() {
+        compactSplitCase = index
+        Runtime.shared.installRootView { CompactSplitScreen() }
+        Runtime.shared.start(host: StubHost(), width: 390, height: 800)
+        var buffer = ByteBuffer(bytes: FlatTreeEncoder().encode(root: drawing.lastTree!))
+        let back = flatNavbarParam(getRoot(byteBuffer: &buffer) as IsoFlat_Node, "back")
+        expect(back == "1", "a drawn compact split's detail that is \(label) goes back to the sidebar (its bar's back: \(back ?? "no bar"))")
+    }
+}
+
 /// A binding read stops reuse only between the state's owner and the
 /// reader: the owner is reused while nothing of its changed, and a change
 /// to the state reaches the reader.
@@ -2519,6 +2568,7 @@ struct Main {
         checkModifierState(mock)
         checkStateReaders(mock)
         checkAPIAdditions(mock)
+        checkCompactSplitBack(mock)
 
         // Row actions: the tagged row is a tap target and carries its menu.
         Runtime.shared.installRootView { RowScreen() }

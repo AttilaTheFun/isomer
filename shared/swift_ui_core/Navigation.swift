@@ -467,12 +467,16 @@ extension NavigationStack: _PrimitiveView {
         // is just an empty strip; collapse it until something is pushed — or
         // until the screen puts something IN the bar (toolbar items, or an
         // `.inline` title), which shows it at the root too (SwiftUI shows
-        // root toolbar items in the navigation bar).
+        // root toolbar items in the navigation bar). A compact split
+        // column's root has its back to the previous column there, and a
+        // title with no scroll to lead (so no large title) shows inline.
         // Otherwise the canonical `navbar` host-view node: a native bar under
         // component systems, DrawnNavBar via chrome expansion on the
         // self-drawing path — the same bar on every GPU backend.
         let barHasContent = !leadingItems.isEmpty || !trailingItems.isEmpty
             || (inlineTitle && !nav.currentTitle.isEmpty)
+            || (!hasLargeTitle && !nav.currentTitle.isEmpty)
+            || splitBack != nil
         let bar: RenderNode
         if nav.stack.isEmpty, !barHasContent {
             bar = RenderNode(kind: .box)
