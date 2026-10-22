@@ -131,7 +131,7 @@ of its own (pinning isomer by commit), back in isomer as `playground/` at
   "Run on the web" reached phones blank twice: the site's file list missing
   a module, then a stale APK.
 - **A release's proof**: `tests/e2e/run.py --review <dir> [--commit <sha>]`
-  also writes the review store's runs (app "Playground", the version
+  also writes the review store's runs (app "Isomer", the version
   `version_name` says: stamp the release's into the working tree first, as
   CI does): each app's screens in portrait and landscape, and each road of
   the run recorded. They go to the review server with the review tooling's

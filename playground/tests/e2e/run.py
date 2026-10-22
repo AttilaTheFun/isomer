@@ -44,7 +44,7 @@ anything failed.
   tests/e2e/run.py [android] [ios] --review <dir> [--commit <sha>]
 
 also writes the run as proof for the review store (reviews/MANIFEST.md, app
-"Playground", the version the apps show): first each app's screens in
+"Isomer", the version the apps show): first each app's screens in
 portrait and in landscape (`<platform>-<orientation>`, snapshots), then each
 road of the run recorded, with its last screen (`<platform>-e2e-portrait`, a
 UI test; a web road's screen is the page as headless Chrome showed it).
@@ -125,7 +125,7 @@ class Proof:
 
     def manifest(self, folder, kind, target, orientation, items):
         out = os.path.join(self.folder, folder)
-        json.dump({"schema": 1, "app": "Playground", "version": self.version, "release": self.version,
+        json.dump({"schema": 1, "app": "Isomer", "version": self.version, "release": self.version,
                    "commit": self.commit, "kind": kind, "target": target, "device": self.device,
                    "orientation": orientation, "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                    "items": items}, open(os.path.join(out, "manifest.json"), "w"), indent=1)
