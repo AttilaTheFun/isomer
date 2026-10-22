@@ -13,7 +13,8 @@ import XCTest
 /// <bundle id>` (bring that app to the front and drive it), `home`
 /// (the Home Screen), and `app <label>` (open a Home Screen icon, e.g. a
 /// web app added with Share > Add to Home Screen; later commands drive it),
-/// `webapp` (type into the frontmost Home Screen web app).
+/// `webapp` (type into the frontmost Home Screen web app), `orient
+/// landscape|portrait` (turn the device).
 final class SafariDriver: XCTestCase {
     let folder = "/private/tmp/safari_probe"
 
@@ -115,6 +116,10 @@ final class SafariDriver: XCTestCase {
         case "home":
             XCUIDevice.shared.press(.home)
             return "home"
+        case "orient":
+            // The device turned: `orient landscape` or `orient portrait`.
+            XCUIDevice.shared.orientation = rest == "landscape" ? .landscapeLeft : .portrait
+            return "oriented \(rest)"
         case "app":
             let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
             let icon = springboard.icons[rest].firstMatch

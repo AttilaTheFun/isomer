@@ -48,6 +48,11 @@ const finish = (code) => { proc.kill(); try { fs.rmSync(profile, { recursive: tr
   // (And not the favicon a browser asks for unprompted.)
   const own = problems.filter((p) => (!/https?:\/\//.test(p) || p.includes(origin)) && !p.includes("/favicon.ico"));
   const ok = shown.includes(text) && own.length === 0;
+  // PAGE_CHECK_SHOT=<file.png>: the page as it was then (run.py's proof).
+  if (process.env.PAGE_CHECK_SHOT) {
+    const shot = await send("Page.captureScreenshot", { format: "png" });
+    if (shot.result && shot.result.data) fs.writeFileSync(process.env.PAGE_CHECK_SHOT, Buffer.from(shot.result.data, "base64"));
+  }
   console.log(JSON.stringify({ ok, text: shown.includes(text), shown: shown.slice(0, 160).replace(/\n/g, " | "), problems: own }, null, 1));
   ws.close();
   finish(ok ? 0 : 1);
