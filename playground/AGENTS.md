@@ -130,6 +130,15 @@ of its own (pinning isomer by commit), back in isomer as `playground/` at
   (`examples/tests/safari_probe` in the parent checkout). It exists because
   "Run on the web" reached phones blank twice: the site's file list missing
   a module, then a stale APK.
+- **A release's proof**: `tests/e2e/run.py --review <dir> [--commit <sha>]`
+  also writes the review store's runs (app "Playground", the version
+  `version_name` says: stamp the release's into the working tree first, as
+  CI does): each app's screens in portrait and landscape, and each road of
+  the run recorded. They go to the review server with the review tooling's
+  `publish_proof` (`bazel run //reviews/harnesses:publish_proof -- runs
+  <folder of review-<run> folders> --commit <sha>` in the reviews checkout,
+  `REVIEW_SERVER_CODE` from `reviews-server code` on its Mac, never on a
+  command line). Reviews holds a release until its commit has them.
 - iOS: on a simulator. `bazel run //apple/playground_ios_application:run`
   builds, installs and launches there with the host toolchain; with the
   embedded compiler staged for the simulator the app compiles in-process, and
