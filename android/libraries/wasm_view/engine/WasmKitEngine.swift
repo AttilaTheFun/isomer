@@ -55,14 +55,17 @@ public func wasmKitCreate(host: any WasmKitHost) -> Int {
 }
 
 /// One of the app's swift_ffi dependencies, before launch: installed under
-/// `key` in the guest's dictionary; its calls go to the host's
-/// `dispatchDependency(index:args:)`.
+/// `key` in the guest's dictionary, as the interface `registryKey` names
+/// (what the guest's proxy factory is filed under: `swift_ffi_isomer_HTTPHost`);
+/// its calls go to the host's `dispatchDependency(index:args:)`.
 @ExportedFunction(namespace: "wasm_engine")
-public func wasmKitAddDependency(handle: Int, index: Int32, key: String, registerSymbol: String, lazy: Bool) {
+public func wasmKitAddDependency(
+    handle: Int, index: Int32, key: String, registryKey: String, registerSymbol: String, lazy: Bool
+) {
     MainActor.assumeIsolated {
         guard let engine = WasmKitEngine.engines[handle] else { return }
         let host = engine.host
-        engine.dependencies[key] = SwiftFFIDependency(key: key, registerSymbol: registerSymbol, lazy: lazy) { args in
+        engine.dependencies[key] = SwiftFFIDependency(key: registryKey, registerSymbol: registerSymbol, lazy: lazy) { args in
             host.dispatchDependency(index: index, args: args)
         }
     }

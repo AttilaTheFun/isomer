@@ -68,6 +68,11 @@ fun WasmView(
     // The pure-Kotlin host services (image cache, scale) the interpreter reads.
     HostServices.appContext = context.applicationContext
     HostServices.density = density
+    // An image loaded: the interpreter's images read the cache again (a
+    // process that runs reactors has no compiled runtime to say so).
+    HostServices.onImageLoaded = {
+        android.os.Handler(android.os.Looper.getMainLooper()).post { ComposeTreeState.imageTick.value++ }
+    }
     // The app's directories in the environment, as the compiled delivery
     // has them (the reactor's /tmp is a folder of TMPDIR's).
     remember { AppDirectories.prepare(context) }

@@ -67,7 +67,9 @@ class WasmKitRuntime(
     init {
         MainQueue.watch()
         dependencies.forEachIndexed { index, dependency ->
-            WasmEngineBridge.wasmKitAddDependency(handle, index, dependency.key, dependency.registerSymbol, dependency.lazy)
+            WasmEngineBridge.wasmKitAddDependency(
+                handle, index, dependency.key, dependency.registryKey, dependency.registerSymbol, dependency.lazy,
+            )
         }
     }
 

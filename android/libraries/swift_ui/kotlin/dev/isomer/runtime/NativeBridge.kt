@@ -7,7 +7,6 @@ import android.graphics.BitmapFactory
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.net.Uri
-import android.opengl.GLSurfaceView
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -21,8 +20,9 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object NativeBridge {
     /**
-     * Run `work` on the runtime's driving thread (the GL thread when a
-     * surface renderer is live, else the main looper), then render a frame —
+     * Run `work` on the runtime's thread (the main thread, under either
+     * renderer), then render a frame (the GL surface's next one under the
+     * SwiftGPU renderer) —
      * the delivery shape for any async host completion (e.g. an injected
      * dependency's callback). Generic: no service knowledge lives here.
      */
@@ -77,8 +77,8 @@ object NativeBridge {
             platformCommandHandler?.invoke(key, value)
         }
 
-        // Main-actor jobs queued from any thread: run them where the runtime
-        // lives (GL thread or main), then render what they changed.
+        // Main-actor jobs queued from any thread: run them on the main
+        // thread, where the runtime lives, then render what they changed.
         override fun scheduleMainJobs() {
             runMainJobs()
         }
@@ -193,7 +193,7 @@ object NativeBridge {
     var appContext: Context?
         get() = HostServices.appContext
         set(value) { HostServices.appContext = value }
-    var surface: GLSurfaceView? = null
+    var surface: MainThreadGLSurface? = null
 
     /// Compose mode: bumps recomposition when an async image lands.
     var onImageLoaded: (() -> Unit)?
@@ -208,9 +208,8 @@ object NativeBridge {
      * the Compose interpreter (ComposeTreeState). */
     var treeSink: ((ByteArray) -> Unit)? = null
 
-    /** Run a runtime entry point on the thread that owns the Swift runtime
-     * (the GL thread under the SwiftGPURenderer, main otherwise) and render
-     * the result. */
+    /** Run a runtime entry point on the main thread, which owns the Swift
+     * runtime, and render the result (a GL frame under the SwiftGPURenderer). */
     /** Runs the queued main-actor jobs and renders only if they changed
      * state: most jobs (a socket read, a sleep ending) change nothing on
      * screen, and a render per job kept a long transcript's main thread

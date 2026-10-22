@@ -285,7 +285,10 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   then isoSetDisplayScale) and Android
   (NativeBridge.rasterizeSpec, nativeSurfaceChanged px feed, nativeRender
   draws in Swift and returns an empty draw list; UIRenderer keeps the
-  wantsRender continuation on that path or nav transitions freeze).
+  wantsRender continuation on that path or nav transitions freeze; its GL
+  context is current on the main thread, MainThreadGLSurface, since 0.38:
+  the runtime is main-actor isolated, and GLSurfaceView's render thread
+  trapped in `MainActor.assumeIsolated`).
   Windows (DirectXGPUDevice over D3D11; the host rasterizes via
   DirectWrite / offscreen D2D / a CPU Gaussian shadow / WIC, and keeps its
   native widget layer — EDIT overlay, Win32 picker/webview children) and

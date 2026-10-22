@@ -2,8 +2,9 @@
 //
 // Kotlin implements `AndroidHost` (an object expression in NativeBridge.kt)
 // and passes it into `nativeStart`; Swift calls back out through the
-// generated JNI foreign proxy, and the GL thread drives the runtime through
-// the exported functions. This replaces the ~500 lines of hand-written JNI
+// generated JNI foreign proxy, and the main thread drives the runtime through
+// the exported functions (under either renderer: the SwiftGPU one's GL
+// context is current there, MainThreadGLSurface.kt). This replaces the ~500 lines of hand-written JNI
 // (cached jmethodIDs, packed-jlong returns, version-script exports) that
 // previously carried the same surface.
 
@@ -98,7 +99,7 @@ func _application_main(
 
 #if canImport(SwiftGPU)
 /// The SwiftGPU surface for Android: swift_gpu's GLES device, driven on
-/// the GL thread (frames render inside nativeRender).
+/// the main thread (frames render inside nativeRender).
 final class GLESRendererSurface: SwiftGPURendererSurface {
     let gpuDevice = GLESGPUDevice()
     var displayScale: Double = 1
@@ -317,7 +318,7 @@ package func nativeStart(host: any AndroidHost, renderer: String, width: Double,
             return
         }
         #if canImport(SwiftGPU)
-        // The self-drawing renderer: SwiftGPU draws on the GL thread; Kotlin
+        // The self-drawing renderer: SwiftGPU draws on the main thread; Kotlin
         // keeps the services half (measurement, raster, IME, host views).
         let surface = gpuSurface ?? GLESRendererSurface()
         surface.widthPx = surfaceWidthPx
