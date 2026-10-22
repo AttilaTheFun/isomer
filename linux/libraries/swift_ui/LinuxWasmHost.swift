@@ -126,6 +126,11 @@ package enum LinuxWasmLoop {
                 // chrome included (as Apple's WasmView does for its GPU
                 // renderer).
                 core.drawnNavigation = true
+                #if canImport(SwiftMap)
+                // And its maps (SwiftMap is linked: the host draws `map`
+                // host views as the compiled app does).
+                core.drawnMaps = true
+                #endif
                 core.onTree = { bytes in
                     if wasmTrace { print("[wasm-trace] tree \(bytes.count) bytes") }
                     cell.pendingBytes.append(bytes)
@@ -153,8 +158,11 @@ package enum LinuxWasmLoop {
             let timeout: Int32 = linuxRenderScheduled ? 0 : 32
             if iso_pump_events(timeout) == 0 { break }
 
-            _ = iso_drain_fetches()
-            _ = iso_drain_images()
+            // A fetch or an image come in redraws the tree (its images are
+            // ready now): this loop draws only when something asks.
+            let fetched = iso_drain_fetches()
+            let imaged = iso_drain_images()
+            if fetched > 0 || imaged > 0 { linuxRenderScheduled = true }
             // The guest's jobs (WasmKit posts them to the main queue) and the
             // core's debounced resize.
             isoRunMainQueue()

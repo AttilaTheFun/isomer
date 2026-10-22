@@ -65,6 +65,15 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
   `@AppStorage` does not persist, the clipboard does nothing. Their
   network transports are URLSession's (0.38, as Apple's WasmView's).
 
+## WasmView on Apple (T1)
+
+- **`Map` in a reactor under WasmView is its placeholder**, with either
+  renderer: the guest draws the real map only when its host says it draws
+  `map` host views (`iso_hot_configure` `maps` = `drawn`, 0.38), and
+  neither Apple renderer does yet. The SwiftUI tree renderer would show
+  SwiftMap's Apple view for the node; the GPU one (GPUTreeServicesHost)
+  would draw its tiles, as the Linux and Windows loaders do.
+
 ## Android (T2)
 
 - **WasmView on Android gives a guest no home** (it passes none), so a

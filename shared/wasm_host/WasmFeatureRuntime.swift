@@ -66,6 +66,9 @@ public final class WasmFeatureRuntime {
     /// The host draws the tree itself (SwiftGPU): the reactor is configured
     /// for drawn navigation chrome before it starts (`iso_hot_configure`).
     public var drawnNavigation = false
+    /// The host draws `map` host views with SwiftMap: the reactor's `Map` is
+    /// the real map, not its placeholder.
+    public var drawnMaps = false
     /// The platform channel the embedding serves (`HostBridge.platformCommand`
     /// / `hostValue` in the guest): "copy" to the clipboard, "openURL", … and
     /// "pasteboard", the clipboard's text. Unset: commands dropped, no values.
@@ -155,6 +158,7 @@ public final class WasmFeatureRuntime {
                 _ = try? runtime.call("iso_hot_set_size_classes", [.i32(classes.horizontal), .i32(classes.vertical)])
             }
             if drawnNavigation { configure(runtime, key: "navigation", value: "drawn") }
+            if drawnMaps { configure(runtime, key: "maps", value: "drawn") }
             _ = try runtime.call("iso_hot_start", [.f64(width), .f64(height)])
             requestRender()
             setStatus("Loaded \(bundle.label)")

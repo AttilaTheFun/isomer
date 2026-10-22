@@ -126,6 +126,11 @@ package enum WindowsWasmLoop {
                 // chrome included (as Apple's WasmView does for its GPU
                 // renderer).
                 core.drawnNavigation = true
+                #if canImport(SwiftMap)
+                // And its maps (SwiftMap is linked: the host draws `map`
+                // host views as the compiled app does).
+                core.drawnMaps = true
+                #endif
                 core.onTree = { bytes in cell.pendingBytes.append(bytes) }
                 core.onScheduleRender = { cell.renderDue = true }
                 core.resize(width: width, height: height)

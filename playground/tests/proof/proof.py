@@ -105,8 +105,11 @@ class Feed:
     reactor published with tools/playground/publish_hot_reload.sh, served
     over HTTP on this Mac while the run lasts, at each address a device
     reaches it by (127.0.0.1: Chrome and the simulator; the emulator's
-    10.0.2.2 is this Mac's loopback; 192.168.65.1: the VMs' network)."""
-    VM_HOST = "192.168.65.1"
+    10.0.2.2 is this Mac's loopback; the VMs' NAT gateways, this Mac on
+    their networks: 192.168.64.1 for Apple's virtualization, the macOS VMs
+    and containers, 192.168.65.1 for UTM's others). A VM is told its own
+    (`gateway`)."""
+    VM_HOSTS = ("192.168.64.1", "192.168.65.1")
 
     def __init__(self):
         self.dir = tempfile.mkdtemp(prefix="proof-feed-")
@@ -127,7 +130,7 @@ class Feed:
                   "http.server.ThreadingHTTPServer((sys.argv[1], int(sys.argv[2])), Handler).serve_forever()\n")
         self.servers = [subprocess.Popen([sys.executable, "-c", server, address, str(self.port)], cwd=self.dir,
                                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                        for address in ("127.0.0.1", self.VM_HOST)]
+                        for address in ("127.0.0.1",) + self.VM_HOSTS]
         time.sleep(1)
 
     def base(self, host="127.0.0.1"):
@@ -137,6 +140,17 @@ class Feed:
         for server in self.servers: server.terminate()
 
 feed = None
+
+def gateway(env, platform):
+    """This Mac's address on a VM's network: the VM's default gateway."""
+    command = {
+        "macos": "route -n get default | awk '/gateway:/ {print $2}'",
+        "linux": "ip route show default | awk '{print $3; exit}'",
+        "windows": "(Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Sort-Object RouteMetric | Select-Object -First 1).NextHop",
+    }[platform]
+    address = ssh(env, command).stdout.strip().splitlines()[-1].strip()
+    log(f"{platform}: this Mac is {address} on its network")
+    return address
 
 def hot_cell(review, platform, device, orientation, launcher, host="127.0.0.1", run_wait=14):
     """The Hot Reloaders: a reloader following the feed (its page: the
@@ -231,7 +245,7 @@ def macos(review, entries):
         ("swiftui", launcher({}, 6)),
         ("wasm-swiftui", launcher({"ISO_RUN_GALLERY_WASM": "1"}, 14)),
     ], entries, menu=True)
-    hot_cell(review, "macos", "Mac (macOS 27 VM)", "landscape", launcher, host=Feed.VM_HOST)
+    hot_cell(review, "macos", "Mac (macOS 27 VM)", "landscape", launcher, host=gateway(env, "macos"))
     ssh(env, "pkill -x Isomer", check=False)
 
 
@@ -302,14 +316,17 @@ def web(review, entries):
 # --- Linux (built in an oss container, run on an oss VM)
 
 def linux(review, entries):
+    # Built and packaged in the container, the package copied out here,
+    # then to the VM as one tarball.
+    work = tempfile.mkdtemp(prefix="proof-linux-")
     sh([os.path.join(ISOMER, "tools", "linux", "build.sh"), "--module", "playground",
-        "--after", "linux/isomer_linux_application/package.sh",
+        "--after", "linux/isomer_linux_application/package.sh /root/isomer-linux -c opt", "--out", "isomer-linux", os.path.join(work, "isomer-linux"),
         "-c", "opt", "//linux/isomer_linux_application:isomer_linux_application_bin",
         "//linux/isomer_linux_application:isomer_wasm_loader", "//shared/gallery_reactor:gallery.wasm"])
-    container = open(os.path.expanduser("~/.cache/isomer/linux-build-container")).read().strip()
-    home = next(line.split()[-1] for line in sh(["oss", "container", "list"]).stdout.splitlines() if line.startswith(container))
-    package = os.path.join(tempfile.mkdtemp(prefix="proof-linux-"), "isomer-linux.tgz")
-    sh(["tar", "-czf", package, "-C", home, "isomer-linux"])
+    sh(["chmod", "+x", os.path.join(work, "isomer-linux", "isomer"), os.path.join(work, "isomer-linux", "isomer_wasm_loader"),
+        os.path.join(work, "isomer-linux", "run.sh")])
+    package = os.path.join(work, "isomer-linux.tgz")
+    sh(["tar", "-czf", package, "-C", work, "isomer-linux"])
     env = lease("linux", "--config=dev")
     scp(env, package, "/tmp/isomer-linux.tgz")
     ssh(env, "cd /tmp && tar -xzf isomer-linux.tgz && sudo apt-get install -y -q libsdl2-2.0-0 libsdl2-ttf-2.0-0 "
@@ -331,7 +348,7 @@ def linux(review, entries):
         ("opengl", launcher({}, 8)),
         ("wasm-opengl", launcher({"ISO_RUN_GALLERY_WASM": "1"}, 25)),
     ], entries, menu=True)
-    hot_cell(review, "linux", "Ubuntu 26.04 (VM, llvmpipe)", "landscape", launcher, host=Feed.VM_HOST, run_wait=30)
+    hot_cell(review, "linux", "Ubuntu 26.04 (VM, llvmpipe)", "landscape", launcher, host=gateway(env, "linux"), run_wait=30)
     ssh(env, "for p in $(pgrep -x isomer) $(pgrep -x isomer_wasm_lo); do kill $p; done", check=False)
 
 
@@ -414,7 +431,7 @@ def windows(review, entries):
         ("directx", launcher({}, 10)),
         ("wasm-directx", launcher({"ISO_RUN_GALLERY_WASM": "1"}, 30)),
     ], entries, menu=True)
-    hot_cell(review, "windows", "Windows 11 (VM, ARM64)", "landscape", launcher, host=Feed.VM_HOST, run_wait=35)
+    hot_cell(review, "windows", "Windows 11 (VM, ARM64)", "landscape", launcher, host=gateway(env, "windows"), run_wait=35)
     ps("Stop-Process -Name isomer,isomer_wasm_loader -ErrorAction SilentlyContinue", check=False)
 
 
