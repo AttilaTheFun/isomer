@@ -7,7 +7,7 @@ leave edited ones alone), the apps compare a project's App.swift with every
 version of every template: this script rebuilds them from isomer's git
 history — playground/ since the Playground came back (0.35), and the
 examples before it moved out of them (0.15) — and writes their FNV-1a 64
-fingerprints to shared/playground_ui/TemplateHistory.swift. Between 0.15 and
+fingerprints to shared/app/TemplateHistory.swift. Between 0.15 and
 0.35 the Playground was a repository of its own, whose history is not in
 isomer's: the versions it shipped are the file's own entries, which the
 script keeps (a fingerprint, once shipped, is never dropped).
@@ -25,7 +25,7 @@ reads commits, not the working tree).
 import argparse, os, re, subprocess, sys, tempfile, types
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-OUT = os.path.join(ROOT, "shared", "playground_ui", "TemplateHistory.swift")
+OUT = os.path.join(ROOT, "shared", "app", "TemplateHistory.swift")
 
 # (repository, module root inside it, the iOS app's package, the splash page).
 def eras(isomer):
