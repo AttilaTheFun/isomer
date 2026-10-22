@@ -4,13 +4,13 @@ load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 package(default_visibility = ["//visibility:public"])
 
 # The Linux **wasm** cell: the same shared example app, but delivered as an
-# `example_full.wasm` reactor run under the WAMR interpreter instead of compiled
+# `example_full.wasm` reactor run on WasmKit (the interpreter) instead of compiled
 # into the binary. This ELF is just a loader — it reads the reactor bytes and
 # runs them through `LinuxWasmApp` (SDL2 window + GL SwiftGPU renderer +
 # `FlatTreeDecoder`), the wasm peer of `example_full_opengl_linux_application`.
 #
-# It links `swift_ui_wasm` (which adds the WAMR C host) rather than `swift_ui`,
-# so the compiled cell never pulls in the interpreter.
+# It links `swift_ui_wasm` (which adds the WasmKit host) rather than
+# `swift_ui`, so the compiled cell never pulls in the interpreter.
 swift_binary(
     name = "example_full_opengl_wasm_linux_application_bin",
     srcs = ["WasmMain.swift"],

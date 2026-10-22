@@ -5,10 +5,10 @@ load("@isomer//swift_ffi/rules:swift_wasm_reactor.bzl", "transition_binary")
 load("@isomer//tools/android:defs.bzl", "flat_assets")
 
 # The network probe (//android/network_probe_android_application) in the wasm
-# delivery: NetworkProbe.swift as a reactor on the full SwiftUI, run under
-# WAMR by WasmView, whose dependencies carry Foundation's networking
-# (WasmNetworkHosts.kt) to the reactor's URLSession. The host carries no
-# compiled Swift. Run it with that package's network_check_wasm.
+# delivery: NetworkProbe.swift as a reactor on the full SwiftUI, run on
+# WasmKit by WasmView, whose dependencies carry Foundation's networking
+# (WasmNetworkHosts.kt) to the reactor's URLSession. The host compiles none
+# of the probe's Swift. Run it with that package's network_check_wasm.
 
 swift_library(
     name = "probe_lib",
@@ -78,6 +78,7 @@ kt_android_library(
     plugins = ["@isomer//android/libraries/swift_ui:compose_compiler_plugin"],
     tags = ["manual"],
     deps = [
+        "@isomer//android/libraries/wasm_view:wasm_engine_bindings",
         "@isomer//tools/android:maven_androidx_activity_activity_compose",
         "@isomer//tools/android:maven_androidx_compose_foundation_foundation",
         "@isomer//tools/android:maven_androidx_compose_material3_material3",
@@ -96,6 +97,6 @@ android_binary(
     visibility = ["//android/network_probe_android_application:__pkg__"],
     deps = [
         ":host_app",
-        "@isomer//android/libraries/wasm_view:wamr_jni",
+        "@isomer//android/libraries/wasm_view:engine_native",
     ],
 )

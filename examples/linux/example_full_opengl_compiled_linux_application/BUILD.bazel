@@ -20,6 +20,7 @@ swift_binary(
     module_name = "ExampleApplication",
     target_compatible_with = ["@platforms//os:linux"],
     deps = [
+        "@isomer//gallery",
         "//shared/platform_services",
         "@isomer//linux/libraries/swift_ui",
         "@isomer//linux/libraries/swift_ui:isomer",

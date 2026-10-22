@@ -5,8 +5,8 @@ package dev.isomer.wasmfull
 // bundle and hosted full-screen by `WasmView`. The compiled twin is
 // //examples/android/example_full_compiled_android_application — the SAME
 // app, but its Swift is compiled into the APK as a .so. Here the app's code is
-// a wasm reactor run in-process under WAMR (a C interpreter) and drawn by the
-// Swift-free Compose interpreter, so the host APK carries NO compiled Swift.
+// a wasm reactor run in-process on WasmKit (a Swift interpreter, the APK's
+// one native library) and drawn by the Swift-free Compose interpreter.
 //
 // The trade-off (docs/adoption_levels.md): wasm delivery gives runtime-updatable
 // code and a smaller/Swift-free host at some runtime cost; compiled gives peak

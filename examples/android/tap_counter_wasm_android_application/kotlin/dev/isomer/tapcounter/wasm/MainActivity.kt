@@ -2,8 +2,9 @@ package dev.isomer.tapcounter.wasm
 
 // The wasm-delivered cell of the minimal counter benchmark: the SAME shared
 // TapCounter.swift @main App shipped as ONE wasm reactor and hosted full-screen by
-// `WasmView`, run in-process under WAMR and drawn by the Swift-free Compose
-// interpreter — so the host APK carries NO compiled Swift (only libiso_wamr_jni.so).
+// `WasmView`, run in-process on WasmKit and drawn by the Swift-free Compose
+// interpreter — none of the app's Swift is compiled into the APK (its one
+// native library is the engine's, libwasm_engine_bindings.so).
 // Its compiled twin is //examples/android/tap_counter_compiled_android_application.
 // See docs/benchmarks.md.
 
@@ -42,8 +43,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun CounterWasmApp(offMainInit: Boolean = false) {
     val context = LocalContext.current
-    // The counter packaged as assets/tap_counter_release.wasm (or .aot under
-    // --config=release; the provider prefers the .aot when present).
+    // The counter packaged as assets/tap_counter_release.wasm.
     val provider = remember {
         AppWasmBundleProvider(context, "tap_counter_release.wasm")
     }

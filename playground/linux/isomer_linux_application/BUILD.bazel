@@ -1,0 +1,58 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+# The Isomer app on Linux: the shared shell (shared/app) against Isomer's
+# Linux SwiftUI (SwiftGPU over OpenGL in an SDL2 window), with the desktop
+# host (shared/desktop_host). Hot reloaders and the Gallery as wasm run in
+# the WasmKit loader's window (:isomer_wasm_loader). Built in a container on a
+# Mac (isomer's tools/linux/build.sh), run on a Linux desktop:
+#
+#   bazel run //linux/isomer_linux_application
+#   linux/isomer_linux_application/package.sh <out dir>   # one directory to copy to a machine
+
+swift_binary(
+    name = "isomer_linux_application_bin",
+    srcs = [
+        "//shared/app:srcs",
+        "//shared/desktop_host:srcs",
+    ],
+    copts = ["-parse-as-library"],
+    data = [
+        ":isomer_wasm_loader",
+        "//shared/gallery_reactor:gallery.wasm",
+        "@isomer//gallery:assets",
+    ],
+    module_name = "IsomerLinux",
+    target_compatible_with = ["@platforms//os:linux"],
+    deps = [
+        "@isomer//gallery",
+        "@isomer//linux/libraries/swift_ui",
+        "@isomer//linux/libraries/swift_ui:isomer",
+        "@isomer//shared/platform_services",
+        "@swiftpkg_agent_ui//:AgentUI",
+    ],
+)
+
+# The reactor's window (LinuxWasmApp: WasmKit, SwiftGPU over OpenGL).
+swift_binary(
+    name = "isomer_wasm_loader",
+    srcs = ["//shared/desktop_host:IsomerWasmLoader.swift"],
+    copts = ["-parse-as-library"],
+    module_name = "IsomerWasmLoader",
+    target_compatible_with = ["@platforms//os:linux"],
+    deps = [
+        "@isomer//linux/libraries/swift_ui_wasm:host",
+        "@isomer//linux/libraries/swift_ui_wasm:swift_ui_wasm",
+    ],
+)
+
+# `bazel run`: the Swift runtime on LD_LIBRARY_PATH, the app's files in its
+# runfiles.
+sh_binary(
+    name = "isomer_linux_application",
+    srcs = ["run.sh"],
+    data = [":isomer_linux_application_bin"],
+    target_compatible_with = ["@platforms//os:linux"],
+)

@@ -192,8 +192,9 @@ filegroup(
 )
 
 # Just the pure host services (image cache, scale, text measurement, SwiftGPU
-# rasterization) — what a Compose-free wasm+GPU app compiles next to
-# //android/libraries/wasm_view:gpu_runtime_kotlin.
+# rasterization), for a Compose-free app to compile next to
+# //android/libraries/wasm_view:engine_kotlin. (The wasm+GPU cell that did,
+# over WAMR's GLES shim, went with WAMR in 0.38.)
 filegroup(
     name = "host_services_kotlin",
     srcs = ["kotlin/dev/isomer/runtime/HostServices.kt"],

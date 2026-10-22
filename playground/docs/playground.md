@@ -11,7 +11,7 @@ the result two ways:
   under `WasmView` and renders with the REAL SwiftUI renderer
   (`IsomerTreeView`), edge to edge with no chrome — the project's SwiftUI
   is meant to feel like the whole app. Shake the device to get an alert with
-  Dismiss/Cancel. The engine is the WasmView default, WAMR's interpreter.
+  Dismiss/Cancel. The engine is the WasmView default, WasmKit's interpreter.
 - **Web** — a sheet: the in-app HTTP server publishes the same bytes and
   `SFSafariViewController` opens the react-renderer page (`web/index.html`,
   which injects the platform services over browser APIs): the browser's own
@@ -294,7 +294,7 @@ never recompile the bridge). User code just writes `import SwiftUI`.
   `iso_wasm_ld_main` → a wasm-only `lldMain` — with diagnostics captured by
   dup2-ing a pipe over fds 1+2. Repeated in-process invocation requires the
   idempotent-init patch (see tools/playground_toolchain/README.md).
-  Compiling wasm produces pure data and running it (WAMR's interpreter)
+  Compiling wasm produces pure data and running it (WasmKit's interpreter)
   needs no JIT pages, so the whole loop is iOS-legal — **verified on a
   physical iPhone 15 Pro** (2026-09-02): `install_device.sh autorun=native`
   compiles the sample in-process about 3s after launch, a second in-process

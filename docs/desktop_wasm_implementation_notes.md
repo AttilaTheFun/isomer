@@ -1,5 +1,14 @@
 # Desktop (Windows/Linux) wasm delivery — implementation notes & blockers
 
+> **Engine replaced in 0.38.** WAMR was removed: the desktop wasm cells now
+> run the reactor on WasmKit, driven from Swift (`LinuxWasmHost` /
+> `WindowsWasmHost` over `WasmFeatureRuntime` + `WasmKitRuntime`,
+> //shared/wasm_host; entry module `IsomerDesktopWasmHost`) instead of the C
+> WAMR host. `//shared/wamr_host`, `@wamr`, `iso_wamr_*` and `WamrRuntime`
+> below are gone; the tree decoding, `SwiftGPURenderer` drawing, id-echo
+> events and hot reload are as described. These notes record how the cells
+> were first built.
+
 Companion to `linux_windows_wasm.md`. That doc set the goal (run the WAMR
 interpreter on the Linux/Windows desktop hosts and render wasm-delivered Swift
 through `SwiftGPURenderer`). This one records what the wiring actually requires
@@ -246,13 +255,12 @@ same `BundleProvider` contract Apple uses, but feeding `FlatTreeDecoder` +
     `bazel build` there). Building the server ON Windows is optional — a single
     Linux/WSL server already drives both desktop clients.
 
-## Key file map (verified this session)
-- C WAMR host + ABI: `shared/wamr_host/iso_wamr.{c,h}` (+ `iso_wamr_smoke.c`,
-  `iso_wamr_full_smoke.c` — no `target_compatible_with`, build anywhere).
-- `@wamr` build: `MODULE.bazel` (the inline `build_file_content`, ~line 104).
-- Swift host (Apple path; the generated `platform_services_host` Dependencies
-  builders + `//examples/apple/platform_services_host` natives):
-  `shared/wasm_host/{WasmFeatureRuntime,WamrRuntime,WasmRuntime}.swift`.
+## Key file map (as of 0.38)
+- The engine: `shared/wasm_host/{WasmFeatureRuntime,WasmKitRuntime,WasmRuntime}.swift`
+  (WasmKit built by `tools/wasmkit/BUILD.wasmkit.bazel`, MODULE.bazel's
+  `wasmkit`); the desktop hosts: `linux/libraries/swift_ui/LinuxWasmHost.swift`,
+  `windows/libraries/swift_ui/WindowsWasmHost.swift`. (The C WAMR host,
+  `shared/wamr_host/iso_wamr.{c,h}`, and `@wamr` were removed in 0.38.)
 - Encoder to invert: `shared/renderers/TreeEncoder.swift`; schema
   `shared/renderers/tree.fbs`; node `shared/swift_ui_core/Node.swift`.
 - Desktop hosts to extend: `linux/libraries/swift_ui/LinuxHost.swift`

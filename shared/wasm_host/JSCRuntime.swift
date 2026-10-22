@@ -2,11 +2,11 @@
 // WebAssembly engine: the reactor runs inside a `JSContext`, instantiated by
 // a small JS bootstrap that carries the same WASI shim the web host uses.
 // It exists to prove the engine seam ("a JS runtime *as* the wasm runtime")
-// and to A/B against WAMR; register it like any engine:
+// and to A/B against WasmKit; register it like any engine:
 //
 //     WasmRuntimeRegistry.register { JSCRuntime() }
 //
-// Import surface (mirrors the WAMR C host): module `iso_hot` — render_tree /
+// Import surface (mirrors WasmKitRuntime's): module `iso_hot` — render_tree /
 // log / epoch_millis / schedule_render; WASI preview1 stubbed; any OTHER
 // import module resolves to no-op zero-returning functions (enough for
 // render-only reactors; the swift_ffi DI transport is NOT bridged here, so
@@ -16,7 +16,7 @@
 //
 // Platform notes: on macOS JSC JIT-compiles wasm (BBQ/OMG tiers). On iOS,
 // third-party processes get no JIT pages, so JSC executes wasm in its
-// interpreter tier (LLInt) — expect WAMR-fast-interp-or-slower performance
+// interpreter tier (LLInt) — expect interpreter-class performance
 // there; measure before shipping anything on this path.
 
 #if canImport(JavaScriptCore)

@@ -4,7 +4,7 @@ package dev.isomer.wasmexample
 // wasm feature BUNDLE with the Android `WasmView` @Composable — the peer of
 // Apple's WasmView / web's <Isomer>. The card's contents are a Swift UI
 // compiled to wasm (the same hot_demo reactor the Apple hot-reload example
-// runs), executed in-process under WAMR; everything else is plain Compose.
+// runs), executed in-process on WasmKit; everything else is plain Compose.
 //
 // The feature reads a native feature flag over the swift_ffi dependency DI
 // (`Host.flag("promo_banner")`); we answer it true here, so a natively-decided
@@ -74,7 +74,7 @@ fun WasmDemoScreen() {
             Column(Modifier.fillMaxSize().padding(padding)) {
                 Text(
                     "The card below is a SwiftUI feature compiled to wasm, run " +
-                        "in-process under WAMR and rendered with Compose:",
+                        "in-process on WasmKit and rendered with Compose:",
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(16.dp),
                 )

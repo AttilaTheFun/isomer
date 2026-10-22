@@ -58,7 +58,7 @@ struct HostScreen: View {
 
     init() {
         // Engine override demo: ISO_JSC=1 runs the wasm feature on
-        // JavaScriptCore's WebAssembly instead of WAMR (pair with
+        // JavaScriptCore's WebAssembly instead of WasmKit (pair with
         // ISO_ENGINE=wasm so a bundle is served). On iOS devices JSC has no
         // JIT pages, so wasm runs on its interpreter tier; the simulator
         // JITs like macOS.

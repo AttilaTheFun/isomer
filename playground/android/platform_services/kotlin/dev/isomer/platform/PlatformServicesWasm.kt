@@ -1,5 +1,5 @@
 // The Android WASM cells' side of shared/platform_services: the five
-// dependencies as opaque blob dispatchers over the generic WAMR runtime
+// dependencies as opaque blob dispatchers over the generic wasm engine's runtime
 // (isomer ships only the DI pattern — keys, ordinals, and codecs are
 // app-owned). Async methods (network, keychain) decode the leading call id,
 // do their work off the main thread, and answer the guest through the fixed

@@ -1,7 +1,8 @@
 // `WasmKitRuntime` — a `WasmRuntime` on WasmKit, the Swift WebAssembly
-// interpreter (MODULE.bazel's `wasmkit`, AttilaTheFun/WasmKit): the Apple
-// hosts' engine beside `WamrRuntime`. An app picks it before its first
-// feature launches:
+// interpreter (MODULE.bazel's `wasmkit`, AttilaTheFun/WasmKit): the engine
+// on every native host since 0.38, when it replaced WAMR. Apple's WasmView
+// registers it as the default; an app that configures its own registers it
+// before its first feature launches:
 //
 //     WasmRuntimeRegistry.register {
 //         let runtime = WasmKitRuntime()
@@ -10,10 +11,10 @@
 //         return runtime
 //     }
 //
-// Everything the C host does for WAMR is done here in Swift, the same way:
+// What WAMR's C host did is done here in Swift:
 //
-//   • WASI (WasmKitWASI) with the guest's file system laid out as WAMR's
-//     host lays it out: /tmp a folder of the host's temporary directory,
+//   • WASI (WasmKitWASI) with the guest's file system laid out as an app
+//     container: /tmp a folder of the host's temporary directory,
 //     /home/app the app's container (Documents, Library/Application Support,
 //     Library/Caches), HOME, XDG_DATA_HOME, XDG_CACHE_HOME and
 //     ISOMER_BUNDLE_IDENTIFIER in the environment with the host's ISO_*
@@ -25,8 +26,7 @@
 //     dependency table, the foreign registry, the job queue and async
 //     answers), and the dependencies' register exports called at launch.
 //   • The guest's Swift concurrency jobs drained on the main queue, held
-//     while a tree the guest sent has yet to be drawn (as WamrRuntime holds
-//     them), with a frame after each drain that changed something.
+//     while a tree the guest sent has yet to be drawn, with a frame after each drain that changed something.
 //
 // Threads: a reactor built for `wasm32-unknown-wasip1-threads` imports a
 // shared memory and `wasi.thread-spawn`. Where WasmKit can make a shared
@@ -71,7 +71,7 @@ public final class WasmKitRuntime: WasmRuntime {
 
     /// The interpreter's stack for one call into the guest: its frames'
     /// locals and operands (the guest's own stack is in its memory). WAMR's
-    /// host gives its interpreter 512 KiB; WasmKit's frames are larger.
+    /// host gave its interpreter 512 KiB; WasmKit's frames are larger.
     public var stackSize = 2 << 20
 
     /// Whether WasmKit can run a threaded reactor here: it makes a shared
@@ -211,8 +211,8 @@ public final class WasmKitRuntime: WasmRuntime {
         activateDependencies()
     }
 
-    /// The guest's environment and preopened directories, as WAMR's host
-    /// gives them (shared/wamr_host/iso_wamr.c).
+    /// The guest's environment and preopened directories: the host's ISO_*
+    /// variables, /tmp, and (with a home directory) /home/app.
     private func makeWASI() throws -> WASIBridgeToHost {
         var environment: [String: String] = [:]
         for (key, value) in ProcessInfo.processInfo.environment where key.hasPrefix("ISO_") {
@@ -220,10 +220,17 @@ public final class WasmKitRuntime: WasmRuntime {
         }
         var preopens: [WASIBridgeToHost.Preopen] = []
         let files = FileManager.default
+        #if os(Windows)
+        // WasmKit's WASI opens no directory on Windows (a preopen fails
+        // with EACCES): the guest has no file system there.
+        let home: String? = nil
+        #else
         let temporary = files.temporaryDirectory.appendingPathComponent("isomer-guest", isDirectory: true)
         try? files.createDirectory(at: temporary, withIntermediateDirectories: true)
         preopens.append(.init(guestPath: "/tmp", hostPath: temporary.path))
-        if let home = homeDirectory, !home.isEmpty {
+        let home = homeDirectory
+        #endif
+        if let home, !home.isEmpty {
             for made in ["Documents", "Library/Application Support", "Library/Caches"] {
                 try? files.createDirectory(
                     atPath: (home as NSString).appendingPathComponent(made), withIntermediateDirectories: true)
@@ -326,7 +333,7 @@ public final class WasmKitRuntime: WasmRuntime {
     /// A tree has been handed to the host and not yet drawn; work that came
     /// due meanwhile waits for the run loop's next update, where the host
     /// lays the tree out (what that layout reports reaches the guest before
-    /// its timers do, as in WamrRuntime).
+    /// its timers do).
     private var treeUndrawn = false
     private var heldWork: [() -> Void] = []
 
@@ -382,9 +389,9 @@ public final class WasmKitRuntime: WasmRuntime {
         init(runtime: WasmKitRuntime) { self.runtime = runtime }
         func instantiate(wasm: [UInt8], swiftFFIImports: [SwiftFFIImport]) throws {}
         func call(_ name: String, _ args: [SwiftFFIScalar]) throws -> SwiftFFIScalar? {
-            // A trap here (a guest job's) is logged and answers nothing, as
-            // the WAMR host's calls do: the swift_ffi runtime's own calls
-            // would otherwise end the app on any guest trap.
+            // A trap here (a guest job's) is logged and answers nothing: the
+            // swift_ffi runtime's own calls would otherwise end the app on
+            // any guest trap.
             MainActor.assumeIsolated {
                 do {
                     return try runtime.call(name, args)

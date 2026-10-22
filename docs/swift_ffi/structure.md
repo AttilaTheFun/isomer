@@ -20,8 +20,9 @@ Bazel aspect) extracts the exported surface into a JSON **IR**, and a
 TypeScript, C++, a C header, or Swift host bindings) against the same
 symbols. Small per-language **runtime** libraries provide the shared
 machinery the generated code leans on (handle boxes, dispatcher registries,
-string marshaling), and for wasm delivery the repo bundles **WAMR** as the
-engine. Everything meets at a C ABI; no serialization framework sits on the
+string marshaling); for wasm delivery a native Swift host runs the reactor
+under an engine it injects (Isomer's hosts use WasmKit; WAMR, which the
+repo bundled until 0.38, is gone). Everything meets at a C ABI; no serialization framework sits on the
 call path.
 
 ```
@@ -37,7 +38,7 @@ swift_ffi_generator ──(ffi_generate, per kind)──▶  C header │ TS │
 per-platform macros (kt_swift_library, ts_swift_wasm_library, cc_swift_library, …)
         │
         ▼
-runtime libraries (ts / kotlin / cpp / c_host / swift_wasm_host) + WAMR
+runtime libraries (ts / kotlin / cpp / c_host / swift_wasm_host)
 ```
 
 ## Directory map
@@ -51,8 +52,7 @@ runtime libraries (ts / kotlin / cpp / c_host / swift_wasm_host) + WAMR
 | `swift_ffi/swift_ffi_generator/`, `_generator_library/` | The code generator, one extension file per backend |
 | `swift_ffi/*_tests/` | `swift_test` suites for plugin, analyzer, and generator |
 | `swift_ffi/rules/` | The Bazel layer: one `.bzl` per public macro + internal `utils.bzl` (aspect, `ffi_generate`, transitions) + the cross-compilation `platform()`s |
-| `swift_ffi/runtime/` | Per-language runtime halves + the vendored WAMR engine |
-| `swift_ffi/BUILD.bazel` | Repo-level build settings (the pluggable `wasm_aot_compiler` flag) |
+| `swift_ffi/runtime/` | Per-language runtime halves |
 | `examples/` | The runnable platform × mode matrix over one shared greeter module |
 | `tools/` | Build helpers for examples (e.g. `electron.bzl` for the web cell) |
 | `docs/` | Design docs (this file, [generics.md](generics.md)) |
@@ -136,7 +136,7 @@ generates Swift glue:
   | `ts_swift_wasm_library` | web/wasm | wasm reactor + TypeScript module (+ staged runtime copy) |
   | `cc_swift_library` | Apple/Linux/Windows | idiomatic C++ over the C ABI |
   | `bridge_cc_library` | building block | the generated C header over the annotated library |
-  | `c_host_library` | any C host | c-host bindings for driving a reactor under WAMR |
+  | `c_host_library` | any C host | c-host bindings for driving a reactor under a C engine the host brings |
   | `swift_wasm_library` | Swift wasm hosts | generated Swift host bindings driving a reactor (explicit `swift_wasm_reactor` for the artifact) |
   | `rs_swift_library` | Rust | generated Rust bindings over the C ABI |
   | `swift_wasm_reactor` | building block | annotated library → `.wasm` reactor binary |
@@ -177,21 +177,12 @@ Generated code is kept lean by pushing shared machinery into small runtimes:
 | `runtime/ts` | TypeScript | consumer-side registry/marshaling; `exports_files` only — `ts_swift_wasm_library` stages a copy next to each generated module |
 | `runtime/kotlin` | Kotlin | `SwiftError` and shared consumer machinery |
 | `runtime/c_host` | C | host runtime for driving reactors from C (`swift_ffi_host`) |
-| `runtime/c_host_wamr` | C | the WAMR-specific host: engine init, DI attachment slots, reload-safe exec-env resolution |
 | `runtime/swift_wasm_host` | Swift | native-Swift host runtime (`SwiftFFIWasmHost`, `WasmBundleProvider`) for dynamically-delivered reactors |
-| `runtime/wamr` | C | the single vendored WAMR: `:wamr` (engine cc_library) and `:wamrc` (AOT compiler alias) |
-
-`runtime/wamr` deserves a note: the whole downstream stack consumes **this**
-WAMR (`@isomer//swift_ffi/runtime/wamr:wamr`) rather than declaring its own,
-so interp feature flags, per-OS platform layers, and AOT wiring live in one
-place (`@wamr`'s `build_file_content` in `MODULE.bazel`). Building with
-`--define wamr_aot=1` compiles in the AOT loader (and enables `:wamrc`);
-`--define wamr_threads=1` enables the wasi-threads build.
-
-`//swift_ffi:wasm_aot_compiler` is a `label_flag` for the AOT step: it defaults
-to `:wamrc` but any tool honoring the `<tool> [flags...] -o <out> <in.wasm>`
-contract can be swapped in per build, letting consumers pair a different
-artifact format with a matching engine.
+Until 0.38 `runtime/wamr` vendored WAMR for the whole stack (with
+`runtime/c_host_wamr`, its C host, and `//swift_ffi:wasm_aot_compiler`,
+wamrc behind a label flag); they were removed with WAMR. The engine is the
+host's now: Isomer's native hosts inject WasmKit (`WasmKitRuntime`,
+//shared/wasm_host) through `runtime/swift_wasm_host`.
 
 ## `examples/` — the integration matrix
 
@@ -202,15 +193,12 @@ bytes) and is delivered unchanged by every cell in the platform × mode matrix
 engine). The shared building blocks:
 
 - `greeter` — the annotated `swift_library` (self-contained C ABI), plus its
-  generated C++ bindings, c-host bindings, and the `.wasm` reactor.
+  generated C++ bindings, c-host bindings (for a C host with its own engine),
+  and the `.wasm` reactor.
 - `greeter_compiled_host` — the C driver for compiled mode (Linux/Windows
   cells are thin `main`s over it).
-- `greeter_wasm_host` — the C driver for wasm mode: the reactor under WAMR
-  with no compiled Swift on the host.
 - `greeter_host` — the `swift_wasm_library` building block: native Swift host
   bindings + reactor, compile-checking the `swift-host-wasm` backend.
-- `greeter_aot_bench` — cold-start benchmark, `.wasm` interp vs `.aot`
-  (needs `--define wamr_aot=1`).
 
 Per-platform apps live at
 `//swift_ffi/examples/<platform>/example_<platform>_<mode>_application`;

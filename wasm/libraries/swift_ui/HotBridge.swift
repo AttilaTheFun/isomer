@@ -1,6 +1,6 @@
 // The framework-owned `iso_hot` reactor bridge: the complete render ABI a
-// wasm reactor exports to its native host (WasmKit on Apple, WAMR on
-// Android/desktop). Reactors link this as a library
+// wasm reactor exports to its native host (WasmKit on every native host).
+// Reactors link this as a library
 // (`//wasm/libraries/swift_ui:hot_bridge` on the full SwiftUI module,
 // `//wasm/libraries/hot_swift_ui:hot_bridge` on the slim one) instead of
 // copying the glue into their own sources — a hand-copied bridge can drift

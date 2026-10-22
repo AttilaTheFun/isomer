@@ -1,0 +1,16 @@
+# The Isomer app's host on Linux and Windows (DesktopHost.swift), its @main
+# (DesktopApp.swift), and the WasmKit loader it runs reactors in
+# (IsomerWasmLoader.swift): compiled by linux/isomer_linux_application and
+# windows/isomer_windows_application.
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "srcs",
+    srcs = [
+        "DesktopApp.swift",
+        "DesktopHost.swift",
+    ],
+)
+
+exports_files(["IsomerWasmLoader.swift"])

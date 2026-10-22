@@ -8,6 +8,4 @@ alias(name = "platform_services", actual = "@isomer//shared/platform_services")
 
 alias(name = "platform_services_host", actual = "@isomer//shared/platform_services:platform_services_host")
 
-alias(name = "platform_services_c_host", actual = "@isomer//shared/platform_services:platform_services_c_host")
-
 alias(name = "native_srcs", actual = "@isomer//shared/platform_services:native_srcs")

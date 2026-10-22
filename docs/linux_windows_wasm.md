@@ -1,5 +1,12 @@
 # Linux + Windows: WAMR wasm engine and the full/partial matrix
 
+> **Superseded in 0.38.** WAMR was removed: the Linux and Windows hosts now
+> run reactors on WasmKit (`LinuxWasmHost`/`WindowsWasmHost` drive
+> `WasmFeatureRuntime` over `WasmKitRuntime`, //shared/wasm_host; the entry
+> module is `IsomerDesktopWasmHost`), as every native host does. `@wamr`,
+> `//shared/wamr_host` and `WamrRuntime` are gone. What follows is the plan
+> as it stood under WAMR.
+
 Goal (parity with the other platforms): run the *same* WAMR wasm interpreter on
 the Linux and Windows desktop hosts that Android already uses, and give each a
 **2×1 matrix** — `full` and `partial` — with a single fixed renderer per OS:

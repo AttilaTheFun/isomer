@@ -8,10 +8,11 @@ load("@isomer//tools/android:defs.bzl", "apk_install_run", "flat_assets")
 # Swift built into the APK) is
 # //android/example_full_compiled_android_application.
 #
-# Like example_partial_wasm, this carries NO compiled Swift: the only native
-# library is libiso_wamr_jni.so (the WAMR C engine + host + JNI, ~344 KB). The
-# app's entire UI is the reactor //wasm/example_full_feature, run
-# in-process under WAMR and drawn by the Swift-free Compose interpreter.
+# Like example_partial_wasm, none of the app's Swift is compiled into the APK:
+# the only native library is the engine's (libwasm_engine_bindings.so:
+# WasmKit, a Swift interpreter with its runtime). The app's entire UI is the
+# reactor //wasm/example_full_feature, run in-process on WasmKit and drawn by
+# the Swift-free Compose interpreter.
 
 # assets/: the whole-app reactor (RELEASE build — gc'd, ABI-only exports,
 # stripped) PLUS the shared image PNGs flattened to the basenames the tree's
@@ -20,16 +21,15 @@ flat_assets(
     name = "app_assets",
     srcs = [
         "//shared/example_application:assets",
-        # Config-selected reactor: `example_full_release.wasm` (interp) by
-        # default, or `example_full_release.aot` (native) under `--config=release`.
+        # The release reactor, `example_full_release.wasm`.
         "//wasm/example_full_feature:example_full_release",
     ],
 )
 
 # The host as ONE Kotlin/Compose library: the full-screen host (MainActivity),
 # the Swift-free Compose interpreter (interpreter_kotlin), and the wasm engine
-# glue (WasmView / WamrRuntime from //android/libraries/wasm_view). No
-# swift_library, no generated JNI bindings — nothing pulls compiled Swift.
+# glue (WasmView / WasmKitRuntime from //android/libraries/wasm_view, over the
+# engine's generated bindings). No swift_library of the app's own.
 kt_android_library(
     name = "host_app",
     srcs = glob(["kotlin/**/*.kt"]) + [
@@ -42,6 +42,7 @@ kt_android_library(
     plugins = ["@isomer//android/libraries/swift_ui:compose_compiler_plugin"],
     tags = ["manual"],
     deps = [
+        "@isomer//android/libraries/wasm_view:wasm_engine_bindings",
         "@isomer//tools/android:maven_androidx_activity_activity_compose",
         "@isomer//tools/android:maven_androidx_compose_foundation_foundation",
         "@isomer//tools/android:maven_androidx_compose_material3_material3",
@@ -59,8 +60,8 @@ android_binary(
     manifest = "AndroidManifest.xml",
     deps = [
         ":host_app",
-        # The ONLY native library: the WAMR C engine (no compiled Swift).
-        "@isomer//android/libraries/wasm_view:wamr_jni",
+        # The ONLY native library: the engine (WasmKit, libwasm_engine_bindings.so).
+        "@isomer//android/libraries/wasm_view:engine_native",
     ],
 )
 

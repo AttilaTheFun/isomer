@@ -40,7 +40,7 @@ struct SplashPage: View {
                     }
                 }
                 section("Compiled, or WebAssembly") {
-                    Para("The same Swift ships two ways. Compiled, it links straight into the app for the platform's native performance. As WebAssembly, it becomes a self-contained feature bundle a host runs in a wasm engine — WAMR, WasmKit, JavaScriptCore, or the browser — which is what makes hot reload possible: a native iOS or Android app can swap a feature's bundle live, and a phone can pull new versions of an app as they are published.")
+                    Para("The same Swift ships two ways. Compiled, it links straight into the app for the platform's native performance. As WebAssembly, it becomes a self-contained feature bundle a host runs in a wasm engine — WasmKit, JavaScriptCore, or the browser — which is what makes hot reload possible: a native iOS or Android app can swap a feature's bundle live, and a phone can pull new versions of an app as they are published.")
                     Para("In the browser it goes one step further: the Playground compiles Swift itself, in the page, with swift-frontend and wasm-ld compiled to WebAssembly. Edit this page there and Run, and the site recompiles without leaving the browser.")
                 }
                 section("Pluggable GPUs") {

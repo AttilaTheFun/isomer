@@ -10,24 +10,3 @@ package(
         "swift.upcoming.StrictConcurrency",
     ],
 )
-
-# The pluggable wasm AOT compiler (an exec-configuration CLI tool). Consumers
-# lower reactors to native artifacts through THIS flag rather than a
-# hard-coded tool, so a different compiler can be swapped in at build time:
-#
-#   bazel build ... --//swift_ffi:wasm_aot_compiler=@my_toolchain//:compiler
-#
-# Tool contract (what the default, wamrc, implements): invoked as
-#   <tool> [flags...] -o <output> <input.wasm>
-# and the produced artifact must be loadable by the wasm runtime the app
-# links (an artifact/runtime PAIR: wamrc's .aot loads under WAMR's AOT
-# loader; another compiler's output needs a runtime that loads it).
-# Wrap tools with a different CLI in a shim script that accepts this shape.
-#
-# Note: the embedded-XIP iOS path is intentionally NOT behind this flag — it
-# relies on wamrc-specific relocation guarantees (--xip
-# --enable-builtin-intrinsics=constop -> zero relocations).
-label_flag(
-    name = "wasm_aot_compiler",
-    build_setting_default = "//swift_ffi/runtime/wamr:wamrc",
-)

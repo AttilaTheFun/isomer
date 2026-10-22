@@ -27,5 +27,5 @@ default) — the run targets pass the right one; switch live by editing the URL.
 | --- | --- |
 | `--config=map` | links swift_map (WebGPU) → the `Map` tab renders real OpenStreetMap tiles (dev dependency, example-apps-only; placeholder pane without it) |
 
-The wasm reactors here run in the *browser's* engine, so `--config=release`'s
-wamrc AOT does not apply — the browser JIT is the optimizer.
+The wasm reactors here run in the *browser's* engine (the native hosts' is
+WasmKit) — the browser JIT is the optimizer; `--config=release` is `-c opt`.

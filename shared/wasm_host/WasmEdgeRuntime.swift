@@ -4,7 +4,7 @@
 //
 //     WasmRuntimeRegistry.register { WasmEdgeRuntime() }
 //
-// Import surface (mirrors the WAMR C host): built-in WASI preview1 plus the
+// Import surface (mirrors WasmKitRuntime's): built-in WASI preview1 plus the
 // `iso_hot` render imports. The swift_ffi DI transport is NOT bridged;
 // The swift_ffi DI transport is not bridged (features see an empty
 // dependency dictionary); legacy flag/track stubs remain only for the
@@ -166,7 +166,7 @@ public final class WasmEdgeRuntime: WasmRuntime {
         }
 
         // SwiftWasm @_extern(wasm) imports carry two trailing swiftcc context
-        // i32s — signatures match the WAMR C host: (iiii), (ii)F, etc.
+        // i32s — signatures as the reactor declares them: (iiii), (ii)F, etc.
         add(module, "render_tree", params: [i32, i32, i32, i32], results: []) { data, frame, input, _ in
             let cbs = Unmanaged<Callbacks>.fromOpaque(data!).takeUnretainedValue()
             cbs.onRenderTree(WasmEdgeRuntime.frameBytes(frame, input![0], input![1]))

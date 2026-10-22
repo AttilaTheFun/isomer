@@ -1,45 +1,70 @@
 #!/bin/bash
-# Builds Isomer's Linux targets in a Linux container, from a Mac: a check that
-# Linux (a T3 platform, run on its own hosts) still compiles and
-# links after a change elsewhere. Podman's machine is started if it is stopped,
-# and stopped again afterwards.
+# Builds Isomer's Linux targets in a Linux container from a Mac: an oss
+# container (https://github.com/AttilaTheFun/oss) of the image this
+# directory's Containerfile makes (Ubuntu 24.04 with what the Linux targets
+# link, and Bazel), arm64 on Apple silicon. The checkout's files (what git
+# tracks, and new files it would) are copied in at each run; Bazel's output
+# and downloads stay in the container between runs.
 #
-#   tools/linux/build.sh            # //linux/... in isomer and in its examples
-#   tools/linux/build.sh <targets>  # in isomer's root module
+#   tools/linux/build.sh                       # //linux/... in isomer, its examples and the Playground
+#   tools/linux/build.sh <targets>             # in isomer's root module
+#   tools/linux/build.sh --module playground [--after '<command>'] <targets>
+#                                              # in that module (examples, playground); then
+#                                              # <command> there, in the container (packaging
+#                                              # what was built)
+#   tools/linux/build.sh --stop                # archive nothing: remove the container
 #
-# The container is the podman machine's architecture (arm64 on Apple silicon):
-# the same Swift and C as x86_64, its own WAMR trampoline. Bazel's output and
-# downloads are kept in podman volumes between runs.
+# The container is the one this script started last (its id kept in
+# ~/.cache/isomer/linux-build-container; started again when it is gone). Its
+# home, /root there, is a folder on this Mac, so the checkout is unpacked into
+# it directly. The image is built with Apple's `container build` when this
+# machine lacks it. Nothing is run there but the build.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
-started=""
-if ! podman machine inspect --format '{{.State}}' 2>/dev/null | grep -q running; then
-    podman machine start >/dev/null
-    started=1
-fi
-trap '[ -n "$started" ] && podman machine stop >/dev/null' EXIT
-podman build --quiet --file "$HERE/Containerfile" --tag localhost/isomer-linux-builder:dev "$HERE" >/dev/null
-# The convenience symlinks go outside the checkout (the Mac's own stay).
-flags="--keep_going --symlink_prefix=/build/links/"
-if [ $# -gt 0 ]; then
-    command="bazel --output_base=/build/root build $flags $*"
-else
-    command="bazel --output_base=/build/root build $flags //linux/... && cd examples && bazel --output_base=/build/examples build $flags //linux/..."
-fi
-# An untracked .bazelrc.user may point --override_module at checkouts beside
-# this one (swift-foundation, say): they are mounted at the same paths.
-extra=()
-for rc in "$ROOT/.bazelrc.user" "$ROOT/examples/.bazelrc.user"; do
-    [ -f "$rc" ] || continue
-    for path in $(grep -oE -- '--override_module=[^= ]+=[^ ]+' "$rc" | sed 's/.*=//'); do
-        [ -d "$path" ] && extra+=(--volume "$path:$path:ro")
-    done
+IMAGE="isomer-linux-builder:dev"
+module=""
+after=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --module) module="$2"; shift 2 ;;
+        --after) after="$2"; shift 2 ;;
+        --stop)
+            id="$(cat ~/.cache/isomer/linux-build-container 2>/dev/null || true)"
+            [ -n "$id" ] && oss container remove "$id"
+            rm -f ~/.cache/isomer/linux-build-container
+            exit 0 ;;
+        *) break ;;
+    esac
 done
-podman run --rm \
-    --volume "$ROOT:/workspace:rw" \
-    ${extra[@]+"${extra[@]}"} \
-    --volume isomer-linux-build:/build \
-    --volume isomer-linux-cache:/root/.cache \
-    localhost/isomer-linux-builder:dev \
-    bash -euc "$command"
+
+if ! container image list 2>/dev/null | grep -q "^isomer-linux-builder *dev"; then
+    container build --tag "$IMAGE" --file "$HERE/Containerfile" "$HERE" >/dev/null
+    # Apple's builder is a container of its own (2 GB): not kept after.
+    container builder stop >/dev/null 2>&1 || true
+fi
+mkdir -p ~/.cache/isomer
+id="$(cat ~/.cache/isomer/linux-build-container 2>/dev/null || true)"
+if [ -z "$id" ] || ! oss container list 2>/dev/null | grep -q "^$id  *running"; then
+    id="$(oss container start --image="$IMAGE" --label=isomer=linux-build | awk '/^container / {sub(":", "", $2); print $2; exit}')"
+    echo "$id" > ~/.cache/isomer/linux-build-container
+fi
+home="$(oss container list 2>/dev/null | awk -v id="$id" '$1 == id {print $NF}')"
+[ -n "$id" ] && [ -d "$home" ] || { echo "no oss container" >&2; exit 1; }
+
+# The checkout as git sees it (tracked, and untracked but not ignored),
+# into the container's home.
+(cd "$ROOT" && git ls-files -co --exclude-standard -z | COPYFILE_DISABLE=1 tar --no-xattrs -czf "$home/isomer-src.tgz" --null -T -)
+
+flags="--keep_going"
+if [ -n "$module" ]; then
+    command="cd /root/isomer/$module && bazel build $flags $*"
+    [ -n "$after" ] && command="$command && $after"
+elif [ $# -gt 0 ]; then
+    command="cd /root/isomer && bazel build $flags $*"
+else
+    command="cd /root/isomer && bazel build $flags //linux/... && cd examples && bazel build $flags //linux/... && cd ../playground && bazel build $flags //linux/..."
+fi
+# A fresh copy of the checkout each run (files deleted here go there too);
+# Bazel's output base is outside it.
+oss container exec "$id" -- bash -lc "rm -rf /root/isomer && mkdir -p /root/isomer && tar -xzf /root/isomer-src.tgz -C /root/isomer && rm /root/isomer-src.tgz && $command"

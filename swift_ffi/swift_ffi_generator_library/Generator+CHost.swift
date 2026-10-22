@@ -2,7 +2,7 @@ import Foundation
 import SwiftFFIIRLibrary
 
 // The C-host backend: a C header + dispatch table for embedding a reactor
-// from C (the Android/desktop WAMR hosts).
+// from C (a host driving a C WebAssembly engine).
 extension Generator {
     func cHostParamType(_ swift: String) throws -> String {
         switch swift {
@@ -57,7 +57,7 @@ extension Generator {
     /// per hostable-interface impl vtables, the ordinal-led blob dispatchers
     /// bridging them into the runtime's ONE `closure_invoke` channel, and thin
     /// wrappers for the module's exported functions. It covers the synchronous
-    /// scalar/string/bytes subset a plain C host (e.g. driving WAMR, no compiled
+    /// scalar/string/bytes subset a plain C host (a C engine, no compiled
     /// Swift) needs; async / @ExportedStruct / generics / closures /
     /// interface-returning functions are skipped and listed in a header comment
     /// (reach them via the Swift host, the browser, or the compiled C ABI).
@@ -135,7 +135,7 @@ extension Generator {
             //
             // Native-C host bindings for the `\(moduleName)` Swift module compiled to a
             // WebAssembly reactor — the C peer of the generated swift-host-wasm bindings,
-            // for a host with NO compiled Swift (e.g. driving WAMR). The host supplies a
+            // for a host with NO compiled Swift (a C engine). The host supplies a
             // `SwiftFFIEngine` (call/read/write), binds the FIXED five-entry import table
             // (\(cid)host_imports), runs `_initialize`, then activates dependencies.
             //

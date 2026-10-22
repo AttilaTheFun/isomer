@@ -6,6 +6,12 @@ React Native and Valdi. Organized by **platform**; within each platform a table
 covers every delivery mode / framework. **Blank** = not yet measured;
 **N/A** = the combination isn't supported.
 
+> **0.38:** WAMR and its AOT tier were removed; every native host now runs
+> reactors on WasmKit's interpreter. The wasm rows below were measured under
+> WAMR (interpreted or wamrc `.aot`) and are kept as history; the WAMR cells
+> and microbenchmarks they name (`greeter_aot_bench`, the wasm×GPU Android
+> cell, the iOS bench app's WAMR engine) are gone.
+
 **Delivery modes** (Isomer):
 - **native** — the platform's idiomatic native UI as a reference ceiling
 - **compiled Swift** — the shared Swift app built to native (`.so`/`.dylib`/ELF),

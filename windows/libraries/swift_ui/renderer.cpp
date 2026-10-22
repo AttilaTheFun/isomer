@@ -506,14 +506,24 @@ void WriteCrashLog(EXCEPTION_POINTERS* info) {
   if (info && info->ContextRecord) {
     CONTEXT ctx = *info->ContextRecord;  // StackWalk64 mutates the context.
     STACKFRAME64 frame = {};
+    // The program counter, frame and stack pointers of the faulting
+    // context, as the CPU names them (x64 or ARM64).
+#if defined(_M_ARM64)
+    const DWORD machine = IMAGE_FILE_MACHINE_ARM64;
+    frame.AddrPC.Offset = ctx.Pc;
+    frame.AddrFrame.Offset = ctx.Fp;
+    frame.AddrStack.Offset = ctx.Sp;
+#else
+    const DWORD machine = IMAGE_FILE_MACHINE_AMD64;
     frame.AddrPC.Offset = ctx.Rip;
-    frame.AddrPC.Mode = AddrModeFlat;
     frame.AddrFrame.Offset = ctx.Rbp;
-    frame.AddrFrame.Mode = AddrModeFlat;
     frame.AddrStack.Offset = ctx.Rsp;
+#endif
+    frame.AddrPC.Mode = AddrModeFlat;
+    frame.AddrFrame.Mode = AddrModeFlat;
     frame.AddrStack.Mode = AddrModeFlat;
     for (int i = 0; i < 60; ++i) {
-      if (!StackWalk64(IMAGE_FILE_MACHINE_AMD64, proc, GetCurrentThread(), &frame, &ctx,
+      if (!StackWalk64(machine, proc, GetCurrentThread(), &frame, &ctx,
                        nullptr, SymFunctionTableAccess64, SymGetModuleBase64, nullptr) ||
           frame.AddrPC.Offset == 0) {
         break;
@@ -1150,9 +1160,9 @@ void iso_window_create(double width, double height, const char* title) {
   // Create an ID2D1Factory1 (D2D 1.1) so render targets expose ID2D1DeviceContext,
   // which is needed for the built-in Gaussian shadow effect. ID2D1Factory1 derives
   // from ID2D1Factory, so it stores fine in the ID2D1Factory* field.
-  D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, __isodof(ID2D1Factory1),
+  D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, __uuidof(ID2D1Factory1),
                     nullptr, reinterpret_cast<void**>(&g.d2dFactory));
-  DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __isodof(IDWriteFactory),
+  DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory),
                       reinterpret_cast<IUnknown**>(&g.dwriteFactory));
   CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
   CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROCESS_SERVER,

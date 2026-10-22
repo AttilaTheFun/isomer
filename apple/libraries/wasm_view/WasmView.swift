@@ -9,7 +9,7 @@
 // Native services the feature consumes are injected as `dependencies` (the
 // app's generated `Dependencies` builders); Foundation's networking goes in
 // beneath them by default, so the feature's URLSession is Apple's
-// (NetworkHosts.swift). Presentation escaping the frame is deferred (a
+// (//shared/isomer_network_host/urlsession). Presentation escaping the frame is deferred (a
 // feature's sheets render within its own bounds).
 
 import SwiftFFIWasmHost

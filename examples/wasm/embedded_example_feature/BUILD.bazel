@@ -73,9 +73,9 @@ swift_binary(
     ],
 )
 
-# Always the plain `.wasm` (never an `.aot`): the iOS host runs this on WAMR's
-# interpreter — a dynamically deliverable bundle is data, not code, which is
-# the point of the wasm engine on iOS (docs/benchmarks.md#ios, the † note).
+# The iOS host runs this on WasmKit's interpreter — a dynamically
+# deliverable bundle is data, not code, which is the point of the wasm engine
+# on iOS (docs/benchmarks.md#ios, the † note).
 transition_binary(
     name = "embedded_example.wasm",
     binary = ":embedded_example_reactor",

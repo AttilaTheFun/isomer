@@ -1,6 +1,6 @@
 // Headless smoke test for the composed wasm pipeline: instantiate the demo
-// reactor under WAMR (WASI + the swift_ffi dependency transport plus
-// the `iso_hot` render callbacks are all wired by the shared C host), inject a
+// reactor under WasmKit (WASI + the swift_ffi dependency transport plus
+// the `iso_hot` render callbacks are all wired by WasmKitRuntime), inject a
 // native ConfigurationService, run `iso_hot_start`/`render`, and assert the reactor pushed
 // a tree containing the demo greeting AND the native-flag-gated promo banner.
 // Proves the whole path (WASI, swift_ffi DI, iso_hot render, FlatBuffers) works
@@ -8,7 +8,7 @@
 
 import ApplePlatformServices
 import Foundation
-import IsomerWamrRuntime
+import IsomerWasmKitRuntime
 import IsomerWasmRuntime
 
 let args = CommandLine.arguments
@@ -25,9 +25,10 @@ func run() -> Never {
         let bytes = try [UInt8](Data(contentsOf: URL(fileURLWithPath: wasmPath)))
         let tree: [UInt8] = try MainActor.assumeIsolated {
             var captured: [UInt8] = []
-            let runtime = WamrRuntime()
+            let runtime = WasmKitRuntime()
             let imports = WasmHostImports(
-                onRenderTree: { captured = $0 },
+                // Every buffer (the first frame's tree, then any patches).
+                onRenderTree: { captured.append(contentsOf: $0) },
                 onLog: { _ in },
                 epochMillis: { Date().timeIntervalSince1970 * 1000 },
                 onScheduleRender: {}

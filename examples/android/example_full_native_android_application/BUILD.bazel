@@ -8,7 +8,7 @@ load("@isomer//tools/android:defs.bzl", "apk_install_run")
 # just hand-written Compose rendering the same Apps list + tap counter. Run it
 # next to //android/example_full_{compiled,wasm}_android_application
 # to feel native Compose vs. our compiled-Swift and wasm-delivered renderers, and
-# compare its [native-tap] latency log against the wasm reactor's [wamr-event].
+# compare its [native-tap] latency log against the wasm reactor's [iso-tap].
 
 kt_android_library(
     name = "host_app",

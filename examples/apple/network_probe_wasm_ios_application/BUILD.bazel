@@ -7,9 +7,9 @@ package(default_visibility = ["//visibility:public"])
 # (//shared/network_probe_application) as a reactor, whose URLSession runs
 # over Apple's (the network hosts WasmView injects; the app injects nothing
 # of its own). Simulator build (no provisioning profile). The probe's server
-# is ISO_NETWORK_SERVER (WAMR hands the reactor the host's ISO_* variables);
-# each check is a line of the list, which ISO_DUMP_TREE writes out (the
-# guest's stdout reaches a launch's --stdout file only in part):
+# is ISO_NETWORK_SERVER (WasmKitRuntime hands the reactor the host's ISO_*
+# variables); each check is a line of the list, which ISO_DUMP_TREE writes
+# out (the guest's stdout reaches a launch's --stdout file only in part):
 #
 #   node ../tools/testing/network_server.js &          # prints its URL
 #   bazel build //apple/network_probe_wasm_ios_application --ios_multi_cpus=sim_arm64
@@ -31,7 +31,8 @@ ios_application(
     bundle_id = "com.LoganShire.Isomer.NetworkProbe",
     families = ["iphone"],
     infoplists = ["Info.plist"],
-    minimum_os_version = "17.0",
+    # iOS 18: WasmView runs reactors on WasmKit (Swift's Synchronization).
+    minimum_os_version = "18.0",
     resources = ["//wasm/network_probe_feature:network_probe.wasm"],
     deps = [":app_lib"],
 )

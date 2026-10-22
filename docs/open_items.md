@@ -18,7 +18,7 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
 |---|---|---|
 | T1 | iOS, macOS | simulators, the Mac |
 | T2 | wasm (web, Electron), Android | headless Chrome, the hermetic emulator |
-| T3 | Linux, Windows | Linux builds in a container from the Mac (`tools/linux/build.sh`); Windows only loads and parses (below). Both are run on their own hosts. |
+| T3 | Linux, Windows | built and run on oss machines from the Mac: Linux in a container (`tools/linux/build.sh`) and run in a Linux VM, Windows on the Windows VM with the Swift build layer (the Playground's `tests/proof/proof.py`) |
 
 ## Releases
 
@@ -32,18 +32,24 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
 
 ## Linux and Windows (T3)
 
-- **Windows is not built from here.** No Swift toolchain cross-compiles to
-  Windows from macOS or Linux (rules_swift has no Windows SDK path), so a
-  change is checked by `bazel query 'deps(//windows/...)'` in both modules
-  (the BUILD graph loads) and `swiftc -parse` of the changed files. Type
-  errors show only on a Windows host. The 0.31 changes made there mirror
-  Linux's, which build: the wasm cell's public entry moved to
-  `IsomerWasmHost` (`WindowsWasmApp`), the WAMR callbacks' new fields, the
-  render calls on the main actor, CoreGraphics over corelibs Foundation.
-- **Linux builds, but does not run here.** `tools/linux/build.sh` builds
-  `//linux/...` in isomer and in the examples (the compiled app, the wasm
-  cell with its reactor) in an arm64 Ubuntu container; nothing
-  has been launched since 0.31.
+- **Both are built and run on oss machines (0.38).** Linux builds in an
+  oss container (`tools/linux/build.sh`) and runs in a Linux VM; Windows
+  builds and runs on the oss Windows VM with the Swift build layer
+  (tools/ci/oss/windows-swift.ps1: Visual Studio's build tools, Swift,
+  Python), in MSVC's environment with Git's bash and POSIX tools (the
+  Playground's tests/proof/proof.py says how). The Playground's Isomer app
+  is the proof on both: the Gallery drawn by the app's renderer and run as
+  wasm in the WasmKit loader's window. Visual Studio and an installed
+  Swift are a stopgap until the hermetic toolchains replace them.
+- **Windows' Swift 6.3.2 can't link `AttributedString.runs`** (its
+  Foundation doesn't export the descriptor of _FoundationCollections'
+  `BigString.Index`, on ARM64 and x64 alike), so there `Text(AttributedString)`
+  shows its text unstyled (shared/swift_ui_core/AttributedText.swift).
+- **Windows' hosts draw every frame** (the compiled app's loop and the
+  wasm cell's, paced by Present; Linux's draw on demand), so an idle
+  window costs about a core under a VM's software D3D (WARP).
+- **WasmKit's WASI opens no directory on Windows**, so a guest there has
+  no file system at all (no /tmp, no home); on Linux it has /tmp.
 - **Linux and Windows still use the toolchain's Foundation**
   (swift-corelibs-foundation), not Isomer's: `URLSession` is in
   FoundationNetworking there (code imports it under `os(Linux) ||
@@ -52,12 +58,12 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
   CGColor; CGFloat, CGPoint, CGSize and CGRect are corelibs'). Moving them
   onto Isomer's Foundation would make every platform's Foundation one
   source.
-- **The WAMR hosts give a guest no home or platform channel** on Linux and
-  Windows (`home_dir`, `bundle_identifier`, `on_platform_command`,
-  `host_value` are NULL): a guest's FileManager directories are not
-  writable, `@AppStorage` does not persist, the clipboard does nothing. Nor
-  do they install network transports, so a guest's `URLSession` fails with
-  `notConnectedToInternet`.
+- **The desktop wasm hosts give a guest no home or platform channel** on
+  Linux and Windows (their `WasmKitRuntime` gets no `homeDirectory` or
+  `bundleIdentifier`, their `WasmFeatureRuntime` no `onPlatformCommand` or
+  `hostValue`): a guest's FileManager directories are not writable,
+  `@AppStorage` does not persist, the clipboard does nothing. Their
+  network transports are URLSession's (0.38, as Apple's WasmView's).
 
 ## Android (T2)
 
@@ -141,7 +147,7 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
 - **A WasmView guest's first requests wait for its first draw** (0.35
   candidate, 2026-10-17: acceptable for now, a possible improvement): at a cold start the blue Visor's
   sign-in leaves about 0.4 s after the store asks for it on the simulator,
-  because WasmKitRuntime (and WamrRuntime) hold the guest's main-actor jobs
+  because WasmKitRuntime holds the guest's main-actor jobs
   while a tree is undrawn (`treeUndrawn`, which keeps a chat's place while
   pages load in above it) and a guest thread's swift_ffi calls wait for the
   main thread (`onMain`), which is drawing the first screen. Options: start

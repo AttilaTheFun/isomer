@@ -1,0 +1,30 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# IsomerNetworkHost's hosts over URLSession, for a native Swift process that
+# runs reactors under WasmKit: Apple's WasmView, and the Linux and Windows
+# wasm hosts (FoundationNetworking there). `isomerNetworkDependencies()`
+# wraps them as the guest's injected dependencies. Not Android's: its hosts
+# are Kotlin's (IsomerHTTP.kt, IsomerWebSockets.kt), and FoundationNetworking
+# must not reach its .so.
+swift_library(
+    name = "urlsession",
+    package_name = "isomer",
+    srcs = ["URLSessionHosts.swift"],
+    module_name = "IsomerURLSessionNetwork",
+    target_compatible_with = select({
+        "@platforms//os:macos": [],
+        "@platforms//os:ios": [],
+        "@platforms//os:linux": [],
+        "@platforms//os:windows": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    deps = [
+        # IsomerNetworkHost's interfaces as a native host implements them
+        # (generated; imported, not re-exported: its `Dependencies` would
+        # meet an app's own).
+        "//shared/isomer_network_host:wasm_host",
+        "//swift_ffi/runtime/swift_wasm_host",
+    ],
+)

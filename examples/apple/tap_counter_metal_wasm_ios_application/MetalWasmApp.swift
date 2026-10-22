@@ -1,18 +1,19 @@
 // The wasm+METAL iOS cell of the counter benchmark (docs/benchmarks.md#ios),
 // mostly a curiosity: the SAME shared TapCounter.swift as a wasm reactor,
 // drawn by the self-drawing `SwiftGPURenderer` through swift_gpu's METAL
-// backend — the iOS analogue of Android's wasm+GPU cell and the desktop wasm
-// hosts. The host is Swift (unlike Android's C-host cell), so the wiring
-// mirrors LinuxWasmHost: the reactor emits tree.fbs, the host decodes it and
-// SwiftGPURenderer lays out + draws every pixel into an MTKView pass.
+// backend — the iOS analogue of the desktop wasm hosts. The wiring mirrors
+// LinuxWasmHost: the reactor runs on WasmKit under the shared feature
+// runtime (WasmFeatureRuntime over WasmKitRuntime) and emits tree.fbs, the
+// host decodes it and SwiftGPURenderer lays out + draws every pixel into an
+// MTKView pass.
 //
 // UIKit only — this module compiles the SwiftUI *reimplementation* core
 // (Runtime/Renderer/SwiftGPURenderer), whose type names (View/Text/Color…)
 // would clash with the real SwiftUI if both were imported.
 
-import CIsoEmbeddedAot
-import CIsoWamr
 import Foundation
+import IsomerWasmHost
+import IsomerWasmKitRuntime
 import SwiftGPU
 import UIKit
 public import IsomerSwiftUI
@@ -47,10 +48,10 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
 final class MetalWasmCell {
     static var shared: MetalWasmCell?
 
-    var wamr: OpaquePointer?
+    var core: WasmFeatureRuntime?
     let decoder: FlatTreeDecoder
     var latestTree: RenderNode?
-    /// Frames handed up by `on_tree`, pending decode on the draw callback.
+    /// Frames handed up by `onTree`, pending decode on the draw callback.
     /// An ordered QUEUE, deliberately not a latest-wins slot: with diff-aware
     /// updates each buffer is a delta against the retained tree (a tap emits
     /// press + un-press patches in one pump); dropping one desyncs the
@@ -64,50 +65,9 @@ final class MetalWasmCell {
     }
 
     func sendEvent(id: String, value: String) {
-        guard let wamr else { return }
-        var idBytes = Array(id.utf8)
-        var valueBytes = Array(value.utf8)
-        idBytes.withUnsafeBufferPointer { idBuf in
-            valueBytes.withUnsafeBufferPointer { valBuf in
-                idBuf.baseAddress!.withMemoryRebound(to: CChar.self, capacity: idBuf.count) { idPtr in
-                    valBuf.baseAddress!.withMemoryRebound(to: CChar.self, capacity: valBuf.count) { valPtr in
-                        iso_wamr_event(wamr, idPtr, idBuf.count, valPtr, valBuf.count)
-                    }
-                }
-            }
-        }
+        core?.send(id: id, value: value)
     }
 }
-
-// C callbacks (top-level so they convert to @convention(c)).
-private func onTree(_ ctx: UnsafeMutableRawPointer?, _ bytes: UnsafePointer<UInt8>?, _ len: Int) {
-    guard let bytes, len > 0 else { return }
-    let copied = Array(UnsafeBufferPointer(start: bytes, count: len))
-    // The reactor runs on the main thread (events/start are main-thread
-    // calls), so the common case appends synchronously — the patch is
-    // available the moment the event call returns.
-    if Thread.isMainThread {
-        MainActor.assumeIsolated {
-            MetalWasmCell.shared?.pendingBytes.append(copied)
-            MetalWasmViewController.shared?.scheduleRender()
-        }
-    } else {
-        Task { @MainActor in
-            MetalWasmCell.shared?.pendingBytes.append(copied)
-            MetalWasmViewController.shared?.scheduleRender()
-        }
-    }
-}
-
-private func onLog(_ ctx: UnsafeMutableRawPointer?, _ msg: UnsafePointer<CChar>?, _ len: Int) {
-    guard let msg, len > 0 else { return }
-    NSLog("[wasm] %@", String(decoding: UnsafeRawBufferPointer(start: msg, count: len), as: UTF8.self))
-}
-
-private func onScheduleRender(_ ctx: UnsafeMutableRawPointer?) {
-    Task { @MainActor in MetalWasmViewController.shared?.scheduleRender() }
-}
-
 
 // MARK: - Metal surface adapter
 
@@ -313,9 +273,7 @@ final class MetalWasmViewController: UIViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         guard !started else {
-            if let wamr = MetalWasmCell.shared?.wamr {
-                iso_wamr_resize(wamr, Double(view.bounds.width), Double(view.bounds.height))
-            }
+            MetalWasmCell.shared?.core?.resize(width: Double(view.bounds.width), height: Double(view.bounds.height))
             return
         }
         started = true
@@ -331,89 +289,28 @@ final class MetalWasmViewController: UIViewController {
         // is installed); the tree comes from the reactor.
         Runtime.shared.start(host: renderer!, width: width, height: height)
 
-        // Hybrid delivery policy: the embedded (signed-__TEXT, execute-in-
-        // place) AOT image by default; ISO_FORCE_INTERP=1 opts into the
-        // interpreter on the bundled .wasm — the dynamically-deliverable tier.
-        var embedded: UnsafeBufferPointer<UInt8>?
-        if ProcessInfo.processInfo.environment["ISO_FORCE_INTERP"] != "1" {
-            var length = 0
-            if let data = iso_embedded_aot_data(&length), length > 0 {
-                embedded = UnsafeBufferPointer(start: data, count: length)
-            }
-        }
-
-        var bytes: [UInt8] = []
-        if embedded == nil {
-            guard let url: FURL = Bundle.main.url(forResource: "tap_counter_release", withExtension: "wasm"),
-                let loaded = try? [UInt8](Data(contentsOf: url))
-            else {
-                NSLog("[wasm] no packaged reactor")
-                return
-            }
-            bytes = loaded
-        }
-
-        let callbacks = IsoWamrCallbacks(
-            ctx: nil,
-            on_tree: onTree,
-            on_log: onLog,
-            on_schedule_render: onScheduleRender,
-            ffi_prefix: nil,
-            on_schedule_jobs: nil,
-            measure_text: nil,
-            rasterize: nil,
-            on_platform_command: nil,
-            host_value: nil,
-            home_dir: nil,
-            bundle_identifier: nil)
-
-        var err = [CChar](repeating: 0, count: 256)
-        func interpretBundled() -> OpaquePointer? {
-            guard let url: FURL = Bundle.main.url(forResource: "tap_counter_release", withExtension: "wasm"),
-                  let loaded = try? [UInt8](Data(contentsOf: url))
-            else { return nil }
-            bytes = loaded
-            return bytes.withUnsafeBufferPointer { buffer in
-                err.withUnsafeMutableBufferPointer { errBuffer in
-                    iso_wamr_create(
-                        buffer.baseAddress, buffer.count, callbacks,
-                        errBuffer.baseAddress, errBuffer.count)
-                }
-            }
-        }
-        var reactor: OpaquePointer?
-        if let embedded {
-            reactor = err.withUnsafeMutableBufferPointer { errBuffer in
-                iso_wamr_create_in_place(
-                    embedded.baseAddress, embedded.count, callbacks,
-                    errBuffer.baseAddress, errBuffer.count)
-            }
-            if reactor == nil {
-                // Embedded image present but unloadable (an interp-only build —
-                // e.g. the simulator — links the shim + image without the @wamr
-                // AOT loader): interpret the bundled `.wasm`, the same tier
-                // ISO_FORCE_INTERP selects explicitly.
-                NSLog("[wasm] embedded AOT unloadable (%@); interpreting bundled wasm",
-                      String(cString: err))
-                reactor = interpretBundled()
-            }
-        } else {
-            reactor = bytes.withUnsafeBufferPointer { buffer in
-                err.withUnsafeMutableBufferPointer { errBuffer in
-                    iso_wamr_create(
-                        buffer.baseAddress, buffer.count, callbacks,
-                        errBuffer.baseAddress, errBuffer.count)
-                }
-            }
-        }
-        guard let reactor else {
-            NSLog("[wasm] iso_wamr_create failed: %@", String(cString: err))
+        guard let url: FURL = Bundle.main.url(forResource: "tap_counter_release", withExtension: "wasm"),
+            let bytes = try? [UInt8](Data(contentsOf: url))
+        else {
+            NSLog("[wasm] no packaged reactor")
             return
         }
-        cell.wamr = reactor
-        // The reactor ships tree.fbs Patches — the only wire format; the
-        // first render after start is a single full-tree op at "n".
-        iso_wamr_start(reactor, width, height)
+
+        // WasmKit under the shared feature runtime, which pumps the reactor's
+        // renders on the main queue. The reactor ships tree.fbs Patches — the
+        // only wire format; the first render after start is a single
+        // full-tree op at "n". Each buffer is queued in order (`pendingBytes`)
+        // and applied on the next draw.
+        let core = WasmFeatureRuntime(
+            runtime: { _ in WasmKitRuntime() },
+            log: { line in NSLog("%@", line) })
+        core.onTree = { [weak self, weak cell] bytes in
+            cell?.pendingBytes.append(bytes)
+            self?.scheduleRender()
+        }
+        cell.core = core
+        core.resize(width: width, height: height)
+        core.load(bundle: WasmServiceBundle(label: "tap_counter_release", wasm: bytes))
         scheduleRender()
     }
 

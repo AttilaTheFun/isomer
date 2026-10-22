@@ -5,7 +5,9 @@
 # compilation conditions (SwiftPM passes enabled traits to every target),
 # and the engine with the RawLayout feature its Cell needs. Only what a host
 # embeds is here: the engine, its parser and types, WASI, and WASI Threads.
-# Apple platforms only (Isomer's WasmKitRuntime runs on macOS and iOS).
+# Every native platform Isomer hosts reactors on: macOS, iOS, Android, Linux,
+# Windows (guard-page bounds checks and shared memory on Apple's and Linux;
+# software checks, and no threads, on Android and Windows).
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_swift//swift:swift_interop_hint.bzl", "swift_interop_hint")
@@ -17,18 +19,31 @@ package(
     features = ["swift.enable_v6"],
 )
 
-_APPLE = select({
+_NATIVE = select({
     "@platforms//os:macos": [],
     "@platforms//os:ios": [],
+    "@platforms//os:android": [],
+    "@platforms//os:linux": [],
+    "@platforms//os:windows": [],
     "//conditions:default": ["@platforms//:incompatible"],
 })
 
-# Package.swift's default traits.
+# Package.swift's default traits, and the interpreter optimized in every
+# build: unoptimized, a debug app's WasmKit took 17 s to start the Gallery's
+# reactor on an emulator (an interpreter is all inner loops).
 _TRAITS = [
     "-DFileSystem",
     "-DMultiThread",
     "-DDisassembler",
+    "-O",
+    "-wmo",
 ]
+
+# MSVC compiles C11's atomics only when asked.
+_C_OPTIMIZED = ["-O2"] + select({
+    "@platforms//os:windows": ["/std:c11", "/experimental:c11atomics"],
+    "//conditions:default": [],
+})
 
 swift_library(
     name = "WasmTypes",
@@ -36,7 +51,7 @@ swift_library(
     copts = _TRAITS,
     module_name = "WasmTypes",
     package_name = "WasmKit",
-    target_compatible_with = _APPLE,
+    target_compatible_with = _NATIVE,
 )
 
 swift_library(
@@ -45,7 +60,7 @@ swift_library(
     copts = _TRAITS,
     module_name = "WasmParser",
     package_name = "WasmKit",
-    target_compatible_with = _APPLE,
+    target_compatible_with = _NATIVE,
     deps = [":WasmTypes"],
 )
 
@@ -66,8 +81,9 @@ cc_library(
     ],
     hdrs = glob(["Sources/_CWasmKit/include/**"]),
     aspect_hints = [":_CWasmKit_hint"],
+    copts = _C_OPTIMIZED,
     includes = ["Sources/_CWasmKit/include"],
-    target_compatible_with = _APPLE,
+    target_compatible_with = _NATIVE,
 )
 
 swift_library(
@@ -79,7 +95,7 @@ swift_library(
     ],
     module_name = "WasmKit",
     package_name = "WasmKit",
-    target_compatible_with = _APPLE,
+    target_compatible_with = _NATIVE,
     deps = [
         ":WasmParser",
         ":WasmTypes",
@@ -93,7 +109,7 @@ swift_library(
     copts = _TRAITS,
     module_name = "WASI",
     package_name = "WasmKit",
-    target_compatible_with = _APPLE,
+    target_compatible_with = _NATIVE,
     deps = [":WasmTypes"],
 )
 
@@ -103,7 +119,7 @@ swift_library(
     copts = _TRAITS,
     module_name = "WasmKitWASI",
     package_name = "WasmKit",
-    target_compatible_with = _APPLE,
+    target_compatible_with = _NATIVE,
     deps = [
         ":WASI",
         ":WasmKit",
@@ -121,8 +137,9 @@ cc_library(
     srcs = ["Sources/CWasmKitWASIThreads/Thread.c"],
     hdrs = glob(["Sources/CWasmKitWASIThreads/include/**"]),
     aspect_hints = [":CWasmKitWASIThreads_hint"],
+    copts = _C_OPTIMIZED,
     includes = ["Sources/CWasmKitWASIThreads/include"],
-    target_compatible_with = _APPLE,
+    target_compatible_with = _NATIVE,
 )
 
 swift_library(
@@ -131,7 +148,7 @@ swift_library(
     copts = _TRAITS,
     module_name = "WasmKitWASIThreads",
     package_name = "WasmKit",
-    target_compatible_with = _APPLE,
+    target_compatible_with = _NATIVE,
     deps = [
         ":CWasmKitWASIThreads",
         ":WasmKit",

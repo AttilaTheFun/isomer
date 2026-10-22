@@ -4,7 +4,7 @@
 // `import SwiftUI` resolves here, exactly like the Android/wasm core modules),
 // drawn by the self-drawing `SwiftGPURenderer` through swift_gpu's METAL
 // backend. The iOS analogue of Android's compiled+GPU cell, and the compiled
-// twin of tap_counter_metal_wasm_ios_application (same shell, no WAMR: the
+// twin of tap_counter_metal_wasm_ios_application (same shell, no WasmKit: the
 // core runs in-process, events and trees never cross a boundary).
 //
 // Entry: the app's `@main` (in TapCounter.swift, its own module) →

@@ -4,6 +4,11 @@ A framing for what this stack *is*, product-wise — not a cross-platform
 framework with a wasm curiosity bolted on, but **a browser engine whose
 content language is Swift and whose DOM is native UI**.
 
+> **0.38:** WAMR, and with it the AOT tier below, was removed; WasmKit's
+> interpreter runs every reactor on the native hosts. The interpreter tier's
+> argument stands as written; the AOT tier and its numbers (measured under
+> WAMR) are history.
+
 ## The analogy, stated plainly
 
 A browser engine is three things:
@@ -18,7 +23,7 @@ A browser engine is three things:
 
 This stack is the same three things:
 
-1. **WAMR** executing a SwiftWasm reactor — a `.wasm` bundle delivered with
+1. **WasmKit** executing a SwiftWasm reactor — a `.wasm` bundle delivered with
    the app or downloaded at runtime;
 2. **`tree.fbs`** — the retained UI tree the reactor produces and a
    `TreeRenderer` renders (real SwiftUI on Apple, Compose on Android, React on
@@ -50,9 +55,9 @@ is long-standing accepted practice with the same mechanical shape; a wasm
 interpreter sits in the same class. The AOT tier below sidesteps the question
 entirely — it's ordinary signed native code, reviewed with the app.)
 
-## The two tiers (hybrid delivery policy)
+## The two tiers (hybrid delivery policy; until 0.38)
 
-Measured on an iPhone 13 Pro ([benchmarks](benchmarks.md#ios)):
+Measured under WAMR on an iPhone 13 Pro ([benchmarks](benchmarks.md#ios)):
 
 | tier | delivery | mechanism | startup | tap |
 |---|---|---|---|---|
@@ -92,7 +97,7 @@ browsers don't have.
 ## One-line pitches
 
 - "A browser engine where the pages are Swift and the DOM is SwiftUI."
-- "JavaScriptCore runs downloaded JS; WAMR runs downloaded Swift. Same
+- "JavaScriptCore runs downloaded JS; WasmKit runs downloaded Swift. Same
   mechanism, typed language, native rendering."
 - "Ship the engine once; ship features like web pages — with a native-speed
   AOT tier for the ones you bundle."

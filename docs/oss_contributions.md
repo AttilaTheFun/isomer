@@ -84,8 +84,10 @@ the natural home for the capability our interim custom executor demonstrates.
 Scope/sequencing: land the interim custom executor in-tree first (unblocks us),
 prototype the runtime executor against a swiftwasm dev snapshot, then propose it
 upstream (swiftwasm, and ultimately swiftlang/swift). Related: the WAMR threads
-build (`--define wamr_threads=1`, vendored in swift_ffi) and the version-matched
-SDK constraint were worked out in a plan outside this repository.
+build (`--define wamr_threads=1`, vendored in swift_ffi; removed with WAMR in
+0.38, threaded reactors run on WasmKit's WASI Threads now) and the
+version-matched SDK constraint were worked out in a plan outside this
+repository.
 
 ## swift-sdk-generator (swiftlang/swift-sdk-generator) — optional
 

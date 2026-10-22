@@ -8,7 +8,7 @@ differ only in how the SwiftUI is *delivered*:
 | Cell | Target | SwiftUI delivery |
 | --- | --- | --- |
 | **compiled** | `//examples/windows/example_full_directx_compiled_windows_application` | linked into the `.exe` as native Swift |
-| **wasm** | `//examples/windows/example_full_directx_wasm_windows_application` | an `example_full.wasm` reactor run under WAMR (interp, or a `.aot` passed as `argv[1]`) |
+| **wasm** | `//examples/windows/example_full_directx_wasm_windows_application` | an `example_full.wasm` reactor run under WasmKit (its path passed as `argv[1]`) |
 
 Benchmark cells (docs/benchmarks.md#windows): the shared tap-counter as
 `//examples/windows/tap_counter_compiled_windows_application` (compiled
@@ -28,8 +28,8 @@ for how the wasm cell works.
 | Flag | Effect |
 | --- | --- |
 | `--config=map` | links swift_map (Direct3D 11) → the `Map` tab renders real OpenStreetMap tiles (swift_map is a dev dependency, example-apps-only; placeholder pane without it) |
-| `--config=release` | `-c opt --define=wamr_aot=1`; compiles the AOT loader into the wasm cell (MSVC). The Windows-ABI `.aot` itself is cross-produced on a macOS/Linux host: `wamrc --target=x86_64 --target-abi=msvc --size-level=0` (size-level=0 is required — default-level `.aot`s fail ADDR32 relocation on load; see swift_ffi's TODO.md) — then passed as `argv[1]` |
-| *(none)* | debug loop: interpreted wasm, placeholder maps |
+| `--config=release` | `-c opt` (the wasm cell interprets the reactor under WasmKit; WAMR's `.aot` tier was removed in 0.38) |
+| *(none)* | debug loop: placeholder maps |
 
 ## Prerequisites
 
@@ -54,7 +54,7 @@ A per-monitor-DPI-aware Win32 window comes up with the responsive shell
 ## Running the wasm cell
 
 The wasm cell is a thin loader: it reads an `example_full.wasm` reactor and runs
-it under WAMR, drawing the decoded tree through Direct3D 11. The SwiftWasm
+it under WasmKit, drawing the decoded tree through Direct3D 11. The SwiftWasm
 toolchain that compiles `.wasm` doesn't run on a Windows host, so **build the
 reactor where it does** (WSL/Linux/macOS):
 

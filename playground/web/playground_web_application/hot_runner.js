@@ -59,8 +59,9 @@ export function createRunner({ dependencies }) {
   }
 
   // `bundleIdentifier` names the build's home: its files (FileManager's,
-  // kept in IndexedDB) and UserDefaults, one per project.
-  async function run(wasm, bundleIdentifier) {
+  // kept in IndexedDB) and UserDefaults, one per project; `environment`
+  // is the guest's added variables.
+  async function run(wasm, bundleIdentifier, environment = {}) {
     stop();
     lines = [];
     container.innerHTML = "";
@@ -72,6 +73,7 @@ export function createRunner({ dependencies }) {
         container,
         dependencies,
         bundleIdentifier,
+        environment,
         onLog: (line) => log(line),
         onStatus: (status) => log("[status] " + status),
       });

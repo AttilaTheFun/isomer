@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="isomer-version" content="0.38.0">
   <title>Isomer Playground</title>
   <link rel="icon" type="image/png" href="./assets/Playground-1024.png">
   <link rel="apple-touch-icon" href="./assets/Playground-1024.png">
@@ -134,7 +135,24 @@
     let toolchainStatus = "probing…";
     ask({ probe: true }).then((r) => { toolchainStatus = r.status; });
     const keyName = sandbox + "openrouter-key";
+    // KEY=VALUE lines, as the app passes a run's environment.
+    const parseEnvironment = (text) => Object.fromEntries(text.split("\n").map((line) => line.trim()).filter((line) => line.includes("="))
+      .map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)]));
     const host = {
+      // The page compiles, runs a reactor from a URL, and carries the
+      // Gallery's reactor (gallery.wasm, fetched when first run).
+      capabilities() { return "projects,reactors,gallery-wasm"; },
+      async runReactor(url, project, environment) {
+        const address = url.startsWith("bundle:") ? "./" + url.slice("bundle:".length) : url;
+        const response = await fetch(address, { cache: "no-store" });
+        if (!response.ok) throw new Error(`${address}: HTTP ${response.status}`);
+        const wasm = new Uint8Array(await response.arrayBuffer());
+        return runner.run(wasm, "dev.isomer.playground.run." + project, parseEnvironment(environment));
+      },
+      async signIn() { throw new Error("paste a key in Settings"); },
+      rendererNames() { return "React,WebGPU"; },
+      rendererFooter() { return "React builds real DOM (text fields, scrolling); WebGPU is the self-drawing SwiftGPU renderer. Applies when the page is refreshed. A run is drawn with React."; },
+      appVersion() { return document.querySelector('meta[name="isomer-version"]')?.content || ""; },
       async compile(source) {
         const result = await ask({ source });
         if (result.ok) { lastBuild = result.wasm; return ""; }

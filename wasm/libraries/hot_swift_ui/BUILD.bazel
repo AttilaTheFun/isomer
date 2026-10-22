@@ -5,7 +5,7 @@ package(default_visibility = ["//visibility:public"])
 # A slim `SwiftUI` module for the hot-reload / wasm-feature reactors: the shared
 # core plus the pluggable renderers MINUS SwiftGPURenderer — no swift_ffi / gpu /
 # map. A reactor binds `SwiftUIRenderer`, which serializes the tree and hands
-# the bytes to the host (WasmKit on Apple, WAMR on Android) where real
+# the bytes to the host (WasmKit, on Apple and Android) where real
 # SwiftUI / Compose renders them, so nothing in the wasm needs to draw. Same
 # `import SwiftUI` for the app code.
 #

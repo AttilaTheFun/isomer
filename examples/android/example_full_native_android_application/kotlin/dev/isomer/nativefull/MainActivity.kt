@@ -6,7 +6,7 @@ package dev.isomer.nativefull
 // interpreter), so it's the "ceiling" reference we benchmark our compiled-Swift
 // and wasm-delivered renderers against — same look (an Apps list + a tap counter),
 // pure-Compose feel. Compare tap->update latency here (logged as [native-tap],
-// typically one frame) against the wasm reactor's [wamr-event] on the same device.
+// typically one frame) against the wasm reactor's [iso-tap] on the same device.
 
 import android.os.Bundle
 import android.os.SystemClock
@@ -153,7 +153,7 @@ private fun AppRow(app: AppEntry, onClick: () -> Unit) {
 private fun DetailScreen(app: AppEntry) {
     var count by remember { mutableIntStateOf(0) }
     var enabled by remember { mutableStateOf(true) }
-    // Measure tap->frame latency the way [wamr-event] does for the wasm path: the
+    // Measure tap->frame latency the way [iso-tap] does for the wasm path: the
     // click stamps a time, and the first frame that reflects the new count logs
     // how long the whole click->recompose->draw took (typically one ~16ms frame).
     var clickAt by remember { mutableStateOf(0L) }

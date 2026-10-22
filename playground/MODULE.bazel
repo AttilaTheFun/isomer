@@ -171,6 +171,20 @@ bazel_dep(name = "rules_xcodeproj", version = "4.1.0")
 # OpenRouterKit, which the Playground's own OpenRouter loop is to move onto.
 bazel_dep(name = "rules_swift_package_manager", version = "1.25.0")
 
+# rules_swift_package_manager on Windows (the Windows app's AgentUI), in
+# one patch: its SwiftPM commands keep SDKROOT there (it clears it so a
+# Mac's manifests build against macOS's SDK whatever a caller set; Swift on
+# Windows finds its SDK by SDKROOT alone); SwiftPM's JSON has its
+# backslashes made slashes, as Bazel's paths are; and it reads packages with
+# POSIX tools (find, cp, od, test: Git's), where Windows' own FIND is run
+# before PATH is read, so its find is the first on PATH outside the Windows
+# directory.
+single_version_override(
+    module_name = "rules_swift_package_manager",
+    patch_strip = 1,
+    patches = ["//tools/patches:rules_swift_package_manager_windows.patch"],
+)
+
 # The generated SwiftPM package repositories load these by their apparent
 # names, which they take from the module that owns their extension — this one,
 # since //third_party/swift_packages:extensions.bzl re-exports it.

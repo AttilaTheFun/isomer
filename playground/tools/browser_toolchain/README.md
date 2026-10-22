@@ -185,8 +185,8 @@ under the threads config (ODR: every object must agree on `std::mutex`).
 `swift-frontend` compiles `print("hello …")` to a wasm32 object, the
 wasm-hosted `lld` links it against the SDK archives, and `main.wasm` run
 under the same WASI runtime prints the line. (The script takes the runner
-as `WASI_RUN`; Isomer's own is `@isomer//tools/wasm/wasi_command:iwasm`,
-WAMR.)
+as `WASI_RUN`; Isomer's own was WAMR's `iwasm` then, and is
+`@isomer//tools/wasm/wasi_run` (WasmKit) since 0.38.)
 
 - The last blocker was a 32-bit pointer-tagging bug in the compiler itself,
   not in serialization: `PointerLikeTypeTraits<AbstractConformance *>`

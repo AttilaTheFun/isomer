@@ -5,59 +5,25 @@ load("@isomer//tools/wasm:defs.bzl", "isomer_web_app")
 # The web Playground — the iOS Playground's concept as a static site: the app
 # itself is Isomer SwiftUI compiled to wasm, and it compiles + runs the
 # user's Swift in the browser (docs/playground_web.md).
-# The app's Swift, for the Android Playground too (it builds the same source
+# The web app's @main, for the Android app too (it builds the same shell
 # against Isomer's Android SwiftUI, with its host in Kotlin).
 exports_files(
-    [
-        "Agent.swift",
-        "App.swift",
-        "CodeEditor.swift",
-        "Services.swift",
-        "Store.swift",
-    ],
-    visibility = ["//visibility:public"],
-)
-
-# The templates' sources, compiled into the web and Android Playgrounds:
-# their store makes new projects from these (TemplateSources.byName, keyed by
-# file name), with no files to read at run time.
-genrule(
-    name = "template_sources",
-    srcs = [":templates"],
-    outs = ["TemplateSources.swift"],
-    cmd = """
-{
-  echo '// Generated from :templates (BUILD.bazel): the sample apps new projects start from.'
-  echo 'enum TemplateSources {'
-  echo '    static let byName: [String: String] = ['
-  for f in $(SRCS); do
-    printf '        "%s": ####\"\"\"\n' "$$(basename $$f)"
-    cat $$f
-    printf '\n\"\"\"####,\n'
-  done
-  echo '    ]'
-  echo '}'
-} > $@
-""",
+    ["WebApp.swift"],
     visibility = ["//visibility:public"],
 )
 
 swift_library(
     name = "app_lib",
     srcs = [
-        "Agent.swift",
-        "App.swift",
-        "CodeEditor.swift",
-        "Services.swift",
-        "Store.swift",
-        ":template_sources",
-        "//shared/playground_ui:srcs",
+        "WebApp.swift",
+        "//shared/app:srcs",
     ],
     alwayslink = True,
     copts = ["-parse-as-library"],
     module_name = "PlaygroundWeb",
     tags = ["manual"],
     deps = [
+        "@isomer//gallery",
         "@isomer//shared/platform_services",
         "@swiftpkg_agent_ui//:AgentUI",
         "@isomer//wasm/libraries/swift_ui",
@@ -105,11 +71,14 @@ isomer_web_app(
     assets = [
         ":templates",
         "//artwork/playground_icon:web_icon",
+        "@isomer//gallery:assets",
     ],
     extra_pages = [
         "compiler_worker.js",
         "hot_runner.js",
         "toolchain_driver.js",
+        # The Gallery's reactor, fetched when "Run as wasm" first runs it.
+        "//shared/gallery_reactor:gallery.wasm",
     ],
     index = "index.html",
     query = "renderer=react",

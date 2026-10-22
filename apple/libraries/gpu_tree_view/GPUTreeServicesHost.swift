@@ -38,7 +38,36 @@ final class GPUTreeServicesHost: HostBridge {
         return CGSize(width: Double(ceil(rect.width)), height: lines * fontSize * Self.lineHeight)
     }
 
-    func imageInfo(_ source: String, isRemote: Bool) -> ImageStatus { .loading }
+    // MARK: Images
+
+    /// Decoded images by source: the app bundle's assets by name, remote
+    /// ones loaded once (a frame is scheduled when one arrives).
+    private var images: [String: UIImage] = [:]
+    private var loading: Set<String> = []
+    private var failed: Set<String> = []
+
+    func imageInfo(_ source: String, isRemote: Bool) -> ImageStatus {
+        if let image = images[source] { return .ready(CGSize(width: Double(image.size.width), height: Double(image.size.height))) }
+        if failed.contains(source) { return .failed }
+        if !isRemote {
+            guard let image = UIImage(named: source) ?? UIImage(contentsOfFile: source) else {
+                failed.insert(source)
+                return .failed
+            }
+            images[source] = image
+            return .ready(CGSize(width: Double(image.size.width), height: Double(image.size.height)))
+        }
+        guard !loading.contains(source), let url = URL(string: source) else { return .loading }
+        loading.insert(source)
+        Task { @MainActor [weak self] in
+            let image = (try? await URLSession.shared.data(from: url)).flatMap { UIImage(data: $0.0) }
+            guard let self else { return }
+            self.loading.remove(source)
+            if let image { self.images[source] = image } else { self.failed.insert(source) }
+            self.onScheduleRender?()
+        }
+        return .loading
+    }
 
     /// Rasterize SwiftGPURenderer specs ([w u32][h u32][premultiplied RGBA8…]).
     func rasterize(_ spec: String) -> [UInt8] {
@@ -77,6 +106,9 @@ final class GPUTreeServicesHost: HostBridge {
         }
 
         switch kind {
+        case "image":
+            guard let source = json["source"] as? String, let image = images[source] else { return [] }
+            return pack(image)
         case "text":
             let text = json["text"] as? String ?? ""
             let size = json["size"] as? Double ?? 17

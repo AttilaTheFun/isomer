@@ -5,14 +5,14 @@ load("@isomer//tools/android:defs.bzl", "apk_install_run", "flat_assets")
 # Level 3 adoption, the "wasm" cell of the Android [full|partial] x
 # [compiled|wasm] matrix: a plain Kotlin/Compose app that embeds one wasm
 # feature BUNDLE with the `WasmView` @Composable. The reactor runs in-process
-# under the WAMR interpreter (a C engine) and its render tree is drawn by the
-# same Swift-free Compose interpreter the compiled path uses.
+# on WasmKit (a Swift interpreter) and its render tree is drawn by the same
+# Swift-free Compose interpreter the compiled path uses.
 #
-# The whole point of this cell: it carries NO compiled Swift. The only native
-# library is libiso_wamr_jni.so (WAMR + the C host + JNI shim, ~344 KB) — no
-# SwiftUIBridge .so, no Swift stdlib. Choosing wasm trades some runtime
-# performance for runtime-updatable code and smaller app size (the compiled twin
-# is //android/example_partial_compiled_android_application).
+# The whole point of this cell: none of the app's Swift is compiled into the
+# APK. The only native library is the engine's (libwasm_engine_bindings.so:
+# WasmKit and its Swift runtime) — no SwiftUIBridge .so. Choosing wasm trades
+# some runtime performance for runtime-updatable code (the compiled twin is
+# //android/example_partial_compiled_android_application).
 
 # The wasm reactor to embed, packaged into the APK's assets/. The RELEASE build
 # (--gc-sections, ABI-only exports, -c opt, --strip-all) — smaller and faster to
@@ -24,9 +24,9 @@ flat_assets(
 
 # The whole app as ONE Kotlin/Compose library: the host screen (MainActivity),
 # the Swift-free Compose interpreter (//android/libraries/swift_ui:
-# interpreter_kotlin), and the wasm engine glue (WasmView / WamrRuntime /
-# WasmBundleProvider from //android/libraries/wasm_view). No swift_library, no
-# generated JNI bindings — nothing pulls compiled Swift.
+# interpreter_kotlin), and the wasm engine glue (WasmView / WasmKitRuntime /
+# WasmBundleProvider from //android/libraries/wasm_view, over the engine's
+# generated bindings). No swift_library of the app's own.
 kt_android_library(
     name = "host_app",
     srcs = glob(["kotlin/**/*.kt"]) + [
@@ -39,6 +39,7 @@ kt_android_library(
     plugins = ["@isomer//android/libraries/swift_ui:compose_compiler_plugin"],
     tags = ["manual"],
     deps = [
+        "@isomer//android/libraries/wasm_view:wasm_engine_bindings",
         "@isomer//tools/android:maven_androidx_activity_activity_compose",
         "@isomer//tools/android:maven_androidx_compose_foundation_foundation",
         "@isomer//tools/android:maven_androidx_compose_material3_material3",
@@ -56,8 +57,8 @@ android_binary(
     manifest = "AndroidManifest.xml",
     deps = [
         ":host_app",
-        # The ONLY native library: the WAMR C engine (no compiled Swift).
-        "@isomer//android/libraries/wasm_view:wamr_jni",
+        # The ONLY native library: the engine (WasmKit, libwasm_engine_bindings.so).
+        "@isomer//android/libraries/wasm_view:engine_native",
     ],
 )
 

@@ -41,25 +41,6 @@ release, then the deeper technical roadmap.
 
 ## Toolchain & build
 
-- **AOT-compile wasm reactors under WAMR — mostly DONE.** `//:wamrc` builds from
-  hermetic-llvm (LLVM 22) on macOS **and Linux** hosts; `--define wamr_aot=1`
-  compiles the AOT loader into `@wamr` on every platform (including MSVC), and
-  `wasm_runtime_load()` dispatches on magic bytes. Measured cold start on the
-  greeter reactor: macOS ~10x (266→30 ms), Linux ~8x (273→35 ms). Remaining:
-  - **Windows .aot loading works, but needs `--size-level=0`.** A msvc-ABI
-    .aot cross-produced with `wamrc --target=x86_64 --target-abi=msvc
-    --size-level=0` (large code model — no 32-bit absolute relocations) loads
-    and runs on Windows; verified with the greeter reactor. At the default
-    size level the load fails (`IMAGE_REL_AMD64_ADDR32` truncation — the
-    Windows loader can't place a ~25 MB SwiftWasm .aot in the low 2 GB the
-    32-bit relocs need, and `--size-level=1` didn't resolve it either).
-    Remaining: size-level=0 makes wamrc dramatically slower on big reactors
-    (~25 min vs ~1.5 min for a 10 MB module) and the .aot a bit larger —
-    either WAMR's Windows `os_mmap` low-address strategy gets fixed upstream
-    (unlocking the default size level) or the release pipeline eats the
-    compile time.
-  - **wamrc on a Windows host** is deliberately out of scope (LLVM-from-source
-    under MSVC); Windows .aot files are cross-produced.
 - **A proper hermetic Electron app rule.** The current web example driver
   (`examples/web/example_web_wasm_application` — a `sh_binary` + `main.js` +
   `//tools:electron.bzl`) is a bring-up hack that only exists to run the example.
@@ -70,10 +51,6 @@ release, then the deeper technical roadmap.
   greeter). Add a size pass (`wasm-opt -Oz`, dead-export stripping once the
   export set is known) so the deliverable — and the committed prebuilt below — is
   smaller.
-- **A cleaner prebuilt-reactor story.** The Windows wasm cell commits a ~10 MB
-  `greeter_reactor.wasm` because the SwiftWasm cross-compile toolchain isn't
-  registered on Windows. Prefer cross-building it on Linux CI and fetching it (or
-  a hot-reload path) over committing a binary blob.
 
 ## Runtime & generator
 
@@ -81,22 +58,18 @@ release, then the deeper technical roadmap.
   `async`, and interface-returning functions (they're listed in a header comment);
   the Swift host supports them. Close the gap so a C host reaches the full greeter
   surface — struct marshalling is straightforward; async needs a C-side pump.
-- **Multiple reactors per process in the WAMR c-host.** `swift_ffi_wamr` currently
-  assumes one reactor per process (the `swift_ffi` native table is registered
-  globally). Support several concurrent reactors for hosts that load more than one
-  module.
 
 ## Example matrix
 
 Fill the remaining `example_<platform>_<mode>_application` cells (see the matrix
 in README.md):
 
-- **macOS** — both modes: a `macos_application` compiled cell, and a native-Swift
-  wasm cell over the swift-host bindings (`//swift_ffi/examples/shared/greeter_host`) plus
-  an embedded engine.
-- **Android / iOS wasm cells** — run the reactor on-device under WAMR (Android
-  via a JNI shim; iOS via the C host or a Swift host), the mobile peers of the
-  Linux/Windows wasm cells.
+- **Native wasm cells** — a native-Swift host over the swift-host bindings
+  (`//swift_ffi/examples/shared/greeter_host`) and WasmKit, on macOS, Linux,
+  Windows, Android and iOS. The C-host Linux/Windows wasm cells ran the
+  reactor under WAMR (`//swift_ffi/runtime/c_host_wamr`) and were removed
+  with it in 0.38 (WasmKit has no C API).
+- **macOS compiled cell** — a `macos_application`.
 
 ## Bridge surface
 

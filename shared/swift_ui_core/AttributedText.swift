@@ -64,6 +64,13 @@ extension Text {
 
     @_disfavoredOverload
     public init(_ attributedContent: AttributedString) {
+        #if os(Windows)
+        // Swift 6.3.2's Foundation on Windows doesn't export the descriptor
+        // of the attributed string's storage index (_FoundationCollections'
+        // BigString.Index), so any use of `runs` fails to link: the text,
+        // unstyled, until it does.
+        self.init(verbatim: String(attributedContent.characters))
+        #else
         var content = ""
         var runs: [TextRun] = []
         for run in attributedContent.runs {
@@ -108,6 +115,7 @@ extension Text {
         if runs.count > 1 || runs.contains(where: { $0 != TextRun(length: $0.length) }) {
             self.runs = runs
         }
+        #endif
     }
 }
 

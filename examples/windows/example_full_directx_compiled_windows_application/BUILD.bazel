@@ -33,6 +33,7 @@ swift_binary(
     module_name = "ExampleApplication",
     target_compatible_with = ["@platforms//os:windows"],
     deps = [
+        "@isomer//gallery",
         "//shared/platform_services",
         "@isomer//windows/libraries/swift_ui",
         "@isomer//windows/libraries/swift_ui:isomer",

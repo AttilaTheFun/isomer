@@ -4,16 +4,16 @@ package dev.isomer.runtime
 // Jetpack Compose @Composable that embeds one *wasm feature bundle* in an
 // existing Compose hierarchy. Where `Isomer()` (//android/libraries/
 // swift_ui) runs the app's UI compiled directly to Android (compiled Swift),
-// `WasmView` runs a downloadable/hot-reloadable wasm reactor in-process under
-// the **WAMR** interpreter (`WamrRuntime`) — a C engine, so the app carries
-// NO compiled Swift. It renders the tree the reactor emits with the SAME
-// Swift-free Compose interpreter (IsoNode) the native path uses.
+// `WasmView` runs a downloadable/hot-reloadable wasm reactor in-process on
+// **WasmKit** (`WasmKitRuntime`), the Swift interpreter compiled into the
+// app's Swift library. It renders the tree the reactor emits with the SAME
+// Compose interpreter (IsoNode) the native path uses.
 //
 // The reactor's render tree is the tree.fbs the native path also emits, so the
 // only wasm-specific glue is (1) launching the reactor with a bundle's bytes
-// and (2) routing node events back to the reactor via `WamrRuntime.event`
+// and (2) routing node events back to the reactor via `WasmEngine.event`
 // (IsoEventRouter). Feature-flag / analytics DI is answered natively through
-// the `WamrHost` callbacks (the swift_ffi dependency transport).
+// the `WasmEngineCallbacks` (the swift_ffi dependency transport).
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -56,9 +56,9 @@ fun WasmView(
     // from any thread). Default stays the simple all-on-main model.
     offMainInit: Boolean = false,
     // The engine seam (Apple's WasmRuntimeRegistry, as a parameter): default
-    // WAMR; an app may pass a factory of its own.
-    engineFactory: (ByteArray, WamrHost, String?, List<WasmDependency>) -> WasmEngine =
-        { w, h, prefix, deps -> WamrRuntime(w, h, prefix, deps) },
+    // WasmKit; an app may pass a factory of its own.
+    engineFactory: (ByteArray, WasmEngineCallbacks, String?, List<WasmDependency>) -> WasmEngine =
+        { w, h, prefix, deps -> WasmKitRuntime(w, h, prefix, deps) },
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current.density
@@ -76,14 +76,10 @@ fun WasmView(
     // the web's JS — so all Compose<->wasm interaction (render, event, resize)
     // runs on the MAIN thread: the tree callback writes Compose state and events
     // call straight into the reactor, no marshaling. The one heavy, one-time cost
-    // is instantiating the reactor (WAMR load + `_initialize` + first render).
-    // On a 2018 Pixel 3a that's ~0.8s, fast enough to run inline on the main
-    // thread, which keeps the model dead simple (one thread, no handoff). A
-    // consumer that wants to hide even that latency can wrap the WamrRuntime
-    // construction in withContext(Dispatchers.Default): the runtime is only ever
-    // driven on the main thread afterward, and WAMR re-binds its exec_env to the
-    // calling thread on every call, so the create-off-main / drive-on-main
-    // handoff is safe (there is never concurrent access either way).
+    // is instantiating the reactor (parse + `_initialize` + first render),
+    // inline on the main thread, which keeps the model dead simple (one
+    // thread, no handoff); `offMainInit` moves it to Dispatchers.Default for a
+    // comparison (the engine is only ever driven on the main thread afterward).
     val holder = remember { object { var runtime: WasmEngine? = null } }
     val mainHandler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
     // Foundation's networking (WasmNetworkHosts) joins the app's table for a
@@ -95,18 +91,8 @@ fun WasmView(
             dependencies.none { it.key == host.key }
         }
     }
-    // Runs the guest's queued jobs, then comes back when its next timed job
-    // (`Task.sleep`) is due; one pending wake at a time.
-    val jobsWake = remember { Any() }
-    fun drainJobs() {
-        val runtime = holder.runtime as? WamrRuntime ?: return
-        runtime.runJobs()
-        mainHandler.removeCallbacksAndMessages(jobsWake)
-        val wait = runtime.nextJobDelayMs()
-        if (wait >= 0) mainHandler.postAtTime({ drainJobs() }, jobsWake, android.os.SystemClock.uptimeMillis() + wait)
-    }
     val host = remember {
-        object : WamrHost {
+        object : WasmEngineCallbacks {
             override fun renderTree(tree: ByteArray) {
                 // The reactor ships diff `Patch`es — the only wire format;
                 // apply to the retained UNode tree so only changed views
@@ -142,9 +128,6 @@ fun WasmView(
             }
             override fun dispatchDependency(index: Int, args: ByteArray): ByteArray =
                 injected.getOrNull(index)?.dispatch?.invoke(holder.runtime, args) ?: ByteArray(0)
-            override fun scheduleJobs() {
-                mainHandler.post { drainJobs() }
-            }
         }
     }
 
@@ -243,11 +226,6 @@ fun WasmView(
             } else {
                 created.render()
             }
-            // Jobs the guest queued while starting (an `.onAppear` Task, a
-            // `.task {}` body) were scheduled before `holder.runtime` existed;
-            // the C host only signals the empty->non-empty transition, so drain
-            // them now or they never run.
-            mainHandler.post { drainJobs() }
         }
         provider.initialBundle()?.let { bundle -> launch(bundle.wasm) }
         provider.bundleUpdates().collect { bundle -> launch(bundle.wasm) }

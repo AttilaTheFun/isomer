@@ -34,31 +34,14 @@ interface WasmBundleProvider {
     fun bundleUpdates(): Flow<WasmServiceBundle> = emptyFlow()
 }
 
-/** The app-packaged bundle read from `assets/<assetPath>` (no updates).
- *
- *  Prefers a native `.aot` sibling of the packaged `.wasm` (what release builds
- *  package via `--config=release` / `reactor_artifact`) and falls back to the
- *  `.wasm`. WAMR dispatches on the magic header, so the loaded engine is the same
- *  either way. */
+/** The app-packaged bundle read from `assets/<assetPath>` (no updates). */
 class PackagedWasmBundleProvider(
     private val context: Context,
     private val assetPath: String,
     private val label: String = assetPath,
 ) : WasmBundleProvider {
     override suspend fun initialBundle(): WasmServiceBundle = withContext(Dispatchers.IO) {
-        val candidates = buildList {
-            if (assetPath.endsWith(".wasm")) add(assetPath.removeSuffix(".wasm") + ".aot")
-            add(assetPath)
-        }
-        for (path in candidates) {
-            try {
-                return@withContext context.assets.open(path)
-                    .use { WasmServiceBundle(label, it.readBytes()) }
-            } catch (_: java.io.FileNotFoundException) {
-                // try the next candidate
-            }
-        }
-        throw java.io.FileNotFoundException("no reactor asset among $candidates")
+        context.assets.open(assetPath).use { WasmServiceBundle(label, it.readBytes()) }
     }
 }
 

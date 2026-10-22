@@ -20,21 +20,12 @@ public typealias BundleProvider = WasmBundleProvider
 
 extension WasmBundle {
     /// Loads a bundle from a single packaged reactor resource (no assets).
-    ///
-    /// Prefers a native `.aot` (what release builds package via `--config=release`
-    /// / `reactor_artifact`) and falls back to the interpreted `.wasm`. The bytes
-    /// are dispatched by their magic header downstream (WAMR auto-detects `\0aot`
-    /// vs `\0asm`), so the field is still called `wasm` either way.
     public static func packaged(
         resource: String, ext: String = "wasm", in bundle: Bundle = .main
     ) -> WasmBundle? {
-        for candidate in ["aot", ext] {
-            if let url = bundle.url(forResource: resource, withExtension: candidate),
-               let data = try? Data(contentsOf: url) {
-                return WasmBundle(label: resource, wasm: [UInt8](data))
-            }
-        }
-        return nil
+        guard let url = bundle.url(forResource: resource, withExtension: ext),
+              let data = try? Data(contentsOf: url) else { return nil }
+        return WasmBundle(label: resource, wasm: [UInt8](data))
     }
 
     /// Loads a bundle directory: `<dir>/feature.wasm` plus every file under

@@ -187,9 +187,11 @@ and smaller app size. The two are mutually exclusive per app (mixing compiled +
 wasm Swift is only free on Apple, where the Swift runtime ships in the OS). Both
 the **partial** (`example_partial_wasm_android_application`) and **full**
 (`example_full_wasm_android_application`) cells ship today: the full cell runs
-the entire shared `@main App` as one wasm bundle under the WAMR interpreter,
-drawn by the same Swift-free Compose interpreter — the host APK's only native
-library is the ~344 KB WAMR C engine (no compiled Swift .so).
+the entire shared `@main App` as one wasm bundle under the WasmKit
+interpreter, drawn by the same Compose interpreter — the host APK's native
+code is the engine library (WasmKit and the shared feature runtime, compiled
+Swift: `//android/libraries/wasm_view:engine_native`), none of the app's own
+Swift.
 
 ### Hot reload
 
@@ -547,7 +549,7 @@ an executor factory in reactors (jobs cross to the host's `task_enqueue` and
 come back through `swift_ffi_task_run`), and `AndroidBridge.swift` installs one
 in compiled Android apps (jobs queue up and the host drains them on its
 runtime thread via `nativeRunMainJobs`). Hosts pump those queues from their
-frame loops (`iso_wamr_run_jobs`, `WasmRuntime.pumpGuestJobs`).
+frame loops (`WasmRuntime.pumpGuestJobs`).
 
 ## Platform-specific code
 
@@ -746,7 +748,7 @@ The first build downloads several GB; later builds are incremental.
 
 ```sh
 bazel test //...            # framework: snapshot + renderer unit tests
-cd examples && bazel test //...   # integration: WAMR DI smokes, engine conformance, networking DI
+cd examples && bazel test //...   # integration: WASI checks, engine conformance, networking DI
 ```
 
 Golden **draw-list snapshot tests**: the platform-agnostic core is compiled for
@@ -1024,8 +1026,8 @@ the Windows x64 Electron runtime — unzip on any 64-bit Windows machine and run
 `Isomer.exe`.
 
 Windows also has a native **wasm** cell — the same shell drawn through
-Direct3D 11, running an `example_full.wasm` reactor under the WAMR interpreter
-instead of compiled-in Swift — plus cross-platform hot reload. See
+Direct3D 11, running an `example_full.wasm` reactor under the WasmKit
+interpreter instead of compiled-in Swift — plus cross-platform hot reload. See
 [windows/README.md](windows/README.md) for how to run both cells.
 
 ### Native Linux target
@@ -1090,6 +1092,6 @@ non-wide ncurses soname the swift.org toolchain's `swiftc` is linked against:
 `sudo ln -sf libncursesw.so.6 /usr/lib/libncurses.so.6`.
 
 Linux also has a native **wasm** cell — the same shell drawn through OpenGL,
-running an `example_full.wasm` reactor under the WAMR interpreter instead of
-compiled-in Swift — plus cross-platform hot reload. See
+running an `example_full.wasm` reactor under the WasmKit interpreter instead
+of compiled-in Swift — plus cross-platform hot reload. See
 [linux/README.md](linux/README.md) for how to run both cells.

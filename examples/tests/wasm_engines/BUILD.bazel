@@ -2,8 +2,10 @@ load("@rules_swift//swift:swift_test.bzl", "swift_test")
 
 # The engine-seam conformance suite: every WasmRuntime engine runs the real
 # tap-counter reactor (launch -> first frame -> tap -> updated tree). A new
-# engine passes this or it isn't an engine. macOS-only (the C engines are
-# host builds; JSC's wasm tiers need a real JSC).
+# engine passes this or it isn't an engine: WasmKit (Isomer's engine since
+# 0.38, when WAMR's place in this suite went with it), JSC and WasmEdge.
+# macOS-only (WasmEdge's SDK is a macOS build; JSC's wasm tiers need a real
+# JSC).
 swift_test(
     name = "wasm_engine_tests",
     srcs = ["WasmEngineTests.swift"],
@@ -22,7 +24,6 @@ swift_test(
     target_compatible_with = ["@platforms//os:macos"],
     deps = [
         "@isomer//shared/wasm_host:jsc_runtime",
-        "@isomer//shared/wasm_host:wamr_runtime",
         "@isomer//shared/wasm_host:wasmkit_runtime",
         "@isomer//shared/wasm_host:wasmedge_runtime",
         "@isomer//shared/wasm_host:wasm_runtime",

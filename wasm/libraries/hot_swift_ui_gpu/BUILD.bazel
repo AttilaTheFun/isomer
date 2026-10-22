@@ -8,8 +8,9 @@ package(default_visibility = ["//visibility:public"])
 # calls become wasm imports (module "env") that the embedding host binds to its
 # real native GL at instantiation — the GPU implementation stays entirely
 # native code on the platform side; only the SwiftGPURenderer (layout + draw
-# orchestration) runs inside the module. See //shared/wamr_host/iso_wamr_gles.c
-# for the Android host half.
+# orchestration) runs inside the module. Its host half was WAMR's on Android
+# (a GLES shim and WasmGpuView), removed with WAMR in 0.38: no host binds these
+# imports now; the examples' tap_counter_gpu reactor keeps the module building.
 #
 # Like //wasm/libraries/hot_swift_ui (the slim, tree-emitting flavour) this
 # compiles a module literally named `SwiftUI`, so it lives in its own package

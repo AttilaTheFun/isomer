@@ -50,7 +50,8 @@ ios_application(
     bundle_id = BUNDLE_ID,
     families = ["iphone"],
     infoplists = ["Info.plist"],
-    minimum_os_version = "17.0",
+    # iOS 18: WasmView runs reactors on WasmKit (Swift's Synchronization).
+    minimum_os_version = "18.0",
     provisioning_profile = ":_development_profile",
     resources = ["//wasm/tap_counter_feature:tap_counter_release.wasm"],
     tags = ["manual"],

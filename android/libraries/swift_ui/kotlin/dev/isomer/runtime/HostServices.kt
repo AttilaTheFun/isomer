@@ -237,10 +237,8 @@ object HostServices {
 
     // MARK: Text measurement + SwiftGPU rasterization
     //
-    // Pure-Kotlin (Paint/Canvas) so BOTH self-drawing hosts share it: the
-    // compiled path (NativeBridge / AndroidHost) and the wasm GPU path
-    // (WamrHost.measureText/rasterize — a SwiftGPURenderer running inside the
-    // reactor, with no compiled Swift in the app).
+    // Pure-Kotlin (Paint/Canvas), free of Compose and of the compiled path
+    // (NativeBridge / AndroidHost), so any self-drawing host can share it.
 
     const val LINE_HEIGHT = 1.3f
 

@@ -1,11 +1,11 @@
 load("@rules_swift//swift:swift.bzl", "swift_binary", "swift_library")
 load("@isomer//swift_ffi/rules:swift_wasm_reactor.bzl", "transition_binary")
-load("@isomer//tools/wasm:defs.bzl", "embedded_xip_aot", "reactor_artifact")
+load("@isomer//tools/wasm:defs.bzl", "reactor_artifact")
 
 package(default_visibility = ["//visibility:public"])
 
 # The minimal counter app as a `iso_hot` wasm reactor — the wasm-delivery cell of
-# the cross-framework benchmark (interpreted or AOT, chosen by `--config=release`).
+# the cross-framework benchmark (interpreted by the host's WasmKit).
 # Same shared TapCounter.swift the compiled Android cell builds; the reactor glue
 # (HotReloadBridge) is the standard app-agnostic iso_hot ABI. Mirrors
 # hot_demo_feature but with the minimal counter and no extra deps.
@@ -78,23 +78,17 @@ transition_binary(
     tags = ["manual"],
 )
 
-# Config-selected reactor the Android APK packages: `.wasm` (interp) by default,
-# native `.aot` under `--config=release`.
+# The reactor the Android APK packages.
 reactor_artifact(
     name = "tap_counter_release",
     wasm = ":tap_counter_release.wasm",
 )
 
-# The desktop (Linux/Windows) flavour: same reactor bytes, but the release
-# `.aot` is lowered with `wamrc --target=x86_64` for the x86_64 desktop hosts.
-# The Linux wasm benchmark cell loads this directly; the Windows cell needs the
-# msvc ABI, produced manually on a Linux/macOS build host with
-# `wamrc --target=x86_64 --target-abi=msvc --size-level=1` (see
-# docs/benchmarks.md#windows — Windows can't build wamrc, LLVM-under-MSVC).
+# The desktop (Linux/Windows) flavour: the same reactor bytes, under the name
+# the Linux wasm benchmark cell loads.
 reactor_artifact(
     name = "tap_counter_x86",
     wasm = ":tap_counter_release.wasm",
-    target = "x86_64",
 )
 
 # ---- GPU reactor: the SAME app, self-drawing. SwiftGPURenderer runs inside
@@ -124,8 +118,9 @@ swift_binary(
         "-Xlinker",
         "--strip-all",
         # The swift_gpu GLES backend's @_extern(c) gl* symbols intentionally
-        # stay undefined: wasm-ld turns them into "env" imports the WAMR host
-        # resolves to real native GL (see //shared/wamr_host + the JNI gles shim).
+        # stay undefined: wasm-ld turns them into "env" imports a host binds
+        # to real native GL (Android's GLES shim did, with WAMR, until 0.38;
+        # no host runs this reactor now: it keeps hot_swift_ui_gpu building).
         "-Xlinker",
         "--allow-undefined",
         "-Xlinker",
@@ -174,15 +169,6 @@ transition_binary(
 reactor_artifact(
     name = "tap_counter_gpu_release",
     wasm = ":tap_counter_gpu_release.wasm",
-)
-
-# The embedded-AOT image for platforms that ban runtime code loading (iOS):
-# `wamrc --xip` output linked into the app's signed __TEXT segment. The fast
-# tier of the hybrid delivery policy; the bundled .wasm above stays the
-# interpreter/hotfix tier.
-embedded_xip_aot(
-    name = "tap_counter_embedded_aot",
-    wasm = ":tap_counter_release.wasm",
 )
 
 # ---- The threaded twin (wasm32-unknown-wasip1-threads): the same reactor

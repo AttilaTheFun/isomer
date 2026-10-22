@@ -4,22 +4,25 @@ What a dynamically delivered bundle runs on, where ahead-of-time code fits,
 and how the same machinery turns Mac CI runners into thin "shell" executors.
 (Native-code reload tiers — a server-compiled artifact on macOS, an
 in-process compiler in the simulator and on Android — were removed in 0.35;
-every reloaded bundle is interpreted now.)
+every reloaded bundle is interpreted now. WAMR, and with it the packaged
+ahead-of-time tier below, was removed in 0.38: every bundle, packaged or
+reloaded, runs on WasmKit's interpreter.)
 
 ## The tiers
 
 | Bundle | Artifact | Engine |
 |---|---|---|
-| hot-reloaded / dynamically delivered | plain `.wasm` (`/wasm`) | the registered engine's interpreter: WAMR by default, WasmKit where the app registers it (Apple) |
-| packaged, release (Android, desktop) | wamrc `.aot` (`--define wamr_aot=1`) | WAMR's AOT loader |
-| packaged, iOS device | embedded XIP `.aot` (`embedded_xip_aot`, in the signed `__TEXT`) | WAMR, in place (`iso_wamr_create_in_place`, `WamrRuntime.embeddedImage`) |
+| hot-reloaded / dynamically delivered | plain `.wasm` (`/wasm`) | the registered engine's interpreter: WasmKit (`WasmKitRuntime`) unless the app registers another |
+| packaged (every platform, debug and release) | plain `.wasm` | the same |
 
 `WasmRuntimeRegistry.make(for:)` makes the registered engine for every
-bundle; WAMR tells `\0asm` from wamrc's `\0aot` itself.
+bundle.
 
-**wamrc is not in the reload loop**: lowering the 18 MB example reactor takes
-~9 min single-threaded even at `--opt-level=0`. wamrc `.aot` is the packaged
-release tier, where compile time is a build cost, not an edit-loop cost.
+Until 0.38 the packaged tiers were WAMR's: a wamrc `.aot` under `--define
+wamr_aot=1` (Android, desktop) and an embedded XIP `.aot` in the signed
+`__TEXT` on an iOS device. wamrc was never in the reload loop (lowering the
+18 MB example reactor took ~9 min single-threaded even at
+`--opt-level=0`).
 
 ## The pieces
 
@@ -33,10 +36,9 @@ release tier, where compile time is a build cost, not an edit-loop cost.
   each bump; with `ISO_WASM_PATH` it watches a file instead. Either shadows
   the packaged bundle.
 - **Android**: the host renders an animating reactor once per display frame
-  (Choreographer), and not at all for a render asked for inside an event's
-  handler, which the event's own render answers (`gate_schedule` in
-  iso_wamr.c); posted as plain messages, an animating reactor rendered three
-  or four times a displayed frame. `adb shell setprop debug.isomer.wasm.perf
+  (Choreographer, in WasmView.kt's `scheduleRender`); posted as plain
+  messages, an animating reactor rendered three or four times a displayed
+  frame. `adb shell setprop debug.isomer.wasm.perf
   1` logs where a second's wasm calls went.
 
 ## CI: cached shells + injected features

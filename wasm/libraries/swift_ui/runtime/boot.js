@@ -569,7 +569,12 @@ export async function boot({
   // The guest's Foundation reads and writes the app's files through WASI
   // (file_system.js); a page's own overrides go on top.
   const files = await filesOpening;
-  const environment = bundleIdentifier ? { ISOMER_BUNDLE_IDENTIFIER: bundleIdentifier } : {};
+  // The page's ISO_ query parameters are the guest's ISO_ environment, as a
+  // native host's process environment is: the launch hooks
+  // (`?ISO_OPEN_APP=todo`).
+  const launchEnvironment = Object.fromEntries(
+    [...new URLSearchParams(location.search)].filter(([key]) => key.startsWith("ISO_")));
+  const environment = { ...launchEnvironment, ...(bundleIdentifier ? { ISOMER_BUNDLE_IDENTIFIER: bundleIdentifier } : {}) };
   const wasiWithFiles = (getMemory, builtins) => ({
     ...files.wasi(getMemory, builtins, { environment }),
     ...(typeof wasi === "function" ? wasi(getMemory, builtins) : (wasi || {})),

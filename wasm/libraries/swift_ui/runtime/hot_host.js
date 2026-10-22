@@ -47,8 +47,9 @@ async function pageNetworkHosts(options) {
  *  into `container`. Returns { resize(w, h), setColorScheme(dark), stop() }.
  *  The feature's files (file_system.js) are kept under `bundleIdentifier`,
  *  else under the page's path; a bundle run again on the page finds them as
- *  the last one left them. */
-export async function runHotBundle({ wasm, container, dependencies = {}, bundleIdentifier = undefined, fetch = undefined, WebSocket = undefined, onLog = null, onStatus = null }) {
+ *  the last one left them. `environment` adds variables to the guest's
+ *  (ISO_OPEN_APP and the other launch hooks). */
+export async function runHotBundle({ wasm, container, dependencies = {}, bundleIdentifier = undefined, environment = {}, fetch = undefined, WebSocket = undefined, onLog = null, onStatus = null }) {
   const files = await openAppFiles(appFilesKey(bundleIdentifier));
   // The page's own entries replace the network hosts, as under boot.js.
   dependencies = { ...(await pageNetworkHosts({ fetch, WebSocket })), ...dependencies };
@@ -184,7 +185,7 @@ export async function runHotBundle({ wasm, container, dependencies = {}, bundleI
       if (!memory) throw new Error("wasm memory accessed before instantiation");
       return memory;
     }, (getMemory, builtins) => files.wasi(getMemory, builtins, {
-      environment: bundleIdentifier ? { ISOMER_BUNDLE_IDENTIFIER: bundleIdentifier } : {},
+      environment: { ...environment, ...(bundleIdentifier ? { ISOMER_BUNDLE_IDENTIFIER: bundleIdentifier } : {}) },
     })),
   };
 

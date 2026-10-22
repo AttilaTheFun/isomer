@@ -89,7 +89,7 @@ public final class WasmFeatureRuntime {
     /// - runtime: a factory for the pluggable wasm engine. Each `load(...)` makes
     ///   a fresh one (so state resets). Defaults to the engine the host app
     ///   registered with `WasmRuntimeRegistry` (isomer's Apple host
-    ///   registers WAMR as its default); hand in a conformer to override
+    ///   registers WasmKit as its default); hand in a conformer to override
     ///   per-instance.
     /// - log: where guest `log(...)` output and load diagnostics go. Defaults to
     ///   stdout; a host can route it to `NSLog` / Android logcat.

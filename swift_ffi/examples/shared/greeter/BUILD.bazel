@@ -40,9 +40,10 @@ cc_swift_library(
     swift = ":greeter",
 )
 
-# Wasm mode, C host (no compiled Swift): the generated `c-host-wasm` header the
-# Linux/Windows wasm example applications include to drive a greeter reactor
-# under WAMR. The generator emits the c-host-representable subset of the greeter
+# Wasm mode, C host (no compiled Swift): the generated `c-host-wasm` header a
+# C host includes to drive a greeter reactor on a C engine of its own. (The
+# Linux/Windows wasm example applications that did, over WAMR, went with it
+# in 0.38.) The generator emits the c-host-representable subset of the greeter
 # (scalars, String, [UInt8], the foreign Counter) and lists the rest in a header
 # comment.
 c_host_library(
@@ -50,9 +51,8 @@ c_host_library(
     swift = ":greeter",
 )
 
-# The greeter compiled to a standalone wasm reactor — the artifact the C hosts
-# (Linux/Windows wasm applications) load and drive under WAMR. Built once here
-# and shared, since it is platform-neutral.
+# The greeter compiled to a standalone wasm reactor — the artifact a wasm host
+# loads and drives. Built once here and shared, since it is platform-neutral.
 swift_wasm_reactor(
     name = "greeter_reactor",
     swift = ":greeter",

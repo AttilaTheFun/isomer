@@ -27,7 +27,7 @@ struct TapCounterJSCIOSApp: App {
     @UIApplicationDelegateAdaptor(BenchAppDelegate.self) private var delegate
 
     init() {
-        // Wins over WasmView's registerDefault(WamrRuntime) — every launch in
+        // Wins over WasmView's registerDefault(WasmKitRuntime) — every launch in
         // this cell runs the reactor under JavaScriptCore.
         WasmRuntimeRegistry.register { JSCRuntime() }
     }

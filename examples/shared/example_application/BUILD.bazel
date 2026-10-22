@@ -1,24 +1,25 @@
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 
-# The shared example application source, compiled for all platforms.
+# The example application's own sources (its @main, the native platform
+# services a compiled cell installs), compiled for all platforms beside
+# the Gallery library they show (@isomer//gallery): an app that compiles
+# :srcs depends on it.
 filegroup(
     name = "srcs",
     srcs = glob(["*.swift"]) + ["//shared/platform_services:native_srcs"],
     visibility = ["//visibility:public"],
 )
 
-# Bundled image assets. The same PNGs ship on every platform: the web site's
-# assets/ dir and the APK's assets/ use the flat image files; Apple bundles
-# consume the enclosing asset catalog (required for SwiftUI's Image(_:)).
-filegroup(
+# The Gallery's images (its assets/ and asset catalog).
+alias(
     name = "assets",
-    srcs = glob(["assets/**/*.png"]),
+    actual = "@isomer//gallery:assets",
     visibility = ["//visibility:public"],
 )
 
-filegroup(
+alias(
     name = "xcassets",
-    srcs = glob(["assets/Assets.xcassets/**"]),
+    actual = "@isomer//gallery:xcassets",
     visibility = ["//visibility:public"],
 )
 
