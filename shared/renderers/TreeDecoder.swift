@@ -8,9 +8,9 @@
 // `handlers` table and that the host echoes back (to the reactor's
 // `iso_hot_event` in the desktop wasm host, or to `encoder.handlers[id]` in a round-trip test).
 //
-// The visual transforms (`.offset`, `.scaleEffect`), `.position`, clipping
-// and a drag's handler round-trip; rotation, overlays and minimum sizes do
-// not yet (docs/desktop_wasm_implementation_notes.md, blocker 2).
+// The visual transforms (`.offset`, `.scaleEffect`), `.position`, clipping,
+// a drag's handler and a scroll's phases round-trip; rotation, overlays and
+// minimum sizes do not yet (docs/desktop_wasm_implementation_notes.md, blocker 2).
 
 import FlatBuffers
 internal import IsomerSwiftUI
@@ -194,6 +194,20 @@ package final class FlatTreeDecoder {
             case "posX": out.positionX = Double(kv.value).map { CGFloat($0) }
             case "posY": out.positionY = Double(kv.value).map { CGFloat($0) }
             case "clip": out.clipsContent = kv.value == "1"
+            // `onScrollPhaseChange` on a scroll: the phases this host's
+            // drag, fling and wheel give it go back to the guest's scroll.
+            case "phase":
+                guard let id = kv.value else { break }
+                let route = self.send
+                out.scrollPhaseHandlers = [(id, { phase, geometry, velocity in
+                    let size = geometry.map { g in
+                        [g.contentOffset.x, g.contentOffset.y, g.contentSize.width, g.contentSize.height,
+                         g.containerSize.width, g.containerSize.height, g.contentInsets.top, g.contentInsets.leading,
+                         g.contentInsets.bottom, g.contentInsets.trailing].map { String(Double($0)) }.joined(separator: ",")
+                    } ?? ""
+                    let speed = velocity.map { "\(Double($0.dx)),\(Double($0.dy))" } ?? ""
+                    route(id, "\(phase.debugDescription);\(size);\(speed)")
+                })]
             default: break
             }
         }

@@ -1,5 +1,5 @@
-// Scrolling: vertical and horizontal scroll views, lazy stacks, and
-// scrolling from code.
+// Scrolling: vertical and horizontal scroll views, lazy stacks,
+// scrolling from code, and what is moving a scroll.
 
 import SwiftUI
 
@@ -19,6 +19,13 @@ extension StoryCatalog {
             height: 300,
             summary: "Scrolling from code: to a row by its id, animated."
         ) { ScrollReaderStory() },
+        Story(
+            "scrolling.phase", "Scroll phases",
+            height: 300,
+            summary: "What is moving a scroll view, told as it changes: the reader's finger, the coast after they let go, an animated scroll from code, or nothing."
+        ) {
+            if #available(iOS 18.0, macOS 15.0, *) { ScrollPhaseStory() }
+        },
     ])
 }
 
@@ -81,6 +88,36 @@ struct ScrollReaderStory: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+            }
+        }
+    }
+}
+// end story
+
+// story: scrolling.phase
+@available(iOS 18.0, macOS 15.0, *)
+struct ScrollPhaseStory: View {
+    @State private var phase = ScrollPhase.idle
+    @State private var changes = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Phase: " + String(describing: phase)).font(.headline)
+                Spacer()
+                Text("\(changes) changes").foregroundColor(phase.isScrolling ? .blue : .secondary)
+            }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(1 ... 50, id: \.self) { row in
+                        Text("Row \(row)").padding(.vertical, 4)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .onScrollPhaseChange { _, newPhase in
+                phase = newPhase
+                changes += 1
             }
         }
     }
