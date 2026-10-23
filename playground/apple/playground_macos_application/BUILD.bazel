@@ -3,7 +3,7 @@ load("@rules_swift//swift:swift.bzl", "swift_library")
 
 # The Playground on the Mac: the shared shell (shared/app) against Apple's
 # SwiftUI, with the Apple host (apple/host). It compiles a project with the
-# swift-frontend and wasm-ld it carries (apple/compiler: the toolchain in its
+# swift-frontend and wasm-ld it carries (shared/compiler: the toolchain in its
 # Resources, about 470 MB, run as processes) against the Playground SDK the
 # iPhone carries, and a build runs in a WasmView (WasmKit, the SwiftUI tree
 # renderer).
@@ -37,7 +37,7 @@ macos_application(
     infoplists = ["Info.plist"],
     minimum_os_version = "15.0",
     resources = [
-        "//apple/compiler:macos_toolchain",
+        "//shared/compiler:toolchain",
         "//apple/playground_ios_application:playground_sdk",
     ],
     deps = [":playground_macos_lib"],

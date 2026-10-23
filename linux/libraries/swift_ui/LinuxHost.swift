@@ -257,7 +257,9 @@ enum LinuxApp {
         iso_set_text_submit_callback(linuxTextSubmit)
         iso_set_control_changed_callback(linuxControlChanged)
 
-        let ok = "Isomer".withCString { titlePtr in
+        // The app's `WindowGroup` title (installed before run()), else Isomer.
+        let title = MainActor.assumeIsolated { Runtime.shared.windowTitle }
+        let ok = (title.isEmpty ? "Isomer" : title).withCString { titlePtr in
             iso_window_create(1100, 720, titlePtr)
         }
         guard ok != 0 else {

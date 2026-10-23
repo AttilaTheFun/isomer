@@ -23,6 +23,7 @@ swift_binary(
     name = "playground",
     srcs = [
         "//shared/app:srcs",
+        "//shared/compiler:srcs",
         "//shared/desktop_host:srcs",
     ],
     copts = ["-parse-as-library"],

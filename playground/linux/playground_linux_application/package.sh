@@ -8,7 +8,9 @@
 #
 #   <out>/playground              the app
 #   <out>/playground_wasm_loader  a build's window
-#   <out>/lib/                    the Swift runtime (LD_LIBRARY_PATH)
+#   <out>/playground_toolchain/   the compiler (swift-frontend, wasm-ld, the wasm SDK)
+#   <out>/playground_sdk/         what a project compiles against
+#   <out>/lib/                    the Swift runtime (LD_LIBRARY_PATH; the compiler's too)
 #   <out>/run.sh                  runs the app
 #
 #   package.sh [<out> [<the build's bazel flags…>]]   e.g. package.sh /root/playground-linux -c opt
@@ -22,6 +24,19 @@ output_base="$(bazel info output_base 2>/dev/null)"
 flags=("$@")
 cp -L "$(files "${flags[@]}" //linux/playground_linux_application:playground_linux_application_bin)" "$out/playground"
 cp -L "$(files "${flags[@]}" //linux/playground_linux_application:playground_wasm_loader)" "$out/playground_wasm_loader"
+cp -RL "$(files "${flags[@]}" //shared/compiler:toolchain)/playground_toolchain" "$out/playground_toolchain"
+cp -RL "$(files "${flags[@]}" //apple/playground_ios_application:playground_sdk)" "$out/playground_sdk"
+# Bazel's outputs are read-only; the copies are the package's own.
+chmod -R u+w "$out/playground_toolchain" "$out/playground_sdk"
+# The swift.org toolchain is Ubuntu 24.04's: its lld loads libxml2.so.2 (and
+# ICU 74 under it), which newer releases have under other names. They go in
+# lib/ with the Swift runtime (run.sh puts it on LD_LIBRARY_PATH, which the
+# compiler's processes inherit).
+for tool in wasm-ld swift-frontend; do
+  ldd "$out/playground_toolchain/usr/bin/$tool" | awk '/libxml2|libicu/ {print $3}' | while read -r library; do
+    cp -L "$library" "$out/lib/"
+  done
+done
 core="$(find "$output_base/external" -name libswiftCore.so -path '*linux*' | head -n1)"
 cp -L "$(dirname "$core")"/*.so "$out/lib/"
 cat > "$out/run.sh" <<'RUN'

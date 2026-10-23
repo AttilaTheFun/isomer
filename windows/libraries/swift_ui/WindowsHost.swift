@@ -304,7 +304,9 @@ enum WindowsApp {
         iso_set_text_submit_callback(windowsTextSubmit)
         iso_set_control_changed_callback(windowsControlChanged)
 
-        "Isomer".withCString { titlePtr in
+        // The app's `WindowGroup` title (installed before run()), else Isomer.
+        let title = MainActor.assumeIsolated { Runtime.shared.windowTitle }
+        (title.isEmpty ? "Isomer" : title).withCString { titlePtr in
             iso_window_create(1100, 720, titlePtr)
         }
 

@@ -5,8 +5,10 @@ package(default_visibility = ["//visibility:public"])
 
 # The Playground on Linux: the shared shell (shared/app) against Isomer's
 # Linux SwiftUI (SwiftGPU over OpenGL in an SDL2 window), with the desktop
-# host (shared/desktop_host). A project's build runs in the WasmKit loader's
-# window (:playground_wasm_loader). Built in a container on a Mac (isomer's
+# host (shared/desktop_host). A project compiles with the compiler beside
+# the app (shared/compiler:toolchain, swift-frontend and wasm-ld run as
+# processes) against the Playground SDK, and its build runs in the WasmKit
+# loader's window (:playground_wasm_loader). Built in a container on a Mac (isomer's
 # tools/linux/build.sh), run on a Linux desktop:
 #
 #   bazel run //linux/playground_linux_application
@@ -16,10 +18,15 @@ swift_binary(
     name = "playground_linux_application_bin",
     srcs = [
         "//shared/app:srcs",
+        "//shared/compiler:srcs",
         "//shared/desktop_host:srcs",
     ],
     copts = ["-parse-as-library"],
-    data = [":playground_wasm_loader"],
+    data = [
+        ":playground_wasm_loader",
+        "//apple/playground_ios_application:playground_sdk",
+        "//shared/compiler:toolchain",
+    ],
     module_name = "PlaygroundLinux",
     target_compatible_with = ["@platforms//os:linux"],
     deps = [

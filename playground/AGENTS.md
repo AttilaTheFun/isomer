@@ -30,8 +30,8 @@ the renderer choice, the capabilities: "projects" where it compiles) and
 | macOS | `apple/playground_macos_application` | `apple/host` (AppleHost: the compiler it carries, run as processes) | WasmView on WasmKit (a sheet) |
 | Android | `android/playground_android_application` | Kotlin (PlaygroundServices.kt) | RunActivity (a process of its own), WasmView on WasmKit |
 | Web | `web/playground_web_application` | index.html | the page's runner (hot_runner.js), the browser's engine |
-| Linux | `linux/playground_linux_application` | `shared/desktop_host` | the WasmKit loader's window (`playground_wasm_loader`) |
-| Windows | `windows/playground_windows_application` | `shared/desktop_host` | the WasmKit loader's window |
+| Linux | `linux/playground_linux_application` | `shared/desktop_host` (the compiler beside the app, run as processes) | the WasmKit loader's window (`playground_wasm_loader`) |
+| Windows | `windows/playground_windows_application` | `shared/desktop_host` (the same) | the WasmKit loader's window |
 
 Launch hooks (the process environment natively; an Android intent's `ISO_`
 string extras; the web page's `ISO_` query parameters):
@@ -47,13 +47,13 @@ of its own (pinning isomer by commit), back in isomer as `playground/` at
 
 | Directory | What |
 | --- | --- |
-| `apple/` | the iOS app and its embedded-compiler staging scripts, the Mac app, `compiler` (how both build a project: ToolchainCompiler, the arguments they share, the iPhone's in-process compiler, the Mac's toolchain rule), `host` (the Apple host and @main), `platform_services_host` (the services a run gets in WasmView) |
+| `apple/` | the iOS app and its embedded-compiler staging scripts, the Mac app, `compiler` (how both build a project: ToolchainCompiler and its backends, the iPhone's in-process compiler), `host` (the Apple host and @main), `platform_services_host` (the services a run gets in WasmView) |
 | `android/` | the Android app (Kotlin host: compile, run, chat, the web run), `platform_services` (the services a run gets), the transcript stress app |
 | `web/` | the web app, the splash page (the whole site is `//web/splash_web_application:site`), the transcript stress app |
 | `linux/`, `windows/` | the desktop apps (built in an oss container on a Mac, and on Windows) |
-| `shared/` | `app` (the shell), `desktop_host` (Linux and Windows), `sample_sources` (the templates' sources), `transcript_stress_application` |
+| `shared/` | `app` (the shell), `compiler` (what every Playground that carries its compiler shares: the build's arguments, the SDK, the build with a compiler carried as files, and that compiler assembled for the app, toolchain.bzl), `desktop_host` (Linux and Windows), `sample_sources` (the templates' sources), `transcript_stress_application` |
 | `tools/` | `playground_toolchain` (the iOS and Android compilers), `browser_toolchain` (the compiler as WebAssembly), `playground` (dev compile server, headless Chrome drivers, the site's packaging and the hot-reload publish scripts, template history), `patches` and `signing` (below) |
-| `tests/` | `templates` (every template compiles), `e2e` (what a reader does, on an emulator and a simulator), `proof` (the Gallery on every platform and renderer), `ios_ui_probe` (a manual XCUITest) |
+| `tests/` | `templates` (every template compiles), `e2e` (what a reader does, on an emulator and a simulator), `ios_ui_probe` (a manual XCUITest); the release's proof is isomer's `tools/proof/proof.py` |
 | `docs/` | `playground.md` (the iOS app), `playground_web.md` (the web app, the site, publishing) |
 | `third_party/swift_packages` | the module's SwiftPM graph: AgentUI and OpenRouterKit |
 
@@ -97,11 +97,16 @@ of its own (pinning isomer by commit), back in isomer as `playground/` at
   the in-process plugin server; the browser's compiler runs them as one wasm
   module (tools/browser_toolchain/README.md "Macros"). A fresh clone does
   not have them, and the apps then build but cannot compile; never delete
-  them from a checkout that has them. The Mac's is not staged: Bazel
-  assembles it from the toolchain repositories rules_swift fetched
-  (apple/compiler/toolchain.bzl: the host toolchain's swift-frontend,
-  wasm-ld, macro plugin server and plugins, thinned to arm64, and the wasm
-  SDK's sysroot and static stdlib, about 470 MB of the app's Resources).
+  them from a checkout that has them. The Mac's and Linux's are not
+  staged: Bazel assembles them from the toolchains rules_swift registered
+  for wasm32 (shared/compiler/toolchain.bzl: the host toolchain's
+  swift-frontend, wasm-ld, macro plugin server and plugins, thinned to
+  arm64 on a Mac, and the wasm SDK's sysroot and static stdlib, about
+  470 MB: the Mac's Resources, beside the Linux app). Windows has no such
+  toolchain in rules_swift; its package takes the build VM's installed
+  Swift's (isomer's tools/proof/proof.py does), with the wasm SDK's data
+  and the Playground SDK from the Mac. Linux's lld wants Ubuntu 24.04's
+  libxml2 and ICU 74, which its package.sh carries in lib/.
 - **Copies of the examples' files**: `shared/sample_sources` is
   `examples/shared/example_application`'s (the template sources),
   `apple/platform_services_host` is `examples/apple/platform_services_host`,
@@ -157,24 +162,24 @@ of its own (pinning isomer by commit), back in isomer as `playground/` at
   (`examples/tests/safari_probe` in the parent checkout). It exists because
   "Run on the web" reached phones blank twice: the site's file list missing
   a module, then a stale APK.
-- **The Gallery on every platform**: `tests/proof/proof.py [ios] [macos]
-  [android] [web] [linux] [windows] --review <dir>` shoots the main menu and
-  every Gallery entry with each platform's renderers, in the app and as
-  wasm (folders `review-<platform>-<renderer>`, e.g. `review-ios-wasm-metal`: the review server files only `review-` folders), on oss
-  leases (the web in headless Chrome here). Linux builds in an oss container
-  (isomer's tools/linux/build.sh); Windows builds on the oss Windows VM
-  (`--config=swift-6.3.2`: Visual Studio's build tools, Swift, Python; isomer's
-  tools/ci/oss/windows-swift.ps1), in MSVC's environment with Git's bash.
-- **A release's proof**: `tests/e2e/run.py --review <dir> [--commit <sha>]`
-  also writes the review store's runs (app "Isomer", the version
-  `version_name` says: stamp the build's into the working tree first, as
-  CI does, with `tools/playground/stamp.py 0.38.N`, and check the files out
-  after; tests/proof/proof.py reads it too): each app's screens in portrait and landscape, and each road of
-  the run recorded. They go to the review server with the review tooling's
-  `publish_proof` (`bazel run //reviews/harnesses:publish_proof -- runs
-  <folder of review-<run> folders> --commit <sha>` in the reviews checkout,
-  `REVIEW_SERVER_CODE` from `reviews-server code` on its Mac, never on a
-  command line). Reviews holds a release until its commit has them.
+- **A release's proof** is isomer's `tools/proof/proof.py`: the Storybook
+  and the Playground on every platform, each with its one renderer
+  (`review-<platform>-storybook`, `review-<platform>-playground`: the review
+  server files only `review-` folders; app "Storybook" and "Playground", the
+  version `version_name` says). The Playground's: its projects, a project
+  open, and 2048 and the Pokédex built on the device and running. Stamp the
+  build's version into the working tree first, as CI does
+  (`tools/playground/stamp.py 0.38.N` here, the examples'
+  `tools/stamp_storybook.py 0.38.N`), and check the files out after. The
+  web Playground's compiler is the in-browser one an earlier site staged
+  (`--web-toolchain <its playground/toolchain>`). The runs go to the review
+  server with the review tooling's `publish_proof` (`bazel run
+  //reviews/harnesses:publish_proof -- runs <folder of review-<run>
+  folders> --commit <sha>` in the reviews checkout, `REVIEW_SERVER_CODE`
+  from `reviews-server code` on its Mac, never on a command line). Reviews
+  holds a release until its commit has them. `tests/e2e/run.py` still
+  drives what a reader does on an emulator and a simulator before a build
+  goes to a phone.
 - iOS: on a simulator. `bazel run //apple/playground_ios_application:run`
   builds, installs and launches there with the host toolchain; with the
   embedded compiler staged for the simulator the app compiles in-process, and

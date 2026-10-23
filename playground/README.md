@@ -15,8 +15,8 @@ News, Meme Creator, Pokédex, Date Planner, Map Explorer, Floating Menu, and
 | macOS | `//apple/playground_macos_application` | SwiftUI | swift-frontend and wasm-ld in the app, run as processes | WasmView (WasmKit) |
 | Android | `//android/playground_android_application` | Compose, OpenGL | swift-frontend and wasm-ld in the APK | its own window (WasmKit), or Chrome |
 | Web | `//web/playground_web_application` | React, WebGPU | the compiler as WebAssembly, in a Worker | in the page |
-| Linux | `//linux/playground_linux_application` | OpenGL | — | its own window (WasmKit) |
-| Windows | `//windows/playground_windows_application` | Direct3D | — | its own window (WasmKit) |
+| Linux | `//linux/playground_linux_application` | OpenGL | swift-frontend and wasm-ld beside the app, run as processes | its own window (WasmKit) |
+| Windows | `//windows/playground_windows_application` | Direct3D | swift-frontend and wasm-ld beside the app (the build machine's Swift's), run as processes | its own window (WasmKit) |
 
 The six apps share one shell (`shared/app`) and the canned examples
 (`shared/sample_sources`). Isomer's SwiftUI API is shown and proven by the

@@ -2,7 +2,10 @@
 // before the app starts. The app is drawn by its own renderer (OpenGL on
 // Linux, Direct3D on Windows); a project's build runs in a window of its
 // own: the platform's WasmKit loader (playground_wasm_loader, beside the
-// app) as a child process.
+// app) as a child process. A project compiles with the compiler the app
+// carries beside it (playground_toolchain: swift-frontend and wasm-ld, run
+// as processes; shared/compiler) against the Playground SDK beside it
+// (playground_sdk).
 
 import Foundation
 #if canImport(FoundationNetworking)
@@ -15,7 +18,29 @@ final class DesktopHost: PlaygroundHostService, @unchecked Sendable {
     /// The last successful build, for `run`.
     private var lastBuild: Data?
 
-    func capabilities() -> String { "" }
+    func capabilities() -> String { DesktopCompiler.toolchain == nil ? "" : "projects" }
+
+    func compile(source: String) async throws -> String {
+        guard let toolchain = DesktopCompiler.toolchain else { return DesktopCompiler.status }
+        let work = FileManager.default.temporaryDirectory.appendingPathComponent("playground-source-\(UUID().uuidString.prefix(8))")
+        try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: work) }
+        let file = work.appendingPathComponent("App.swift")
+        try Data(source.utf8).write(to: file)
+        let result = await Task.detached {
+            Result { try toolchain.compile(files: [file], sdk: try DesktopCompiler.sdk(), run: DesktopCompiler.run) }
+        }.value
+        switch result {
+        case .success(let wasm):
+            lastBuild = wasm
+            print("[playground] compiled \(wasm.count) bytes")
+            return ""
+        case .failure(let error):
+            return (error as? CompileError)?.diagnostics ?? "\(error)"
+        }
+    }
+
+    func toolchainStatus() -> String { DesktopCompiler.status }
 
     /// A build in the loader's window: its bytes in a file of their own.
     private func start(_ bytes: Data, project: String) async throws {
@@ -39,15 +64,13 @@ final class DesktopHost: PlaygroundHostService, @unchecked Sendable {
     func rendererFooter() -> String { "" }
     func appVersion() -> String { DesktopFiles.version }
 
-    // What the desktop doesn't do yet (no compiler).
+    // What the desktop doesn't do yet (no agent).
     func signIn() async throws -> String { throw HostError("no sign-in here") }
-    func compile(source: String) async throws -> String { "No compiler on this platform yet." }
     func canRunOnWeb() -> Bool { false }
     func runOnWeb() async throws -> String { throw HostError("no web run here") }
     func chat(body: String) async throws -> String { throw HostError("no agent here") }
     func hasKey() -> Bool { false }
     func setKey(key: String) {}
-    func toolchainStatus() -> String { "none: no compiler on this platform yet" }
     func requestedTemplate() -> String { "" }
     func legacyFiles() -> String { "{}" }
     func renderer() -> String { "native" }
@@ -88,6 +111,42 @@ enum DesktopFiles {
     static var version: String {
         resource("version.txt").flatMap { try? String(contentsOf: $0, encoding: .utf8) }?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? "0.38.0"
+    }
+}
+
+/// The compiler beside the app, and how its tools run.
+enum DesktopCompiler {
+    static let toolchain = DesktopFiles.resource("playground_toolchain").flatMap(BundledToolchain.at)
+
+    static var status: String {
+        toolchain == nil
+            ? "none: playground_toolchain is not beside the app"
+            : "Swift toolchain beside the app (swift-frontend and wasm-ld)"
+    }
+
+    static func sdk() throws -> CompilerSDK {
+        guard let root = DesktopFiles.resource("playground_sdk") else {
+            throw CompileError(diagnostics: "playground_sdk is not beside the app")
+        }
+        return try CompilerSDK.load(root: root)
+    }
+
+    /// A tool as a child process, in the app's environment (on Linux its
+    /// LD_LIBRARY_PATH: the Swift runtime the frontend loads) with
+    /// `environment` over it; its output and errors together.
+    static func run(_ tool: String, _ arguments: [String], _ environment: [String: String]) -> (status: Int32, output: String) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: tool)
+        process.arguments = arguments
+        process.environment = ProcessInfo.processInfo.environment.merging(environment) { $1 }
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        do { try process.run() } catch { return (-1, "\(tool): \(error)") }
+        // Read before waiting: a full pipe would block the tool.
+        let output = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return (process.terminationStatus, String(decoding: output, as: UTF8.self))
     }
 }
 

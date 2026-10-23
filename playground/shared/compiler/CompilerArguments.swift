@@ -26,13 +26,13 @@ enum CompilerArguments {
     /// swift-frontend's: compile `files` into `object`.
     static func frontend(
         files: [String], object: String, moduleCache: String,
-        paths: Paths, sdk: ToolchainCompiler.SDK
+        paths: Paths, sdk: CompilerSDK
     ) -> [String] {
         var arguments = ["-frontend", "-c"] + files + [
             "-target", "wasm32-unknown-wasip1",
             "-disable-objc-interop",
             "-sdk", paths.wasiSDK,
-            "-I", sdk.moduleDirectory.path,
+            "-I", sdk.moduleDirectory.fileSystemPath,
         ] + sdk.clangModuleArguments + [
             "-no-color-diagnostics",
             "-Xcc", "-fno-color-diagnostics",
@@ -67,7 +67,7 @@ enum CompilerArguments {
     }
 
     /// wasm-ld's: link `object` with the SDK into the reactor `output`.
-    static func link(object: String, output: String, paths: Paths, sdk: ToolchainCompiler.SDK) -> [String] {
+    static func link(object: String, output: String, paths: Paths, sdk: CompilerSDK) -> [String] {
         var arguments = [
             "-m", "wasm32",
             "-L" + paths.swiftStatic + "/wasi",
@@ -77,7 +77,7 @@ enum CompilerArguments {
             object,
             "--whole-archive",
         ]
-        arguments += sdk.archives.map(\.path)
+        arguments += sdk.archives.map(\.fileSystemPath)
         arguments += ["--no-whole-archive"]
         // The hosts' entries exported, the rest dead-stripped (an SDK that
         // lists none exports everything).
