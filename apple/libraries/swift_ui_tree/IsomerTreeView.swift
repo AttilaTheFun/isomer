@@ -406,7 +406,10 @@ struct NodeView: View, Equatable {
             let strong = flags.contains("S"), emphasized = flags.contains("E")
             let linkURL = isLink ? linkURLs.popFirst().flatMap({ URL(string: $0) }) : nil
             let rgba = parts.count > 2 ? parts[2].split(separator: ",").compactMap { Double($0) } : []
-            let ownColor = rgba.count == 4 ? Color(red: rgba[0], green: rgba[1], blue: rgba[2], opacity: rgba[3]) : nil
+            // The system colour by name where the run names one (the
+            // platform's `.primary`), else its RGBA.
+            let named = parts.count > 3 ? hostSystemColor(String(parts[3])) : nil
+            let ownColor = named ?? (rgba.count == 4 ? Color(red: rgba[0], green: rgba[1], blue: rgba[2], opacity: rgba[3]) : nil)
             if linkURL != nil || strong || emphasized {
                 var attributed = AttributedString(String(string[index..<end]))
                 if let linkURL {
@@ -474,6 +477,24 @@ struct NodeView: View, Equatable {
                     spacing: nodeParam("insetSpacing").flatMap(Double.init).map { CGFloat($0) },
                     bar: nodeParam("insetBar") == "1",
                     inset: NodeView(pnode: pnode.children[top ? 0 : 1], send: send)))
+        } else if nodeParam("grid") != nil, pnode.children.contains(where: { Self.isGridRow($0) }) {
+            // A `Grid`: the system's, so its columns line up across rows
+            // (each sized by its widest cell); a row that is no GridRow (a
+            // Divider) spans the grid. The rows' spacing is the columns'.
+            let columnSpacing = pnode.children.first(where: { Self.isGridRow($0) })?.flat.spacing.map { CGFloat($0) }
+            Grid(alignment: alignment, horizontalSpacing: columnSpacing ?? 8, verticalSpacing: spacing ?? 8) {
+                ForEach(keyedNodes(pnode.children)) { row in
+                    if Self.isGridRow(row.node) {
+                        GridRow {
+                            ForEach(keyedNodes(row.node.children)) { cell in
+                                NodeView(pnode: cell.node, send: send)
+                            }
+                        }
+                    } else {
+                        NodeView(pnode: row.node, send: send)
+                    }
+                }
+            }
         } else if nodeParam("label") == "1", pnode.children.count == 2 {
             // A Label: the system's, from its icon and title.
             Label {
@@ -484,6 +505,10 @@ struct NodeView: View, Equatable {
         } else {
             plainStackBody(spacing: spacing)
         }
+    }
+
+    private static func isGridRow(_ node: PatchedNode) -> Bool {
+        node.flat.params.contains { $0.key == "gridRow" && $0.value == "1" }
     }
 
     @ViewBuilder private func plainStackBody(spacing: CGFloat?) -> some View {
@@ -726,8 +751,9 @@ struct AnyShapeView: View {
 }
 
 /// Parses the runtime's gradient paint JSON (shared with
-/// HostBridge.fillGradient): {kind, stops: [{c: [r,g,b,a], l}], p0/p1 | c}.
-func gradientPaint(_ json: String) -> LinearGradient? {
+/// HostBridge.fillGradient): {kind, stops: [{c: [r,g,b,a], l}]} with a
+/// linear one's p0/p1, a radial one's c/sr/er, an angular one's c/a0/a1.
+func gradientPaint(_ json: String) -> AnyShapeStyle? {
     guard let data = json.data(using: .utf8),
           let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
           let stops = object["stops"] as? [[String: Any]] else { return nil }
@@ -742,10 +768,21 @@ func gradientPaint(_ json: String) -> LinearGradient? {
         guard let p = object[key] as? [Double], p.count == 2 else { return fallback }
         return UnitPoint(x: p[0], y: p[1])
     }
-    return LinearGradient(
-        gradient: Gradient(stops: colors),
-        startPoint: point("p0", .top),
-        endPoint: point("p1", .bottom))
+    func number(_ key: String) -> CGFloat { CGFloat(object[key] as? Double ?? 0) }
+    let gradient = Gradient(stops: colors)
+    switch object["kind"] as? String {
+    case "radial":
+        return AnyShapeStyle(RadialGradient(
+            gradient: gradient, center: point("c", .center),
+            startRadius: number("sr"), endRadius: number("er")))
+    case "angular":
+        return AnyShapeStyle(AngularGradient(
+            gradient: gradient, center: point("c", .center),
+            startAngle: .radians(Double(number("a0"))), endAngle: .radians(Double(number("a1")))))
+    default:
+        return AnyShapeStyle(LinearGradient(
+            gradient: gradient, startPoint: point("p0", .top), endPoint: point("p1", .bottom)))
+    }
 }
 
 // MARK: - Host views (semantic chrome)

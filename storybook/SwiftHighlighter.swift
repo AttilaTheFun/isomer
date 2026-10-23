@@ -3,8 +3,10 @@
 // attributes and directives (`@State`, `#if`), in Xcode's palettes, the
 // dark one in dark appearance. The Playground's lexer
 // (playground/apple/playground_ios_application/CodeEditor.swift) in plain
-// Swift, so it runs on every platform: the result is an AttributedString
-// for one Text.
+// Swift, so it runs on every platform: the result is a Text a line, its
+// tokens' coloured Texts interpolated into it (not an AttributedString,
+// whose colours an app compiled against Isomer's frameworks on an Apple
+// platform reads through Apple's attribute scope, and Windows can't draw).
 
 import Foundation
 import SwiftUI
@@ -43,21 +45,41 @@ enum SwiftHighlighter {
         }
     }
 
-    /// `source` as coloured runs.
-    static func highlight(_ source: String, dark: Bool) -> AttributedString {
+    /// `source`'s lines, each its tokens' coloured Texts in one Text.
+    static func lines(_ source: String, dark: Bool) -> [Text] {
+        var lines: [Text] = []
+        var line = Text(verbatim: "")
+        var empty = true
+        for (text, kind) in tokens(source) {
+            let parts = text.split(separator: "\n", omittingEmptySubsequences: false)
+            for (index, part) in parts.enumerated() {
+                if index > 0 {
+                    // An empty line is a space, so it keeps a line's height.
+                    lines.append(empty ? Text(verbatim: " ") : line)
+                    line = Text(verbatim: "")
+                    empty = true
+                }
+                guard !part.isEmpty else { continue }
+                let piece = Text(verbatim: String(part)).foregroundColor(color(kind, dark: dark))
+                line = empty ? piece : Text("\(line)\(piece)")
+                empty = false
+            }
+        }
+        lines.append(empty ? Text(verbatim: " ") : line)
+        return lines
+    }
+
+    /// `source` as (text, token) runs, in order.
+    static func tokens(_ source: String) -> [(String, Token)] {
         let scalars = Array(source.unicodeScalars)
-        var result = AttributedString()
+        var result: [(String, Token)] = []
         func at(_ k: Int) -> Unicode.Scalar { k < scalars.count ? scalars[k] : "\0" }
         func isIdentStart(_ c: Unicode.Scalar) -> Bool { c == "_" || ("a"..."z").contains(c) || ("A"..."Z").contains(c) }
         func isIdent(_ c: Unicode.Scalar) -> Bool { isIdentStart(c) || ("0"..."9").contains(c) }
         func isDigit(_ c: Unicode.Scalar) -> Bool { ("0"..."9").contains(c) }
         func append(_ from: Int, _ to: Int, _ token: Token) {
             guard to > from else { return }
-            var text = String.UnicodeScalarView()
-            text.append(contentsOf: scalars[from..<to])
-            var run = AttributedString(String(text))
-            run.foregroundColor = color(token, dark: dark)
-            result.append(run)
+            result.append((String(String.UnicodeScalarView(scalars[from..<to])), token))
         }
         var i = 0
         var plainStart = 0
@@ -100,7 +122,7 @@ enum SwiftHighlighter {
                             // The interpolation's inside, coloured as code.
                             let inner = String(String.UnicodeScalarView(scalars[(j + 2)..<max(j + 2, k - 1)]))
                             append(plainStart, j + 2, .plain)
-                            result.append(highlight(inner, dark: dark))
+                            result += tokens(inner)
                             plainStart = max(j + 2, k - 1)
                             j = k; segmentStart = k; continue
                         }

@@ -6,6 +6,10 @@ on the web, OpenGL on Linux, DirectX on Windows).
   * The Storybook (examples/*/storybook_*_application): its opening screen
     and every story's page (ISO_STORYBOOK_STORY=<id>), the code, what it
     does, and the code running.
+  * On the iPhone, the Storybook compiled against Isomer's frameworks too
+    (examples/apple/storybook_isomer_ios_application, a test, not released):
+    each story beside its Apple-SwiftUI shot, with a diff, which should be
+    empty (review-ios-storybook-isomer). A difference is Isomer's.
   * The Playground (playground/): its projects, a project open, and 2048 and
     the Pokédex built on the device by the compiler it carries and running
     (ISO_PLAYGROUND_RUN_PROJECT=<name>).
@@ -30,7 +34,7 @@ ends. Stamp the build's version into both modules first, as CI does
 (playground/tools/playground/stamp.py and examples/tools/stamp_storybook.py),
 and check the files out after.
 """
-import argparse, json, os, re, shlex, subprocess, sys, tempfile, threading, time, urllib.parse
+import argparse, json, os, re, shlex, shutil, subprocess, sys, tempfile, threading, time, urllib.parse
 
 ISOMER = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 EXAMPLES = os.path.join(ISOMER, "examples")
@@ -39,6 +43,10 @@ APPS = {
     "storybook": {"name": "Storybook", "bundle": "com.LoganShire.IsomerStorybook"},
     "playground": {"name": "Playground", "bundle": "com.LoganShire.IsomerPlayground"},
 }
+# The Storybook compiled against Isomer's frameworks (iPhone only; a test,
+# not released): every story shot again and set beside the Storybook's own,
+# which is Apple's SwiftUI throughout. They should match.
+ISOMER_STORYBOOK = {"name": "Storybook", "bundle": "com.LoganShire.IsomerStorybookCompiled"}
 # The Playground's screens: its opening screen, a project open, and two
 # projects built on the device and running (2048; the Pokédex, whose
 # @Observable needs the compiler's macro plugins).
@@ -134,6 +142,40 @@ class Review:
         os.makedirs(path, exist_ok=True)
         return path
 
+    def compared_cell(self, name, app, device, orientation, shots):
+        """`shots`: (item name, capture file, reference file) in the cell's
+        folder: each item the capture against its reference, with a diff
+        image and the count of pixels that differ (`same` when none do)."""
+        out = self.dir(name)
+        items, missing = [], []
+        for item, capture, reference in shots:
+            if not os.path.exists(os.path.join(out, capture)):
+                missing.append(item)
+                continue
+            entry = {"name": item, "status": "new", "capture": capture}
+            if os.path.exists(os.path.join(out, reference)):
+                entry["reference"] = reference
+                # Parity: held to the other app's same screen, which Reviews
+                # shows whatever ran before on this target.
+                entry["parity"] = reference
+                entry["parity_with"] = f"Storybook (SwiftUI) {self.version}"
+                changed = diff_images(os.path.join(out, reference), os.path.join(out, capture),
+                                      os.path.join(out, capture.replace(".png", ".diff.png")))
+                if changed is not None:
+                    entry.update(status="same" if changed == 0 else "changed", changed_px=changed)
+                    if changed:
+                        entry["diff"] = capture.replace(".png", ".diff.png")
+            items.append(entry)
+        with lock:
+            failures.extend(f"{name}: {item}" for item in missing)
+        json.dump({"schema": 1, "app": APPS[app]["name"], "version": self.version, "release": self.version,
+                   "commit": self.commit, "kind": "snapshots", "target": name, "device": device,
+                   "orientation": orientation, "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                   "items": items}, open(os.path.join(out, "manifest.json"), "w"), indent=1)
+        changed = [i["name"] for i in items if i.get("status") == "changed"]
+        log(f"{name}: {len(items)} screens, {len(changed)} differ from their reference"
+            + (f", MISSING {missing}" if missing else ""))
+
     def cell(self, name, app, device, orientation, shots):
         """`shots`: (item name, capture file) pairs; a missing capture is a failure."""
         out = self.dir(name)
@@ -147,6 +189,26 @@ class Review:
                    "orientation": orientation, "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                    "items": items}, open(os.path.join(out, "manifest.json"), "w"), indent=1)
         log(f"{name}: {len(items)} screens" + (f", MISSING {missing}" if missing else ""))
+
+
+def diff_images(reference, capture, out):
+    """Pixels that differ between two screenshots (a channel off by more than
+    24), with the difference drawn in red over a faded capture at `out`;
+    None when they can't be compared (Pillow missing, sizes differ)."""
+    try:
+        from PIL import Image, ImageChops
+    except ImportError:
+        return None
+    a, b = Image.open(reference).convert("RGB"), Image.open(capture).convert("RGB")
+    if a.size != b.size:
+        return None
+    mask = ImageChops.difference(a, b).convert("L").point(lambda v: 255 if v > 24 else 0)
+    changed = sum(1 for v in mask.getdata() if v)
+    if changed:
+        faded = Image.blend(b, Image.new("RGB", b.size, "white"), 0.6)
+        faded.paste(Image.new("RGB", b.size, (255, 0, 0)), mask=mask)
+        faded.save(out)
+    return changed
 
 
 def shoot_apps(review, platform, device, orientation, launcher, story_list, waits):
@@ -184,6 +246,8 @@ def build_ios():
     return {
         "storybook": bazel_output(EXAMPLES, "//apple/storybook_ios_application:storybook_ios_sim_application",
                                   "-c", "opt", "--ios_multi_cpus=sim_arm64", suffix=".ipa"),
+        "storybook-isomer": bazel_output(EXAMPLES, "//apple/storybook_isomer_ios_application", "-c", "opt",
+                                         "--ios_multi_cpus=sim_arm64", suffix=".ipa"),
         # The compiler linked into the app (its staged embedded_toolchain).
         "playground": bazel_output(PLAYGROUND, "//apple/playground_ios_application", "-c", "opt",
                                    "--ios_multi_cpus=sim_arm64", "--define", "iso_playground_embedded=1", suffix=".ipa"),
@@ -202,10 +266,10 @@ def ios(review, story_list, builds):
         sh(["xcrun", "simctl", "status_bar", udid, "override", "--time", "9:41", "--batteryState", "charged", "--batteryLevel", "100"], check=False)
 
         def launcher(app, environment, wait, path):
-            bundle = APPS[app]["bundle"]
-            # Both apps closed: launched with another in front, iOS shows a
+            bundle = ISOMER_STORYBOOK["bundle"] if app == "storybook-isomer" else APPS[app]["bundle"]
+            # Every app closed: launched with another in front, iOS shows a
             # "◀ <that app>" link in the status bar.
-            for other in APPS.values():
+            for other in list(APPS.values()) + [ISOMER_STORYBOOK]:
                 sh(["xcrun", "simctl", "terminate", udid, other["bundle"]], check=False)
             variables = dict(os.environ)
             for key, value in environment.items(): variables["SIMCTL_CHILD_" + key] = value
@@ -215,7 +279,24 @@ def ios(review, story_list, builds):
 
         shoot_apps(review, "ios", "iPhone (simulator)", "portrait", launcher, story_list,
                    {"open": 5, "story": 4, "run": 25})
-        for app in APPS.values():
+        # The Storybook compiled against Isomer's frameworks, each story
+        # beside the one just shot with Apple's SwiftUI.
+        native = review.dir("ios-storybook")
+        out = review.dir("ios-storybook-isomer")
+        shots = []
+        for slug, title in [("stories", "Stories")] + story_list:
+            capture, reference = f"{slug}.png", f"{slug}.reference.png"
+            try:
+                launcher("storybook-isomer", {} if slug == "stories" else {"ISO_STORYBOOK_STORY": slug},
+                         5 if slug == "stories" else 4, os.path.join(out, capture))
+                if os.path.exists(os.path.join(native, capture)):
+                    shutil.copyfile(os.path.join(native, capture), os.path.join(out, reference))
+            except Exception as error:
+                log(f"storybook-isomer {slug}: {error}")
+            shots.append((title, capture, reference))
+        review.compared_cell("ios-storybook-isomer", "storybook", "iPhone (simulator), Isomer's SwiftUI against Apple's",
+                             "portrait", shots)
+        for app in list(APPS.values()) + [ISOMER_STORYBOOK]:
             sh(["xcrun", "simctl", "terminate", udid, app["bundle"]], check=False)
     finally:
         release(env)

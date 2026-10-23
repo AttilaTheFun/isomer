@@ -447,7 +447,9 @@ func checkAttributedText(_ mock: MockRenderer) {
     let parts = runs.split(separator: ";").map(String.init)
     expect(parts.count == 3, "a run for each side of the link and one for it (\(runs))")
     let link = parts.count == 3 ? parts[1].split(separator: ":", omittingEmptySubsequences: false) : []
-    expect(link.count == 3, "the link's run has a colour of its own (\(runs))")
+    // length, flags, RGBA, and (a system colour's) its name.
+    expect(link.count >= 3, "the link's run has a colour of its own (\(runs))")
+    expect(link.count == 4 && link[3] == "secondary", "named as the system's colour it is (\(runs))")
     expect(link.count > 1 && link[1].contains("l") && link[1].contains("u") && link[1].contains("w600"),
            "the link's run is a link, underlined, semibold (\(runs))")
     expect(param(text, "runLinks") == "https://example.com/notes", "the link's URL goes with it")
@@ -549,8 +551,29 @@ func checkDecodedTransforms(_ mock: MockRenderer) {
     expect(scales == [2], "and a scaleEffect survives (\(scales))")
 }
 
+/// Text interpolated with system colours (the Storybook's highlighted code):
+/// each run names its colour, so a host with the system's draws its own.
+struct NamedRunScreen: View {
+    var body: some View {
+        let inner = Text("\(Text(verbatim: "plain ").foregroundColor(.primary))\(Text(verbatim: "red").foregroundColor(.red))")
+        // Nested, as the Storybook builds a line token by token.
+        Text("\(inner)\(Text(verbatim: " more").foregroundColor(.primary))")
+    }
+}
+
+@MainActor
+func checkNamedRuns(_ mock: MockRenderer) {
+    Runtime.shared.installRootView { NamedRunScreen() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    let text = flatNodes(lastFlatTree(mock)) { $0.kind == .text }.first
+    let runs = text.flatMap { param($0, "runs") } ?? "none"
+    let named = runs.split(separator: ";").filter { $0.hasSuffix(":primary") }.count
+    expect(named == 2 && runs.contains(":red"), "interpolated runs name their system colours, nested too (\(runs))")
+}
+
 @MainActor
 func checkAPIAdditions(_ mock: MockRenderer) {
+    checkNamedRuns(mock)
     checkDecodedTransforms(mock)
     checkRuntimeConnection(mock)
     checkDerivedStyles(mock)

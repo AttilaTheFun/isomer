@@ -1,0 +1,60 @@
+load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@isomer//apple/compiled:defs.bzl", "isomer_compiled_feature")
+
+# The Storybook compiled against Isomer's frameworks (apple/compiled) inside
+# an iOS app, beside the Storybook app itself (storybook_ios_application,
+# Apple's SwiftUI throughout): the same stories, Isomer's SwiftUI building
+# the tree and the host drawing it with Apple's SwiftUI through WasmView.
+# A test, not a release: the proof shoots every story here and sets each
+# beside the Storybook's own (tools/proof/proof.py, review-ios-storybook-isomer),
+# and the two should match; a difference is Isomer's.
+#   bazel build //apple/storybook_isomer_ios_application --ios_multi_cpus=sim_arm64
+swift_library(
+    name = "feature_lib",
+    srcs = ["FeatureApp.swift"],
+    module_name = "StorybookIsomer",
+    tags = ["manual"],
+    deps = [
+        "@isomer//:swift_ui",
+        "@isomer//apple/libraries/compiled_swift_ui:hot_bridge",
+        "@isomer//storybook",
+    ],
+)
+
+isomer_compiled_feature(
+    name = "feature",
+    tags = ["manual"],
+    deps = [":feature_lib"],
+)
+
+swift_library(
+    name = "app_lib",
+    srcs = ["iOSApp.swift"],
+    # The stories' images, as the Storybook's: the host's asset catalog.
+    data = ["//shared/example_application:xcassets"],
+    module_name = "StorybookIsomerApp",
+    tags = ["manual"],
+    deps = [
+        "@isomer//apple/libraries/native_runtime",
+        "@isomer//apple/libraries/wasm_view",
+    ],
+)
+
+ios_application(
+    name = "storybook_isomer_ios_application",
+    app_icons = ["//artwork/storybook_icon:app_icon"],
+    bundle_id = "com.LoganShire.IsomerStorybookCompiled",
+    bundle_name = "StorybookIsomer",
+    families = [
+        "ipad",
+        "iphone",
+    ],
+    infoplists = ["Info.plist"],
+    minimum_os_version = "18.0",
+    tags = ["manual"],
+    deps = [
+        ":app_lib",
+        ":feature",
+    ],
+)

@@ -231,9 +231,17 @@ The mini apps are the Playground's canned projects only.
 on its six platforms, one renderer each (SwiftUI on iOS and the Mac,
 Compose on Android, React on the web, OpenGL on Linux, DirectX on
 Windows): the Storybook's every story, and the Playground's projects with
-2048 and the Pokédex built on the device and running. The platforms run at
-once, each on its own oss lease, after this Mac's builds; the runs go to
-the review server, and Reviews holds a release until its commit has them.
+2048 and the Pokédex built on the device and running. On the iPhone the
+Storybook is also compiled against Isomer's frameworks
+(examples/apple/storybook_isomer_ios_application: a test, not released)
+and every story is held to Apple's SwiftUI's same screen
+(review-ios-storybook-isomer: a reference, a diff and changed pixels each,
+and Reviews' parity): they should match, and a difference is Isomer's (it
+found radial and angular gradients drawn linear, Grid's columns unaligned
+and text runs' `.primary` drawn at the Mac's 85% black in the tree view).
+The platforms run at once, each on its own oss lease, after this Mac's
+builds; the runs go to the review server, and Reviews holds a release
+until its commit has them.
 
 **Adoption levels** (docs/adoption_levels.md): (1) rules_swift — raw Swift
 on the platform; (2) swift_ffi — idiomatic bindings; (3) embedded Isomer

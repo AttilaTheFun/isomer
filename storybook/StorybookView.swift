@@ -132,10 +132,14 @@ struct CodeCard: View {
 
     var body: some View {
         ScrollView(.horizontal) {
-            Text(SwiftHighlighter.highlight(code, dark: colorScheme == .dark))
-                .font(.system(size: 12, design: .monospaced))
-                .fixedSize(horizontal: true, vertical: true)
-                .padding(12)
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(SwiftHighlighter.lines(code, dark: colorScheme == .dark).enumerated()), id: \.offset) { _, line in
+                    line
+                }
+            }
+            .font(.system(size: 12, design: .monospaced))
+            .fixedSize(horizontal: true, vertical: true)
+            .padding(12)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.secondary.opacity(0.12)))
