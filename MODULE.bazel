@@ -227,7 +227,7 @@ exports_files(["umd/react-dom.production.min.js"])
 )
 
 # Generates Xcode projects for the Apple example applications
-# (`bazel run //examples/apple/example_ios_application:example_ios_application_project`).
+# (`bazel run //apple/storybook_ios_application:storybook_ios_application_project` in examples/).
 bazel_dep(name = "rules_xcodeproj", version = "4.1.0")
 
 # Hermetic Python used to serve the web application from `bazel run`.

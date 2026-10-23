@@ -37,10 +37,17 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
   builds and runs on the oss Windows VM with the Swift build layer
   (tools/ci/oss/windows-swift.ps1: Visual Studio's build tools, Swift,
   Python), in MSVC's environment with Git's bash and POSIX tools (the
-  Playground's tests/proof/proof.py says how). The Playground's Isomer app
-  is the proof on both: the Gallery drawn by the app's renderer and run as
-  wasm in the WasmKit loader's window. Visual Studio and an installed
-  Swift are a stopgap until the hermetic toolchains replace them.
+  release proof, tools/proof/proof.py, says how): the Storybook drawn by
+  each platform's renderer, and the Playground compiling projects there
+  and running them in the WasmKit loader's window. Linux's Playground
+  carries the swift.org toolchain's frontend and wasm-ld (shared/compiler);
+  Windows' takes them from the build VM's installed Swift, since rules_swift
+  has no Windows host toolchain to assemble them from. Visual Studio and an
+  installed Swift are a stopgap until the hermetic toolchains replace them.
+- **The GPU renderer draws 2048's board as one tile** (the Playground's
+  2048 in Linux's WasmKit loader, 0.38): the sixteen cells, each framed
+  and `.offset` inside a `ZStack(alignment: .topLeading)`, are not drawn
+  where SwiftUI puts them. The Storybook's own pages draw right there.
 - **Windows' Swift 6.3.2 can't link `AttributedString.runs`** (its
   Foundation doesn't export the descriptor of _FoundationCollections'
   `BigString.Index`, on ARM64 and x64 alike), so there `Text(AttributedString)`

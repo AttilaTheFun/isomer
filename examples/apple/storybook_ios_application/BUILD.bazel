@@ -48,6 +48,7 @@ ios_application(
     name = "storybook_ios_application",
     app_icons = ["//artwork/storybook_icon:app_icon"],
     bundle_id = BUNDLE_ID,
+    bundle_name = "Storybook",
     families = [
         "ipad",
         "iphone",
@@ -66,6 +67,7 @@ ios_application(
     name = "storybook_ios_sim_application",
     app_icons = ["//artwork/storybook_icon:app_icon"],
     bundle_id = BUNDLE_ID,
+    bundle_name = "Storybook",
     families = [
         "ipad",
         "iphone",

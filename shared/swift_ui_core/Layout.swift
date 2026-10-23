@@ -25,7 +25,12 @@ func isFlexible(_ node: RenderNode, along axis: StackAxis) -> Bool {
         return node.spacerAxis == nil || node.spacerAxis == axis
     case .divider, .text, .hostView:
         return false
-    case .shape, .scroll, .gradient, .geometryReader:
+    case .scroll(let scrollAxis):
+        // A vertical scroll takes the space it is offered both ways; a
+        // horizontal one hugs its content's height, as SwiftUI's does (a
+        // strip of cards, a line of code), and stretches only sideways.
+        return scrollAxis == .vertical || axis == .horizontal
+    case .shape, .gradient, .geometryReader:
         return true
     case .progress(let value):
         // Determinate bar stretches horizontally; spinner is fixed.
@@ -195,9 +200,10 @@ private func measureContent(_ node: RenderNode, proposal: ProposedSize, ctx: Lay
                 height: proposal.height ?? contentSize.height
             )
         }
+        // Horizontal: as tall as its content, within what it is offered.
         return CGSize(
             width: proposal.width ?? contentSize.width,
-            height: proposal.height ?? contentSize.height
+            height: proposal.height.map { min($0, contentSize.height) } ?? contentSize.height
         )
 
     case .stack(let axis):

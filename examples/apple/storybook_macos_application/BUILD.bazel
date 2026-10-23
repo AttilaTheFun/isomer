@@ -24,6 +24,7 @@ macos_application(
     name = "storybook_macos_application",
     app_icons = ["//artwork/storybook_icon:app_icon"],
     bundle_id = BUNDLE_ID,
+    bundle_name = "Storybook",
     infoplists = ["Info.plist"],
     minimum_os_version = "14.0",
     visibility = ["//visibility:public"],

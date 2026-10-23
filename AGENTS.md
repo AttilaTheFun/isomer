@@ -227,6 +227,14 @@ web page's `?ISO_STORYBOOK_STORY=`). A story uses only what both Apple's
 SwiftUI (iOS 17, macOS 14) and Isomer's have: the web build is the check.
 The mini apps are the Playground's canned projects only.
 
+**The release proof** (tools/proof/proof.py, since 0.38): Isomer's two apps
+on its six platforms, one renderer each (SwiftUI on iOS and the Mac,
+Compose on Android, React on the web, OpenGL on Linux, DirectX on
+Windows): the Storybook's every story, and the Playground's projects with
+2048 and the Pokédex built on the device and running. The platforms run at
+once, each on its own oss lease, after this Mac's builds; the runs go to
+the review server, and Reviews holds a release until its commit has them.
+
 **Adoption levels** (docs/adoption_levels.md): (1) rules_swift — raw Swift
 on the platform; (2) swift_ffi — idiomatic bindings; (3) embedded Isomer
 — `Isomer()` composable / `IsomerFragment` / `<Isomer/>`
@@ -358,7 +366,7 @@ com.LoganShire.IsomerExamples.
 ```sh
 # Apple
 bazel build //examples/apple/storybook_macos_application/...
-bazel run //examples/apple/storybook_ios_application:example_ios_application_project  # Xcode proj
+bazel run //examples/apple/storybook_ios_application:storybook_ios_application_project  # Xcode proj
 
 # Android — builds APK, boots the hermetic emulator, installs, launches.
 # Compose is the ONLY supported Android renderer. The Android axis is delivery,
@@ -394,8 +402,8 @@ oss machines (~/Developer/AGENTS.md), never on this Mac's own screen.
   build` if missing, the container kept between builds, `--stop` to stop
   it). The container is arm64: MODULE.bazel registers swift.org's
   ubuntu24.04 toolchains for aarch64 as well as x86_64, wasm SDK included
-  (the wasm cell's reactor). The Playground's tests/proof/proof.py runs
-  what it builds in an oss Linux VM.
+  (the wasm cell's reactor). tools/proof/proof.py runs what it builds in
+  an oss Linux VM.
 - **Windows on the oss Windows VM** (`oss machine lease windows
   --config=swift-6.3.2`, the build layer tools/ci/oss/windows-swift.ps1
   makes): Bazel in MSVC's environment (vcvarsall arm64) with
@@ -404,7 +412,8 @@ oss machines (~/Developer/AGENTS.md), never on this Mac's own screen.
   `--repo_env` for SDKROOT, PATH and MSVC's variables (repository rules see
   nothing else). The Playground carries
   tools/patches/rules_swift_package_manager_windows.patch for its SwiftPM
-  graph there. tests/proof/proof.py has the whole recipe. No Swift
+  graph there (and the examples, for the Storybook's). tools/proof/proof.py
+  has the whole recipe. No Swift
   toolchain cross-compiles to Windows.
 - docs/open_items.md lists what is open, by tier.
 
