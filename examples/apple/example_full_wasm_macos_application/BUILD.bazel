@@ -6,7 +6,7 @@ package(default_visibility = ["//visibility:public"])
 # The "full x wasm" cell of the Apple matrix: the WHOLE shared example app
 # (//wasm/example_full_feature) delivered as a wasm bundle and
 # rendered full-screen with real SwiftUI via `WasmView`. The runtime-updatable
-# twin of example_full_compiled_macos_application (same app, compiled Swift).
+# twin of storybook_macos_application (same app, compiled Swift).
 
 swift_library(
     name = "host_lib",

@@ -1,5 +1,5 @@
-# The Isomer app's shell (App.swift): Projects, Hot Reloaders and the
-# Gallery, written once in SwiftUI and compiled by every platform's app:
+# The Playground's shell (App.swift): its projects, written once in SwiftUI
+# and compiled by every platform's app:
 # against Apple's SwiftUI on iOS and macOS, Isomer's on the web, Android,
 # Linux and Windows. What is platform-bound is the host's
 # (PlaygroundHostService, Services.swift) or injected (PlaygroundSurfaces:

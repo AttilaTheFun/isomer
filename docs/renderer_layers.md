@@ -103,11 +103,11 @@ Component-system renderers are the default run targets; each has a
 SwiftGPU-drawn twin:
 
 ```sh
-bazel run //examples/web/example_full_react_web_application            # React (browser)
+bazel run //examples/web/storybook_web_application            # React (browser)
 bazel run //examples/web/example_full_webgpu_web_application           # SwiftGPU/WebGPU (browser)
 bazel run //examples/electron/example_full_react_electron_application  # React (Electron)
 bazel run //examples/electron/example_full_webgpu_electron_application # SwiftGPU/WebGPU (Electron)
-bazel run //examples/android/example_full_compiled_android_application # Jetpack Compose (emulator)
+bazel run //examples/android/storybook_android_application # Jetpack Compose (emulator)
 ```
 
 On Android, Compose is the only supported app renderer. The self-drawing

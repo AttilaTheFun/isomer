@@ -241,7 +241,7 @@ IDWriteTextFormat* TextFormat(double fontSize, int weight) {
 
 // --- Bundled asset resolution (Bazel runfiles manifest) -------------------
 // Windows runfiles are a MANIFEST (no symlinked tree), so a bundled-image name
-// like "tab-gallery" must be mapped to its real .png path. Parse the manifest
+// like "iso-logo" must be mapped to its real .png path. Parse the manifest
 // once into a map from imageset base name -> the highest-scale real file path.
 
 std::unordered_map<std::string, std::wstring> g_assetPaths;

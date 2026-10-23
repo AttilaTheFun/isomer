@@ -2,13 +2,13 @@ load("@isomer//tools/wasm:defs.bzl", "electron_application", "windows_electron_p
 
 # The Level 4 example in a desktop Electron window under the React
 # ReactRenderer (docs/renderer_layers.md) — the same site as
-# //web/example_full_react_web_application.
+# //web/storybook_web_application.
 electron_application(
     name = "example_full_react_electron_application",
     env = {"ISO_RENDERER": "react"},
     main_js = "//electron:main.js",
     package_json = "//electron:package.json",
-    site = "//web/example_full_react_web_application:site",
+    site = "//web/storybook_web_application:site",
 )
 
 # Native Swift cannot be cross-compiled from macOS to Windows (no official
@@ -20,5 +20,5 @@ windows_electron_package(
     app_name = "Isomer",
     main_js = "//electron:main.js",
     package_json = "//electron:package.json",
-    site = "//web/example_full_react_web_application:site",
+    site = "//web/storybook_web_application:site",
 )

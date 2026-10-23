@@ -1,0 +1,49 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+# The Storybook (storybook/): every SwiftUI API Isomer implements, a story
+# each, its page showing the story's code, what the API does and the code
+# running on the platform. The examples' Storybook apps
+# (examples/*/storybook_*_application) show it on every platform, and their
+# proof is a screenshot of each story's page. One library for every
+# platform: the root's aliases pick Apple's SwiftUI or Isomer's for the
+# configuration it is built in. It is an application's code: no
+# `package_name`, nothing of Isomer's plumbing.
+
+package(default_visibility = ["//visibility:public"])
+
+# Each story's source, between its `// story:` and `// end story` lines, as
+# a table the story's page reads (Story.code).
+genrule(
+    name = "snippets",
+    srcs = glob(["stories/*.swift"]),
+    outs = ["StorySnippets.swift"],
+    cmd = "awk -f $(location snippets.awk) $(SRCS) > $@",
+    tools = ["snippets.awk"],
+)
+
+swift_library(
+    name = "storybook",
+    srcs = glob([
+        "*.swift",
+        "stories/*.swift",
+    ]) + [":snippets"],
+    module_name = "Storybook",
+    deps = [
+        "//:foundation",
+        "//:isomer",
+        "//:swift_ui",
+    ],
+)
+
+# The images the stories name. The same PNGs ship on every platform: the
+# web site's assets/ and the APK's assets/ take the flat files; an Apple
+# bundle takes the asset catalog (SwiftUI's Image(_:) reads it).
+filegroup(
+    name = "assets",
+    srcs = glob(["assets/**/*.png"]),
+)
+
+filegroup(
+    name = "xcassets",
+    srcs = glob(["assets/Assets.xcassets/**"]),
+)

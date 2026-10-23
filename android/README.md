@@ -17,7 +17,7 @@ with WAMR in 0.38). See
 
 | App | `bazel run` target | Runtime | Renderer |
 | --- | --- | --- | --- |
-| full · compiled | `//examples/android/example_full_compiled_android_application` | Swift `.so` | Compose (default) · GPU — switchable, see below |
+| full · compiled | `//examples/android/storybook_android_application` | Swift `.so` | Compose (default) · GPU — switchable, see below |
 | full · wasm | `//examples/android/example_full_wasm_android_application` | WasmKit | Compose interpreter (`WasmView`) |
 | full · native reference | `//examples/android/example_full_native_android_application` | Kotlin | hand-written Compose (parity reference) |
 | partial · compiled | `//examples/android/example_partial_compiled_android_application` | Swift `.so` | one SwiftUI feature embedded in a native app |
@@ -27,8 +27,8 @@ The compiled app's renderer is chosen **at launch** (the APK carries all three);
 after `bazel run` once, relaunch with:
 
 ```sh
-adb shell am start -S -n dev.isomer.example/.MainActivity --es renderer jetpackCompose  # default
-adb shell am start -S -n dev.isomer.example/.MainActivity --es renderer openGL
+adb shell am start -S -n com.LoganShire.IsomerStorybook/.MainActivity --es renderer jetpackCompose  # default
+adb shell am start -S -n com.LoganShire.IsomerStorybook/.MainActivity --es renderer openGL
 ```
 
 ## Benchmark cells (the minimal "Tap me" counter)

@@ -213,6 +213,20 @@ renderers (and their baseline benchmark cells) and the WinUI stub are gone.
   swift_gpu), so every GPU backend looks and feels the same. The only native bridges there are
   app-authored representables and the invisible IME-capture text input.
 
+**The Storybook** (storybook/, `@isomer//storybook`, since 0.38): every
+SwiftUI API Isomer implements, a story each (stories/<Area>.swift), its
+page the story's code, what the API does and the code running. A story's
+view sits between `// story: <id>` and `// end story` lines; :snippets
+(snippets.awk) copies that source into the page's table, so the code shown
+is the code run. It is the primary integration test: the Storybook apps
+(examples/<platform>/storybook_<platform>_application,
+com.LoganShire.IsomerStorybook, "Storybook"), one a platform with that
+platform's renderer, are released with Isomer, and their proof is a
+screenshot of every story's page (`ISO_STORYBOOK_STORY=<id>` opens one; the
+web page's `?ISO_STORYBOOK_STORY=`). A story uses only what both Apple's
+SwiftUI (iOS 17, macOS 14) and Isomer's have: the web build is the check.
+The mini apps are the Playground's canned projects only.
+
 **Adoption levels** (docs/adoption_levels.md): (1) rules_swift — raw Swift
 on the platform; (2) swift_ffi — idiomatic bindings; (3) embedded Isomer
 — `Isomer()` composable / `IsomerFragment` / `<Isomer/>`
@@ -343,19 +357,19 @@ com.LoganShire.IsomerExamples.
 
 ```sh
 # Apple
-bazel build //examples/apple/example_full_compiled_macos_application/...
-bazel run //examples/apple/example_full_compiled_ios_application:example_ios_application_project  # Xcode proj
+bazel build //examples/apple/storybook_macos_application/...
+bazel run //examples/apple/storybook_ios_application:example_ios_application_project  # Xcode proj
 
 # Android — builds APK, boots the hermetic emulator, installs, launches.
 # Compose is the ONLY supported Android renderer. The Android axis is delivery,
 # not renderer: [full|partial] x [compiled|wasm] (SwiftUI linked as native
 # Swift, vs shipped as an in-process wasm bundle). SwiftGPU still works as a
 # library (--es renderer openGL) but is not an endorsed Android app path.
-bazel run //examples/android/example_full_compiled_android_application
+bazel run //examples/android/storybook_android_application
 
 # Web (wasm) — serves via hermetic Python; ReactRenderer,
 # …example_full_webgpu_web_application is the SwiftGPU-drawn twin.
-bazel run //examples/web/example_full_react_web_application
+bazel run //examples/web/storybook_web_application
 # Electron desktop wrapper (…webgpu_electron… = SwiftGPU-drawn twin)
 bazel run //examples/electron/example_full_react_electron_application
 

@@ -82,13 +82,21 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
   injected (WasmNetworkHosts.kt).
 - SwiftGPU on Android works as a library but is not an endorsed app path;
   Compose is the renderer.
+- **`Map` under Compose is its placeholder** (the Storybook's Map story
+  shows it): only the GPU renderer draws SwiftMap's tiles on Android
+  (AndroidBridge sets `Renderer.hostRendersMaps` there alone), where the web's
+  React renderer composites them. Compose needs a map host view of its own.
 
 ## The web (T2)
 
-- **The web Playground's fastbuild overflows the stack** loading
-  ("RangeError: Maximum call stack size exceeded", a WebAssembly native
-  stack overflow); `-c opt` builds work and are what ships
-  (playground/docs/playground_web.md).
+- **The web's fastbuild overflows the stack** (the Playground's and the
+  Storybook's: "RangeError: Maximum call stack size exceeded", a
+  WebAssembly native stack overflow, in FlatTreeEncoder's flatten); `-c
+  opt` builds work and are what ships (playground/docs/playground_web.md).
+  The tree is shallow (the Storybook's is 14 levels); unoptimized,
+  `flattenNode` (shared/renderers/TreeEncoder.swift, one ~900-line
+  function) has so many wasm locals that each frame V8's baseline compiler
+  gives it is large. Splitting it into smaller functions is the likely fix.
 - Browsers cannot speak gRPC: a web client goes through gRPC-Web and a
   proxy (Envoy).
 

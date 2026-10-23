@@ -1,11 +1,17 @@
-// The example application: the Gallery (@isomer//gallery) as an app of its
-// own, compiled for every platform:
-//   * examples/apple/example_full_compiled_{ios,macos}_application (Apple's SwiftUI)
-//   * examples/web/example_full_{react,webgpu}_web_application, electron (wasm)
-//   * examples/android/example_full_{compiled,wasm}_android_application
-//   * examples/linux, examples/windows (compiled and wasm)
+// The example application: the Storybook (@isomer//storybook), compiled for
+// every platform. The Storybook apps (com.LoganShire.IsomerStorybook,
+// "Storybook") are its one cell per platform, each with that platform's
+// renderer:
+//   * examples/apple/storybook_{ios,macos}_application (Apple's SwiftUI)
+//   * examples/web/storybook_web_application (React)
+//   * examples/android/storybook_android_application (Compose)
+//   * examples/linux/storybook_linux_application (OpenGL)
+//   * examples/windows/storybook_windows_application (DirectX)
+// The rest compile the same source as test cells: delivered as wasm
+// (example_full_wasm_*, example_full_feature), the web's GPU renderer
+// (example_full_webgpu_*), Electron.
 
-import Gallery
+import Storybook
 import SwiftUI
 
 @main
@@ -18,8 +24,8 @@ struct ExampleApplication: App {
 
     var body: some Scene {
         // The title reaches the host as the document/window/task title.
-        WindowGroup("Isomer") {
-            GalleryView()
+        WindowGroup("Storybook") {
+            StorybookView()
         }
     }
 }

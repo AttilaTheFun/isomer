@@ -1,9 +1,9 @@
 load("@isomer//tools/wasm:defs.bzl", "web_server")
 
 # The Level 4 example under the SwiftGPU (WebGPU) renderer — the same site as
-# //web/example_full_react_web_application, opened without the
+# //web/storybook_web_application, opened without the
 # ?renderer=react query (docs/renderer_layers.md).
 web_server(
     name = "example_full_webgpu_web_application",
-    site = "//web/example_full_react_web_application:example_full_react_web_application_site",
+    site = "//web/storybook_web_application:storybook_web_application_site",
 )

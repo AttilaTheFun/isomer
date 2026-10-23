@@ -6,7 +6,7 @@ load("@isomer//tools/android:defs.bzl", "apk_install_run", "flat_assets")
 # [compiled|wasm] matrix: the WHOLE shared SwiftUI @main App shipped as a wasm
 # bundle and hosted full-screen by `WasmView`. Its compiled twin (SAME app,
 # Swift built into the APK) is
-# //android/example_full_compiled_android_application.
+# //android/storybook_android_application.
 #
 # Like example_partial_wasm, none of the app's Swift is compiled into the APK:
 # the only native library is the engine's (libwasm_engine_bindings.so:
@@ -16,7 +16,7 @@ load("@isomer//tools/android:defs.bzl", "apk_install_run", "flat_assets")
 
 # assets/: the whole-app reactor (RELEASE build — gc'd, ABI-only exports,
 # stripped) PLUS the shared image PNGs flattened to the basenames the tree's
-# image nodes open (HostServices.loadBitmap → assets.open("tab-pokedex.png")).
+# image nodes open (HostServices.loadBitmap → assets.open("iso-logo.png")).
 flat_assets(
     name = "app_assets",
     srcs = [

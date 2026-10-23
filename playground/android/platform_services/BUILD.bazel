@@ -3,7 +3,7 @@ package(default_visibility = ["//visibility:public"])
 # The Android implementations of isomer's platform services, for the app
 # itself (AppServices.kt) and for a project it runs under WasmView
 # (PlatformServicesWasm.kt). Copies of the examples' (examples/android/
-# example_full_compiled_android_application/AppServices.kt and
+# storybook_android_application/AppServices.kt and
 # examples/android/platform_services_wasm in the parent checkout, another
 # module), kept in step by hand.
 exports_files([

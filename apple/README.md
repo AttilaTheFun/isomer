@@ -8,8 +8,8 @@ iOS apps boot the simulator themselves.
 
 | App | `bazel run` target | SwiftUI delivery |
 | --- | --- | --- |
-| full · compiled · macOS | `//examples/apple/example_full_compiled_macos_application` | native (real SwiftUI) |
-| full · compiled · iOS | `//examples/apple/example_full_compiled_ios_application` | native (real SwiftUI) |
+| full · compiled · macOS | `//examples/apple/storybook_macos_application` | native (real SwiftUI) |
+| full · compiled · iOS | `//examples/apple/storybook_ios_application` | native (real SwiftUI) |
 | full · wasm · macOS | `//examples/apple/example_full_wasm_macos_application` | wasm reactor → `IsomerTreeView` |
 | full · wasm · iOS | `//examples/apple/example_full_wasm_ios_application` | wasm reactor → `IsomerTreeView` |
 | partial · compiled · macOS | `//examples/apple/example_partial_compiled_macos_application` | one SwiftUI feature in a native app |
