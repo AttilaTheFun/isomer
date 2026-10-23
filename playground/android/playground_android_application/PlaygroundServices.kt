@@ -237,7 +237,7 @@ class AndroidPlaygroundHost(private val context: Context, private val preference
             return linked.output.replace(work.absolutePath + "/", "").ifBlank { "wasm-ld exited with ${linked.exitCode}" }
         }
         // (The run's own window runs the module as it is, under Isomer's
-        // wasm engine on Android, WAMR's interpreter: nothing more to make
+        // wasm engine on Android, WasmKit's interpreter: nothing more to make
         // here.)
         lastBuild = wasm
         return ""
@@ -261,16 +261,55 @@ class AndroidPlaygroundHost(private val context: Context, private val preference
     // guest none (its files are not kept).
     override suspend fun run(project: String): String {
         val wasm = lastBuild ?: throw IllegalStateException("nothing built yet")
+        start(wasm, "")
+        return "running"
+    }
+
+    /** The run's window (RunActivity, a process of its own) over [wasm]. */
+    private fun start(wasm: File, environment: String) {
         Handler(Looper.getMainLooper()).post {
             PlaygroundRun.running = true
             context.startActivity(
                 android.content.Intent(context, RunActivity::class.java)
                     .putExtra(RunActivity.EXTRA_WASM, wasm.absolutePath)
+                    .putExtra(RunActivity.EXTRA_ENVIRONMENT, environment)
                     .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
             )
         }
-        return "running"
     }
+
+    // The app compiles (with the toolchain staged), runs a reactor from a
+    // URL, and carries the Gallery's (assets/gallery.wasm).
+    override fun capabilities(): String = "projects,reactors,gallery-wasm"
+
+    override suspend fun runReactor(url: String, project: String, environment: String): String = suspendCoroutine { cont ->
+        thread(name = "playground-reactor") {
+            try {
+                val reactors = File(context.cacheDir, "reactors").apply { mkdirs() }
+                val file = File(reactors, project.replace(Regex("[^A-Za-z0-9._-]"), "_") + ".wasm")
+                if (url.startsWith("bundle:")) {
+                    context.assets.open(url.removePrefix("bundle:")).use { input -> file.outputStream().use { input.copyTo(it) } }
+                } else {
+                    val connection = URL(url).openConnection() as HttpURLConnection
+                    connection.connectTimeout = 20_000
+                    connection.readTimeout = 120_000
+                    connection.useCaches = false
+                    if (connection.responseCode >= 300) throw IllegalStateException("$url: HTTP ${connection.responseCode}")
+                    connection.inputStream.use { input -> file.outputStream().use { input.copyTo(it) } }
+                }
+                start(file, environment)
+                cont.resume("running")
+            } catch (e: Exception) {
+                cont.resumeWithException(e)
+            }
+        }
+    }
+
+    override suspend fun signIn(): String = throw UnsupportedOperationException("paste a key in Settings")
+    override fun rendererNames(): String = "Compose,OpenGL"
+    override fun rendererFooter(): String = "Compose builds the app from Material components; OpenGL is the self-drawing SwiftGPU renderer. Applies the next time the app starts. A run is drawn with Compose."
+    override fun appVersion(): String =
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: ""
 
     override fun stop() {
         Handler(Looper.getMainLooper()).post {
@@ -335,8 +374,13 @@ class AndroidPlaygroundHost(private val context: Context, private val preference
         return files.toString()
     }
 
-    override fun renderer(): String = preferences.getString("pref.renderer", "") ?: ""
-    override fun setRenderer(value: String) { preferences.edit().putString("pref.renderer", value).apply() }
+    // The app's renderer, which the generated MainActivity reads at launch
+    // (SharedPreferences "isomer", "renderer").
+    private val isomerPreferences = context.getSharedPreferences("isomer", Context.MODE_PRIVATE)
+    override fun renderer(): String = if (isomerPreferences.getString("renderer", null) == "openGL") "gpu" else "native"
+    override fun setRenderer(value: String) {
+        isomerPreferences.edit().putString("renderer", if (value == "gpu") "openGL" else "jetpackCompose").apply()
+    }
 
     // Driving the running build (the agent's ui_tree / tap / …) is not wired
     // on Android yet: the agent is told so.

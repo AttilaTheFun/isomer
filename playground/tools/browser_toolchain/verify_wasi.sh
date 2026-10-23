@@ -6,15 +6,13 @@
 # guess flags).
 #
 # WASI_RUN is the command that runs a WASI module, taking `--dir=<path>`
-# preopens before it: by default Isomer's `iwasm` (WAMR;
-# `bazel build @isomer//tools/wasm/wasi_command:iwasm` from playground/, and
-# `--define wamr_aot=1` with a wamrc-compiled module to run it at native
-# speed: interpreted, a 100 MB compiler is slow), or any standalone WASI
-# runtime's equivalent.
+# preopens before it: by default Isomer's `wasi_run` (WasmKit;
+# `bazel build @isomer//tools/wasm/wasi_run` from playground/; interpreted, a
+# 100 MB compiler is slow), or any standalone WASI runtime's equivalent.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/env.sh"
-read -r -a RUN <<< "${WASI_RUN:-iwasm}"
+read -r -a RUN <<< "${WASI_RUN:-wasi_run}"
 FRONTEND="${1:-$ISO_WORKSPACE/build/wasi-swift/bin/swift-frontend}"
 LLD="${2:-$ISO_WORKSPACE/build/wasi-llvm/bin/lld}"
 W="$ISO_WORKSPACE/build/browser-work"

@@ -1,6 +1,6 @@
 #!/bin/bash
-# Runs a check program built for wasm under WAMR's WASI command runner;
-# fails on any "FAIL" line or a missing "ok".
+# Runs a check program built for wasm under WasmKit's WASI command runner
+# (//tools/wasm/wasi_run); fails on any "FAIL" line or a missing "ok".
 set -euo pipefail
 runner="$1"
 module="$2"

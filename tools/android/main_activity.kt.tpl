@@ -33,6 +33,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Launch hooks: the intent's ISO_ string extras are environment
+        // variables (`am start … --es ISO_OPEN_APP todo`), as a native host's
+        // process environment has them, set before any Swift reads them.
+        intent.extras?.keySet()?.filter { it.startsWith("ISO_") }?.forEach { key ->
+            intent.getStringExtra(key)?.let { android.system.Os.setenv(key, it, true) }
+        }
         // Before any Swift runs (the services installer's included): the
         // app's directories where Foundation's FileManager finds them, and
         // Foundation's networking.
@@ -47,7 +53,12 @@ class MainActivity : ComponentActivity() {
         // runtime starts.
         {INSTALL_SERVICES}
         IsomerRuntime.attach(this, embedded = false)
-        val renderer = intent.getStringExtra("renderer") ?: "{DEFAULT_RENDERER}"
+        // The launch's own choice (`--es renderer openGL`), else the app's
+        // (an app that offers one keeps it in SharedPreferences "isomer",
+        // "renderer", applied at the next launch), else the build's default.
+        val renderer = intent.getStringExtra("renderer")
+            ?: getSharedPreferences("isomer", MODE_PRIVATE).getString("renderer", null)
+            ?: "{DEFAULT_RENDERER}"
         when (renderer) {
             "jetpackCompose" -> {
                 // Edge to edge: the app's chrome takes the system bars' room

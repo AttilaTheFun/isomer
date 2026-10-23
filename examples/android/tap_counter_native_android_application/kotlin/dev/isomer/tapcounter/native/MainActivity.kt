@@ -5,7 +5,7 @@ package dev.isomer.tapcounter.native
 // Swift, no wasm, no IsoNode interpreter): just hand-written Compose rendering the
 // exact same UI as its compiled-Swift, wasm, Valdi, and React Native twins — a
 // counter label + a "Tap me" button. Compare its [native-tap] tap->frame latency
-// against the wasm reactor's [wamr-event] on the same device.
+// against the wasm reactor's [iso-tap] on the same device.
 
 import android.os.Bundle
 import android.os.SystemClock
@@ -62,7 +62,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun CounterScreen() {
     var count by remember { mutableIntStateOf(0) }
-    // Measure tap->frame latency the way [wamr-event] does for the wasm path: the
+    // Measure tap->frame latency the way [iso-tap] does for the wasm path: the
     // click stamps a time, and the first frame that reflects the new count logs
     // how long the whole click->recompose->draw took (typically one ~16ms frame).
     var clickAt by remember { mutableStateOf(0L) }

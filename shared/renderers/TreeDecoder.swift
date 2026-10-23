@@ -5,8 +5,8 @@
 // `RenderNode`s instead of SwiftUI views. Interactive nodes get synthesized
 // closures (`tapAction`/`textSet`/`sliderSet`/host `onChange`) that call the
 // `send(id, value)` closure — the same id the encoder registered in its
-// `handlers` table and that the host echoes back (to `iso_wamr_event` in the
-// desktop wasm host, or to `encoder.handlers[id]` in a round-trip test).
+// `handlers` table and that the host echoes back (to the reactor's
+// `iso_hot_event` in the desktop wasm host, or to `encoder.handlers[id]` in a round-trip test).
 //
 // The schema is lossy for a few draw-walk fields (offset/rotation/scaleEffect/
 // overlay/min); those simply don't round-trip in v1. See

@@ -3,7 +3,7 @@
 // through `http`, WebSocket connections through `webSocket`. Each platform
 // fills them in from its own networking (the browser's `fetch` and
 // `WebSocket`, Android's HTTP stack and a WebSocket client in its runtime,
-// Apple's URLSession in a WAMR host). Without one, a task fails as it would
+// Apple's URLSession in a WasmKit host). Without one, a task fails as it would
 // on a device offline (`URLError.notConnectedToInternet`). Apps call
 // URLSession; only hosts use what is here.
 //

@@ -70,4 +70,12 @@ public enum IsomerTypingSignposts {
                     String(describing: key), a, bytes)
     }
 }
+#else
+/// No os_signpost off Apple: the signposts are no-ops.
+public enum IsomerTypingSignposts {
+    @inline(__always)
+    public static func interval<T>(_ name: StaticString, _ body: () throws -> T) rethrows -> T { try body() }
+    @inline(__always)
+    public static func event(_ name: StaticString, _ key: StaticString, _ a: Int, bytes: Int) {}
+}
 #endif

@@ -4,12 +4,24 @@
 // module has nothing of Isomer's own in its interface.
 
 internal import SwiftUI
+import IsomerNativePlatformServices
+import SwiftFFIWasmHost
 
 public enum LinuxWasmApp {
-    /// Runs `wasmBytes` (an `iso_hot` reactor) in a native window until it
-    /// closes. `nextReload`, when given, is polled for newer reactor bytes
-    /// (hot reload), which replace the running one live.
-    public static func run(wasmBytes: [UInt8], nextReload: (() -> [UInt8]?)? = nil) {
-        LinuxWasmLoop.run(wasmBytes: wasmBytes, nextReload: nextReload)
+    /// Runs `wasmBytes` (an `iso_hot` reactor) on WasmKit in a native window
+    /// until it closes, with the platform services `dependencies` (the
+    /// Foundation implementations by default, the keychain under
+    /// `namespace`). `nextReload`, when given, is polled for newer reactor
+    /// bytes (hot reload), which replace the running one live.
+    @MainActor
+    public static func run(
+        wasmBytes: [UInt8], namespace: String = "isomer_wasm",
+        dependencies: [String: SwiftFFIDependency]? = nil,
+        nextReload: (() -> [UInt8]?)? = nil
+    ) {
+        LinuxWasmLoop.run(
+            wasmBytes: wasmBytes,
+            dependencies: dependencies ?? nativePlatformDependencies(namespace: namespace),
+            nextReload: nextReload)
     }
 }

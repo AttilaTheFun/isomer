@@ -1,6 +1,6 @@
 // Isomer's Foundation with FoundationInternationalization (built with
 // --@isomer//foundation:internationalization): formatting, locales,
-// calendars and time zones through ICU, run under WAMR. Prints "FAIL …" for
+// calendars and time zones through ICU, run under WasmKit. Prints "FAIL …" for
 // a wrong answer and "ok" at the end.
 
 import Foundation

@@ -4,7 +4,7 @@ load("@rules_swift//swift:swift_test.bzl", "swift_test")
 # installs the keychain, analytics, flags, a timer and OAuth into the swift_ffi
 # dependency dictionary and PlatformDependencies resolves and round-trips
 # through them — the same mechanism the wasm hosts drive through
-# dependency_get (see //shared/wamr_host:iso_wamr_full_smoke for that half).
+# dependency_get (//tests/wasm_engines checks that half).
 swift_test(
     name = "platform_services_di",
     srcs = ["PlatformServicesDITests.swift"],

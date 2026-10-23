@@ -19,7 +19,8 @@ import UIKit
 import AppKit
 #endif
 import IsomerTree
-import IsomerWamrRuntime
+import IsomerURLSessionNetwork
+import IsomerWasmKitRuntime
 @_exported import IsomerWasmHost
 
 @MainActor
@@ -62,7 +63,7 @@ public final class WasmViewModel: ObservableObject {
     /// The app's swift_ffi module prefix + dependency table, injected into the
     /// running feature's `dependencies` dictionary. Set before `load(...)`;
     /// build entries with the app's generated `Dependencies` builders.
-    /// Foundation's networking (URLSession, NetworkHosts.swift) goes in
+    /// Foundation's networking (URLSession, IsomerURLSessionNetwork) goes in
     /// beneath them under `isomerHTTP` and `isomerWebSocket`: an app's entry
     /// under either key replaces it.
     public var ffiModulePrefix: String? {
@@ -92,7 +93,7 @@ public final class WasmViewModel: ObservableObject {
     /// UserDefaults) and the bundle identifier it is told, for the runtimes
     /// made after they are set: the app's own container and identifier when
     /// nil. A host that runs several apps (the Playground's projects) gives
-    /// each its own. WAMR's; the directory is made when missing.
+    /// each its own. The directory is made when missing.
     public var guestHomeDirectory: String? {
         get { home.directory }
         set { home.directory = newValue }
@@ -113,7 +114,7 @@ public final class WasmViewModel: ObservableObject {
     /// `WasmRuntime`), defaulting to the registry: a host that wants to pick
     /// or configure the engine per feature passes its own.
     public init(runtime: @escaping @MainActor ([UInt8]) -> any WasmRuntime = { WasmRuntimeRegistry.make(for: $0) }) {
-        // The Apple host's default engine: WAMR, unless the app registered
+        // The Apple host's default engine: WasmKit, unless the app registered
         // its own (WasmRuntimeRegistry.register { ... }) before the first
         // feature launches. The engine seam is //shared/wasm_host's
         // WasmRuntime protocol; the core is engine-free.
@@ -121,13 +122,13 @@ public final class WasmViewModel: ObservableObject {
         // runs compiled: its Documents, Application Support, Caches and
         // UserDefaults are the app's.
         WasmRuntimeRegistry.registerDefault {
-            let runtime = WamrRuntime()
+            let runtime = WasmKitRuntime()
             runtime.homeDirectory = NSHomeDirectory()
             runtime.bundleIdentifier = Bundle.main.bundleIdentifier
             return runtime
         }
-        // What a person picks goes where the guest reads it: the WAMR host
-        // maps a folder of the temporary directory as the guest's /tmp.
+        // What a person picks goes where the guest reads it: the host maps
+        // a folder of the temporary directory as the guest's /tmp.
         IsomerPickedFiles.folder = (
             FileManager.default.temporaryDirectory.appendingPathComponent("isomer-guest/picked", isDirectory: true),
             "/tmp/picked")
@@ -135,10 +136,10 @@ public final class WasmViewModel: ObservableObject {
         let home = self.home
         core = WasmFeatureRuntime(runtime: { bytes in
             let made = runtime(bytes)
-            if let directory = home.directory, let wamr = made as? WamrRuntime {
+            if let directory = home.directory, let engine = made as? WasmKitRuntime {
                 try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
-                wamr.homeDirectory = directory
-                wamr.bundleIdentifier = home.bundleIdentifier ?? wamr.bundleIdentifier
+                engine.homeDirectory = directory
+                engine.bundleIdentifier = home.bundleIdentifier ?? engine.bundleIdentifier
             }
             return made
         }, log: { line in

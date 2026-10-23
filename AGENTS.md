@@ -1,7 +1,7 @@
 # AGENTS.md — isomer
 
 Context for AI agents (and new humans) working in this repo. Last updated
-2026-10-15. If something here contradicts the code, trust the code and
+2026-10-22. If something here contradicts the code, trust the code and
 update this file.
 
 ## The name
@@ -33,7 +33,7 @@ the Playground:
 | Directory | Module | What |
 | --- | --- | --- |
 | `.` | `isomer` | everything below |
-| `swift_ffi/` | (isomer) | the Swift <-> Kotlin/TypeScript/C bridge generator: macros, analyzer, generator, rules, runtimes, WAMR. Labels `//swift_ffi/...` (`@isomer//swift_ffi/...` from outside). Its own examples are `swift_ffi/examples`; docs in `docs/swift_ffi/`. Every BUILD file under it carries `package(features = [swift.enable_v6, treat_warnings_as_errors, ...])` — what its REPO.bazel said when it was a repo; keep that on new packages there |
+| `swift_ffi/` | (isomer) | the Swift <-> Kotlin/TypeScript/C bridge generator: macros, analyzer, generator, rules, runtimes. Labels `//swift_ffi/...` (`@isomer//swift_ffi/...` from outside). Its own examples are `swift_ffi/examples`; docs in `docs/swift_ffi/`. Every BUILD file under it carries `package(features = [swift.enable_v6, treat_warnings_as_errors, ...])` — what its REPO.bazel said when it was a repo; keep that on new packages there |
 | `core_graphics/`, `foundation/` | (isomer) | Isomer's `CoreGraphics` and `Foundation` for the platforms without Apple's (see "Apple's frameworks off Apple") |
 | `frameworks/` | (isomer) | the other Apple frameworks SwiftUI's interface names, off Apple: `CoreTransferable`, `UniformTypeIdentifiers`, `PhotosUI`. Not Combine, UIKit or Dispatch (see "Apple's frameworks off Apple") |
 | `metal/` | (isomer) | Isomer's `Metal` (`//metal/metal`), IsomerMetal (`//metal/isomer_metal`: the MSL→WGSL translator, the backend interface), the web backend (`//metal/web`, `//metal/runtime`) |
@@ -90,7 +90,7 @@ Things the fold taught:
   package only: Bazel takes it through rules_swift_package_manager as
   `@swiftpkg_swift_sql//:SwiftSQL`. Isomer's root has no SQLite
   dependency; the examples list swift_sql in their Package.swift and
-  check SQLite's WASI build under WAMR (examples' //tests/sqlite_wasi);
+  check SQLite's WASI builds under WasmKit (examples' //tests/sqlite_wasi);
   `@isomer//:sqlite` is gone.
 - swift_ffi's gazelle setup (`//:update_build_files`) was dropped in the fold.
 - **isomer's `swift` extension use is dev-only.** rules_swift takes that
@@ -110,7 +110,7 @@ Things the fold taught:
   0.35. Its MODULE.bazel follows examples/MODULE.bazel: change an override
   in both. What is framework stays in isomer proper: `wasm_sdk_bundle`,
   `site_imports_test`, `assemble_directory` (tools/wasm/defs.bzl), WasmView,
-  `AppHostViews`, `WasiCommand`, hot_host.js. The headless Chrome drivers
+  `AppHostViews`, hot_host.js. The headless Chrome drivers
   `cdp_shot.js`/`cdp_eval.js` are in `tools/testing` beside cdp.py.
 - **isomer has no agent_ui dependency** since 0.16: the transcript stress
   apps (the only users) moved to the Playground. The examples' SwiftPM
@@ -119,9 +119,8 @@ Things the fold taught:
   2026-10-09 (swiftlang/swift#92018, multi-threaded Concurrency for
   `wasm32-unknown-wasip1-threads`; swift-platform-executors#33 before it),
   so its test cell (`wasm_threads/` here until 2026-10-02, then a
-  repository of its own) is gone. The `--define wamr_threads=1` WAMR build it
-  exercised stays in MODULE.bazel; the main snapshots after that date carry
-  the change.
+  repository of its own) is gone; the main snapshots after that date carry
+  the change. Threaded modules run under WasmKit's WASI Threads (below).
 
 What building a whole application on the stack taught (a todos app, with a
 gRPC server over PostgreSQL, was the reference until 0.35, when it moved to
@@ -286,7 +285,10 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   then isoSetDisplayScale) and Android
   (NativeBridge.rasterizeSpec, nativeSurfaceChanged px feed, nativeRender
   draws in Swift and returns an empty draw list; UIRenderer keeps the
-  wantsRender continuation on that path or nav transitions freeze).
+  wantsRender continuation on that path or nav transitions freeze; its GL
+  context is current on the main thread, MainThreadGLSurface, since 0.38:
+  the runtime is main-actor isolated, and GLSurfaceView's render thread
+  trapped in `MainActor.assumeIsolated`).
   Windows (DirectXGPUDevice over D3D11; the host rasterizes via
   DirectWrite / offscreen D2D / a CPU Gaussian shadow / WIC, and keeps its
   native widget layer — EDIT overlay, Win32 picker/webview children) and
@@ -361,51 +363,72 @@ bazel run //examples/electron/example_full_react_electron_application
 # android: example_partial_{compiled,wasm}_…; web/electron:
 # example_partial_{react,webgpu}_… — see README's tables.
 
-# Linux/Windows: build/run natively on those hosts. From a Mac, Linux
-# builds in a container: tools/linux/build.sh
-# (//linux/... in isomer and the examples; see "Platform tiers").
+# Linux/Windows: on oss machines. Linux builds in an oss container
+# (tools/linux/build.sh), Windows on the oss Windows VM (see "Platform tiers").
 ```
 
 ## Platform tiers (2026-10-13)
 
 Linux and Windows are T3, wasm and Android T2, iOS and macOS T1. T1 (iOS, macOS): simulators and
 the Mac on every change. T2 (wasm: web and Electron; Android): headless
-Chrome and the hermetic emulator. T3 (Linux, Windows): keep them building;
-they are run on their own hosts.
+Chrome and the hermetic emulator. T3 (Linux, Windows): built and run on
+oss machines (~/Developer/AGENTS.md), never on this Mac's own screen.
 
-- **Linux from a Mac**: `tools/linux/build.sh [targets]` starts podman's
-  machine if it is stopped (and stops it after), builds an Ubuntu 24.04
-  image with Bazel and the libraries the Linux targets link (SDL2,
-  SDL2_ttf, GL/EGL, GTK 3, WebKitGTK), and builds `//linux/...` in isomer
-  and in the examples, Bazel's output in podman volumes. The container is
-  arm64: MODULE.bazel registers swift.org's ubuntu24.04 toolchains for
-  aarch64 as well as x86_64, wasm SDK included (the wasm cell's reactor).
-  Nothing is run there.
-- **Windows cannot be built from macOS or Linux** (no Swift toolchain
-  cross-compiles to it): `bazel query 'deps(//windows/...)'` in both modules
-  and `swiftc -parse` of changed files are what can be checked; mirror a
-  Linux change on Windows' twin file.
+- **Linux from a Mac**: `tools/linux/build.sh [targets]` builds in an oss
+  container (an Ubuntu image with Bazel and the libraries the Linux targets
+  link: SDL2, SDL2_ttf, GL/EGL, GTK 3, WebKitGTK; made with `container
+  build` if missing, the container kept between builds, `--stop` to stop
+  it). The container is arm64: MODULE.bazel registers swift.org's
+  ubuntu24.04 toolchains for aarch64 as well as x86_64, wasm SDK included
+  (the wasm cell's reactor). The Playground's tests/proof/proof.py runs
+  what it builds in an oss Linux VM.
+- **Windows on the oss Windows VM** (`oss machine lease windows
+  --config=swift-6.3.2`, the build layer tools/ci/oss/windows-swift.ps1
+  makes): Bazel in MSVC's environment (vcvarsall arm64) with
+  `BAZEL_SH` Git's bash, Git's usr\bin on PATH (rules_swift_package_manager
+  runs find, cp and od), `--output_user_root=C:/b` (short paths) and
+  `--repo_env` for SDKROOT, PATH and MSVC's variables (repository rules see
+  nothing else). The Playground carries
+  tools/patches/rules_swift_package_manager_windows.patch for its SwiftPM
+  graph there. tests/proof/proof.py has the whole recipe. No Swift
+  toolchain cross-compiles to Windows.
 - docs/open_items.md lists what is open, by tier.
 
-## WasmKit and wasi-threads (0.33)
+## WasmKit and wasi-threads (0.33; the only engine since 0.38)
 
 Since 0.33 Visor Isomer's iPhone app runs on WasmKit with interpreted
-wasi-threads Swift. The engine work is in the WasmKit fork (measured against
-WAMR on the same reactor); what is here is how Isomer runs it.
+wasi-threads Swift; since 0.38 WasmKit runs reactors on every native host
+(WAMR, Isomer's engine before it, and WAMR's AOT tier were removed then:
+no wamrc, no `.aot`, no `--define wamr_*`). The engine work is in the
+WasmKit fork (measured against WAMR on the same reactor); what is here is
+how Isomer runs it.
 
 - **WasmKit** (MODULE.bazel's `wasmkit`: AttilaTheFun/WasmKit, the fork,
   pinned by commit; built by tools/wasmkit/BUILD.wasmkit.bazel after its
-  Package.swift, default traits, Apple platforms) is the Apple hosts'
-  second engine: `WasmKitRuntime` (//shared/wasm_host:wasmkit_runtime). An
-  app registers it (`WasmRuntimeRegistry.register`); WasmView's default
-  stays WAMR. It does in Swift what the C host does for WAMR: WASI laid out
-  as WAMR's (/tmp, /home/app, HOME and XDG_*), the six iso_hot callbacks,
+  Package.swift, default traits, optimized in every build, for macOS, iOS,
+  Android, Linux and Windows) is behind `WasmKitRuntime`
+  (//shared/wasm_host:wasmkit_runtime). Apple's WasmView registers it as
+  the default engine (`WasmRuntimeRegistry.registerDefault`; an app may
+  register its own first); Android's WasmView runs it as a Swift library of
+  its own (android/libraries/wasm_view: engine/WasmKitEngine.swift, reached
+  from the Kotlin `WasmKitRuntime` through generated bindings; a process
+  runs reactors or an app's compiled Swift, not both); the Linux and Windows hosts drive
+  `WasmFeatureRuntime` over it. It lays out WASI as the hosts always have
+  (/tmp, /home/app, HOME and XDG_*), binds the six iso_hot callbacks and
   swift_ffi through `SwiftFFIHostRuntime` (the dependencies' register
-  exports called at launch), jobs drained on the main queue and held while
-  a tree is undrawn. Nothing of Isomer's goes into the fork. iOS 18
-  (WasmKit's Synchronization). `ISO_WASMKIT_TRACE=1` prints each guest
+  exports called at launch), and drains jobs on the main queue, held while
+  a tree is undrawn. Nothing of Isomer's goes into the fork. iOS 18 and
+  macOS 15 (WasmKit's Synchronization): so, since WAMR went, WasmView and
+  every app that hosts reactors (the examples' wasm cells raised with it). `ISO_WASMKIT_TRACE=1` prints each guest
   thread's instance and each swift_ffi import with the thread it came on.
-  The engine tests (examples //tests/wasm_engines) run it beside WAMR.
+  The engine tests (examples //tests/wasm_engines) run it beside JSC and
+  WasmEdge.
+- **WASI commands**: //tools/wasm/wasi_run runs a command module under
+  WasmKit with `iwasm`'s options (`--dir=`, `--map-dir=<guest>::<host>`,
+  `--env=`; also `--stack-size=`), the guest's stdout, stderr and exit
+  code, and WASI Threads for a module that imports a shared memory. The
+  checks built for wasm run under it (//foundation/tests, the Metal
+  translator's, the examples' //tests/sqlite_wasi).
 - **The threads SDK beside the stock one.** rules_swift takes one
   `swift.wasm_sdk`; tools/patches/rules_swift_wasm_threads_beside.patch
   (in the registry's rules_swift 3.6.1.isomer.1 since 0.36) takes two, the
@@ -435,7 +458,10 @@ WAMR on the same reactor); what is here is how Isomer runs it.
   its screens match the ICU build's.
 - **Shared memory needs WasmKit's guard pages**: a 4 GiB reservation per
   memory and signal-trapped bounds checks, on macOS, Linux and (since the
-  fork's 285def1) iOS. `WasmKitRuntime.canRunThreads` tries one; a host
+  fork's 285def1) iOS. Android and Windows check bounds in software and
+  run no threaded reactor (on Android by
+  tools/patches/wasmkit_android_software_bounds.patch: WasmKit's C takes
+  Android for Linux). `WasmKitRuntime.canRunThreads` tries one; a host
   with both builds of its reactor picks the threaded one only then (an
   iPhone's address space may refuse it; nothing here has run on a device).
 
@@ -460,9 +486,10 @@ apple/libraries/native_runtime/iso_hot_native.h); the host app registers
 `WasmView(provider: CompiledFeatureProvider())`, so WasmView runs it as it
 runs a reactor. examples/apple/tap_counter_compiled_isomer_ios_application is
 the example (simulator: `--ios_multi_cpus=sim_arm64`); visor_isomer's
-applications/visor_isomer_compiled_ios is Visor's whole client so. Both are
-iOS 16: SwiftUI, Observation and Synchronization are Isomer's there,
-Foundation still Apple's. What the feature's configuration has and what bit:
+applications/visor_isomer_compiled_ios is Visor's whole client so. The
+features are iOS 16: SwiftUI, Observation and Synchronization are Isomer's
+there, Foundation still Apple's. (An app that shows one through WasmView is
+iOS 18 since 0.38, WasmView linking WasmKit: the example is.) What the feature's configuration has and what bit:
 
 - **Observation and Synchronization are Isomer's** (since 2026-10-14),
   so a feature runs below Apple's iOS 17 and 18: //apple/libraries/
@@ -490,11 +517,13 @@ Foundation still Apple's. What the feature's configuration has and what bit:
 - **iOS 16 is the floor** (2026-10-14: stay at 16 rather than
   override the standard library): below it a feature would need the
   standard library's iOS 16 types (`Duration`, `Clock`, `Regex`) of Isomer's
-  own. The host side
-  (WasmView, the tree renderer) already runs on iOS 15:
-  example_full_wasm_ios_application builds there to keep it so, and
-  visor_isomer's wasm blue Visor (visor_isomer_ios) is iOS 15. Xcode 27
-  offers no iOS 15 simulator, so 15 is checked by building.
+  own. The host side is iOS 18 / macOS 15 since 0.38: WasmView runs
+  reactors on WasmKit, which stands on Swift's Synchronization (Mutex,
+  Atomic), so the examples' wasm apps (example_full_wasm_ios_application,
+  iOS 15 until then) were raised to 18. visor_isomer's wasm blue Visor
+  (visor_isomer_ios, iOS 15) needs the same raise when it moves to isomer
+  0.38. The tree renderer itself still keeps newer APIs behind availability
+  checks from its iOS 15 days.
 - RSPM refuses a package to an app below the package's own minimum:
   visor_isomer lowers AgentUI's (iOS 18 → 16) with a `patch_cmds` on its
   configure_package.
@@ -616,18 +645,20 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
     (XDG_DATA_HOME); Caches are Android's cacheDir/Caches (XDG_CACHE_HOME,
     linked from Library/Caches: not backed up, cleared by the system, as
     iOS's), TMPDIR the cacheDir, ISOMER_BUNDLE_IDENTIFIER the package.
-  - **App files under WAMR** (shared/wamr_host/iso_wamr.c): a host that
-    sets `IsoWamrCallbacks.home_dir` gives the guest that directory as
-    /home/app, with Documents, Library/Application Support and
-    Library/Caches made in it and HOME/XDG_DATA_HOME/XDG_CACHE_HOME naming
-    them; `bundle_identifier` becomes ISOMER_BUNDLE_IDENTIFIER. Apple's
-    WasmView passes the app's own container (`WamrRuntime.homeDirectory =
-    NSHomeDirectory()`), so a guest's files are the app's. Hosts that pass
-    none (the tests, the Linux/Windows WAMR hosts, Android's WasmView for
-    now) give the guest no home: its directories are not writable, and
-    swift-foundation (fork commit e8b0c06) answers
-    `createDirectory(withIntermediateDirectories:)` there with an error
-    rather than recursing past "/".
+  - **App files under WasmKit** (shared/wasm_host/WasmKitRuntime.swift's
+    `makeWASI`): the guest's /tmp is the host's temporary directory's
+    `isomer-guest`; a host that sets `WasmKitRuntime.homeDirectory` gives
+    the guest that directory as /home/app, with Documents, Library/
+    Application Support and Library/Caches made in it and
+    HOME/XDG_DATA_HOME/XDG_CACHE_HOME naming them; `bundleIdentifier`
+    becomes ISOMER_BUNDLE_IDENTIFIER. Apple's WasmView passes the app's own
+    container (`homeDirectory = NSHomeDirectory()`), so a guest's files are
+    the app's; Android's Kotlin `WasmKitRuntime` takes a `homeDirectory` and
+    `bundleIdentifier` too. Hosts that pass none (the tests, the
+    Linux/Windows hosts, Android's WasmView for now) give the guest no home:
+    its directories are not writable, and swift-foundation (fork commit
+    e8b0c06) answers `createDirectory(withIntermediateDirectories:)` there
+    with an error rather than recursing past "/".
   - **SQLite** (swift_sql, a Swift package: `@swiftpkg_swift_sql//:SwiftSQL`
     over `//:CSwiftSQL` there): the system SQLite on Apple platforms, SQLite's
     amalgamation with FTS5 elsewhere (options in its Sources/CSwiftSQL/cswiftsql.c). On WASI it uses the "unix-none" VFS (no
@@ -635,9 +666,11 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
     directory in the web's IndexedDB if a page closed mid-transaction) and
     no WAL or mmap, and is thread-safe in a threaded reactor. A database in
     Application Support persists on every host: the web's files above, the
-    app container under WasmKit and WAMR, the files directory on Android.
-    the examples' //tests/sqlite_wasi:sqlite_file_test runs it under WAMR (its threaded
-    build compiles SQLite with THREADSAFE=1, the single-threaded one with 0);
+    app container under WasmKit, the files directory on Android.
+    The examples' //tests/sqlite_wasi:sqlite_file_test runs it under
+    WasmKit (//tools/wasm/wasi_run), and :sqlite_file_threads_test the
+    threaded build with WASI Threads (it compiles SQLite with THREADSAFE=1,
+    the single-threaded one with 0);
     examples/web/files_probe_web_application checks it in Chrome across
     reloads (tools/testing/run_files_check.js, whose window is tall enough
     for the probe's whole report: its list draws only the rows on screen).
@@ -676,12 +709,12 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
     API through its own server (no CORS headers: a third party's cloud API)
     gives boot()/mountIsomer()/`<Isomer>`/runHotBundle a `fetch` (and a
     `WebSocket` constructor) to use instead of the browser's, or injects
-    its own `isomerHTTP`. Apple's WasmView injects
-    URLSession and URLSessionWebSocketTask (apple/libraries/wasm_view/
-    NetworkHosts.swift, over the generated
-    //shared/isomer_network_host:wasm_host) beneath the app's
-    dependencies at each load; an http: server needs the host app's ATS
-    to allow it. Android's runtime installs its own (`IsomerRuntime.
+    its own `isomerHTTP`. Apple's WasmView and the Linux and Windows wasm
+    hosts inject URLSession and URLSessionWebSocketTask
+    (//shared/isomer_network_host/urlsession, over the generated
+    //shared/isomer_network_host:wasm_host; FoundationNetworking on Linux
+    and Windows) beneath their dependencies at each load; on Apple an
+    http: server needs the host app's ATS to allow it. Android's runtime installs its own (`IsomerRuntime.
     prepare` → `installIsomerNetworkHosts`): HTTP over HttpURLConnection
     off the runtime's thread (IsomerHTTP.kt: redirects followed across
     http→https too, error bodies, gzip undone) and an RFC 6455 client of its
@@ -692,7 +725,7 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
     `bazel run //android/network_probe_android_application:network_check
     -- --serial emulator-5554` (and `:network_check_wasm`) in the examples,
     two launches each (files and `@AppStorage` kept between them). //foundation/tests:
-    foundation_test runs URLSession over fake transports under WAMR;
+    foundation_test runs URLSession over fake transports under WasmKit;
     //tests/web_network:network_test the web's hosts in the hermetic Node.
 - **CoreGraphics** (//core_graphics): geometry and CGFloat (a Double on
   every architecture), CGAffineTransform, CGColor/CGColorSpace, CGPath, line
@@ -728,7 +761,7 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
     `isoMetalViewFrame`), composited into the frame under the GPU renderer
     (`SwiftGPURenderer.metalViewFrame`). examples/{shared,web,apple}/
     metal_triangle_* is the example.
-  - Tests: `//metal/isomer_metal/tests:translator_test` (WAMR);
+  - Tests: `//metal/isomer_metal/tests:translator_test` (under WasmKit);
     `tools/metal/validate_wgsl.js` compiles the translator's output with
     Chrome's WebGPU; metal/tests/web + `tools/metal/run_metal_check.js` run
     13 end-to-end checks (compute readback, render readback, textures,
@@ -851,20 +884,13 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
   linked in its development shape (`--export-all --no-gc-sections`) keeps
   every function in the program: Visor's was 83 MB. `isomer_web_app` and
   visor_isomer link twice: once exporting everything, to read the entries
-  hosts call (`swift_ffi_*`, `iso_hot_*`, `_initialize`, what WAMR reads:
-  `wasm_export_list`, `swift_wasm_reactor(exports = "host")`), then the
+  hosts call (`swift_ffi_*`, `iso_hot_*`, `_initialize`, what the engines
+  read: `wasm_export_list`, `swift_wasm_reactor(exports = "host")`), then the
   shipped module exporting just those, without function names in `-c opt`.
   An app with the full Foundation also gets ICU's data less `ICU_DROP`
   (legacy converters, CJK/Southeast Asian word dictionaries:
   `icu_data_library`). A host that looks up a new kind of export by name
   must add it to the entries, or the shipped module drops it.
-- **Profiling the interpreter** (`--define wamr_profile=1`, Apple hosts):
-  `ISO_WAMR_PROFILE=<s>,<s>` dumps WAMR's per-function profile at those
-  times, `ISO_WAMR_SLOW=<ms>` logs slow guest calls, and
-  `ISO_WAMR_CALLERS=<function as in the name section>` counts that
-  function's calls between the two dumps by the chain of callers above them
-  (tools/patches/wamr_profile_callers.patch): how the conformance scans
-  were traced to Isomer's casts.
 - **Don't read outputs via `find -L bazel-bin`** — you'll hit stale
   other-config outputs. Use `bazel cquery --output=files <target>`.
 - Android license acceptance + `--android_platforms=@rules_android//:arm64-v8a`

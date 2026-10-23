@@ -1,6 +1,6 @@
 // The hosts' side of Foundation's networking: what a host implements as
 // swift_ffi interfaces (the browser's fetch and WebSocket, Android's
-// HttpURLConnection and socket client, Apple's URLSession in a WAMR shell),
+// HttpURLConnection and socket client, Apple's URLSession in a WasmKit shell),
 // and the adapters that make them IsomerFoundation's transports. A host
 // injects its implementations under `NetworkHostKey`'s keys (the web's boot
 // does, as an app injects its own services) or hands them to

@@ -5,12 +5,12 @@ load("@isomer//tools/android:defs.bzl", "apk_install_run", "flat_assets")
 # The wasm-delivered cell of the minimal counter benchmark (docs/benchmarks.md):
 # the SAME shared TapCounter.swift @main App as the compiled cell
 # (//android/tap_counter_compiled_android_application), shipped as ONE
-# wasm reactor and hosted full-screen by `WasmView`. Carries NO compiled Swift —
-# the only native library is libiso_wamr_jni.so (the WAMR C engine + host + JNI).
+# wasm reactor and hosted full-screen by `WasmView`. None of the app's Swift is
+# compiled in — the only native library is the engine's
+# (libwasm_engine_bindings.so: WasmKit).
 
-# assets/: just the counter reactor (RELEASE build). No image assets — the counter
-# UI has none. Config-selected: `tap_counter_release.wasm` (interp) by default, or
-# `tap_counter_release.aot` (native) under `--config=release`.
+# assets/: just the counter reactor (RELEASE build, `tap_counter_release.wasm`).
+# No image assets — the counter UI has none.
 flat_assets(
     name = "app_assets",
     srcs = ["//wasm/tap_counter_feature:tap_counter_release"],
@@ -27,6 +27,7 @@ kt_android_library(
     plugins = ["@isomer//android/libraries/swift_ui:compose_compiler_plugin"],
     tags = ["manual"],
     deps = [
+        "@isomer//android/libraries/wasm_view:wasm_engine_bindings",
         "@isomer//tools/android:maven_androidx_activity_activity_compose",
         "@isomer//tools/android:maven_androidx_compose_foundation_foundation",
         "@isomer//tools/android:maven_androidx_compose_material3_material3",
@@ -45,8 +46,8 @@ android_binary(
     deps = [
         "@isomer//tools/android:maven_androidx_profileinstaller_profileinstaller",
         ":host_app",
-        # The ONLY native library: the WAMR C engine (no compiled Swift).
-        "@isomer//android/libraries/wasm_view:wamr_jni",
+        # The ONLY native library: the engine (WasmKit, libwasm_engine_bindings.so).
+        "@isomer//android/libraries/wasm_view:engine_native",
     ],
 )
 

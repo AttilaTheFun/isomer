@@ -274,7 +274,7 @@ object ComposeTreeState {
     /** Benchmark hook: when a tree update is the response to a tap (sendEvent
      *  stamped IsoEventRouter.lastEventAt), log tap->tree latency. Uniform for the
      *  compiled cell (full trees) and the wasm cell (diff Patches) since both
-     *  route tap -> sendEvent -> sink -> (in-process Swift | WAMR reactor) ->
+     *  route tap -> sendEvent -> sink -> (in-process Swift | WasmKit reactor) ->
      *  applyPatch. See docs/benchmarks.md. */
     private fun logTapLatency() {
         val at = IsoEventRouter.lastEventAt
@@ -299,7 +299,7 @@ object ComposeTreeState {
  *  Swift-free wasm cell). The native compiled-Swift path installs a sink that
  *  feeds the in-process Swift runtime and pumps frames (see
  *  `installNativeEventSink`); the wasm WasmView (//android/libraries/wasm_view)
- *  installs a sink that routes to its WAMR reactor. */
+ *  installs a sink that routes to its WasmKit reactor. */
 object IsoEventRouter {
     var sink: (String, String) -> Unit = { _, _ -> }
 

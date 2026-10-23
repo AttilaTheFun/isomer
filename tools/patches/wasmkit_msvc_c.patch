@@ -1,0 +1,22 @@
+--- a/Sources/_CWasmKit/include/_CWasmKit.h	2026-10-22 16:03:15
++++ b/Sources/_CWasmKit/include/_CWasmKit.h	2026-10-22 16:03:15
+@@ -10,6 +10,10 @@
+ 
+ #include "Platform.h"
+ 
++// MSVC's C compiler has none of clang's atomic builtins: the atomics and
++// the epoch counter are Swift's (through clang's importer) and no C file's,
++// so a C file MSVC compiles goes without them.
++#if !(defined(_MSC_VER) && !defined(__clang__))
+ // MARK: - Hardware Atomic Operations for Wasm Shared Memory
+ 
+ #if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
+@@ -71,6 +75,8 @@
+     __atomic_fetch_add(counter, 1, __ATOMIC_RELAXED);
+ }
+ 
++#endif
++
+ // MARK: - Execution Parameters
+ // See ExecutionContext.swift for more information about each execution
+ // parameter.

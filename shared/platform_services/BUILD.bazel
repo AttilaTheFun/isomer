@@ -2,7 +2,7 @@
 # and every host injects — the keychain, OAuth, timers, analytics,
 # configuration, the image picker, device motion — as swift_ffi
 # @ExportedInterfaces implemented by each host (Security and AppKit/UIKit on
-# Apple, Kotlin on Android, the browser on the web, the WAMR C host on
+# Apple, Kotlin on Android, the browser on the web, the Swift wasm hosts on
 # Linux/Windows). Networking, files and preferences are Foundation's
 # (URLSession, FileManager, UserDefaults), not services, since 0.31.
 # The C ABI is macro-expanded into :platform_services (swift_ffi v3), so
@@ -11,13 +11,11 @@
 #
 #   :platform_services        — the annotated module (guest / compiled app)
 #   :platform_services_host   — native swift-host-wasm bindings (WasmView hosts)
-#   :platform_services_c_host — native c-host-wasm bindings (the WAMR C host)
 #   //apple/libraries/platform_services_native — the Foundation implementations
 #   conformed to these protocols for in-process Apple hosts; the browser's
 #   implementations ship in the runtime (runtime/platform_services.js).
 
 load("@rules_swift//swift:swift.bzl", "swift_library")
-load("//swift_ffi/rules:c_host_library.bzl", "c_host_library")
 load("//swift_ffi/rules:swift_wasm_library.bzl", "swift_wasm_library")
 
 package(default_visibility = ["//visibility:public"])
@@ -51,12 +49,27 @@ swift_wasm_library(
         "@platforms//os:macos": [],
         "@platforms//os:ios": [],
         "@platforms//os:android": [],
+        "@platforms//os:linux": [],
+        "@platforms//os:windows": [],
         "//conditions:default": ["@platforms//:incompatible"],
     }),
 )
 
-c_host_library(
-    name = "platform_services_c_host",
-    module_name = "PlatformServices",
-    swift = ":platform_services",
+# The Foundation implementations as a native host's dependency table
+# (nativePlatformDependencies): what the Linux and Windows wasm hosts inject.
+swift_library(
+    name = "native_dependencies",
+    package_name = "isomer",
+    srcs = [":native_srcs"] + glob(["native_host/*.swift"]),
+    module_name = "IsomerNativePlatformServices",
+    target_compatible_with = select({
+        "@platforms//os:macos": [],
+        "@platforms//os:linux": [],
+        "@platforms//os:windows": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    deps = [
+        ":platform_services_host",
+        "//swift_ffi/runtime/swift_wasm_host",
+    ],
 )

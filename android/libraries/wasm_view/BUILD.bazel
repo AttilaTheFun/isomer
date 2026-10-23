@@ -1,68 +1,62 @@
-load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("//swift_ffi/rules:kt_swift_library.bzl", "kt_swift_library")
 
 package(default_visibility = ["//visibility:public"])
 
-# The WAMR JNI engine: the C WAMR host (//shared/wamr_host) exposed to Kotlin
-# as libiso_wamr_jni.so. This is the compiled-Swift-FREE Android "wasm" engine
-# — because WAMR is a C interpreter, a wasm feature bundle ships with NO Swift
-# .so in the app (the stdlib lives once, inside the bundle). It replaces the
-# WasmKit `wasm_host_bridge` path below. Android-only (needs the NDK's jni.h).
-cc_binary(
-    name = "libiso_wamr_jni.so",
-    srcs = [
-        "jni/iso_wamr_gles.c",
-        "jni/iso_wamr_jni.c",
-        # WasiCommand: a WASI command module (a compiler) run in the same
-        # runtime, for the Android Playground's compile.
-        "jni/iso_wasi_command_jni.c",
+# The engine: WasmKit under the shared feature runtime, as a Swift library
+# of its own (libwasm_engine_bindings.so) with a generated Kotlin bridge
+# (WasmEngineBridge, :wasm_engine_bindings) whose `wasmKit*` functions
+# kotlin/.../WasmKitRuntime.kt calls. An app that runs reactors depends on
+# both (the Kotlin bindings, and :engine_native for the .so). A process runs
+# reactors or the app's compiled Swift, not both: each library carries its
+# own Swift runtime and libdispatch (the Playground's builds run in a process
+# of their own).
+swift_library(
+    name = "engine",
+    package_name = "isomer",
+    srcs = ["engine/WasmKitEngine.swift"],
+    copts = [
+        # @_extern for libdispatch's main-queue hooks.
+        "-enable-experimental-feature",
+        "Extern",
     ],
-    # iso_wamr_gles.c binds a GPU reactor's "env" gl* imports to real OpenGL
-    # ES — the native GPU implementation the wasm module gets injected with.
-    linkopts = ["-lGLESv2"],
-    linkshared = True,
-    linkstatic = True,
+    module_name = "WasmEngine",
     target_compatible_with = ["@platforms//os:android"],
     deps = [
-        "//shared/wamr_host:iso_wamr",
-        "//tools/wasm/wasi_command",
+        "//shared/wasm_host",
+        "//shared/wasm_host:wasmkit_runtime",
+        "//swift_ffi/runtime/swift_wasm_host",
+        "//swift_ffi/swift_ffi",
     ],
 )
 
-# Wraps the .so as a src so an android_binary packages it into lib/<abi>/.
+kt_swift_library(
+    name = "wasm_engine_bindings",
+    java_package = "dev.isomer.runtime",
+    swift = ":engine",
+    tags = ["manual"],
+)
+
 cc_library(
-    name = "wamr_jni",
-    srcs = [":libiso_wamr_jni.so"],
+    name = "engine_native",
+    srcs = [":libwasm_engine_bindings.so"],
+    tags = ["manual"],
     target_compatible_with = ["@platforms//os:android"],
 )
 
-
-# The Compose @Composable surface (WasmView) + Kotlin BundleProvider, compiled
-# per-app alongside the generated bindings by `isomer_wasm_android_library`
-# (tools/android/defs.bzl); the package is dev.isomer.runtime so it resolves
-# the bindings + the existing Compose interpreter (FlatTree/ComposeRenderer).
 filegroup(
     name = "runtime_kotlin",
     srcs = glob(["kotlin/**/*.kt"], allow_empty = True),
 )
 
-# The Compose-FREE engine surface for GPU (self-drawing) reactors: the WAMR
-# bridge + the GLSurfaceView host. A wasm+GPU app compiles these with
-# //android/libraries/swift_ui:host_services_kotlin and nothing else — no
-# Compose, no compiled Swift.
-filegroup(
-    name = "gpu_runtime_kotlin",
-    srcs = [
-        "kotlin/dev/isomer/runtime/WamrBridge.kt",
-        "kotlin/dev/isomer/runtime/WasmEngine.kt",
-        "kotlin/dev/isomer/runtime/WasmGpuView.kt",
-    ],
-)
+# The engine's Kotlin alone (WasmKitRuntime over the generated bridge): for
+# an app that drives a reactor without WasmView.
 
-# Just the WAMR engine bridge (Compose-free).
 filegroup(
     name = "engine_kotlin",
     srcs = [
-        "kotlin/dev/isomer/runtime/WamrBridge.kt",
         "kotlin/dev/isomer/runtime/WasmEngine.kt",
+        "kotlin/dev/isomer/runtime/WasmKitRuntime.kt",
     ],
 )

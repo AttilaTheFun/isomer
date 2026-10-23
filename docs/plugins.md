@@ -7,36 +7,26 @@ app (or a third-party consumer) swaps any of these without forking:
 
 | Seam | Level | Interface | Registration | Default |
 | --- | --- | --- | --- | --- |
-| wasm AOT compiler | swift_ffi (build) | wamrc-shaped CLI (`[flags] -o out in`) | `--@isomer//swift_ffi:wasm_aot_compiler=<label>` | wamrc |
-| Wasm runtime | swift_ffi / isomer | `WasmRuntime` (launch/call/read/write) | `WasmRuntimeRegistry.register { … }` | WAMR |
+| Wasm runtime | swift_ffi / isomer | `WasmRuntime` (launch/call/read/write) | `WasmRuntimeRegistry.register { … }` | WasmKit |
 | Bundle delivery | swift_ffi | `WasmBundleProvider` (initial + update stream) | pass to `IsomerView` / `WasmView` | `AppBundleProvider` |
 | GPU device | swift_gpu | `GPUDevice` (+ `GPURenderPass`) | inject via the platform bridge / renderer surface | Metal / GLES / WebGPU |
 | Renderer | isomer | `TreeRenderer` (`render(tree:)`) | `Renderer.bind(_:)` before `Runtime.start` | per-platform component system |
 
-## Wasm AOT compiler (build-time label flag)
+(The wasm AOT compiler seam, `//swift_ffi:wasm_aot_compiler` with wamrc
+behind it, went with WAMR in 0.38: reactors are interpreted everywhere.)
 
-```
-bazel build ... --@isomer//swift_ffi:wasm_aot_compiler=@my_toolchain//:compiler
-```
-
-The tool is invoked wamrc-style (`<tool> [flags] -o <out> <in.wasm>`); wrap a
-different CLI in a shim script. The artifact must be loadable by the wasm
-runtime the app links — compiler/runtime travel as a PAIR (wamrc `.aot` ↔
-WAMR's AOT loader). The iOS embedded-XIP path stays wamrc-pinned (its
-zero-relocation guarantee is wamrc-specific).
-
-## Wasm runtime (four engines behind one seam)
+## Wasm runtime (three engines behind one seam)
 
 ```swift
-WasmRuntimeRegistry.register { WamrRuntime() }      // the shipping default
-WasmRuntimeRegistry.register { WasmKitRuntime() }   // WasmKit (Apple; threaded reactors)
+WasmRuntimeRegistry.register { WasmKitRuntime() }   // the shipping default (every native host; threaded reactors)
 WasmRuntimeRegistry.register { JSCRuntime() }       // JavaScriptCore's wasm
 WasmRuntimeRegistry.register { WasmEdgeRuntime() }  // WasmEdge (macOS dev)
 ```
 
 The core host (`//shared/wasm_host`) depends on NO engine; isomer's
-Apple host registers WAMR via `registerDefault` (an app's own `register`
-wins). An engine is ~200 lines: conform `WasmRuntime`, bind WASI + the
+Apple host registers WasmKit via `registerDefault` (an app's own `register`
+wins). WAMR (`WamrRuntime`) was the default until 0.38, when it was
+removed. An engine is ~200 lines: conform `WasmRuntime`, bind WASI + the
 `iso_hot` imports — including the two trailing swiftcc context i32s every
 SwiftWasm `@_extern(wasm)` import carries — and pass the conformance suite:
 
@@ -46,11 +36,11 @@ bazel test //tests/wasm_engines:wasm_engine_tests
 
 which drives the real tap-counter reactor through launch → first frame →
 tap → updated tree on every engine. Measured on an M-series MacBook (macOS,
-same reactor, same suite):
+same reactor, same suite; before 0.38, WasmKit not measured here then):
 
 | engine | startup | tap | notes |
 | --- | --- | --- | --- |
-| WAMR | 398 ms | 6.9 ms | fast interpreter — the shipping default |
+| WAMR (removed in 0.38) | 398 ms | 6.9 ms | fast interpreter — the shipping default then |
 | JSC | 562 ms | 5.4 ms | a JS runtime as the wasm runtime; JIT tiers |
 | WasmEdge | **182 ms** | 8.4 ms | interpreter — fastest cold start |
 

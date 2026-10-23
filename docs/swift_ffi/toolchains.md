@@ -38,10 +38,11 @@ doc.
   module must not use rules_js's `npm` extension (flatbuffers hands it a tag
   rules_js 3 rejects), so the web example declares the Node APIs it uses in
   `node.d.ts`.
-- **WAMR** is vendored once, as `@wamr` (a main-pinned commit; 2.4.5 targets
-  LLVM 18 while `//:wamrc` AOT builds against the BCR `llvm` module). The
-  whole downstream stack consumes `@isomer//swift_ffi/runtime/wamr` — see
-  [structure.md](structure.md).
+- **WasmKit** (MODULE.bazel's `wasmkit`, the AttilaTheFun/WasmKit fork,
+  built by `tools/wasmkit/BUILD.wasmkit.bazel`) is the engine Isomer's native
+  hosts and `//tools/wasm/wasi_run` run reactors and WASI commands on. WAMR,
+  vendored as `@wamr` with wamrc built against the BCR `llvm` module until
+  0.38, is gone, and the `llvm` dependency with it.
 - The hermetic Android emulator image and Electron are declared at the bottom
   of `MODULE.bazel`.
 

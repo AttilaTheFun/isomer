@@ -1,0 +1,23 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+# Runs a WASI command module under WasmKit (MODULE.bazel's `wasmkit`, the
+# engine every native host runs reactors on): arguments, environment,
+# preopened directories, the guest's stdout/stderr and exit code. The checks
+# built for wasm run under it (//foundation/tests, the Metal translator's,
+# the examples' //tests/sqlite_wasi); it replaced WAMR's `iwasm`
+# (//tools/wasm/wasi_command) in 0.38 and takes its options. A module built
+# for wasm32-wasip1-threads runs with WASI Threads.
+#   bazel run //tools/wasm/wasi_run -- --map-dir=/tmp::/tmp module.wasm args...
+swift_binary(
+    name = "wasi_run",
+    package_name = "isomer",
+    srcs = ["WasiRun.swift"],
+    deps = [
+        "@wasmkit//:WASI",
+        "@wasmkit//:WasmKit",
+        "@wasmkit//:WasmKitWASI",
+        "@wasmkit//:WasmKitWASIThreads",
+    ],
+)

@@ -263,18 +263,6 @@ playground_sample(
 )
 
 apple_resource_group(
-    name = "sample_data",
-    structured_resources = [
-        ":counter_sample",
-        ":game2048_sample",
-        ":hackernews_sample",
-        ":wikipedia_sample",
-        ":meme_sample",
-        ":pokedex_sample",
-    ],
-)
-
-apple_resource_group(
     name = "embedded_toolchain_data",
     structured_resources = glob(
         ["embedded_toolchain/data/**"],
@@ -285,27 +273,15 @@ apple_resource_group(
 swift_library(
     name = "playground_lib",
     srcs = [
-        "Agent.swift",
-        "Auth.swift",
-        "ChatView.swift",
+        # The iPhone's own: the compiler, the web run, the code editor.
         "CodeEditor.swift",
-        "CrashRecorder.swift",
         "EmbeddedCompiler.swift",
-        "HeadlessRun.swift",
-        "HostServices.swift",
-        "HotReload.swift",
-        "LLMClient.swift",
-        "PlaygroundApp.swift",
-        "PlaygroundStore.swift",
-        "PreviewPane.swift",
-        "Projects.swift",
-        "Templates.swift",
-        "RunMonitor.swift",
         "Spawn.swift",
         "ToolchainCompiler.swift",
-        "WebTools.swift",
         "WebRunServer.swift",
-        "//shared/playground_ui:srcs",
+        # The Apple host and the shared shell.
+        "//apple/host:srcs",
+        "//shared/app:srcs",
     ],
     module_name = "PlaygroundApp",
     tags = ["manual"],
@@ -315,10 +291,12 @@ swift_library(
     }),
     deps = [
         "//apple/platform_services_host",
+        "@isomer//apple/libraries/swift_ui:isomer",
+        "@isomer//apple/libraries/wasm_view",
+        "@isomer//gallery",
         "@isomer//shared/platform_services",
         "@isomer//swift_ffi/runtime/swift_wasm_host",
         "@swiftpkg_agent_ui//:AgentUI",
-        "@isomer//apple/libraries/wasm_view",
     ] + select({
         ":embedded_toolchain_enabled": [":embedded_toolchain_libs"],
         "//conditions:default": [],
@@ -356,7 +334,9 @@ ios_application(
     resources = [
         ":playground_sdk",
         ":playground_site",
-        ":sample_data",
+        # The Gallery's images and its reactor ("Run as wasm").
+        "//shared/gallery_reactor:gallery.wasm",
+        "@isomer//gallery:xcassets",
     ] + select({
         ":embedded_toolchain_enabled": [":embedded_toolchain_data"],
         "//conditions:default": [],

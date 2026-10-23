@@ -21,8 +21,8 @@ import UIKit
 
 /// Where what a person picks is put for the app: the folder the host writes
 /// in, and the same folder as the app reads it — its own path for an app
-/// compiled for the device, `/tmp/…` in a wasm guest (the WAMR host maps a
-/// folder of its temporary directory there; WasmView points this at it).
+/// compiled for the device, `/tmp/…` in a wasm guest (the WasmKit host maps
+/// a folder of its temporary directory there; WasmView points this at it).
 public enum IsomerPickedFiles {
     nonisolated(unsafe) public static var folder: (host: URL, app: String) = {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("isomer-picked", isDirectory: true)

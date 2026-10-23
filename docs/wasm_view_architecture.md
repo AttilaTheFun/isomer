@@ -222,7 +222,7 @@ on a single actor (`@MainActor`). Fresh state per feature = fresh Store.
 
 **Ownership.** `WasmView` owns (or is handed) a `WasmViewModel`; the model
 owns a `WasmFeatureRuntime`; the feature runtime owns the engine instance
-(`WasmRuntime`: WAMR, WasmKit, …), created per loaded bundle by an
+(`WasmRuntime`: WasmKit, or an engine the app registers), created per loaded bundle by an
 injected factory — `WasmViewModel(runtime:)` takes it, defaulting to
 `WasmRuntimeRegistry.make(for:)`. A host that wants to pick or configure
 the engine per feature, or to hold the model so it can shut the feature
@@ -238,8 +238,11 @@ must tolerate concurrent callers. Verified by the Playground's
 offscreen run).
 
 **Teardown.** Releasing the view releases the model, which releases the
-engine instance (WAMR: exec env, instance, module, swift_ffi host; a
-refcount destroys the process-global WAMR runtime with the last instance).
+engine instance (WasmKit: store, instance, module, WASI bridge, swift_ffi
+host; a threaded reactor's instance is kept for the life of the process).
+Until 0.38 the engine was WAMR (exec env, instance, module, swift_ffi
+host; a refcount destroyed the process-global WAMR runtime with the last
+instance).
 Two rules keep that true: `WasmView` subscribes to bundle updates with
 `.task`, so a provider whose stream never finishes cannot keep the model
 alive; and closures stored on the model (`onLog`, status callbacks) must
@@ -261,8 +264,8 @@ built before the export existed — torn down immediately).
 guest spinning in synchronous code cannot be cancelled cooperatively; the
 host thread is blocked in the call anyway.
 
-**Memory per instance** (measured 2026-09-06 in the iPhone 17 Pro
-simulator, phys_footprint of the Playground process, a 17.7 MB
+**Memory per instance** (measured 2026-09-06, under WAMR, removed in 0.38
+for WasmKit; not yet measured again; in the iPhone 17 Pro simulator, phys_footprint of the Playground process, a 17.7 MB
 unoptimized feature build with a 16 MiB guest stack):
 
 | engine | before run | run loaded | after release |
@@ -356,7 +359,14 @@ heap) rather than code.
     - **Web** — `<Isomer>` (React), over the existing TS transport, driven
       by a JS `BundleProvider` (`runtime/bundle_provider.js`).
     - **Android** — a Jetpack Compose `@Composable WasmView`
-      (`//android/libraries/wasm_view`), running on **WAMR**, a tiny C
+      (`//android/libraries/wasm_view`). *Since 0.38 it runs on WasmKit, as
+      every native host does: the engine is a Swift library of its own
+      (`:engine`, `engine/WasmKitEngine.swift`, loaded as `:engine_native`)
+      with a generated Kotlin bridge (`:wasm_engine_bindings`) that the
+      Kotlin `WasmKitRuntime` calls; WAMR, its JNI C and `WamrRuntime` are
+      gone. A process runs reactors or the app's compiled Swift, not both:
+      each library carries its own Swift runtime. What follows is how it
+      was built until then.* Until 0.38 it ran on **WAMR**, a tiny C
       WebAssembly interpreter, NOT WasmKit. This is deliberate: Android's "wasm"
       delivery cell must carry **no compiled Swift** (compiled-vs-wasm is an
       exclusive choice on Android; mixing is only free on Apple, where the Swift

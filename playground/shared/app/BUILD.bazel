@@ -1,0 +1,41 @@
+# The Isomer app's shell (App.swift): Projects, Hot Reloaders and the
+# Gallery, written once in SwiftUI and compiled by every platform's app:
+# against Apple's SwiftUI on iOS and macOS, Isomer's on the web, Android,
+# Linux and Windows. What is platform-bound is the host's
+# (PlaygroundHostService, Services.swift) or injected (PlaygroundSurfaces:
+# the run surface, the code editor). An app compiles :srcs with its own
+# @main and depends on :deps' libraries for its platform. The agent chat
+# page itself (transcript + composer) is AgentUI's AgentView, from the
+# agent_ui SwiftPM package (@swiftpkg_agent_ui//:AgentUI).
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(glob(["*.swift"]))
+
+filegroup(
+    name = "srcs",
+    srcs = glob(["*.swift"]) + [":template_sources"],
+)
+
+# The templates' sources, compiled into the app: its store makes new
+# projects from these (TemplateSources.byName, keyed by file name), with
+# no files to read at run time.
+genrule(
+    name = "template_sources",
+    srcs = ["//web/playground_web_application:templates"],
+    outs = ["TemplateSources.swift"],
+    cmd = """
+{
+  echo '// Generated from :templates (BUILD.bazel): the sample apps new projects start from.'
+  echo 'enum TemplateSources {'
+  echo '    static let byName: [String: String] = ['
+  for f in $(SRCS); do
+    printf '        "%s": ####\"\"\"\n' "$$(basename $$f)"
+    cat $$f
+    printf '\n\"\"\"####,\n'
+  done
+  echo '    ]'
+  echo '}'
+} > $@
+""",
+)

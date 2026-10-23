@@ -5,7 +5,7 @@
 // implementations — the same capability the TypeScript runtime gives the web,
 // but for a native host driving an embedded WebAssembly engine.
 //
-// The concrete engine (WasmKit, WAMR, …) is injected as a
+// The concrete engine (WasmKit, …) is injected as a
 // `SwiftFFIWasmEngine`, so this file — like the generated bindings that build
 // on it — has NO WebAssembly dependency. A consumer supplies the engine (e.g. a
 // thin WasmKit adapter); the generated per-module facade (`swift-host-wasm`

@@ -1,7 +1,7 @@
 // Entry point for the Windows **wasm** example cell. Unlike the compiled cell
 // (whose `@main` is the shared `ExampleApplication`), here the UI lives in an
 // `example_full.wasm` reactor: this .exe loads those bytes and hands them to
-// `WindowsWasmApp`, which runs them under WAMR and draws the decoded tree
+// `WindowsWasmApp`, which runs them on WasmKit and draws the decoded tree
 // through SwiftGPU/D3D11. The reactor path is passed as the first argument —
 // build it where the SwiftWasm toolchain runs (WSL/Linux/macOS:
 // `bazel build -c opt //examples/wasm/example_full_feature:example_full.wasm`)
@@ -11,7 +11,7 @@
 // comes from that server and the loop polls it for rebuilds, so one server
 // drives this app and a Linux wasm cell side by side.
 
-import IsomerWasmHost  // WindowsWasmApp, over the swift_ui_wasm module
+import IsomerDesktopWasmHost  // LinuxWasmApp / WindowsWasmApp: the reactor on WasmKit in a window
 
 #if canImport(WinSDK)
 import WinSDK
@@ -21,6 +21,7 @@ import ucrt
 #endif
 
 @main
+@MainActor
 struct WasmCellMain {
     static func main() {
         let arguments = CommandLine.arguments

@@ -4,14 +4,15 @@ package(default_visibility = ["//visibility:public"])
 
 # The `SwiftUI` module for the native Linux **wasm delivery cell**: the same
 # shared core + SDL2/OpenGL host bridge as //linux/libraries/swift_ui:swift_ui,
-# plus `LinuxWasmHost.swift` and the `CIsoWamr` (WAMR C host) dep, so the wasm
-# example binary can drive an `example_full.wasm` reactor under WAMR and draw its
+# plus `LinuxWasmHost.swift` and the engine (WasmKit, under the shared
+# feature runtime), so the wasm example binary can drive an `example_full.wasm`
+# reactor and draw its
 # decoded tree through the same SwiftGPU renderer. It carries the SAME
 # `module_name = "SwiftUI"` (so app code does `import SwiftUI` unchanged) and
 # therefore lives in its OWN package: two same-named swiftmodules in one package
 # collide on the `SwiftUI.swiftmodule` output path. `LinuxHost.swift` +
 # `renderer.h` are reused from the sibling package (exported there); the compiled
-# `swift_ui` never links the WAMR interpreter / swift_ffi C host.
+# `swift_ui` never links an interpreter.
 _LINUX_COPTS = [
     "-import-objc-header",
     "$(location //linux/libraries/swift_ui:renderer.h)",
@@ -34,7 +35,13 @@ swift_library(
         "//shared/isomer_swift_ui",
         "//frameworks:for_core",
         "//linux/libraries/swift_ui:renderer",
-        "//shared/wamr_host:iso_wamr",  # the WAMR C host, as Swift module CIsoWamr
+        # The engine: WasmKit under the shared feature runtime.
+        "//shared/wasm_host",
+        "//shared/wasm_host:wasmkit_runtime",
+        # Foundation's networking for the reactor (URLSession over
+        # FoundationNetworking), beneath the host's own dependencies.
+        "//shared/isomer_network_host/urlsession",
+        "//swift_ffi/runtime/swift_wasm_host",
         "@flatbuffers//swift",
         "//swift_gpu/linux:swift_gpu",
     ] + [
@@ -45,13 +52,17 @@ swift_library(
     ],
 )
 
-# IsomerWasmHost: the cell's public entry (LinuxWasmApp) for a host program,
+# IsomerDesktopWasmHost: the cell's public entry (LinuxWasmApp) for a host program,
 # over the `SwiftUI` module above, whose loop is package.
 swift_library(
     name = "host",
     package_name = "isomer",
     srcs = ["LinuxWasmApp.swift"],
-    module_name = "IsomerWasmHost",
+    module_name = "IsomerDesktopWasmHost",
     target_compatible_with = ["@platforms//os:linux"],
-    deps = [":swift_ui_wasm"],
+    deps = [
+        ":swift_ui_wasm",
+        "//shared/platform_services:native_dependencies",
+        "//swift_ffi/runtime/swift_wasm_host",
+    ],
 )

@@ -1,7 +1,7 @@
 // Entry point for the Linux **wasm** example cell. Unlike the compiled cell
 // (whose `@main` is the shared `ExampleApplication`), here the UI lives in an
 // `example_full.wasm` reactor: this binary loads those bytes and hands them to
-// `LinuxWasmApp`, which runs them under WAMR and draws the decoded tree through
+// `LinuxWasmApp`, which runs them on WasmKit and draws the decoded tree through
 // SwiftGPU. The reactor path is passed as the first argument (the
 // `run_linux_wasm.sh` wrapper resolves it from the runfiles tree).
 //
@@ -10,13 +10,14 @@
 // one server drives this app (and a Windows wasm cell) side by side. Falls back
 // to the packaged reactor if the server is unreachable at launch.
 
-import IsomerWasmHost  // LinuxWasmApp, over the swift_ui_wasm module
+import IsomerDesktopWasmHost  // LinuxWasmApp / WindowsWasmApp: the reactor on WasmKit in a window
 
 #if canImport(Glibc)
 import Glibc
 #endif
 
 @main
+@MainActor
 struct WasmCellMain {
     static func main() {
         let arguments = CommandLine.arguments

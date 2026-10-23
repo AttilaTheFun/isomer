@@ -5,8 +5,9 @@ load("@isomer//tools/platforms:transition.bzl", "transition_binary")
 # swift_sql's SQLite as a guest links it (SwiftSQL over CSwiftSQL, the
 # amalgamation built for WASI, from the Swift package through
 # rules_swift_package_manager) in a WASI file: built for wasm and run under
-# WAMR's command runner with the test's temporary directory as the guest's
-# /tmp (SQLiteFileCheck.swift says what it checks). It was the typed SQL library's
+# WasmKit's command runner (@isomer//tools/wasm/wasi_run) with the test's
+# temporary directory as the guest's /tmp (SQLiteFileCheck.swift says what it
+# checks). It was the typed SQL library's
 # until that left Isomer (0.34), then isomer's own //tests/sqlite_wasi.
 swift_binary(
     name = "sqlite_file_check",
@@ -29,9 +30,9 @@ transition_binary(
 )
 
 # The same, built for a threaded reactor (wasm32-wasip1-threads: SQLite
-# thread-safe over the threads SDK's pthreads). Built by `bazel build //...`,
-# not run: WAMR's command runner here has no wasi-threads (and as test data
-# its runfile would take the single-threaded module's name).
+# thread-safe over the threads SDK's pthreads), run with WASI Threads by
+# :sqlite_file_threads_test (a test of its own: as data beside the
+# single-threaded module its runfile would take the same name).
 transition_binary(
     name = "sqlite_file_check_wasm_threads",
     binary = ":sqlite_file_check",
@@ -43,11 +44,25 @@ sh_test(
     size = "small",
     srcs = ["@isomer//foundation/tests:run_foundation_check.sh"],
     args = [
-        "$(rootpath @isomer//tools/wasm/wasi_command:iwasm)",
+        "$(rootpath @isomer//tools/wasm/wasi_run)",
         "$(rootpath :sqlite_file_check_wasm)",
     ],
     data = [
         ":sqlite_file_check_wasm",
-        "@isomer//tools/wasm/wasi_command:iwasm",
+        "@isomer//tools/wasm/wasi_run",
+    ],
+)
+
+sh_test(
+    name = "sqlite_file_threads_test",
+    size = "small",
+    srcs = ["@isomer//foundation/tests:run_foundation_check.sh"],
+    args = [
+        "$(rootpath @isomer//tools/wasm/wasi_run)",
+        "$(rootpath :sqlite_file_check_wasm_threads)",
+    ],
+    data = [
+        ":sqlite_file_check_wasm_threads",
+        "@isomer//tools/wasm/wasi_run",
     ],
 )

@@ -19,9 +19,6 @@ swift_library(
         # it breaks the Android .so. Each platform supplies its own provider (web:
         # bundle_provider.js; Android: Kotlin WasmBundleProvider).
         "BundleProvider.swift",
-        # Foundation's networking for the reactor: URLSession as
-        # IsomerNetworkHost's hosts, injected by WasmViewModel.
-        "NetworkHosts.swift",
         "WasmViewModel.swift",
         "WasmView.swift",
     ],
@@ -36,12 +33,11 @@ swift_library(
         # The Apple host's batteries-included default engine (registered via
         # WasmRuntimeRegistry.registerDefault; apps can register their own
         # first). The core //shared/wasm_host is engine-free.
-        "//shared/wasm_host:wamr_runtime",
+        "//shared/wasm_host:wasmkit_runtime",
         "//shared/wasm_host",
-        # IsomerNetworkHost's interfaces as a native host implements them
-        # (generated; imported, not re-exported: its `Dependencies` would
-        # meet an app's own).
-        "//shared/isomer_network_host:wasm_host",
+        # Foundation's networking for the reactor: URLSession as
+        # IsomerNetworkHost's hosts, injected by WasmViewModel.
+        "//shared/isomer_network_host/urlsession",
     ] + select({
         # The iOS GPU renderer (SwiftGPU over Metal) for `WasmView(renderer: .gpu)`.
         "@platforms//os:ios": ["//apple/libraries/gpu_tree_view"],

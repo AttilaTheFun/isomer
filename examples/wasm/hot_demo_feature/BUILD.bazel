@@ -72,8 +72,7 @@ transition_binary(
     tags = ["manual"],
 )
 
-# Config-selected dev reactor for the Apple partial-wasm hosts: `.wasm` by
-# default, native `.aot` under `--config=release`.
+# The dev reactor for the Apple partial-wasm hosts.
 reactor_artifact(
     name = "hot_demo",
     wasm = ":hot_demo.wasm",
@@ -171,7 +170,7 @@ transition_binary(
     tags = ["manual"],
 )
 
-# Config-selected RELEASE reactor the Android partial APK packages.
+# The RELEASE reactor the Android partial APK packages.
 reactor_artifact(
     name = "hot_demo_release",
     wasm = ":hot_demo_release.wasm",

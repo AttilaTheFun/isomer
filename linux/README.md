@@ -8,7 +8,7 @@ how the SwiftUI is *delivered*:
 | Cell | Target | SwiftUI delivery |
 | --- | --- | --- |
 | **compiled** | `//examples/linux/example_full_opengl_compiled_linux_application` | linked into the ELF as native Swift |
-| **wasm** | `//examples/linux/example_full_opengl_wasm_linux_application` | an `example_full.wasm` reactor run under WAMR (interp, or the bundled `.aot` under `--config=release`; an explicit reactor path as `argv[1]` wins) |
+| **wasm** | `//examples/linux/example_full_opengl_wasm_linux_application` | an `example_full.wasm` reactor run under WasmKit (the bundled one; an explicit reactor path as `argv[1]` wins) |
 
 Benchmark cells (docs/benchmarks.md#linux): the shared tap-counter as
 `//examples/linux/tap_counter_compiled_linux_application` (compiled Swift)
@@ -28,8 +28,8 @@ for how the wasm cell works.
 | Flag | Effect |
 | --- | --- |
 | `--config=map` | links swift_map (OpenGL) → the `Map` tab renders real OpenStreetMap tiles (swift_map is a dev dependency, example-apps-only; placeholder pane without it) |
-| `--config=release` | `-c opt --define=wamr_aot=1`; the wasm cell bundles a wamrc-produced native x86_64 `.aot` (wamrc builds on macOS **and Linux** hosts, so the whole release build runs in WSL/CI; measured: load 115 → 17 ms, startup 249 → 150 ms) |
-| *(none)* | debug loop: interpreted wasm, placeholder maps |
+| `--config=release` | `-c opt` (the wasm cell's reactor stays interpreted `.wasm` under WasmKit; WAMR's `.aot` tier was removed in 0.38) |
+| *(none)* | debug loop: placeholder maps |
 
 ## Prerequisites
 
@@ -80,7 +80,7 @@ bazel run //examples/linux/example_full_opengl_wasm_linux_application
 
 The `run_linux_wasm.sh` wrapper points `LD_LIBRARY_PATH` at the swift.org runtime
 and passes the bundled reactor as the first argument; the ELF loads those bytes
-under WAMR and draws the decoded tree through the same OpenGL renderer. The first
+under WasmKit and draws the decoded tree through the same OpenGL renderer. The first
 build cross-compiles the reactor via SwiftWasm (a few minutes); later builds are
 incremental.
 

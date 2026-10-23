@@ -40,8 +40,7 @@ _FIXED_RUNTIME_EXPORTS = [
 # What a host looks up in a reactor by name, for `exports = "host"` and
 # `wasm_export_list`: swift_ffi's entries (generated and fixed), the
 # reactor's initializer, and what the runtimes read (the heap's start and
-# the data's end, between which WAMR puts the stack it is given; the
-# allocator; the function table).
+# the data's end; the allocator; the function table).
 HOST_ENTRIES = [
     "swift_ffi_*",
     "_initialize",
@@ -117,7 +116,7 @@ def swift_wasm_reactor(
 
     The same reactor any wasm host loads — the browser (`ts_swift_wasm_library`
     bundles its own), a native Swift host (`swift_wasm_library`), or a plain C
-    host driving WAMR (`//swift_ffi/runtime/c_host_wamr`). `c_host_library`
+    host driving an engine of its own. `c_host_library`
     deliberately builds no reactor (a C host with no Swift usually gets one from
     the app that owns it), so a self-contained C-host application pairs this with
     it. `module_name` is unused (kept for call-site compatibility); `linkopts`

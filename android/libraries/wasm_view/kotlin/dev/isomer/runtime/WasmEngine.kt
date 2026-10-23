@@ -1,7 +1,7 @@
 package dev.isomer.runtime
 
 // The Android engine seam — the Kotlin peer of Apple's `WasmRuntimeRegistry`:
-// `WasmView` drives whatever engine its factory produces. `WamrRuntime` is
+// `WasmView` drives whatever engine its factory produces. `WasmKitRuntime` is
 // the batteries-included default; an app may supply its own.
 interface WasmEngine {
     fun start(width: Double, height: Double)

@@ -89,7 +89,9 @@ static_site = rule(
         "index": attr.label(allow_single_file = [".html"], mandatory = True),
         "wasm": attr.label(allow_single_file = [".wasm"], mandatory = True),
         # Extra root-level pages and scripts (a page's workers / ES modules).
-        "extra_pages": attr.label_list(allow_files = [".html", ".js"]),
+        # Pages and scripts at the site's root, and reactors the page runs
+        # beside its own (the Isomer app's gallery.wasm).
+        "extra_pages": attr.label_list(allow_files = [".html", ".js", ".wasm"]),
         "runtime_js": attr.label_list(allow_files = [".js"]),
         "root_js": attr.label_list(allow_files = [".js"]),
         "assets": attr.label_list(allow_files = True),
@@ -398,52 +400,20 @@ def isomer_web_app(
         visibility = visibility,
     )
 
-def reactor_artifact(name, wasm, target = None, visibility = None):
-    """Config-selected reactor delivery: the interpreted `.wasm` by default, or a
-    wamrc-produced native `.aot` under `--define wamr_aot=1` (`--config=release`).
+def reactor_artifact(name, wasm, visibility = None):
+    """The reactor a host bundles: an alias `<name>` to `wasm`, the reactor's
+    `transition_binary` (its output is `<x>.wasm`).
 
-    `wasm` is the reactor's `transition_binary` (its output is `<x>.wasm`). Emits:
-      * `<name>.aot`  the wamrc-lowered native reactor (built only under the AOT
-                      config; wamrc is an //swift_ffi/runtime/wamr tool).
-      * `<name>`      an alias -> the `.aot` under //tools/wasm:aot, else `wasm`.
-
-    Apps put `:<name>` in their resources/assets. Name it after the resource the
-    host looks up (e.g. `example_full`) so the bundled basename is a stable
-    `example_full.{wasm,aot}`; WasmServiceBundle.packaged() tries `.aot` first,
-    then `.wasm`, and the runtime dispatches on the file's magic bytes regardless.
-
-    `target` is the wamrc `--target` triple. Default = wamrc's host triple
-    (arm64-apple on the macOS build host, which is also correct for Android arm64
-    and Apple). Pass an explicit triple (e.g. "x86_64") for the desktop
-    Linux/Windows cells. NOTE: wamrc currently only runs on a macOS build host, so
-    the AOT (release) build of any cell must be produced on macOS.
+    Apps put `:<name>` in their resources/assets, named after the resource the
+    host looks up (e.g. `example_full`). Until 0.38 `--config=release` swapped
+    in a wamrc-lowered native `.aot` here; WasmKit, the engine on every host
+    since, interprets the `.wasm` itself.
     """
-    native.genrule(
-        name = name + "_aot",
-        srcs = [wasm],
-        outs = [name + ".aot"],
-        cmd = "$(location %s)" % Label("//swift_ffi/runtime/wamr:wamrc") + " " +
-              ("--target=%s " % target if target else "") +
-              "-o $@ $<",
-        tools = [Label("//swift_ffi/runtime/wamr:wamrc")],
-        # The .aot only exists under the AOT config; keep `bazel build //...` in a
-        # default (interp) build from demanding wamrc / fetching LLVM.
-        target_compatible_with = select({
-            Label("//tools/wasm:aot"): [],
-            "//conditions:default": ["@platforms//:incompatible"],
-        }),
-        tags = ["manual"],
-        visibility = visibility,
-    )
     native.alias(
         name = name,
-        actual = select({
-            Label("//tools/wasm:aot"): ":" + name + "_aot",
-            "//conditions:default": wasm,
-        }),
+        actual = wasm,
         visibility = visibility,
     )
-
 
 def _assemble_directory_impl(ctx):
     out = ctx.actions.declare_directory(ctx.label.name)
@@ -638,103 +608,6 @@ wasm_sdk_bundle = rule(
           "link-with SDK an out-of-band toolchain (the Playground app) uses " +
           "to build user Swift code into a `iso_hot` reactor without bazel.",
 )
-
-# embedded_xip_aot's wamrc run; %s = the target's flags (see there), $$OPT
-# the optimization level's (_XIP_OPT).
-_XIP_CMD = """
-out=$$($(location WAMRC) --xip --enable-builtin-intrinsics=constop $$OPT %s -o $@ $< 2>&1) || { echo "$$out" >&2; exit 1; }
-if echo "$$out" | grep -q "text relocations"; then
-    echo "$$out" >&2
-    echo "embedded_xip_aot: $@ has text relocations, which a read-only __TEXT segment cannot take" >&2
-    exit 1
-fi
-""".replace("WAMRC", str(Label("//swift_ffi/runtime/wamr:wamrc")))
-
-# `--define wamr_aot_opt=<level>` (//tools/wasm:aot_opt_*): wamrc's
-# --opt-level; unset, its default, 3.
-_XIP_OPT = select({
-    Label("//tools/wasm:aot_opt_0"): "OPT=--opt-level=0\n",
-    Label("//tools/wasm:aot_opt_1"): "OPT=--opt-level=1\n",
-    Label("//tools/wasm:aot_opt_2"): "OPT=--opt-level=2\n",
-    "//conditions:default": "OPT=\n",
-})
-
-def embedded_xip_aot(name, wasm, visibility = None):
-    """AOT wasm for platforms that ban runtime code loading (iOS): compiles
-    `wasm` with `wamrc --xip` (indirect mode — no text relocations, executes
-    in place from read-only memory) and emits a cc_library that links the
-    image into the binary's signed __TEXT segment, where it is executable by
-    construction. Read it back with //tools/wasm:embedded_aot_shim's
-    `iso_embedded_aot_data` and run it via `iso_wamr_create_in_place`
-    (`WamrRuntime.embeddedImage` on the Swift engine seam).
-
-    This is the fast tier of the hybrid delivery policy: bundled features run
-    AOT; dynamically delivered bundles (e.g. an opt-in hotfix) run the
-    interpreter — data, not code, so iOS allows them.
-
-    `wasm` is the reactor's transition_binary. Declares `<name>` (cc_library).
-    """
-    native.genrule(
-        name = name + "_image",
-        srcs = [wasm],
-        outs = [name + ".aot"],
-        # --enable-builtin-intrinsics=constop routes f32/f64/i32/i64 constants
-        # through WAMR's runtime constant table instead of .rodata.cst* pools —
-        # otherwise the text is full of absolute/PC-relative relocations to
-        # those pools (the XIP doc's "known issue") which the loader would have
-        # to patch, impossible in a signed read-only __TEXT segment. The image
-        # must load with ZERO text relocations.
-        #
-        # On arm64, more (found running Visor's client, an 80 MB reactor,
-        # where the tap counter had been fine). wamrc's pipeline always runs
-        # LLVM's loop and SLP vectorizers, and the NEON code they make loads
-        # its masks from .rodata.cst16 (ADRP + LDR q: text relocations again;
-        # the loader dies writing to __TEXT). -neon leaves LLVM no vector
-        # registers to vectorize into; scalar floating point stays
-        # (fp-armv8). Swift's wasm SDK emits no wasm SIMD (no simd128), so
-        # --disable-simd costs nothing and makes a module that does fail here
-        # rather than on a device. --cpu=apple-a11 is the iOS 16 floor: the
-        # default is the building Mac's CPU (apple-m4 here), whose newer
-        # instructions an older iPhone would trap on. (x18, which Apple
-        # platforms keep for the OS, wamrc already reserves on a Mac.)
-        #
-        # wamrc only warns about text relocations; here they fail the build.
-        cmd = _XIP_OPT + select({
-            "@platforms//cpu:aarch64": _XIP_CMD % "--target=aarch64v8 --cpu=apple-a11 --cpu-features=-neon --disable-simd",
-            "//conditions:default": _XIP_CMD % "",
-        }),
-        tools = [Label("//swift_ffi/runtime/wamr:wamrc")],
-        tags = ["manual"],
-    )
-    native.genrule(
-        name = name + "_asm",
-        srcs = [":" + name + "_image"],
-        outs = [name + ".s"],
-        # .incbin resolves at ASSEMBLY time with CWD = execroot, so bake the
-        # execpath in. 2^14 alignment = the 16 KiB Apple page size, preserving
-        # the image's internal alignments as if it were file-mapped.
-        cmd = """cat > $@ <<EOF
-	.section __TEXT,__iso_aot
-	.globl _iso_embedded_aot_start
-	.globl _iso_embedded_aot_end
-	.p2align 14
-_iso_embedded_aot_start:
-	.incbin "$(execpath :%s_image)"
-_iso_embedded_aot_end:
-EOF""" % name,
-        tags = ["manual"],
-    )
-    cc_library(
-        name = name,
-        srcs = [":" + name + "_asm"],
-        # The .incbin input, needed when the .s is assembled.
-        additional_compiler_inputs = [":" + name + "_image"],
-        linkstatic = True,
-        alwayslink = True,
-        tags = ["manual"],
-        visibility = visibility,
-    )
-
 
 def _combine_sites_impl(ctx):
     out = ctx.actions.declare_directory(ctx.label.name)

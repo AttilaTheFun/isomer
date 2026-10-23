@@ -10,16 +10,16 @@ had started importing, and once the installed APK was a stale build that
 lacked it though the source was right. Neither shows in a compile; both show
 the moment the page is loaded. So:
 
-android  Builds the APK the way it is installed (-c opt), installs it on the
-         hermetic emulator (emulator-5554 only: another session's is its
-         own), or on the test phone ANDROID_SERIAL names (the root-only
-         template check is skipped there), opens the 2048 project and
+android  Builds the APK the way it is installed (-c opt), installs it on an
+         emulator leased from oss (adb connected to it), or on the test
+         phone ANDROID_SERIAL names (the root-only template check is skipped
+         there), opens the 2048 project from the sidebar and
          - taps "Run on the web": the app compiles the project ON the
            emulator and serves the page; the page is loaded from the host in
            headless Chrome (adb forward) and must show the board with no
            failed request, uncaught exception or console error;
          - taps "Run": the build must start in its own window (WasmView's
-           "[wasm-init] done" line, WAMR's interpreter; no fatal signal) and
+           "[wasm-init] done" line, WasmKit's interpreter; no fatal signal) and
            show the board;
          then runs every other template on the web the same way (each must
          compile on the emulator, the @Observable ones with the staged macro
@@ -28,9 +28,9 @@ android  Builds the APK the way it is installed (-c opt), installs it on the
          app's files and relaunches: the first must take this build's
          template, the second keep its source (TemplateHistory).
 ios      Builds the simulator app (the embedded compiler when it is staged),
-         installs it on this harness's own simulator (`playground-e2e`),
-         and taps "Run on the web" in the app: the app compiles its first
-         project in-process, and the page opens in the app's Safari view
+         installs it on a simulator leased from oss, opens the Pokédex
+         project from the sidebar and taps "Run on the web" in the app: the
+         app compiles it in-process, and the page opens in the app's Safari view
          (WebKit, as on the phone) and must show the project; then the
          template check, on projects from before the store kept hashes; then
          compiles every project with the app's compiler (ISO_PLAYGROUND_AUTORUN
@@ -56,7 +56,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 ISOMER = os.environ.get("ISOMER", os.path.dirname(ROOT))
 ANDROID_PACKAGE = "com.LoganShire.Isomer"
 IOS_BUNDLE = "com.LoganShire.Isomer"
-SIMULATOR_NAME, SIMULATOR_TYPE = "playground-e2e", "iPhone 17 Pro"
+SIMULATOR_TYPE = "iPhone"
 BOARD = "Swipe the board to merge tiles."
 # The web/Android templates (WebTemplate.all) and what each one's page shows
 # first; the iOS app seeds the same but "This website".
@@ -65,6 +65,15 @@ TEMPLATES = {"Counter": "Tapped 0 times", "2048": BOARD, "Hacker News": "Hacker 
 
 failures = []
 proof = None
+leases = []
+
+def oss_lease(platform):
+    """A machine of oss's (released at exit): its exports (OSS_ID, OSS_UDID, OSS_ADB…)."""
+    out = sh(["oss", "machine", "lease", platform, "--exports", "--minutes=120"]).stdout
+    env = dict(re.findall(r"(OSS_[A-Z_]+)='([^']*)'", out))
+    leases.append(env["OSS_ID"])
+    log(f"leased {platform} {env['OSS_ID']}")
+    return env
 
 def log(message): print(f"[e2e] {message}", flush=True)
 
@@ -133,7 +142,8 @@ class Proof:
 
     def screens(self, orientation, screens, show):
         """Each screen as show(steps) leaves it, shot."""
-        folder = f"{self.name}-{orientation}"
+        # review-<run>: the folders the review server files.
+        folder = f"review-{self.name}-{orientation}"
         os.makedirs(os.path.join(self.folder, folder), exist_ok=True)
         items = []
         for name, steps in screens:
@@ -144,7 +154,7 @@ class Proof:
 
     def road(self, name):
         self.end()
-        folder = os.path.join(self.folder, f"{self.name}-e2e-portrait")
+        folder = os.path.join(self.folder, f"review-{self.name}-e2e-portrait")
         os.makedirs(folder, exist_ok=True)
         slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
         self.current = {"name": name, "slug": slug, "folder": folder, "lines": [], "ok": True, "shot": False}
@@ -174,26 +184,28 @@ class Proof:
     def finish(self):
         self.end()
         if getattr(self, "items", None):
-            self.manifest(f"{self.name}-e2e-portrait", "ui-test", f"{self.name}-e2e", "portrait", self.items)
+            self.manifest(f"review-{self.name}-e2e-portrait", "ui-test", f"{self.name}-e2e", "portrait", self.items)
         self.items = []
 
 # --- Android
 
 def android():
-    adb = sh("find -L \"$(bazel info output_base)/external\" -maxdepth 4 -path '*androidsdk*platform-tools*' -name adb -type f | head -1").stdout.strip()
+    # This machine's adb: the hermetic SDK repository is fetched for every
+    # host (androidsdk_darwin, _linux, _windows), and find's order is the
+    # directory's.
+    host = "darwin" if sys.platform == "darwin" else "linux"
+    adb = sh(f"find -L \"$(bazel info output_base)/external\" -maxdepth 4 -path '*androidsdk_{host}*platform-tools*' -name adb -type f | head -1").stdout.strip()
     apk = bazel_output("//android/playground_android_application:playground_android_application_apk", "-c", "opt", suffix="_apk.apk")
     # A test phone when ANDROID_SERIAL names one (with ADB_SERVER_SOCKET when
     # its adb server is not this Mac's), else this Mac's emulator.
-    serial = os.environ.get("ANDROID_SERIAL", "emulator-5554")
+    serial = os.environ.get("ANDROID_SERIAL")
+    emulator = serial is None
+    if emulator:
+        # An emulator of oss's, through this Mac's adb.
+        serial = oss_lease("android")["OSS_ADB"]
+        sh([adb, "connect", serial])
     a = [adb, "-s", serial]
     started = None
-    if serial.startswith("emulator-") and f"{serial}\tdevice" not in sh([adb, "devices"]).stdout:
-        log("booting the hermetic emulator")
-        started = subprocess.Popen(["bazel", "run", "@isomer//tools/android/emulator", "--", "-no-window", "-no-audio", "-port", "5554"],
-                                   cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        for _ in range(200):
-            time.sleep(3)
-            if sh(a + ["shell", "getprop", "sys.boot_completed"], check_status=False).stdout.strip() == "1": break
     def launch():
         """The app's launcher activity, as a tap on its icon starts it. Not
         `monkey -p … 1`: its one random event can be a keyboard-lid flip,
@@ -203,7 +215,7 @@ def android():
                             "-c", "android.intent.category.LAUNCHER", ANDROID_PACKAGE]).stdout.split()[-1]
         sh(a + ["shell", "am", "start", "-n", component])
 
-    phone = not serial.startswith("emulator-")
+    phone = not emulator
     if phone:
         # A test phone (no passcode): woken and unlocked, in case its screen
         # went off.
@@ -291,9 +303,9 @@ def android():
                     time.sleep(2)
                 time.sleep(2)
             prop = lambda name: sh(a + ["shell", "getprop", name], check_status=False).stdout.strip()
-            name = "Android emulator" if serial.startswith("emulator-") else prop("ro.product.model")
+            name = "Android emulator" if emulator else prop("ro.product.model")
             proof.platform("android", f"{name}, Android {prop('ro.build.version.release')} ({prop('ro.product.cpu.abi')})", shoot, record)
-            screens = [("projects", []),
+            screens = [("menu", []),
                        ("project", [("text", "2048")]),
                        ("editor", [("text", "2048"), ("content-desc", "Edit")]),
                        ("new-project", [("text", "New Project")]),
@@ -366,7 +378,7 @@ def android():
         # earlier build shipped takes this build's at launch; an edited one
         # keeps its source. Written as root into the app's own files (the
         # emulator's image allows `adb root`; a phone's does not: skipped).
-        if not serial.startswith("emulator-"):
+        if not emulator:
             log("      the template check writes as root: emulator only, skipped on " + serial)
             return
         sys.path.insert(0, os.path.join(ROOT, "tools", "playground"))
@@ -404,20 +416,9 @@ def android():
     finally:
         if proof: proof.finish()
         sh(a + ["shell", "am", "force-stop", ANDROID_PACKAGE], check_status=False)
-        if started: sh(a + ["emu", "kill"], check_status=False)
+        if emulator: sh([adb, "disconnect", serial], check_status=False)
 
 # --- iOS (the simulator)
-
-def simulator():
-    listing = json.loads(sh("xcrun simctl list -j").stdout)
-    devices = [d for runtime in listing["devices"].values() for d in runtime if d.get("isAvailable")]
-    device = next((d for d in devices if d["name"] == SIMULATOR_NAME), None)
-    if device is None:
-        kind = next(t["identifier"] for t in listing["devicetypes"] if t["name"] == SIMULATOR_TYPE)
-        runtime = [r for r in listing["runtimes"] if r["platform"] == "iOS" and r["isAvailable"]][-1]["identifier"]
-        log(f"creating the simulator {SIMULATOR_NAME}")
-        return sh(["xcrun", "simctl", "create", SIMULATOR_NAME, kind, runtime]).stdout.strip(), False
-    return device["udid"], device["state"] == "Booted"
 
 def ios():
     probe = os.path.join(ISOMER, "examples")
@@ -428,8 +429,8 @@ def ios():
     if os.path.isdir(os.path.join(ROOT, "apple/playground_ios_application/embedded_toolchain/iphonesimulator/lib")):
         flags.append("--define=iso_playground_embedded=1")
     ipa = bazel_output("//apple/playground_ios_application", *flags, suffix=".ipa")
-    udid, was_booted = simulator()
-    if not was_booted: sh(["xcrun", "simctl", "boot", udid])
+    # A simulator of oss's (the server is this Mac: simctl reaches it).
+    udid, was_booted = oss_lease("ios")["OSS_UDID"], True
     sh(["xcrun", "simctl", "bootstatus", udid, "-b"])
     folder = "/private/tmp/safari_probe"
     driver = None
@@ -498,12 +499,12 @@ def ios():
                             if any(d["udid"] == udid for d in devices)), "")
             os_version = re.sub(r"^iOS-(\d+)-(\d+).*", r"iOS \1.\2", runtime.rsplit(".", 1)[-1])
             proof.platform("ios", f"{SIMULATOR_TYPE} simulator, {os_version}", shoot, record)
-            screens = [("project", []),
-                       ("projects", ["tapany BackButton"]),
-                       ("new-project", ["tapany BackButton", "sleep 1", "tapany new-project"]),
-                       ("settings", ["tapany BackButton", "sleep 1", "tapany gearshape"]),
-                       ("editor", ["tapany Edit"]),
-                       ("run", ["tapany Run", "sleep 45"])]
+            screens = [("menu", []),
+                       ("project", ["tapany Pokédex"]),
+                       ("new-project", ["tapany new-project"]),
+                       ("settings", ["tapany settings"]),
+                       ("editor", ["tapany Pokédex", "sleep 1", "tapany Edit"]),
+                       ("run", ["tapany Pokédex", "sleep 1", "tapany Run", "sleep 45"])]
             for orientation in ("portrait", "landscape"):
                 drive(f"orient {orientation}", "sleep 2")
                 turned["landscape"] = orientation == "landscape"
@@ -516,9 +517,9 @@ def ios():
             sh(["xcrun", "simctl", "install", udid, app])
             sh(["xcrun", "simctl", "launch", udid, IOS_BUNDLE], env=environment)
             time.sleep(3)
-        # A fresh install opens on its first project (the Pokédex sample).
+        # A fresh install opens on the sidebar; the Pokédex project from there.
         road("Pokédex on the web")
-        said = drive(f"bundle {IOS_BUNDLE}", "sleep 2", "tapany Run on the web", "sleep 40", "tree")
+        said = drive(f"bundle {IOS_BUNDLE}", "sleep 2", "tapany Pokédex", "sleep 2", "tapany Run on the web", "sleep 40", "tree")
         check("tapped Run on the web" in said, "ios: Run on the web is offered", said[:200])
         # The page's own text, inside the app's Safari view (`tree` is the
         # web view's elements): the project's title, there with no network.
@@ -534,24 +535,19 @@ def ios():
         import template_history
         shipped = template_history.history(ISOMER)
         sh(["xcrun", "simctl", "terminate", udid, IOS_BUNDLE], check_status=False)
-        projects = os.path.join(sh(["xcrun", "simctl", "get_app_container", udid, IOS_BUNDLE, "data"]).stdout.strip(),
-                                "Documents", "Projects")
-        metas = {}
-        for project in os.listdir(projects):
-            path = os.path.join(projects, project, "project.json")
-            if os.path.exists(path):
-                meta = json.load(open(path))
-                metas[meta["name"]] = (project, meta, path)
-        if check("2048" in metas and "Counter" in metas, "ios: the 2048 and Counter projects are on disk", str(list(metas))):
-            source = lambda name: os.path.join(projects, metas[name][0], "files", "App.swift")
+        # The shared store: Application Support/playground/projects.json and
+        # <id>/App.swift, as on Android and the web.
+        home = os.path.join(sh(["xcrun", "simctl", "get_app_container", udid, IOS_BUNDLE, "data"]).stdout.strip(),
+                            "Library", "Application Support", "playground")
+        index = os.path.join(home, "projects.json")
+        ids = {p["name"]: p["id"] for p in json.load(open(index)).get("projects", [])} if os.path.exists(index) else {}
+        if check("2048" in ids and "Counter" in ids, "ios: the 2048 and Counter projects are on disk", str(list(ids))):
+            source = lambda name: os.path.join(home, ids[name], "App.swift")
             fresh = open(source("2048")).read()
             older = [text.decode() for name, text in shipped.values() if name == "Game2048.swift" and text.decode() != fresh]
             edited = [text.decode() for name, text in shipped.values() if name == "Counter.swift"][-1] + "\n// The reader's own line.\n"
-            for name, text in (("2048", older[-1]), ("Counter", edited)):
-                open(source(name), "w").write(text)
-                _, meta, path = metas[name]
-                meta.pop("sampleHash", None)
-                json.dump(meta, open(path, "w"))
+            open(source("2048"), "w").write(older[-1])
+            open(source("Counter"), "w").write(edited)
             sh(["xcrun", "simctl", "launch", udid, IOS_BUNDLE], env=environment)
             time.sleep(8)
             check(open(source("2048")).read() == fresh,
@@ -581,7 +577,6 @@ def ios():
             try: driver.wait(timeout=60)
             except subprocess.TimeoutExpired: driver.kill()
         sh(["xcrun", "simctl", "terminate", udid, IOS_BUNDLE], check_status=False)
-        if not was_booted: sh(["xcrun", "simctl", "shutdown", udid], check_status=False)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -592,7 +587,11 @@ if __name__ == "__main__":
     if args.review:
         os.makedirs(args.review, exist_ok=True)
         proof = Proof(os.path.abspath(args.review), args.commit or sh(["git", "rev-parse", "HEAD"]).stdout.strip())
-    for target in args.targets or ["android", "ios"]:
-        {"android": android, "ios": ios}[target]()
+    try:
+        for target in args.targets or ["android", "ios"]:
+            {"android": android, "ios": ios}[target]()
+    finally:
+        for lease in leases:
+            sh(["oss", "machine", "release", lease], check_status=False)
     log("FAILED: " + "; ".join(failures) if failures else "all passed")
     sys.exit(1 if failures else 0)

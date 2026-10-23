@@ -3,14 +3,9 @@
 
 common --enable_bzlmod
 
-# Release builds run the wasm reactor as a wamrc-produced native .aot instead of
-# under the fast interpreter: `--define wamr_aot=1` compiles the AOT loader into
-# the WAMR host (@isomer//swift_ffi/runtime/wamr) and swaps the bundled reactor
-# from .wasm to .aot. AOT trades a slow one-time wamrc compile (minutes, cached)
-# for a ~10x faster cold start — worth it for release, not for the debug loop, so
-# it is off by default and opt-in via `--config=release`. wamrc is built from
-# hermetic-llvm (LLVM 22); default builds never fetch LLVM.
-build:release -c opt --define=wamr_aot=1
+# Release builds: optimized. (Until 0.38 this also lowered reactors to WAMR's
+# native .aot; WasmKit, the engine since, interprets the .wasm.)
+build:release -c opt
 
 # Real OpenStreetMap tiles for the SwiftUI `Map` view.
 # The map is ON here, so `Map` in a project the Playground builds draws real

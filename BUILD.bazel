@@ -6,8 +6,9 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 # The reimplementation's `SwiftUI` module for the current platform — ONE
 # label a SwiftPM package's generated target (rules_swift_package_manager
-# `target_deps`) can depend on: the per-platform library on wasm, Linux,
-# Windows and Android; nothing on Apple, where the system SwiftUI is implicit.
+# `target_deps`) can depend on: the per-platform SDK group (SwiftUI and the
+# Isomer module) on wasm, Linux, Windows and Android; nothing on Apple, where
+# the system SwiftUI is implicit.
 alias(
     name = "swift_ui",
     actual = select({
@@ -15,8 +16,8 @@ alias(
         # (apple/compiled): Isomer's SwiftUI on Apple platforms too.
         "//apple/compiled:feature_on": "//apple/libraries/compiled_swift_ui:sdk",
         "@platforms//os:wasi": "//wasm/libraries/swift_ui:sdk",
-        "@platforms//os:linux": "//linux/libraries/swift_ui",
-        "@platforms//os:windows": "//windows/libraries/swift_ui",
+        "@platforms//os:linux": "//linux/libraries/swift_ui:sdk",
+        "@platforms//os:windows": "//windows/libraries/swift_ui:sdk",
         "@platforms//os:android": "//android/libraries/swift_ui:sdk",
         "//conditions:default": ":system_swift_ui",
     }),

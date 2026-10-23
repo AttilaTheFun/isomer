@@ -16,7 +16,6 @@
 
 import Foundation
 import IsomerWasmHost  // WasmServiceBundle
-import IsomerWamrRuntime  // WamrRuntime.embeddedImage
 #if canImport(FoundationNetworking)
 // URLSession lives in a separate module in swift-corelibs-foundation
 // (Android / Linux); on Apple it is part of Foundation.
@@ -62,13 +61,7 @@ public final class AppBundleProvider: BundleProvider {
     }
 
     public func initialBundle() -> WasmServiceBundle? {
-        if let packaged = WasmServiceBundle.packaged(resource: resource, in: bundle) { return packaged }
-        // An app that carries its reactor compiled ahead of time, run in
-        // place (`WamrRuntime.embeddedImage`), need not ship the module as
-        // well: the image is all WAMR loads (Visor's 83 MB .wasm was read
-        // into memory at each launch and never run).
-        if WamrRuntime.embeddedImage != nil { return WasmServiceBundle(label: resource, wasm: []) }
-        return nil
+        WasmServiceBundle.packaged(resource: resource, in: bundle)
     }
 
     public func bundleUpdates() -> AsyncStream<WasmServiceBundle> {

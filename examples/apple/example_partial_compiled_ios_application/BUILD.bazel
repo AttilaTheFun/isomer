@@ -44,7 +44,8 @@ ios_application(
         "ipad",
     ],
     infoplists = ["Info.plist"],
-    minimum_os_version = "17.0",
+    # iOS 18: WasmView runs reactors on WasmKit (Swift's Synchronization).
+    minimum_os_version = "18.0",
     resources = ["//wasm/embedded_example_feature:embedded_example.wasm"],
     deps = [":ios_lib"],
 )

@@ -3,7 +3,6 @@ package dev.isomer.runtime
 import android.app.Activity
 import android.app.DatePickerDialog
 import android.content.Context
-import android.opengl.GLSurfaceView
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
@@ -17,12 +16,12 @@ import java.util.Calendar
  * Reconciles native host-view widgets (Picker -> Spinner, DatePicker -> a
  * field that opens a DatePickerDialog) over the GL surface, keyed by id —
  * the Android analogue of the web DOM overlay in boot.js. Changes are sent
- * back to the runtime via NativeBridge.nativeHostEvent on the GL thread.
+ * back to the runtime via NativeBridge.nativeHostEvent on the main thread.
  */
 class HostViewManager(
     private val activity: Activity,
     private val root: FrameLayout,
-    private val surface: GLSurfaceView,
+    private val surface: MainThreadGLSurface,
 ) : NativeBridge.HostViews {
 
     private class Entry(val kind: String, val view: View)

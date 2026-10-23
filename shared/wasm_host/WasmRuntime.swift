@@ -3,17 +3,16 @@
 // its exports and linear memory. `WasmFeatureRuntime` (the platform-free core)
 // talks only to this protocol, so the concrete engine is user-replaceable:
 //
-//   • `WamrRuntime` (//shared/wasm_host:wamr_runtime) — the built-in engine on
-//     every native-Swift host (macOS, iOS, Linux, Windows), backed by the WAMR C
-//     interpreter shared with Android.
 //   • `WasmKitRuntime` (//shared/wasm_host:wasmkit_runtime) — WasmKit, the
-//     Swift interpreter, on Apple hosts; the one that runs threaded reactors.
+//     Swift interpreter: the engine on every native host (macOS, iOS,
+//     Android, Linux, Windows) since 0.38, threaded reactors included.
+//   • `JSCRuntime`, `WasmEdgeRuntime` — experimental, for A/B tests.
 //   • The web's `NativeWasmRuntime` — the browser's own `WebAssembly` APIs,
 //     which the JS runtime already calls directly.
 //
 // The protocol is deliberately small: "launch a bundle with these host imports,
 // then call exports / read+write memory / install the DI proxy." Everything
-// engine-specific (the WAMR C host, the swift_ffi transport, WASI) lives inside
+// engine-specific (the interpreter, the swift_ffi transport, WASI) lives inside
 // the conforming type, never leaking here. This module carries NO interpreter
 // dependency, so the engine and the driver share it without pulling one in.
 
@@ -115,7 +114,7 @@ extension WasmRuntime {
 ///     WasmRuntimeRegistry.register { MyEngineRuntime() }
 ///
 /// `registerDefault` is for host layers that ship a batteries-included
-/// engine (isomer's Apple host registers WAMR this way): it only takes
+/// engine (isomer's Apple host registers WasmKit this way): it only takes
 /// effect if the app hasn't registered its own.
 @MainActor
 public enum WasmRuntimeRegistry {
@@ -136,9 +135,8 @@ public enum WasmRuntimeRegistry {
 
     /// Makes a fresh engine instance for one feature launch of `bundle`:
     /// the per-bundle factory `WasmFeatureRuntime` and `WasmViewModel` take
-    /// by default. Every bundle goes to the registered engine (WAMR tells
-    /// `\0asm` wasm from `\0aot` wamrc output itself); a host that picks an
-    /// engine per bundle passes its own factory instead.
+    /// by default. Every bundle goes to the registered engine; a host that
+    /// picks an engine per bundle passes its own factory instead.
     public static func make(for bundle: [UInt8]) -> any WasmRuntime {
         make()
     }
@@ -148,7 +146,7 @@ public enum WasmRuntimeRegistry {
         guard let factory else {
             preconditionFailure(
                 "No WasmRuntime engine registered. Register one before launching a "
-                    + "feature, e.g. WasmRuntimeRegistry.register { WamrRuntime() }.")
+                    + "feature, e.g. WasmRuntimeRegistry.register { WasmKitRuntime() }.")
         }
         return factory()
     }

@@ -24,7 +24,7 @@ in a plain C ABI — no serialization framework on the call path.
 | a web app (TypeScript) | `ts_swift_wasm_library` | a wasm reactor + a strict-mode TypeScript module (`using`, `Promise`, `Result` unions) |
 | an Apple / Linux / Windows app (C++) | `cc_swift_library` | idiomatic C++ over the bridge (templates, std::function, RAII wrappers) |
 | a Rust crate | `rs_swift_library` | generated Rust bindings over the bridge |
-| a native host that loads Swift as wasm (dynamic delivery, no recompile) | `c_host_library` / `swift_wasm_library` | C or Swift host bindings that drive the reactor under a bundled [WAMR][wamr] engine |
+| a native host that loads Swift as wasm (dynamic delivery, no recompile) | `c_host_library` / `swift_wasm_library` | C or Swift host bindings that drive the reactor under an engine the host embeds (Swift hosts: [WasmKit][wasmkit] through `//swift_ffi/runtime/swift_wasm_host`, as Isomer's do; a C host brings its own C engine) |
 
 On Apple platforms you can also skip the bridge entirely and import the
 annotated library directly — the macros are inert there.
@@ -106,8 +106,9 @@ cc_swift_library(name = "greeter_cpp", swift = ":greeter")
 The [example matrix](../docs/swift_ffi/examples.md) is a full working reference for every
 platform — `examples/shared/greeter` is one annotated library, and each
 `//swift_ffi/examples/<platform>/...` application delivers it unchanged, either
-**compiled** (natively linked over the C ABI) or as **wasm** (a reactor under
-WAMR, or the browser itself on the web).
+**compiled** (natively linked over the C ABI) or as **wasm** (a reactor the
+browser runs, on the web; the C-host wasm cells for Linux and Windows ran it
+under WAMR and went with it in 0.38).
 
 ## Bridgeable types
 
@@ -179,4 +180,4 @@ Licensed under Apache-2.0 ([LICENSE](LICENSE)).
 
 [rules_swift]: https://github.com/bazelbuild/rules_swift
 [swift-java]: https://github.com/swiftlang/swift-java
-[wamr]: https://github.com/bytecodealliance/wasm-micro-runtime
+[wasmkit]: https://github.com/swiftwasm/WasmKit

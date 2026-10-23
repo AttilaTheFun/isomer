@@ -7,7 +7,7 @@
 // app's code is Apple's API either way, only the host's transport differs.
 //
 // Where the server is: the page's own origin on the web (the page's URL
-// arrives through `.onOpenURL`), ISO_NETWORK_SERVER (WAMR hands a reactor
+// arrives through `.onOpenURL`), ISO_NETWORK_SERVER (WasmKit hands a reactor
 // the host's ISO_* environment) in a WasmView. Drivers:
 // tools/testing/run_network_check.js (headless Chrome), and the iOS
 // simulator's run in examples/apple/network_probe_wasm_ios_application.

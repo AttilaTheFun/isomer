@@ -3,7 +3,6 @@ package dev.isomer.runtime
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
-import android.opengl.GLSurfaceView
 import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
@@ -30,7 +29,8 @@ import android.widget.FrameLayout
  */
 @SuppressLint("ClickableViewAccessibility")
 class IsomerView(context: Context) : FrameLayout(context) {
-    private val surface = GLSurfaceView(context)
+    // GL current on the main thread, where the main-actor runtime runs.
+    private val surface = MainThreadGLSurface(context, UIRenderer())
     private val textInput = EditText(context)
     private var suppressWatcher = false
 
@@ -39,10 +39,6 @@ class IsomerView(context: Context) : FrameLayout(context) {
         NativeBridge.appContext = context.applicationContext
         NativeBridge.density = resources.displayMetrics.density
 
-        surface.setEGLContextClientVersion(2)
-        surface.setEGLConfigChooser(8, 8, 8, 8, 0, 0)
-        surface.setRenderer(UIRenderer())
-        surface.renderMode = GLSurfaceView.RENDERMODE_WHEN_DIRTY
         NativeBridge.surface = surface
         // Async image loads live in HostServices now; refresh the GL surface
         // when one lands (the pre-split loadBitmap did this via surface.requestRender).

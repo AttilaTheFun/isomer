@@ -440,8 +440,8 @@ def isomer_android_app(
     android:versionName / android:versionCode, what the system's app info
     shows and what an update is ordered by; left out, the APK has neither.
     `extra_binary_deps` are further android_binary deps: a native library
-    the app's Kotlin loads (//android/libraries/wasm_view:wamr_jni, for
-    WasmView and WasiCommand). `extra_application` is manifest XML placed
+    the app's Kotlin loads (//android/libraries/wasm_view:engine_native,
+    WasmKit for WasmView). `extra_application` is manifest XML placed
     inside `<application>`: a second activity the app's Kotlin declares.
     App-authored host views (`kind` of a PlatformViewRepresentable) are
     composables the services installer puts in `AppHostViews.factories`.

@@ -11,7 +11,6 @@ import PlatformServicesHost
 import IsomerNetworkWasmHost
 import Foundation
 import IsomerJSCRuntime
-import IsomerWamrRuntime
 import IsomerWasmKitRuntime
 import IsomerWasmEdgeRuntime
 import IsomerWasmRuntime
@@ -22,7 +21,6 @@ final class WasmEngineTests: XCTestCase {
 
     @MainActor
     private static let engines: [(name: String, make: @MainActor () -> any WasmRuntime)] = [
-        ("WAMR", { WamrRuntime() }),
         ("WasmKit", { WasmKitRuntime() }),
         ("JSC", { JSCRuntime() }),
         ("WasmEdge", { WasmEdgeRuntime() }),
@@ -60,7 +58,7 @@ final class WasmEngineTests: XCTestCase {
                 epochMillis: { Date().timeIntervalSince1970 * 1000 },
                 onScheduleRender: {}
             )
-            let runtime = WamrRuntime()
+            let runtime = WasmKitRuntime()
             try runtime.launch(wasm: wasm, hostImports: imports)
             _ = try runtime.call("iso_hot_start", [.f64(390), .f64(680)])
             _ = try runtime.call("iso_hot_render", [])
@@ -89,14 +87,8 @@ final class WasmEngineTests: XCTestCase {
     /// sends through it, and the host's `async` implementation answers through
     /// the runtime's `resumeAsync` → the guest's fixed `swift_ffi_async_resume`
     /// — no app-specific export anywhere.
-    func testWamrNetworkingDependencyInjection() async throws {
-        try await Self.exerciseNetworkingDI(
-            WamrRuntime(), name: "WAMR",
-            wasm: Self.artifactBytes("wasm/example_full_feature/example_full.wasm"))
-    }
-
-    /// The same DI path on WasmKit, whose swift_ffi transport is the Swift
-    /// host runtime's (SwiftFFIHostRuntime) rather than the C host's.
+    /// On WasmKit, whose swift_ffi transport is the Swift host runtime's
+    /// (SwiftFFIHostRuntime).
     func testWasmKitNetworkingDependencyInjection() async throws {
         try await Self.exerciseNetworkingDI(
             WasmKitRuntime(), name: "WasmKit",
@@ -178,7 +170,7 @@ final class WasmEngineTests: XCTestCase {
         XCTAssertTrue(service.requests[0].contains("pokeapi.co"), "\(name): unexpected URL \(service.requests[0])")
 
         // The patch stream is cumulative: a host that renders as part of its
-        // job pump (the WAMR C host does) may have emitted the list already.
+        // job pump may have emitted the list already.
         for _ in 0..<40 where !Self.contains(stream, "ulbasaur") {
             await Task.yield()
             try? await Task.sleep(nanoseconds: 5_000_000)

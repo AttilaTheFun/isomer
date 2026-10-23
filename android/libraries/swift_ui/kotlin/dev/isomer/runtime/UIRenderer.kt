@@ -5,7 +5,9 @@ import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
 /**
- * Thin GLSurfaceView.Renderer that drives the Swift render loop. The
+ * Thin GLSurfaceView.Renderer that drives the Swift render loop, called on
+ * the main thread by MainThreadGLSurface (the runtime is main-actor
+ * isolated). The
  * SwiftGPURenderer draws every pixel in Swift through swift_gpu's OpenGL ES
  * backend during `nativeRender()`; this class only owns the GL surface
  * lifecycle and pumps frames.
@@ -63,8 +65,7 @@ class UIRenderer : GLSurfaceView.Renderer {
         if (t0 != 0L) {
             // Tap receipt (UP dispatch) -> draw commands issued for the frame
             // that renders the update: the GL analogue of the View toolkit's
-            // SYNC_QUEUED handoff. requestRender wakes the GL thread directly
-            // (not vsync-paced), so no frame timing enters the metric.
+            // SYNC_QUEUED handoff (the frame comes on the next vsync).
             val us = (System.nanoTime() - t0) / 1000
             android.util.Log.i("Isomer", "[gpu-tap] handoff latency_us=$us")
         }

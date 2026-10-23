@@ -17,8 +17,8 @@
 //
 // The same source is the wasm delivery's reactor
 // (//android/network_probe_wasm_android_application, under WasmView), which
-// checks the networking only: Android's WAMR host gives a reactor /tmp (a
-// folder of TMPDIR) but no home yet.
+// checks the networking only: Android's WasmView gives a reactor /tmp (a
+// folder of the temporary directory) but no home yet.
 
 import Foundation
 import Isomer
@@ -161,7 +161,7 @@ final class Probe: @unchecked Sendable {
     /// The directories and what the last launch left in them; returns this launch's number.
     func directories() -> Int {
         #if os(WASI)
-        record("the app's directories not checked: Android's WAMR host maps no home")
+        record("the app's directories not checked: Android's WasmView maps no home")
         let scratch = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "probe-scratch.txt")
         check("temporary written", (try? { try write("scratch", to: scratch); return try read(scratch) }()) ?? "unwritable", "scratch")
         return 1

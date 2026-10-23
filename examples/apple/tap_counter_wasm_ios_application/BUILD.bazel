@@ -6,8 +6,8 @@ load("@isomer_signing//:signing.bzl", "TEAM_ID")
 
 # The WASM iOS cell of the counter benchmark (docs/benchmarks.md#ios): the
 # SAME shared TapCounter.swift as a wasm reactor, rendered as real SwiftUI by
-# `WasmView`. `--config=release` packages the wamrc `.aot` (the shipping
-# shape). One shared bundle id across the iOS cells — install one at a time.
+# `WasmView` (WasmKit interprets it). One shared bundle id across the iOS
+# cells — install one at a time.
 # Bench mode: launch with `-bench`.
 
 BUNDLE_ID = "com.LoganShire.IsomerExamples"
@@ -25,9 +25,6 @@ swift_library(
     deps = [
         "@isomer//apple/libraries/bench:boot",
         "@isomer//apple/libraries/wasm_view",
-        "@isomer//shared/wasm_host:wamr_runtime",
-        "@isomer//tools/wasm:embedded_aot_shim",
-        "//wasm/tap_counter_feature:tap_counter_embedded_aot",
     ],
 )
 
@@ -50,12 +47,9 @@ ios_application(
     bundle_id = BUNDLE_ID,
     families = ["iphone"],
     infoplists = ["Info.plist"],
-    minimum_os_version = "17.0",
+    # iOS 18: WasmView runs reactors on WasmKit (Swift's Synchronization).
+    minimum_os_version = "18.0",
     provisioning_profile = ":_development_profile",
-    # Always the plain `.wasm` (NOT the config-selected reactor_artifact, which
-    # becomes a `.aot` under --define=wamr_aot=1): on iOS the AOT tier is the
-    # EMBEDDED image in __TEXT; the bundled resource is the interpreter-tier
-    # fallback (ISO_FORCE_INTERP=1), which must stay interpretable data.
     resources = ["//wasm/tap_counter_feature:tap_counter_release.wasm"],
     visibility = ["//visibility:public"],
     deps = [":app_lib"],

@@ -269,7 +269,7 @@ bool CreateDevice(UINT flags) {
 
 bool CreateSwapchainTarget() {
   ID3D11Texture2D* backbuffer = nullptr;
-  if (FAILED(g.swapchain->GetBuffer(0, __isodof(ID3D11Texture2D),
+  if (FAILED(g.swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D),
                                     reinterpret_cast<void**>(&backbuffer)))) {
     return false;
   }
@@ -328,10 +328,10 @@ int sgpu_d3d_init_hwnd(void* hwnd, int widthPx, int heightPx) {
   IDXGIDevice* dxgiDevice = nullptr;
   IDXGIAdapter* adapter = nullptr;
   IDXGIFactory* factory = nullptr;
-  if (FAILED(g.device->QueryInterface(__isodof(IDXGIDevice),
+  if (FAILED(g.device->QueryInterface(__uuidof(IDXGIDevice),
                                       reinterpret_cast<void**>(&dxgiDevice))) ||
       FAILED(dxgiDevice->GetAdapter(&adapter)) ||
-      FAILED(adapter->GetParent(__isodof(IDXGIFactory),
+      FAILED(adapter->GetParent(__uuidof(IDXGIFactory),
                                 reinterpret_cast<void**>(&factory)))) {
     SafeRelease(adapter);
     SafeRelease(dxgiDevice);

@@ -7,15 +7,44 @@ and update this file.
 
 ## What it is
 
-The Playground apps: write SwiftUI on the device, build it there with a
-Swift compiler the app carries, run it on Isomer. One app on iOS
-(`apple/playground_ios_application`), the web (`web/playground_web_application`,
-with the site's front page in `web/splash_web_application`) and Android
-(`android/playground_android_application`). Their screens are one SwiftUI
-source (`shared/playground_ui`, and the web app's Swift, which Android
-compiles too), built against Apple's SwiftUI on iOS and Isomer's elsewhere.
-The transcript stress apps (`shared/transcript_stress_application`, web and
-Android) are here because they exercise the same agent page (AgentUI).
+The Isomer app (com.LoganShire.Isomer; the Playground, as this module is
+still named): one SwiftUI shell on six platforms, and Isomer's integration
+test app. Its sidebar has three sections:
+
+- **Projects**: write SwiftUI on the device (an agent writes it, or you do),
+  build it there with a Swift compiler the app carries, run it on Isomer.
+  Where a compiler is: iOS, Android, the web.
+- **Hot Reloaders**: follow an app published to a URL (versions.json and its
+  reactors), run its newest version, reload as new ones appear. Every
+  platform.
+- **Gallery**: Isomer's apps and components (isomer's `//gallery`, the
+  library the examples' apps show too), drawn by the app's own renderer, and
+  "Run as wasm": the Gallery's reactor (`shared/gallery_reactor:gallery.wasm`,
+  carried by every app) on the platform's engine. Every platform.
+
+The shell is `shared/app` (App.swift: the sidebar and a page per selection,
+Visor's two-column shape; a phone opens on the sidebar), compiled against
+Apple's SwiftUI on iOS and macOS and Isomer's elsewhere. What is
+platform-bound is the host's: `PlaygroundHostService` (shared/app/Services.swift:
+compiling, running a reactor, the chat's network, the renderer choice, the
+capabilities that decide which sections show) and `PlaygroundSurfaces` (the
+run surface, the code editor). The hosts:
+
+| Platform | App | Host | A run (a build, a reactor) |
+| --- | --- | --- | --- |
+| iOS | `apple/playground_ios_application` | `apple/host` (AppleHost: the embedded compiler, the in-app web run, OpenRouter sign-in) | WasmView on WasmKit, SwiftUI or Metal |
+| macOS | `apple/isomer_macos_application` | `apple/host` | WasmView on WasmKit (a sheet) |
+| Android | `android/playground_android_application` | Kotlin (PlaygroundServices.kt) | RunActivity (a process of its own), WasmView on WasmKit |
+| Web | `web/playground_web_application` | index.html | the page's runner (hot_runner.js), the browser's engine |
+| Linux | `linux/isomer_linux_application` | `shared/desktop_host` | the WasmKit loader's window (`isomer_wasm_loader`) |
+| Windows | `windows/isomer_windows_application` | `shared/desktop_host` | the WasmKit loader's window |
+
+Launch hooks (the process environment natively; an Android intent's `ISO_`
+string extras; the web page's `ISO_` query parameters): `ISO_OPEN_APP=<entry>`
+opens a Gallery entry (GalleryEntry.slug: pokedex, todo, map, controls…),
+`ISO_RUN_GALLERY_WASM=1` runs it as wasm, `ISO_RUN_REACTOR=<url>` runs a
+reactor, `ISO_PLAYGROUND_OPEN_PROJECT=<id or name>` and `ISO_OPEN_RELOADER=<name>`
+open a project or a reloader.
 
 History: `examples/*/playground_*` in isomer until 0.15, then a repository
 of its own (pinning isomer by commit), back in isomer as `playground/` at
@@ -25,12 +54,13 @@ of its own (pinning isomer by commit), back in isomer as `playground/` at
 
 | Directory | What |
 | --- | --- |
-| `apple/` | the iOS app, its embedded-compiler staging scripts, `platform_services_host` (the services a run gets in WasmView) |
+| `apple/` | the iOS app and its embedded-compiler staging scripts, the Mac app, `host` (the Apple host and @main), `platform_services_host` (the services a run gets in WasmView) |
 | `android/` | the Android app (Kotlin host: compile, run, chat, the web run), `platform_services` (the services a run gets), the transcript stress app |
-| `web/` | the web Playground, the splash page (the whole site is `//web/splash_web_application:site`), the transcript stress app |
-| `shared/` | `playground_ui` (the shared screens), `sample_sources` (the templates' sources), `transcript_stress_application` |
+| `web/` | the web app, the splash page (the whole site is `//web/splash_web_application:site`), the transcript stress app |
+| `linux/`, `windows/` | the desktop apps (built in an oss container on a Mac, and on Windows) |
+| `shared/` | `app` (the shell), `desktop_host` (Linux and Windows), `gallery_reactor`, `sample_sources` (the templates' sources), `transcript_stress_application` |
 | `tools/` | `playground_toolchain` (the iOS and Android compilers), `browser_toolchain` (the compiler as WebAssembly), `playground` (dev compile server, headless Chrome drivers, the site's packaging and the hot-reload publish scripts, template history), `patches` and `signing` (below) |
-| `tests/` | `templates` (every template compiles), `e2e` (what a reader does, on an emulator and a simulator), `ios_ui_probe` (a manual XCUITest) |
+| `tests/` | `templates` (every template compiles), `e2e` (what a reader does, on an emulator and a simulator), `proof` (the Gallery on every platform and renderer), `ios_ui_probe` (a manual XCUITest) |
 | `docs/` | `playground.md` (the iOS app), `playground_web.md` (the web app, the site, publishing) |
 | `third_party/swift_packages` | the module's SwiftPM graph: AgentUI and OpenRouterKit |
 
@@ -130,10 +160,19 @@ of its own (pinning isomer by commit), back in isomer as `playground/` at
   (`examples/tests/safari_probe` in the parent checkout). It exists because
   "Run on the web" reached phones blank twice: the site's file list missing
   a module, then a stale APK.
+- **The Gallery on every platform**: `tests/proof/proof.py [ios] [macos]
+  [android] [web] [linux] [windows] --review <dir>` shoots the main menu and
+  every Gallery entry with each platform's renderers, in the app and as
+  wasm (folders `review-<platform>-<renderer>`, e.g. `review-ios-wasm-metal`: the review server files only `review-` folders), on oss
+  leases (the web in headless Chrome here). Linux builds in an oss container
+  (isomer's tools/linux/build.sh); Windows builds on the oss Windows VM
+  (`--config=swift-6.3.2`: Visual Studio's build tools, Swift, Python; isomer's
+  tools/ci/oss/windows-swift.ps1), in MSVC's environment with Git's bash.
 - **A release's proof**: `tests/e2e/run.py --review <dir> [--commit <sha>]`
   also writes the review store's runs (app "Isomer", the version
-  `version_name` says: stamp the release's into the working tree first, as
-  CI does): each app's screens in portrait and landscape, and each road of
+  `version_name` says: stamp the build's into the working tree first, as
+  CI does, with `tools/playground/stamp.py 0.38.N`, and check the files out
+  after; tests/proof/proof.py reads it too): each app's screens in portrait and landscape, and each road of
   the run recorded. They go to the review server with the review tooling's
   `publish_proof` (`bazel run //reviews/harnesses:publish_proof -- runs
   <folder of review-<run> folders> --commit <sha>` in the reviews checkout,
@@ -163,10 +202,16 @@ of its own (pinning isomer by commit), back in isomer as `playground/` at
 
 ## What a build runs on
 
-- **iOS**: in-process under `WasmView`, on the Apple host's default engine
-  (WAMR's interpreter; `WasmViewModel.playground()` takes it from
-  `WasmRuntimeRegistry`), drawn by the SwiftUI tree renderer or, by the
-  Settings choice, SwiftGPU over Metal; or in Safari ("Run on the web").
+WasmKit (the optimized fork, isomer's MODULE.bazel `wasmkit`) on every
+native platform since 0.38; WAMR is gone.
+
+- **iOS**: in-process under `WasmView`, on WasmKit (`WasmRuntimeRegistry`'s
+  default), drawn by the SwiftUI tree renderer or, by the Settings choice,
+  SwiftGPU over Metal; or in Safari ("Run on the web").
+- **macOS**: under `WasmView` in a sheet, the SwiftUI tree renderer.
 - **Android**: in its own window and process (`RunActivity`, `:run`) under
-  the Android WasmView, WAMR's interpreter; or in a Chrome tab.
+  the Android WasmView: WasmKit as a Swift library of its own
+  (isomer's android/libraries/wasm_view:engine_native), which is why a run
+  has a process of its own (one Swift runtime a process); or in a Chrome tab.
 - **Web**: in the page, on the browser's own WebAssembly engine.
+- **Linux, Windows**: the WasmKit loader's window, a child process.

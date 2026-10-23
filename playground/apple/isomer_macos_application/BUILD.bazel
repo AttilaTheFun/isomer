@@ -1,0 +1,44 @@
+load("@build_bazel_rules_apple//apple:macos.bzl", "macos_application")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+# The Isomer app on the Mac: the shared shell (shared/app) against Apple's
+# SwiftUI, with the Apple host (apple/host). Its Gallery is drawn by
+# SwiftUI; "Run as wasm" and hot reloaders run in a WasmView (WasmKit, the
+# SwiftUI tree renderer or Metal). No Projects yet: the Mac has no
+# compiler for them.
+#
+#   bazel build //apple/isomer_macos_application
+
+swift_library(
+    name = "isomer_macos_lib",
+    srcs = [
+        "//apple/host:srcs",
+        "//shared/app:srcs",
+    ],
+    module_name = "IsomerMac",
+    tags = ["manual"],
+    deps = [
+        "//apple/platform_services_host",
+        "@isomer//apple/libraries/swift_ui:isomer",
+        "@isomer//apple/libraries/wasm_view",
+        "@isomer//gallery",
+        "@isomer//shared/platform_services",
+        "@isomer//swift_ffi/runtime/swift_wasm_host",
+        "@swiftpkg_agent_ui//:AgentUI",
+    ],
+)
+
+macos_application(
+    name = "isomer_macos_application",
+    app_icons = ["//artwork/playground_icon:app_icon"],
+    bundle_id = "com.LoganShire.Isomer",
+    bundle_name = "Isomer",
+    infoplists = ["Info.plist"],
+    minimum_os_version = "15.0",
+    resources = [
+        # The Gallery's images and its reactor ("Run as wasm").
+        "//shared/gallery_reactor:gallery.wasm",
+        "@isomer//gallery:xcassets",
+    ],
+    deps = [":isomer_macos_lib"],
+)

@@ -135,8 +135,8 @@ runs*:
   self-drawing SwiftGPU renderer exists for pixel-identical output where you want
   it.)
 - **It still ships out-of-band.** The same Swift app also compiles to a **wasm
-  reactor delivered as data** — a wamrc `.aot` on Android, the `.wasm` itself
-  on iOS, run by WAMR's interpreter (iOS-legal, because it's a data artifact
+  reactor delivered as data** — the `.wasm` itself, run by WasmKit's
+  interpreter on every native host (iOS-legal, because it's a data artifact
   an interpreter reads, not loaded executable pages). Hotfix a bug or
   hot-reload a live screen without an app-store round trip — the thing OTA JS
   bundles buy you — except the delivered artifact is your compiled Swift, run

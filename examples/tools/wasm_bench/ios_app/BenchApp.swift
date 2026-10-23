@@ -1,15 +1,14 @@
-// The on-device engine benchmark: runs the same console bench as the
-// Pixel/emulator passes (WAMR interp, compiled in with a renamed main) plus a
-// JSC pass over the Swift engine seam, then shows the RESULT lines on screen
-// and mirrors them to Documents/bench_output.txt + NSLog for retrieval. All
-// engine output (printf from the C bench, print from the JSC bench) lands in
-// the same redirected file.
+// The on-device engine benchmark: the engine conformance suite's protocol
+// (launch, first frame, 20 taps), timed, for each engine over the Swift
+// engine seam — WasmKit (Isomer's engine) and JSC — then the RESULT lines on
+// screen, mirrored to Documents/bench_output.txt + NSLog for retrieval. (A
+// WAMR pass, its C console bench compiled in, went with WAMR in 0.38.)
 
-import CBenchEntries
 import Foundation
 import SwiftUI
 import UIKit
 import IsomerJSCRuntime
+import IsomerWasmKitRuntime
 import IsomerWasmRuntime
 
 @main
@@ -68,23 +67,13 @@ private func runAllBenches(emit: @escaping (String) -> Void) {
 
     let iterations = 5
 
-    func runC(_ name: String, _ entry: (Int32, UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?) -> Int32, _ artifact: String) {
-        emit("\(name): \(iterations) runs …")
+    for engine in ["wasmkit", "jsc"] {
+        emit("\(engine): \(iterations) runs …")
         for i in 0..<iterations {
-            var argv: [UnsafeMutablePointer<CChar>?] = [strdup("bench"), strdup(artifact), strdup("20"), nil]
-            let rc = argv.withUnsafeMutableBufferPointer { entry(3, $0.baseAddress) }
-            argv.forEach { free($0) }
-            if rc != 0 { emit("\(name) run \(i): exit \(rc)") }
-        }
-    }
-
-    runC("wamr-interp", iso_wamr_bench_main, wasmPath)
-
-    emit("jsc: \(iterations) runs …")
-    for i in 0..<iterations {
-        DispatchQueue.main.sync {
-            MainActor.assumeIsolated {
-                runJSCBench(wasmPath: wasmPath, run: i, emit: emit)
+            DispatchQueue.main.sync {
+                MainActor.assumeIsolated {
+                    runEngineBench(engine, wasmPath: wasmPath, run: i, emit: emit)
+                }
             }
         }
     }
@@ -97,10 +86,10 @@ private func runAllBenches(emit: @escaping (String) -> Void) {
     NSLog("[engine-bench] %@", results.joined(separator: " | "))
 }
 
-// MARK: - The JSC pass (the conformance suite's protocol, timed)
+// MARK: - One engine's pass (the conformance suite's protocol, timed)
 
 @MainActor
-private func runJSCBench(wasmPath: String, run: Int, emit: (String) -> Void) {
+private func runEngineBench(_ engine: String, wasmPath: String, run: Int, emit: (String) -> Void) {
     guard let data = FileManager.default.contents(atPath: wasmPath) else { return }
     let wasm = [UInt8](data)
     do {
@@ -111,7 +100,7 @@ private func runJSCBench(wasmPath: String, run: Int, emit: (String) -> Void) {
             epochMillis: { Date().timeIntervalSince1970 * 1000 },
             onScheduleRender: {}
         )
-        let runtime = JSCRuntime()
+        let runtime: any WasmRuntime = engine == "jsc" ? JSCRuntime() : WasmKitRuntime()
         let launchStart = Date()
         try runtime.launch(wasm: wasm, hostImports: imports)
         _ = try runtime.call("iso_hot_start", [.f64(390), .f64(680)])
@@ -119,7 +108,7 @@ private func runJSCBench(wasmPath: String, run: Int, emit: (String) -> Void) {
         let startupMs = Date().timeIntervalSince(launchStart) * 1000
 
         guard contains(stream, "Tap me"), let tapID = firstTapID(in: stream) else {
-            emit("jsc run \(run): first frame lacks the counter")
+            emit("\(engine) run \(run): first frame lacks the counter")
             return
         }
 
@@ -131,7 +120,7 @@ private func runJSCBench(wasmPath: String, run: Int, emit: (String) -> Void) {
             _ = try runtime.call("iso_hot_render", [])
             samples.append(Date().timeIntervalSince(tapStart) * 1000)
             guard contains(stream, "Tapped") else {
-                emit("jsc run \(run): tap produced no update")
+                emit("\(engine) run \(run): tap produced no update")
                 return
             }
         }
@@ -139,10 +128,10 @@ private func runJSCBench(wasmPath: String, run: Int, emit: (String) -> Void) {
         let mean = samples.reduce(0, +) / Double(samples.count)
         let sizeMB = Double(wasm.count) / 1e6
         print(String(
-            format: "RESULT engine=jsc artifact=wasm size_mb=%.1f startup_ms=%.0f tap_med_ms=%.2f tap_mean_ms=%.2f taps=20",
-            sizeMB, startupMs, samples[samples.count / 2], mean))
+            format: "RESULT engine=%@ artifact=wasm size_mb=%.1f startup_ms=%.0f tap_med_ms=%.2f tap_mean_ms=%.2f taps=20",
+            engine, sizeMB, startupMs, samples[samples.count / 2], mean))
     } catch {
-        emit("jsc run \(run) failed: \(error)")
+        emit("\(engine) run \(run) failed: \(error)")
     }
 }
 

@@ -12,9 +12,12 @@ cell in a platform × mode matrix.
 - **compiled** — the greeter linked natively and called over its generated
   C/JNI ABI. No interpreter anywhere.
 - **wasm** — the greeter compiled to a WebAssembly reactor and run under an
-  engine: [WAMR](https://github.com/bytecodealliance/wasm-micro-runtime)
-  driven from C (`//swift_ffi/runtime/c_host_wamr`) everywhere except the
-  web, where the browser itself is the engine. No compiled Swift on the host.
+  engine: the browser's on the web. Native wasm cells would run it under
+  [WasmKit](https://github.com/swiftwasm/WasmKit) through the swift-host
+  bindings (`greeter_host`), as Isomer's hosts do. The Linux and Windows
+  wasm cells drove [WAMR](https://github.com/bytecodealliance/wasm-micro-runtime)
+  from C (`//swift_ffi/runtime/c_host_wamr`) and were removed with it in
+  0.38 (WasmKit has no C API).
 
 ## The matrix
 
@@ -22,11 +25,11 @@ Cells are named `//swift_ffi/examples/<platform>/example_<platform>_<mode>_appli
 
 | Platform | `compiled` | `wasm` | wasm engine |
 | --- | :---: | :---: | --- |
-| linux   | ✓ | ✓ | WAMR (C host) |
-| windows | ✓ | ✓ | WAMR (C host) |
-| android | ✓ | ○ | WAMR (via JNI) |
-| ios     | ✓ | ○ | WAMR |
-| macos   | ○ | ○ | WAMR |
+| linux   | ✓ | ○ | WasmKit (Swift host) |
+| windows | ✓ | ○ | WasmKit (Swift host) |
+| android | ✓ | ○ | WasmKit (Swift host) |
+| ios     | ✓ | ○ | WasmKit (Swift host) |
+| macos   | ○ | ○ | WasmKit (Swift host) |
 | web     | — | ✓ | the browser's own WebAssembly |
 
 **✓** runnable today · **○** same shape, not yet wired · **—** not applicable
@@ -38,11 +41,9 @@ linux on Linux, android/ios on a Mac — while web runs from any host:
 ```sh
 # Linux (from a Linux host / WSL):
 bazel run //swift_ffi/examples/linux/example_linux_compiled_application
-bazel run //swift_ffi/examples/linux/example_linux_wasm_application
 
 # Windows (from a Windows host):
 bazel run //swift_ffi/examples/windows/example_windows_compiled_application
-bazel run //swift_ffi/examples/windows/example_windows_wasm_application
 
 # Web (from any host):
 bazel run //swift_ffi/examples/web/example_web_wasm_application
@@ -67,25 +68,21 @@ bazel run //swift_ffi/examples/ios/example_ios_compiled_application
   *directly*: on Apple platforms there is no bridge and the macros are inert.
   `:example_ios_compiled_application_project` generates an Xcode project via
   rules_xcodeproj.
-- **linux / windows, both modes** — the same greeter surface (`greeting`,
-  `add`, `isEven`, `checksum`) printed identically whether natively linked
-  (compiled) or run as a reactor under WAMR with no Swift on the host (wasm).
+- **linux / windows, compiled** — the greeter surface (`greeting`, `add`,
+  `isEven`, `checksum`) printed by a C `main` over the natively linked
+  library. (Until 0.38 a wasm cell printed the same from a reactor under
+  WAMR, with no Swift on the host.)
 
 ## Shared building blocks (`examples/shared/`)
 
 - `greeter` — the one annotated `swift_library`, plus its generated C-mode
-  glue (`greeter_c`), C header, c-host bindings, and `.wasm` reactor.
+  glue (`greeter_c`), C header, c-host bindings (for a C host that brings its
+  own engine), and `.wasm` reactor.
 - `greeter_compiled_host` — the C driver behind the desktop compiled cells;
   each platform application is a thin `main` over it.
-- `greeter_wasm_host` — the C driver behind the desktop wasm cells (reactor
-  under WAMR). The generated c-host header's functions are `static`, so this
-  library is the single translation unit that includes it.
 - `greeter_host` — the `swift_wasm_library` building block: native-Swift host
   bindings + reactor, compile-checking the `swift-host-wasm` generator kind
   over the full surface.
-- `greeter_aot_bench` — cold-start benchmark: the reactor as interpreted
-  `.wasm` vs a wamrc-produced native `.aot` over the same C host. Requires
-  `--define wamr_aot=1` (links the AOT loader and builds `wamrc`).
 
 ## Operational notes
 

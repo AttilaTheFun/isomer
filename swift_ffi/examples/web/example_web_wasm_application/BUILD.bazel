@@ -1,7 +1,7 @@
 # The web "wasm mode" cell of the example matrix: the shared greeter
 # (//swift_ffi/examples/shared/greeter) as a wasm reactor + TypeScript bindings,
 # typechecked with tsc and opened in a hermetic Electron shell. The web runs
-# Swift only as wasm (the browser's own WebAssembly, no WAMR), so there is no web
+# Swift only as wasm (the browser's own WebAssembly engine), so there is no web
 # compiled cell.
 #
 #   bazel run //swift_ffi/examples/web/example_web_wasm_application                      # Electron window

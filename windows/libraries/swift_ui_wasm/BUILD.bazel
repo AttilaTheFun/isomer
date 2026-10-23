@@ -5,14 +5,14 @@ package(default_visibility = ["//visibility:public"])
 # The `SwiftUI` module for the native Windows **wasm delivery cell**: the same
 # shared core + Direct2D/D3D11 host bridge as
 # //windows/libraries/swift_ui:swift_ui, plus `WindowsWasmHost.swift` and the
-# `CIsoWamr` (WAMR C host) dep, so the wasm example .exe can drive an
-# `example_full.wasm` reactor under WAMR and draw its decoded tree through the
+# engine (WasmKit, under the shared feature runtime), so the wasm example
+# .exe can drive an `example_full.wasm` reactor and draw its decoded tree through the
 # same SwiftGPU/D3D11 renderer. It carries the SAME `module_name = "SwiftUI"` (so
 # app code does `import SwiftUI` unchanged) and therefore lives in its OWN
 # package: two same-named swiftmodules in one package collide on the
 # `SwiftUI.swiftmodule` output path. `WindowsHost.swift` + `renderer.h` are
 # reused from the sibling package (exported there); the compiled `swift_ui` never
-# links the WAMR interpreter / swift_ffi C host.
+# links an interpreter.
 _WINDOWS_COPTS = [
     "-import-objc-header",
     "$(location //windows/libraries/swift_ui:renderer.h)",
@@ -36,7 +36,13 @@ swift_library(
         "//shared/isomer_swift_ui",
         "//frameworks:for_core",
         "//windows/libraries/swift_ui:renderer",
-        "//shared/wamr_host:iso_wamr",  # the WAMR C host, as Swift module CIsoWamr
+        # The engine: WasmKit under the shared feature runtime.
+        "//shared/wasm_host",
+        "//shared/wasm_host:wasmkit_runtime",
+        # Foundation's networking for the reactor (URLSession over
+        # FoundationNetworking), beneath the host's own dependencies.
+        "//shared/isomer_network_host/urlsession",
+        "//swift_ffi/runtime/swift_wasm_host",
         "@flatbuffers//swift",
         "//swift_gpu/windows:swift_gpu",
     ] + [
@@ -47,13 +53,17 @@ swift_library(
     ],
 )
 
-# IsomerWasmHost: the cell's public entry (WindowsWasmApp) for a host program,
+# IsomerDesktopWasmHost: the cell's public entry (WindowsWasmApp) for a host program,
 # over the `SwiftUI` module above, whose loop is package.
 swift_library(
     name = "host",
     package_name = "isomer",
     srcs = ["WindowsWasmApp.swift"],
-    module_name = "IsomerWasmHost",
+    module_name = "IsomerDesktopWasmHost",
     target_compatible_with = ["@platforms//os:windows"],
-    deps = [":swift_ui_wasm"],
+    deps = [
+        ":swift_ui_wasm",
+        "//shared/platform_services:native_dependencies",
+        "//swift_ffi/runtime/swift_wasm_host",
+    ],
 )

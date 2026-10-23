@@ -17,7 +17,8 @@ ios_application(
     bundle_id = "com.LoganShire.Isomer.SelectionProbe",
     families = ["iphone"],
     infoplists = ["Info.plist"],
-    minimum_os_version = "15.0",
+    # iOS 18: WasmView runs reactors on WasmKit (Swift's Synchronization).
+    minimum_os_version = "18.0",
     resources = ["//wasm/selection_probe_feature:selection_probe"],
     deps = [":ios_lib"],
 )

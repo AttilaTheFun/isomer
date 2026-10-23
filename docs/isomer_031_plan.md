@@ -1,6 +1,8 @@
 # Isomer 0.31: Apple's frameworks, in Swift, everywhere
 
-The plan agreed on 2026-10-12, and how it landed.
+The plan agreed on 2026-10-12, and how it landed. (Its "WAMR hosts" are
+WasmKit's since 0.38, when WAMR was removed: the checks run under
+//tools/wasm/wasi_run, the native hosts on `WasmKitRuntime`.)
 Work goes on `release-0.31` in isomer and in every repository that takes it
 (visor_isomer, the Playground; other applications on their own). The
 native Visor app is not cut for 0.31 yet.

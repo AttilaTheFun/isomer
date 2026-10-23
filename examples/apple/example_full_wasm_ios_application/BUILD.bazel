@@ -8,10 +8,11 @@ package(default_visibility = ["//visibility:public"])
 # rendered full-screen with `WasmView`. Simulator build (no provisioning
 # profile). Runtime-updatable twin of example_full_compiled_ios_application.
 #
-# iOS 15, the oldest OS WasmView and Isomer's tree renderer support (each
+# iOS 18, the oldest OS WasmView supports since 0.38: its engine, WasmKit,
+# stands on Swift's Synchronization. (Isomer's tree renderer still keeps each
 # newer API behind an availability check, NavigationView before
-# NavigationStack and NavigationSplitView): built here so they stay that way.
-# The guest is wasm, so nothing of the app's is bound by the OS.
+# NavigationStack and NavigationSplitView, from its iOS 15 days.) The guest is
+# wasm, so nothing of the app's is bound by the OS.
 
 swift_library(
     name = "ios_lib",
@@ -31,7 +32,7 @@ ios_application(
         "ipad",
     ],
     infoplists = ["Info.plist"],
-    minimum_os_version = "15.0",
+    minimum_os_version = "18.0",
     resources = ["//wasm/example_full_feature:example_full"],
     deps = [":ios_lib"],
 )

@@ -1,6 +1,7 @@
 #!/bin/bash
 # Runs Isomer's Foundation check (FoundationCheck.swift, built for wasm) under
-# WAMR's WASI command runner; fails on any "FAIL" line or a missing "ok".
+# WasmKit's WASI command runner (//tools/wasm/wasi_run); fails on any "FAIL"
+# line or a missing "ok".
 set -euo pipefail
 runner="$1"
 module="$2"

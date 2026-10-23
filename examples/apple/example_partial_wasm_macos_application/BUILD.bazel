@@ -43,8 +43,8 @@ swift_binary(
     srcs = ["main.swift"],
     target_compatible_with = ["@platforms//os:macos"],
     deps = [
-        "@isomer//shared/wasm_host:wamr_runtime",
         "@isomer//shared/wasm_host:wasm_runtime",
+        "@isomer//shared/wasm_host:wasmkit_runtime",
         "//apple/platform_services_host",
     ],
 )
@@ -55,7 +55,8 @@ macos_application(
     name = "example_partial_wasm_macos_application",
     bundle_id = "com.LoganShire.Isomer.WasmView",
     infoplists = ["Info.plist"],
-    minimum_os_version = "14.0",
+    # macOS 15: WasmView runs reactors on WasmKit (Swift's Synchronization).
+    minimum_os_version = "15.0",
     resources = ["//wasm/hot_demo_feature:hot_demo"],
     target_compatible_with = ["@platforms//os:macos"],
     deps = [":host_lib"],

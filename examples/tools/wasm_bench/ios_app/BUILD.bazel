@@ -1,42 +1,17 @@
 load("@build_bazel_rules_apple//apple:apple.bzl", "local_provisioning_profile")
 load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
 load("@build_bazel_rules_apple//apple:versioning.bzl", "apple_bundle_version")
-load("@rules_swift//swift:swift.bzl", "swift_interop_hint", "swift_library")
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_swift//swift:swift.bzl", "swift_library")
 load("@isomer_signing//:signing.bzl", "TEAM_ID")
 
-# The on-device iOS engine benchmark app: runs the SAME console bench as the
-# Pixel/emulator passes (tools/wasm_bench/wamr_bench.c, `main` renamed) plus
-# a JSC pass over the Swift engine seam, on an iPhone via devicectl.
+# The on-device iOS engine benchmark app: the engine conformance suite's
+# protocol, timed, for WasmKit and JSC over the Swift engine seam, on an
+# iPhone via devicectl. (Its WAMR pass, the C console bench compiled in,
+# went with WAMR in 0.38.)
 # Everything here is `manual` and dev-only (a device build needs the
 # Xcode-managed provisioning profile).
 
 BUNDLE_ID = "com.LoganShire.IsomerExamples"
-
-cc_library(
-    name = "bench_wamr_c",
-    srcs = ["//tools/wasm_bench:wamr_bench.c"],
-    copts = ["-Dmain=iso_wamr_bench_main"],
-    tags = ["manual"],
-    target_compatible_with = ["@platforms//os:ios"],
-    deps = ["@isomer//shared/wamr_host:iso_wamr"],
-)
-
-# A Swift-importable declaration of the renamed bench entry point.
-cc_library(
-    name = "bench_entries",
-    hdrs = ["bench_entry.h"],
-    aspect_hints = [":bench_entries_swift"],
-    includes = ["."],
-    tags = ["manual"],
-    target_compatible_with = ["@platforms//os:ios"],
-    deps = [":bench_wamr_c"],
-)
-
-swift_interop_hint(
-    name = "bench_entries_swift",
-    module_name = "CBenchEntries",
-)
 
 swift_library(
     name = "bench_app_lib",
@@ -44,9 +19,9 @@ swift_library(
     data = ["//wasm/tap_counter_feature:tap_counter_release.wasm"],
     tags = ["manual"],
     deps = [
-        ":bench_entries",
         "@isomer//shared/wasm_host:jsc_runtime",
         "@isomer//shared/wasm_host:wasm_runtime",
+        "@isomer//shared/wasm_host:wasmkit_runtime",
     ],
 )
 
@@ -71,7 +46,8 @@ ios_application(
     bundle_id = BUNDLE_ID,
     families = ["iphone"],
     infoplists = ["Info.plist"],
-    minimum_os_version = "16.0",
+    # iOS 18: WasmView runs reactors on WasmKit (Swift's Synchronization).
+    minimum_os_version = "18.0",
     provisioning_profile = ":_xcode_managed_profile",
     tags = ["manual"],
     version = ":_version",

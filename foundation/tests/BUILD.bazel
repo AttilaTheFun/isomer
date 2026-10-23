@@ -33,12 +33,12 @@ sh_test(
     size = "small",
     srcs = ["run_foundation_check.sh"],
     args = [
-        "$(rootpath //tools/wasm/wasi_command:iwasm)",
+        "$(rootpath //tools/wasm/wasi_run)",
         "$(rootpath :foundation_check_wasm)",
     ],
     data = [
         ":foundation_check_wasm",
-        "//tools/wasm/wasi_command:iwasm",
+        "//tools/wasm/wasi_run",
     ],
 )
 
@@ -70,12 +70,12 @@ sh_test(
     size = "small",
     srcs = ["run_foundation_check.sh"],
     args = [
-        "$(rootpath //tools/wasm/wasi_command:iwasm)",
+        "$(rootpath //tools/wasm/wasi_run)",
         "$(rootpath :internationalization_check_wasm)",
     ],
     data = [
         ":internationalization_check_wasm",
-        "//tools/wasm/wasi_command:iwasm",
+        "//tools/wasm/wasi_run",
     ],
 )
 
@@ -147,12 +147,12 @@ sh_test(
     size = "small",
     srcs = ["run_foundation_check.sh"],
     args = [
-        "$(rootpath //tools/wasm/wasi_command:iwasm)",
+        "$(rootpath //tools/wasm/wasi_run)",
         "$(rootpath :internationalization_trimmed_check_wasm)",
     ],
     data = [
         ":internationalization_trimmed_check_wasm",
-        "//tools/wasm/wasi_command:iwasm",
+        "//tools/wasm/wasi_run",
     ],
 )
 

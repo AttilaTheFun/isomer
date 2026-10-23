@@ -988,9 +988,9 @@ extension _OnChangeView: _PrimitiveView {
         // SwiftUI's does, rather than reporting a change against the value its
         // predecessor last saw. On the child's node, not a box of its own:
         // a level per `.onChange` deepened the full example app's recursion
-        // past WAMR's interpreter stack. Made again on the node a partial
-        // frame builds in place (InPlace.swift), as a modifier's in-place
-        // change is.
+        // past the interpreter's stack (WAMR's, the engine before WasmKit).
+        // Made again on the node a partial frame builds in place
+        // (InPlace.swift), as a modifier's in-place change is.
         let keep: @MainActor (RenderNode, inout BuildContext) -> RenderNode = { node, _ in
             if !node.onChangeKeys.contains(key) { node.onChangeKeys.append(key) }
             return node

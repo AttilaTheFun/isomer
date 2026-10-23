@@ -1,6 +1,6 @@
 // swift_ffi_host — the C half of the native host transport, the fourth peer of
 // swift_ffi/runtime/{ts,swift,swift_wasm_host,kotlin}. It lets a plain C host
-// (e.g. an app driving a WebAssembly engine like WAMR with NO compiled Swift)
+// (e.g. an app driving a C WebAssembly engine with NO compiled Swift)
 // satisfy a swift_ffi reactor's `swift_ffi` foreign-interface imports with native C
 // implementations — the C analogue of SwiftFFIWasmHost.swift.
 //

@@ -5,8 +5,10 @@ load("@isomer//apple/compiled:defs.bzl", "isomer_compiled_feature")
 # The tap counter compiled against Isomer's frameworks inside an iOS app
 # (apple/compiled): the feature (the shared source, `import SwiftUI` being
 # Isomer's) and the host that draws it (WasmView over the native engine).
-# iOS 16: the feature's SwiftUI, Observation and Synchronization are Isomer's
-# (iOS 15 waits for Isomer's CoreTransferable, which PhotosUI stands on).
+# The feature builds for iOS 16: its SwiftUI, Observation and Synchronization
+# are Isomer's (iOS 15 waits for Isomer's CoreTransferable, which PhotosUI
+# stands on). The app is iOS 18 since 0.38: its host, WasmView, links WasmKit,
+# which stands on Swift's Synchronization.
 # Simulator builds need no provisioning:
 #   bazel build //apple/tap_counter_compiled_isomer_ios_application --ios_multi_cpus=sim_arm64
 swift_library(
@@ -42,7 +44,7 @@ ios_application(
     bundle_id = "com.LoganShire.IsomerCompiledTapCounter",
     families = ["iphone"],
     infoplists = ["Info.plist"],
-    minimum_os_version = "16.0",
+    minimum_os_version = "18.0",
     tags = ["manual"],
     deps = [
         ":app_lib",

@@ -1,5 +1,5 @@
 # The Android WASM cells' platform services (shared/platform_services) as
-# blob dispatchers over the generic WAMR runtime — one source file every wasm
+# blob dispatchers over the generic engine runtime — one source file every wasm
 # Android example compiles into its own Kotlin library (the runtime's Kotlin
 # targets are source sets, not JVM libraries).
 

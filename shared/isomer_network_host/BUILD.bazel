@@ -5,8 +5,8 @@ package(default_visibility = ["//visibility:public"])
 
 # IsomerNetworkHost: Foundation's networking on a host's own (phase 11). The
 # swift_ffi interfaces a host implements (the browser's fetch and WebSocket,
-# Android's HttpURLConnection and socket client, Apple's URLSession in a WAMR
-# shell) and their adapters, installed as IsomerFoundation's transports by
+# Android's HttpURLConnection and socket client, Apple's URLSession in a
+# WasmKit shell) and their adapters, installed as IsomerFoundation's transports by
 # the platform runtime when it starts. Above IsomerFFI and IsomerFoundation;
 # Isomer's SwiftUI modules link it.
 swift_library(
@@ -29,7 +29,7 @@ swift_library(
     ],
 )
 
-# The hosts' side for a native Swift process running a reactor under WAMR
+# The hosts' side for a native Swift process running a reactor under WasmKit
 # (generated `swift-host-wasm` bindings): the interfaces and structs as
 # Swift declarations of their own, and `Dependencies.hTTPHost` /
 # `.webSocketHost`, which wrap a host's implementations as the guest's

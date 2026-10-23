@@ -16,7 +16,7 @@ package(default_visibility = ["//visibility:public"])
 # `Map` and `import IsomerBridge`, so it must build on the FULL `swift_ui`
 # module (same deps as the web's app_lib). The Map tab is GPU-backed
 # (SwiftGPU/SwiftMap), a de-endorsed path on Android — it degrades under the
-# WAMR + Compose interpreter; every other tab renders.
+# WasmKit + Compose interpreter; every other tab renders.
 
 # The app archive. `alwayslink` + `-parse-as-library`: the synthesized @main is
 # reached only through the reactor's `__main_argc_argv` trampoline, which links
@@ -29,6 +29,7 @@ swift_library(
     module_name = "ExampleApplication",
     tags = ["manual"],
     deps = [
+        "@isomer//gallery",
         "//shared/platform_services",
         "@isomer//wasm/libraries/swift_ui",
         "@isomer//wasm/libraries/swift_ui:isomer",
@@ -124,23 +125,17 @@ transition_binary(
     tags = ["manual"],
 )
 
-# The config-selected reactor the hosts bundle: `:example_full` is the `.wasm`
-# above by default, or a wamrc-produced native `example_full.aot` under
-# `--config=release` (`--define wamr_aot=1`). Hosts look up the "example_full"
-# resource and load by magic bytes, so the swap is transparent.
+# The reactor the hosts bundle, as the "example_full" resource they look up.
 reactor_artifact(
     name = "example_full",
     wasm = ":example_full.wasm",
 )
 
-# The x86_64 variant for the desktop Linux/Windows wasm cells (native .exe/ELF
-# are x86_64). Same interpreted `.wasm` by default; under `--config=release` the
-# reactor is lowered with `wamrc --target=x86_64`. NOTE: only verified to *build*
-# from a macOS host — running the desktop wasm cells needs a Linux/Windows host.
+# The name the desktop Linux/Windows wasm cells bundle: the same `.wasm`.
+# (Until 0.38 their release build was a wamrc-lowered x86_64 `.aot`.)
 reactor_artifact(
     name = "example_full_x86",
     wasm = ":example_full.wasm",
-    target = "x86_64",
 )
 
 # A PRODUCTION-style bundle: export only the iso_hot ABI, --gc-sections to
@@ -244,10 +239,7 @@ transition_binary(
     tags = ["manual"],
 )
 
-# The config-selected RELEASE reactor the Android APK packages: the stripped
-# `.wasm` by default, or a wamrc-produced native `example_full_release.aot` under
-# `--config=release`. Default arm64 target = Android (and Apple). The Kotlin
-# PackagedWasmBundleProvider opens the `.aot` sibling first, else the `.wasm`.
+# The RELEASE reactor the Android APK packages: the stripped `.wasm`.
 reactor_artifact(
     name = "example_full_release",
     wasm = ":example_full_release.wasm",

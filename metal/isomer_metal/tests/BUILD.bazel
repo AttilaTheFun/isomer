@@ -34,11 +34,11 @@ sh_test(
     size = "small",
     srcs = ["run_check.sh"],
     args = [
-        "$(rootpath //tools/wasm/wasi_command:iwasm)",
+        "$(rootpath //tools/wasm/wasi_run)",
         "$(rootpath :translator_check_wasm)",
     ],
     data = [
         ":translator_check_wasm",
-        "//tools/wasm/wasi_command:iwasm",
+        "//tools/wasm/wasi_run",
     ],
 )

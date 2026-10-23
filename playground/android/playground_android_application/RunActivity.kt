@@ -37,6 +37,9 @@ import java.io.File
 class RunActivity : ComponentActivity() {
     companion object {
         const val EXTRA_WASM = "wasm"
+        /** KEY=VALUE lines for the guest (the engine forwards a process's
+         *  ISO_ variables): this process is the run's alone. */
+        const val EXTRA_ENVIRONMENT = "environment"
         const val ACTION_STOPPED = "dev.isomer.playground.RUN_STOPPED"
     }
 
@@ -67,6 +70,10 @@ class RunActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         ImagePickerHost.attach(this)
         val wasm = File(intent.getStringExtra(EXTRA_WASM) ?: run { finish(); return })
+        for (line in (intent.getStringExtra(EXTRA_ENVIRONMENT) ?: "").lines()) {
+            val equals = line.indexOf('=')
+            if (equals > 0) android.system.Os.setenv(line.substring(0, equals).trim(), line.substring(equals + 1), true)
+        }
         val main = Handler(Looper.getMainLooper())
         val dependencies = PlatformServicesWasm.all(
             main, "playground_run", applicationContext,

@@ -1,6 +1,6 @@
 // The framework-owned `iso_hot` reactor bridge: the complete render ABI a
-// wasm reactor exports to its native host (WasmKit on Apple, WAMR on
-// Android/desktop). Reactors link this as a library
+// wasm reactor exports to its native host (WasmKit on every native host).
+// Reactors link this as a library
 // (`//wasm/libraries/swift_ui:hot_bridge` on the full SwiftUI module,
 // `//wasm/libraries/hot_swift_ui:hot_bridge` on the slim one) instead of
 // copying the glue into their own sources — a hand-copied bridge can drift
@@ -276,8 +276,10 @@ public func iso_hot_resize(_ width: Double, _ height: Double) {
 /// `navigation` = `drawn` (the host renders with a self-drawing renderer —
 /// SwiftGPU — and wants pre-expanded drawn chrome instead of `navstack` /
 /// `navsplit` host views) or `semantic` (the default: component-system
-/// hosts map navigation to their platform's own containers). Unknown keys
-/// are ignored by design, so hosts can declare future capabilities.
+/// hosts map navigation to their platform's own containers); `maps` =
+/// `drawn` (the host draws `map` host views with SwiftMap, so `Map` is the
+/// real map, not its placeholder). Unknown keys are ignored by design, so
+/// hosts can declare future capabilities.
 @_cdecl("iso_hot_configure")
 public func iso_hot_configure(
     _ keyPtr: UnsafePointer<UInt8>?, _ keyLen: Int32,
@@ -287,6 +289,8 @@ public func iso_hot_configure(
     let value = _hotString(valPtr, valLen)
     if key == "navigation" {
         Renderer.setHostRendersNavigation(value != "drawn")
+    } else if key == "maps" {
+        Renderer.hostRendersMaps = value == "drawn"
     }
 }
 

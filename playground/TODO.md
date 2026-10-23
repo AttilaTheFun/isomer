@@ -39,14 +39,16 @@ isomer's docs/open_items.md is the framework's list).
 
 ## Playground unification
 
-Both Playgrounds compile `shared/playground_ui` (transcript,
-editor sheet, run cover shell, New Project, `.onShake`). Still per app:
-the agent session + LLM client (iOS streams SSE over URLSession, the web
-uses the host's `chat`), the composer (attachments, model/effort pills),
-Settings (Keychain vs localStorage), the project store. Next: a shared
-`AgentSession` over a `ChatService` platform service (streaming through
-an async-sequence-shaped interface once swift_ffi has one), then the
-composer.
+Done in 0.38: one shell, `shared/app`, on all six platforms (the agent
+session, transcript, composer, editor, run cover, settings and project
+store shared; the host's `PlaygroundHostService` does the platform's part).
+What the iPhone app had before and the shared agent doesn't yet:
+
+- Anthropic keys used directly (it speaks OpenRouter only now).
+- Streamed replies (the host's `chat` answers whole).
+- Images in a message, and multi-file projects.
+- The agent's screenshot, crash-log and web-search tools.
+- The model catalog sheet.
 
 ## Playground agent
 
