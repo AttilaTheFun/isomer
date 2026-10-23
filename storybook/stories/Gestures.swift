@@ -5,19 +5,19 @@ import SwiftUI
 extension StoryCatalog {
     static let gestures = StoryArea(id: "gestures", title: "Gestures", symbol: "hand.draw", stories: [
         Story(
-            "gestures.tap", "Taps", apis: [".onTapGesture(count:perform:)", ".contentShape(_:)"],
+            "gestures.tap", "Taps",
             summary: "Single and double taps on any view; a content shape makes its empty space tappable too."
         ) { TapStory() },
         Story(
-            "gestures.drag", "DragGesture", apis: ["DragGesture()", ".gesture(_:)", ".onChanged(_:)", ".onEnded(_:)"],
+            "gestures.drag", "DragGesture",
             summary: "A view that follows the finger or pointer, and springs back when let go."
         ) { DragStory() },
         Story(
-            "gestures.magnify", "MagnifyGesture", apis: ["MagnifyGesture()", "MagnifyGesture.Value.magnification"],
+            "gestures.magnify", "MagnifyGesture",
             summary: "A pinch that scales a view, on a touch screen or a trackpad."
         ) { MagnifyStory() },
         Story(
-            "gestures.hover", "Hover", apis: [".onHover(perform:)"],
+            "gestures.hover", "Hover",
             summary: "Whether the pointer is over a view: on the Mac, the web and Windows, and with a mouse or trackpad on iPad and Android."
         ) { HoverStory() },
     ])

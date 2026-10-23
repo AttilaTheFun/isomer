@@ -6,19 +6,19 @@ import SwiftUI
 extension StoryCatalog {
     static let buttons = StoryArea(id: "buttons", title: "Buttons", symbol: "hand.tap", stories: [
         Story(
-            "buttons.styles", "Button styles", apis: ["Button(_:action:)", ".buttonStyle(_:)", ".bordered", ".borderedProminent", ".borderless", ".plain", ".tint(_:)", ".disabled(_:)"],
+            "buttons.styles", "Button styles",
             summary: "A button in each of the built-in styles, tinted, and disabled. The styles are the platform's own buttons: filled and tonal buttons on Android, the page's on the web."
         ) { ButtonStylesStory() },
         Story(
-            "buttons.labels", "Labels and roles", apis: ["Button(action:label:)", "Button(_:role:action:)", "ButtonRole.destructive", "ButtonRole.cancel"],
+            "buttons.labels", "Labels and roles",
             summary: "A button's label is any view: an icon, a Label, a stack. A role says what the button does; a destructive one is red."
         ) { ButtonLabelsStory() },
         Story(
-            "buttons.menu", "Menu", apis: ["Menu(_:content:)", "Menu(content:label:)", "Divider()"],
+            "buttons.menu", "Menu",
             summary: "A button that opens a list of actions: the platform's own pop-up menu."
         ) { MenuStory() },
         Story(
-            "buttons.links", "Link and ShareLink", apis: ["Link(_:destination:)", "ShareLink(item:label:)"],
+            "buttons.links", "Link and ShareLink",
             summary: "A link opens a URL in the browser; a share link hands one to the platform's share sheet."
         ) { LinksStory() },
     ])

@@ -9,34 +9,34 @@ import SwiftUI
 extension StoryCatalog {
     static let isomer = StoryArea(id: "isomer", title: "Isomer", symbol: "cube", stories: [
         Story(
-            "isomer.platform", "Platform", apis: ["Bridge.platformName", "Bridge.rendererName", "Bridge.log(_:)", "#if os(…)"],
+            "isomer.platform", "Platform",
             summary: "Which platform and renderer the app is running on, and a line written to the platform's log."
         ) { PlatformStory() },
         Story(
-            "isomer.webview", "WebView", apis: ["WebView(url:)"],
+            "isomer.webview", "WebView",
             height: 360,
             summary: "A web page in the app: WKWebView on Apple's platforms, WebView on Android, an iframe on the web, WebView2 on Windows."
         ) { WebViewStory() },
         Story(
-            "isomer.map", "Map", apis: ["Map(camera:annotations:polygons:polylines:onAnnotationTap:)", "MapCamera", "MapAnnotation"],
+            "isomer.map", "Map",
             height: 380,
             summary: "OpenStreetMap's tiles, drawn by Isomer's map renderer, with markers that show their titles when tapped."
         ) { MapStory() },
         Story(
-            "isomer.video", "VideoPlayer", apis: ["VideoPlayer(url:)"],
+            "isomer.video", "VideoPlayer",
             height: 240,
             summary: "A video with the platform's own playback controls."
         ) { VideoStory() },
         Story(
-            "isomer.clipboard", "Clipboard", apis: ["Clipboard.string"],
+            "isomer.clipboard", "Clipboard",
             summary: "Text copied to and pasted from the system's clipboard."
         ) { ClipboardStory() },
         Story(
-            "isomer.dynamic", "Colors by appearance", apis: ["Color.dynamic(light:dark:)"],
+            "isomer.dynamic", "Colors by appearance",
             summary: "A color of your own with a light and a dark version, following the system's appearance."
         ) { DynamicColorStory() },
         Story(
-            "isomer.swipe", "Swipe gesture", apis: [".swipeGesture(onChanged:onEnded:)"],
+            "isomer.swipe", "Swipe gesture",
             summary: "A horizontal swipe that leaves vertical drags to the scroll view around it: a row swiped aside."
         ) { SwipeStory() },
     ])

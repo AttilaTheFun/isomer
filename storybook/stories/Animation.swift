@@ -5,19 +5,19 @@ import SwiftUI
 extension StoryCatalog {
     static let animation = StoryArea(id: "animation", title: "Animation", symbol: "wand.and.stars", stories: [
         Story(
-            "animation.explicit", "withAnimation", apis: ["withAnimation(_:_:)", "Animation.easeInOut(duration:)", "Animation.spring"],
+            "animation.explicit", "withAnimation",
             summary: "A state change made inside withAnimation: every view it changes moves there over time."
         ) { ExplicitAnimationStory() },
         Story(
-            "animation.implicit", "Animating a value", apis: [".animation(_:value:)", ".scaleEffect(_:)"],
+            "animation.implicit", "Animating a value",
             summary: "A view that animates whenever one value changes, however it changes."
         ) { ImplicitAnimationStory() },
         Story(
-            "animation.transforms", "Transforms", apis: [".rotationEffect(_:)", ".scaleEffect(_:)", ".offset(x:y:)"],
+            "animation.transforms", "Transforms",
             summary: "A view rotated, scaled and moved without changing its layout."
         ) { TransformsStory() },
         Story(
-            "animation.transition", "Transitions", apis: [".transition(_:)", "AnyTransition.opacity", ".move(edge:)", ".scale"],
+            "animation.transition", "Transitions",
             summary: "How a view arrives and leaves when it is added and removed."
         ) { TransitionStory() },
     ])

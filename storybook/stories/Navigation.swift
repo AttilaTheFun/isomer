@@ -5,15 +5,15 @@ import SwiftUI
 extension StoryCatalog {
     static let navigation = StoryArea(id: "navigation", title: "Navigation", symbol: "arrow.right.square", stories: [
         Story(
-            "navigation.links", "NavigationLink", apis: ["NavigationLink(_:value:)", ".navigationDestination(for:destination:)", "NavigationLink(destination:label:)", ".navigationTitle(_:)"],
+            "navigation.links", "NavigationLink",
             summary: "Rows that push a screen onto the page's NavigationStack: by value, the destination chosen by the value's type, or with the destination written in place. Back returns."
         ) { NavigationLinksStory() },
         Story(
-            "navigation.toolbar", "Toolbar", apis: [".toolbar(content:)", "ToolbarItem(placement:content:)", ".primaryAction", ".navigation"],
+            "navigation.toolbar", "Toolbar",
             summary: "Buttons in the navigation bar, placed by role. These two join this page's bar while the story is open."
         ) { ToolbarStory() },
         Story(
-            "navigation.tabs", "TabView", apis: ["TabView(selection:content:)", ".tabItem(_:)", ".tag(_:)"],
+            "navigation.tabs", "TabView",
             height: 300,
             summary: "Screens a tab bar switches between: a bottom bar on iOS, a navigation bar on Android, tabs on the Mac."
         ) { TabsStory() },

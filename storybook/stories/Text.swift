@@ -7,31 +7,31 @@ import SwiftUI
 extension StoryCatalog {
     static let text = StoryArea(id: "text", title: "Text", symbol: "textformat", stories: [
         Story(
-            "text.styles", "Text styles", apis: ["Text", ".font(_:)", "Font.largeTitle … .caption2"],
+            "text.styles", "Text styles",
             summary: "The system's text styles, from largeTitle to caption2. Each platform maps them to its own type scale: Dynamic Type on Apple's, Material's type roles on Android, the page's on the web."
         ) { TextStylesStory() },
         Story(
-            "text.weights", "Weights and designs", apis: [".fontWeight(_:)", ".bold()", ".italic()", "Font.system(size:weight:design:)", ".monospaced()"],
+            "text.weights", "Weights and designs",
             summary: "A font's weight, slant and design: the default sans serif, rounded, serif and monospaced, at a size of your own."
         ) { TextWeightsStory() },
         Story(
-            "text.decoration", "Decoration and color", apis: [".underline(_:color:)", ".strikethrough(_:color:)", ".foregroundStyle(_:)", "Text(\"\\(Text)\")"],
+            "text.decoration", "Decoration and color",
             summary: "Underline and strikethrough, colored text, and styled Text interpolated into a string: one run that wraps as one paragraph."
         ) { TextDecorationStory() },
         Story(
-            "text.markdown", "Markdown", apis: ["Text(_: LocalizedStringKey)", "Text(verbatim:)"],
+            "text.markdown", "Markdown",
             summary: "A string literal is a LocalizedStringKey, read as Markdown: bold, italic, code and links. Text(verbatim:) shows the characters as they are."
         ) { TextMarkdownStory() },
         Story(
-            "text.format", "Formatted values", apis: ["Text(_:format:)", "FormatStyle", "Text(\"\\(Image)\")"],
+            "text.format", "Formatted values",
             summary: "A value shown through a FormatStyle of your own, and an image inline in a line of text."
         ) { TextFormatStory() },
         Story(
-            "text.lines", "Lines and alignment", apis: [".lineLimit(_:)", ".multilineTextAlignment(_:)", ".truncationMode(_:)", ".fixedSize(horizontal:vertical:)"],
+            "text.lines", "Lines and alignment",
             summary: "How a long string wraps: limited to a number of lines, truncated at its head, middle or tail, aligned within its frame."
         ) { TextLinesStory() },
         Story(
-            "text.label", "Label", apis: ["Label(_:systemImage:)", ".labelStyle(_:)", ".titleAndIcon", ".iconOnly", ".titleOnly"],
+            "text.label", "Label",
             summary: "A title with an icon, shown whole, as its icon or as its title. Lists, menus and toolbars choose a style for the labels in them."
         ) { LabelStory() },
     ])

@@ -8,23 +8,23 @@ import SwiftUI
 extension StoryCatalog {
     static let state = StoryArea(id: "state", title: "State and Data", symbol: "arrow.triangle.2.circlepath", stories: [
         Story(
-            "state.binding", "@State and @Binding", apis: ["@State", "@Binding", "$value"],
+            "state.binding", "@State and @Binding",
             summary: "A value a view owns, and a child that reads and writes it through a binding: both redraw when it changes."
         ) { BindingStory() },
         Story(
-            "state.observable", "@Observable", apis: ["@Observable", "@State", ".environment(_:)", "@Environment(Model.self)", "@Bindable"],
+            "state.observable", "@Observable",
             summary: "A model class whose properties are observed: held in @State, put in the environment, read below, and bound to controls with @Bindable. Only the views that read a property redraw when it changes."
         ) { ObservableStory() },
         Story(
-            "state.environment", "Environment values", apis: ["@Environment(\\.colorScheme)", "@Environment(\\.horizontalSizeClass)", ".environment(_:_:)"],
+            "state.environment", "Environment values",
             summary: "Values the system passes down (the appearance, the size class) and values a view sets for the views inside it."
         ) { EnvironmentStory() },
         Story(
-            "state.appstorage", "@AppStorage", apis: ["@AppStorage(_:)", "UserDefaults"],
+            "state.appstorage", "@AppStorage",
             summary: "A value kept in the app's defaults: it is still there when the app is opened again."
         ) { AppStorageStory() },
         Story(
-            "state.task", "Tasks and lifecycle", apis: [".task(_:)", ".task(id:_:)", ".onAppear(perform:)", ".onChange(of:_:)", "Task.sleep(for:)"],
+            "state.task", "Tasks and lifecycle",
             summary: "Work that starts when a view appears and is cancelled when it goes, restarted when a value changes."
         ) { TaskStory() },
     ])

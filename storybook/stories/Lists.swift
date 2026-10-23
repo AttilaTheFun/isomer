@@ -6,37 +6,37 @@ import SwiftUI
 extension StoryCatalog {
     static let lists = StoryArea(id: "lists", title: "Lists and Forms", symbol: "list.bullet", stories: [
         Story(
-            "lists.sections", "List and Section", apis: ["List", "Section(_:content:)", "ForEach(_:id:content:)"],
+            "lists.sections", "List and Section",
             height: 340,
             summary: "Rows in sections with headers. A list is the platform's own: grouped and inset on iOS, Material rows on Android."
         ) { ListSectionsStory() },
         Story(
-            "lists.selection", "Selection", apis: ["List(selection:content:)", ".tag(_:)"],
+            "lists.selection", "Selection",
             height: 300,
             summary: "A list whose rows select a value: the row tagged with it is highlighted."
         ) { ListSelectionStory() },
         Story(
-            "lists.actions", "Row actions", apis: [".swipeActions(edge:allowsFullSwipe:content:)", ".onDelete(perform:)", ".contextMenu(menuItems:)"],
+            "lists.actions", "Row actions",
             height: 300,
             summary: "Actions on a row: swiped from its edge, deleted with a full swipe, or chosen from its context menu (a long press, or a secondary click)."
         ) { RowActionsStory() },
         Story(
-            "lists.form", "Form", apis: ["Form", "Section(_:content:footer:)", "LabeledContent(_:value:)", ".formStyle(_:)"],
+            "lists.form", "Form",
             height: 440,
             summary: "Settings-style rows of controls in grouped sections, with labeled values and footers."
         ) { FormStory() },
         Story(
-            "lists.outline", "Outlines", apis: ["OutlineGroup(_:children:content:)", "DisclosureGroup(_:isExpanded:content:)", "List(_:children:rowContent:)"],
+            "lists.outline", "Outlines",
             height: 340,
             summary: "A tree shown as rows that expand to show their children, and a single group that shows and hides its content."
         ) { OutlineStory() },
         Story(
-            "lists.search", "Searchable", apis: [".searchable(text:prompt:)"],
+            "lists.search", "Searchable",
             height: 300,
             summary: "A search field in the navigation bar that filters what the page lists."
         ) { SearchStory() },
         Story(
-            "lists.empty", "ContentUnavailableView", apis: ["ContentUnavailableView(_:systemImage:description:)", "ContentUnavailableView(label:description:actions:)"],
+            "lists.empty", "ContentUnavailableView",
             summary: "What a screen shows when it has nothing to show: a symbol, a title, a description, and what to do about it."
         ) { EmptyStateStory() },
     ])

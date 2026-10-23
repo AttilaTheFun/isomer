@@ -6,15 +6,15 @@ import SwiftUI
 extension StoryCatalog {
     static let images = StoryArea(id: "images", title: "Images", symbol: "photo", stories: [
         Story(
-            "images.symbols", "Symbols", apis: ["Image(systemName:)", ".font(_:)", ".foregroundStyle(_:)"],
+            "images.symbols", "Symbols",
             summary: "SF Symbols by name. They size with the font, like text, and take a color. Off Apple's platforms Isomer draws the symbols it carries; a name it lacks draws nothing."
         ) { SymbolsStory() },
         Story(
-            "images.assets", "App images", apis: ["Image(_:)", ".resizable()", ".scaledToFit()", ".aspectRatio(contentMode:)", ".clipShape(_:)"],
+            "images.assets", "App images",
             summary: "An image the app ships, by name: an asset catalog's on Apple's platforms, the app's assets elsewhere. Resizable, it fits or fills the frame it is given."
         ) { AppImagesStory() },
         Story(
-            "images.async", "AsyncImage", apis: ["AsyncImage(url:content:placeholder:)", "ProgressView()"],
+            "images.async", "AsyncImage",
             summary: "An image loaded from a URL, with a placeholder until it arrives."
         ) { AsyncImageStory() },
     ])

@@ -6,27 +6,27 @@ import SwiftUI
 extension StoryCatalog {
     static let controls = StoryArea(id: "controls", title: "Controls", symbol: "slider.horizontal.3", stories: [
         Story(
-            "controls.toggle", "Toggle", apis: ["Toggle(_:isOn:)", "Toggle(isOn:label:)", ".disabled(_:)"],
+            "controls.toggle", "Toggle",
             summary: "An on-off switch bound to a Bool: a switch on iOS and Android, a checkbox or switch on the Mac, the page's own on the web."
         ) { ToggleStory() },
         Story(
-            "controls.slider", "Slider", apis: ["Slider(value:)", "Slider(value:in:)", ".tint(_:)"],
+            "controls.slider", "Slider",
             summary: "A value picked from a range by dragging: a fraction by default, or any range."
         ) { SliderStory() },
         Story(
-            "controls.stepper", "Stepper", apis: ["Stepper(_:value:in:)", "Stepper(_:value:in:step:)"],
+            "controls.stepper", "Stepper",
             summary: "A value raised and lowered one step at a time, within bounds."
         ) { StepperStory() },
         Story(
-            "controls.picker", "Picker", apis: ["Picker(_:selection:content:)", ".pickerStyle(_:)", ".segmented", ".menu", ".tag(_:)"],
+            "controls.picker", "Picker",
             summary: "One of several values, as segments or a menu. Each choice is tagged with the value it selects."
         ) { PickerStory() },
         Story(
-            "controls.date", "DatePicker", apis: ["DatePicker(_:selection:displayedComponents:)", ".date", ".hourAndMinute"],
+            "controls.date", "DatePicker",
             summary: "A date, a time, or both, in the platform's own picker."
         ) { DatePickerStory() },
         Story(
-            "controls.progress", "ProgressView", apis: ["ProgressView()", "ProgressView(value:)", "ProgressView(_:value:total:)"],
+            "controls.progress", "ProgressView",
             summary: "Work under way: a spinner when its length is unknown, a bar when it is."
         ) { ProgressStory() },
     ])

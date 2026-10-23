@@ -6,16 +6,16 @@ import SwiftUI
 extension StoryCatalog {
     static let scrolling = StoryArea(id: "scrolling", title: "Scrolling", symbol: "scroll", stories: [
         Story(
-            "scrolling.vertical", "ScrollView and LazyVStack", apis: ["ScrollView", "LazyVStack(spacing:content:)"],
+            "scrolling.vertical", "ScrollView and LazyVStack",
             height: 280,
             summary: "Content taller than its space, scrolled; a lazy stack makes rows only as they come into view."
         ) { VerticalScrollStory() },
         Story(
-            "scrolling.horizontal", "Horizontal scrolling", apis: ["ScrollView(.horizontal, showsIndicators:)", "LazyHStack"],
+            "scrolling.horizontal", "Horizontal scrolling",
             summary: "A row of cards wider than the screen, scrolled sideways."
         ) { HorizontalScrollStory() },
         Story(
-            "scrolling.reader", "ScrollViewReader", apis: ["ScrollViewReader", "ScrollViewProxy.scrollTo(_:anchor:)", ".id(_:)"],
+            "scrolling.reader", "ScrollViewReader",
             height: 300,
             summary: "Scrolling from code: to a row by its id, animated."
         ) { ScrollReaderStory() },

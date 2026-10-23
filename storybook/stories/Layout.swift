@@ -6,31 +6,31 @@ import SwiftUI
 extension StoryCatalog {
     static let layout = StoryArea(id: "layout", title: "Layout", symbol: "square.grid.2x2", stories: [
         Story(
-            "layout.stacks", "Stacks", apis: ["HStack(alignment:spacing:content:)", "VStack(alignment:spacing:content:)", "ZStack(alignment:content:)"],
+            "layout.stacks", "Stacks",
             summary: "Views side by side, one above another, and layered, aligned and spaced."
         ) { StacksStory() },
         Story(
-            "layout.frames", "Frames and spacers", apis: [".frame(width:height:alignment:)", ".frame(maxWidth:alignment:)", "Spacer()", "Divider()"],
+            "layout.frames", "Frames and spacers",
             summary: "A view's size, fixed or as wide as it may be; space that pushes its neighbours apart; a line between them."
         ) { FramesStory() },
         Story(
-            "layout.decoration", "Padding, background, overlay", apis: [".padding(_:)", ".padding(_:_:)", ".background(_:)", ".overlay(alignment:content:)", ".cornerRadius(_:)"],
+            "layout.decoration", "Padding, background, overlay",
             summary: "Space around a view, a view behind it, and a view in front of it at an alignment."
         ) { DecorationStory() },
         Story(
-            "layout.grid", "Grid", apis: ["Grid(alignment:horizontalSpacing:verticalSpacing:content:)", "GridRow"],
+            "layout.grid", "Grid",
             summary: "Rows of cells whose columns line up, sized by their widest cell."
         ) { GridStory() },
         Story(
-            "layout.lazygrid", "LazyVGrid", apis: ["LazyVGrid(columns:spacing:content:)", "GridItem(.adaptive(minimum:))", "GridItem(.flexible())"],
+            "layout.lazygrid", "LazyVGrid",
             summary: "As many columns as fit, each at least a width, filled row by row."
         ) { LazyGridStory() },
         Story(
-            "layout.geometry", "GeometryReader", apis: ["GeometryReader", "GeometryProxy.size"],
+            "layout.geometry", "GeometryReader",
             summary: "The size a view is offered, read to lay out its content in proportion."
         ) { GeometryStory() },
         Story(
-            "layout.thatfits", "ViewThatFits", apis: ["ViewThatFits(in:content:)"],
+            "layout.thatfits", "ViewThatFits",
             summary: "The first of several layouts that fits the space: a row when there is room, a column when there is not."
         ) { ThatFitsStory() },
     ])

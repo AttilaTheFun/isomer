@@ -88,8 +88,7 @@ public struct StorybookView: View {
     }
 }
 
-/// A story's page: its code, what it does and the APIs it shows, and the
-/// code running.
+/// A story's page: its code, what it does, and the code running.
 struct StoryPage: View {
     let story: Story
 
@@ -97,15 +96,9 @@ struct StoryPage: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 CodeCard(code: story.code)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(story.summary)
-                        .font(.body)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(story.apis.joined(separator: "  ·  "))
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text(story.summary)
+                    .font(.body)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text("Result")
                     .font(.headline)
                     .accessibilityIdentifier("story-result")
@@ -131,29 +124,18 @@ struct StoryPage: View {
     }
 }
 
-/// A story's source in a monospaced card: its first lines, with the rest a
-/// tap away, so the result stays on screen beside it.
+/// A story's source in a monospaced card, coloured as the Playground's
+/// editor colours it.
 struct CodeCard: View {
     let code: String
-    @State private var expanded = false
-    private static let compactLines = 12
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        let lines = code.split(separator: "\n", omittingEmptySubsequences: false)
-        let clipped = !expanded && lines.count > Self.compactLines
-        VStack(alignment: .leading, spacing: 8) {
-            ScrollView(.horizontal) {
-                Text(clipped ? lines.prefix(Self.compactLines).joined(separator: "\n") : code)
-                    .font(.system(size: 12, design: .monospaced))
-                    .fixedSize(horizontal: true, vertical: true)
-                    .padding(12)
-            }
-            if clipped {
-                Button("Show all \(lines.count) lines") { expanded = true }
-                    .font(.footnote)
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 10)
-            }
+        ScrollView(.horizontal) {
+            Text(SwiftHighlighter.highlight(code, dark: colorScheme == .dark))
+                .font(.system(size: 12, design: .monospaced))
+                .fixedSize(horizontal: true, vertical: true)
+                .padding(12)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.secondary.opacity(0.12)))

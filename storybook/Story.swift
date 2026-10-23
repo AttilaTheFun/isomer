@@ -10,13 +10,11 @@
 
 import SwiftUI
 
-/// One story: its id (`area.name`), title, the APIs it shows, what it says
-/// about them, and its view.
+/// One story: its id (`area.name`), title, what it says about its APIs,
+/// and its view.
 public struct Story: Identifiable, Hashable {
     public let id: String
     public let title: String
-    /// The APIs it exercises, as written in code (`Toggle`, `.toggleStyle(_:)`).
-    public let apis: [String]
     public let summary: String
     /// A fixed height for the result (a story that fills its space: a split
     /// view, a map), else its own.
@@ -24,12 +22,11 @@ public struct Story: Identifiable, Hashable {
     let make: @MainActor () -> AnyView
 
     init<V: View>(
-        _ id: String, _ title: String, apis: [String], height: Double? = nil, summary: String,
+        _ id: String, _ title: String, height: Double? = nil, summary: String,
         @ViewBuilder view: @escaping @MainActor () -> V
     ) {
         self.id = id
         self.title = title
-        self.apis = apis
         self.height = height
         self.summary = summary
         self.make = { AnyView(view()) }

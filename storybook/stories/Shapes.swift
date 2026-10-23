@@ -6,31 +6,31 @@ import SwiftUI
 extension StoryCatalog {
     static let shapes = StoryArea(id: "shapes", title: "Shapes and Color", symbol: "circle.square", stories: [
         Story(
-            "shapes.basic", "Shapes", apis: ["Rectangle()", "RoundedRectangle(cornerRadius:)", "Circle()", "Capsule()", "Ellipse()", ".fill(_:)"],
+            "shapes.basic", "Shapes",
             summary: "The built-in shapes, filled. A shape takes all the space it is offered; a frame sizes it."
         ) { BasicShapesStory() },
         Story(
-            "shapes.stroke", "Strokes", apis: [".stroke(_:lineWidth:)", ".stroke(_:style:)", "StrokeStyle(lineWidth:lineCap:dash:)", ".trim(from:to:)"],
+            "shapes.stroke", "Strokes",
             summary: "A shape's outline: its width, dashes and caps, and part of it trimmed away, as a progress ring is."
         ) { StrokesStory() },
         Story(
-            "shapes.path", "Path and Shape", apis: ["Shape", "path(in:)", "Path", "move(to:)", "addLine(to:)", "addQuadCurve(to:control:)"],
+            "shapes.path", "Path and Shape",
             summary: "A shape of your own: a path drawn in the rectangle it is given, filled and stroked like the built-in ones."
         ) { PathStory() },
         Story(
-            "shapes.gradients", "Gradients", apis: ["LinearGradient(colors:startPoint:endPoint:)", "RadialGradient(colors:center:startRadius:endRadius:)", "AngularGradient(colors:center:)"],
+            "shapes.gradients", "Gradients",
             summary: "Colors blended along a line, out from a point, and around a centre."
         ) { GradientsStory() },
         Story(
-            "shapes.colors", "Colors", apis: ["Color.red … .brown", "Color(red:green:blue:)", ".opacity(_:)", "Color.primary", "Color.secondary", "Color.accentColor"],
+            "shapes.colors", "Colors",
             summary: "The system colors, which adapt to light and dark appearance, and colors of your own."
         ) { ColorsStory() },
         Story(
-            "shapes.materials", "Materials", apis: [".background(_:)", "Material.ultraThin … .thick"],
+            "shapes.materials", "Materials",
             summary: "Translucent backgrounds that blur what is behind them."
         ) { MaterialsStory() },
         Story(
-            "shapes.effects", "Shadows and effects", apis: [".shadow(color:radius:x:y:)", ".blur(radius:)", ".opacity(_:)", ".clipShape(_:)"],
+            "shapes.effects", "Shadows and effects",
             summary: "A shadow under a view, a blur over it, its opacity, and a shape it is clipped to."
         ) { EffectsStory() },
     ])

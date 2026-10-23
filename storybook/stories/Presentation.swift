@@ -5,19 +5,19 @@ import SwiftUI
 extension StoryCatalog {
     static let presentation = StoryArea(id: "presentation", title: "Presentation", symbol: "rectangle.stack", stories: [
         Story(
-            "presentation.sheet", "Sheet", apis: [".sheet(isPresented:content:)", ".presentationDetents(_:)", "@Environment(\\.dismiss)"],
+            "presentation.sheet", "Sheet",
             summary: "A screen that slides up over this one, at half or full height, dismissed by itself or by a swipe."
         ) { SheetStory() },
         Story(
-            "presentation.alert", "Alert", apis: [".alert(_:isPresented:actions:message:)", "ButtonRole"],
+            "presentation.alert", "Alert",
             summary: "A message that needs an answer, in the platform's own dialog."
         ) { AlertStory() },
         Story(
-            "presentation.dialog", "Confirmation dialog", apis: [".confirmationDialog(_:isPresented:titleVisibility:actions:)"],
+            "presentation.dialog", "Confirmation dialog",
             summary: "A choice among actions, one of them destructive: an action sheet on iOS, a dialog elsewhere."
         ) { ConfirmationStory() },
         Story(
-            "presentation.popover", "Popover", apis: [".popover(isPresented:content:)"],
+            "presentation.popover", "Popover",
             summary: "Content in a bubble beside the button that showed it; a sheet on a phone."
         ) { PopoverStory() },
     ])

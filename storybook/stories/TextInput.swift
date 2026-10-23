@@ -5,19 +5,19 @@ import SwiftUI
 extension StoryCatalog {
     static let textInput = StoryArea(id: "input", title: "Text Input", symbol: "character.cursor.ibeam", stories: [
         Story(
-            "input.field", "TextField", apis: ["TextField(_:text:)", ".textFieldStyle(_:)", ".roundedBorder", ".onSubmit(_:)"],
+            "input.field", "TextField",
             summary: "One line of text bound to a String. Return submits it."
         ) { TextFieldStory() },
         Story(
-            "input.secure", "SecureField", apis: ["SecureField(_:text:)"],
+            "input.secure", "SecureField",
             summary: "A field whose characters are hidden as they are typed: passwords and keys."
         ) { SecureFieldStory() },
         Story(
-            "input.multiline", "Multi-line text", apis: ["TextField(_:text:axis:)", ".lineLimit(_:)", "TextEditor(text:)"],
+            "input.multiline", "Multi-line text",
             summary: "A field that grows with its text up to a number of lines, and an editor for longer text."
         ) { MultilineStory() },
         Story(
-            "input.focus", "Focus", apis: ["@FocusState", ".focused(_:equals:)", ".submitLabel(_:)"],
+            "input.focus", "Focus",
             summary: "Which field has the keyboard, as state: read it, and move it from code."
         ) { FocusStory() },
     ])
