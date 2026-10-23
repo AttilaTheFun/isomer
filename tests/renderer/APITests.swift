@@ -513,8 +513,45 @@ func checkRowSeparatorTrait(_ mock: MockRenderer) {
     expect(gaps == 1, "the second section starts its own group (\(gaps) section breaks)")
 }
 
+// MARK: Transforms through a reactor's tree (the desktop wasm hosts)
+
+/// A board of cells each `.offset` into place, as 2048 draws it.
+struct OffsetBoard: View {
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(0..<4, id: \.self) { index in
+                Color.gray
+                    .frame(width: 40, height: 40)
+                    .offset(x: CGFloat(index % 2) * 48, y: CGFloat(index / 2) * 48)
+            }
+            Color.blue.frame(width: 10, height: 10).scaleEffect(2)
+        }
+        .frame(width: 96, height: 96)
+    }
+}
+
+/// The desktop hosts decode the reactor's flat tree back into render nodes
+/// (FlatTreeDecoder): its transforms must survive, or every `.offset` cell
+/// draws at its origin (2048's board, one tile on Linux and Windows).
+@MainActor
+func checkDecodedTransforms(_ mock: MockRenderer) {
+    Runtime.shared.installRootView { OffsetBoard() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    let bytes = FlatTreeEncoder().encode(root: mock.lastTree!)
+    let decoded = FlatTreeDecoder { _, _ in }.decode(bytes: bytes)
+    // What the decoded nodes carry, read back through the encoder.
+    var buffer = ByteBuffer(bytes: FlatTreeEncoder().encode(root: decoded))
+    let again = getRoot(byteBuffer: &buffer) as IsoFlat_Node
+    let offsets = flatNodes(again) { $0.offsetX != nil || $0.offsetY != nil }
+        .map { "\(Int($0.offsetX ?? 0)),\(Int($0.offsetY ?? 0))" }
+    let scales = flatNodes(again) { $0.scale != nil }.compactMap(\.scale)
+    expect(offsets.sorted() == ["0,48", "48,0", "48,48"], "the decoded cells keep their offsets (\(offsets))")
+    expect(scales == [2], "and a scaleEffect survives (\(scales))")
+}
+
 @MainActor
 func checkAPIAdditions(_ mock: MockRenderer) {
+    checkDecodedTransforms(mock)
     checkRuntimeConnection(mock)
     checkDerivedStyles(mock)
     checkDisabledButton(mock)

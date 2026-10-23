@@ -326,6 +326,10 @@ def web(review, story_list, builds):
             url = f"http://127.0.0.1:{app_port}/{page}?{query}"
             sh([sys.executable, cdp, url, path, f"wait={wait}", "width=1280", "height=800"])
 
+        # A fresh Chrome profile's first load compiles the reactor: warm both
+        # sites up before the shots.
+        for app in APPS:
+            launcher(app, {}, 15, os.path.join(tempfile.mkdtemp(), "warm.png"))
         shoot_apps(review, "web", "Chrome (desktop width)", "landscape", launcher, story_list,
                    # A run fetches and starts the in-browser compiler first.
                    {"open": 8, "story": 6, "run": 75})

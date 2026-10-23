@@ -44,10 +44,6 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
   Windows' takes them from the build VM's installed Swift, since rules_swift
   has no Windows host toolchain to assemble them from. Visual Studio and an
   installed Swift are a stopgap until the hermetic toolchains replace them.
-- **The GPU renderer draws 2048's board as one tile** (the Playground's
-  2048 in Linux's WasmKit loader, 0.38): the sixteen cells, each framed
-  and `.offset` inside a `ZStack(alignment: .topLeading)`, are not drawn
-  where SwiftUI puts them. The Storybook's own pages draw right there.
 - **Windows' Swift 6.3.2 can't link `AttributedString.runs`** (its
   Foundation doesn't export the descriptor of _FoundationCollections'
   `BigString.Index`, on ARM64 and x64 alike), so there `Text(AttributedString)`
