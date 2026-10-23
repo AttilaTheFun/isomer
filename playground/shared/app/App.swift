@@ -1,29 +1,17 @@
-// The Isomer app: one shell on every platform, written in SwiftUI and
+// The Playground: one shell on every platform, written in SwiftUI and
 // compiled against Apple's SwiftUI (iOS, macOS) and Isomer's (the web,
-// Android, Linux, Windows). Its sidebar has three sections:
-//   • Projects: describe an app, an agent writes the SwiftUI, and the app
-//     compiles it to a wasm reactor on the device and runs it (where the
-//     host has a compiler: iOS, Android, the web);
-//   • Hot Reloaders: follow an app published to a URL, run its newest
-//     version, reload when a new one appears (where the host runs wasm);
-//   • Gallery: Isomer's apps and components (@isomer//gallery), drawn by the
-//     app's own renderer, and runnable as wasm on the platform's engine.
+// Android, Linux, Windows). Its sidebar is the projects: describe an app,
+// an agent writes the SwiftUI, and the app compiles it to a wasm reactor
+// on the device and runs it. New projects start from the canned examples
+// (the templates: Counter, 2048, the Pokédex…), which live only here.
 // What is platform-bound (the compiler, running a reactor, the chat's
 // network, the code editor) is the host's: PlaygroundHostService
 // (Services.swift), and the views a host injects (PlaygroundSurfaces).
 
 import AgentUI
 import Foundation
-import Gallery
 import SwiftUI
 import Isomer
-
-/// What the sidebar selects.
-enum IsomerSelection: Hashable {
-    case project(String)
-    case reloader(String)
-    case gallery(GalleryEntry)
-}
 
 /// The views a native host injects where the platform has its own: the run
 /// surface (a WasmView on Apple platforms; the run's own window on Linux
@@ -35,46 +23,32 @@ public enum PlaygroundSurfaces {
 }
 
 /// The app: the shell, given what the host can do.
-public struct IsomerRoot: View {
+public struct PlaygroundRoot: View {
     /// Projects only where the host compiles.
     private let hasProjects = PlaygroundHost.service?.supportsProjects() ?? false
-    /// Hot reloaders and the Gallery as wasm only where the host runs reactors.
-    private let runsReactors = PlaygroundHost.service?.supportsReactors() ?? false
     @State private var store: WebProjectStore
-    @State private var hot: HotReloadStore
-    @State private var gallery = GalleryModel()
     @State private var sessions: [String: WebAgentSession] = [:]
-    @State private var selection: IsomerSelection?
+    /// The project open.
+    @State private var selection: String?
     @State private var showNewProject = false
-    @State private var showNewReloader = false
     @State private var showSettings = false
     @State private var columns: NavigationSplitViewVisibility = .all
     /// A phone's one column: the sidebar (the app's main menu) until
     /// something is opened.
     @State private var compactColumn: NavigationSplitViewColumn = .sidebar
     @Environment(\.horizontalSizeClass) private var sizeClass
-    /// A run the launch asked for (ISO_RUN_GALLERY_WASM, ISO_RUN_REACTOR),
-    /// and whether it was started.
-    @State private var launchRun = false
+    /// A run the launch asked for (ISO_PLAYGROUND_RUN_PROJECT), and whether
+    /// it was started.
     @State private var launchRunStarted = false
     /// The launch's own selection, which opens no page on a phone.
     @State private var settingFirstSelection = false
 
-    /// What a launch hook opens (ISO_OPEN_APP, ISO_PLAYGROUND_OPEN_PROJECT,
-    /// ISO_OPEN_RELOADER) is open from the first frame, on its page.
+    /// What a launch hook opens (ISO_PLAYGROUND_OPEN_PROJECT,
+    /// ISO_PLAYGROUND_RUN_PROJECT) is open from the first frame, on its page.
     public init() {
         let store = WebProjectStore()
-        let hot = HotReloadStore()
-        // ISO_ADD_RELOADER="<name>|<versions URL>": a hot reloader made at
-        // launch when there is none of that name (the proof's, with no
-        // typing into the New Hot Reloader sheet).
-        if let spec = ProcessInfo.processInfo.environment["ISO_ADD_RELOADER"], let bar = spec.firstIndex(of: "|") {
-            let name = String(spec[..<bar]), url = String(spec[spec.index(after: bar)...])
-            if !hot.reloaders.contains(where: { $0.name == name }) { hot.create(name: name, url: url, intervalSeconds: 15) }
-        }
         _store = State(initialValue: store)
-        _hot = State(initialValue: hot)
-        if let launched = Self.launchSelection(store: store, hot: hot) {
+        if let launched = Self.launchProject(store: store) {
             _selection = State(initialValue: launched)
             _compactColumn = State(initialValue: .detail)
         }
@@ -82,9 +56,9 @@ public struct IsomerRoot: View {
 
     private var compact: Bool { sizeClass == .compact }
 
-    // Visor's shape: two columns, the sidebar (an inset grouped list: the
-    // projects, the hot reloaders, the Gallery) and the page of what it has
-    // selected. A phone shows one at a time, the sidebar first.
+    // Visor's shape: two columns, the sidebar (an inset grouped list of the
+    // projects) and the project selected. A phone shows one at a time, the
+    // sidebar first.
     public var body: some View {
         NavigationSplitView(columnVisibility: $columns, preferredCompactColumn: $compactColumn) {
             sidebar
@@ -92,21 +66,15 @@ public struct IsomerRoot: View {
             page
         }
         .navigationSplitViewStyle(.balanced)
-        .galleryEnvironment(gallery)
         .sheet(isPresented: $showNewProject) {
             NewProjectSheet(templates: WebTemplate.all.map { ProjectTemplateChoice(id: $0.id, name: $0.name, subtitle: $0.subtitle, isBlank: $0.asset == nil) }) { name, choice in
                 if let template = WebTemplate.all.first(where: { $0.id == choice.id }) {
                     let project = store.create(named: name, template: template)
-                    selection = .project(project.id)
+                    selection = project.id
                 }
             }
         }
-        .sheet(isPresented: $showNewReloader) {
-            NewHotReloaderSheet { reloader in selection = .reloader(reloader.id) }
-                .environment(hot)
-        }
         .sheet(isPresented: $showSettings) { SettingsSheet(hasProjects: hasProjects) }
-        .runCover(isPresented: $launchRun)
         .onAppear {
             openFirstPageIfWide()
             startLaunchRun()
@@ -115,7 +83,7 @@ public struct IsomerRoot: View {
         // A window that widens past a phone's opens a page beside the sidebar.
         .onChange(of: sizeClass) { _ in openFirstPageIfWide() }
         .onChange(of: selection) { value in
-            if case .project(let id) = value { store.select(id) }
+            if let value { store.select(value) }
             if settingFirstSelection {
                 settingFirstSelection = false
                 return
@@ -124,61 +92,35 @@ public struct IsomerRoot: View {
         }
     }
 
-    /// Wide, the last project (or the Gallery's first entry) is open beside
-    /// the sidebar; a phone stays on the sidebar, its main menu, with
-    /// nothing selected (a selection there would open its page).
+    /// Wide, the last project is open beside the sidebar; a phone stays on
+    /// the sidebar, its main menu, with nothing selected (a selection there
+    /// would open its page).
     private func openFirstPageIfWide() {
-        guard !compact, selection == nil else { return }
+        guard !compact, selection == nil, hasProjects, let last = store.selection ?? store.projects.first?.id else { return }
         settingFirstSelection = true
-        selection = (hasProjects ? store.selection.map { .project($0) } : nil) ?? .gallery(.first)
+        selection = last
     }
 
-    /// Headless hooks: ISO_OPEN_APP=<gallery slug> opens a Gallery entry,
-    /// ISO_PLAYGROUND_OPEN_PROJECT=<id or name> a project,
-    /// ISO_OPEN_RELOADER=<name> a hot reloader (ISO_ADD_RELOADER, in `init`,
-    /// adds one).
-    static func launchSelection(store: WebProjectStore, hot: HotReloadStore) -> IsomerSelection? {
-        if let entry = GalleryEntry.launchEntry { return .gallery(entry) }
+    /// Headless hooks: ISO_PLAYGROUND_OPEN_PROJECT=<id or name> opens a
+    /// project; ISO_PLAYGROUND_RUN_PROJECT=<id or name> opens it and builds
+    /// and runs it (the proof's shot of a canned example running).
+    static func launchProject(store: WebProjectStore) -> String? {
         let environment = ProcessInfo.processInfo.environment
-        if let key = environment["ISO_PLAYGROUND_OPEN_PROJECT"], !key.isEmpty,
-           let project = store.projects.first(where: { $0.id == key || $0.name == key }) {
-            return .project(project.id)
-        }
-        if let key = environment["ISO_OPEN_RELOADER"], !key.isEmpty,
-           let reloader = hot.reloaders.first(where: { $0.id == key || $0.name == key }) {
-            return .reloader(reloader.id)
+        for hook in ["ISO_PLAYGROUND_RUN_PROJECT", "ISO_PLAYGROUND_OPEN_PROJECT"] {
+            if let key = environment[hook], !key.isEmpty,
+               let project = store.projects.first(where: { $0.id == key || $0.name == key }) {
+                return project.id
+            }
         }
         return nil
     }
 
-    /// Headless hooks for a run at launch: ISO_RUN_GALLERY_WASM=1 runs the
-    /// Gallery's reactor on the entry ISO_OPEN_APP names; ISO_RUN_REACTOR=<url>
-    /// runs that reactor (as a hot reloader's version runs).
+    /// ISO_PLAYGROUND_AUTORUN=all compiles every project at launch.
     private func startLaunchRun() {
         guard !launchRunStarted else { return }
         launchRunStarted = true
-        let environment = ProcessInfo.processInfo.environment
-        if environment["ISO_PLAYGROUND_AUTORUN"] == "all" {
+        if ProcessInfo.processInfo.environment["ISO_PLAYGROUND_AUTORUN"] == "all" {
             compileEveryProject()
-            return
-        }
-        let url: String
-        var guest = ""
-        if environment["ISO_RUN_GALLERY_WASM"].map({ !$0.isEmpty && $0 != "0" }) == true {
-            url = "bundle:gallery.wasm"
-            guest = "ISO_OPEN_APP=\(GalleryEntry.launchEntry?.slug ?? GalleryEntry.first.slug)"
-        } else if let reactor = environment["ISO_RUN_REACTOR"], !reactor.isEmpty {
-            url = reactor
-        } else {
-            return
-        }
-        Task { @MainActor in
-            do {
-                _ = try await PlaygroundHost.service?.runReactor(url: url, project: url.hasPrefix("bundle:") ? "gallery" : "launch", environment: guest)
-                launchRun = true
-            } catch {
-                print("[isomer] launch run failed: \(error)")
-            }
         }
     }
 
@@ -221,38 +163,8 @@ public struct IsomerRoot: View {
                                 .foregroundColor(.secondary)
                                 .accessibilityLabel("Delete \(project.name)")
                         }
-                        .tag(IsomerSelection.project(project.id))
+                        .tag(project.id)
                     }
-                }
-            }
-            if runsReactors {
-                Section {
-                    Button { showNewReloader = true } label: {
-                        Label("New Hot Reloader", systemImage: "plus.circle.fill")
-                    }
-                    .accessibilityIdentifier("new-hot-reloader")
-                    ForEach(hot.reloaders) { reloader in
-                        Label {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(reloader.name)
-                                Text(reloader.pendingVersion.map { "\($0) ready" } ?? reloader.lastVersion.map { "Installed \($0)" } ?? reloader.url)
-                                    .font(.caption).foregroundColor(.secondary).lineLimit(1)
-                            }
-                        } icon: {
-                            Image(systemName: "arrow.triangle.2.circlepath")
-                        }
-                        .tag(IsomerSelection.reloader(reloader.id))
-                        .accessibilityIdentifier("hot-reloader-\(reloader.name)")
-                    }
-                } header: {
-                    Text("Hot Reloaders")
-                }
-            }
-            Section("Gallery") {
-                ForEach(GalleryEntry.all) { entry in
-                    GalleryEntryRow(entry)
-                        .tag(IsomerSelection.gallery(entry))
-                        .accessibilityIdentifier("gallery-\(entry.slug)")
                 }
             }
         }
@@ -261,7 +173,7 @@ public struct IsomerRoot: View {
         #else
         .listStyle(.insetGrouped)
         #endif
-        .navigationTitle("Isomer")
+        .navigationTitle("Playground")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { showSettings = true } label: { Image(systemName: "gearshape") }
@@ -274,44 +186,29 @@ public struct IsomerRoot: View {
     private func delete(project id: String) {
         store.delete(id)
         sessions[id] = nil
-        if selection == .project(id) { selection = store.selection.map { .project($0) } ?? .gallery(.first) }
+        if selection == id { selection = compact ? nil : store.selection }
     }
 
     // MARK: The page
 
     @ViewBuilder
     private var page: some View {
-        switch selection {
-        case .project(let id):
-            if let session = session(for: id) {
-                Barred {
-                    ProjectView(session: session)
-                        .id(id)
-                        .navigationTitle(store.projects.first(where: { $0.id == id })?.name ?? "Project")
-                        .inlineTitle()
-                }
-            } else {
-                Barred { Placeholder(text: "Create a project to start") }
+        if let id = selection, let session = session(for: id) {
+            Barred {
+                ProjectView(session: session, runAtLaunch: Self.runsAtLaunch(id, store: store))
+                    .id(id)
+                    .navigationTitle(store.projects.first(where: { $0.id == id })?.name ?? "Project")
+                    .inlineTitle()
             }
-        case .reloader(let id):
-            if let reloader = hot.reloaders.first(where: { $0.id == id }) {
-                Barred {
-                    HotReloaderView(reloader: reloader) { selection = nil }
-                        .id(id)
-                        .environment(hot)
-                }
-            } else {
-                Barred { Placeholder(text: "Select a hot reloader") }
-            }
-        case .gallery(let entry):
-            // The page has its own stack: its rows push their screens.
-            GalleryPage(entry, model: gallery) {
-                if PlaygroundHost.service?.supports("gallery-wasm") == true { GalleryWasmButton(entry: entry) }
-            }
-            .id(entry)
-        case nil:
-            Barred { Placeholder(text: "Select something in the sidebar") }
+        } else {
+            Barred { Placeholder(text: hasProjects ? "Select a project, or make a new one" : "This platform has no compiler yet") }
         }
+    }
+
+    /// Whether ISO_PLAYGROUND_RUN_PROJECT names this project.
+    static func runsAtLaunch(_ id: String, store: WebProjectStore) -> Bool {
+        guard let key = ProcessInfo.processInfo.environment["ISO_PLAYGROUND_RUN_PROJECT"], !key.isEmpty else { return false }
+        return store.projects.first(where: { $0.id == key || $0.name == key })?.id == id
     }
 
     private func session(for id: String) -> WebAgentSession? {
@@ -378,7 +275,10 @@ extension View {
 /// full-screen run).
 struct ProjectView: View {
     var session: WebAgentSession
+    /// Build and run as soon as the page appears (ISO_PLAYGROUND_RUN_PROJECT).
+    var runAtLaunch = false
     @State private var draft = ""
+    @State private var ranAtLaunch = false
     @State private var compiling = false
     @State private var showEditor = false
     @State private var running = false
@@ -436,6 +336,11 @@ struct ProjectView: View {
             BuildDiagnosticsSheet(diagnostics: buildFailure ?? "")
         }
         .runCover(isPresented: $running)
+        .onAppear {
+            guard runAtLaunch, !ranAtLaunch else { return }
+            ranAtLaunch = true
+            run()
+        }
     }
 
     private func send() {
@@ -564,36 +469,6 @@ struct RunSurface: PlatformViewRepresentable {
     }
 }
 #endif
-
-/// Runs the Gallery's entry as wasm: the Gallery's reactor, bundled with
-/// the app, on the platform's wasm engine and the chosen renderer.
-struct GalleryWasmButton: View {
-    let entry: GalleryEntry
-    @State private var running = false
-    @State private var failure: String?
-
-    var body: some View {
-        Button {
-            Task { @MainActor in
-                do {
-                    _ = try await PlaygroundHost.service?.runReactor(url: "bundle:gallery.wasm", project: "gallery", environment: "ISO_OPEN_APP=\(entry.slug)")
-                    running = true
-                } catch {
-                    failure = "\(error)"
-                }
-            }
-        } label: {
-            Label("Run as wasm", systemImage: "play.rectangle")
-        }
-        .accessibilityIdentifier("gallery-wasm")
-        .runCover(isPresented: $running)
-        .alert("Couldn't run the Gallery", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
-            Button("OK") { failure = nil }
-        } message: {
-            Text(failure ?? "")
-        }
-    }
-}
 
 extension TranscriptMessage {
     init(_ message: ChatMessage) {

@@ -1,9 +1,8 @@
-// The Isomer app's host on Linux and Windows, set as `PlaygroundHost.service`
-// before the app starts. The Gallery is drawn by the app's own renderer
-// (OpenGL on Linux, Direct3D on Windows); a reactor (a hot reloader's
-// version, the Gallery as wasm) runs in a window of its own: the platform's
-// WasmKit loader (isomer_wasm_loader, beside the app) as a child process, its
-// ISO_ variables forwarded to the guest. No Projects: no compiler here yet.
+// The Playground's host on Linux and Windows, set as `PlaygroundHost.service`
+// before the app starts. The app is drawn by its own renderer (OpenGL on
+// Linux, Direct3D on Windows); a project's build runs in a window of its
+// own: the platform's WasmKit loader (playground_wasm_loader, beside the
+// app) as a child process.
 
 import Foundation
 #if canImport(FoundationNetworking)
@@ -13,30 +12,23 @@ import Observation
 import SwiftUI
 
 final class DesktopHost: PlaygroundHostService, @unchecked Sendable {
-    func capabilities() -> String { "reactors,gallery-wasm" }
+    /// The last successful build, for `run`.
+    private var lastBuild: Data?
 
-    func runReactor(url: String, project: String, environment: String) async throws -> String {
-        let bytes: Data
-        if url.hasPrefix("bundle:") {
-            let name = String(url.dropFirst("bundle:".count))
-            guard let file = DesktopFiles.resource(name) else { throw HostError("\(name) is not beside the app") }
-            bytes = try Data(contentsOf: file)
-        } else {
-            guard let address = URL(string: url) else { throw HostError("not a URL: \(url)") }
-            let (data, response) = try await URLSession.shared.data(from: address)
-            if let status = (response as? HTTPURLResponse)?.statusCode, status >= 300 { throw HostError("\(url): HTTP \(status)") }
-            bytes = data
-        }
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("isomer-runs", isDirectory: true)
+    func capabilities() -> String { "" }
+
+    /// A build in the loader's window: its bytes in a file of their own.
+    private func start(_ bytes: Data, project: String) async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("playground-runs", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let file = directory.appendingPathComponent(project.filter { $0.isLetter || $0.isNumber || $0 == "-" } + ".wasm")
         try bytes.write(to: file)
-        var variables: [String: String] = [:]
-        for line in environment.split(separator: "\n") {
-            guard let equals = line.firstIndex(of: "=") else { continue }
-            variables[String(line[..<equals]).trimmingCharacters(in: .whitespaces)] = String(line[line.index(after: equals)...])
-        }
-        try await MainActor.run { try DesktopRun.shared.start(reactor: file, environment: variables) }
+        try await MainActor.run { try DesktopRun.shared.start(reactor: file, environment: [:]) }
+    }
+
+    func run(project: String) async throws -> String {
+        guard let lastBuild else { throw HostError("nothing built yet") }
+        try await start(lastBuild, project: project)
         return "running in its own window"
     }
 
@@ -47,10 +39,9 @@ final class DesktopHost: PlaygroundHostService, @unchecked Sendable {
     func rendererFooter() -> String { "" }
     func appVersion() -> String { DesktopFiles.version }
 
-    // What the desktop doesn't do (no Projects).
+    // What the desktop doesn't do yet (no compiler).
     func signIn() async throws -> String { throw HostError("no sign-in here") }
     func compile(source: String) async throws -> String { "No compiler on this platform yet." }
-    func run(project: String) async throws -> String { throw HostError("no builds here") }
     func canRunOnWeb() -> Bool { false }
     func runOnWeb() async throws -> String { throw HostError("no web run here") }
     func chat(body: String) async throws -> String { throw HostError("no agent here") }
@@ -112,9 +103,9 @@ final class DesktopRun {
     func start(reactor: URL, environment: [String: String]) throws {
         stop()
         #if os(Windows)
-        let loaderName = "isomer_wasm_loader.exe"
+        let loaderName = "playground_wasm_loader.exe"
         #else
-        let loaderName = "isomer_wasm_loader"
+        let loaderName = "playground_wasm_loader"
         #endif
         guard let loader = DesktopFiles.resource(loaderName) else { throw HostError("\(loaderName) is not beside the app") }
         let process = Process()

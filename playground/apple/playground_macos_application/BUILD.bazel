@@ -1,0 +1,36 @@
+load("@build_bazel_rules_apple//apple:macos.bzl", "macos_application")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+# The Playground on the Mac: the shared shell (shared/app) against Apple's
+# SwiftUI, with the Apple host (apple/host). A project's build runs in a
+# WasmView (WasmKit, the SwiftUI tree renderer).
+#
+#   bazel build //apple/playground_macos_application
+
+swift_library(
+    name = "playground_macos_lib",
+    srcs = [
+        "//apple/host:srcs",
+        "//shared/app:srcs",
+    ],
+    module_name = "PlaygroundMac",
+    tags = ["manual"],
+    deps = [
+        "//apple/platform_services_host",
+        "@isomer//apple/libraries/swift_ui:isomer",
+        "@isomer//apple/libraries/wasm_view",
+        "@isomer//shared/platform_services",
+        "@isomer//swift_ffi/runtime/swift_wasm_host",
+        "@swiftpkg_agent_ui//:AgentUI",
+    ],
+)
+
+macos_application(
+    name = "playground_macos_application",
+    app_icons = ["//artwork/playground_icon:app_icon"],
+    bundle_id = "com.LoganShire.IsomerPlayground",
+    bundle_name = "Playground",
+    infoplists = ["Info.plist"],
+    minimum_os_version = "15.0",
+    deps = [":playground_macos_lib"],
+)

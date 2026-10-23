@@ -385,7 +385,10 @@ def windows(review, entries):
     scp(env, archive, "C:/Users/runner/isomer-src.tgz")
     scp(env, reactor, "C:/Users/runner/gallery.wasm")
     ps = lambda command, check=True: ssh(env, command, check)
-    ps("if (-not (Get-Command python -ErrorAction SilentlyContinue)) { winget install --id Python.Python.3.12 --silent --scope machine "
+    # Python for rules_swift's autoconfiguration (the build layer carries it
+    # from tools/ci/oss/windows-swift.ps1; older ones don't). `python` alone
+    # is no test: Windows answers it with the Store's alias.
+    ps("if (-not (Test-Path 'C:\\Program Files\\Python312-arm64\\python.exe')) { winget install --id Python.Python.3.12 --silent --scope machine "
        "--accept-package-agreements --accept-source-agreements | Out-Null }; "
        "New-Item -ItemType Directory -Force C:\\isomer | Out-Null; tar -xzf C:\\Users\\runner\\isomer-src.tgz -C C:\\isomer")
     # Bazel in MSVC's environment (SwiftPM finds link.exe there) with Git's

@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDisplayName</key>
-	<string>Isomer</string>
+	<string>Playground</string>
 	<key>CFBundleName</key>
-	<string>Isomer</string>
+	<string>Playground</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

@@ -335,9 +335,9 @@ still hosts the emulator runner (`apk_install_run`) and the Level 4 codegen
 templates. iOS device builds need the team's Xcode-managed wildcard
 profile ('iOS Team Provisioning Profile: *'); a machine without it fails
 them — an environment issue, not code; exclude iOS from wildcard
-verification builds. The Playground's app is Isomer (com.LoganShire.Isomer,
-Isomer.app; Android com.LoganShire.Isomer, "Isomer"); the examples' apps
-share com.LoganShire.IsomerExamples.
+verification builds. The Playground is com.LoganShire.IsomerPlayground
+("Playground", Playground.app; Android the same); the examples' apps share
+com.LoganShire.IsomerExamples.
 
 ## Build & run (macOS host)
 

@@ -1,16 +1,16 @@
-// The Isomer app on Linux and Windows: the shared shell (shared/app) against
+// The Playground on Linux and Windows: the shared shell (shared/app) against
 // Isomer's SwiftUI, with the desktop host installed before it starts.
 
 import SwiftUI
 
 @main
-struct IsomerDesktopApp: App {
+struct PlaygroundDesktopApp: App {
     init() {
         PlaygroundHost.service = DesktopHost()
         PlaygroundSurfaces.run = { onStopped in AnyView(DesktopRunSurface(onStopped: onStopped)) }
     }
 
     var body: some Scene {
-        WindowGroup("Isomer") { IsomerRoot() }
+        WindowGroup("Playground") { PlaygroundRoot() }
     }
 }

@@ -7,44 +7,37 @@ and update this file.
 
 ## What it is
 
-The Isomer app (com.LoganShire.Isomer; the Playground, as this module is
-still named): one SwiftUI shell on six platforms, and Isomer's integration
-test app. Its sidebar has three sections:
+The Playground (com.LoganShire.IsomerPlayground, "Playground"): one SwiftUI
+shell on six platforms for writing SwiftUI on the device (an agent writes
+it, or you do), building it there with a Swift compiler the app carries,
+and running it on Isomer. New projects start from its canned examples, the
+templates (`shared/sample_sources`: Counter, 2048, Hacker News, Meme
+Creator, Pokédex, Date Planner, Map Explorer, Floating Menu, and "This
+website"), which live only here. Isomer's SwiftUI API is proven by the
+Storybook (isomer's `examples/`), not here.
 
-- **Projects**: write SwiftUI on the device (an agent writes it, or you do),
-  build it there with a Swift compiler the app carries, run it on Isomer.
-  Where a compiler is: iOS, Android, the web.
-- **Hot Reloaders**: follow an app published to a URL (versions.json and its
-  reactors), run its newest version, reload as new ones appear. Every
-  platform.
-- **Gallery**: Isomer's apps and components (isomer's `//gallery`, the
-  library the examples' apps show too), drawn by the app's own renderer, and
-  "Run as wasm": the Gallery's reactor (`shared/gallery_reactor:gallery.wasm`,
-  carried by every app) on the platform's engine. Every platform.
+The shell is `shared/app` (App.swift: the projects in a sidebar and the
+project open, Visor's two-column shape; a phone opens on the sidebar),
+compiled against Apple's SwiftUI on iOS and macOS and Isomer's elsewhere.
+What is platform-bound is the host's: `PlaygroundHostService`
+(shared/app/Services.swift: compiling, running a build, the chat's network,
+the renderer choice, the capabilities: "projects" where it compiles) and
+`PlaygroundSurfaces` (the run surface, the code editor). The hosts:
 
-The shell is `shared/app` (App.swift: the sidebar and a page per selection,
-Visor's two-column shape; a phone opens on the sidebar), compiled against
-Apple's SwiftUI on iOS and macOS and Isomer's elsewhere. What is
-platform-bound is the host's: `PlaygroundHostService` (shared/app/Services.swift:
-compiling, running a reactor, the chat's network, the renderer choice, the
-capabilities that decide which sections show) and `PlaygroundSurfaces` (the
-run surface, the code editor). The hosts:
-
-| Platform | App | Host | A run (a build, a reactor) |
+| Platform | App | Host | A build runs in |
 | --- | --- | --- | --- |
 | iOS | `apple/playground_ios_application` | `apple/host` (AppleHost: the embedded compiler, the in-app web run, OpenRouter sign-in) | WasmView on WasmKit, SwiftUI or Metal |
-| macOS | `apple/isomer_macos_application` | `apple/host` | WasmView on WasmKit (a sheet) |
+| macOS | `apple/playground_macos_application` | `apple/host` | WasmView on WasmKit (a sheet) |
 | Android | `android/playground_android_application` | Kotlin (PlaygroundServices.kt) | RunActivity (a process of its own), WasmView on WasmKit |
 | Web | `web/playground_web_application` | index.html | the page's runner (hot_runner.js), the browser's engine |
-| Linux | `linux/isomer_linux_application` | `shared/desktop_host` | the WasmKit loader's window (`isomer_wasm_loader`) |
-| Windows | `windows/isomer_windows_application` | `shared/desktop_host` | the WasmKit loader's window |
+| Linux | `linux/playground_linux_application` | `shared/desktop_host` | the WasmKit loader's window (`playground_wasm_loader`) |
+| Windows | `windows/playground_windows_application` | `shared/desktop_host` | the WasmKit loader's window |
 
 Launch hooks (the process environment natively; an Android intent's `ISO_`
-string extras; the web page's `ISO_` query parameters): `ISO_OPEN_APP=<entry>`
-opens a Gallery entry (GalleryEntry.slug: pokedex, todo, map, controls…),
-`ISO_RUN_GALLERY_WASM=1` runs it as wasm, `ISO_RUN_REACTOR=<url>` runs a
-reactor, `ISO_PLAYGROUND_OPEN_PROJECT=<id or name>` and `ISO_OPEN_RELOADER=<name>`
-open a project or a reloader.
+string extras; the web page's `ISO_` query parameters):
+`ISO_PLAYGROUND_OPEN_PROJECT=<id or name>` opens a project,
+`ISO_PLAYGROUND_RUN_PROJECT=<id or name>` opens it and builds and runs it,
+`ISO_PLAYGROUND_AUTORUN=all` compiles every project.
 
 History: `examples/*/playground_*` in isomer until 0.15, then a repository
 of its own (pinning isomer by commit), back in isomer as `playground/` at
@@ -58,7 +51,7 @@ of its own (pinning isomer by commit), back in isomer as `playground/` at
 | `android/` | the Android app (Kotlin host: compile, run, chat, the web run), `platform_services` (the services a run gets), the transcript stress app |
 | `web/` | the web app, the splash page (the whole site is `//web/splash_web_application:site`), the transcript stress app |
 | `linux/`, `windows/` | the desktop apps (built in an oss container on a Mac, and on Windows) |
-| `shared/` | `app` (the shell), `desktop_host` (Linux and Windows), `gallery_reactor`, `sample_sources` (the templates' sources), `transcript_stress_application` |
+| `shared/` | `app` (the shell), `desktop_host` (Linux and Windows), `sample_sources` (the templates' sources), `transcript_stress_application` |
 | `tools/` | `playground_toolchain` (the iOS and Android compilers), `browser_toolchain` (the compiler as WebAssembly), `playground` (dev compile server, headless Chrome drivers, the site's packaging and the hot-reload publish scripts, template history), `patches` and `signing` (below) |
 | `tests/` | `templates` (every template compiles), `e2e` (what a reader does, on an emulator and a simulator), `proof` (the Gallery on every platform and renderer), `ios_ui_probe` (a manual XCUITest) |
 | `docs/` | `playground.md` (the iOS app), `playground_web.md` (the web app, the site, publishing) |

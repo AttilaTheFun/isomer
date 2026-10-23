@@ -23,7 +23,6 @@ swift_library(
     module_name = "PlaygroundWeb",
     tags = ["manual"],
     deps = [
-        "@isomer//gallery",
         "@isomer//shared/platform_services",
         "@swiftpkg_agent_ui//:AgentUI",
         "@isomer//wasm/libraries/swift_ui",
@@ -59,7 +58,9 @@ filegroup(
         "//apple/playground_ios_application:hackernews_sample",
         "//apple/playground_ios_application:meme_sample",
         "//apple/playground_ios_application:pokedex_sample",
-        "//apple/playground_ios_application:wikipedia_sample",
+        "//apple/playground_ios_application:date_planner_sample",
+        "//apple/playground_ios_application:map_explorer_sample",
+        "//apple/playground_ios_application:floating_menu_sample",
         # The site's front page, editable in the Playground ("This website"),
         # with the example screens it embeds.
         "//apple/playground_ios_application:splash_sample",
@@ -71,14 +72,11 @@ isomer_web_app(
     assets = [
         ":templates",
         "//artwork/playground_icon:web_icon",
-        "@isomer//gallery:assets",
     ],
     extra_pages = [
         "compiler_worker.js",
         "hot_runner.js",
         "toolchain_driver.js",
-        # The Gallery's reactor, fetched when "Run as wasm" first runs it.
-        "//shared/gallery_reactor:gallery.wasm",
     ],
     index = "index.html",
     query = "renderer=react",

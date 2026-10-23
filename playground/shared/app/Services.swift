@@ -1,4 +1,4 @@
-// What the Isomer app asks of its host: compiling, running a reactor, the
+// What the Playground asks of its host: compiling, running a build, the
 // chat's network, the renderer choice. The web page implements it in
 // index.html (docs/wasm_di.md): compiling runs in a Web Worker
 // (swift-frontend.wasm + wasm-ld.wasm when the toolchain bundle is present;
@@ -18,17 +18,11 @@ public enum PlaygroundHostKey: String {
 @ExportedInterface(namespace: "playground_web")
 public protocol PlaygroundHostService {
     /// What this host can do, comma-separated: "projects" (it compiles),
-    /// "reactors" (it runs a reactor from a URL: hot reloaders),
-    /// "gallery-wasm" (it carries the Gallery's reactor, `bundle:gallery.wasm`),
     /// "sign-in" (it links an OpenRouter account: `signIn`).
     func capabilities() -> String
     /// Signs in to OpenRouter in the system's web sign-in (PKCE) and keeps
     /// the key it returns; returns a status line.
     func signIn() async throws -> String
-    /// Runs the wasm reactor at `url` full screen, as `run` runs a build:
-    /// http(s), or `bundle:<name>` for one the app carries. `project` names
-    /// its home; `environment` is KEY=VALUE lines for the guest.
-    func runReactor(url: String, project: String, environment: String) async throws -> String
     /// The renderers a run (or the app) can be drawn with, "Native,GPU"
     /// (the component system's, the self-drawing one's), "" when one.
     func rendererNames() -> String
@@ -96,5 +90,4 @@ extension PlaygroundHostService {
     }
 
     func supportsProjects() -> Bool { supports("projects") }
-    func supportsReactors() -> Bool { supports("reactors") }
 }

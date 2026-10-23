@@ -278,32 +278,8 @@ class AndroidPlaygroundHost(private val context: Context, private val preference
         }
     }
 
-    // The app compiles (with the toolchain staged), runs a reactor from a
-    // URL, and carries the Gallery's (assets/gallery.wasm).
-    override fun capabilities(): String = "projects,reactors,gallery-wasm"
-
-    override suspend fun runReactor(url: String, project: String, environment: String): String = suspendCoroutine { cont ->
-        thread(name = "playground-reactor") {
-            try {
-                val reactors = File(context.cacheDir, "reactors").apply { mkdirs() }
-                val file = File(reactors, project.replace(Regex("[^A-Za-z0-9._-]"), "_") + ".wasm")
-                if (url.startsWith("bundle:")) {
-                    context.assets.open(url.removePrefix("bundle:")).use { input -> file.outputStream().use { input.copyTo(it) } }
-                } else {
-                    val connection = URL(url).openConnection() as HttpURLConnection
-                    connection.connectTimeout = 20_000
-                    connection.readTimeout = 120_000
-                    connection.useCaches = false
-                    if (connection.responseCode >= 300) throw IllegalStateException("$url: HTTP ${connection.responseCode}")
-                    connection.inputStream.use { input -> file.outputStream().use { input.copyTo(it) } }
-                }
-                start(file, environment)
-                cont.resume("running")
-            } catch (e: Exception) {
-                cont.resumeWithException(e)
-            }
-        }
-    }
+    // The app compiles (with the toolchain staged).
+    override fun capabilities(): String = "projects"
 
     override suspend fun signIn(): String = throw UnsupportedOperationException("paste a key in Settings")
     override fun rendererNames(): String = "Compose,OpenGL"

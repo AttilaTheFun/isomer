@@ -1,29 +1,26 @@
-# Isomer (the Playground)
+# The Playground
 
-The Isomer app: one SwiftUI app on iOS, macOS, Android, the web, Linux and
-Windows, and [Isomer](../README.md)'s integration test. Its sidebar:
+Write SwiftUI on your device, build it there, and run it there: one SwiftUI
+app on iOS, macOS, Android, the web, Linux and Windows, built on
+[Isomer](../README.md). A project is a `.swift` file; Run compiles it to
+WebAssembly with a Swift compiler the app carries, and shows the result on
+Isomer's SwiftUI. An agent page (AgentUI) can write and fix the project for
+you. New projects start from the canned examples: Counter, 2048, Hacker
+News, Meme Creator, Pokédex, Date Planner, Map Explorer, Floating Menu, and
+"This website".
 
-- **Projects**: write SwiftUI on the device, build it there, run it there.
-  A project is a `.swift` file; Run compiles it to WebAssembly with a Swift
-  compiler the app carries, and shows the result on Isomer's SwiftUI. An
-  agent page (AgentUI) can write and fix the project for you.
-- **Hot Reloaders**: follow an app published to a URL; its newest version
-  runs, and a newer one is offered as it appears.
-- **Gallery**: Isomer's apps and components, drawn by the platform's own
-  renderer, or run as wasm on the platform's engine.
-
-| | Target | Renderers | Projects (compiler) | A run |
+| | Target | Renderer | Projects (compiler) | A run |
 | --- | --- | --- | --- | --- |
 | iOS | `//apple/playground_ios_application` | SwiftUI; Metal for runs | swift-frontend and lld linked into the app | WasmView (WasmKit), or Safari |
-| macOS | `//apple/isomer_macos_application` | SwiftUI | — | WasmView (WasmKit) |
+| macOS | `//apple/playground_macos_application` | SwiftUI | — | WasmView (WasmKit) |
 | Android | `//android/playground_android_application` | Compose, OpenGL | swift-frontend and wasm-ld in the APK | its own window (WasmKit), or Chrome |
 | Web | `//web/playground_web_application` | React, WebGPU | the compiler as WebAssembly, in a Worker | in the page |
-| Linux | `//linux/isomer_linux_application` | OpenGL | — | its own window (WasmKit) |
-| Windows | `//windows/isomer_windows_application` | Direct3D | — | its own window (WasmKit) |
+| Linux | `//linux/playground_linux_application` | OpenGL | — | its own window (WasmKit) |
+| Windows | `//windows/playground_windows_application` | Direct3D | — | its own window (WasmKit) |
 
-The six apps share one shell (`shared/app`), the Gallery (isomer's
-`//gallery`) and their sample projects (`shared/sample_sources`, the example
-apps' own sources).
+The six apps share one shell (`shared/app`) and the canned examples
+(`shared/sample_sources`). Isomer's SwiftUI API is shown and proven by the
+Storybook (isomer's `examples/`).
 
 Also here, because it exercises the same agent page (AgentUI on Isomer): the
 transcript stress apps, `//web/transcript_stress_web_application` and

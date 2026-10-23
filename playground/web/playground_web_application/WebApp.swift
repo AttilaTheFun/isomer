@@ -1,4 +1,4 @@
-// The Isomer app on the web and Android: the shared shell (shared/app) with
+// The Playground on the web and Android: the shared shell (shared/app) with
 // the host the page (index.html) or the Android app's Kotlin injected.
 
 import SwiftUI
@@ -13,5 +13,5 @@ struct PlaygroundWebApp: App {
             set: { PlaygroundHost.service?.setRenderer(value: $0) })
     }
 
-    var body: some Scene { WindowGroup("Isomer") { IsomerRoot() } }
+    var body: some Scene { WindowGroup("Playground") { PlaygroundRoot() } }
 }

@@ -2,15 +2,13 @@ load("@rules_swift//swift:swift.bzl", "swift_binary")
 
 package(default_visibility = ["//visibility:public"])
 
-# The Isomer app on Windows: the shared shell (shared/app) against Isomer's
+# The Playground on Windows: the shared shell (shared/app) against Isomer's
 # Windows SwiftUI (SwiftGPU over Direct3D 11 in a Win32 window), with the
-# desktop host (shared/desktop_host). Hot reloaders and the Gallery as wasm
-# run in the WasmKit loader's window (:isomer_wasm_loader). Built on Windows
-# (Swift's toolchain cross-compiles to Windows from nowhere else); the
-# Gallery's reactor is built on a Mac or Linux and put beside the app as
-# gallery.wasm (a Windows build has no wasm SDK).
+# desktop host (shared/desktop_host). A project's build runs in the WasmKit
+# loader's window (:playground_wasm_loader). Built on Windows (Swift's
+# toolchain cross-compiles to Windows from nowhere else).
 #
-#   bazel build //windows/isomer_windows_application/...
+#   bazel build //windows/playground_windows_application/...
 
 # GUI subsystem (no console window) with the console CRT entry Swift's @main
 # needs, and a 16 MiB main-thread stack: the view tree's build and the
@@ -22,18 +20,16 @@ _GUI_LINKOPTS = [
 ]
 
 swift_binary(
-    name = "isomer",
+    name = "playground",
     srcs = [
         "//shared/app:srcs",
         "//shared/desktop_host:srcs",
     ],
     copts = ["-parse-as-library"],
-    data = ["@isomer//gallery:assets"],
     linkopts = _GUI_LINKOPTS,
-    module_name = "IsomerWindows",
+    module_name = "PlaygroundWindows",
     target_compatible_with = ["@platforms//os:windows"],
     deps = [
-        "@isomer//gallery",
         "@isomer//shared/platform_services",
         "@isomer//windows/libraries/swift_ui",
         "@isomer//windows/libraries/swift_ui:isomer",
@@ -41,13 +37,13 @@ swift_binary(
     ],
 )
 
-# The reactor's window (WindowsWasmApp: WasmKit, SwiftGPU over Direct3D 11).
+# A build's window (WindowsWasmApp: WasmKit, SwiftGPU over Direct3D 11).
 swift_binary(
-    name = "isomer_wasm_loader",
-    srcs = ["//shared/desktop_host:IsomerWasmLoader.swift"],
+    name = "playground_wasm_loader",
+    srcs = ["//shared/desktop_host:PlaygroundWasmLoader.swift"],
     copts = ["-parse-as-library"],
     linkopts = _GUI_LINKOPTS,
-    module_name = "IsomerWasmLoader",
+    module_name = "PlaygroundWasmLoader",
     target_compatible_with = ["@platforms//os:windows"],
     deps = [
         "@isomer//windows/libraries/swift_ui_wasm:host",

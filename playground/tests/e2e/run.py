@@ -44,7 +44,7 @@ anything failed.
   tests/e2e/run.py [android] [ios] --review <dir> [--commit <sha>]
 
 also writes the run as proof for the review store (reviews/MANIFEST.md, app
-"Isomer", the version the apps show): first each app's screens in
+"Playground", the version the apps show): first each app's screens in
 portrait and in landscape (`<platform>-<orientation>`, snapshots), then each
 road of the run recorded, with its last screen (`<platform>-e2e-portrait`, a
 UI test; a web road's screen is the page as headless Chrome showed it).
@@ -54,14 +54,15 @@ import argparse, json, os, re, shutil, signal, subprocess, sys, time
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # The isomer checkout this module lives in (playground/ is its subdirectory).
 ISOMER = os.environ.get("ISOMER", os.path.dirname(ROOT))
-ANDROID_PACKAGE = "com.LoganShire.Isomer"
-IOS_BUNDLE = "com.LoganShire.Isomer"
+ANDROID_PACKAGE = "com.LoganShire.IsomerPlayground"
+IOS_BUNDLE = "com.LoganShire.IsomerPlayground"
 SIMULATOR_TYPE = "iPhone"
 BOARD = "Swipe the board to merge tiles."
 # The web/Android templates (WebTemplate.all) and what each one's page shows
 # first; the iOS app seeds the same but "This website".
-TEMPLATES = {"Counter": "Tapped 0 times", "2048": BOARD, "Hacker News": "Hacker News", "Wikipedia": "Wikipedia",
-             "Meme Creator": "Meme Creator", "Pokédex": "Pokédex", "This website": "What it is"}
+TEMPLATES = {"Counter": "Tapped 0 times", "2048": BOARD, "Hacker News": "Hacker News", "Meme Creator": "Meme Creator",
+             "Pokédex": "Pokédex", "Date Planner": "Date Planner", "Map Explorer": "Map", "Floating Menu": "Floating Menu",
+             "This website": "What it is"}
 
 failures = []
 proof = None
@@ -134,7 +135,7 @@ class Proof:
 
     def manifest(self, folder, kind, target, orientation, items):
         out = os.path.join(self.folder, folder)
-        json.dump({"schema": 1, "app": "Isomer", "version": self.version, "release": self.version,
+        json.dump({"schema": 1, "app": "Playground", "version": self.version, "release": self.version,
                    "commit": self.commit, "kind": kind, "target": target, "device": self.device,
                    "orientation": orientation, "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                    "items": items}, open(os.path.join(out, "manifest.json"), "w"), indent=1)
