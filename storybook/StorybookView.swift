@@ -92,12 +92,11 @@ public struct StorybookView: View {
 /// code running.
 struct StoryPage: View {
     let story: Story
-    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                CodeCard(code: story.code, compact: sizeClass == .compact)
+                CodeCard(code: story.code)
                 VStack(alignment: .leading, spacing: 6) {
                     Text(story.summary)
                         .font(.body)
@@ -132,17 +131,16 @@ struct StoryPage: View {
     }
 }
 
-/// A story's source in a monospaced card. On a phone it shows its first
-/// lines, with the rest a tap away, so the result stays on screen.
+/// A story's source in a monospaced card: its first lines, with the rest a
+/// tap away, so the result stays on screen beside it.
 struct CodeCard: View {
     let code: String
-    let compact: Bool
     @State private var expanded = false
     private static let compactLines = 12
 
     var body: some View {
         let lines = code.split(separator: "\n", omittingEmptySubsequences: false)
-        let clipped = compact && !expanded && lines.count > Self.compactLines
+        let clipped = !expanded && lines.count > Self.compactLines
         VStack(alignment: .leading, spacing: 8) {
             ScrollView(.horizontal) {
                 Text(clipped ? lines.prefix(Self.compactLines).joined(separator: "\n") : code)

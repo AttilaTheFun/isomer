@@ -110,7 +110,7 @@ struct MapStory: View {
 // story: isomer.video
 struct VideoStory: View {
     var body: some View {
-        VideoPlayer(url: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"))
+        VideoPlayer(url: URL(string: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"))
     }
 }
 // end story

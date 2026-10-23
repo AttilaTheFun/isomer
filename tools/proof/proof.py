@@ -203,7 +203,10 @@ def ios(review, story_list, builds):
 
         def launcher(app, environment, wait, path):
             bundle = APPS[app]["bundle"]
-            sh(["xcrun", "simctl", "terminate", udid, bundle], check=False)
+            # Both apps closed: launched with another in front, iOS shows a
+            # "◀ <that app>" link in the status bar.
+            for other in APPS.values():
+                sh(["xcrun", "simctl", "terminate", udid, other["bundle"]], check=False)
             variables = dict(os.environ)
             for key, value in environment.items(): variables["SIMCTL_CHILD_" + key] = value
             subprocess.run(["xcrun", "simctl", "launch", udid, bundle], env=variables, capture_output=True)
@@ -278,6 +281,9 @@ def android(review, story_list, builds):
             time.sleep(wait)
             oss_shot(env, path)
 
+        # The first launch after an install shows the splash a while longer.
+        for app in APPS:
+            launcher(app, {}, 8, os.path.join(tempfile.mkdtemp(), "warm.png"))
         shoot_apps(review, "android", "Android phone (emulator)", "portrait", launcher, story_list,
                    {"open": 6, "story": 5, "run": 30})
         for app in APPS.values():
@@ -551,7 +557,7 @@ def main():
         if name == "web":
             if not args.web_toolchain:
                 raise SystemExit("the web needs --web-toolchain (an earlier site's playground/toolchain)")
-            builds[name] = lambda toolchain=args.web_toolchain: build_web(toolchain)
+            builds[name] = lambda toolchain=os.path.abspath(args.web_toolchain): build_web(toolchain)
         elif name in ("linux", "windows"):
             builds[name] = make
         else:

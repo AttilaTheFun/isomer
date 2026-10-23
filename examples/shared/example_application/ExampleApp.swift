@@ -27,5 +27,8 @@ struct ExampleApplication: App {
         WindowGroup("Storybook") {
             StorybookView()
         }
+        #if os(macOS)
+        .defaultSize(width: 1280, height: 820)
+        #endif
     }
 }

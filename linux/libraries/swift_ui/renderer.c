@@ -849,6 +849,20 @@ void iso_measure_text(const char *text, int text_len, double font_size, int weig
   }
   char *z = dupstr(text, text_len);
   int lineSkip = TTF_FontLineSkip(font);
+  // Unwrapped text with line breaks (a code listing) is as tall as its
+  // lines: TTF_SizeUTF8 measures one line, so render-measure it with a
+  // wrap length of 0, which breaks at the newlines only, as drawing does.
+  if (wrap_width < 0 && memchr(z, '\n', text_len)) {
+    SDL_Color white = {255, 255, 255, 255};
+    SDL_Surface *surf = TTF_RenderUTF8_Blended_Wrapped(font, z, white, 0);
+    if (surf) {
+      *out_width = surf->w / g.scale;
+      *out_height = surf->h / g.scale;
+      SDL_FreeSurface(surf);
+      free(z);
+      return;
+    }
+  }
   if (wrap_width < 0) {
     int tw = 0, th = 0;
     TTF_SizeUTF8(font, z, &tw, &th);
