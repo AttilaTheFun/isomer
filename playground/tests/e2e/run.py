@@ -190,7 +190,11 @@ class Proof:
 # --- Android
 
 def android():
-    adb = sh("find -L \"$(bazel info output_base)/external\" -maxdepth 4 -path '*androidsdk*platform-tools*' -name adb -type f | head -1").stdout.strip()
+    # This machine's adb: the hermetic SDK repository is fetched for every
+    # host (androidsdk_darwin, _linux, _windows), and find's order is the
+    # directory's.
+    host = "darwin" if sys.platform == "darwin" else "linux"
+    adb = sh(f"find -L \"$(bazel info output_base)/external\" -maxdepth 4 -path '*androidsdk_{host}*platform-tools*' -name adb -type f | head -1").stdout.strip()
     apk = bazel_output("//android/playground_android_application:playground_android_application_apk", "-c", "opt", suffix="_apk.apk")
     # A test phone when ANDROID_SERIAL names one (with ADB_SERVER_SOCKET when
     # its adb server is not this Mac's), else this Mac's emulator.

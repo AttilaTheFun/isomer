@@ -107,11 +107,9 @@ class Feed:
     reactor published with tools/playground/publish_hot_reload.sh, served
     over HTTP on this Mac while the run lasts, at each address a device
     reaches it by (127.0.0.1: Chrome and the simulator; the emulator's
-    10.0.2.2 is this Mac's loopback; the VMs' NAT gateways, this Mac on
-    their networks: 192.168.64.1 for Apple's virtualization, the macOS VMs
-    and containers, 192.168.65.1 for UTM's others). A VM is told its own
-    (`gateway`)."""
-    VM_HOSTS = ("192.168.64.1", "192.168.65.1")
+    10.0.2.2 is this Mac's loopback; a VM's NAT gateway, this Mac on its
+    network, which varies from VM to VM (192.168.64.1, .65.1, .66.1…):
+    `gateway` asks the VM and has the feed listen there too)."""
 
     def __init__(self):
         self.dir = tempfile.mkdtemp(prefix="proof-feed-")
@@ -130,16 +128,22 @@ class Feed:
                   "        self.send_header('Cache-Control', 'no-store')\n"
                   "        super().end_headers()\n"
                   "http.server.ThreadingHTTPServer((sys.argv[1], int(sys.argv[2])), Handler).serve_forever()\n")
-        self.servers = [subprocess.Popen([sys.executable, "-c", server, address, str(self.port)], cwd=self.dir,
-                                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                        for address in ("127.0.0.1",) + self.VM_HOSTS]
+        self.server = server
+        self.servers = {}
+        self.listen("127.0.0.1")
+
+    def listen(self, address):
+        """The feed on `address` too (once)."""
+        if address in self.servers: return
+        self.servers[address] = subprocess.Popen([sys.executable, "-c", self.server, address, str(self.port)], cwd=self.dir,
+                                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(1)
 
     def base(self, host="127.0.0.1"):
         return f"http://{host}:{self.port}/feed"
 
     def close(self):
-        for server in self.servers: server.terminate()
+        for server in self.servers.values(): server.terminate()
 
 feed = None
 
@@ -152,6 +156,7 @@ def gateway(env, platform):
     }[platform]
     address = ssh(env, command).stdout.strip().splitlines()[-1].strip()
     log(f"{platform}: this Mac is {address} on its network")
+    feed.listen(address)
     return address
 
 def hot_cell(review, platform, device, orientation, launcher, host="127.0.0.1", run_wait=14):
