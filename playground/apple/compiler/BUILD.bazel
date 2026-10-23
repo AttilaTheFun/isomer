@@ -1,0 +1,31 @@
+load(":toolchain.bzl", "macos_playground_toolchain", "wasm_swift_sdk_files")
+
+# How the Apple Playground builds a project: ToolchainCompiler (the
+# pipeline, its backends and the bundled SDK), CompilerArguments (the
+# frontend's and wasm-ld's arguments), EmbeddedCompiler (the iPhone's
+# compiler, linked into the app; `--define iso_playground_embedded=1`) and
+# Spawn (the Mac's, and the simulator's host toolchain, run as processes).
+# Compiled into both apps.
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "srcs",
+    srcs = glob(["*.swift"]),
+)
+
+# The Mac's compiler, for its Resources (toolchain.bzl).
+macos_playground_toolchain(
+    name = "macos_toolchain",
+    tags = ["manual"],
+    toolchain = [
+        "@swift_toolchain_xcode//:swift_sdk_compiler_inputs",
+        "@swift_toolchain_xcode//:swift_sdk_linker_inputs",
+    ],
+    wasm_sdk = [":wasm_sdk_files"],
+)
+
+wasm_swift_sdk_files(
+    name = "wasm_sdk_files",
+    tags = ["manual"],
+)

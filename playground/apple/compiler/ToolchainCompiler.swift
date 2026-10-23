@@ -8,10 +8,13 @@
 //   2. clang   --target=wasm32-unknown-wasip1 ... user.o + SDK archives
 //              + swiftrt + static stdlib -> reactor .wasm
 //
-// The BACKEND is a seam: on the simulator (an unhardened macOS process) the
-// toolchain binaries are posix_spawned from the host — paths injected by the
-// `:run` launcher via SIMCTL_CHILD_ISO_PLAYGROUND_*. The on-device backend
-// links swift-frontend + lld as static libraries behind this same interface.
+// The BACKEND is a seam: the iPhone links swift-frontend + lld into the app
+// (EmbeddedCompiler); the Mac carries them in its Resources
+// (playground_toolchain/, apple/compiler/toolchain.bzl) and runs them as
+// processes (BundledToolchain), with the same arguments (CompilerArguments);
+// on the simulator without the embedded compiler, the host toolchain is
+// posix_spawned, its paths injected by the `:run` launcher via
+// SIMCTL_CHILD_ISO_PLAYGROUND_*.
 
 import Foundation
 
@@ -45,6 +48,12 @@ enum ToolchainCompiler {
         let file = work.appendingPathComponent(fileName.isEmpty ? "Untitled.swift" : fileName)
         guard (try? source.write(to: file, atomically: true, encoding: .utf8)) != nil else { return [] }
         var raw = ""
+        if let bundled = BundledToolchain.bundled() {
+            let result = queue.sync {
+                Spawn.run(bundled.frontend, CompilerArguments.parse(file: file.path), environment: ["HOME": work.path])
+            }
+            return parseDiagnostics(result.stderr + result.stdout)
+        }
         #if ISO_PLAYGROUND_EMBEDDED
             if EmbeddedCompiler.isAvailable {
                 raw = queue.sync { EmbeddedCompiler.parseCheck(file: file) }
@@ -100,11 +109,42 @@ enum ToolchainCompiler {
         }
     }
 
+    /// The Mac's compiler: swift-frontend and wasm-ld in the app's Resources
+    /// (playground_toolchain/), with the macro plugin server and plugins
+    /// beside them and the wasm SDK's sysroot and static stdlib under data/.
+    struct BundledToolchain {
+        var frontend: String
+        var linker: String
+        var paths: CompilerArguments.Paths
+
+        static func bundled() -> BundledToolchain? {
+            guard let root = Bundle.main.resourceURL?.appendingPathComponent("playground_toolchain"),
+                FileManager.default.isExecutableFile(atPath: root.appendingPathComponent("usr/bin/swift-frontend").path)
+            else { return nil }
+            let host = root.appendingPathComponent("usr/lib/swift/host")
+            let plugins = ((try? FileManager.default.contentsOfDirectory(atPath: host.appendingPathComponent("plugins").path)) ?? [])
+                .filter { $0.hasSuffix(".dylib") }.sorted()
+                .map { host.appendingPathComponent("plugins").appendingPathComponent($0).path }
+            return BundledToolchain(
+                frontend: root.appendingPathComponent("usr/bin/swift-frontend").path,
+                linker: root.appendingPathComponent("usr/bin/wasm-ld").path,
+                paths: CompilerArguments.Paths(
+                    wasiSDK: root.appendingPathComponent("data/WASI.sdk").path,
+                    swiftStatic: root.appendingPathComponent("data/swift_static").path,
+                    pluginServer: host.appendingPathComponent("libSwiftInProcPluginServer.dylib").path,
+                    plugins: plugins))
+        }
+    }
+
     /// Whether ANY compile backend can work here right now.
     static var availability: String? {
+        if BundledToolchain.bundled() != nil { return nil }
         #if ISO_PLAYGROUND_EMBEDDED
             if EmbeddedCompiler.isAvailable { return nil }
         #endif
+        #if os(macOS)
+        return "This Mac's Playground was built without its compiler (playground_toolchain is missing from its Resources)."
+        #else
         guard Spawn.isAvailable else {
             return "On-device compilation is not wired up yet — run in the "
                 + "simulator via `bazel run //apple/playground_ios_application:run`."
@@ -115,6 +155,7 @@ enum ToolchainCompiler {
                 + "ISO_PLAYGROUND_* env vars are injected."
         }
         return nil
+        #endif
     }
 
     /// The bundled SDK (playground_sdk resource directory + its manifest).
@@ -178,6 +219,9 @@ enum ToolchainCompiler {
     }
 
     private static func compileSerialized(files: [URL]) throws -> Data {
+        if let bundled = BundledToolchain.bundled() {
+            return try compileBundled(files: files, toolchain: bundled, sdk: try SDK.bundled())
+        }
         #if ISO_PLAYGROUND_EMBEDDED
             if EmbeddedCompiler.isAvailable {
                 return try EmbeddedCompiler.compile(files: files, sdk: try SDK.bundled())
@@ -280,6 +324,43 @@ enum ToolchainCompiler {
             throw CompileError(diagnostics: prettify(linkResult.stderr + linkResult.stdout))
         }
 
+        guard let bytes = try? Data(contentsOf: wasm), !bytes.isEmpty else {
+            throw CompileError(diagnostics: "link produced no output")
+        }
+        return bytes
+    }
+
+    /// The Mac's build: the bundled swift-frontend and wasm-ld as processes,
+    /// with the iPhone's arguments.
+    private static func compileBundled(files: [URL], toolchain: BundledToolchain, sdk: SDK) throws -> Data {
+        let work = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("playground-build-\(UUID().uuidString.prefix(8))")
+        try? FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: work) }
+        let object = work.appendingPathComponent("UserApp.o")
+        let wasm = work.appendingPathComponent("UserApp.wasm")
+        // Snapshot the sources (the editor auto-saves while a build runs).
+        var snapshots: [String] = []
+        for file in files {
+            let copy = work.appendingPathComponent(file.lastPathComponent)
+            guard (try? FileManager.default.copyItem(at: file, to: copy)) != nil else {
+                throw CompileError(diagnostics: "could not stage \(file.lastPathComponent)")
+            }
+            snapshots.append(copy.path)
+        }
+        let environment = ["HOME": work.path]
+        let compile = Spawn.run(toolchain.frontend, CompilerArguments.frontend(
+            files: snapshots, object: object.path,
+            moduleCache: work.appendingPathComponent("module-cache").path,
+            paths: toolchain.paths, sdk: sdk), environment: environment)
+        guard compile.status == 0 else {
+            throw CompileError(diagnostics: prettify(compile.stderr + compile.stdout))
+        }
+        let link = Spawn.run(toolchain.linker, CompilerArguments.link(
+            object: object.path, output: wasm.path, paths: toolchain.paths, sdk: sdk), environment: environment)
+        guard link.status == 0 else {
+            throw CompileError(diagnostics: prettify(link.stderr + link.stdout))
+        }
         guard let bytes = try? Data(contentsOf: wasm), !bytes.isEmpty else {
             throw CompileError(diagnostics: "link produced no output")
         }

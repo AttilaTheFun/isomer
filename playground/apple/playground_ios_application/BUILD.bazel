@@ -87,7 +87,7 @@ config_setting(
 # and the prebuilt macro plugins (libSwiftMacros/libObservationMacros):
 # rules_apple copies them into Frameworks/ and signs them — iOS refuses to
 # load unsigned dylibs, even from inside the app bundle. The frontend
-# dlopens the server + plugins from Frameworks/ (EmbeddedCompiler.swift) —
+# dlopens the server + plugins from Frameworks/ (apple/compiler/EmbeddedCompiler.swift) —
 # macro expansion with no subprocess.
 # One import target per framework (the rule accepts a single bundle each);
 # names come from the staged Info.plists so a re-staging needs no BUILD edit.
@@ -294,13 +294,11 @@ apple_resource_group(
 swift_library(
     name = "playground_lib",
     srcs = [
-        # The iPhone's own: the compiler, the web run, the code editor.
+        # The iPhone's own: the web run, the code editor.
         "CodeEditor.swift",
-        "EmbeddedCompiler.swift",
-        "Spawn.swift",
-        "ToolchainCompiler.swift",
         "WebRunServer.swift",
-        # The Apple host and the shared shell.
+        # The compiler (the Mac's too), the Apple host and the shared shell.
+        "//apple/compiler:srcs",
         "//apple/host:srcs",
         "//shared/app:srcs",
     ],

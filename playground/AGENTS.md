@@ -27,7 +27,7 @@ the renderer choice, the capabilities: "projects" where it compiles) and
 | Platform | App | Host | A build runs in |
 | --- | --- | --- | --- |
 | iOS | `apple/playground_ios_application` | `apple/host` (AppleHost: the embedded compiler, the in-app web run, OpenRouter sign-in) | WasmView on WasmKit, SwiftUI or Metal |
-| macOS | `apple/playground_macos_application` | `apple/host` | WasmView on WasmKit (a sheet) |
+| macOS | `apple/playground_macos_application` | `apple/host` (AppleHost: the compiler it carries, run as processes) | WasmView on WasmKit (a sheet) |
 | Android | `android/playground_android_application` | Kotlin (PlaygroundServices.kt) | RunActivity (a process of its own), WasmView on WasmKit |
 | Web | `web/playground_web_application` | index.html | the page's runner (hot_runner.js), the browser's engine |
 | Linux | `linux/playground_linux_application` | `shared/desktop_host` | the WasmKit loader's window (`playground_wasm_loader`) |
@@ -47,7 +47,7 @@ of its own (pinning isomer by commit), back in isomer as `playground/` at
 
 | Directory | What |
 | --- | --- |
-| `apple/` | the iOS app and its embedded-compiler staging scripts, the Mac app, `host` (the Apple host and @main), `platform_services_host` (the services a run gets in WasmView) |
+| `apple/` | the iOS app and its embedded-compiler staging scripts, the Mac app, `compiler` (how both build a project: ToolchainCompiler, the arguments they share, the iPhone's in-process compiler, the Mac's toolchain rule), `host` (the Apple host and @main), `platform_services_host` (the services a run gets in WasmView) |
 | `android/` | the Android app (Kotlin host: compile, run, chat, the web run), `platform_services` (the services a run gets), the transcript stress app |
 | `web/` | the web app, the splash page (the whole site is `//web/splash_web_application:site`), the transcript stress app |
 | `linux/`, `windows/` | the desktop apps (built in an oss container on a Mac, and on Windows) |
@@ -97,7 +97,11 @@ of its own (pinning isomer by commit), back in isomer as `playground/` at
   the in-process plugin server; the browser's compiler runs them as one wasm
   module (tools/browser_toolchain/README.md "Macros"). A fresh clone does
   not have them, and the apps then build but cannot compile; never delete
-  them from a checkout that has them.
+  them from a checkout that has them. The Mac's is not staged: Bazel
+  assembles it from the toolchain repositories rules_swift fetched
+  (apple/compiler/toolchain.bzl: the host toolchain's swift-frontend,
+  wasm-ld, macro plugin server and plugins, thinned to arm64, and the wasm
+  SDK's sysroot and static stdlib, about 470 MB of the app's Resources).
 - **Copies of the examples' files**: `shared/sample_sources` is
   `examples/shared/example_application`'s (the template sources),
   `apple/platform_services_host` is `examples/apple/platform_services_host`,

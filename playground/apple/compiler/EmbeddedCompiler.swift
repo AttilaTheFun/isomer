@@ -58,12 +58,7 @@ enum EmbeddedCompiler {
     /// frontend's `-parse` action, no SDK or modules needed. Returns the
     /// raw diagnostics text.
     static func parseCheck(file: URL) -> String {
-        let result = run(entry: iso_swiftc_main, arguments: [
-            "swift-frontend", "-frontend", "-parse", file.path,
-            "-target", "wasm32-unknown-wasip1", "-disable-objc-interop",
-            "-no-color-diagnostics", "-module-name", "UserApp", "-parse-as-library",
-        ])
-        return result.output
+        run(entry: iso_swiftc_main, arguments: ["swift-frontend"] + CompilerArguments.parse(file: file.path)).output
     }
 
     /// Compiles `files` into a `iso_hot` reactor entirely in-process.
@@ -86,87 +81,28 @@ enum EmbeddedCompiler {
             snapshots.append(copy.path)
         }
 
-        // The exact single-frontend invocation the driver would spawn (mined
-        // via swiftc -###), minus macro-plugin paths — no host dylibs here.
-        var frontend = ["swift-frontend", "-frontend", "-c"]
-        frontend += snapshots
-        frontend += [
-            "-target", "wasm32-unknown-wasip1",
-            "-disable-objc-interop",
-            "-sdk", data.wasiSDK,
-            "-I", sdk.moduleDirectory.path,
-        ] + sdk.clangModuleArguments + [
-            "-no-color-diagnostics",
-            "-Xcc", "-fno-color-diagnostics",
-            "-static",
-            "-swift-version", "5",
-            "-Onone",
-            "-empty-abi-descriptor",
-            "-resource-dir", data.swiftStatic,
-            "-use-static-resource-dir",
-            "-Xcc", "--target=wasm32-unknown-wasip1",
-            "-module-cache-path", work.appendingPathComponent("module-cache").path,
-            "-module-name", "UserApp",
-            "-parse-as-library",
-            "-o", object.path,
-        ]
         // Macro expansion, still spawn-free: the in-process plugin server is
         // dlopened by the frontend, and it loads the bundled macro plugin
         // dylibs (libSwiftMacros, ObservationMacros, ...) in-process too.
+        // Each *Macros.framework wraps a prebuilt plugin, loaded by explicit
+        // path; its binary keeps the lib<Name>.dylib name the frontend
+        // derives the plugin module name from.
+        var paths = CompilerArguments.Paths(wasiSDK: data.wasiSDK, swiftStatic: data.swiftStatic)
         if let host = data.host {
-            frontend += [
-                "-in-process-plugin-server-path",
-                host + "/SPluginSrv.framework/SPluginSrv",
-            ]
-            // Each *Macros.framework wraps a prebuilt plugin, loaded by explicit
-            // path; its binary keeps the lib<Name>.dylib name the frontend
-            // derives the plugin module name from.
-            let plugins = ((try? FileManager.default.contentsOfDirectory(atPath: host)) ?? [])
+            paths.pluginServer = host + "/SPluginSrv.framework/SPluginSrv"
+            paths.plugins = ((try? FileManager.default.contentsOfDirectory(atPath: host)) ?? [])
                 .filter { $0.hasSuffix("Macros.dylib.framework") }.sorted()
-            for plugin in plugins {
-                let name = String(plugin.dropLast(".framework".count))
-                frontend += ["-load-plugin-library", host + "/" + plugin + "/" + name]
-            }
+                .map { host + "/" + $0 + "/" + String($0.dropLast(".framework".count)) }
         }
+        let frontend = ["swift-frontend"] + CompilerArguments.frontend(
+            files: snapshots, object: object.path,
+            moduleCache: work.appendingPathComponent("module-cache").path, paths: paths, sdk: sdk)
         let compileResult = run(entry: iso_swiftc_main, arguments: frontend)
         guard compileResult.status == 0 else {
             throw CompileError(diagnostics: ToolchainCompiler.prettify(compileResult.output))
         }
 
-        // The exact raw wasm-ld line the clang driver would produce
-        // (mined via clang -###): reactor model, whole-archive SDK, static
-        // stdlib + wasi emulation libs + compiler-rt builtins.
-        var link = [
-            "wasm-ld", "-m", "wasm32",
-            "-L" + data.swiftStatic + "/wasi",
-            "-L" + data.wasiSDK + "/lib/wasm32-wasip1",
-            data.wasiSDK + "/lib/wasm32-wasip1/crt1-reactor.o",
-            "--entry", "_initialize",
-            object.path,
-            "--whole-archive",
-        ]
-        link += sdk.archives.map { $0.path }
-        link += ["--no-whole-archive"]
-        // The hosts' entries exported and the rest dead-stripped, as isomer
-        // ships its reactors; an SDK without the list exports everything.
-        if let exports = sdk.exports {
-            link += ["--gc-sections"] + exports.map { "--export-if-defined=" + $0 }
-        } else {
-            link += ["--export-all", "--no-gc-sections"]
-        }
-        link += [
-            "-z", "stack-size=16777216",
-            data.swiftStatic + "/wasi/wasm32/swiftrt.o",
-            "-lswiftCore", "-lswiftSwiftOnoneSupport", "-lswiftWASILibc",
-            "-lswift_Concurrency", "-lswift_RegexParser", "-lswift_StringProcessing",
-            "-lswiftObservation", "-lswiftSynchronization",
-            "-lc++", "-lc++abi", "-ldl", "-lm",
-            "-lwasi-emulated-mman", "-lwasi-emulated-signal", "-lwasi-emulated-process-clocks", "-lwasi-emulated-getpid",
-            "--global-base=4096", "--table-base=4096",
-            "-lc",
-            data.swiftStatic + "/clang/lib/wasip1/libclang_rt.builtins-wasm32.a",
-            "-o", wasm.path,
-        ]
+        let link = ["wasm-ld"] + CompilerArguments.link(object: object.path, output: wasm.path, paths: paths, sdk: sdk)
         let linkResult = run(entry: iso_wasm_ld_main, arguments: link)
         guard linkResult.status == 0 else {
             throw CompileError(diagnostics: ToolchainCompiler.prettify(linkResult.output))

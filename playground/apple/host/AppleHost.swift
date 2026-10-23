@@ -22,17 +22,12 @@ final class AppleHost: PlaygroundHostService, @unchecked Sendable {
     private var lastBuild: Data?
 
     func capabilities() -> String {
-        #if os(iOS)
-        return "projects,sign-in"
-        #else
-        return "sign-in"
-        #endif
+        "projects,sign-in"
     }
 
     // MARK: Compiling
 
     func compile(source: String) async throws -> String {
-        #if os(iOS)
         let work = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("playground-source-\(UUID().uuidString.prefix(8))")
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: work) }
@@ -47,17 +42,10 @@ final class AppleHost: PlaygroundHostService, @unchecked Sendable {
         case .failure(let error):
             return (error as? CompileError)?.diagnostics ?? "\(error)"
         }
-        #else
-        return "This Mac has no Swift compiler for the Playground yet."
-        #endif
     }
 
     func toolchainStatus() -> String {
-        #if os(iOS)
-        return ToolchainCompiler.availability ?? "Swift toolchain in the app (swift-frontend and lld)"
-        #else
-        return "none: no compiler on the Mac yet"
-        #endif
+        ToolchainCompiler.availability ?? "Swift toolchain in the app (swift-frontend and wasm-ld)"
     }
 
     // MARK: Running

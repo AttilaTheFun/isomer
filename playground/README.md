@@ -12,7 +12,7 @@ News, Meme Creator, Pokédex, Date Planner, Map Explorer, Floating Menu, and
 | | Target | Renderer | Projects (compiler) | A run |
 | --- | --- | --- | --- | --- |
 | iOS | `//apple/playground_ios_application` | SwiftUI; Metal for runs | swift-frontend and lld linked into the app | WasmView (WasmKit), or Safari |
-| macOS | `//apple/playground_macos_application` | SwiftUI | — | WasmView (WasmKit) |
+| macOS | `//apple/playground_macos_application` | SwiftUI | swift-frontend and wasm-ld in the app, run as processes | WasmView (WasmKit) |
 | Android | `//android/playground_android_application` | Compose, OpenGL | swift-frontend and wasm-ld in the APK | its own window (WasmKit), or Chrome |
 | Web | `//web/playground_web_application` | React, WebGPU | the compiler as WebAssembly, in a Worker | in the page |
 | Linux | `//linux/playground_linux_application` | OpenGL | — | its own window (WasmKit) |
