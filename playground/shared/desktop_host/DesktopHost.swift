@@ -60,8 +60,6 @@ final class DesktopHost: PlaygroundHostService, @unchecked Sendable {
     func stop() { MainActor.assumeIsolated { DesktopRun.shared.stop() } }
     func logs() -> String { MainActor.assumeIsolated { DesktopRun.shared.log } }
 
-    func rendererNames() -> String { "" }
-    func rendererFooter() -> String { "" }
     func appVersion() -> String { DesktopFiles.version }
 
     // What the desktop doesn't do yet (no agent).
@@ -73,8 +71,6 @@ final class DesktopHost: PlaygroundHostService, @unchecked Sendable {
     func setKey(key: String) {}
     func requestedTemplate() -> String { "" }
     func legacyFiles() -> String { "{}" }
-    func renderer() -> String { "native" }
-    func setRenderer(value: String) {}
     func uiTree() -> String { "the run is in its own window" }
     func tap(target: String) async throws -> String { "the run is in its own window" }
     func typeText(target: String, text: String) async throws -> String { "the run is in its own window" }

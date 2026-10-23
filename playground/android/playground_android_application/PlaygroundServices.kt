@@ -51,6 +51,9 @@ object PlaygroundAndroidServices {
      *  context comes from the activity, not HostServices. */
     fun install(activity: android.app.Activity) {
         val context = activity.applicationContext
+        // Compose only (0.38): forget the OpenGL choice Settings once offered,
+        // before the activity reads it (SharedPreferences "isomer", "renderer").
+        context.getSharedPreferences("isomer", Context.MODE_PRIVATE).edit().remove("renderer").apply()
         val preferences = context.getSharedPreferences("playground", Context.MODE_PRIVATE)
         SwiftUIBridge.installPlatformDependencies(
             keychain = PreferencesKeychainService("playground"),
@@ -282,8 +285,6 @@ class AndroidPlaygroundHost(private val context: Context, private val preference
     override fun capabilities(): String = "projects"
 
     override suspend fun signIn(): String = throw UnsupportedOperationException("paste a key in Settings")
-    override fun rendererNames(): String = "Compose,OpenGL"
-    override fun rendererFooter(): String = "Compose builds the app from Material components; OpenGL is the self-drawing SwiftGPU renderer. Applies the next time the app starts. A run is drawn with Compose."
     override fun appVersion(): String =
         context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: ""
 
@@ -348,14 +349,6 @@ class AndroidPlaygroundHost(private val context: Context, private val preference
                 android.util.Base64.encodeToString(file.readBytes(), android.util.Base64.NO_WRAP))
         }
         return files.toString()
-    }
-
-    // The app's renderer, which the generated MainActivity reads at launch
-    // (SharedPreferences "isomer", "renderer").
-    private val isomerPreferences = context.getSharedPreferences("isomer", Context.MODE_PRIVATE)
-    override fun renderer(): String = if (isomerPreferences.getString("renderer", null) == "openGL") "gpu" else "native"
-    override fun setRenderer(value: String) {
-        isomerPreferences.edit().putString("renderer", if (value == "gpu") "openGL" else "jetpackCompose").apply()
     }
 
     // Driving the running build (the agent's ui_tree / tap / …) is not wired

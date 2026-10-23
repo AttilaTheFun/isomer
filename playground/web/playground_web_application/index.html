@@ -95,11 +95,6 @@
     window.addEventListener("keydown", (event) => { if (event.key === "Escape" && shakeWaiters.length) { event.preventDefault(); fireShake(); } });
     window.__playgroundShake = fireShake;
 
-    // The renderer choice: read here before boot, so the page keeps it
-    // (Settings sets it through the host).
-    const rendererKey = sandbox + "preferences:renderer";
-    const storedRenderer = () => localStorage.getItem(rendererKey) || "";
-    const storeRenderer = (value) => { if (value) localStorage.setItem(rendererKey, value); else localStorage.removeItem(rendererKey); };
 
     // The services the USER's build sees while it runs. Its network and files
     // are Foundation's (the runtime's fetch and IndexedDB), its home its
@@ -139,8 +134,6 @@
       // The page compiles.
       capabilities() { return "projects"; },
       async signIn() { throw new Error("paste a key in Settings"); },
-      rendererNames() { return "React,WebGPU"; },
-      rendererFooter() { return "React builds real DOM (text fields, scrolling); WebGPU is the self-drawing SwiftGPU renderer. Applies when the page is refreshed. A run is drawn with React."; },
       appVersion() { return document.querySelector('meta[name="isomer-version"]')?.content || ""; },
       async compile(source) {
         const result = await ask({ source });
@@ -187,8 +180,6 @@
         }
         return JSON.stringify(files);
       },
-      renderer() { return storedRenderer(); },
-      setRenderer(value) { storeRenderer(value); },
       toolchainStatus() {
         return toolchainStatus === "wasm" ? "In-browser Swift toolchain (swift-frontend.wasm)"
           : toolchainStatus === "dev" ? "Dev compile server (host toolchain)"
@@ -206,13 +197,11 @@
       deviceMotion: Dependencies.deviceMotionService(() => deviceMotion),
       host: Dependencies.playgroundHostService(() => host),
     };
-    // React (real DOM: text fields, scrolling) unless Settings chose the
-    // self-drawing WebGPU renderer (applied on refresh, like this).
-    // `?renderer=react|webGPU` overrides the stored preference (and stores
-    // it) — the way back if a renderer cannot show Settings.
-    const forced = new URLSearchParams(location.search).get("renderer");
-    if (forced === "react" || forced === "webGPU") storeRenderer(forced === "webGPU" ? "gpu" : "native");
-    const rendererName = storedRenderer() === "gpu" ? "webGPU" : "react";
+    // React (real DOM: text fields, scrolling); `?renderer=webGPU` draws it
+    // with the self-drawing renderer for a look, stored nowhere. The choice
+    // Settings once kept (before 0.38) is forgotten.
+    localStorage.removeItem(sandbox + "preferences:renderer");
+    const rendererName = new URLSearchParams(location.search).get("renderer") === "webGPU" ? "webGPU" : "react";
     // The Playground's own files (its projects) are kept under its bundle
     // identifier; each run's under its project's.
     boot({ canvas: document.getElementById("canvas"), wasmURL: "./app.wasm", rendererName, dependencies, bundleIdentifier: "dev.isomer.playground" })

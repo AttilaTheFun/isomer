@@ -238,11 +238,10 @@ the run's Documents (`imported/`; the transcript notes them, `list_files`
 lists them), where an app reads them with `Data(contentsOf:
 URL.documentsDirectory.appendingPathComponent("imported/<name>"))`.
 
-Settings' **Renderer** choice (SwiftUI or Metal for the user's runs; React
-or WebGPU on the web page) is UserDefaults' on iOS
-(`playground.preferences.renderer`), the host's elsewhere (the page reads
-it before boot: `PlaygroundHostService.renderer()`), and applies to the
-next run / page refresh.
+**One renderer a platform** (0.38): a run is drawn with SwiftUI on iOS and
+the Mac, the app with Compose on Android and React on the web. Settings no
+longer offers Metal, OpenGL or WebGPU; the choice a Playground stored
+before is forgotten at launch.
 
 Feature code reaches the services through `PlatformDependencies.keychain`
 etc. (`import PlatformServices`). Async methods simply suspend: swift_ffi's

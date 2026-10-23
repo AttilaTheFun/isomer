@@ -150,12 +150,6 @@ final class AppleHost: PlaygroundHostService, @unchecked Sendable {
 
     func requestedTemplate() -> String { "" }
 
-    func renderer() -> String { RendererPreference.current }
-    func setRenderer(value: String) { UserDefaults.standard.set(value, forKey: RendererPreference.key) }
-    func rendererNames() -> String { "SwiftUI,Metal" }
-    func rendererFooter() -> String {
-        "SwiftUI draws a run with real views; Metal is the self-drawing SwiftGPU renderer. Applies to the next run."
-    }
 
     func appVersion() -> String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""

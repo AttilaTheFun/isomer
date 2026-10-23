@@ -389,13 +389,8 @@ struct CodeEditorView: View {
             #if os(iOS) || os(macOS) || os(Linux) || os(Windows)
             TextEditor(text: $text).font(.system(size: 13, design: .monospaced))
             #else
-            if RendererPreference.isGPU {
-                // The self-drawing renderer has no DOM to host the highlighted editor.
-                TextEditor(text: $text).font(.system(size: 13, design: .monospaced))
-            } else {
-                CodeEditor(text: $text, fileName: fileName)
-                    .accessibilityIdentifier("editor")
-            }
+            CodeEditor(text: $text, fileName: fileName)
+                .accessibilityIdentifier("editor")
             #endif
         }
     }
@@ -542,12 +537,6 @@ struct SettingsSheet: View {
                     } footer: {
                         Text("Any OpenRouter model id that supports tools, e.g. anthropic/claude-sonnet-5, openai/gpt-5.2, z-ai/glm-5.")
                     }
-                }
-                if let renderers = PlaygroundHost.service?.rendererNames(), renderers.contains(",") {
-                    let names = renderers.split(separator: ",").map(String.init)
-                    RendererSettingsSection(
-                        nativeName: names[0], gpuName: names[1],
-                        footer: PlaygroundHost.service?.rendererFooter() ?? "")
                 }
                 if hasProjects {
                     Section("Compiler") {

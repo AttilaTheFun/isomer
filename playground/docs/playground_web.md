@@ -45,7 +45,7 @@ keyboard stand-in; `window.__playgroundShake()` for tests). `.onShake { }`
 in `playground_ui/Shake.swift` runs one `nextShake` loop and hands each
 shake to the most recently appeared listener.
 
-**Renderer setting (2026-09-10).** Settings on both Playgrounds carry the
+**Renderer setting (2026-09-10; removed in 0.38, one renderer a platform: what follows is history).** Settings on both Playgrounds carry the
 shared `RendererSettingsSection` (playground_ui/RendererSettings.swift): the
 platform's component-system renderer (SwiftUI / React) or the self-drawing
 SwiftGPU renderer over its GPU (Metal / WebGPU), stored through the

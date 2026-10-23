@@ -23,11 +23,6 @@ public protocol PlaygroundHostService {
     /// Signs in to OpenRouter in the system's web sign-in (PKCE) and keeps
     /// the key it returns; returns a status line.
     func signIn() async throws -> String
-    /// The renderers a run (or the app) can be drawn with, "Native,GPU"
-    /// (the component system's, the self-drawing one's), "" when one.
-    func rendererNames() -> String
-    /// When a change of renderer applies, for Settings.
-    func rendererFooter() -> String
     /// The app's version, as the release shows it ("0.38.4").
     func appVersion() -> String
     /// Compiles one App.swift; "" on success, else the diagnostics.
@@ -57,10 +52,6 @@ public protocol PlaygroundHostService {
     /// JSON object of path → base64 contents under `playground/`, "{}" when
     /// there are none. Read once, when the Playground's own store is empty.
     func legacyFiles() -> String
-    /// The renderer choice ("native" or "gpu"), which the host reads before
-    /// the app starts.
-    func renderer() -> String
-    func setRenderer(value: String)
     /// Driving the running build (the agent's ui_tree/tap/type_text/submit/swipe).
     func uiTree() -> String
     func tap(target: String) async throws -> String

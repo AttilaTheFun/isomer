@@ -5,13 +5,5 @@ import SwiftUI
 
 @main
 struct PlaygroundWebApp: App {
-    init() {
-        // The host keeps the renderer choice: it picks the renderer before
-        // the app starts.
-        RendererPreference.hostStore = (
-            get: { PlaygroundHost.service?.renderer() ?? "" },
-            set: { PlaygroundHost.service?.setRenderer(value: $0) })
-    }
-
     var body: some Scene { WindowGroup("Playground") { PlaygroundRoot() } }
 }
