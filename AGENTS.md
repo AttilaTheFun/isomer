@@ -393,8 +393,9 @@ bazel run //examples/electron/example_full_react_electron_application
 # android: example_partial_{compiled,wasm}_…; web/electron:
 # example_partial_{react,webgpu}_… — see README's tables.
 
-# Linux/Windows: on oss machines. Linux builds in an oss container
-# (tools/linux/build.sh), Windows on the oss Windows VM (see "Platform tiers").
+# Linux/Windows: Linux builds in a container here (tools/linux/build.sh) and
+# runs on an oss VM, Windows builds and runs on the oss Windows VM (see
+# "Platform tiers").
 ```
 
 ## Platform tiers (2026-10-13)
@@ -404,11 +405,12 @@ the Mac on every change. T2 (wasm: web and Electron; Android): headless
 Chrome and the hermetic emulator. T3 (Linux, Windows): built and run on
 oss machines (~/Developer/AGENTS.md), never on this Mac's own screen.
 
-- **Linux from a Mac**: `tools/linux/build.sh [targets]` builds in an oss
-  container (an Ubuntu image with Bazel and the libraries the Linux targets
-  link: SDL2, SDL2_ttf, GL/EGL, GTK 3, WebKitGTK; made with `container
-  build` if missing, the container kept between builds, `--stop` to stop
-  it). The container is arm64: MODULE.bazel registers swift.org's
+- **Linux from a Mac**: `tools/linux/build.sh [targets]` builds in a
+  Linux container of Apple's `container` (isomer-linux-build: an Ubuntu
+  image with Bazel and the libraries the Linux targets link: SDL2, SDL2_ttf,
+  GL/EGL, GTK 3, WebKitGTK; made with `container build` if missing, the
+  container kept between builds, `--stop` to remove it; an oss container
+  until 0.38, when oss became the GUI machines' alone). The container is arm64: MODULE.bazel registers swift.org's
   ubuntu24.04 toolchains for aarch64 as well as x86_64, wasm SDK included
   (the wasm cell's reactor). tools/proof/proof.py runs what it builds in
   an oss Linux VM.
