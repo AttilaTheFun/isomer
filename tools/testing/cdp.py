@@ -28,7 +28,11 @@ import sys
 import time
 import urllib.request
 
-CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+# The Mac's Chrome, else Linux's; CDP_CHROME names another (a Chromium).
+CHROME = os.environ.get("CDP_CHROME") or next(
+    (path for path in ("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "/usr/bin/google-chrome",
+                       "/usr/bin/chromium") if os.path.exists(path)),
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
 PORT = 9223
 
 
@@ -119,7 +123,11 @@ def main():
     width, height = width or 1220, height or 880
 
     chrome = subprocess.Popen(
+        # No keychain or keyring: Chrome's cookie store waits for Linux's
+        # GNOME keyring, locked or out of reach from a shell, and every
+        # http(s) page then hangs (the JS drivers pass the same).
         [CHROME, "--headless=new", "--enable-unsafe-webgpu", "--enable-features=Vulkan",
+         "--use-mock-keychain", "--password-store=basic",
          f"--remote-debugging-port={PORT}",
          f"--window-size={width},{height}", "--user-data-dir=/tmp/iso-cdp-profile",
          # CDP_CHROME_FLAGS: extra switches (e.g. --disable-features=
