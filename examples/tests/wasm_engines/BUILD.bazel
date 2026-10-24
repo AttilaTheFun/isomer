@@ -11,7 +11,8 @@ swift_test(
     srcs = ["WasmEngineTests.swift"],
     data = [
         "//wasm/example_full_feature:example_full.wasm",
-        "//wasm/example_full_feature:example_full_threads.wasm",
+        "//wasm/network_probe_feature:network_probe.wasm",
+        "//wasm/network_probe_feature:network_probe_threads.wasm",
         "//wasm/tap_counter_feature:tap_counter_release.wasm",
         "//wasm/tap_counter_feature:tap_counter_threads_release.wasm",
     ],

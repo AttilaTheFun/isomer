@@ -76,6 +76,17 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
   neither Apple renderer does yet. The SwiftUI tree renderer would show
   SwiftMap's Apple view for the node; the GPU one (GPUTreeServicesHost)
   would draw its tiles, as the Linux and Windows loaders do.
+- **The SwiftUI tree view differs from Apple's SwiftUI** in the Storybook
+  compiled against Isomer (0.38.13's proof, review-ios-storybook-isomer,
+  each story beside Apple's shot of it):
+  - a custom `Shape`'s path is drawn as its frame's rectangle;
+  - `LazyVGrid`'s adaptive columns are too many and don't stretch to the
+    width (5 fixed columns where Apple fits 4);
+  - `Stepper`'s buttons are tinted, not Apple's grey ones;
+  - `ProgressView` centres its label;
+  - `OutlineGroup`'s rows put the disclosure chevron first, without
+    Apple's trailing one;
+  - `ContentUnavailableView`'s description is smaller than Apple's.
 
 ## Android (T2)
 
