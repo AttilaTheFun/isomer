@@ -59,7 +59,7 @@ IOS_PID=$!
     done
   fi
   "$ADB" install -r "$APK" >/dev/null
-  "$ADB" shell am start -n dev.isomer.example/.MainActivity >/dev/null
+  "$ADB" shell am start -n com.LoganShire.IsomerStorybook/.MainActivity >/dev/null
   note "Android: launched on $("$ADB" devices | awk 'NR==2{print $1}')"
 ) &
 ANDROID_PID=$!

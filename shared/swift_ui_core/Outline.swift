@@ -58,7 +58,8 @@ extension DisclosureGroup: _PrimitiveView {
 
         let chevron = RenderNode(kind: .text(expanded ? "\u{25BE}" : "\u{25B8}"))
         chevron.font = .footnote
-        chevron.color = Color(white: 0, opacity: 0.4)
+        // The secondary label colour, legible in either appearance.
+        chevron.color = .secondary
         let chevronBox = RenderNode.box(child: chevron)
         chevronBox.fixedWidth = 16
 
@@ -69,6 +70,9 @@ extension DisclosureGroup: _PrimitiveView {
         header.stackSpacing = 4
         header.stackAlignment = .center
         header.children = [chevronBox, labelNode, RenderNode(kind: .spacer(nil))]
+        // The row's width, so its spacer puts the label at the leading edge
+        // (the box would otherwise center a content-wide stack).
+        header.expandsWidth = true
         let headerBox = RenderNode.box(child: header)
         headerBox.expandsWidth = true
         headerBox.padding = EdgeInsets(top: 7, leading: 0, bottom: 7, trailing: 0)

@@ -28,7 +28,6 @@ swift_library(
     module_name = "PlaygroundAndroid",
     tags = ["manual"],
     deps = [
-        "@isomer//gallery",
         "@isomer//shared/platform_services",
         "@isomer//android/libraries/swift_ui",
         "@isomer//android/libraries/swift_ui:isomer",
@@ -43,9 +42,6 @@ flat_assets(
     srcs = [
         ":web_site_zip",
         "//web/playground_web_application:templates",
-        # The Gallery's images, and its reactor ("Run as wasm").
-        "//shared/gallery_reactor:gallery.wasm",
-        "@isomer//gallery:assets",
     ] + glob(["toolchain/toolchain.zip"], allow_empty = True),
 )
 
@@ -84,9 +80,9 @@ isomer_android_app(
         # The wasm engine (WasmKit) the build's window runs a reactor on.
         "@isomer//android/libraries/wasm_view:engine_native",
     ],
-    label = "Isomer",
+    label = "Playground",
     icon = "//artwork/playground_icon:ic_launcher.png",
-    package = "com.LoganShire.Isomer",
+    package = "com.LoganShire.IsomerPlayground",
     services_deps = [
         "@isomer//android/libraries/wasm_view:wasm_engine_bindings",
         "@isomer//tools/android:maven_androidx_browser_browser",
@@ -96,8 +92,7 @@ isomer_android_app(
     services_installer = "dev.isomer.runtime.PlaygroundAndroidServices.install(this)",
     services_kt = ":host_kotlin",
     swift_library = ":app_swift",
-    # A hot reloader may follow a feed served over plain HTTP (a laptop's
-    # dev server on the LAN, the proof's feed).
+    # A project may fetch over plain HTTP (a dev server on the LAN).
     uses_cleartext_traffic = True,
     version_code = 38000,
     version_name = "0.38.0",

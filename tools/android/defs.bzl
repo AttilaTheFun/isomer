@@ -171,7 +171,7 @@ def _flat_assets_impl(ctx):
     """Flattens nested PNGs into a single directory keyed by basename.
 
     The app's AssetManager opens images by flat basename (e.g.
-    `assets.open("tab-pokedex.png")`), but the source PNGs live in a nested
+    `assets.open("iso-logo.png")`), but the source PNGs live in a nested
     `Assets.xcassets/<name>.imageset/` tree (shared with the Apple build). This
     produces a `<name>/` TreeArtifact of flat-named copies that rules_android's
     `android_binary`/`kt_android_library` packages directly into the APK's

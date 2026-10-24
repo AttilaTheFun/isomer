@@ -1,4 +1,6 @@
 # Vendored copies of isomer's flatbuffers patches: bzlmod only applies
 # single_version_override patches from the MAIN repository, so every consumer
 # carries these two files until a flatbuffers release includes the fixes.
+# And the Playground's rules_swift_package_manager patch for Windows (the
+# same file as playground/tools/patches').
 exports_files(glob(["*.patch"]))

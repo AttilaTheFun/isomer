@@ -3,7 +3,7 @@ package dev.isomer.wasmfull
 // Level 4 adoption, the "full x wasm" cell of the Android matrix: the WHOLE
 // shared SwiftUI @main App (//examples/shared/example_application) shipped as ONE wasm
 // bundle and hosted full-screen by `WasmView`. The compiled twin is
-// //examples/android/example_full_compiled_android_application — the SAME
+// //examples/android/storybook_android_application — the SAME
 // app, but its Swift is compiled into the APK as a .so. Here the app's code is
 // a wasm reactor run in-process on WasmKit (a Swift interpreter, the APK's
 // one native library) and drawn by the Swift-free Compose interpreter.

@@ -2,24 +2,24 @@ load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 
 # The example application's own sources (its @main, the native platform
 # services a compiled cell installs), compiled for all platforms beside
-# the Gallery library they show (@isomer//gallery): an app that compiles
-# :srcs depends on it.
+# the Storybook library they show (@isomer//storybook): an app that
+# compiles :srcs depends on it.
 filegroup(
     name = "srcs",
     srcs = glob(["*.swift"]) + ["//shared/platform_services:native_srcs"],
     visibility = ["//visibility:public"],
 )
 
-# The Gallery's images (its assets/ and asset catalog).
+# The Storybook's images (its assets/ and asset catalog).
 alias(
     name = "assets",
-    actual = "@isomer//gallery:assets",
+    actual = "@isomer//storybook:assets",
     visibility = ["//visibility:public"],
 )
 
 alias(
     name = "xcassets",
-    actual = "@isomer//gallery:xcassets",
+    actual = "@isomer//storybook:xcassets",
     visibility = ["//visibility:public"],
 )
 
@@ -30,9 +30,9 @@ sh_binary(
     name = "run_all",
     srcs = ["run_all.sh"],
     args = [
-        "$(rlocationpath //apple/example_full_compiled_macos_application)",
-        "$(rlocationpath //apple/example_full_compiled_ios_application)",
-        "$(rlocationpath //android/example_full_compiled_android_application:example_full_compiled_android_application_apk.apk)",
+        "$(rlocationpath //apple/storybook_macos_application)",
+        "$(rlocationpath //apple/storybook_ios_application)",
+        "$(rlocationpath //android/storybook_android_application:storybook_android_application_apk.apk)",
         "$(rlocationpath @android_platform_tools//:adb)",
         "$(rlocationpath @isomer//tools/android/emulator:run_emulator.sh)",
         "$(rlocationpath @android_emulator//:emulator/emulator)",
@@ -40,17 +40,17 @@ sh_binary(
         "$(rlocationpath @android_platform_tools//:adb)",
         "$(rlocationpath @electron//:electron_path.txt)",
         "$(rlocationpath //electron:package.json)",
-        "$(rlocationpath //web/example_full_react_web_application:site)",
+        "$(rlocationpath //web/storybook_web_application:site)",
     ],
     data = [
         ":assets",
-        "//android/example_full_compiled_android_application:example_full_compiled_android_application_apk.apk",
-        "//apple/example_full_compiled_ios_application",
-        "//apple/example_full_compiled_macos_application",
+        "//android/storybook_android_application:storybook_android_application_apk.apk",
+        "//apple/storybook_ios_application",
+        "//apple/storybook_macos_application",
         "@isomer//tools/android/emulator:run_emulator.sh",
         "//electron:main.js",
         "//electron:package.json",
-        "//web/example_full_react_web_application:site",
+        "//web/storybook_web_application:site",
         "@android_emulator//:all",
         "@android_emulator//:emulator/emulator",
         "@android_platform_tools//:adb",

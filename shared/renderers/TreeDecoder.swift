@@ -8,9 +8,9 @@
 // `handlers` table and that the host echoes back (to the reactor's
 // `iso_hot_event` in the desktop wasm host, or to `encoder.handlers[id]` in a round-trip test).
 //
-// The schema is lossy for a few draw-walk fields (offset/rotation/scaleEffect/
-// overlay/min); those simply don't round-trip in v1. See
-// docs/desktop_wasm_implementation_notes.md (blocker 2).
+// The visual transforms (`.offset`, `.scaleEffect`), `.position`, clipping
+// and a drag's handler round-trip; rotation, overlays and minimum sizes do
+// not yet (docs/desktop_wasm_implementation_notes.md, blocker 2).
 
 import FlatBuffers
 internal import IsomerSwiftUI
@@ -182,6 +182,29 @@ package final class FlatTreeDecoder {
             let route = self.send
             out.tapAction = { route(tap, "") }
             out.pressFeedback = PressFeedback(rawValue: Int(n.feedback ?? 0)) ?? .none
+        }
+
+        // Visual transforms, as the guest's animator left them this frame
+        // (a 2048 board's cells are each `.offset` into place).
+        out.offsetX = CGFloat(n.offsetX ?? 0)
+        out.offsetY = CGFloat(n.offsetY ?? 0)
+        out.scaleEffect = CGFloat(n.scale ?? 1)
+        for kv in n.params {
+            switch kv.key {
+            case "posX": out.positionX = Double(kv.value).map { CGFloat($0) }
+            case "posY": out.positionY = Double(kv.value).map { CGFloat($0) }
+            case "clip": out.clipsContent = kv.value == "1"
+            default: break
+            }
+        }
+        // A drag on the node: its movement goes back to the guest's
+        // onChanged/onEnded by the node's drag id, as Apple's tree view sends it.
+        if let drag = n.drag {
+            let route = self.send
+            var gesture = DragGesture(minimumDistance: 6)
+            gesture.onChangedAction = { value in route(drag, "changed:\(value.translation.width),\(value.translation.height)") }
+            gesture.onEndedAction = { value in route(drag, "ended:\(value.translation.width),\(value.translation.height)") }
+            out.dragGesture = gesture
         }
 
         return out

@@ -7,7 +7,7 @@ how the SwiftUI is *delivered*:
 
 | Cell | Target | SwiftUI delivery |
 | --- | --- | --- |
-| **compiled** | `//examples/linux/example_full_opengl_compiled_linux_application` | linked into the ELF as native Swift |
+| **compiled** | `//examples/linux/storybook_linux_application` | linked into the ELF as native Swift |
 | **wasm** | `//examples/linux/example_full_opengl_wasm_linux_application` | an `example_full.wasm` reactor run under WasmKit (the bundled one; an explicit reactor path as `argv[1]` wins) |
 
 Benchmark cells (docs/benchmarks.md#linux): the shared tap-counter as
@@ -54,7 +54,7 @@ Arch/SteamOS also symlink the ncurses soname `swiftc` links against:
 ## Running the compiled cell
 
 ```sh
-bazel run //examples/linux/example_full_opengl_compiled_linux_application
+bazel run //examples/linux/storybook_linux_application
 ```
 
 An SDL2 window comes up with the responsive shell (three-pane split when wide,
@@ -65,7 +65,7 @@ Windows desktop (see [Under WSL](#under-wsl) below for the display-env caveat
 when running as root):
 
 ```powershell
-wsl -d Ubuntu-24.04 -- bash -lc "cd ~/src/isomer && bazelisk run //examples/linux/example_full_opengl_compiled_linux_application"
+wsl -d Ubuntu-24.04 -- bash -lc "cd ~/src/isomer && bazelisk run //examples/linux/storybook_linux_application"
 ```
 
 ## Running the wasm cell

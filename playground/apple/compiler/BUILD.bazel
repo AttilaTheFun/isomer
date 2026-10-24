@@ -1,0 +1,13 @@
+# How the Apple Playground builds a project: ToolchainCompiler (the
+# pipeline and its backends), EmbeddedCompiler (the iPhone's compiler,
+# linked into the app; `--define iso_playground_embedded=1`) and Spawn (the
+# Mac's carried compiler and the simulator's host toolchain, run as
+# processes), over shared/compiler (the arguments, the SDK, the carried
+# compiler). Compiled into both apps.
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "srcs",
+    srcs = glob(["*.swift"]) + ["//shared/compiler:srcs"],
+)

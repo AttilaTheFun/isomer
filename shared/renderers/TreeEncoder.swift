@@ -600,6 +600,11 @@ package final class FlatTreeEncoder {
                     if let color = run.color {
                         let c = flatColor(color)
                         part += ":" + [c.r, c.g, c.b, c.a].map { formatNumber(Double($0)) }.joined(separator: ",")
+                        // A system colour's name too, as a text's own
+                        // (`colorName`): a host with the system's colours
+                        // draws its own `.primary` (black on iOS, the Mac's
+                        // 85% black being what the RGBA says).
+                        if let name = systemColorName(color) { part += ":" + name }
                     }
                     return part
                 }.joined(separator: ";")

@@ -1,0 +1,43 @@
+load("@build_bazel_rules_apple//apple:macos.bzl", "macos_application")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@rules_xcodeproj//xcodeproj:defs.bzl", "top_level_target", "xcodeproj")
+
+# The Storybook on the Mac: the Storybook's own app, which releases hand out.
+BUNDLE_ID = "com.LoganShire.IsomerStorybook"
+
+# The Storybook (//shared/example_application), compiled against Apple's
+# SwiftUI for macOS.
+swift_library(
+    name = "storybook_macos_application_lib",
+    srcs = ["//shared/example_application:srcs"],
+    data = ["//shared/example_application:xcassets"],
+    deps = [
+        "@isomer//storybook",
+        "//shared/platform_services",
+        "@isomer//apple/libraries/swift_ui",
+        "@isomer//apple/libraries/swift_ui:isomer",
+    ],
+)
+
+# `bazel run //apple/storybook_macos_application` launches the app.
+macos_application(
+    name = "storybook_macos_application",
+    app_icons = ["//artwork/storybook_icon:app_icon"],
+    bundle_id = BUNDLE_ID,
+    bundle_name = "Storybook",
+    infoplists = ["Info.plist"],
+    minimum_os_version = "14.0",
+    visibility = ["//visibility:public"],
+    deps = [":storybook_macos_application_lib"],
+)
+
+# `bazel run //apple/storybook_macos_application:storybook_macos_application_project`
+# generates StorybookMacos.xcodeproj in this directory (gitignored).
+xcodeproj(
+    name = "storybook_macos_application_project",
+    project_name = "StorybookMacos",
+    tags = ["manual"],
+    top_level_targets = [
+        top_level_target(":storybook_macos_application"),
+    ],
+)

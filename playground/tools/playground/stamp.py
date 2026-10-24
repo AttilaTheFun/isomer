@@ -33,7 +33,7 @@ def main():
     android = "android/playground_android_application/BUILD.bazel"
     stamp(android, r'version_name = "[^"]*"', f'version_name = "{version}"')
     stamp(android, r"version_code = \d+", f"version_code = {code}")
-    for plist in ("apple/playground_ios_application/Info.plist", "apple/isomer_macos_application/Info.plist"):
+    for plist in ("apple/playground_ios_application/Info.plist", "apple/playground_macos_application/Info.plist"):
         stamp(plist, r"(<key>CFBundleShortVersionString</key>\s*<string>)[^<]*(</string>)", rf"\g<1>{version}\g<2>")
     stamp("web/playground_web_application/index.html",
           r'(<meta name="isomer-version" content=")[^"]*(")', rf"\g<1>{version}\g<2>")

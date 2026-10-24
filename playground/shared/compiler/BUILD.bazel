@@ -1,0 +1,31 @@
+load(":toolchain.bzl", "playground_toolchain", "wasm_swift_sdk_files")
+
+# What every Playground that carries its compiler shares: the arguments of a
+# project's build (CompilerArguments), the SDK a project compiles against
+# and the build with a compiler carried as files (BundledCompiler: the Mac,
+# Linux and Windows run swift-frontend and wasm-ld as processes; the iPhone
+# links them in, apple/compiler), and that compiler as a directory for the
+# app (toolchain.bzl).
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "srcs",
+    srcs = glob(["*.swift"]),
+)
+
+# The compiler, assembled for the platform the app is built on.
+playground_toolchain(
+    name = "toolchain",
+    files = [":wasm_sdk_files"],
+    tags = ["manual"],
+    thin_arm64 = select({
+        "@platforms//os:macos": True,
+        "//conditions:default": False,
+    }),
+)
+
+wasm_swift_sdk_files(
+    name = "wasm_sdk_files",
+    tags = ["manual"],
+)

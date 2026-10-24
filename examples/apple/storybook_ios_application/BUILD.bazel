@@ -1,0 +1,101 @@
+load("@build_bazel_rules_apple//apple:apple.bzl", "local_provisioning_profile")
+load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@rules_xcodeproj//xcodeproj:defs.bzl", "top_level_target", "xcode_provisioning_profile", "xcodeproj")
+load("@isomer_signing//:signing.bzl", "TEAM_ID")
+
+# The Storybook on iOS: the Storybook's own app, which releases hand out.
+BUNDLE_ID = "com.LoganShire.IsomerStorybook"
+
+
+# The Storybook (//shared/example_application), compiled against Apple's
+# SwiftUI for iOS.
+swift_library(
+    name = "storybook_ios_application_lib",
+    srcs = ["//shared/example_application:srcs"],
+    data = ["//shared/example_application:xcassets"],
+    deps = [
+        "@isomer//storybook",
+        "//shared/platform_services",
+        "@isomer//apple/libraries/swift_ui",
+        "@isomer//apple/libraries/swift_ui:isomer",
+    ],
+)
+
+# The version is the Info.plist's (CFBundleShortVersionString MAJOR.MINOR.0,
+# stamped per build by tools/stamp_storybook.py; CFBundleVersion 1).
+
+# The Xcode-managed development profile for the bundle id, found in the local
+# Xcode provisioning profile store.
+local_provisioning_profile(
+    name = "_xcode_managed_profile",
+    profile_name = "iOS Team Provisioning Profile: *",
+    tags = ["manual"],
+    team_id = TEAM_ID,
+)
+
+xcode_provisioning_profile(
+    name = "_development_profile",
+    managed_by_xcode = True,
+    provisioning_profile = ":_xcode_managed_profile",
+    tags = ["manual"],
+)
+
+# `bazel run //apple/storybook_ios_application` installs and
+# launches the app in the iOS simulator; add `--ios_multi_cpus=arm64` to
+# install and launch on an attached device instead.
+ios_application(
+    name = "storybook_ios_application",
+    app_icons = ["//artwork/storybook_icon:app_icon"],
+    bundle_id = BUNDLE_ID,
+    bundle_name = "Storybook",
+    # Its own app ID and keychain group: a wildcard profile's entitlements
+    # would otherwise be copied as-is (application-identifier TEAM.*), which
+    # the release server refuses.
+    entitlements = "Storybook.entitlements",
+    families = [
+        "ipad",
+        "iphone",
+    ],
+    infoplists = ["Info.plist"],
+    minimum_os_version = "17.0",
+    provisioning_profile = ":_development_profile",
+    visibility = ["//visibility:public"],
+    deps = [":storybook_ios_application_lib"],
+)
+
+# Simulator-only variant: no provisioning profile, so it builds on machines
+# without the Xcode-managed profile above. Build with
+# --ios_multi_cpus=sim_arm64, then `xcrun simctl install` the Payload .app.
+ios_application(
+    name = "storybook_ios_sim_application",
+    app_icons = ["//artwork/storybook_icon:app_icon"],
+    bundle_id = BUNDLE_ID,
+    bundle_name = "Storybook",
+    families = [
+        "ipad",
+        "iphone",
+    ],
+    infoplists = ["Info.plist"],
+    minimum_os_version = "17.0",
+    tags = ["manual"],
+    visibility = ["//visibility:public"],
+    deps = [":storybook_ios_application_lib"],
+)
+
+# `bazel run //apple/storybook_ios_application:storybook_ios_application_project`
+# generates StorybookIos.xcodeproj in this directory (gitignored).
+xcodeproj(
+    name = "storybook_ios_application_project",
+    project_name = "StorybookIos",
+    tags = ["manual"],
+    top_level_targets = [
+        top_level_target(
+            ":storybook_ios_application",
+            target_environments = [
+                "device",
+                "simulator",
+            ],
+        ),
+    ],
+)

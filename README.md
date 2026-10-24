@@ -163,16 +163,16 @@ Web and Electron are separate platforms (they share the wasm build under
 `wasm/libraries`).
 | Platform | Renderer | Target |
 | --- | --- | --- |
-| macos | native | `//examples/apple/example_full_compiled_macos_application` |
-| ios | native | `//examples/apple/example_full_compiled_ios_application` |
-| android | compiled | `//examples/android/example_full_compiled_android_application` |
+| macos | native | `//examples/apple/storybook_macos_application` |
+| ios | native | `//examples/apple/storybook_ios_application` |
+| android | compiled | `//examples/android/storybook_android_application` |
 | android | wasm | `//examples/android/example_full_wasm_android_application` \*\* |
-| web | react | `//examples/web/example_full_react_web_application` |
+| web | react | `//examples/web/storybook_web_application` |
 | web | webgpu | `//examples/web/example_full_webgpu_web_application` |
 | electron | react | `//examples/electron/example_full_react_electron_application` |
 | electron | webgpu | `//examples/electron/example_full_webgpu_electron_application` |
-| windows | directx | `//examples/windows/example_full_directx_compiled_windows_application` \* |
-| linux | opengl | `//examples/linux/example_full_opengl_compiled_linux_application` \* |
+| windows | directx | `//examples/windows/storybook_windows_application` \* |
+| linux | opengl | `//examples/linux/storybook_linux_application` \* |
 
 \* Built natively **on** that OS with its own Swift toolchain — no
 cross-compile from macOS exists for these targets (see
@@ -272,48 +272,25 @@ platform) is exercised by every target above, and
 carries this repo's entire host boundary — `swift_ffi/examples` has
 standalone greeter apps per platform.
 
-What to expect once a window is up — a two-tab app that adapts its shell to the
-available width: a **`NavigationSplitView`** (sidebar · list · detail) when the
-canvas is **wide** (desktop, tablet, a wide window) and a **`TabView`** with
-bundled icon assets when it's **narrow** (a phone, or any window dragged narrow).
-The choice is made live by width — drag a desktop window across the threshold and
-the shell switches — so the same build adapts on every platform rather than being
-fixed per-OS. One tab lists the bundled **example apps**; the other is the
-component **Gallery**. Together they exercise most of the
-[supported surface](#swiftui-api-support):
+What to expect once a window is up: the **Storybook**
+([storybook/](storybook/)), every SwiftUI API Isomer implements, a story
+each, in fifteen areas (text, images, buttons, controls, text input, lists
+and forms, layout, scrolling, navigation, presentation, shapes and color,
+animation, gestures, state and data, and the Isomer module's own views). A
+story's page shows its code, what the API does, and the code running on the
+platform, drawn by the platform's renderer: Apple's SwiftUI on iOS and the
+Mac, React on the web, Compose on Android, OpenGL on Linux, DirectX on
+Windows. The shell is a `NavigationSplitView`: the stories beside the page
+on a wide window, one column at a time on a phone. Each Storybook app
+(com.LoganShire.IsomerStorybook) is released with Isomer, and its proof is
+a screenshot of every story's page on every platform. A story's view is
+written once, between `// story: <id>` and `// end story` lines, and the
+build copies that source into the page, so the code shown is the code that
+runs; `ISO_STORYBOOK_STORY=<id>` in the launch environment (the web page's
+query) opens one.
 
-* **Wikipedia** — a live reader. A `.searchable` field drives the Wikipedia API
-  (`URLSession` → the bundled JSON parser); results render as a list of
-  articles with async-loaded, fill-and-clipped thumbnail `AsyncImage`s (two-line
-  `.lineLimit` summaries). Selecting one shows a detail screen that fetches and
-  renders the article's full text, with an "Open full page" link into an in-app
-  `WebView`.
-* **Pokédex** — a mini-app over [pokeapi.co](https://pokeapi.co): list + search,
-  a detail page (artwork, types, height/weight) and the games each Pokémon
-  appears in. Each game is a tap-to-catch toggle; the "caught" record is
-  **persisted** as a JSON file in the app's Application Support (`FileManager`,
-  which persists on every platform: IndexedDB on the web) and reloaded on startup.
-* **Meme Creator** — our own take on Apple's sample-app tutorial: a draggable,
-  rotatable, styled caption over an `AsyncImage`, with live `TextField` / `Slider`
-  / color / background controls (`DragGesture` + `.rotationEffect`).
-* **2048** — a swipe-to-merge tile game: axis-locked interactive swipes (the
-  movable tiles follow the finger, blocked ones stretch a little), animated
-  merges and edge spawns (`GeometryReader`, `DragGesture`, `withAnimation`
-  with animated `.offset`/`.scaleEffect`, `.ignoresSafeArea()`).
-* **Counter** — the smallest example: a button that counts taps.
-* **Date Planner** — an original events app: events grouped by day, created and
-  edited through a `sheet` (`Form` + `TextField` + `DatePicker` + `Picker`s,
-  dismissed via `@Environment(\.dismiss)`), **persisted** with `FileManager`.
-  Day/time labels come from `IsomerBridge`'s calendar helpers (UTC epoch math
-  on the reimplementation, a UTC `Foundation.Calendar` on Apple) so the same
-  source formats dates identically everywhere.
-* **Gallery** — a showcase of the implemented components: counter/`Toggle`/
-  `Slider`/`Stepper`/`Picker`, `ProgressView` (determinate + indeterminate),
-  `Menu` (native pop-up), `GeometryReader`, gradients with `shadow`, a
-  `WebView`, a `Form`/`Section`/`OutlineGroup` screen and a selectable `List`,
-  the animated `sheet`/`alert`, an `@Environment`/`@EnvironmentObject` demo, the
-  `IsomerBridge` logging hook, and the live platform/renderer details at the
-  bottom.
+The mini apps (Pokédex, 2048, Date Planner, Map Explorer and the rest) are
+the [Playground](playground/)'s canned projects.
 
 Everything is interactive on every target.
 
@@ -322,25 +299,25 @@ Everything is interactive on every target.
 * **iOS / macOS** — needs Xcode (its simulator runtimes drive the iOS
   target). The macOS app opens directly; iOS installs into a booted
   simulator. To work in Xcode instead, generate a project with
-  `bazel run //examples/apple/example_full_compiled_macos_application:example_full_compiled_macos_application_project`
-  (or `…/example_full_compiled_ios_application:example_full_compiled_ios_application_project`), which writes
+  `bazel run //examples/apple/storybook_macos_application:storybook_macos_application_project`
+  (or `…/storybook_ios_application:storybook_ios_application_project`), which writes
   a gitignored `.xcodeproj` next to the app's `BUILD.bazel`.
 * **Android** — if no device/emulator is attached, the runner boots the
   hermetic emulator (downloaded on first build), waits for it, installs the
   APK, launches it, and tails logcat.
-* **Web** — `example_full_react_web_application` serves on `http://127.0.0.1:8080` and
+* **Web** — `storybook_web_application` serves on `http://127.0.0.1:8080` and
   opens your default browser (`-- --no-open` to skip); the Electron targets
   open the same site in a hermetic desktop window instead. The SwiftGPU
   renderer needs a WebGPU-capable browser
   (Chrome, Safari 18+). To run the same build on Windows, `bazel build
   …:example_windows_package`, copy the zip to a 64-bit Windows machine,
   unzip, and run `Isomer.exe`.
-* **Windows (native)** — `bazel run //examples/windows/example_full_directx_compiled_windows_application`
+* **Windows (native)** — `bazel run //examples/windows/storybook_windows_application`
   on a Windows host (needs the Swift Windows toolchain + Visual Studio Build
   Tools / Windows SDK). Builds a native Direct2D `.exe`; a per-monitor-DPI-aware
   Win32 window comes up with the same three-pane shell as macOS/web. See
   [Native Windows target](#native-windows-target).
-* **Linux (native)** — `bazel run //examples/linux/example_full_opengl_compiled_linux_application`
+* **Linux (native)** — `bazel run //examples/linux/storybook_linux_application`
   on a Linux host (needs the system C toolchain + SDL2 / SDL2_ttf / Mesa GL /
   libcurl dev packages; the swift.org toolchain is fetched by Bazel). Builds a
   native x86_64 ELF; an SDL2 window comes up, drawn on the GPU with OpenGL, with
@@ -793,8 +770,8 @@ electron/
                       four sites in hermetic Electron desktop windows
 apple/
   libraries/swift_ui/ re-export of system SwiftUI + IsomerBridge (native)
-  applications/example_full_compiled_macos_application/  (rules_apple)
-  applications/example_full_compiled_ios_application/    -> iOS simulator
+  applications/storybook_macos_application/  (rules_apple)
+  applications/storybook_ios_application/    -> iOS simulator
 android/
   libraries/swift_ui/ module `SwiftUI` for Android (core + JNI host bridge,
                       written in Swift against jni.h), IsomerBridge, and
@@ -804,12 +781,12 @@ android/
 windows/
   libraries/swift_ui/ module `SwiftUI` for Windows (core + Direct2D host
                       bridge), IsomerBridge, C++ renderer (renderer.cpp)
-  applications/example_full_directx_compiled_windows_application/  (built on Windows)
+  applications/storybook_windows_application/  (built on Windows)
 linux/
   libraries/swift_ui/ module `SwiftUI` for Linux (core + SDL2/OpenGL host
                       bridge), IsomerBridge, C renderer (renderer.c) +
                       vendored stb_image + embedded WebKitGTK (webview_linux.c)
-  applications/example_full_opengl_compiled_linux_application/  (built on Linux)
+  applications/storybook_linux_application/  (built on Linux)
 tools/
   swift_cross/        hermetic toolchain repos + swift_{wasm,android}_*
                       build rules (drive swiftc directly)
@@ -999,7 +976,7 @@ Implementations live in each `…/libraries/swift_ui/IsomerBridge.swift`.
 
 ### Native Windows target
 
-`//examples/windows/example_full_directx_compiled_windows_application` is a **native** Windows app: the
+`//examples/windows/storybook_windows_application` is a **native** Windows app: the
 same `shared/swift_ui_core` SwiftUI reimplementation compiled to a real x64
 `.exe` with the Swift Windows toolchain, hosted in a Win32 window and drawn with
 **Direct2D / DirectWrite / WIC** (see `windows/libraries/swift_ui/renderer.cpp`).
@@ -1032,7 +1009,7 @@ interpreter instead of compiled-in Swift — plus cross-platform hot reload. See
 
 ### Native Linux target
 
-`//examples/linux/example_full_opengl_compiled_linux_application` is a **native** Linux app: the same
+`//examples/linux/storybook_linux_application` is a **native** Linux app: the same
 `shared/swift_ui_core` SwiftUI reimplementation compiled to a real x86_64 ELF
 with the swift.org toolchain, hosted in an **SDL2** window and drawn on the GPU
 with **OpenGL** (see `linux/libraries/swift_ui/renderer.c`). Like the Windows

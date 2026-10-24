@@ -7,7 +7,7 @@ opens itself (append `-- --no-open` to suppress).
 
 | App | `bazel run` target | Renderer |
 | --- | --- | --- |
-| full · React | `//examples/web/example_full_react_web_application` | React (DOM) |
+| full · React | `//examples/web/storybook_web_application` | React (DOM) |
 | full · WebGPU | `//examples/web/example_full_webgpu_web_application` | SwiftGPU (WebGPU) |
 | partial · React | `//examples/web/example_partial_react_web_application` | one feature embedded in a React page |
 | partial · WebGPU | `//examples/web/example_partial_webgpu_web_application` | one feature drawn by SwiftGPU |

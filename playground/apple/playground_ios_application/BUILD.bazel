@@ -87,7 +87,7 @@ config_setting(
 # and the prebuilt macro plugins (libSwiftMacros/libObservationMacros):
 # rules_apple copies them into Frameworks/ and signs them — iOS refuses to
 # load unsigned dylibs, even from inside the app bundle. The frontend
-# dlopens the server + plugins from Frameworks/ (EmbeddedCompiler.swift) —
+# dlopens the server + plugins from Frameworks/ (apple/compiler/EmbeddedCompiler.swift) —
 # macro expansion with no subprocess.
 # One import target per framework (the rule accepts a single bundle each);
 # names come from the staged Info.plists so a re-staging needs no BUILD edit.
@@ -199,22 +199,6 @@ playground_sample(
 )
 
 playground_sample(
-    name = "wikipedia_sample",
-    out = "Wikipedia.swift",
-    title = "Wikipedia",
-    app = [
-        "struct WikipediaApp: App {",
-        "    var body: some Scene { WindowGroup { NavigationStack { WikipediaScreen() } } }",
-        "}",
-    ],
-    srcs = [
-        "//shared/sample_sources:Wikipedia.swift",
-        "//shared/sample_sources:URLEncoding.swift",
-    ],
-    services = True,
-)
-
-playground_sample(
     name = "meme_sample",
     out = "MemeCreator.swift",
     title = "Meme Creator",
@@ -242,6 +226,43 @@ playground_sample(
     ],
     srcs = ["//shared/sample_sources:Pokedex.swift"],
     services = True,
+)
+
+playground_sample(
+    name = "date_planner_sample",
+    out = "DatePlanner.swift",
+    title = "Date Planner",
+    app = [
+        "struct DatePlannerApp: App {",
+        "    var body: some Scene { WindowGroup { NavigationStack { DatePlannerScreen() } } }",
+        "}",
+    ],
+    srcs = ["//shared/sample_sources:DatePlanner.swift"],
+    services = True,
+)
+
+playground_sample(
+    name = "map_explorer_sample",
+    out = "MapExplorer.swift",
+    title = "Map Explorer",
+    app = [
+        "struct MapExplorerApp: App {",
+        "    var body: some Scene { WindowGroup { NavigationStack { MapExplorerScreen() } } }",
+        "}",
+    ],
+    srcs = ["//shared/sample_sources:MapExplorer.swift"],
+)
+
+playground_sample(
+    name = "floating_menu_sample",
+    out = "FloatingMenu.swift",
+    title = "Floating Menu",
+    app = [
+        "struct FloatingMenuApp: App {",
+        "    var body: some Scene { WindowGroup { NavigationStack { FloatingMenuScreen() } } }",
+        "}",
+    ],
+    srcs = ["//shared/sample_sources:FloatingMenu.swift"],
 )
 
 # "This website": the splash page with the example screens it embeds (as
@@ -273,13 +294,11 @@ apple_resource_group(
 swift_library(
     name = "playground_lib",
     srcs = [
-        # The iPhone's own: the compiler, the web run, the code editor.
+        # The iPhone's own: the web run, the code editor.
         "CodeEditor.swift",
-        "EmbeddedCompiler.swift",
-        "Spawn.swift",
-        "ToolchainCompiler.swift",
         "WebRunServer.swift",
-        # The Apple host and the shared shell.
+        # The compiler (the Mac's too), the Apple host and the shared shell.
+        "//apple/compiler:srcs",
         "//apple/host:srcs",
         "//shared/app:srcs",
     ],
@@ -293,7 +312,6 @@ swift_library(
         "//apple/platform_services_host",
         "@isomer//apple/libraries/swift_ui:isomer",
         "@isomer//apple/libraries/wasm_view",
-        "@isomer//gallery",
         "@isomer//shared/platform_services",
         "@isomer//swift_ffi/runtime/swift_wasm_host",
         "@swiftpkg_agent_ui//:AgentUI",
@@ -318,9 +336,8 @@ local_provisioning_profile(
 ios_application(
     name = "playground_ios_application",
     app_icons = ["//artwork/playground_icon:app_icon"],
-    bundle_id = "com.LoganShire.Isomer",
-    # The app is Isomer (Isomer.app, "Isomer" under its icon); the project is the Playground.
-    bundle_name = "Isomer",
+    bundle_id = "com.LoganShire.IsomerPlayground",
+    bundle_name = "Playground",
     # Its own app ID and keychain group: a wildcard profile's entitlements
     # would otherwise be copied as-is (application-identifier TEAM.*).
     entitlements = "Playground.entitlements",
@@ -334,9 +351,6 @@ ios_application(
     resources = [
         ":playground_sdk",
         ":playground_site",
-        # The Gallery's images and its reactor ("Run as wasm").
-        "//shared/gallery_reactor:gallery.wasm",
-        "@isomer//gallery:xcassets",
     ] + select({
         ":embedded_toolchain_enabled": [":embedded_toolchain_data"],
         "//conditions:default": [],

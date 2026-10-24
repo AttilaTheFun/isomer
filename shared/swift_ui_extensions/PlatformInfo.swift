@@ -39,6 +39,11 @@ public enum Platform: Equatable, Sendable {
         return .linux
         #elseif os(Windows)
         return .windows
+        #elseif os(iOS)
+        // A feature compiled against Isomer's frameworks (apple/compiled).
+        return .iOS
+        #elseif os(macOS)
+        return .macOS
         #else
         return .unknown
         #endif

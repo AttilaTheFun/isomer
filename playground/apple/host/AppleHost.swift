@@ -1,11 +1,10 @@
-// The Isomer app's host on Apple platforms (iOS and macOS), set as
+// The Playground's host on Apple platforms (iOS and macOS), set as
 // `PlaygroundHost.service` before the app starts: the shared shell's
-// compiler, runs, chat and settings. On the iPhone and iPad it compiles
-// (ToolchainCompiler: the embedded swift-frontend + lld, or the host
-// toolchain on the simulator), runs a build or a reactor in a WasmView
-// (AppleRun), serves a build to an in-app Safari (WebRunServer) and signs in
-// to OpenRouter (PKCE). On the Mac it runs reactors (hot reloaders, the
-// Gallery as wasm); Projects wait for a compiler there.
+// compiler, runs, chat and settings. It compiles (ToolchainCompiler: the
+// swift-frontend and lld the app carries, or the host toolchain on the
+// simulator), runs a build in a WasmView (AppleRun), serves a build to an
+// in-app Safari on the iPhone (WebRunServer) and signs in to OpenRouter
+// (PKCE).
 
 import AuthenticationServices
 import CryptoKit
@@ -23,17 +22,12 @@ final class AppleHost: PlaygroundHostService, @unchecked Sendable {
     private var lastBuild: Data?
 
     func capabilities() -> String {
-        #if os(iOS)
-        return "projects,reactors,gallery-wasm,sign-in"
-        #else
-        return "reactors,gallery-wasm"
-        #endif
+        "projects,sign-in"
     }
 
     // MARK: Compiling
 
     func compile(source: String) async throws -> String {
-        #if os(iOS)
         let work = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("playground-source-\(UUID().uuidString.prefix(8))")
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: work) }
@@ -48,17 +42,10 @@ final class AppleHost: PlaygroundHostService, @unchecked Sendable {
         case .failure(let error):
             return (error as? CompileError)?.diagnostics ?? "\(error)"
         }
-        #else
-        return "This Mac has no Swift compiler for the Playground yet."
-        #endif
     }
 
     func toolchainStatus() -> String {
-        #if os(iOS)
-        return ToolchainCompiler.availability ?? "Swift toolchain in the app (swift-frontend and lld)"
-        #else
-        return "none: no compiler on the Mac yet"
-        #endif
+        ToolchainCompiler.availability ?? "Swift toolchain in the app (swift-frontend and wasm-ld)"
     }
 
     // MARK: Running
@@ -67,32 +54,6 @@ final class AppleHost: PlaygroundHostService, @unchecked Sendable {
         guard let wasm = lastBuild else { throw HostError("nothing built yet") }
         await MainActor.run {
             AppleRun.shared.start(.init(wasm: wasm, label: "run", name: project, environment: [:]))
-        }
-        return "running"
-    }
-
-    func runReactor(url: String, project: String, environment: String) async throws -> String {
-        let wasm: Data
-        if url.hasPrefix("bundle:") {
-            let name = String(url.dropFirst("bundle:".count))
-            guard let file = Bundle.main.url(forResource: name, withExtension: nil) else { throw HostError("\(name) is not in the app") }
-            wasm = try Data(contentsOf: file)
-        } else {
-            guard let address = URL(string: url) else { throw HostError("not a URL: \(url)") }
-            var request = URLRequest(url: address)
-            request.cachePolicy = .reloadIgnoringLocalCacheData
-            request.timeoutInterval = 120
-            let (data, response) = try await URLSession.shared.data(for: request)
-            if let status = (response as? HTTPURLResponse)?.statusCode, status >= 300 { throw HostError("\(url): HTTP \(status)") }
-            wasm = data
-        }
-        var variables: [String: String] = [:]
-        for line in environment.split(separator: "\n") {
-            guard let equals = line.firstIndex(of: "=") else { continue }
-            variables[String(line[..<equals]).trimmingCharacters(in: .whitespaces)] = String(line[line.index(after: equals)...])
-        }
-        await MainActor.run {
-            AppleRun.shared.start(.init(wasm: wasm, label: URL(string: url)?.lastPathComponent ?? "reactor", name: project, environment: variables))
         }
         return "running"
     }
@@ -162,7 +123,7 @@ final class AppleHost: PlaygroundHostService, @unchecked Sendable {
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("https://github.com/AttilaTheFun/isomer", forHTTPHeaderField: "HTTP-Referer")
-        request.setValue("Isomer", forHTTPHeaderField: "X-Title")
+        request.setValue("Isomer Playground", forHTTPHeaderField: "X-Title")
         request.httpBody = Data(body.utf8)
         let (data, _) = try await URLSession.shared.data(for: request)
         return String(decoding: data, as: UTF8.self)
@@ -189,12 +150,6 @@ final class AppleHost: PlaygroundHostService, @unchecked Sendable {
 
     func requestedTemplate() -> String { "" }
 
-    func renderer() -> String { RendererPreference.current }
-    func setRenderer(value: String) { UserDefaults.standard.set(value, forKey: RendererPreference.key) }
-    func rendererNames() -> String { "SwiftUI,Metal" }
-    func rendererFooter() -> String {
-        "SwiftUI draws a run with real views; Metal is the self-drawing SwiftGPU renderer. Applies to the next run."
-    }
 
     func appVersion() -> String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
@@ -231,7 +186,7 @@ struct HostError: Error, CustomStringConvertible {
 
 /// Generic-password strings in the app's keychain.
 enum Keychain {
-    private static let service = "com.LoganShire.Isomer"
+    private static let service = "com.LoganShire.IsomerPlayground"
 
     static func get(_ account: String) -> String? {
         let query: [String: Any] = [

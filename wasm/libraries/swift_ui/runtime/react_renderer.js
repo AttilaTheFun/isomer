@@ -196,6 +196,11 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
       "[data-edge-scroll],.iso-sheet-body,[data-iso-scroll]{overscroll-behavior:contain}" +
       ".iso-no-sep::after{display:none!important}" +
       ".iso-no-scrollbar::-webkit-scrollbar{display:none}" +
+      // A horizontal scroll offers its content unlimited width, as
+      // SwiftUI's does: its content keeps its own width (and starts at the
+      // leading edge) instead of shrinking to the scroll's and centering
+      // what overflows, half of it out of reach.
+      "[data-iso-hscroll]>*{flex-shrink:0!important;min-width:max-content!important}" +
       // The Mac's push button (a Form's button at regular width): a
       // rounded fill, its label in the text colour.
       // Dark by the system's setting unless the app chose light, or by
@@ -3681,6 +3686,7 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
           s.flexDirection = "row";
           s.justifyContent = "flex-start";
           s.alignItems = "flex-start";
+          props["data-iso-hscroll"] = "1";
         } else {
           s.flex = "1 1 0";
           s.alignSelf = "stretch";
@@ -3822,10 +3828,29 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
         if (trim && n.shape === "circle" && n.stroke) {
           const [from, to] = trim.split(",").map(Number);
           const width = n.strokeWidth || 1;
-          const size = n.width || n.height || 20;
+          const span = Math.max(0, Math.min(1, (to || 0) - (from || 0)));
+          if (n.width == null && n.height == null) {
+            // Sized from outside (a frame on a wrapper: a rotation, an
+            // overlay): the ring fills its box, the arc measured in
+            // fractions of the circle (pathLength 1) and the radius from
+            // the box's own width.
+            return h("svg", {
+              ...props,
+              style: { ...s, display: "block", overflow: "visible", width: "100%", height: "100%" },
+            }, h("circle", {
+              pathLength: 1,
+              fill: "none", stroke: rgba(n.stroke), strokeWidth: width, strokeLinecap: "round",
+              strokeDasharray: `${span} 1`,
+              style: {
+                cx: "50%", cy: "50%", r: `calc(50% - ${width / 2}px)`,
+                transformBox: "fill-box", transformOrigin: "center",
+                transform: `rotate(${360 * (from || 0)}deg)`,
+              },
+            }));
+          }
+          const size = n.width || n.height;
           const radius = (size - width) / 2;
           const circumference = 2 * Math.PI * radius;
-          const span = Math.max(0, Math.min(1, (to || 0) - (from || 0)));
           return h("svg", {
             ...props,
             width: size, height: size, viewBox: `0 0 ${size} ${size}`,

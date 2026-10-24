@@ -6,5 +6,5 @@ electron_application(
     name = "example_full_webgpu_electron_application",
     main_js = "//electron:main.js",
     package_json = "//electron:package.json",
-    site = "//web/example_full_react_web_application:site",
+    site = "//web/storybook_web_application:site",
 )

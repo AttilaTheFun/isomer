@@ -7,7 +7,7 @@ package(default_visibility = ["//visibility:public"])
 # into the .exe. This binary is a loader — it reads the reactor bytes and runs
 # them through `WindowsWasmApp` (Win32 window + D3D11 SwiftGPU renderer +
 # `FlatTreeDecoder`), the wasm peer of
-# `example_full_directx_compiled_windows_application`.
+# `storybook_windows_application`.
 #
 # It links `swift_ui_wasm` (which adds the WasmKit host) rather than
 # `swift_ui`, so the compiled cell never pulls in the interpreter. Kept on the CONSOLE subsystem (unlike the compiled cell's

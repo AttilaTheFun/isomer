@@ -212,7 +212,7 @@ struct AppleRunSurface: View {
                         namespace: "playground." + current.name,
                         flags: ["promo_banner": true],
                         analytics: { NSLog("[playground] analytics %@", $0) }),
-                    renderer: RendererPreference.isGPU ? .gpu : .swiftUI
+                    renderer: .swiftUI
                 ) { status in
                     NSLog("[playground] run status: %@", status)
                     AppleRun.shared.append("[status] " + status)

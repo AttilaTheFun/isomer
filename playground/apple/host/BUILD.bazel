@@ -1,7 +1,7 @@
-# The Isomer app's host on Apple platforms (AppleHost.swift), its run
-# surface (AppleRun.swift) and its @main (IsomerApp.swift): compiled into the
-# iOS app (apple/playground_ios_application) with that app's compiler and web
-# run, and into the Mac app (apple/isomer_macos_application).
+# The Playground's host on Apple platforms (AppleHost.swift), its run
+# surface (AppleRun.swift) and its @main (PlaygroundApp.swift): compiled into
+# the iOS app (apple/playground_ios_application) with that app's compiler and
+# web run, and into the Mac app (apple/playground_macos_application).
 
 package(default_visibility = ["//visibility:public"])
 

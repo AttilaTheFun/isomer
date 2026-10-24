@@ -1,9 +1,11 @@
-// The Isomer app's host on Linux and Windows, set as `PlaygroundHost.service`
-// before the app starts. The Gallery is drawn by the app's own renderer
-// (OpenGL on Linux, Direct3D on Windows); a reactor (a hot reloader's
-// version, the Gallery as wasm) runs in a window of its own: the platform's
-// WasmKit loader (isomer_wasm_loader, beside the app) as a child process, its
-// ISO_ variables forwarded to the guest. No Projects: no compiler here yet.
+// The Playground's host on Linux and Windows, set as `PlaygroundHost.service`
+// before the app starts. The app is drawn by its own renderer (OpenGL on
+// Linux, Direct3D on Windows); a project's build runs in a window of its
+// own: the platform's WasmKit loader (playground_wasm_loader, beside the
+// app) as a child process. A project compiles with the compiler the app
+// carries beside it (playground_toolchain: swift-frontend and wasm-ld, run
+// as processes; shared/compiler) against the Playground SDK beside it
+// (playground_sdk).
 
 import Foundation
 #if canImport(FoundationNetworking)
@@ -13,54 +15,62 @@ import Observation
 import SwiftUI
 
 final class DesktopHost: PlaygroundHostService, @unchecked Sendable {
-    func capabilities() -> String { "reactors,gallery-wasm" }
+    /// The last successful build, for `run`.
+    private var lastBuild: Data?
 
-    func runReactor(url: String, project: String, environment: String) async throws -> String {
-        let bytes: Data
-        if url.hasPrefix("bundle:") {
-            let name = String(url.dropFirst("bundle:".count))
-            guard let file = DesktopFiles.resource(name) else { throw HostError("\(name) is not beside the app") }
-            bytes = try Data(contentsOf: file)
-        } else {
-            guard let address = URL(string: url) else { throw HostError("not a URL: \(url)") }
-            let (data, response) = try await URLSession.shared.data(from: address)
-            if let status = (response as? HTTPURLResponse)?.statusCode, status >= 300 { throw HostError("\(url): HTTP \(status)") }
-            bytes = data
+    func capabilities() -> String { DesktopCompiler.toolchain == nil ? "" : "projects" }
+
+    func compile(source: String) async throws -> String {
+        guard let toolchain = DesktopCompiler.toolchain else { return DesktopCompiler.status }
+        let work = FileManager.default.temporaryDirectory.appendingPathComponent("playground-source-\(UUID().uuidString.prefix(8))")
+        try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: work) }
+        let file = work.appendingPathComponent("App.swift")
+        try Data(source.utf8).write(to: file)
+        let result = await Task.detached {
+            Result { try toolchain.compile(files: [file], sdk: try DesktopCompiler.sdk(), run: DesktopCompiler.run) }
+        }.value
+        switch result {
+        case .success(let wasm):
+            lastBuild = wasm
+            print("[playground] compiled \(wasm.count) bytes")
+            return ""
+        case .failure(let error):
+            return (error as? CompileError)?.diagnostics ?? "\(error)"
         }
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("isomer-runs", isDirectory: true)
+    }
+
+    func toolchainStatus() -> String { DesktopCompiler.status }
+
+    /// A build in the loader's window: its bytes in a file of their own.
+    private func start(_ bytes: Data, project: String) async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("playground-runs", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let file = directory.appendingPathComponent(project.filter { $0.isLetter || $0.isNumber || $0 == "-" } + ".wasm")
         try bytes.write(to: file)
-        var variables: [String: String] = [:]
-        for line in environment.split(separator: "\n") {
-            guard let equals = line.firstIndex(of: "=") else { continue }
-            variables[String(line[..<equals]).trimmingCharacters(in: .whitespaces)] = String(line[line.index(after: equals)...])
-        }
-        try await MainActor.run { try DesktopRun.shared.start(reactor: file, environment: variables) }
+        try await MainActor.run { try DesktopRun.shared.start(reactor: file, environment: [:]) }
+    }
+
+    func run(project: String) async throws -> String {
+        guard let lastBuild else { throw HostError("nothing built yet") }
+        try await start(lastBuild, project: project)
         return "running in its own window"
     }
 
     func stop() { MainActor.assumeIsolated { DesktopRun.shared.stop() } }
     func logs() -> String { MainActor.assumeIsolated { DesktopRun.shared.log } }
 
-    func rendererNames() -> String { "" }
-    func rendererFooter() -> String { "" }
     func appVersion() -> String { DesktopFiles.version }
 
-    // What the desktop doesn't do (no Projects).
+    // What the desktop doesn't do yet (no agent).
     func signIn() async throws -> String { throw HostError("no sign-in here") }
-    func compile(source: String) async throws -> String { "No compiler on this platform yet." }
-    func run(project: String) async throws -> String { throw HostError("no builds here") }
     func canRunOnWeb() -> Bool { false }
     func runOnWeb() async throws -> String { throw HostError("no web run here") }
     func chat(body: String) async throws -> String { throw HostError("no agent here") }
     func hasKey() -> Bool { false }
     func setKey(key: String) {}
-    func toolchainStatus() -> String { "none: no compiler on this platform yet" }
     func requestedTemplate() -> String { "" }
     func legacyFiles() -> String { "{}" }
-    func renderer() -> String { "native" }
-    func setRenderer(value: String) {}
     func uiTree() -> String { "the run is in its own window" }
     func tap(target: String) async throws -> String { "the run is in its own window" }
     func typeText(target: String, text: String) async throws -> String { "the run is in its own window" }
@@ -100,6 +110,42 @@ enum DesktopFiles {
     }
 }
 
+/// The compiler beside the app, and how its tools run.
+enum DesktopCompiler {
+    static let toolchain = DesktopFiles.resource("playground_toolchain").flatMap(BundledToolchain.at)
+
+    static var status: String {
+        toolchain == nil
+            ? "none: playground_toolchain is not beside the app"
+            : "Swift toolchain beside the app (swift-frontend and wasm-ld)"
+    }
+
+    static func sdk() throws -> CompilerSDK {
+        guard let root = DesktopFiles.resource("playground_sdk") else {
+            throw CompileError(diagnostics: "playground_sdk is not beside the app")
+        }
+        return try CompilerSDK.load(root: root)
+    }
+
+    /// A tool as a child process, in the app's environment (on Linux its
+    /// LD_LIBRARY_PATH: the Swift runtime the frontend loads) with
+    /// `environment` over it; its output and errors together.
+    static func run(_ tool: String, _ arguments: [String], _ environment: [String: String]) -> (status: Int32, output: String) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: tool)
+        process.arguments = arguments
+        process.environment = ProcessInfo.processInfo.environment.merging(environment) { $1 }
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        do { try process.run() } catch { return (-1, "\(tool): \(error)") }
+        // Read before waiting: a full pipe would block the tool.
+        let output = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return (process.terminationStatus, String(decoding: output, as: UTF8.self))
+    }
+}
+
 /// The reactor's window: the loader as a child process, one at a time.
 @MainActor @Observable
 final class DesktopRun {
@@ -112,9 +158,9 @@ final class DesktopRun {
     func start(reactor: URL, environment: [String: String]) throws {
         stop()
         #if os(Windows)
-        let loaderName = "isomer_wasm_loader.exe"
+        let loaderName = "playground_wasm_loader.exe"
         #else
-        let loaderName = "isomer_wasm_loader"
+        let loaderName = "playground_wasm_loader"
         #endif
         guard let loader = DesktopFiles.resource(loaderName) else { throw HostError("\(loaderName) is not beside the app") }
         let process = Process()

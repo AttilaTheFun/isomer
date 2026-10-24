@@ -6,7 +6,7 @@ package(default_visibility = ["//visibility:public"])
 # The "full x wasm" cell of the Apple matrix on iOS: the WHOLE shared example
 # app (//wasm/example_full_feature) delivered as a wasm bundle and
 # rendered full-screen with `WasmView`. Simulator build (no provisioning
-# profile). Runtime-updatable twin of example_full_compiled_ios_application.
+# profile). Runtime-updatable twin of storybook_ios_application.
 #
 # iOS 18, the oldest OS WasmView supports since 0.38: its engine, WasmKit,
 # stands on Swift's Synchronization. (Isomer's tree renderer still keeps each

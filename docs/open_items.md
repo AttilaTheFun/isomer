@@ -37,10 +37,13 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
   builds and runs on the oss Windows VM with the Swift build layer
   (tools/ci/oss/windows-swift.ps1: Visual Studio's build tools, Swift,
   Python), in MSVC's environment with Git's bash and POSIX tools (the
-  Playground's tests/proof/proof.py says how). The Playground's Isomer app
-  is the proof on both: the Gallery drawn by the app's renderer and run as
-  wasm in the WasmKit loader's window. Visual Studio and an installed
-  Swift are a stopgap until the hermetic toolchains replace them.
+  release proof, tools/proof/proof.py, says how): the Storybook drawn by
+  each platform's renderer, and the Playground compiling projects there
+  and running them in the WasmKit loader's window. Linux's Playground
+  carries the swift.org toolchain's frontend and wasm-ld (shared/compiler);
+  Windows' takes them from the build VM's installed Swift, since rules_swift
+  has no Windows host toolchain to assemble them from. Visual Studio and an
+  installed Swift are a stopgap until the hermetic toolchains replace them.
 - **Windows' Swift 6.3.2 can't link `AttributedString.runs`** (its
   Foundation doesn't export the descriptor of _FoundationCollections'
   `BigString.Index`, on ARM64 and x64 alike), so there `Text(AttributedString)`
@@ -82,13 +85,21 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
   injected (WasmNetworkHosts.kt).
 - SwiftGPU on Android works as a library but is not an endorsed app path;
   Compose is the renderer.
+- **`Map` under Compose is its placeholder** (the Storybook's Map story
+  shows it): only the GPU renderer draws SwiftMap's tiles on Android
+  (AndroidBridge sets `Renderer.hostRendersMaps` there alone), where the web's
+  React renderer composites them. Compose needs a map host view of its own.
 
 ## The web (T2)
 
-- **The web Playground's fastbuild overflows the stack** loading
-  ("RangeError: Maximum call stack size exceeded", a WebAssembly native
-  stack overflow); `-c opt` builds work and are what ships
-  (playground/docs/playground_web.md).
+- **The web's fastbuild overflows the stack** (the Playground's and the
+  Storybook's: "RangeError: Maximum call stack size exceeded", a
+  WebAssembly native stack overflow, in FlatTreeEncoder's flatten); `-c
+  opt` builds work and are what ships (playground/docs/playground_web.md).
+  The tree is shallow (the Storybook's is 14 levels); unoptimized,
+  `flattenNode` (shared/renderers/TreeEncoder.swift, one ~900-line
+  function) has so many wasm locals that each frame V8's baseline compiler
+  gives it is large. Splitting it into smaller functions is the likely fix.
 - Browsers cannot speak gRPC: a web client goes through gRPC-Web and a
   proxy (Envoy).
 

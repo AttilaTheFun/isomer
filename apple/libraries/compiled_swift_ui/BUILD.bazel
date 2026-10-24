@@ -90,6 +90,7 @@ swift_library(
     name = "isomer",
     package_name = "isomer",
     srcs = [
+        "IsomerBridge.swift",
         "//shared/isomer:Exports.swift",
         "//shared/swift_ui_extensions:srcs",
     ],

@@ -7,7 +7,7 @@ differ only in how the SwiftUI is *delivered*:
 
 | Cell | Target | SwiftUI delivery |
 | --- | --- | --- |
-| **compiled** | `//examples/windows/example_full_directx_compiled_windows_application` | linked into the `.exe` as native Swift |
+| **compiled** | `//examples/windows/storybook_windows_application` | linked into the `.exe` as native Swift |
 | **wasm** | `//examples/windows/example_full_directx_wasm_windows_application` | an `example_full.wasm` reactor run under WasmKit (its path passed as `argv[1]`) |
 
 Benchmark cells (docs/benchmarks.md#windows): the shared tap-counter as
@@ -45,7 +45,7 @@ Windows — see the [main README](../README.md#native-windows-target)):
 ## Running the compiled cell
 
 ```powershell
-bazelisk run //examples/windows/example_full_directx_compiled_windows_application
+bazelisk run //examples/windows/storybook_windows_application
 ```
 
 A per-monitor-DPI-aware Win32 window comes up with the responsive shell
@@ -146,7 +146,7 @@ the Linux prerequisites from [linux/README.md](../linux/README.md), then:
 
 ```powershell
 # Linux compiled cell (WSLg shows the SDL2 window on your Windows desktop)
-wsl -d Ubuntu-24.04 -- bash -lc "cd ~/src/isomer && bazelisk run //examples/linux/example_full_opengl_compiled_linux_application"
+wsl -d Ubuntu-24.04 -- bash -lc "cd ~/src/isomer && bazelisk run //examples/linux/storybook_linux_application"
 
 # Linux wasm cell (as -u root, set the WSLg display env — root's shell doesn't inherit it)
 wsl -d Ubuntu-24.04 -u root -- bash -lc "cd ~/src/isomer && DISPLAY=:0 XDG_RUNTIME_DIR=/mnt/wslg/runtime-dir bazelisk run //examples/linux/example_full_opengl_wasm_linux_application"

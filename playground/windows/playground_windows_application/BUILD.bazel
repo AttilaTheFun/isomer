@@ -1,0 +1,53 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+# The Playground on Windows: the shared shell (shared/app) against Isomer's
+# Windows SwiftUI (SwiftGPU over Direct3D 11 in a Win32 window), with the
+# desktop host (shared/desktop_host). A project's build runs in the WasmKit
+# loader's window (:playground_wasm_loader). Built on Windows (Swift's
+# toolchain cross-compiles to Windows from nowhere else).
+#
+#   bazel build //windows/playground_windows_application/...
+
+# GUI subsystem (no console window) with the console CRT entry Swift's @main
+# needs, and a 16 MiB main-thread stack: the view tree's build and the
+# SwiftGPU layout recurse deeply (the example apps' settings).
+_GUI_LINKOPTS = [
+    "/SUBSYSTEM:WINDOWS",
+    "/ENTRY:mainCRTStartup",
+    "/STACK:16777216",
+]
+
+swift_binary(
+    name = "playground",
+    srcs = [
+        "//shared/app:srcs",
+        "//shared/compiler:srcs",
+        "//shared/desktop_host:srcs",
+    ],
+    copts = ["-parse-as-library"],
+    linkopts = _GUI_LINKOPTS,
+    module_name = "PlaygroundWindows",
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        "@isomer//shared/platform_services",
+        "@isomer//windows/libraries/swift_ui",
+        "@isomer//windows/libraries/swift_ui:isomer",
+        "@swiftpkg_agent_ui//:AgentUI",
+    ],
+)
+
+# A build's window (WindowsWasmApp: WasmKit, SwiftGPU over Direct3D 11).
+swift_binary(
+    name = "playground_wasm_loader",
+    srcs = ["//shared/desktop_host:PlaygroundWasmLoader.swift"],
+    copts = ["-parse-as-library"],
+    linkopts = _GUI_LINKOPTS,
+    module_name = "PlaygroundWasmLoader",
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        "@isomer//windows/libraries/swift_ui_wasm:host",
+        "@isomer//windows/libraries/swift_ui_wasm:swift_ui_wasm",
+    ],
+)

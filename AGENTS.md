@@ -213,6 +213,36 @@ renderers (and their baseline benchmark cells) and the WinUI stub are gone.
   swift_gpu), so every GPU backend looks and feels the same. The only native bridges there are
   app-authored representables and the invisible IME-capture text input.
 
+**The Storybook** (storybook/, `@isomer//storybook`, since 0.38): every
+SwiftUI API Isomer implements, a story each (stories/<Area>.swift), its
+page the story's code, what the API does and the code running. A story's
+view sits between `// story: <id>` and `// end story` lines; :snippets
+(snippets.awk) copies that source into the page's table, so the code shown
+is the code run. It is the primary integration test: the Storybook apps
+(examples/<platform>/storybook_<platform>_application,
+com.LoganShire.IsomerStorybook, "Storybook"), one a platform with that
+platform's renderer, are released with Isomer, and their proof is a
+screenshot of every story's page (`ISO_STORYBOOK_STORY=<id>` opens one; the
+web page's `?ISO_STORYBOOK_STORY=`). A story uses only what both Apple's
+SwiftUI (iOS 17, macOS 14) and Isomer's have: the web build is the check.
+The mini apps are the Playground's canned projects only.
+
+**The release proof** (tools/proof/proof.py, since 0.38): Isomer's two apps
+on its six platforms, one renderer each (SwiftUI on iOS and the Mac,
+Compose on Android, React on the web, OpenGL on Linux, DirectX on
+Windows): the Storybook's every story, and the Playground's projects with
+2048 and the Pokédex built on the device and running. On the iPhone the
+Storybook is also compiled against Isomer's frameworks
+(examples/apple/storybook_isomer_ios_application: a test, not released)
+and every story is held to Apple's SwiftUI's same screen
+(review-ios-storybook-isomer: a reference, a diff and changed pixels each,
+and Reviews' parity): they should match, and a difference is Isomer's (it
+found radial and angular gradients drawn linear, Grid's columns unaligned
+and text runs' `.primary` drawn at the Mac's 85% black in the tree view).
+The platforms run at once, each on its own oss lease, after this Mac's
+builds; the runs go to the review server, and Reviews holds a release
+until its commit has them.
+
 **Adoption levels** (docs/adoption_levels.md): (1) rules_swift — raw Swift
 on the platform; (2) swift_ffi — idiomatic bindings; (3) embedded Isomer
 — `Isomer()` composable / `IsomerFragment` / `<Isomer/>`
@@ -335,27 +365,27 @@ still hosts the emulator runner (`apk_install_run`) and the Level 4 codegen
 templates. iOS device builds need the team's Xcode-managed wildcard
 profile ('iOS Team Provisioning Profile: *'); a machine without it fails
 them — an environment issue, not code; exclude iOS from wildcard
-verification builds. The Playground's app is Isomer (com.LoganShire.Isomer,
-Isomer.app; Android com.LoganShire.Isomer, "Isomer"); the examples' apps
-share com.LoganShire.IsomerExamples.
+verification builds. The Playground is com.LoganShire.IsomerPlayground
+("Playground", Playground.app; Android the same); the examples' apps share
+com.LoganShire.IsomerExamples.
 
 ## Build & run (macOS host)
 
 ```sh
 # Apple
-bazel build //examples/apple/example_full_compiled_macos_application/...
-bazel run //examples/apple/example_full_compiled_ios_application:example_ios_application_project  # Xcode proj
+bazel build //examples/apple/storybook_macos_application/...
+bazel run //examples/apple/storybook_ios_application:storybook_ios_application_project  # Xcode proj
 
 # Android — builds APK, boots the hermetic emulator, installs, launches.
 # Compose is the ONLY supported Android renderer. The Android axis is delivery,
 # not renderer: [full|partial] x [compiled|wasm] (SwiftUI linked as native
 # Swift, vs shipped as an in-process wasm bundle). SwiftGPU still works as a
 # library (--es renderer openGL) but is not an endorsed Android app path.
-bazel run //examples/android/example_full_compiled_android_application
+bazel run //examples/android/storybook_android_application
 
 # Web (wasm) — serves via hermetic Python; ReactRenderer,
 # …example_full_webgpu_web_application is the SwiftGPU-drawn twin.
-bazel run //examples/web/example_full_react_web_application
+bazel run //examples/web/storybook_web_application
 # Electron desktop wrapper (…webgpu_electron… = SwiftGPU-drawn twin)
 bazel run //examples/electron/example_full_react_electron_application
 
@@ -380,8 +410,8 @@ oss machines (~/Developer/AGENTS.md), never on this Mac's own screen.
   build` if missing, the container kept between builds, `--stop` to stop
   it). The container is arm64: MODULE.bazel registers swift.org's
   ubuntu24.04 toolchains for aarch64 as well as x86_64, wasm SDK included
-  (the wasm cell's reactor). The Playground's tests/proof/proof.py runs
-  what it builds in an oss Linux VM.
+  (the wasm cell's reactor). tools/proof/proof.py runs what it builds in
+  an oss Linux VM.
 - **Windows on the oss Windows VM** (`oss machine lease windows
   --config=swift-6.3.2`, the build layer tools/ci/oss/windows-swift.ps1
   makes): Bazel in MSVC's environment (vcvarsall arm64) with
@@ -390,7 +420,8 @@ oss machines (~/Developer/AGENTS.md), never on this Mac's own screen.
   `--repo_env` for SDKROOT, PATH and MSVC's variables (repository rules see
   nothing else). The Playground carries
   tools/patches/rules_swift_package_manager_windows.patch for its SwiftPM
-  graph there. tests/proof/proof.py has the whole recipe. No Swift
+  graph there (and the examples, for the Storybook's). tools/proof/proof.py
+  has the whole recipe. No Swift
   toolchain cross-compiles to Windows.
 - docs/open_items.md lists what is open, by tier.
 

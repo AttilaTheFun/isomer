@@ -2,7 +2,7 @@
 // rendered full-screen with real SwiftUI via `WasmView`. Where
 // example_partial_wasm embeds one FEATURE bundle in native chrome, this hosts
 // the entire multi-tab `@main App`. The runtime-updatable twin of
-// example_full_compiled_ios_application.
+// storybook_ios_application.
 //
 // Host-side dependency injection: the app's platform services (the keychain,
 // analytics, flags, the image picker, a timer, OAuth) from

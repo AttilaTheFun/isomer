@@ -27,9 +27,11 @@ struct WebTemplate: Identifiable, Equatable {
         WebTemplate(name: "Counter", asset: "Counter.swift", subtitle: "One button, one number."),
         WebTemplate(name: "2048", asset: "Game2048.swift", subtitle: "Swipe tiles; interactive drag."),
         WebTemplate(name: "Hacker News", asset: "HackerNews.swift", subtitle: "Top stories over the network service."),
-        WebTemplate(name: "Wikipedia", asset: "Wikipedia.swift", subtitle: "Search + article pages."),
         WebTemplate(name: "Meme Creator", asset: "MemeCreator.swift", subtitle: "Captions over a picked image."),
         WebTemplate(name: "Pokédex", asset: "Pokedex.swift", subtitle: "A list with remote artwork."),
+        WebTemplate(name: "Date Planner", asset: "DatePlanner.swift", subtitle: "Events by day; a sheet to add one."),
+        WebTemplate(name: "Map Explorer", asset: "MapExplorer.swift", subtitle: "A map with markers, a park and a route."),
+        WebTemplate(name: "Floating Menu", asset: "FloatingMenu.swift", subtitle: "A menu over a floating button."),
         WebTemplate(name: "This website", asset: "Splash.swift", subtitle: "The front page you came from — edit it and Run."),
     ]
 

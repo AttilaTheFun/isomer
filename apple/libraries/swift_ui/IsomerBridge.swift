@@ -159,19 +159,50 @@ public func timeOfDay(_ date: Date) -> String {
 }
 
 /// Mirrors the reimplementation's `VideoPlayer` (shared/swift_ui_core/
-/// VideoPlayer.swift), backed by a native `AVKit.VideoPlayer` + `AVPlayer`.
-/// Constructed from a URL here; the reimplementation passes the URL to a
-/// `<video>` / Android `VideoView` instead.
+/// VideoPlayer.swift), backed by AVKit: `AVKit.VideoPlayer` + `AVPlayer` on
+/// iOS, AppKit's `AVPlayerView` on the Mac. Constructed from a URL here; the
+/// reimplementation passes the URL to a `<video>` / Android `VideoView`.
 public struct VideoPlayer: View {
     let url: URL?
     public init(url: URL?) { self.url = url }
 
     public var body: some View {
         if let url {
+            #if os(macOS)
+            // Not AVKit's SwiftUI VideoPlayer: on macOS 27 its overlay
+            // (_AVKit_SwiftUI) aborts while initializing its class metadata
+            // ("superclass not found") the moment one is shown.
+            MacPlayerView(url: url)
+            #else
             AVKit.VideoPlayer(player: AVPlayer(url: url))
+            #endif
         } else {
             Color.black
         }
     }
 }
+
+#if os(macOS)
+/// AppKit's player view, with its inline controls.
+private struct MacPlayerView: NSViewRepresentable {
+    let url: URL
+
+    func makeNSView(context: Context) -> AVPlayerView {
+        let view = AVPlayerView()
+        view.controlsStyle = .inline
+        view.player = AVPlayer(url: url)
+        return view
+    }
+
+    func updateNSView(_ view: AVPlayerView, context: Context) {
+        if (view.player?.currentItem?.asset as? AVURLAsset)?.url != url {
+            view.player = AVPlayer(url: url)
+        }
+    }
+
+    static func dismantleNSView(_ view: AVPlayerView, coordinator: ()) {
+        view.player?.pause()
+    }
+}
+#endif
 

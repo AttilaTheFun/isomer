@@ -29,7 +29,7 @@ swift_library(
     module_name = "ExampleApplication",
     tags = ["manual"],
     deps = [
-        "@isomer//gallery",
+        "@isomer//storybook",
         "//shared/platform_services",
         "@isomer//wasm/libraries/swift_ui",
         "@isomer//wasm/libraries/swift_ui:isomer",
