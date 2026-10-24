@@ -123,6 +123,10 @@ wasi.fd_close(fd);
 fd = open("home/app/Documents/a.txt");
 check("append", read(fd), "hello world!");
 wasi.fd_close(fd);
+// What the page reads of a file (a VideoPlayer of a file URL).
+check("page reads a file", decoder.decode(files.read("/home/app/Documents/a.txt")), "hello world!");
+check("page reads nothing missing", files.read("/home/app/Documents/none.txt"), null);
+check("page reads no directory", files.read("/home/app/Documents"), null);
 wasi.fd_close(open("home/app/Documents/a.txt", O_TRUNC, RIGHT_WRITE));
 check("truncate", stat("home/app/Documents/a.txt").size, 0);
 

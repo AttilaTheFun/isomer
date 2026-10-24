@@ -71,7 +71,7 @@ function symbolSVG(h, name, size, color, weight, extraStyle, secondary) {
      entry.inner && !cut ? h("path", { key: "i", d: entry.inner, fill: closedGlyph ? "currentColor" : "none", stroke: "currentColor", strokeWidth: 2.2 }) : null);
 }
 
-export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, value) => { sendEvent(id, value); return false; }, assetBase = "assets/", mapSurface = null, metalViews = null, documentScroll = false }) {
+export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, value) => { sendEvent(id, value); return false; }, assetBase = "assets/", mapSurface = null, metalViews = null, documentScroll = false, readFile = null }) {
   const R = window.React;
   const SYSTEM_FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif";
   const MONO_FONT = "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace";
@@ -1228,6 +1228,11 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
     }).filter(Boolean);
   }
 
+  // A tab's SF Symbol drawn from the symbol table (null when it lacks it).
+  function tabSymbol(name, size, style) {
+    return name ? symbolSVG(h, name, size, undefined, 400, { verticalAlign: "0", ...style }) : null;
+  }
+
   function tabBar(n) {
     const p = n.params || {};
     const count = Number(p.count || 0);
@@ -1245,7 +1250,12 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
           color: active ? "var(--iso-tint, #0a84ff)" : "rgba(0,0,0,0.55)",
         },
       },
-        p["glyph" + i]
+        // The tab's symbol from the symbol table, as Android's bar draws
+        // it; a stand-in glyph only for a symbol the table lacks.
+        tabSymbol(p["symbol" + i], 20, { display: "block", height: 24, width: 24 })
+          ? h("span", { style: { height: 24, display: "flex", alignItems: "center" } },
+              tabSymbol(p["symbol" + i], 20, { display: "block", height: 24, width: 24 }))
+          : p["glyph" + i]
           ? h("span", { style: { fontSize: 22, lineHeight: "24px" } }, p["glyph" + i])
           : p["icon" + i]
             ? h("img", { src: `${assetBase}${p["icon" + i]}.png`, style: { width: 24, height: 24, objectFit: "contain" } })
@@ -1730,9 +1740,10 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
           ...overStyle(item),
         },
       },
-        p["glyph" + i]
-          ? h("span", { style: { fontSize: 15, width: 22, textAlign: "center", color: "var(--iso-tint, #0a84ff)" } }, p["glyph" + i])
-          : null,
+        tabSymbol(p["symbol" + i], 15, { color: "var(--iso-tint, #0a84ff)", width: 22, height: 17 })
+          || (p["glyph" + i]
+            ? h("span", { style: { fontSize: 15, width: 22, textAlign: "center", color: "var(--iso-tint, #0a84ff)" } }, p["glyph" + i])
+            : null),
         h("span", null, p["label" + i] || ""));
     };
     for (const root of roots) {
@@ -2216,6 +2227,22 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
   // (`.system(size:)`, no style) stays as given.
   const MAC_TEXT_SIZES = { largeTitle: 26, title: 22, title2: 17, title3: 15, headline: 13, body: 13,
     callout: 12, subheadline: 11, footnote: 10, caption: 10, caption2: 10 };
+  // A video's URL as the browser can load it: a file of the guest's
+  // (`file:///tmp/…`, a recording it downloaded) from its bytes, as a blob
+  // URL kept for the page's life; any other URL as it is.
+  const fileURLs = new Map();
+  function playableURL(url) {
+    if (!url || !url.startsWith("file://") || !readFile) return url;
+    if (fileURLs.has(url)) return fileURLs.get(url);
+    const path = decodeURIComponent(new URL(url).pathname);
+    const bytes = readFile(path);
+    if (!bytes) return url;
+    const type = /\.webm$/i.test(path) ? "video/webm" : /\.mov$/i.test(path) ? "video/quicktime" : "video/mp4";
+    const blob = URL.createObjectURL(new Blob([bytes], { type }));
+    fileURLs.set(url, blob);
+    return blob;
+  }
+
   // A text's font made smaller, step by step, until it fits its box (no
   // longer cut off or clamped) or reaches `minScale` of `size`.
   function fitText(el, size, minScale) {
@@ -2842,7 +2869,7 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
         return h("div", props);
       }
       case "video":
-        props.src = n.v;
+        props.src = playableURL(n.v);
         props.controls = true;
         props.playsInline = true;
         props.style = { ...props.style, width: "100%", background: "#000", objectFit: "contain" };

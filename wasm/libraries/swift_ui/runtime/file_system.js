@@ -549,6 +549,14 @@ async function createAppFiles(key) {
       markDirty(path, blocks);
       timer ||= setTimeout(flush, WRITE_DELAY_MS);
     },
+    /** The bytes of the file at the absolute `path` ("/tmp/…",
+     *  "/home/app/…"), a copy, or null: what the page shows of the guest's
+     *  files (a VideoPlayer of a file URL). */
+    read(path) {
+      const found = lookup(root, path);
+      if (typeof found !== "object" || !found.node || found.node.type !== REGULAR_FILE) return null;
+      return found.node.data.slice(0, found.node.size);
+    },
     // `node` and everything in it (a directory moving).
     changedTree(node) {
       if (!database) return;

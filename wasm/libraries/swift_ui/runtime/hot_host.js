@@ -90,7 +90,7 @@ export async function runHotBundle({ wasm, container, dependencies = {}, bundleI
     return (BigInt(bytes.length) << 32n) | BigInt(ptr >>> 0);
   };
 
-  const renderer = createReactTreeRenderer({ container, sendEvent });
+  const renderer = createReactTreeRenderer({ container, sendEvent, readFile: (path) => files.read(path) });
   window.__isoSendEvent = sendEvent; // headless smoke-test hook
 
   let renderQueued = false;
