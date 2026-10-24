@@ -26,7 +26,7 @@ platform as it passes a process environment: simctl's SIMCTL_CHILD_, `open
 desktops' environment.
 
 The builds are this checkout's, made here (-c opt) before the platforms
-start, except Linux's (an oss container: tools/linux/build.sh) and
+start, except Linux's (a Linux container: tools/linux/build.sh) and
 Windows' (on its VM). Then the platforms run at once, each on a lease of
 its own (an iOS simulator, an Android emulator, macOS, Linux and Windows
 VMs; the web in this Mac's headless Chrome), released however the run
@@ -419,7 +419,7 @@ def web(review, story_list, builds):
             server.terminate()
 
 
-# --- Linux (built in an oss container, run on an oss VM)
+# --- Linux (built in a Linux container here, run on an oss VM)
 
 def build_linux():
     """Both apps built and packaged in the container, each one directory."""

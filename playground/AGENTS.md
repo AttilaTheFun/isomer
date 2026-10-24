@@ -50,7 +50,7 @@ of its own (pinning isomer by commit), back in isomer as `playground/` at
 | `apple/` | the iOS app and its embedded-compiler staging scripts, the Mac app, `compiler` (how both build a project: ToolchainCompiler and its backends, the iPhone's in-process compiler), `host` (the Apple host and @main), `platform_services_host` (the services a run gets in WasmView) |
 | `android/` | the Android app (Kotlin host: compile, run, chat, the web run), `platform_services` (the services a run gets), the transcript stress app |
 | `web/` | the web app, the splash page (the whole site is `//web/splash_web_application:site`), the transcript stress app |
-| `linux/`, `windows/` | the desktop apps (built in an oss container on a Mac, and on Windows) |
+| `linux/`, `windows/` | the desktop apps (built in a Linux container on a Mac, and on Windows) |
 | `shared/` | `app` (the shell), `compiler` (what every Playground that carries its compiler shares: the build's arguments, the SDK, the build with a compiler carried as files, and that compiler assembled for the app, toolchain.bzl), `desktop_host` (Linux and Windows), `sample_sources` (the templates' sources), `transcript_stress_application` |
 | `tools/` | `playground_toolchain` (the iOS and Android compilers), `browser_toolchain` (the compiler as WebAssembly), `playground` (dev compile server, headless Chrome drivers, the site's packaging and the hot-reload publish scripts, template history), `patches` and `signing` (below) |
 | `tests/` | `templates` (every template compiles), `e2e` (what a reader does, on an emulator and a simulator), `ios_ui_probe` (a manual XCUITest); the release's proof is isomer's `tools/proof/proof.py` |
