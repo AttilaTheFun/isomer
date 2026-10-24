@@ -33,6 +33,10 @@ extension StoryCatalog {
             "layout.thatfits", "ViewThatFits",
             summary: "The first of several layouts that fits the space: a row when there is room, a column when there is not."
         ) { ThatFitsStory() },
+        Story(
+            "layout.anylayout", "AnyLayout",
+            summary: "A stack's layout as a value (HStackLayout, VStackLayout, ZStackLayout): the same views, laid out another way when the layout changes."
+        ) { AnyLayoutStory() },
     ])
 }
 
@@ -189,6 +193,27 @@ struct ThatFitsStory: View {
             VStack(alignment: .leading) {
                 Button("Accept") {}.buttonStyle(.borderedProminent)
                 Button("Decline") {}.buttonStyle(.bordered)
+            }
+        }
+    }
+}
+// end story
+
+// story: layout.anylayout
+struct AnyLayoutStory: View {
+    @State private var vertical = false
+
+    var body: some View {
+        let layout = vertical ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
+        VStack(alignment: .leading, spacing: 12) {
+            Toggle("Vertical", isOn: $vertical)
+            layout {
+                ForEach(["One", "Two", "Three"], id: \.self) { word in
+                    Text(word)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.blue.opacity(0.15), in: Capsule())
+                }
             }
         }
     }

@@ -124,6 +124,9 @@ package final class RenderNode {
     var alignment = Alignment.center
     var background: [RenderNode] = []
     var overlay: [RenderNode] = []
+    /// `.mask(alignment:_:)`: what shows of this box is where the mask is
+    /// opaque (its layers placed as an overlay's, at `maskAlignment`).
+    var mask: [RenderNode] = []
     var cornerRadius: CGFloat = 0
     /// Corner radius applied directly to an image's drawn bounds (set when a
     /// `.cornerRadius` wraps an `Image`/`AsyncImage`), so the host rounds and
@@ -159,6 +162,7 @@ package final class RenderNode {
     /// decoration layers sit over this box (default center).
     var overlayAlignment: Alignment = .center
     var backgroundAlignment: Alignment = .center
+    var maskAlignment: Alignment = .center
     /// `Image(systemName:)`: the SF Symbol name the glyph stands in for —
     /// the Apple host draws the real symbol.
     var symbolName: String?
@@ -428,6 +432,9 @@ package final class RenderNode {
     var selectionSet: ((Int, Int) -> Void)?
     /// `.truncationMode` for text ("head" / "middle" / "tail").
     var truncation: String?
+    /// `.minimumScaleFactor`: how far a host may shrink the text to fit its
+    /// width before it wraps or truncates (param "minScale").
+    var minimumScaleFactor: Double?
     /// Text or a symbol whose colour nobody set: the host's container
     /// colours it (param "autoColor").
     var colorAuto = false
@@ -553,6 +560,9 @@ final class _EnvironmentStorage {
     var autocapitalization: String?
     var autocorrectionDisabled: Bool = false
     var truncationMode: String?
+    var minimumScaleFactor: Double?
+    /// `.menuIndicator(.hidden)`: menus below show no chevron.
+    var menuIndicatorHidden = false
     var textCase: String?
     var lineSpacing: Double?
     var opacity: Double = 1
@@ -603,6 +613,8 @@ final class _EnvironmentStorage {
         autocapitalization = other.autocapitalization
         autocorrectionDisabled = other.autocorrectionDisabled
         truncationMode = other.truncationMode
+        minimumScaleFactor = other.minimumScaleFactor
+        menuIndicatorHidden = other.menuIndicatorHidden
         textCase = other.textCase
         lineSpacing = other.lineSpacing
         opacity = other.opacity
@@ -787,6 +799,14 @@ public struct EnvironmentValues {
     var truncationMode: String? {
         get { _storage.truncationMode }
         set { _makeUnique(); _storage.truncationMode = newValue }
+    }
+    var minimumScaleFactor: Double? {
+        get { _storage.minimumScaleFactor }
+        set { _makeUnique(); _storage.minimumScaleFactor = newValue }
+    }
+    var menuIndicatorHidden: Bool {
+        get { _storage.menuIndicatorHidden }
+        set { _makeUnique(); _storage.menuIndicatorHidden = newValue }
     }
     /// `.textCase`: "upper", "lower", or "none" (`.textCase(nil)`); nil
     /// when no `.textCase` is in scope (the container's own default).

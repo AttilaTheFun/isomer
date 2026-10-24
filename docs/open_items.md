@@ -68,6 +68,14 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
   `@AppStorage` does not persist, the clipboard does nothing. Their
   network transports are URLSession's (0.38, as Apple's WasmView's).
 
+- **SF Symbols on the GPU renderer** (Linux, Windows, the web's WebGPU) are
+  stand-in glyphs from the core's small table (`Image.glyph(forSystemName:)`),
+  U+FFFD for a name it lacks, and a tab bar's are none: the React and
+  Compose renderers draw the symbol table's paths (tools/symbols). The GPU
+  renderer should draw those paths too (rasterized in Swift, or by each
+  host's raster service). Reviews on Linux shows it (its list's Merged,
+  Drafts and check marks).
+
 ## WasmView on Apple (T1)
 
 - **`Map` in a reactor under WasmView is its placeholder**, with either
@@ -111,6 +119,10 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
   `flattenNode` (shared/renderers/TreeEncoder.swift, one ~900-line
   function) has so many wasm locals that each frame V8's baseline compiler
   gives it is large. Splitting it into smaller functions is the likely fix.
+- **A `Circle()` in a frame that isn't square is drawn as an ellipse** by
+  the React renderer (`borderRadius: 50%` on the frame); SwiftUI draws the
+  largest circle that fits, centred. A circle *mask* is right
+  (`maskClipPath`'s `circle()`).
 - Browsers cannot speak gRPC: a web client goes through gRPC-Web and a
   proxy (Envoy).
 

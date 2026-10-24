@@ -51,7 +51,10 @@ extension ExportedInterfaceMacroProtocol {
             return attribute.trimmedDescription + " "
         }.joined()
         let isPackage = proto.modifiers.contains { $0.name.tokenKind == .keyword(.package) }
-        return ABIEmitter.interfacePeers(protocolName: name, methods: methods, namespace: namespace)
+        let mainActor = proto.attributes.contains { element in
+            element.as(AttributeSyntax.self)?.attributeName.trimmedDescription == "MainActor"
+        }
+        return ABIEmitter.interfacePeers(protocolName: name, methods: methods, namespace: namespace, mainActor: mainActor)
             .map { peer in
                 guard !spi.isEmpty || isPackage else { return "\(raw: peer)" }
                 let lines = peer.split(separator: "\n", omittingEmptySubsequences: false).map { line in

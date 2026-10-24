@@ -109,6 +109,17 @@ _LINUX_COPTS = [
 # host bridge, compiled as a module named `SwiftUI` (see the wasm/Android/Windows
 # counterparts) so application code can `import SwiftUI` unchanged.
 
+# ImageIO's decoding subset (//shared/image_io), under Apple's module name:
+# a CGImage's bytes reach the renderer at its first draw (registerImage).
+swift_library(
+    name = "image_io",
+    package_name = "isomer",
+    srcs = ["//shared/image_io:srcs"],
+    module_name = "ImageIO",
+    target_compatible_with = ["@platforms//os:linux"],
+    deps = ["//:foundation"],
+)
+
 swift_library(
     name = "swift_ui",
     package_name = "isomer",
@@ -116,6 +127,8 @@ swift_library(
         "LinuxHost.swift",
         "//shared/renderers:srcs",
         "//shared/swift_ui_core:srcs",
+        # FileDocument's FileWrapper, which the toolchain's Foundation lacks.
+        "//foundation:FileWrapper.swift",
     ],
     # The define activates the `os(Linux)` host entry point in `App.main()`
     # (which calls `LinuxApp.run()`, defined here); the platform-agnostic core
@@ -125,6 +138,7 @@ swift_library(
     swiftc_inputs = ["renderer.h"],
     target_compatible_with = ["@platforms//os:linux"],
     deps = [
+        ":image_io",
         "//shared/isomer_swift_ui",
         ":renderer",
         "@flatbuffers//swift",
@@ -202,6 +216,7 @@ swift_library(
 swift_library_group(
     name = "sdk",
     deps = [
+        ":image_io",
         ":isomer",
         ":swift_ui",
     ],

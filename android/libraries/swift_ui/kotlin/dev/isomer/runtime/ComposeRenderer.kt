@@ -192,6 +192,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
@@ -973,21 +975,41 @@ fun IsoNode(
                     Icon(vector, contentDescription = null, tint = tint, modifier = m.size(size))
                 }
             } else {
-                val runs = j.optJSONObject("params")?.optString("runs") ?: ""
+                val params = j.optJSONObject("params")
+                val runs = params?.optString("runs") ?: ""
+                // `.minimumScaleFactor`: Compose 1.7 has no auto-size, so a
+                // text that overflows is drawn again smaller, down to it.
+                val minScale = params?.optString("minScale")?.toFloatOrNull()?.coerceIn(0.01f, 1f)
+                var scale by remember(j.optString("v"), minScale) { mutableStateOf(1f) }
+                // The width it was last made smaller at: given more (a
+                // rotation), it starts again from its full size.
+                var shrunkAt by remember(j.optString("v"), minScale) { mutableStateOf(Int.MAX_VALUE) }
                 val style = TextStyle(
-                    fontSize = j.optDouble("size", 17.0).sp,
+                    fontSize = (j.optDouble("size", 17.0) * scale).sp,
                     fontWeight = FontWeight(j.optInt("weight", 400)),
                     color = onSelection(colorOf(j, "color") ?: Color.Black),
-                    fontFamily = textFontFamily(j.optJSONObject("params")),
+                    fontFamily = textFontFamily(params),
+                    // `.monospacedDigit()`: tabular figures.
+                    fontFeatureSettings = if (params?.optString("tnum") == "1") "tnum" else null,
                 )
+                val shrink: (TextLayoutResult) -> Unit = { layout ->
+                    val width = layout.layoutInput.constraints.maxWidth
+                    if (minScale != null && scale < 1f && width > shrunkAt) {
+                        scale = 1f
+                        shrunkAt = Int.MAX_VALUE
+                    } else if (minScale != null && layout.hasVisualOverflow && scale > minScale) {
+                        scale = maxOf(minScale, scale * 0.9f)
+                        shrunkAt = width
+                    }
+                }
                 val maxLines = if (j.has("lines")) j.optInt("lines") else Int.MAX_VALUE
-                val truncation = j.optJSONObject("params")?.optString("truncation") ?: ""
+                val truncation = params?.optString("truncation") ?: ""
                 if (maxLines == 1 && runs.isEmpty() && (truncation == "head" || truncation == "middle")) {
                     EllipsizedLine(j.optString("v"), m, style, truncation)
                 } else if (runs.isNotEmpty()) {
-                    Text(styledRuns(j.optString("v"), runs), m, style = style, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+                    Text(styledRuns(j.optString("v"), runs), m, style = style, maxLines = maxLines, overflow = TextOverflow.Ellipsis, onTextLayout = shrink)
                 } else {
-                    Text(j.optString("v"), m, style = style, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+                    Text(j.optString("v"), m, style = style, maxLines = maxLines, overflow = TextOverflow.Ellipsis, onTextLayout = shrink)
                 }
             }
         }
@@ -1219,10 +1241,21 @@ fun IsoNode(
                     val content = n.children.filter { it.json.optJSONObject("params")?.optString("layer").isNullOrEmpty() }
                     val backgrounds = n.children.filter { it.json.optJSONObject("params")?.optString("layer") == "background" }
                     val overlays = n.children.filter { it.json.optJSONObject("params")?.optString("layer") == "overlay" }
-                    Box(mm, contentAlignment = boxAlign(j)) {
+                    // `.mask(alignment:_:)`: the box drawn offscreen, then
+                    // kept only where the mask's layer draws (DstIn).
+                    val masks = n.children.filter { it.json.optJSONObject("params")?.optString("layer") == "mask" }
+                    val composited = if (masks.isEmpty()) mm
+                        else mm.graphicsLayer(compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen)
+                    Box(composited, contentAlignment = boxAlign(j)) {
                         for (c in backgrounds) IsoLayer(c, bw, bh)
                         for (c in content) IsoNode(c, boxChildModifier(c), bw, bh)
                         for (c in overlays) IsoLayer(c, bw, bh)
+                        for (c in masks) Box(Modifier.matchParentSize().drawWithContent {
+                            val keep = androidx.compose.ui.graphics.Paint().apply { blendMode = androidx.compose.ui.graphics.BlendMode.DstIn }
+                            drawIntoCanvas { it.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height), keep) }
+                            drawContent()
+                            drawIntoCanvas { it.restore() }
+                        }) { IsoLayer(c, bw, bh) }
                     }
                 } else {
                     Box(mm, contentAlignment = boxAlign(j)) {
@@ -1584,7 +1617,10 @@ private fun IsoMenu(n: UNode, m: Modifier) {
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(j.optJSONObject("params")?.optString("label") ?: "", color = MaterialTheme.colorScheme.primary)
-                    Icon(Icons.Filled.ArrowDropDown, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    // `.menuIndicator(.hidden)`: the label alone.
+                    if (j.optJSONObject("params")?.optString("indicator") != "hidden") {
+                        Icon(Icons.Filled.ArrowDropDown, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    }
                 }
             }
         }
@@ -2186,11 +2222,16 @@ private fun alertActionRole(n: UNode): String {
 @Composable
 private fun IsoPresentation(n: UNode) {
     // A request: the system's own picker (MediaPickerHost), answered with
-    // the copied files' paths; nothing is drawn.
+    // the copied files' paths (or, saving, where the file went); nothing is
+    // drawn.
     n.json.optJSONObject("params")?.takeIf { it.has("request") }?.let { p ->
         val result = p.optString("result")
         LaunchedEffect(n.json.optString("dismiss")) {
-            MediaPickerHost.request(p.optString("request"), p.optString("accept"), p.optString("multiple") == "1") { sendEvent(result, it) }
+            if (p.optString("request") == "export") {
+                MediaPickerHost.export(p.optString("name"), p.optString("type"), p.optString("data")) { sendEvent(result, it) }
+            } else {
+                MediaPickerHost.request(p.optString("request"), p.optString("accept"), p.optString("multiple") == "1") { sendEvent(result, it) }
+            }
         }
         return
     }
@@ -2358,7 +2399,7 @@ internal fun decodeRowActions(text: String): List<RowAction> =
         RowAction(f.getOrNull(0)?.toIntOrNull() ?: 0, f.getOrNull(1) ?: "", f.getOrNull(2) ?: "", f.getOrNull(3) == "d")
     }
 
-/** A concatenated Text's spans: `length:flags[:r,g,b,a]` per run, ";" between (flags ⊂ b i m u s). */
+/** A concatenated Text's spans: `length:flags[:r,g,b,a]` per run, ";" between (flags ⊂ b i m u s t). */
 internal fun styledRuns(text: String, encoded: String): AnnotatedString = buildAnnotatedString {
     var at = 0
     for (part in encoded.split(";")) {
@@ -2376,6 +2417,7 @@ internal fun styledRuns(text: String, encoded: String): AnnotatedString = buildA
             fontWeight = if ('b' in flags) FontWeight.SemiBold else null,
             fontStyle = if ('i' in flags) FontStyle.Italic else null,
             fontFamily = if ('m' in flags) FontFamily.Monospace else null,
+            fontFeatureSettings = if ('t' in flags) "tnum" else null,
             textDecoration = if (decorations.isEmpty()) null else TextDecoration.combine(decorations),
             color = if (color != null && color.size >= 3) Color(color[0], color[1], color[2], color.getOrNull(3) ?: 1f) else Color.Unspecified,
         )) { append(slice) }

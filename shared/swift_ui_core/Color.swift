@@ -1,3 +1,5 @@
+import Foundation
+
 public enum ColorScheme: Equatable, Sendable {
     case light
     case dark
@@ -162,5 +164,62 @@ extension Color: _PrimitiveView {
         // Honor the inherited opacity (`.opacity`/`.disabled`) so a `Color`
         // (including as a `.background`) fades like text and images do.
         RenderNode(kind: .shape(.rectangle, fill: self.opacity(ctx.env.opacity), stroke: nil))
+    }
+}
+
+extension Gradient {
+    /// How colours are blended between stops, and by `Color.mix`: in the
+    /// device's own RGB, or perceptually (Oklab), where a blend's middle
+    /// looks halfway between its ends.
+    public struct ColorSpace: Hashable, Sendable {
+        let perceptual: Bool
+        public static let device = ColorSpace(perceptual: false)
+        public static let perceptual = ColorSpace(perceptual: true)
+    }
+}
+
+extension Color {
+    /// This colour blended `fraction` of the way to `rhs` (0 this, 1 that),
+    /// in light and dark appearance alike.
+    public func mix(with rhs: Color, by fraction: Double, in colorSpace: Gradient.ColorSpace = .perceptual) -> Color {
+        let t = min(max(fraction, 0), 1)
+        func blend(_ a: (Double, Double, Double, Double), _ b: (Double, Double, Double, Double)) -> (Double, Double, Double, Double) {
+            let alpha = a.3 + (b.3 - a.3) * t
+            guard colorSpace.perceptual else {
+                return (a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t, a.2 + (b.2 - a.2) * t, alpha)
+            }
+            let p = Self.oklab(a.0, a.1, a.2), q = Self.oklab(b.0, b.1, b.2)
+            let rgb = Self.srgb(p.0 + (q.0 - p.0) * t, p.1 + (q.1 - p.1) * t, p.2 + (q.2 - p.2) * t)
+            return (rgb.0, rgb.1, rgb.2, alpha)
+        }
+        let light = blend((lr, lg, lb, la), (rhs.lr, rhs.lg, rhs.lb, rhs.la))
+        guard hasDark || rhs.hasDark else { return Color(red: light.0, green: light.1, blue: light.2, opacity: light.3) }
+        return .dynamic(light: light, dark: blend((dr, dg, db, da), (rhs.dr, rhs.dg, rhs.db, rhs.da)))
+    }
+
+    /// sRGB (gamma-encoded, 0...1) to Oklab.
+    private static func oklab(_ r: Double, _ g: Double, _ b: Double) -> (Double, Double, Double) {
+        func linear(_ c: Double) -> Double { c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4) }
+        let (lr, lg, lb) = (linear(r), linear(g), linear(b))
+        let l = cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb)
+        let m = cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb)
+        let s = cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb)
+        return (0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+                1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+                0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s)
+    }
+
+    /// Oklab back to sRGB, clamped to 0...1.
+    private static func srgb(_ L: Double, _ a: Double, _ b: Double) -> (Double, Double, Double) {
+        let l = pow(L + 0.3963377774 * a + 0.2158037573 * b, 3)
+        let m = pow(L - 0.1055613458 * a - 0.0638541728 * b, 3)
+        let s = pow(L - 0.0894841775 * a - 1.2914855480 * b, 3)
+        func encoded(_ c: Double) -> Double {
+            let v = c <= 0.0031308 ? 12.92 * c : 1.055 * pow(c, 1 / 2.4) - 0.055
+            return min(max(v, 0), 1)
+        }
+        return (encoded(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+                encoded(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+                encoded(-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s))
     }
 }

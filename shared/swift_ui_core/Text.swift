@@ -19,6 +19,9 @@ struct TextRun: Equatable {
     /// the system's text draws as its markdown does (flags S, E beside b, i).
     var strong = false
     var emphasized = false
+    /// `.monospacedDigit()` on this part (`Text("Score: ") +
+    /// Text("\(n)").monospacedDigit()`): tabular figures.
+    var tabular = false
 }
 
 public struct Text {
@@ -33,6 +36,8 @@ public struct Text {
     var isUnderlined = false
     var isStruck = false
     var isMonospaced = false
+    /// `.monospacedDigit()`: tabular figures, whatever its font.
+    var monospacedDigits = false
     /// Set once two differently styled Texts are joined; empty otherwise.
     var runs: [TextRun] = []
 
@@ -107,11 +112,18 @@ public struct Text {
         return copy
     }
 
+    /// Digits of one width (tabular figures).
+    public func monospacedDigit() -> Text {
+        var copy = self
+        copy.monospacedDigits = true
+        return copy
+    }
+
     /// This Text as one run (its own styles), for concatenation.
     var ownRun: TextRun {
         TextRun(length: content.count, bold: explicitWeight == .bold || explicitWeight == .semibold || explicitWeight == .heavy,
                 italic: isItalic, monospaced: isMonospaced, underline: isUnderlined, strikethrough: isStruck, color: explicitColor,
-                weight: explicitWeight?.value)
+                weight: explicitWeight?.value, tabular: monospacedDigits)
     }
 
     public func fontWeight(_ weight: Font.Weight?) -> Text {
@@ -144,12 +156,14 @@ extension Text: _PrimitiveView {
         let node = RenderNode(kind: .text(cased))
         node.symbolName = symbolName
         node.truncation = ctx.env.truncationMode
+        node.minimumScaleFactor = ctx.env.minimumScaleFactor
         node.textCase = ctx.env.textCase
         node.lineSpacing = ctx.env.lineSpacing
         var font = explicitFont ?? ctx.env.font
         if let weight = explicitWeight {
             font = font.weight(weight)
         }
+        if monospacedDigits { font = font.monospacedDigit() }
         node.font = font
         if let alignment = Runtime.shared.textAlignmentStack.last {
             node.alignment = alignment == .leading ? .leading : alignment == .trailing ? .trailing : .center
@@ -177,9 +191,14 @@ extension Text {
         var joined = Text(lhs.content + rhs.content)
         joined.explicitFont = lhs.explicitFont ?? rhs.explicitFont
         joined.explicitColor = lhs.explicitColor
-        let left = lhs.runs.isEmpty ? [lhs.ownRun] : lhs.runs
-        let right = rhs.runs.isEmpty ? [rhs.ownRun] : rhs.runs
-        joined.runs = left + right
+        // A side already joined keeps its runs; its own monospacedDigit()
+        // reaches each of them.
+        func parts(_ text: Text) -> [TextRun] {
+            guard !text.runs.isEmpty else { return [text.ownRun] }
+            guard text.monospacedDigits else { return text.runs }
+            return text.runs.map { var run = $0; run.tabular = true; return run }
+        }
+        joined.runs = parts(lhs) + parts(rhs)
         return joined
     }
 }

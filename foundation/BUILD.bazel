@@ -61,3 +61,7 @@ one_configuration(
     name = "for_dependents",
     actual = ":foundation",
 )
+
+# FileWrapper, compiled into the SwiftUI of Linux and Windows too (their
+# Foundation, the toolchain's, has none): what FileDocument hands over.
+exports_files(["FileWrapper.swift"], visibility = ["//linux/libraries/swift_ui:__pkg__", "//windows/libraries/swift_ui:__pkg__"])

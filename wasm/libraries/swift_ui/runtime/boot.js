@@ -4,6 +4,7 @@
 // the runtime. Strings and structs copy at the boundary, so there is no
 // pointer/length or staging-buffer plumbing here.
 
+import { playHaptic } from "./haptics.js";
 import { appFilesKey, openAppFiles } from "./file_system.js";
 import { Dependencies, load } from "../app_bridge.js";
 import { browserNetworkHosts } from "./network.js";
@@ -57,6 +58,12 @@ export async function boot({
   // `Bundle.main.bundleIdentifier` is it. Without one, the files are kept
   // under the reactor's URL.
   bundleIdentifier = undefined,
+  // The app's name, version and build, as an Apple app's Info.plist has
+  // them (Bundle.main's CFBundleName, CFBundleShortVersionString,
+  // CFBundleVersion): what an About row shows.
+  bundleName = undefined,
+  bundleVersion = undefined,
+  bundleBuild = undefined,
   // Document scrolling on a phone-width page (react only): the screen's
   // scroll is the page's own, its bars fixed over it (react_renderer.js).
   // Also `?scroll=document` in the page's URL.
@@ -66,6 +73,7 @@ export async function boot({
   // The app's files, read from IndexedDB while the rest starts: the reactor
   // finds them from its first instruction.
   const filesOpening = openAppFiles(appFilesKey(bundleIdentifier, bundle ? undefined : wasmURL));
+  let appFiles = null;
   // SwiftGPURenderer: Swift draws through Isomer's Metal, whose executor
   // runs it on WebGPU; this page supplies measurement + rasterization.
   let gpuHost = null;
@@ -347,6 +355,9 @@ export async function boot({
       mapSurface,
       metalViews,
       documentScroll,
+      // The guest's files, for what the page shows of them (a video of a
+      // file URL); open by the time a frame names one.
+      readFile: (path) => appFiles?.read(path) ?? null,
     });
     // Event injection for headless smoke tests (cf. __isoHostViews).
     window.__isoSendEvent = (id, value) => bridge.isoHostEvent(id, value);
@@ -532,6 +543,8 @@ export async function boot({
       // reader's gesture; the textarea route is for browsers without the
       // async API (or refusing it outside a secure context).
       if (key === "copy") { copyText(value); return; }
+      // `.sensoryFeedback`: a vibration, where the browser has one.
+      if (key === "haptic") { playHaptic(value); return; }
       // `ShareLink`: the system's share sheet where the browser has one
       // (a phone's), else the text to the clipboard.
       if (key === "share") {
@@ -569,12 +582,15 @@ export async function boot({
   // The guest's Foundation reads and writes the app's files through WASI
   // (file_system.js); a page's own overrides go on top.
   const files = await filesOpening;
+  appFiles = files;
   // The page's ISO_ query parameters are the guest's ISO_ environment, as a
   // native host's process environment is: the launch hooks
   // (`?ISO_OPEN_APP=todo`).
   const launchEnvironment = Object.fromEntries(
     [...new URLSearchParams(location.search)].filter(([key]) => key.startsWith("ISO_")));
-  const environment = { ...launchEnvironment, ...(bundleIdentifier ? { ISOMER_BUNDLE_IDENTIFIER: bundleIdentifier } : {}) };
+  const bundleInfo = { ISOMER_BUNDLE_IDENTIFIER: bundleIdentifier, ISOMER_BUNDLE_NAME: bundleName,
+                       ISOMER_BUNDLE_SHORT_VERSION: bundleVersion, ISOMER_BUNDLE_VERSION: bundleBuild };
+  const environment = { ...launchEnvironment, ...Object.fromEntries(Object.entries(bundleInfo).filter(([, value]) => value)) };
   const wasiWithFiles = (getMemory, builtins) => ({
     ...files.wasi(getMemory, builtins, { environment }),
     ...(typeof wasi === "function" ? wasi(getMemory, builtins) : (wasi || {})),

@@ -19,6 +19,7 @@ swift_library(
         # it breaks the Android .so. Each platform supplies its own provider (web:
         # bundle_provider.js; Android: Kotlin WasmBundleProvider).
         "BundleProvider.swift",
+        "Haptics.swift",
         "WasmViewModel.swift",
         "WasmView.swift",
     ],

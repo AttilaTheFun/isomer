@@ -336,6 +336,7 @@ func _trail(to target: RenderNode, in root: RenderNode) -> [RenderNode]? {
         for child in node.children where child === target || visit(child) { return true }
         for child in node.background where child === target || visit(child) { return true }
         for child in node.overlay where child === target || visit(child) { return true }
+        for child in node.mask where child === target || visit(child) { return true }
         if let content = node.navigationContent, content === target || visit(content) { return true }
         trail.removeLast()
         return false
@@ -348,6 +349,7 @@ func _replace(_ old: RenderNode, with new: RenderNode, in parent: RenderNode) {
     if let i = parent.children.firstIndex(where: { $0 === old }) { parent.children[i] = new }
     if let i = parent.background.firstIndex(where: { $0 === old }) { parent.background[i] = new }
     if let i = parent.overlay.firstIndex(where: { $0 === old }) { parent.overlay[i] = new }
+    if let i = parent.mask.firstIndex(where: { $0 === old }) { parent.mask[i] = new }
     if parent.navigationContent === old { parent.navigationContent = new }
 }
 
@@ -386,6 +388,7 @@ func _describeTree(_ root: RenderNode) -> String {
         for child in node.children { visit(child, deeper, "") }
         for child in node.background { visit(child, deeper, "bg ") }
         for child in node.overlay { visit(child, deeper, "ov ") }
+        for child in node.mask { visit(child, deeper, "mask ") }
         if let content = node.navigationContent { visit(content, deeper, "nav ") }
     }
     visit(root, "", "")

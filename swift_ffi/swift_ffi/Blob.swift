@@ -255,8 +255,11 @@ public enum SwiftFFIBlob {
 /// The uniform callback channel: closures, consumer-implemented interfaces,
 /// and injected dependencies all cross as a dispatcher the expanded ABI
 /// invokes with blob-encoded arguments (interface method calls lead with an
-/// `.int32` method ordinal).
-public protocol SwiftFFIDispatcher: AnyObject {
+/// `.int32` method ordinal). Sendable: a native closure may be invoked from
+/// any thread, and a wasm guest's calls reach the host's main thread
+/// whichever thread makes them; so the proxy of an interface declared
+/// `Sendable` is one.
+public protocol SwiftFFIDispatcher: AnyObject, Sendable {
     func invoke(_ args: [UInt8]) throws -> [UInt8]
 }
 

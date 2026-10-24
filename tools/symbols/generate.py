@@ -6,6 +6,8 @@ ImageVectors). Run with a lucide-static checkout:
 
     tools/symbols/generate.py <lucide-static/icons dir>
 
+(The tables are lucide-static 1.61.0's, npm's tarball.)
+
 Writes wasm/libraries/swift_ui/runtime/symbols.js and
 android/libraries/swift_ui/kotlin/dev/isomer/runtime/Symbols.kt.
 """
@@ -79,13 +81,23 @@ MAP = {
     "shippingbox.fill": "package", "stop.fill": "square", "hand.raised.fill": "hand", "exclamationmark.triangle.fill": "triangle-alert",
     "xmark.circle.fill": "circle-x", "plus.circle.fill": "circle-plus", "ellipsis.circle.fill": "circle-ellipsis", "cloud.fill": "cloud", "play.fill": "play",
     "phone.fill": "phone", "phone.down.fill": "phone-off", "square.and.arrow.up.fill": "share",
+    "arrow.up.forward.square": "square-arrow-up-right", "arrow.down.backward.square": "square-arrow-down-left",
+    "arrow.up.right.square": "square-arrow-up-right", "arrow.down.left.square": "square-arrow-down-left",
+    "arrow.down.to.line.compact": "arrow-down-to-line", "arrow.up.to.line.compact": "arrow-up-to-line",
+    "arrow.triangle.merge": "git-merge", "arrow.triangle.pull": "git-pull-request", "arrow.uturn.backward": "undo-2",
+    "arrow.uturn.backward.circle": "circle-arrow-left", "bubble.left.and.bubble.right": "messages-square",
+    "circle.dashed": "circle-dashed", "clock.arrow.circlepath": "history", "document": "file",
+    "exclamationmark.bubble": "message-circle-warning", "line.3.horizontal.decrease": "list-filter",
+    "line.3.horizontal.decrease.circle": "list-filter", "person.crop.circle.badge.checkmark": "user-round-check",
+    "photo.on.rectangle.angled": "images", "point.topleft.down.to.point.bottomright.curvepath": "route",
+    "safari": "compass", "xmark.bin": "archive-x", "smallcircle.filled.circle": "circle-dot", "equal.circle": "circle-equal",
 }
 FILLED_OK = {"circle", "square", "star", "heart", "bell", "flame", "drop", "bolt", "trash", "play", "stop", "pause",
              "cloud", "hand.raised", "shippingbox", "checkmark.seal", "xmark.circle", "plus.circle", "checkmark.circle",
              "exclamationmark.triangle", "phone", "phone.down", "person", "moon", "sun.max", "bookmark", "flag", "tag",
              "lock", "house", "envelope", "camera", "mic", "square.fill", "circle.fill", "star.fill", "heart.fill",
              "bell.fill", "flame.fill", "drop.fill", "bolt.fill", "trash.fill",
-             "folder", "arrow.down.circle", "play.circle"}
+             "folder", "arrow.down.circle", "play.circle", "clock", "hand.thumbsup", "exclamationmark.bubble", "document"}
 
 NUM = r"[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?"
 

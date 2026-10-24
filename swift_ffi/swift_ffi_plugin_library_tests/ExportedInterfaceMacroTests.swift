@@ -70,6 +70,28 @@ final class ExportedInterfaceMacroTests: XCTestCase {
         XCTAssertFalse(peers.contains("@_spi(Isomer)     public"), peers)
     }
 
+    /// A `@MainActor` protocol's foreign proxy is made anywhere and its
+    /// Swift-owned instances are called on the main actor.
+    func testMainActorProtocol() throws {
+        let source = Parser.parse(source: """
+            @MainActor @ExportedInterface
+            public protocol Counter {
+                func increment(by amount: Int) -> Int
+                func reset() async throws
+            }
+            """)
+        let proto = try XCTUnwrap(source.statements.first?.item.as(ProtocolDeclSyntax.self))
+        let attribute = try XCTUnwrap(proto.attributes.compactMap { $0.as(AttributeSyntax.self) }
+            .first { $0.attributeName.trimmedDescription == "ExportedInterface" })
+        let peers = try ExportedInterfaceMacro.expansion(
+            of: attribute, providingPeersOf: proto, in: BasicMacroExpansionContext())
+            .map(\.description).joined(separator: "\n")
+        XCTAssertTrue(peers.contains("nonisolated final class SwiftFFIForeign_Counter"), peers)
+        XCTAssertTrue(peers.contains("private func swiftFFIInvokeIsolated_Counter("), peers)
+        XCTAssertTrue(peers.contains("MainActor.assumeIsolated {"), peers)
+        XCTAssertTrue(peers.contains("Task { @MainActor in"), peers)
+    }
+
     /// A `package` protocol's peers are `package` (a public declaration
     /// cannot name a package protocol).
     func testPackageProtocolPeersArePackage() throws {

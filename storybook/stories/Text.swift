@@ -31,6 +31,10 @@ extension StoryCatalog {
             summary: "How a long string wraps: limited to a number of lines, truncated at its head, middle or tail, aligned within its frame."
         ) { TextLinesStory() },
         Story(
+            "text.fit", "Digits and fitting",
+            summary: "Digits of one width (monospacedDigit), so a number that changes keeps its place; and a line too long for its width, drawn smaller to fit, down to its minimumScaleFactor."
+        ) { TextFitStory() },
+        Story(
             "text.label", "Label",
             summary: "A title with an icon, shown whole, as its icon or as its title. Lists, menus and toolbars choose a style for the labels in them."
         ) { LabelStory() },
@@ -170,6 +174,22 @@ struct LabelStory: View {
                 .labelStyle(.titleOnly)
             Label("Large", systemImage: "folder")
                 .font(.title2)
+        }
+    }
+}
+// end story
+
+// story: text.fit
+struct TextFitStory: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("1,111.11 and 8,888.88").monospacedDigit()
+            Text("1,111.11 and 8,888.88")
+            Text("A title too long for its width")
+                .font(.title2)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .frame(width: 220, alignment: .leading)
         }
     }
 }

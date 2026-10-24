@@ -354,6 +354,7 @@ func translateSubtree(_ node: RenderNode, dx: CGFloat, dy: CGFloat) {
     for child in node.children { translateSubtree(child, dx: dx, dy: dy) }
     for decoration in node.background { translateSubtree(decoration, dx: dx, dy: dy) }
     for decoration in node.overlay { translateSubtree(decoration, dx: dx, dy: dy) }
+    for decoration in node.mask { translateSubtree(decoration, dx: dx, dy: dy) }
 }
 
 @MainActor
@@ -430,7 +431,8 @@ func place(_ node: RenderNode, in frame: CGRect, ctx: LayoutContext) {
         }
         let backgrounds: [(RenderNode, Alignment)] = node.background.map { ($0, node.backgroundAlignment) }
         let overlays: [(RenderNode, Alignment)] = node.overlay.map { ($0, node.overlayAlignment) }
-        for (decoration, alignment) in backgrounds + overlays {
+        let masks: [(RenderNode, Alignment)] = node.mask.map { ($0, node.maskAlignment) }
+        for (decoration, alignment) in backgrounds + overlays + masks {
             let size = measure(
                 decoration,
                 proposal: ProposedSize(width: frame.width, height: frame.height),

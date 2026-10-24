@@ -615,8 +615,40 @@ func checkScrollPhases(_ mock: MockRenderer) {
            "every phase but idle is scrolling")
 }
 
+// MARK: What Reviews uses: tabular digits, fitting, masks, menus
+
+struct ReviewsAPIScreen: View {
+    var body: some View {
+        VStack {
+            Text("Score: ") + Text("42").monospacedDigit()
+            Text("1,234").monospacedDigit()
+            Text("A long title").lineLimit(1).minimumScaleFactor(0.5)
+            Rectangle().frame(width: 100, height: 50).mask(alignment: .leading) { Circle().frame(width: 50) }
+            Menu("Sort") { Button("By name") {} }.menuIndicator(.hidden)
+        }
+    }
+}
+
+@MainActor
+func checkReviewsAPIs(_ mock: MockRenderer) {
+    Runtime.shared.installRootView { ReviewsAPIScreen() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    let tree = lastFlatTree(mock)
+    let joined = flatNodes(tree) { $0.kind == .text && $0.v == "Score: 42" }.first.flatMap { param($0, "runs") } ?? "none"
+    let joinedRuns = joined.split(separator: ";").map { $0.split(separator: ":").dropFirst().first ?? "" }
+    expect(joinedRuns.count == 2 && !joinedRuns[0].contains("t") && joinedRuns[1].contains("t"),
+           "monospacedDigit() on one side of a + reaches its run alone (\(joined))")
+    expect(flatNodes(tree) { $0.v == "1,234" && param($0, "tnum") == "1" }.count == 1, "a Text's monospacedDigit() is tabular")
+    expect(flatNodes(tree) { $0.v == "A long title" && param($0, "minScale") == "0.5" }.count == 1, "minimumScaleFactor rides its text")
+    let masks = flatNodes(tree) { param($0, "layer") == "mask" }
+    expect(masks.count == 1 && masks.first.flatMap { param($0, "layerAlign") }?.hasPrefix("start") == true,
+           "a mask is a layer of its view, at its alignment (\(masks.compactMap { param($0, "layerAlign") }))")
+    expect(flatNodes(tree) { param($0, "indicator") == "hidden" }.count == 1, "menuIndicator(.hidden) rides its menu")
+}
+
 @MainActor
 func checkAPIAdditions(_ mock: MockRenderer) {
+    checkReviewsAPIs(mock)
     checkNamedRuns(mock)
     checkScrollPhases(mock)
     checkDecodedTransforms(mock)

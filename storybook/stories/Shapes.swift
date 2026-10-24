@@ -33,6 +33,10 @@ extension StoryCatalog {
             "shapes.effects", "Shadows and effects",
             summary: "A shadow under a view, a blur over it, its opacity, and a shape it is clipped to."
         ) { EffectsStory() },
+        Story(
+            "shapes.mask", "Masks",
+            summary: "A view shown only where its mask is drawn (mask): a gradient cut to the largest circle its frame holds, and one shown across part of its width, the mask aligned to its leading edge."
+        ) { MaskStory() },
     ])
 }
 
@@ -186,6 +190,23 @@ struct EffectsStory: View {
                 .clipShape(Capsule())
         }
         .padding(10)
+    }
+}
+// end story
+
+// story: shapes.mask
+struct MaskStory: View {
+    var body: some View {
+        HStack(spacing: 16) {
+            Rectangle()
+                .fill(LinearGradient(colors: [.purple, .orange], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .frame(width: 140, height: 100)
+                .mask { Circle() }
+            Rectangle()
+                .fill(LinearGradient(colors: [.blue, .green], startPoint: .leading, endPoint: .trailing))
+                .frame(width: 140, height: 100)
+                .mask(alignment: .leading) { RoundedRectangle(cornerRadius: 16).frame(width: 90) }
+        }
     }
 }
 // end story

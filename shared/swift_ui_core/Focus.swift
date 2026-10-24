@@ -110,6 +110,18 @@ extension View {
         _EnvironmentModifier(child: self, descend: "trunc") { env in env.truncationMode = "\(mode)" }
     }
 
+    /// `.menuIndicator(_:)`: whether menus below show their chevron
+    /// (`.automatic` and `.visible` do).
+    nonisolated public func menuIndicator(_ visibility: Visibility) -> some View {
+        _EnvironmentModifier(child: self, descend: "menuind") { env in env.menuIndicatorHidden = visibility == .hidden }
+    }
+
+    /// `.minimumScaleFactor`: descendant text may shrink to this fraction
+    /// of its size to fit before it wraps or truncates, where the host can.
+    nonisolated public func minimumScaleFactor(_ factor: CGFloat) -> some View {
+        _EnvironmentModifier(child: self, descend: "minscale") { env in env.minimumScaleFactor = Double(factor) }
+    }
+
     /// `.textCase`: descendant text in capitals or small letters, or —
     /// `nil` — as written, where a container would otherwise case it (a
     /// list's section header on iOS is in capitals unless told).

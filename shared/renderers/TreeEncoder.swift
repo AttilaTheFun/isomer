@@ -539,8 +539,15 @@ package final class FlatTreeEncoder {
             layer.params = (layer.params ?? []) + [("layer", "overlay"), ("layerAlign", alignName(node.overlayAlignment))]
             overlayLayers.append(layer)
         }
-        if !backgroundLayers.isEmpty || !overlayLayers.isEmpty {
-            out.children = backgroundLayers + out.children + overlayLayers
+        var maskLayers: [FlatNode] = []
+        for (index, decoration) in node.mask.enumerated() {
+            var layer = flatten(decoration, ident: decoration.buildPath ?? "\(ident)~mask\(index)", anchor: childAnchor)
+            layer.setKey("~mask\(index)", fallback: "")
+            layer.params = (layer.params ?? []) + [("layer", "mask"), ("layerAlign", alignName(node.maskAlignment))]
+            maskLayers.append(layer)
+        }
+        if !backgroundLayers.isEmpty || !overlayLayers.isEmpty || !maskLayers.isEmpty {
+            out.children = backgroundLayers + out.children + overlayLayers + maskLayers
         }
 
         var shapeRadius: Double? = nil
@@ -596,6 +603,7 @@ package final class FlatTreeEncoder {
                     if run.link != nil { flags += "l" }
                     if run.strong { flags += "S" }
                     if run.emphasized { flags += "E" }
+                    if run.tabular { flags += "t" }
                     var part = "\(run.length):\(flags)"
                     if let color = run.color {
                         let c = flatColor(color)
@@ -614,6 +622,7 @@ package final class FlatTreeEncoder {
                 if !links.isEmpty { out.params = (out.params ?? []) + [("runLinks", links.joined(separator: "\u{1F}"))] }
             }
             if let truncation = node.truncation { out.params = (out.params ?? []) + [("truncation", truncation)] }
+            if let scale = node.minimumScaleFactor { out.params = (out.params ?? []) + [("minScale", String(scale))] }
             if let textCase = node.textCase { out.params = (out.params ?? []) + [("textCase", textCase)] }
             if let spacing = node.lineSpacing, spacing > 0 { out.params = (out.params ?? []) + [("lineSpacing", formatNumber(spacing))] }
         case .shape(let shapeKind, _, _):
@@ -801,6 +810,8 @@ package final class FlatTreeEncoder {
             if node.font.design == .serif { out.params = (out.params ?? []) + [("design", "serif")] }
             if node.font.design == .rounded { out.params = (out.params ?? []) + [("design", "rounded")] }
             if let family = node.font.family { out.params = (out.params ?? []) + [("family", family)] }
+            // `.monospacedDigit()`: tabular figures.
+            if node.font.monospacedDigits { out.params = (out.params ?? []) + [("tnum", "1")] }
         case .textField:
             out.fontSize = Double(node.font.size)
             // Its text style, as a Text's: a field's line height is its

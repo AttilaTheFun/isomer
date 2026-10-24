@@ -1693,6 +1693,10 @@ private func _draw(_ node: RenderNode, pass: RenderPass) {
         if node.hasLifecycle, let path = node.identityPath ?? node.onChangeKeys.first {
             pass.lifecycle[path] = (node.onAppear, node.disappearHandler)
         }
+        // `.mask`: drawn only within the mask's frame (exact for a
+        // rectangle, the mask's bounds for any other shape).
+        let masked = node.mask.first?.frame
+        if let masked { host.pushClip(masked, cornerRadius: Double(node.mask.first?.cornerRadius ?? 0)) }
         // A ViewThatFits draws only the candidate its layout chose.
         for (index, child) in node.children.enumerated() where node.fitsAxes == nil || index == node.fitsChosen {
             draw(child, pass: pass)
@@ -1700,6 +1704,7 @@ private func _draw(_ node: RenderNode, pass: RenderPass) {
         for overlay in node.overlay {
             drawDecoration(overlay, radius: node.cornerRadius, pass: pass)
         }
+        if masked != nil { host.popClip() }
         if transformed { host.popTransform() }
 
     case .text(let string):

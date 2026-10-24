@@ -9,8 +9,8 @@
 // `iso_hot_event` in the desktop wasm host, or to `encoder.handlers[id]` in a round-trip test).
 //
 // The visual transforms (`.offset`, `.scaleEffect`), `.position`, clipping,
-// a drag's handler and a scroll's phases round-trip; rotation, overlays and
-// minimum sizes do not yet (docs/desktop_wasm_implementation_notes.md, blocker 2).
+// a drag's handler and a scroll's phases round-trip; rotation, overlays,
+// masks (drawn unmasked) and minimum sizes do not yet (docs/desktop_wasm_implementation_notes.md, blocker 2).
 
 import FlatBuffers
 internal import IsomerSwiftUI
@@ -194,6 +194,10 @@ package final class FlatTreeDecoder {
             case "posX": out.positionX = Double(kv.value).map { CGFloat($0) }
             case "posY": out.positionY = Double(kv.value).map { CGFloat($0) }
             case "clip": out.clipsContent = kv.value == "1"
+            // A `.mask` layer: kept in its place (patches address children
+            // by position) but not drawn; the masked view shows unmasked
+            // here for now.
+            case "layer" where kv.value == "mask": out.opacity = 0
             // `onScrollPhaseChange` on a scroll: the phases this host's
             // drag, fling and wheel give it go back to the guest's scroll.
             case "phase":

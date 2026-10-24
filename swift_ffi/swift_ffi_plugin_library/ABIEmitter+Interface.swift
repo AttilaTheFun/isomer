@@ -8,16 +8,19 @@ import SwiftSyntax
 // resolver function thunks marshal interface parameters with, and the
 // `register` export that makes the interface injectable as a wasm dependency.
 extension ABIEmitter {
-    /// The peer declarations for one `@ExportedInterface`.
+    /// The peer declarations for one `@ExportedInterface`. A `@MainActor`
+    /// protocol's foreign proxy is a nonisolated class (made anywhere, its
+    /// methods witnessing the main-actor requirements) and its Swift-owned
+    /// instances are called on the main actor.
     static func interfacePeers(
-        protocolName name: String, methods: [ABIFunction], namespace: String?
+        protocolName name: String, methods: [ABIFunction], namespace: String?, mainActor: Bool = false
     ) -> [String] {
         [
             boxClass(name),
-            foreignProxy(name, methods: methods),
+            foreignProxy(name, methods: methods, mainActor: mainActor),
             resolveDualSlot(name),
             resolveValue(name),
-            invokeEntry(name, methods: methods, namespace: namespace),
+            invokeEntry(name, methods: methods, namespace: namespace, mainActor: mainActor),
             releaseEntry(name, namespace: namespace),
             registerEntry(name, namespace: namespace),
         ]
@@ -61,7 +64,7 @@ extension ABIEmitter {
     /// `bridge_closure`, a wasm foreign-registry id, or an injected
     /// dependency): method calls lead with the method ordinal and
     /// blob-encode their arguments.
-    static func foreignProxy(_ name: String, methods: [ABIFunction]) -> String {
+    static func foreignProxy(_ name: String, methods: [ABIFunction], mainActor: Bool = false) -> String {
         var members: [String] = []
         for (ordinal, method) in methods.enumerated() {
             let (signature, valueNames) = proxyMethodSignature(method)
@@ -103,7 +106,7 @@ extension ABIEmitter {
         return """
             /// Wraps a consumer-implemented `\(name)` (a dispatcher). Released
             /// when ARC drops the proxy.
-            final class SwiftFFIForeign_\(name): \(name) {
+            \(mainActor ? "nonisolated " : "")final class SwiftFFIForeign_\(name): \(name) {
                 let dispatcher: any IsomerFFI.SwiftFFIDispatcher
                 init(dispatcher: any IsomerFFI.SwiftFFIDispatcher) { self.dispatcher = dispatcher }
 
@@ -164,7 +167,7 @@ extension ABIEmitter {
     /// The ordinal-dispatch entry consumers call Swift-owned instances
     /// through: `args` is a borrowed blob sequence, the return is a +1 box of
     /// the result blob (a VOID blob for void; an ERROR blob on failure).
-    static func invokeEntry(_ name: String, methods: [ABIFunction], namespace: String?) -> String {
+    static func invokeEntry(_ name: String, methods: [ABIFunction], namespace: String?, mainActor: Bool = false) -> String {
         var cases: [String] = []
         for (ordinal, method) in methods.enumerated() {
             var body: [String] = []
@@ -185,7 +188,8 @@ extension ABIEmitter {
                 values.append("a\(index)")
             }
             let rawCall = method.call("value.\(method.name)", values: values)
-            let call = (method.isThrowing ? "try " : "") + (method.isAsync ? "await " : "") + rawCall
+            // `call` already leads with its `try` and `await`.
+            let call = rawCall
             let resultBlob: String
             if method.isAsync {
                 let successBlob = method.returnValue.kind == .void
@@ -193,7 +197,7 @@ extension ABIEmitter {
                 let invoke = method.returnValue.kind == .void ? call : "let result = \(call)"
                 body.append("#if os(WASI)")
                 body.append("IsomerFFI.swiftFFIInstallExecutor()")
-                body.append("Task {")
+                body.append(mainActor ? "Task { @MainActor in" : "Task {")
                 body.append("    do {")
                 body.append("        \(invoke)")
                 body.append("        IsomerFFI.swiftFFIAsyncComplete(callId, \(successBlob))")
@@ -201,11 +205,15 @@ extension ABIEmitter {
                 body.append("        IsomerFFI.swiftFFIAsyncComplete(callId, IsomerFFI.SwiftFFIBlob.encodeError(String(describing: error)))")
                 body.append("    }")
                 body.append("}")
+                // The return inside the wasm branch: after the other's throw
+                // it would never run (a warning, an error where warnings are).
+                body.append(
+                    "return Unmanaged.passRetained(IsomerFFI.SwiftFFIStringBox(bytes: IsomerFFI.SwiftFFIBlob.encode(.void))).toOpaque()")
                 body.append("#else")
                 body.append("_ = callId")
                 body.append("throw IsomerFFI.BridgeDecodingError(\"async interface methods on Swift-owned instances complete through the wasm async_complete import only\")")
                 body.append("#endif")
-                resultBlob = "IsomerFFI.SwiftFFIBlob.encode(.void)"
+                resultBlob = ""
             } else if method.returnValue.kind == .void {
                 body.append(call)
                 resultBlob = "IsomerFFI.SwiftFFIBlob.encode(.void)"
@@ -213,18 +221,17 @@ extension ABIEmitter {
                 body.append("let result = \(call)")
                 resultBlob = method.returnValue.encodeExpr("result")
             }
-            body.append(
-                "return Unmanaged.passRetained(IsomerFFI.SwiftFFIStringBox(bytes: \(resultBlob))).toOpaque()")
+            if !method.isAsync {
+                body.append(
+                    "return Unmanaged.passRetained(IsomerFFI.SwiftFFIStringBox(bytes: \(resultBlob))).toOpaque()")
+            }
             cases.append(
                 "        case \(ordinal):\n"
                     + body.map { "            \($0)\n" }.joined())
         }
-        return """
-            @c(\(ABIModel.cSymbol(namespace: namespace, "\(name)_invoke")))
-            public func swiftFFIInvoke_\(name)(_ handle: UnsafeMutableRawPointer, _ ordinal: Int32, _ args: UnsafeRawPointer?, _ args_len: Int32) -> UnsafeMutableRawPointer {
-                let value = Unmanaged<SwiftFFIBox_\(name)>.fromOpaque(handle).takeUnretainedValue().value
+        let dispatch = """
                 do {
-                    let arguments = try IsomerFFI.SwiftFFIBlob.decodeSequence(IsomerFFI.SwiftFFIBridge.bytes(args, args_len))
+                    let arguments = try IsomerFFI.SwiftFFIBlob.decodeSequence(bytes)
                     switch ordinal {
             \(cases.joined(separator: "\n"))
                     default:
@@ -233,6 +240,34 @@ extension ABIEmitter {
                 } catch {
                     return Unmanaged.passRetained(IsomerFFI.SwiftFFIStringBox(bytes: IsomerFFI.SwiftFFIBlob.encodeError(String(describing: error)))).toOpaque()
                 }
+            """
+        let entry = "@c(\(ABIModel.cSymbol(namespace: namespace, "\(name)_invoke")))\n"
+            + "public func swiftFFIInvoke_\(name)(_ handle: UnsafeMutableRawPointer, _ ordinal: Int32, _ args: UnsafeRawPointer?, _ args_len: Int32) -> UnsafeMutableRawPointer {\n"
+        guard mainActor else {
+            return entry + """
+                    let value = Unmanaged<SwiftFFIBox_\(name)>.fromOpaque(handle).takeUnretainedValue().value
+                    let bytes = IsomerFFI.SwiftFFIBridge.bytes(args, args_len)
+                \(dispatch)
+                }
+                """
+        }
+        // A main-actor protocol's instance is called on the main actor (the
+        // entry is reached on the main thread, as the host's calls are):
+        // only Sendable values (the handle's and the result's bits, the
+        // argument bytes) cross into the isolated dispatch.
+        return entry + """
+                let handleBits = UInt(bitPattern: handle)
+                let bytes = IsomerFFI.SwiftFFIBridge.bytes(args, args_len)
+                let resultBits = MainActor.assumeIsolated {
+                    UInt(bitPattern: swiftFFIInvokeIsolated_\(name)(handleBits, ordinal, bytes))
+                }
+                return UnsafeMutableRawPointer(bitPattern: resultBits)!
+            }
+
+            @MainActor
+            private func swiftFFIInvokeIsolated_\(name)(_ handleBits: UInt, _ ordinal: Int32, _ bytes: [UInt8]) -> UnsafeMutableRawPointer {
+                let value = Unmanaged<SwiftFFIBox_\(name)>.fromOpaque(UnsafeMutableRawPointer(bitPattern: handleBits)!).takeUnretainedValue().value
+            \(dispatch)
             }
             """
     }

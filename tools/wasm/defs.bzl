@@ -249,6 +249,8 @@ _ISO_RUNTIME_JS = [
     # URLSession's transports over fetch and WebSocket (boot.js and
     # hot_host.js import it).
     Label("//wasm/libraries/swift_ui:runtime/network.js"),
+    # `.sensoryFeedback`'s vibrations (boot.js and hot_host.js import it).
+    Label("//wasm/libraries/swift_ui:runtime/haptics.js"),
     # Isomer's Metal executor: the only navigator.gpu code.
     Label("//metal/runtime:runtime_js"),
 ]

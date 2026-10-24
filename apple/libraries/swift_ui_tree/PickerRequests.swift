@@ -115,6 +115,23 @@ struct PickerRequests: ViewModifier {
         return mapped.isEmpty ? [.item] : mapped
     }
 
+    /// A document to save (`.fileExporter`): its bytes, sent in base64.
+    private var exported: ExportedBytes? {
+        guard let data = param("data").flatMap({ Data(base64Encoded: $0) }) else { return nil }
+        return ExportedBytes(data: data)
+    }
+
+    private var exportedType: UTType {
+        param("type").flatMap { UTType(mimeType: $0) } ?? .data
+    }
+
+    /// The name suggested, less the extension the exporter adds itself.
+    private var exportedName: String? {
+        guard let name = param("name"), !name.isEmpty else { return nil }
+        let url = URL(fileURLWithPath: name)
+        return url.pathExtension == exportedType.preferredFilenameExtension ? url.deletingPathExtension().lastPathComponent : name
+    }
+
     private var photoFilter: PHPickerFilter {
         let types = contentTypes
         let images = types.contains { $0.conforms(to: .image) }
@@ -154,6 +171,16 @@ struct PickerRequests: ViewModifier {
                 }
                 answer(paths, for: asked)
             }
+            .fileExporter(isPresented: presented("export"), document: exported, contentType: exportedType,
+                          defaultFilename: exportedName) { result in
+                let asked = token
+                closedToken = asked
+                pickingToken = asked
+                switch result {
+                case .success(let url): answer([url.path], for: asked)
+                case .failure: answer([], for: asked)
+                }
+            }
             .modifier(PhotoRequest(
                 open: presented("photos"), filter: photoFilter,
                 max: Int(param("max") ?? "").flatMap { $0 > 0 ? $0 : nil } ?? (param("multiple") == "1" ? nil : 1),
@@ -169,6 +196,22 @@ struct PickerRequests: ViewModifier {
                 pickingToken = asked
                 answer(data.flatMap { IsomerPickedFiles.store($0, name: "photo.jpg") }.map { [$0] } ?? [], for: asked)
             }))
+    }
+}
+
+/// What `.fileExporter` writes: the guest's document, as bytes.
+private struct ExportedBytes: FileDocument {
+    static var readableContentTypes: [UTType] { [.data] }
+    let data: Data
+
+    init(data: Data) { self.data = data }
+
+    init(configuration: ReadConfiguration) throws {
+        data = configuration.file.regularFileContents ?? Data()
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: data)
     }
 }
 

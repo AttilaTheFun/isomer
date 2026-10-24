@@ -1,20 +1,20 @@
 // NSNumber (Apple's Foundation and corelibs have it; swift-foundation does
 // not): a number of any of Swift's numeric types, read back as any. A Swift
-// class, not bridged: `as? Int` on an NSNumber is not a conversion here
-// (`intValue` is).
+// class; Swift's numbers bridge to it as Apple's do (NSNumberBridging.swift:
+// `as? Int` on an NSNumber is exact, `intValue` truncates).
 
 import FoundationEssentials
 
 open class NSNumber: Hashable, CustomStringConvertible, ExpressibleByIntegerLiteral,
     ExpressibleByFloatLiteral, ExpressibleByBooleanLiteral, @unchecked Sendable {
-    private enum Storage: Hashable {
+    enum Storage: Hashable {
         case signed(Int64)
         case unsigned(UInt64)
         case floating(Double)
         case boolean(Bool)
     }
 
-    private let storage: Storage
+    let storage: Storage
 
     public init(value: Int) { storage = .signed(Int64(value)) }
     public init(value: Int8) { storage = .signed(Int64(value)) }
@@ -29,6 +29,11 @@ open class NSNumber: Hashable, CustomStringConvertible, ExpressibleByIntegerLite
     public init(value: Float) { storage = .floating(Double(value)) }
     public init(value: Double) { storage = .floating(value) }
     public init(value: Bool) { storage = .boolean(value) }
+
+    /// What the number was made from, for JSONSerialization's writing.
+    var boolStorage: Bool? { if case .boolean(let v) = storage { v } else { nil } }
+    var isFloatingStorage: Bool { if case .floating = storage { true } else { false } }
+    var isUnsignedStorage: Bool { if case .unsigned = storage { true } else { false } }
 
     public required convenience init(integerLiteral value: Int) { self.init(value: value) }
     public required convenience init(floatLiteral value: Double) { self.init(value: value) }

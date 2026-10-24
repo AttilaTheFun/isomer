@@ -1,6 +1,9 @@
-// Presentation: sheets, alerts, confirmation dialogs and popovers.
+// Presentation: sheets, alerts, confirmation dialogs, popovers and the
+// file exporter.
 
+import Foundation
 import SwiftUI
+import UniformTypeIdentifiers
 
 extension StoryCatalog {
     static let presentation = StoryArea(id: "presentation", title: "Presentation", symbol: "rectangle.stack", stories: [
@@ -20,6 +23,10 @@ extension StoryCatalog {
             "presentation.popover", "Popover",
             summary: "Content in a bubble beside the button that showed it; a sheet on a phone."
         ) { PopoverStory() },
+        Story(
+            "presentation.exporter", "File exporter",
+            summary: "A document saved where the person chooses (fileExporter with a FileDocument): the system's save panel, Android's \"save to\" picker, a download on the web."
+        ) { ExporterStory() },
     ])
 }
 
@@ -112,6 +119,49 @@ struct PopoverStory: View {
                 }
                 .padding()
             }
+    }
+}
+// end story
+
+// story: presentation.exporter
+struct ExporterStory: View {
+    @State private var exporting = false
+    @State private var outcome = "Nothing saved yet."
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button("Save a note") { exporting = true }
+                .buttonStyle(.bordered)
+            Text(outcome)
+                .font(.footnote)
+                .foregroundColor(.secondary)
+        }
+        .fileExporter(isPresented: $exporting, document: NoteDocument(text: "A note from the Storybook."),
+                      contentType: .plainText, defaultFilename: "Note") { result in
+            switch result {
+            case .success(let url): outcome = "Saved as \(url.lastPathComponent)."
+            case .failure(let error): outcome = "Not saved: \(error.localizedDescription)"
+            }
+        }
+    }
+}
+
+/// A plain-text document: what the exporter saves.
+struct NoteDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.plainText] }
+
+    var text: String
+
+    init(text: String) {
+        self.text = text
+    }
+
+    init(configuration: ReadConfiguration) throws {
+        text = String(decoding: configuration.file.regularFileContents ?? Data(), as: UTF8.self)
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: Data(text.utf8))
     }
 }
 // end story

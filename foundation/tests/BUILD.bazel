@@ -10,6 +10,7 @@ swift_binary(
     name = "foundation_check",
     package_name = "isomer",
     srcs = [
+        "ClassesCheck.swift",
         "ErrorCheck.swift",
         "FoundationCheck.swift",
         "NetworkCheck.swift",
@@ -35,6 +36,11 @@ sh_test(
     args = [
         "$(rootpath //tools/wasm/wasi_run)",
         "$(rootpath :foundation_check_wasm)",
+        # UserDefaults' argument domain (ClassesCheck.swift): one from the
+        # program's arguments, one from ISO_ARGUMENTS.
+        "'--env=ISO_ARGUMENTS=-check.flag YES'",
+        "-check.argument",
+        "given",
     ],
     data = [
         ":foundation_check_wasm",

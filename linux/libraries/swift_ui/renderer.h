@@ -121,6 +121,12 @@ void iso_fetch(int request_id, const char* url, int url_len);
 int iso_drain_fetches(void);   // deliver completed fetches (main thread)
 int iso_drain_images(void);    // decode any downloaded remote images (main thread)
 
+// A picture an app decoded through ImageIO (`Image(cgImage)`): its encoded
+// bytes, handed over at its first draw, decoded under its source key; and
+// forgotten when the app's last reference goes (main thread, both).
+void iso_register_image(const char* source, int source_len, const unsigned char* bytes, int len);
+void iso_forget_image(const char* source, int source_len);
+
 // --- Native host views (form controls) ----------------------------------
 
 // Reconciled each frame between begin/end. The Linux renderer draws Picker /

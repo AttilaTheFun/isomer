@@ -138,6 +138,14 @@ consumers don't cross the ABI at all — they depend on the annotated library
 directly. (Swift-to-Swift and Swift-consuming-C++ interop live in the
 separate `swift_interop` project.)
 
+An interface's isolation is the protocol's. A `@MainActor` protocol's
+Swift-owned instances are called on the main actor (the `_invoke` entry
+hands only the handle's bits and the argument bytes to a main-actor
+dispatch), and its proxy is a `nonisolated` class, made anywhere, whose
+methods witness the main-actor requirements. A protocol that inherits
+`Sendable` gets a Sendable proxy (dispatchers are Sendable), so an app can
+hand a host's implementation across isolations without an escape hatch.
+
 `swift_wasm_library` is Swift as a wasm **host**: generated bindings drive a
 reactor through an injected `SwiftFFIWasmEngine` — `Swift<Proto>` wrappers
 dispatch through `_invoke`, native implementations are parked in the foreign

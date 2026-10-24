@@ -60,10 +60,15 @@ public macro ExportedFunction(namespace: String) =
 ///         func increment() -> Int
 ///         func label() -> String
 ///     }
+///
+/// A `@MainActor` protocol is called on the main actor: its Swift-owned
+/// instances there, and the host's (a proxy made anywhere) from it, so an
+/// app keeps one without leaving the main actor.
 @attached(
     peer,
     names: prefixed(SwiftFFIBox_), prefixed(SwiftFFIForeign_), prefixed(swiftFFIResolve_),
-    prefixed(swiftFFIInvoke_), prefixed(swiftFFIRelease_), prefixed(swiftFFIRegister_))
+    prefixed(swiftFFIInvoke_), prefixed(swiftFFIInvokeIsolated_), prefixed(swiftFFIRelease_),
+    prefixed(swiftFFIRegister_))
 public macro ExportedInterface() =
     #externalMacro(module: "SwiftFFIPlugin", type: "ExportedInterfaceMacro")
 
@@ -71,7 +76,8 @@ public macro ExportedInterface() =
 @attached(
     peer,
     names: prefixed(SwiftFFIBox_), prefixed(SwiftFFIForeign_), prefixed(swiftFFIResolve_),
-    prefixed(swiftFFIInvoke_), prefixed(swiftFFIRelease_), prefixed(swiftFFIRegister_))
+    prefixed(swiftFFIInvoke_), prefixed(swiftFFIInvokeIsolated_), prefixed(swiftFFIRelease_),
+    prefixed(swiftFFIRegister_))
 public macro ExportedInterface(namespace: String) =
     #externalMacro(module: "SwiftFFIPlugin", type: "ExportedInterfaceMacro")
 

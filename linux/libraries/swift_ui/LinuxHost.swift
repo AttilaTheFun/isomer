@@ -7,6 +7,7 @@
 // process, so the entry point itself creates the window and runs the loop.
 
 import Foundation
+import ImageIO
 package import IsomerSwiftUI
 
 func withUTF8Pointer(_ string: String, _ body: (UnsafePointer<CChar>?, Int32) -> Void) {
@@ -26,6 +27,13 @@ struct LinuxHostBridge: HostBridge {
             iso_measure_text(ptr, length, fontSize, Int32(weight), wrapWidth ?? -1, &width, &height)
         }
         return CGSize(width: width, height: height)
+    }
+
+    /// A picture an app decoded through ImageIO, its bytes at its first draw.
+    func registerImage(_ source: String, bytes: [UInt8]) {
+        withUTF8Pointer(source) { ptr, length in
+            bytes.withUnsafeBufferPointer { iso_register_image(ptr, length, $0.baseAddress, Int32($0.count)) }
+        }
     }
 
     func imageInfo(_ source: String, isRemote: Bool) -> ImageStatus {
@@ -271,6 +279,11 @@ enum LinuxApp {
         var height: Double = 0
         iso_window_size(&width, &height)
 
+        // An ImageIO picture's last reference may go on any thread; its
+        // texture is the main thread's.
+        _ImageIOHost.release = { source in
+            DispatchQueue.main.async { withUTF8Pointer(source) { iso_forget_image($0, $1) } }
+        }
         MainActor.assumeIsolated { Runtime.shared.start(host: linuxMakeHost(), width: width, height: height) }
         while true {
             // While a render is pending (animation / fresh input) don't block,
