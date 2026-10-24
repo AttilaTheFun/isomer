@@ -7,7 +7,8 @@
 const { spawn } = require("child_process");
 const fs = require("fs");
 const [url, out, waitS = "8", width = "1200", height = "800", clicks = "", typeText = "", postWaitS = "1"] = process.argv.slice(2);
-const chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+// CDP_CHROME names another Chrome (Linux's, a Chromium) than the Mac's.
+const chrome = process.env.CDP_CHROME || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const profile = fs.mkdtempSync("/tmp/cdp-profile-");
 const port = 9333 + Math.floor(Math.random() * 500);
 // CDP_CHROME_FLAGS="--enable-unsafe-webgpu --use-angle=metal": extra flags

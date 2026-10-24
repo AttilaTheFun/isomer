@@ -4,7 +4,8 @@
 const { spawn } = require("child_process");
 const fs = require("fs");
 const [url, waitS = "10", expression = "1"] = process.argv.slice(2);
-const chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+// CDP_CHROME names another Chrome (Linux's, a Chromium) than the Mac's.
+const chrome = process.env.CDP_CHROME || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const profile = fs.mkdtempSync("/tmp/cdp-profile-");
 const port = 9333 + Math.floor(Math.random() * 500);
 const proc = spawn(chrome, ["--headless=new", "--disable-gpu", "--use-mock-keychain", "--password-store=basic", `--remote-debugging-port=${port}`, "--window-size=1200,800", `--user-data-dir=${profile}`, "--no-first-run", "about:blank"], { stdio: "ignore" });

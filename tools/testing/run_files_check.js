@@ -21,7 +21,8 @@ if (!siteArgument) {
   process.exit(2);
 }
 const site = path.resolve(siteArgument);
-const chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+// CDP_CHROME names another Chrome (Linux's, a Chromium) than the Mac's.
+const chrome = process.env.CDP_CHROME || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const PROBE = "dev.isomer.examples.files-probe";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
