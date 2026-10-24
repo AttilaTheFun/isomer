@@ -2597,6 +2597,7 @@ private fun IsoVerticalScroll(n: UNode, m: Modifier, bw: Boolean) {
             }
         }
     }
+    ReportScrollPhase(params?.optString("phase") ?: "", state, state.interactionSource)
     ReportScrolledUnder(n, state, reversed = false)
     CompositionLocalProvider(LocalScrollTargets provides targets, LocalSafeArea provides EdgeInsets(), LocalChrome provides EdgeInsets(), LocalEdgeScroll provides null, LocalInScroll provides true) {
         Column(
@@ -2610,6 +2611,44 @@ private fun IsoVerticalScroll(n: UNode, m: Modifier, bw: Boolean) {
                 IsoNode(
                     c, if (stretch) Modifier.fillMaxWidth() else Modifier,
                     boundedW = bw, boundedH = false)
+            }
+        }
+    }
+}
+
+/** `onScrollPhaseChange`: the reader's drag is "interacting", the scroll
+ *  carrying on after it "decelerating", a scroll nobody dragged (an animated
+ *  `scrollTo`) "animating", and a still one "idle". A touch that has not
+ *  moved yet is not a drag here, so there is no "tracking". */
+@Composable
+private fun ReportScrollPhase(
+    phaseId: String,
+    state: androidx.compose.foundation.gestures.ScrollableState,
+    interactions: androidx.compose.foundation.interaction.InteractionSource,
+) {
+    if (phaseId.isEmpty()) return
+    LaunchedEffect(state, phaseId) {
+        var dragging by mutableStateOf(false)
+        launch {
+            interactions.interactions.collect {
+                when (it) {
+                    is DragInteraction.Start -> dragging = true
+                    is DragInteraction.Stop, is DragInteraction.Cancel -> dragging = false
+                }
+            }
+        }
+        var afterDrag = false
+        var reported = "idle"
+        snapshotFlow { state.isScrollInProgress to dragging }.collect { (scrolling, drag) ->
+            val phase = when {
+                drag -> "interacting"
+                scrolling -> if (afterDrag) "decelerating" else "animating"
+                else -> "idle"
+            }
+            if (drag) afterDrag = true else if (!scrolling) afterDrag = false
+            if (phase != reported) {
+                reported = phase
+                sendEvent(phaseId, phase)
             }
         }
     }
@@ -2811,6 +2850,7 @@ private fun IsoLazyList(n: UNode, column: UNode, m: Modifier, bw: Boolean) {
         }
     }
     val insets = scrollInsets(n)
+    ReportScrollPhase(params?.optString("phase") ?: "", state, state.interactionSource)
     ReportScrolledUnder(n, state, reversed)
     // SwiftUI's grouped lists (inset grouped, the automatic style on a
     // phone) are Material's lists in groups: each row knows where it sits in

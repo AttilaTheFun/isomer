@@ -891,6 +891,19 @@ package final class FlatTreeEncoder {
                 })
                 scrollParams.append(("geometry", id))
             }
+            // `onScrollPhaseChange`: the host reports what moves the scroll
+            // ("interacting", "decelerating", …; see ScrollPhaseReport).
+            if !node.scrollPhaseHandlers.isEmpty {
+                let handlers = node.scrollPhaseHandlers
+                let id = "\(handle()).phase"
+                register(id, { value in
+                    guard let report = ScrollPhaseReport(hostValue: value) else { return }
+                    MainActor.assumeIsolated {
+                        for entry in handlers { entry.handler(report.phase, report.geometry, report.velocity) }
+                    }
+                })
+                scrollParams.append(("phase", id))
+            }
             // `.scrollEdgeEffectStyle(_:for:)`: "hard", an opaque band under
             // the bar at that edge, or "soft", fading and visible (a plain
             // List's own edge on iOS 26 is hard; a host with the effect

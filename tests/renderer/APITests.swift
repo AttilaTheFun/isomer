@@ -571,9 +571,54 @@ func checkNamedRuns(_ mock: MockRenderer) {
     expect(named == 2 && runs.contains(":red"), "interpolated runs name their system colours, nested too (\(runs))")
 }
 
+// MARK: onScrollPhaseChange
+
+nonisolated(unsafe) var phaseChanges: [String] = []
+
+struct PhaseScreen: View {
+    var body: some View {
+        ScrollView {
+            VStack {
+                ForEach(0..<40, id: \.self) { Text("Row \($0)") }
+            }
+        }
+        .onScrollPhaseChange { old, new, context in
+            phaseChanges.append("\(old.debugDescription)>\(new.debugDescription)@\(Int(context.geometry.contentOffset.y))"
+                + (context.velocity.map { ",\(Int($0.dy))" } ?? ""))
+        }
+    }
+}
+
+@MainActor
+func checkScrollPhases(_ mock: MockRenderer) {
+    Runtime.shared.installRootView { PhaseScreen() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    let encoder = FlatTreeEncoder()
+    let scroll = flatNodes(lastFlatTree(mock, encoder)) { $0.kind == .scroll }.first
+    guard let phase = scroll.flatMap({ param($0, "phase") }), let geometry = scroll.flatMap({ param($0, "geometry") }) else {
+        expect(false, "a scroll with onScrollPhaseChange asks its host for its phases and geometry")
+        return
+    }
+    Runtime.shared.installTreeHandlers(encoder.handlers)
+    // The phase with its geometry, the same phase again (no change), the
+    // geometry alone then a phase without it (the last one reported), a
+    // velocity, and a name no host sends.
+    Runtime.shared.hostViewEvent(id: phase, value: "interacting;0,120,390,1600,390,844,0,0,0,0;")
+    Runtime.shared.hostViewEvent(id: phase, value: "interacting")
+    Runtime.shared.hostViewEvent(id: geometry, value: "0,300,390,1600,390,844,0,0,0,0")
+    Runtime.shared.hostViewEvent(id: phase, value: "decelerating;;0,-900")
+    Runtime.shared.hostViewEvent(id: phase, value: "sideways")
+    Runtime.shared.hostViewEvent(id: phase, value: "idle")
+    let expected = ["idle>interacting@120", "interacting>decelerating@300,-900", "decelerating>idle@300"]
+    expect(phaseChanges == expected, "onScrollPhaseChange runs at each change of the host's phase (got \(phaseChanges))")
+    expect(ScrollPhase.idle.isScrolling == false && ScrollPhase.tracking.isScrolling && ScrollPhase.animating.isScrolling,
+           "every phase but idle is scrolling")
+}
+
 @MainActor
 func checkAPIAdditions(_ mock: MockRenderer) {
     checkNamedRuns(mock)
+    checkScrollPhases(mock)
     checkDecodedTransforms(mock)
     checkRuntimeConnection(mock)
     checkDerivedStyles(mock)

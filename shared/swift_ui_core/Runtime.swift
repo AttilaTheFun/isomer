@@ -41,6 +41,8 @@ struct ScrollRegion {
     let axis: StackAxis
     let contentLength: CGFloat
     let viewportLength: CGFloat
+    /// The scroll's `onScrollPhaseChange` handlers.
+    var phaseHandlers: [(key: String, handler: @MainActor (ScrollPhase, ScrollGeometry?, CGVector?) -> Void)] = []
 }
 
 struct SliderRegion {
@@ -417,6 +419,9 @@ package final class Runtime {
     var pointerLastTime: Double = 0
     var scrollVelocity: [String: CGFloat] = [:]
     var flingLastTime: Double = 0
+    /// Scrolls the wheel last moved, by path, and when: idle once it has
+    /// been still a while.
+    var wheelScrolls: [String: Double] = [:]
 
     /// Edge overscroll distance (logical points) for a native scroller: + pulls
     /// the content down past the top, − pulls it up past the bottom. The host's
@@ -749,6 +754,10 @@ package final class Runtime {
     var listRowIndex: [String: (list: String, index: Int)] = [:]
     /// Each `onScrollGeometryChange`'s last transformed value, by its path.
     var scrollGeometryValues: [String: Any] = [:]
+    /// Each `onScrollPhaseChange`'s last phase, and the last geometry its
+    /// scroll reported (for a host that sends the phase alone), by its path.
+    var scrollPhases: [String: ScrollPhase] = [:]
+    var scrollPhaseGeometries: [String: ScrollGeometry] = [:]
     /// Lists anchored at their bottom (a chat), by path: built from their end.
     var listsAnchoredAtBottom: Set<String> = []
     var listRowCounts: [String: Int] = [:]
@@ -1141,6 +1150,13 @@ package final class Runtime {
     /// decaying velocity exponentially and stopping softly at the edges. Uses
     /// the previous frame's `scrollRegions` for bounds.
     func stepFling(now: Double) {
+        if !wheelScrolls.isEmpty {
+            for (path, at) in wheelScrolls where now - at > 0.15 {
+                wheelScrolls[path] = nil
+                reportScrollPhase(path, .idle)
+            }
+            if !wheelScrolls.isEmpty { host?.scheduleRender() }
+        }
         guard !scrollVelocity.isEmpty else {
             flingLastTime = now
             return
@@ -1165,6 +1181,7 @@ package final class Runtime {
             }
             scrollOffsets[path] = offset
             scrollVelocity[path] = abs(next) < 12 ? nil : next
+            if scrollVelocity[path] == nil { reportScrollPhase(path, .idle) }
         }
         if !scrollVelocity.isEmpty {
             host?.scheduleRender()
@@ -1180,6 +1197,26 @@ package final class Runtime {
         if updated != current {
             scrollOffsets[path] = updated
             setNeedsRender()
+        }
+    }
+
+    /// `onScrollPhaseChange` on the scroll at `path` (drawn here: the drag,
+    /// the fling and the wheel are the runtime's own), with its geometry and
+    /// the velocity along its axis, in points a second.
+    func reportScrollPhase(_ path: String, _ phase: ScrollPhase, velocity: CGFloat? = nil) {
+        guard let region = scrollRegions.first(where: { $0.path == path }), !region.phaseHandlers.isEmpty else { return }
+        let offset = scrollOffsets[path] ?? 0
+        let vertical = region.axis == .vertical
+        let geometry = ScrollGeometry(
+            contentOffset: vertical ? CGPoint(x: 0, y: offset) : CGPoint(x: offset, y: 0),
+            contentSize: vertical
+                ? CGSize(width: region.rect.width, height: region.contentLength)
+                : CGSize(width: region.contentLength, height: region.rect.height),
+            contentInsets: EdgeInsets(),
+            containerSize: region.rect.size)
+        let speed = velocity.map { vertical ? CGVector(dx: 0, dy: $0) : CGVector(dx: $0, dy: 0) }
+        MainActor.assumeIsolated {
+            for entry in region.phaseHandlers { entry.handler(phase, geometry, speed) }
         }
     }
 
@@ -1216,6 +1253,11 @@ package final class Runtime {
                 axis: region.axis,
                 delta: region.axis == .vertical ? deltaY : deltaX
             )
+            if !region.phaseHandlers.isEmpty {
+                wheelScrolls[region.path] = host?.now() ?? 0
+                reportScrollPhase(region.path, .interacting)
+                host?.scheduleRender()
+            }
         }
     }
 
@@ -1233,7 +1275,9 @@ package final class Runtime {
             dragScrollPath = nil
             pressedTap = nil
             // Touching down halts any in-flight momentum (native behaviour).
+            let coasting = Array(scrollVelocity.keys)
             scrollVelocity.removeAll()
+            for path in coasting { reportScrollPhase(path, .idle) }
             dragVelocity = 0
             pointerLastTime = host?.now() ?? 0
             activeSlider = sliderRegions.reversed().first {
@@ -1331,6 +1375,7 @@ package final class Runtime {
                     dragScrollAxis = region.axis
                     pressedTap = nil
                     releasePressFeedback()
+                    reportScrollPhase(region.path, .interacting)
                 }
             }
             if isDragScrolling, let path = dragScrollPath {
@@ -1369,6 +1414,9 @@ package final class Runtime {
                 scrollVelocity[path] = dragVelocity
                 flingLastTime = host?.now() ?? 0
                 setNeedsRender()
+                reportScrollPhase(path, .decelerating, velocity: dragVelocity)
+            } else if isDragScrolling, let path = dragScrollPath {
+                reportScrollPhase(path, .idle)
             }
             let wasDragScrolling = isDragScrolling
             let wasMapDragging = mapDragID != nil
@@ -1840,7 +1888,8 @@ private func _draw(_ node: RenderNode, pass: RenderPass) {
             path: path,
             axis: axis,
             contentLength: contentLength,
-            viewportLength: viewportLength
+            viewportLength: viewportLength,
+            phaseHandlers: node.scrollPhaseHandlers
         )) }
 
         if node.showsIndicators, !node.scrollDisabled, contentLength > viewportLength {

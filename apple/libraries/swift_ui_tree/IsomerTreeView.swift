@@ -155,6 +155,7 @@ struct NodeView: View, Equatable {
                     .modifier(ScrollEdgeModifier(top: nodeParam("edgeTop"), bottom: nodeParam("edgeBottom")))
                     .modifier(ScrollAnchorModifier(anchor: nodeParam("anchor"), role: nodeParam("anchorFor"), align: nodeParam("anchorAlign")))
                     .modifier(ScrollGeometryReporter(id: nodeParam("geometry"), send: send))
+                    .modifier(ScrollPhaseReporter(id: nodeParam("phase"), send: send))
                     // `ScrollViewProxy.scrollTo` from the guest: "<id>|<tick>|<anchor>".
                     // Every ScrollView sees it; only the one containing the id moves.
                     .onChange(of: nodeParam("scrollTo")) { request in hostScrollTo(request, proxy: proxy) }
@@ -962,6 +963,7 @@ struct ListBody: View {
             .modifier(ScrollEdgeModifier(top: param("edgeTop"), bottom: param("edgeBottom")))
             .modifier(ScrollAnchorModifier(anchor: param("anchor"), role: param("anchorFor"), align: param("anchorAlign")))
             .modifier(ScrollGeometryReporter(id: param("geometry"), send: send))
+            .modifier(ScrollPhaseReporter(id: param("phase"), send: send))
             .modifier(BottomPin(on: param("anchor") == "bottom" && param("anchorFor") != "initialOffset",
                                 window: window, proxy: proxy))
             .modifier(MinRowHeightModifier(height: param("minRowHeight").flatMap(Double.init)))
@@ -3604,6 +3606,36 @@ struct ScrollGeometryReporter: ViewModifier {
             }
         } else {
             content
+        }
+    }
+}
+
+/// `onScrollPhaseChange` in the guest: SwiftUI's own phase, sent on the
+/// scroll's `phase` id at each change with the geometry and velocity then
+/// ("phase;geometry;dx,dy", ScrollPhaseReport's).
+struct ScrollPhaseReporter: ViewModifier {
+    let id: String?
+    let send: (String, String) -> Void
+
+    func body(content: Content) -> some View {
+        if let id, #available(iOS 18.0, macOS 15.0, *) {
+            content.onScrollPhaseChange { _, phase, context in
+                let velocity = context.velocity.map { "\(Double($0.dx)),\(Double($0.dy))" } ?? ""
+                send(id, "\(Self.name(phase));\(GeometryReport(context.geometry).wire);\(velocity)")
+            }
+        } else {
+            content
+        }
+    }
+
+    @available(iOS 18.0, macOS 15.0, *)
+    static func name(_ phase: ScrollPhase) -> String {
+        switch phase {
+        case .idle: "idle"
+        case .tracking: "tracking"
+        case .interacting: "interacting"
+        case .decelerating: "decelerating"
+        case .animating: "animating"
         }
     }
 }

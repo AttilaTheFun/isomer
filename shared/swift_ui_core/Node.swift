@@ -264,6 +264,10 @@ package final class RenderNode {
     /// One per `.onScrollGeometryChange` over it, by that modifier's path
     /// (a modifier built again over a reused scroll replaces its own).
     var scrollGeometryHandlers: [(key: String, handler: @MainActor (ScrollGeometry) -> Void)] = []
+    /// `onScrollPhaseChange` handlers on this scroll, by modifier path as
+    /// above: the phase the host reports, with its geometry and velocity
+    /// when it sends them.
+    var scrollPhaseHandlers: [(key: String, handler: @MainActor (ScrollPhase, ScrollGeometry?, CGVector?) -> Void)] = []
     var scrollEdgeBottom: ScrollEdgeEffectStyle?
 
     /// Axis of the stack that owns this spacer (spacers only stretch along

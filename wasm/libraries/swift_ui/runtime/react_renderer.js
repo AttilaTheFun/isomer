@@ -2466,6 +2466,80 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
     };
   }
 
+  // `onScrollPhaseChange`: a browser says that a scroll moved, not why, so
+  // the phase is read from the reader's input around it. A scroll while a
+  // finger, the pointer (the scroll bar), the wheel or a key drives it is
+  // "interacting"; one after the finger lifts is the coast ("decelerating");
+  // quiet for 150 ms (or `scrollend`) with nothing held is "idle". A scroll
+  // with none of those is the renderer's own (a pin to the bottom, a
+  // `scrollTo`, both instant) and is not reported, as SwiftUI reports none
+  // for a scroll that is not animated.
+  function useScrollPhase(ref, phaseId, doc) {
+    R.useEffect(() => {
+      const el = ref.current;
+      if (!phaseId || !el) return undefined;
+      const target = doc ? window : el;
+      let phase = "idle", touching = false, pressing = false, wheelAt = -1e9, keyAt = -1e9, timer = 0;
+      const report = (next) => {
+        if (next === phase) return;
+        phase = next;
+        sendEvent(phaseId, next);
+      };
+      const settle = () => {
+        clearTimeout(timer);
+        timer = 0;
+        if (!touching && !pressing) report("idle");
+      };
+      const onScroll = () => {
+        const now = performance.now();
+        if (touching || pressing || now - wheelAt < 200 || now - keyAt < 600) report("interacting");
+        else if (phase === "interacting" || phase === "decelerating") report("decelerating");
+        else return;
+        clearTimeout(timer);
+        timer = setTimeout(settle, 150);
+      };
+      const onTouchStart = () => { touching = true; };
+      const onTouchEnd = (e) => {
+        if (e.touches && e.touches.length) return;
+        touching = false;
+        clearTimeout(timer);
+        timer = setTimeout(settle, 150);
+      };
+      // The scroll bar (or the scroll's own empty area) under the pointer.
+      const onPointerDown = (e) => { if (e.pointerType === "mouse" && e.target === el) pressing = true; };
+      const onPointerUp = () => {
+        if (!pressing) return;
+        pressing = false;
+        clearTimeout(timer);
+        timer = setTimeout(settle, 150);
+      };
+      const onWheel = () => { wheelAt = performance.now(); };
+      const onKey = (e) => { if (doc || el.contains(e.target)) keyAt = performance.now(); };
+      const onScrollEnd = () => { if (!touching && !pressing && phase !== "idle") settle(); };
+      target.addEventListener("scroll", onScroll, { passive: true });
+      target.addEventListener("scrollend", onScrollEnd);
+      el.addEventListener("touchstart", onTouchStart, { passive: true });
+      window.addEventListener("touchend", onTouchEnd, { passive: true });
+      window.addEventListener("touchcancel", onTouchEnd, { passive: true });
+      el.addEventListener("pointerdown", onPointerDown);
+      window.addEventListener("pointerup", onPointerUp);
+      target.addEventListener("wheel", onWheel, { passive: true });
+      window.addEventListener("keydown", onKey);
+      return () => {
+        clearTimeout(timer);
+        target.removeEventListener("scroll", onScroll);
+        target.removeEventListener("scrollend", onScrollEnd);
+        el.removeEventListener("touchstart", onTouchStart);
+        window.removeEventListener("touchend", onTouchEnd);
+        window.removeEventListener("touchcancel", onTouchEnd);
+        el.removeEventListener("pointerdown", onPointerDown);
+        window.removeEventListener("pointerup", onPointerUp);
+        target.removeEventListener("wheel", onWheel);
+        window.removeEventListener("keydown", onKey);
+      };
+    }, [phaseId, doc]);
+  }
+
   // A scroll the renderer keeps a hand on: `ScrollViewProxy.scrollTo`
   // requests, a lazy List's window, the page's scroll when it is document-
   // scrolled, and `.defaultScrollAnchor(.bottom)` (a chat log: start at the
@@ -2473,8 +2547,9 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
   // up). One component whatever the anchor, so the anchor changing (AgentUI
   // holds the top for the moment rows are appended, then scrolls down to
   // them) keeps the scroll and its rows rather than building them again.
-  function ManagedScroll({ divProps, children, request, windowId, doc, id, bottom, epoch, rows, geometryId }) {
+  function ManagedScroll({ divProps, children, request, windowId, doc, id, bottom, epoch, rows, geometryId, phaseId }) {
     const ref = R.useRef(null);
+    useScrollPhase(ref, phaseId, doc);
     // `onScrollGeometryChange`: where the scroll is and how large its
     // content is, reported (in points) as either changes.
     R.useEffect(() => {
@@ -3761,8 +3836,9 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
         const windowId = (n.params || {}).window;
         const bottom = (n.params || {}).anchor === "bottom";
         const geometryId = (n.params || {}).geometry;
-        if (bottom || request || windowId || documentScrolled || geometryId) {
-          return h(ManagedScroll, { key, divProps: props, request, windowId, doc: documentScrolled, id: n.key || key, bottom, epoch: (n.params || {}).epoch, rows: (n.params || {}).rows, geometryId }, kids);
+        const phaseId = (n.params || {}).phase;
+        if (bottom || request || windowId || documentScrolled || geometryId || phaseId) {
+          return h(ManagedScroll, { key, divProps: props, request, windowId, doc: documentScrolled, id: n.key || key, bottom, epoch: (n.params || {}).epoch, rows: (n.params || {}).rows, geometryId, phaseId }, kids);
         }
         return h("div", props, kids);
       case "image": {
