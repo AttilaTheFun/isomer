@@ -26,6 +26,7 @@ final class Stored: Sendable {
 struct FoundationCheck {
     static func main() async throws {
         try checkFoundation()
+        try checkClasses()
         checkErrors()
         await checkNetwork()
     }

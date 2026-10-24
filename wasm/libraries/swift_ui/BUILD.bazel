@@ -174,4 +174,5 @@ exports_files([
     "runtime/imported_files.js",
     "runtime/file_system.js",
     "runtime/network.js",
+    "runtime/haptics.js",
 ])

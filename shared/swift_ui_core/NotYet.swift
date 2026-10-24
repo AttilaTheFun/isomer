@@ -358,11 +358,6 @@ extension Font {
     public func uppercaseSmallCaps(_ isActive: Bool) -> Font { fatalError() }
 }
 
-extension Text {
-    @available(*, unavailable, message: "Not yet in Isomer: Text and fonts (docs/parity/SwiftUI.md)")
-    public nonisolated func monospacedDigit() -> Text { fatalError() }
-}
-
 extension Font {
     @available(*, unavailable, message: "Not yet in Isomer: Text and fonts (docs/parity/SwiftUI.md)")
     public static var `default`: Font { fatalError() }
@@ -890,11 +885,6 @@ extension View {
 
 extension View {
     @available(*, unavailable, message: "Not yet in Isomer: View modifiers (docs/parity/SwiftUI.md)")
-    public nonisolated func menuIndicator(_ visibility: Visibility) -> some View { self }
-}
-
-extension View {
-    @available(*, unavailable, message: "Not yet in Isomer: View modifiers (docs/parity/SwiftUI.md)")
     public nonisolated func tableColumnHeaders(_ visibility: Visibility) -> some View { self }
 }
 
@@ -1011,11 +1001,6 @@ extension View {
 extension View {
     @available(*, unavailable, message: "Not yet in Isomer: View modifiers (docs/parity/SwiftUI.md)")
     public nonisolated func transformEnvironment<V>(_ keyPath: WritableKeyPath<EnvironmentValues, V>, transform: @escaping (inout V) -> Void) -> some View { self }
-}
-
-extension View {
-    @available(*, unavailable, message: "Not yet in Isomer: View modifiers (docs/parity/SwiftUI.md)")
-    public nonisolated func monospacedDigit() -> some View { self }
 }
 
 extension View {

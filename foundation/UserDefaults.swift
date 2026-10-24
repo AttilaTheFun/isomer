@@ -43,10 +43,35 @@ open class UserDefaults: @unchecked Sendable {
     // MARK: Reading
 
     open func object(forKey defaultName: String) -> Any? {
+        if let argument = Self.arguments[defaultName] { return argument }
         lock.lock()
         defer { lock.unlock() }
         return loaded()[defaultName] ?? registered[defaultName]
     }
+
+    /// The argument domain, as Apple's: each `-key value` among the
+    /// program's arguments, ahead of anything stored, never written. A host
+    /// that starts no program with arguments (an Android app) passes them
+    /// in ISO_ARGUMENTS, split at spaces (`am start -e ISO_ARGUMENTS
+    /// "-reviews.fixture YES"`: the generated activity sets each ISO_ extra).
+    private static let arguments: [String: Any] = {
+        var words = Array(ProcessInfo.processInfo.arguments.dropFirst())
+        if let more = ProcessInfo.processInfo.environment["ISO_ARGUMENTS"] {
+            words += more.split(separator: " ").map(String.init)
+        }
+        var found: [String: Any] = [:]
+        var index = 0
+        while index + 1 < words.count {
+            let word = words[index]
+            if word.count > 1, word.hasPrefix("-"), !word.hasPrefix("--") {
+                found[String(word.dropFirst())] = words[index + 1]
+                index += 2
+            } else {
+                index += 1
+            }
+        }
+        return found
+    }()
 
     open func string(forKey defaultName: String) -> String? {
         switch object(forKey: defaultName) {
@@ -108,7 +133,7 @@ open class UserDefaults: @unchecked Sendable {
     open func dictionaryRepresentation() -> [String: Any] {
         lock.lock()
         defer { lock.unlock() }
-        return registered.merging(loaded()) { $1 }
+        return registered.merging(loaded()) { $1 }.merging(Self.arguments) { $1 }
     }
 
     // MARK: Writing

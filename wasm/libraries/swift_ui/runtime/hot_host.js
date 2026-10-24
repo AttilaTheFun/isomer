@@ -22,6 +22,7 @@ import { BlobWriter, Runtime, Tags, Types, decoder as ffiDecoder, encodeErrorBlo
 import { createReactTreeRenderer } from "./runtime/react_renderer.js";
 import { applyPatch } from "./runtime/flat_tree.js";
 import { appFilesKey, openAppFiles } from "./runtime/file_system.js";
+import { playHaptic } from "./runtime/haptics.js";
 import { browserNetworkHosts } from "./runtime/network.js";
 
 const decoder = new TextDecoder();
@@ -129,6 +130,7 @@ export async function runHotBundle({ wasm, container, dependencies = {}, bundleI
         if (key === "copy") navigator.clipboard?.writeText(value).catch(() => {});
         else if (key === "openURL") window.open(value, "_blank");
         else if (key === "share" && navigator.share) navigator.share({ text: value }).catch(() => {});
+        else if (key === "haptic") playHaptic(value);
       },
       host_value() {
         return -1;

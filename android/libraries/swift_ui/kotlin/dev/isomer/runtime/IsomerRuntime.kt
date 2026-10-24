@@ -7,6 +7,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.net.Uri
 import android.os.Build
+import android.view.HapticFeedbackConstants
 import android.view.WindowInsetsController
 import android.view.WindowManager
 
@@ -98,6 +99,34 @@ object IsomerRuntime {
         NativeBridge.dispatchToRuntime { SwiftUIBridge.nativeOpenURL(value) }
     }
 
+    /** The system's haptic nearest a SwiftUI feedback ("success",
+     * "impact:heavy:1.0"…); the newer constants where the system has them. */
+    private fun hapticConstant(name: String): Int {
+        val parts = name.split(":")
+        val api30 = Build.VERSION.SDK_INT >= 30
+        val api34 = Build.VERSION.SDK_INT >= 34
+        return when (parts[0]) {
+            "success", "pathComplete" ->
+                if (api30) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.VIRTUAL_KEY
+            "error" -> if (api30) HapticFeedbackConstants.REJECT else HapticFeedbackConstants.LONG_PRESS
+            "warning" -> HapticFeedbackConstants.LONG_PRESS
+            "selection" -> HapticFeedbackConstants.CLOCK_TICK
+            "increase", "decrease" ->
+                if (api34) HapticFeedbackConstants.SEGMENT_TICK else HapticFeedbackConstants.CLOCK_TICK
+            "alignment" ->
+                if (api34) HapticFeedbackConstants.SEGMENT_FREQUENT_TICK else HapticFeedbackConstants.CLOCK_TICK
+            "start" -> if (api30) HapticFeedbackConstants.GESTURE_START else HapticFeedbackConstants.VIRTUAL_KEY
+            "stop" -> if (api30) HapticFeedbackConstants.GESTURE_END else HapticFeedbackConstants.VIRTUAL_KEY
+            "levelChange" -> HapticFeedbackConstants.CONTEXT_CLICK
+            "impact" -> when (parts.getOrNull(1)) {
+                "light", "soft" -> HapticFeedbackConstants.KEYBOARD_TAP
+                "heavy", "rigid" -> HapticFeedbackConstants.LONG_PRESS
+                else -> HapticFeedbackConstants.VIRTUAL_KEY
+            }
+            else -> HapticFeedbackConstants.VIRTUAL_KEY
+        }
+    }
+
     private fun apply(activity: Activity, key: String, value: String) {
         when (key) {
             // `ShareLink`: the system's share sheet.
@@ -130,6 +159,9 @@ object IsomerRuntime {
                 val clipboard = activity.getSystemService(ClipboardManager::class.java)
                 clipboard?.setPrimaryClip(ClipData.newPlainText("", value))
             }
+            // `.sensoryFeedback`: the view's haptic, as the system's
+            // settings allow.
+            "haptic" -> activity.window.decorView.performHapticFeedback(hapticConstant(value))
             // Unknown keys are ignored by design (forward-compatible channel).
         }
     }

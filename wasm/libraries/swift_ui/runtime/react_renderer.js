@@ -2216,6 +2216,18 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
   // (`.system(size:)`, no style) stays as given.
   const MAC_TEXT_SIZES = { largeTitle: 26, title: 22, title2: 17, title3: 15, headline: 13, body: 13,
     callout: 12, subheadline: 11, footnote: 10, caption: 10, caption2: 10 };
+  // A text's font made smaller, step by step, until it fits its box (no
+  // longer cut off or clamped) or reaches `minScale` of `size`.
+  function fitText(el, size, minScale) {
+    let scale = 1;
+    el.style.fontSize = size + "px";
+    const overflows = () => el.scrollWidth > el.clientWidth + 0.5 || el.scrollHeight > el.clientHeight + 0.5;
+    while (overflows() && scale > minScale) {
+      scale = Math.max(minScale, scale * 0.92);
+      el.style.fontSize = size * scale + "px";
+    }
+  }
+
   function textSize(n) {
     const style = n.params && n.params.textStyle;
     return isDesktop() && style && MAC_TEXT_SIZES[style] ? MAC_TEXT_SIZES[style] : n.size;
@@ -2752,10 +2764,11 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
           ...props, type: "button", onClick: openIt,
           style: { ...props.style, display: "inline-flex", alignItems: "center", gap: 6, fontSize: 15, padding: "6px 10px", borderRadius: 10,
             border: "none", background: "rgba(120,120,128,0.14)", color: "inherit", fontFamily: MENU_FONT, cursor: "pointer" },
-        }, p.labelContent === "1" && kids && kids.length
-          ? [h("span", { key: "l", style: { display: "inline-flex", alignItems: "center" } }, kids[0]),
-             h("span", { key: "c", style: { fontSize: 11, opacity: 0.7 } }, "⌃⌄")]
-          : [h("span", { key: "l" }, label), h("span", { key: "c", style: { fontSize: 11, opacity: 0.7 } }, "⌃⌄")]);
+        }, [p.labelContent === "1" && kids && kids.length
+             ? h("span", { key: "l", style: { display: "inline-flex", alignItems: "center" } }, kids[0])
+             : h("span", { key: "l" }, label),
+           // `.menuIndicator(.hidden)`: no chevrons.
+           p.indicator === "hidden" ? null : h("span", { key: "c", style: { fontSize: 11, opacity: 0.7 } }, "⌃⌄")]);
       }
       case "datepicker":
         props.type = "date";
@@ -3015,11 +3028,47 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
       if (flags.includes("b")) style.fontWeight = 600;
       if (flags.includes("i")) style.fontStyle = "italic";
       if (flags.includes("m")) { style.fontFamily = MONO_FONT; style.fontSize = "0.92em"; }
+      if (flags.includes("t")) style.fontVariantNumeric = "tabular-nums";
       const decorations = [flags.includes("u") ? "underline" : "", flags.includes("s") ? "line-through" : ""].filter(Boolean);
       if (decorations.length) style.textDecoration = decorations.join(" ");
       if (color) { const c = color.split(",").map(Number); style.color = `rgba(${Math.round(c[0] * 255)},${Math.round(c[1] * 255)},${Math.round(c[2] * 255)},${c[3] == null ? 1 : c[3]})`; }
       return h("span", { key: i, style }, slice);
     });
+  }
+
+  // A mask layer as a CSS clip-path: a shape (or a box holding one) at
+  // its frame's width and height, placed by the layer's alignment within
+  // the masked box, rounded as the shape is. Null for a mask that isn't a
+  // shape.
+  function maskClipPath(mask) {
+    let node = mask, width = mask.width, height = mask.height;
+    while (node && node.k === "box" && (node.ch || []).length === 1) {
+      node = node.ch[0];
+      if (width == null) width = node.width;
+      if (height == null) height = node.height;
+    }
+    if (!node || node.k !== "shape") return null;
+    const [ah, av] = ((mask.params || {}).layerAlign || "center,center").split(",");
+    const edges = (size, align) => {
+      if (size == null) return ["0px", "0px"];
+      const rest = `calc(100% - ${size}px)`;
+      const half = `calc((100% - ${size}px) / 2)`;
+      return align === "start" ? ["0px", rest] : align === "end" ? [rest, "0px"] : [half, half];
+    };
+    const [left, right] = edges(width, ah);
+    const [top, bottom] = edges(height, av);
+    const shape = (node.params || {}).shape || node.shape || "";
+    // A circle is the largest that fits its frame, centred in it (not the
+    // frame's capsule).
+    if (shape === "circle") {
+      const centre = (size, align) => size == null || align === "center" ? "50%"
+        : align === "start" ? `${size / 2}px` : `calc(100% - ${size / 2}px)`;
+      const at = `at ${centre(width, ah)} ${centre(height, av)}`;
+      const sides = [width, height].filter((v) => v != null);
+      return `circle(${sides.length === 2 ? `${Math.min(...sides) / 2}px` : "closest-side"} ${at})`;
+    }
+    const radius = shape === "capsule" ? "9999px" : node.radius ? `${node.radius}px` : "0px";
+    return `inset(${top} ${right} ${bottom} ${left} round ${radius})`;
   }
 
   // A request presentation: the browser's own picker (a file input, with
@@ -3030,6 +3079,22 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
     // the reader's tap opens the picker while Safari still counts the tap.
     R.useLayoutEffect(() => {
       const p = n.params || {};
+      // `.fileExporter`: the document downloaded under its name (the
+      // browser asks where, or saves to Downloads), answered with the name.
+      if (p.request === "export") {
+        const bytes = Uint8Array.from(atob(p.data || ""), (c) => c.charCodeAt(0));
+        const url = URL.createObjectURL(new Blob([bytes], { type: p.type || "application/octet-stream" }));
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = p.name || "Untitled";
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        sendEvent(p.result, link.download);
+        return undefined;
+      }
       const input = document.createElement("input");
       input.type = "file";
       if (p.accept && p.accept !== "*/*") input.accept = p.accept;
@@ -3697,6 +3762,8 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
         if (/\S{20,}/.test(n.v || "")) s.overflowWrap = "anywhere";
         else { s.overflowWrap = "break-word"; s.minWidth = "min-content"; }
         s.fontFamily = fontFamilyCSS(n.params);
+        // `.monospacedDigit()`: tabular figures.
+        if ((n.params || {}).tnum === "1") s.fontVariantNumeric = "tabular-nums";
         // `.multilineTextAlignment` reaches the text itself.
         if (n.alignH === "center") s.textAlign = "center";
         else if (n.alignH === "trailing") s.textAlign = "right";
@@ -3726,6 +3793,13 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
           if ((n.params || {}).lineSpacing) s.lineHeight = `calc(1.25em + ${Number((n.params || {}).lineSpacing)}px)`;
           s.WebkitBoxOrient = "vertical";
           s.overflow = "hidden";
+        }
+        // `.minimumScaleFactor`: drawn smaller when it does not fit, down
+        // to the factor (measured once laid out: CSS has no shrink-to-fit).
+        const minScale = Number((n.params || {}).minScale);
+        if (minScale > 0 && minScale < 1 && !(n.params || {}).symbol) {
+          const size = s.fontSize;
+          props.ref = (el) => { if (el) fitText(el, size, minScale); };
         }
         if ((n.params || {}).symbol) {
           const svg = symbolSVG(h, n.params.symbol, s.fontSize, s.color, n.weight, undefined, n.params.symbol2);
@@ -4089,6 +4163,16 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
             const layer = layerOf(i);
             return layer === "background" ? wrap(kid, i, -1) : layer === "overlay" ? wrap(kid, i, 1) : kid;
           });
+          // `.mask(alignment:_:)`: the box clipped to its mask's shape, at
+          // its fixed width and height (else the box's) and alignment.
+          // A shape mask is what a CSS clip-path draws; a mask of other
+          // views (text, a gradient's fade) isn't, and leaves it unmasked.
+          const maskIndex = (n.ch || []).findIndex((c) => c.params && c.params.layer === "mask");
+          if (maskIndex >= 0) {
+            const clip = maskClipPath(n.ch[maskIndex]);
+            if (clip) s.clipPath = clip;
+            kids = kids.filter((_, i) => layerOf(i) !== "mask");
+          }
         }
         if (kids.length > 0) {
           s.display = "flex";

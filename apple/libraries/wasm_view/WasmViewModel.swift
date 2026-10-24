@@ -180,6 +180,8 @@ public final class WasmViewModel: ObservableObject {
                 #elseif canImport(AppKit)
                 NSWorkspace.shared.open(url)
                 #endif
+            case "haptic":
+                GuestHaptics.play(value)
             default:
                 break
             }

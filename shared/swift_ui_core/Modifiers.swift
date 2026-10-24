@@ -249,6 +249,20 @@ extension View {
         background(content(), alignment: alignment)
     }
 
+    /// `.mask(alignment:_:)`: the view shows where `mask` is opaque, the
+    /// mask placed over it as an overlay is.
+    nonisolated public func mask<Mask: View>(alignment: Alignment = .center, @ViewBuilder _ mask: () -> Mask) -> some View {
+        let mask = mask()
+        return _ModifiedView(child: self, descend: "mask", pure: true) { inner, ctx in
+            let box = RenderNode.box(child: inner)
+            var sub = ctx.descend("mask-content")
+            sub.env.containerAlignment = ContainerAlignment(alignment, layer: true)
+            box.mask = buildChildren(of: mask, ctx: &sub)
+            box.maskAlignment = alignment
+            return box
+        }
+    }
+
     /// A background of `style` (`.background(.red)`, `.background(.thinMaterial)`).
     /// Edges are not tracked: the background fills the view's box.
     nonisolated public func background<S: ShapeStyle>(_ style: S, ignoresSafeAreaEdges edges: Edge.Set = .all) -> some View {
@@ -636,6 +650,14 @@ extension View {
         _EnvironmentModifier(child: self, descend: "italic") { env in
             guard isActive else { return }
             env.font = env.font.italic()
+            env.fontSet = true
+        }
+    }
+
+    /// `.monospacedDigit()` on any view: its text's digits of one width.
+    nonisolated public func monospacedDigit() -> some View {
+        _EnvironmentModifier(child: self, descend: "tnum") { env in
+            env.font = env.font.monospacedDigit()
             env.fontSet = true
         }
     }

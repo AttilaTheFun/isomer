@@ -521,6 +521,8 @@ extension Menu: _PrimitiveView {
         if items.contains(where: { $0.role != nil }) {
             params["roles"] = items.map { $0.role?.wireName ?? "" }.joined(separator: "\n")
         }
+        // `.menuIndicator(.hidden)`: no chevron beside the label.
+        if ctx.env.menuIndicatorHidden { params["indicator"] = "hidden" }
         // Canonical semantic node; the self-drawing path swaps in
         // DrawnPopUpList via chrome expansion.
         let spec = HostViewSpec(

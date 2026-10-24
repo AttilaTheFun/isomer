@@ -15,8 +15,12 @@ extension StoryCatalog {
         ) { ButtonLabelsStory() },
         Story(
             "buttons.menu", "Menu",
-            summary: "A button that opens a list of actions: the platform's own pop-up menu."
+            summary: "A button that opens a list of actions: the platform's own pop-up menu, with its indicator or (menuIndicator(.hidden)) without."
         ) { MenuStory() },
+        Story(
+            "buttons.feedback", "Sensory feedback",
+            summary: "A haptic played when a value changes (sensoryFeedback): the platform's own, where the device has one, and nothing where it hasn't."
+        ) { FeedbackStory() },
         Story(
             "buttons.links", "Link and ShareLink",
             summary: "A link opens a URL in the browser; a share link hands one to the platform's share sheet."
@@ -109,6 +113,11 @@ struct MenuStory: View {
             } label: {
                 Label("More", systemImage: "ellipsis.circle")
             }
+            Menu("Sort") {
+                Button("By name") { choice = "By name" }
+                Button("By date") { choice = "By date" }
+            }
+            .menuIndicator(.hidden)
             Text("Chose: \(choice)")
                 .font(.footnote)
                 .foregroundColor(.secondary)
@@ -130,6 +139,28 @@ struct LinksStory: View {
             ShareLink(item: swift) {
                 Label("Share Swift.org", systemImage: "square.and.arrow.up")
             }
+        }
+    }
+}
+// end story
+
+// story: buttons.feedback
+struct FeedbackStory: View {
+    @State private var count = 0
+    @State private var saves = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 16) {
+                Button("Less") { count -= 1 }
+                Text("\(count)").monospacedDigit()
+                Button("More") { count += 1 }
+            }
+            .buttonStyle(.bordered)
+            .sensoryFeedback(trigger: count) { old, new in new > old ? .increase : .decrease }
+            Button("Save") { saves += 1 }
+                .buttonStyle(.borderedProminent)
+                .sensoryFeedback(.success, trigger: saves)
         }
     }
 }

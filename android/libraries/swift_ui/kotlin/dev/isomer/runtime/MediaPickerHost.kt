@@ -5,16 +5,21 @@ package dev.isomer.runtime
 // the camera, registered on the activity at creation (activity-result
 // launchers must be). What was picked is copied into the app's cache
 // (cache/iso-import/<n>/<name>), where the guest's Foundation reads it, and
-// the paths go back newline-separated ("" when cancelled).
+// the paths go back newline-separated ("" when cancelled). `.fileExporter`
+// asks the other way: the system's "save to" picker, the document's bytes
+// written where the person chose, its content: URI the answer.
 
 import android.content.ContentValues
+import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import android.util.Base64
 import androidx.activity.ComponentActivity
+import androidx.activity.result.ActivityResult
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -28,6 +33,8 @@ object MediaPickerHost {
     private var photos: ActivityResultLauncher<PickVisualMediaRequest>? = null
     private var photo: ActivityResultLauncher<PickVisualMediaRequest>? = null
     private var camera: ActivityResultLauncher<Uri>? = null
+    private var save: ActivityResultLauncher<Intent>? = null
+    private var saving: ByteArray? = null
     private var pending: ((String) -> Unit)? = null
     private var cameraTarget: Uri? = null
     private var serial = 0
@@ -44,6 +51,48 @@ object MediaPickerHost {
             val target = cameraTarget
             cameraTarget = null
             deliver(if (taken && target != null) listOf(target) else emptyList(), removeAfter = target)
+        }
+        // Not CreateDocument: its MIME type is fixed when it is registered.
+        save = activity.registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { saved(it) }
+    }
+
+    /** Saves a document where the person chooses: `name` suggested, `type`
+     *  its MIME type, `data` its bytes in base64. Answers the content: URI it
+     *  was written to, "" when cancelled or not written. */
+    fun export(name: String, type: String, data: String, callback: (String) -> Unit) {
+        main.post {
+            if (pending != null) { callback(""); return@post }
+            pending = callback
+            try {
+                saving = Base64.decode(data, Base64.DEFAULT)
+                val intent = Intent(Intent.ACTION_CREATE_DOCUMENT)
+                    .addCategory(Intent.CATEGORY_OPENABLE)
+                    .setType(type.ifEmpty { "application/octet-stream" })
+                    .putExtra(Intent.EXTRA_TITLE, name)
+                save?.launch(intent) ?: saved(null)
+            } catch (error: Exception) {
+                android.util.Log.w("Isomer", "saving failed", error)
+                saved(null)
+            }
+        }
+    }
+
+    private fun saved(result: ActivityResult?) {
+        val callback = pending
+        val bytes = saving
+        pending = null
+        saving = null
+        val uri = result?.data?.data
+        val resolver = activity?.contentResolver
+        if (callback == null) return
+        if (uri == null || bytes == null || resolver == null) { callback(""); return }
+        thread(name = "iso-save") {
+            val written = try {
+                resolver.openOutputStream(uri, "wt")?.use { it.write(bytes) } != null
+            } catch (error: Exception) {
+                android.util.Log.w("Isomer", "writing a saved document failed", error); false
+            }
+            main.post { callback(if (written) uri.toString() else "") }
         }
     }
 

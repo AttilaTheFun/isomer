@@ -4,6 +4,7 @@
 // the runtime. Strings and structs copy at the boundary, so there is no
 // pointer/length or staging-buffer plumbing here.
 
+import { playHaptic } from "./haptics.js";
 import { appFilesKey, openAppFiles } from "./file_system.js";
 import { Dependencies, load } from "../app_bridge.js";
 import { browserNetworkHosts } from "./network.js";
@@ -532,6 +533,8 @@ export async function boot({
       // reader's gesture; the textarea route is for browsers without the
       // async API (or refusing it outside a secure context).
       if (key === "copy") { copyText(value); return; }
+      // `.sensoryFeedback`: a vibration, where the browser has one.
+      if (key === "haptic") { playHaptic(value); return; }
       // `ShareLink`: the system's share sheet where the browser has one
       // (a phone's), else the text to the clipboard.
       if (key === "share") {

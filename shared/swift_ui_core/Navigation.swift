@@ -2075,7 +2075,7 @@ func firstAccessibilityLabel(_ node: RenderNode) -> String? {
 func isPlainBarLabel(_ node: RenderNode) -> Bool {
     switch node.kind {
     case .text, .spacer, .stack: break
-    case .box: if !node.background.isEmpty || !node.overlay.isEmpty { return false }
+    case .box: if !node.background.isEmpty || !node.overlay.isEmpty || !node.mask.isEmpty { return false }
     case .image: if node.symbolName == nil { return false }
     default: return false
     }

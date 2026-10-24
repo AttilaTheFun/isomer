@@ -30,6 +30,9 @@ public struct Font: Hashable, Sendable {
     /// `Font.custom`: a typeface by name, which hosts that have it use
     /// (param "family"); the system's otherwise.
     var family: String?
+    /// `.monospacedDigit()`: digits of one width, so numbers that change
+    /// keep their place (param "tnum": hosts set tabular figures).
+    var monospacedDigits = false
 
     init(size: CGFloat, weight: Weight = .regular, design: Design = .default, textStyle: String? = nil) {
         self.size = size
@@ -124,6 +127,10 @@ public struct Font: Hashable, Sendable {
         return font
     }
 
-    /// Digits of one width (a monospaced design is the nearest here).
-    public func monospacedDigit() -> Font { self }
+    /// Digits of one width (tabular figures), the rest as it was.
+    public func monospacedDigit() -> Font {
+        var font = self
+        font.monospacedDigits = true
+        return font
+    }
 }

@@ -111,6 +111,10 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
   `flattenNode` (shared/renderers/TreeEncoder.swift, one ~900-line
   function) has so many wasm locals that each frame V8's baseline compiler
   gives it is large. Splitting it into smaller functions is the likely fix.
+- **A `Circle()` in a frame that isn't square is drawn as an ellipse** by
+  the React renderer (`borderRadius: 50%` on the frame); SwiftUI draws the
+  largest circle that fits, centred. A circle *mask* is right
+  (`maskClipPath`'s `circle()`).
 - Browsers cannot speak gRPC: a web client goes through gRPC-Web and a
   proxy (Envoy).
 

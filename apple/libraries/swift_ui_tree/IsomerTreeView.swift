@@ -191,6 +191,7 @@ struct NodeView: View, Equatable {
                 } label: {
                     NodeView(pnode: pnode.children[0], send: send)
                 }
+                .modifier(MenuIndicatorHidden(hidden: nodeParam("indicator") == "hidden"))
             default:
                 HostViewBody(node: node, send: send)
             }
@@ -275,6 +276,9 @@ struct NodeView: View, Equatable {
             .overlay(alignment: layerAlignment(overlays.first)) {
                 ZStack { ForEach(keyedNodes(overlays)) { child in NodeView(pnode: child.node, send: send) } }
             }
+            .modifier(MaskLayers(masks: pnode.children.filter { layer(of: $0) == "mask" },
+                                 alignment: layerAlignment(pnode.children.first { layer(of: $0) == "mask" }),
+                                 send: send))
         } else if let axes = nodeParam("fits") {
             // `ViewThatFits`: SwiftUI's own over the candidates. Before iOS
             // 16 the last of them, the one meant for when nothing fits.
@@ -356,6 +360,7 @@ struct NodeView: View, Equatable {
         // Form's or a list's section header, a button's control size.
         var text = Self.styledText(node.v ?? "", runs: nodeParam("runs"), links: nodeParam("runLinks"))
         if nodeParam("autoFont") != "1" { text = text.font(textFont) }
+        if nodeParam("tnum") == "1" { text = text.monospacedDigit() }
         if let color = ownColor {
             text = text.foregroundColor(nodeParam("colorName").flatMap(hostSystemColor) ?? swiftColor(color))
         }
@@ -372,6 +377,9 @@ struct NodeView: View, Equatable {
         }
         if let lines = node.lines {
             truncated = AnyView(truncated.lineLimit(Int(lines)))
+        }
+        if let scale = nodeParam("minScale").flatMap(Double.init) {
+            truncated = AnyView(truncated.minimumScaleFactor(CGFloat(scale)))
         }
         // `.textCase` in scope in the app: "none" keeps a container from
         // casing it (a list's section header); the guest cased the string
@@ -440,6 +448,7 @@ struct NodeView: View, Equatable {
             }
             if flags.contains("u") { piece = piece.underline() }
             if flags.contains("s") { piece = piece.strikethrough() }
+            if flags.contains("t") { piece = piece.monospacedDigit() }
             if let ownColor, !isLink { piece = piece.foregroundColor(ownColor) }
             result = result + piece
             index = end
@@ -862,6 +871,7 @@ struct HostViewBody: View {
             Menu(param("label") ?? "Menu") {
                 MenuItems(node: node, send: send)
             }
+            .modifier(MenuIndicatorHidden(hidden: param("indicator") == "hidden"))
         case "datepicker":
             NativeDatePicker(
                 title: param("title") ?? "",
@@ -3606,6 +3616,33 @@ struct ScrollGeometryReporter: ViewModifier {
             }
         } else {
             content
+        }
+    }
+}
+
+/// `.menuIndicator(.hidden)` in the guest: the menu's label alone.
+struct MenuIndicatorHidden: ViewModifier {
+    let hidden: Bool
+
+    func body(content: Content) -> some View {
+        if hidden { content.menuIndicator(.hidden) } else { content }
+    }
+}
+
+/// `.mask(alignment:_:)` in the guest: SwiftUI's own mask over the box,
+/// of its mask layers; none, no mask (an empty one would hide it all).
+struct MaskLayers: ViewModifier {
+    let masks: [PatchedNode]
+    let alignment: Alignment
+    let send: (String, String) -> Void
+
+    func body(content: Content) -> some View {
+        if masks.isEmpty {
+            content
+        } else {
+            content.mask(alignment: alignment) {
+                ZStack { ForEach(keyedNodes(masks)) { child in NodeView(pnode: child.node, send: send) } }
+            }
         }
     }
 }

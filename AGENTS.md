@@ -1,7 +1,7 @@
 # AGENTS.md — isomer
 
 Context for AI agents (and new humans) working in this repo. Last updated
-2026-10-22. If something here contradicts the code, trust the code and
+2026-10-24. If something here contradicts the code, trust the code and
 update this file.
 
 ## The name
@@ -612,8 +612,15 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
   untracked .bazelrc.user). FoundationEssentials, plus what corelibs has
   that apps reach for, written in Swift here: NSRange, NSRegularExpression
   (over Swift's Regex, UTF-16 ranges), NSLock/NSRecursiveLock/NSCondition,
-  Thread (pthreads; one thread in wasm), FileHandle, NSNumber,
-  `String(format:)`, Bundle, streams. `--@isomer//foundation:internationalization`
+  Thread (pthreads; one thread in wasm), FileHandle, NSNumber (Swift's
+  numbers bridge to it as on Apple's platforms: `json["n"] as? Int` is an
+  exact cast, through `_ObjectiveCBridgeable`, which Swift's runtime honours
+  off Objective-C too), JSONSerialization, ISO8601DateFormatter,
+  FileWrapper, `String(format:)`, Bundle, streams. UserDefaults has Apple's
+  argument domain: `-key value` among the program's arguments, or, where a
+  host starts no program with arguments (Android), in ISO_ARGUMENTS
+  (`am start -e ISO_ARGUMENTS '-reviews.fixture YES'`: the generated
+  activity sets each ISO_ extra in the environment). `--@isomer//foundation:internationalization`
   adds FoundationInternationalization over the Swift SDK's prebuilt ICU
   (lib_FoundationICU.a); `isomer_web_app(icu_locales = [...])` keeps only
   those languages' ICU data (34 MB → 6-7 MB). Linux and Windows still use

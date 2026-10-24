@@ -55,6 +55,7 @@ assemble_directory(
         "@isomer//wasm/libraries/swift_ui:runtime/imported_files.js": "runtime/imported_files.js",
         "@isomer//wasm/libraries/swift_ui:runtime/file_system.js": "runtime/file_system.js",
         "@isomer//wasm/libraries/swift_ui:runtime/network.js": "runtime/network.js",
+        "@isomer//wasm/libraries/swift_ui:runtime/haptics.js": "runtime/haptics.js",
         # Image sources the renderer resolves (decoded images, isomer 0.19).
         "@isomer//wasm/libraries/swift_ui:runtime/raster.js": "runtime/raster.js",
         "@isomer//tools/wasm:react_umd_js": "runtime/react.production.min.js",
