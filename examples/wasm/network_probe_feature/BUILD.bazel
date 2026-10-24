@@ -56,3 +56,47 @@ transition_binary(
     platform = "@isomer//swift_ffi/rules:wasm32-wasip1",
     tags = ["manual"],
 )
+
+# The same probe threaded (wasm32-unknown-wasip1-threads: its memory
+# imported, exported and shared, with a maximum), as example_full's threaded
+# reactor was: the engine tests' networking check on WasmKit's WASI Threads.
+swift_binary(
+    name = "network_probe_threads_reactor",
+    copts = [
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    linkopts = [
+        "-Xlinker",
+        "--export-all",
+        "-Xlinker",
+        "--no-gc-sections",
+        "-Xlinker",
+        "--import-memory",
+        "-Xlinker",
+        "--export-memory",
+        "-Xlinker",
+        "--shared-memory",
+        "-Xlinker",
+        "--max-memory=268435456",
+        "-Xlinker",
+        "-z",
+        "-Xlinker",
+        "stack-size=16777216",
+    ],
+    linkshared = True,
+    module_name = "network_probe_threads_reactor",
+    tags = ["manual"],
+    deps = [
+        "@isomer//wasm/libraries/swift_ui:hot_bridge",
+        ":network_probe_lib",
+        "@isomer//wasm/libraries/swift_ui",
+    ],
+)
+
+transition_binary(
+    name = "network_probe_threads.wasm",
+    binary = ":network_probe_threads_reactor",
+    platform = "@isomer//swift_ffi/rules:wasm32-wasip1-threads",
+    tags = ["manual"],
+)

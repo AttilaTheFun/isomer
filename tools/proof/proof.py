@@ -521,7 +521,9 @@ def windows_package(app, version):
             "tar -xzf C:\\Users\\runner\\playground_sdk.tgz -C $app",
             # Its projects start from the templates (a VM that ran an
             # earlier build keeps that build's in Application Support).
-            "Remove-Item -Recurse -Force \"$env:LOCALAPPDATA\\playground\" -ErrorAction SilentlyContinue",
+            # Guarded: on a fresh VM there is none, and a failed Remove-Item,
+            # silent or not, as the last command fails the whole step.
+            "if (Test-Path \"$env:LOCALAPPDATA\\playground\") { Remove-Item -Recurse -Force \"$env:LOCALAPPDATA\\playground\" }",
         ]
     return "; ".join(steps)
 

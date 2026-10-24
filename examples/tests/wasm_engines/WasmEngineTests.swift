@@ -92,7 +92,7 @@ final class WasmEngineTests: XCTestCase {
     func testWasmKitNetworkingDependencyInjection() async throws {
         try await Self.exerciseNetworkingDI(
             WasmKitRuntime(), name: "WasmKit",
-            wasm: Self.artifactBytes("wasm/example_full_feature/example_full.wasm"))
+            wasm: Self.artifactBytes("wasm/network_probe_feature/network_probe.wasm"))
     }
 
     /// The threaded tap counter (wasm32-unknown-wasip1-threads: shared
@@ -106,19 +106,20 @@ final class WasmEngineTests: XCTestCase {
         }
     }
 
-    /// The DI path on the threaded full app: the dependencies' calls and
+    /// The DI path on the threaded probe: the dependencies' calls and
     /// the main actor on the host's thread, the app's other tasks on the
     /// guest's own pool of threads.
     func testWasmKitThreadedNetworkingDependencyInjection() async throws {
         guard WasmKitRuntime.canRunThreads else { throw XCTSkip("WasmKit can make no shared memory here") }
         try await Self.exerciseNetworkingDI(
             WasmKitRuntime(), name: "WasmKit-threads",
-            wasm: Self.artifactBytes("wasm/example_full_feature/example_full_threads.wasm"))
+            wasm: Self.artifactBytes("wasm/network_probe_feature/network_probe_threads.wasm"))
     }
 
-    /// An HTTP host whose `send` records the URL and answers a canned
-    /// Pokédex list — an `async throws` host implementation, like WasmView's
-    /// URLSession one.
+    /// An HTTP host whose `send` records the URL and answers as the probe's
+    /// server (tools/testing/network_server.js) answers its first check, a
+    /// GET of /echo with a header field — an `async throws` host
+    /// implementation, like WasmView's URLSession one.
     private final class RecordingHTTP: IsomerNetworkWasmHost.HTTPHost {
         var requests: [String] = []
         func send(method: String, url: String, headers: String, body: [UInt8], timeout: Double) async throws
@@ -126,8 +127,8 @@ final class WasmEngineTests: XCTestCase {
         {
             requests.append(url)
             return HTTPHostResponse(
-                status: 200, headers: #"[["Content-Type","application/json"]]"#,
-                body: Array(#"{"results":[{"name":"bulbasaur","url":"https://pokeapi.co/api/v2/pokemon/1/"}]}"#.utf8),
+                status: 200, headers: #"[["Content-Type","application/json"],["X-Echo","yes"]]"#,
+                body: Array(#"{"method":"\#(method)","url":"/echo","headers":{"x-probe":"probe value"},"body":""}"#.utf8),
                 url: "")
         }
     }
@@ -136,8 +137,10 @@ final class WasmEngineTests: XCTestCase {
     private static func exerciseNetworkingDI(
         _ runtime: any WasmRuntime, name: String, wasm: [UInt8]
     ) async throws {
-        setenv("ISO_OPEN_APP", "pokedex", 1)
-        defer { unsetenv("ISO_OPEN_APP") }
+        // The probe (examples' network probe) starts its checks on appear,
+        // against the server WasmKit hands it in the host's environment.
+        setenv("ISO_NETWORK_SERVER", "http://probe.test:8080", 1)
+        defer { unsetenv("ISO_NETWORK_SERVER") }
 
         var stream: [UInt8] = []
         let imports = WasmHostImports(
@@ -155,7 +158,7 @@ final class WasmEngineTests: XCTestCase {
 
         _ = try runtime.call("iso_hot_start", [.f64(390), .f64(680)])
         _ = try runtime.call("iso_hot_render", [])
-        // The Pokedex onAppear starts a Task that awaits URLSession: let the
+        // The probe's onAppear starts a Task that awaits URLSession: let the
         // guest's queued jobs run (a real host drains them on the main queue),
         // then let the host-side async answer land and the resumed task run.
         // (With guest threads the request is made on one of them: give it
@@ -165,20 +168,27 @@ final class WasmEngineTests: XCTestCase {
             await Task.yield()
             try? await Task.sleep(nanoseconds: 5_000_000)
         }
-        XCTAssertFalse(service.requests.isEmpty, "\(name): Pokedex onAppear should request through the injected HTTP host")
+        XCTAssertFalse(service.requests.isEmpty, "\(name): the probe's onAppear should request through the injected HTTP host")
         guard !service.requests.isEmpty else { return }
-        XCTAssertTrue(service.requests[0].contains("pokeapi.co"), "\(name): unexpected URL \(service.requests[0])")
+        XCTAssertEqual(service.requests[0], "http://probe.test:8080/echo", "\(name): unexpected URL")
 
         // The patch stream is cumulative: a host that renders as part of its
-        // job pump may have emitted the list already.
-        for _ in 0..<40 where !Self.contains(stream, "ulbasaur") {
+        // job pump may have emitted the line already.
+        let line = "ok GET with a header field"
+        for _ in 0..<40 where !Self.contains(stream, line) {
             await Task.yield()
             try? await Task.sleep(nanoseconds: 5_000_000)
             runtime.pumpGuestJobs()
             _ = try runtime.call("iso_hot_render", [])
         }
-        XCTAssertTrue(Self.contains(stream, "ulbasaur"), "\(name): the awaited fetch should render the Pokedex list")
+        XCTAssertTrue(Self.contains(stream, line), "\(name): the awaited answer should render the probe's first check as passed")
+        // The probe goes on to its other checks: its runtime and host stay
+        // for the life of the process (as a threaded instance's do anyway),
+        // or the guest's later calls reach a runtime already gone.
+        keptRuntimes.append((runtime, service))
     }
+
+    @MainActor private static var keptRuntimes: [(any WasmRuntime, RecordingHTTP)] = []
 
     @MainActor
     private static func exercise(
