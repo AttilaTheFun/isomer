@@ -1378,6 +1378,26 @@ void iso_drain_images(void) {
   }
 }
 
+void iso_register_image(const char* source, int source_len, const unsigned char* bytes, int len) {
+  std::string key(source, source_len > 0 ? source_len : 0);
+  std::string encoded(reinterpret_cast<const char*>(bytes), len > 0 ? len : 0);
+  UINT width = 0, height = 0;
+  if (ProbeImageDimsMemory(encoded, &width, &height)) {
+    g.imageDims[key] = {width, height};
+    g.imageStatus[key] = 1;
+    g_imageEncoded[key] = std::move(encoded);  // decoded on demand by iso_rasterize
+  } else {
+    g.imageStatus[key] = 2;
+  }
+}
+
+void iso_forget_image(const char* source, int source_len) {
+  std::string key(source, source_len > 0 ? source_len : 0);
+  g.imageDims.erase(key);
+  g.imageStatus.erase(key);
+  g_imageEncoded.erase(key);
+}
+
 // --- SwiftGPU rasterization -------------------------------------------------
 // The services half of the SwiftGPU renderer: produce premultiplied-RGBA
 // pixels for text runs, gradients, shadows, and images. NO GPU calls here —

@@ -1632,6 +1632,33 @@ int iso_drain_images(void) {
   return n;
 }
 
+void iso_register_image(const char *source, int source_len, const unsigned char *bytes, int len) {
+  char *key = dupstr(source, source_len);
+  int w, h, ch;
+  unsigned char *px = len > 0 ? stbi_load_from_memory(bytes, len, &w, &h, &ch, 4) : NULL;
+  if (px) {
+    ImageEntry *e = putImage(key, texFromRGBA(px, w, h), w, h, 1);
+    e->rgba = px;  // retained for iso_rasterize (straight alpha)
+  } else {
+    putImage(key, 0, 0, 0, 2);
+  }
+  free(key);
+}
+
+void iso_forget_image(const char *source, int source_len) {
+  char *key = dupstr(source, source_len);
+  for (int i = 0; i < g.imageCount; i++) {
+    ImageEntry *e = &g.images[i];
+    if (strcmp(e->key, key) != 0) continue;
+    if (e->tex) glDeleteTextures(1, &e->tex);
+    if (e->rgba) stbi_image_free(e->rgba);
+    free(e->key);
+    g.images[i] = g.images[--g.imageCount];
+    break;
+  }
+  free(key);
+}
+
 // ---------------------------------------------------------------------------
 // SwiftGPU rasterization: the services half of the SwiftGPU renderer —
 // produce [w u32 LE][h u32 LE][PREMULTIPLIED RGBA8...] for text runs,

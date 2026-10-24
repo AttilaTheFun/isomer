@@ -1,8 +1,10 @@
-// FileWrapper (Apple's Foundation and corelibs have it; swift-foundation
-// does not): a file, a directory of them, or a symbolic link, held in
-// memory, read from and written to the file system. What SwiftUI's
-// FileDocument hands over. A Swift class, as Isomer's other Foundation
-// classes are (Apple's is an NSObject).
+// FileWrapper (Apple's Foundation has it; swift-foundation and corelibs do
+// not): a file, a directory of them, or a symbolic link, held in memory,
+// read from and written to the file system. What SwiftUI's FileDocument
+// hands over. A Swift class, as Isomer's other Foundation classes are
+// (Apple's is an NSObject). Also compiled into the SwiftUI of Linux and
+// Windows, whose Foundation is the toolchain's: FileManager's own API
+// only.
 
 import FoundationEssentials
 
@@ -50,8 +52,10 @@ open class FileWrapper: @unchecked Sendable {
     public init(url: URL, options: ReadingOptions = []) throws {
         let manager = FileManager.default
         let path = url.path
-        guard let type = manager.itemType(atPath: path) else { throw CocoaError(.fileReadNoSuchFile) }
-        if let destination = try? manager.destinationOfSymbolicLink(atPath: path) {
+        guard let type = (try? manager.attributesOfItem(atPath: path))?[.type] as? FileAttributeType else {
+            throw CocoaError(.fileReadNoSuchFile)
+        }
+        if type == .typeSymbolicLink, let destination = try? manager.destinationOfSymbolicLink(atPath: path) {
             kind = .link(URL(fileURLWithPath: destination))
         } else if type == .typeDirectory {
             var children: [String: FileWrapper] = [:]

@@ -105,6 +105,12 @@ void iso_drain_fetches(void);
 // Decode any downloaded remote images into GPU bitmaps (main thread).
 void iso_drain_images(void);
 
+// A picture an app decoded through ImageIO (`Image(cgImage)`): its encoded
+// bytes, handed over at its first draw, kept under its source key; and
+// forgotten when the app's last reference goes (main thread, both).
+void iso_register_image(const char* source, int source_len, const unsigned char* bytes, int len);
+void iso_forget_image(const char* source, int source_len);
+
 // --- SwiftGPU rasterization ------------------------------------------------
 
 // The services half of the SwiftGPU renderer: rasterize a spec (JSON —

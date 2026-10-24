@@ -68,6 +68,14 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
   `@AppStorage` does not persist, the clipboard does nothing. Their
   network transports are URLSession's (0.38, as Apple's WasmView's).
 
+- **SF Symbols on the GPU renderer** (Linux, Windows, the web's WebGPU) are
+  stand-in glyphs from the core's small table (`Image.glyph(forSystemName:)`),
+  U+FFFD for a name it lacks, and a tab bar's are none: the React and
+  Compose renderers draw the symbol table's paths (tools/symbols). The GPU
+  renderer should draw those paths too (rasterized in Swift, or by each
+  host's raster service). Reviews on Linux shows it (its list's Merged,
+  Drafts and check marks).
+
 ## WasmView on Apple (T1)
 
 - **`Map` in a reactor under WasmView is its placeholder**, with either
