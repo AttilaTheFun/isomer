@@ -13,6 +13,10 @@
 #                                              # <command> there, in the container (packaging
 #                                              # what was built), and <path> in its home
 #                                              # copied out to <dir> here
+#   tools/linux/build.sh --checkout <dir> [--after …] [--out …] <targets>
+#                                              # another repository's checkout (an app on
+#                                              # Isomer: reviews), built the same way in
+#                                              # /work/<its name>
 #   tools/linux/build.sh --stop                # remove the container (and its Bazel tree)
 #
 # The container is named isomer-linux-build: started when stopped, made
@@ -30,12 +34,14 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 IMAGE="isomer-linux-builder:dev"
 module=""
+checkout=""
 after=""
 out=""
 out_dir=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --module) module="$2"; shift 2 ;;
+        --checkout) checkout="$(cd "$2" && pwd)"; shift 2 ;;
         --after) after="$2"; shift 2 ;;
         --out) out="$2"; out_dir="$3"; shift 3 ;;
         --stop)
@@ -62,11 +68,13 @@ elif [ "$state" != "running" ]; then
 fi
 
 # The checkout as git sees it (tracked, and untracked but not ignored),
-# into the container's home.
+# into the container's home: isomer's, or the one --checkout names.
+source_root="${checkout:-$ROOT}"
+name="$(basename "$source_root")"
 staging="$(mktemp -d)"
 trap 'rm -rf "$staging"' EXIT
-(cd "$ROOT" && git ls-files -co --exclude-standard -z | COPYFILE_DISABLE=1 tar --no-xattrs -czf "$staging/isomer-src.tgz" --null -T -)
-container cp "$staging/isomer-src.tgz" "$id:/root/isomer-src.tgz" >/dev/null
+(cd "$source_root" && git ls-files -co --exclude-standard -z | COPYFILE_DISABLE=1 tar --no-xattrs -czf "$staging/src.tgz" --null -T -)
+container cp "$staging/src.tgz" "$id:/root/$name-src.tgz" >/dev/null
 
 # Every bazel in the container (a packaging command's too) keeps its tree
 # on the container's disk.
@@ -74,7 +82,10 @@ echo "startup --output_user_root=/var/cache/bazel" > "$staging/bazelrc"
 container cp "$staging/bazelrc" "$id:/root/.bazelrc" >/dev/null
 
 flags="--keep_going"
-if [ -n "$module" ]; then
+if [ -n "$checkout" ]; then
+    command="cd /work/$name && bazel build $flags $*"
+    [ -n "$after" ] && command="$command && $after"
+elif [ -n "$module" ]; then
     command="cd /work/isomer/$module && bazel build $flags $*"
     [ -n "$after" ] && command="$command && $after"
 elif [ $# -gt 0 ]; then
@@ -85,7 +96,7 @@ fi
 # A fresh copy of the checkout each run (files deleted here go there too);
 # Bazel's output base is outside it.
 status=0
-container exec "$id" bash -lc "rm -rf /work/isomer && mkdir -p /work/isomer && tar -xzf /root/isomer-src.tgz -C /work/isomer && rm /root/isomer-src.tgz && $command" || status=$?
+container exec "$id" bash -lc "rm -rf /work/$name && mkdir -p /work/$name && tar -xzf /root/$name-src.tgz -C /work/$name && rm /root/$name-src.tgz && $command" || status=$?
 if [ "$status" -eq 0 ] && [ -n "$out" ]; then
     rm -rf "$out_dir"
     container cp "$id:/root/$out" "$out_dir" >/dev/null || status=$?
