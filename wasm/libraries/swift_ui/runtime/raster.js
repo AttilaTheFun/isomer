@@ -124,21 +124,31 @@ export function createRasterHost({ scale = 1, invalidate = () => {} } = {}) {
 
   function applyGradient(ctx, spec, w, h) {
     // The runtime's schema (shared/swift_ui_core/Paint.swift):
-    // {kind: "linear"|"radial"|"angular", stops: [{c: [r,g,b,a], l}],
-    //  p0/p1 (linear) or c + er (radial/angular), unit coordinates}.
+    // {kind: "solid"|"linear"|"radial"|"angular", stops: [{c: [r,g,b,a], l}],
+    //  p0/p1 (linear) or c + er (radial/angular), unit coordinates}. A
+    // solid one (a material's or glass's fill) has its color as its one
+    // stop and no points: reading a point it hasn't threw here, and the
+    // throw ended the guest (the bridge's rasterize can't fail).
+    const stops = spec.stops ?? [];
+    if (spec.kind === "solid") {
+      const [r, g, b, a] = stops[0]?.c ?? [0, 0, 0, 0];
+      ctx.fillStyle = cssColor(r, g, b, a);
+      return;
+    }
+    const center = spec.c ?? [0.5, 0.5];
     let gradient;
     if (spec.kind === "radial") {
-      const cx = spec.c[0] * w;
-      const cy = spec.c[1] * h;
+      const cx = center[0] * w;
+      const cy = center[1] * h;
       // sr/er are radii in points (canvas space is points here).
       gradient = ctx.createRadialGradient(cx, cy, Math.max(spec.sr ?? 0, 0), cx, cy, Math.max(spec.er ?? 1, 0.01));
     } else if (spec.kind === "angular") {
-      gradient = ctx.createConicGradient(spec.a0 ?? 0, spec.c[0] * w, spec.c[1] * h);
+      gradient = ctx.createConicGradient(spec.a0 ?? 0, center[0] * w, center[1] * h);
     } else {
-      gradient = ctx.createLinearGradient(
-        spec.p0[0] * w, spec.p0[1] * h, spec.p1[0] * w, spec.p1[1] * h);
+      const p0 = spec.p0 ?? [0.5, 0], p1 = spec.p1 ?? [0.5, 1];
+      gradient = ctx.createLinearGradient(p0[0] * w, p0[1] * h, p1[0] * w, p1[1] * h);
     }
-    for (const stop of spec.stops ?? []) {
+    for (const stop of stops) {
       const [r, g, b, a] = stop.c;
       gradient.addColorStop(Math.min(1, Math.max(0, stop.l ?? 0)), cssColor(r, g, b, a));
     }
