@@ -2,7 +2,8 @@
 // it: nothing (idle), the reader's finger or trackpad (tracking, then
 // interacting), the coast after they let go (decelerating), or a scroll
 // the app asked for (animating). The action runs on each change with the
-// phase before and after, as SwiftUI's does. A host that cannot tell
+// phase before and after, as SwiftUI's does, and once as the scroll view
+// appears, idle to idle, as SwiftUI's does too. A host that cannot tell
 // reports nothing, and the phase stays idle.
 
 import Foundation
@@ -136,7 +137,19 @@ extension View {
                 }
                 if case .box = n.kind, n.children.count == 1 { current = n.children.first } else { break }
             }
-            return inner
+            // SwiftUI calls the action once as the scroll view appears, from
+            // idle to idle (what its phase is before anything moves it).
+            let appear = RenderNode.box(child: inner)
+            appear.identityPath = key + "/appear"
+            appear.onAppear = {
+                let runtime = Runtime.shared
+                guard runtime.scrollPhases[key] == nil else { return }
+                runtime.scrollPhases[key] = .idle
+                let known = runtime.scrollPhaseGeometries[key]
+                    ?? ScrollGeometry(contentOffset: .zero, contentSize: .zero, contentInsets: EdgeInsets(), containerSize: .zero)
+                action(.idle, .idle, ScrollPhaseChangeContext(_geometry: known, _velocity: nil))
+            }
+            return appear
         }
     }
 }

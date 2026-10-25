@@ -2556,6 +2556,7 @@ struct Main {
         checkEncoderLiveValues(mock)
         checkScrollDisabled(mock)
         checkCappedScrollGreediness(mock)
+        checkScrollPhaseOnAppear(mock)
         checkNativeChrome(mock)
         checkMarkdownLiteral(mock)
         checkObservation(mock)
@@ -2743,4 +2744,30 @@ func checkDiffAwarePatches(_ mock: MockRenderer) {
     expect(ops1 >= 1, "a state change emits at least one op")
     expect(ops1 < nodeCount, "the patch is smaller than a full re-send (\(ops1) < \(nodeCount))")
     expect(describeTree(root!) == fullDescribe(tree1), "applied patch == full encode of changed tree")
+}
+
+/// `onScrollPhaseChange` runs once as its scroll view appears, idle to idle,
+/// as SwiftUI's does (Apple's, logged on a simulator: `idle -> idle` at the
+/// first frame), and not again for the same scroll view.
+nonisolated(unsafe) var scrollPhaseCalls: [String] = []
+struct ScrollPhaseAppearScreen: View {
+    var body: some View {
+        ScrollView { Text("Row") }
+            .onScrollPhaseChange { oldPhase, newPhase in scrollPhaseCalls.append("\(oldPhase) -> \(newPhase)") }
+    }
+}
+
+@MainActor
+func checkScrollPhaseOnAppear(_ mock: MockRenderer) {
+    scrollPhaseCalls = []
+    Runtime.shared.installRootView { ScrollPhaseAppearScreen() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    for _ in 0..<3 {
+        Runtime.shared.setNeedsRender()
+        Runtime.shared.renderFrame()
+        let encoder = FlatTreeEncoder()
+        _ = encoder.encode(root: mock.lastTree!)
+        Runtime.shared.fireTreeAppearances(encoder.appearances, disappearances: encoder.disappearances)
+    }
+    expect(scrollPhaseCalls == ["idle -> idle"], "the action ran once as the scroll view appeared, idle to idle (\(scrollPhaseCalls))")
 }
