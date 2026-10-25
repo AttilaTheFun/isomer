@@ -1,10 +1,14 @@
 # Fills the oss server's Bazel cache with main's builds after each merge
-# (tools/ci/populate_cache.py): the release proof's builds with its flags,
-# and each module's tests as agents run them, so an oss lease, a container
-# or a Mac that reads the cache downloads what was built here.
+# (tools/ci/populate_cache.py): in a throwaway container of the image Visor
+# makes agents' containers from (visor-agent:latest, which the runner's Mac
+# has), with the checkout where a session sees isomer, each module's tests
+# and the Linux, web and Android apps; and on the Mac itself the proof's
+# Apple builds and the Mac's tests. An agent's container, an oss lease or a
+# Mac that reads the cache then downloads what was built here.
 #
-# On the Mac mini's self-hosted runner (an instance of its own, so it never
-# queues behind pull requests' CI), and never for a pull request: the
+# On the self-hosted runner of the Mac that runs agents' containers (an
+# instance of its own, so it never queues behind pull requests' CI), and
+# never for a pull request: the
 # cache's write token is in the `bazel-cache` environment, which only main
 # may use (Settings > Environments > bazel-cache: deployment branch main;
 # the secret OSS_CACHE_WRITE_TOKEN, put there with
