@@ -76,10 +76,11 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
   renderer should draw those paths too (rasterized in Swift, or by each
   host's raster service). Reviews on Linux shows it (its list's Merged,
   Drafts and check marks).
-- **Linux's window title bar covers the top of the content** under GNOME
-  (Ubuntu 26.04): the Playground's projects' navigation titles (2048's)
-  are cut in half under it, in every 0.38 proof. The host lays
-  the tree out from the window's top, not from below its decorations.
+- **A Playground project's navigation title is drawn half above the
+  window's top** on Linux and Windows (2048's, in every 0.38 proof): not
+  the window's decorations (Windows draws its title bar outside the client
+  area, and shows it too), so the GPU renderer or the desktop wasm hosts
+  place the guest's navigation bar too high.
 
 ## WasmView on Apple (T1)
 
@@ -90,7 +91,7 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
   SwiftMap's Apple view for the node; the GPU one (GPUTreeServicesHost)
   would draw its tiles, as the Linux and Windows loaders do.
 - **The SwiftUI tree view differs from Apple's SwiftUI** in the Storybook
-  compiled against Isomer (0.38.13's proof, review-ios-storybook-isomer,
+  compiled against Isomer (0.38.15's proof, review-ios-storybook-isomer,
   each story beside Apple's shot of it):
   - a custom `Shape`'s path is drawn as its frame's rectangle;
   - `LazyVGrid`'s adaptive columns are too many and don't stretch to the
@@ -99,7 +100,10 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
   - `ProgressView` centres its label;
   - `OutlineGroup`'s rows put the disclosure chevron first, without
     Apple's trailing one;
-  - `ContentUnavailableView`'s description is smaller than Apple's.
+  - `ContentUnavailableView`'s description is smaller than Apple's;
+  - Scroll phases' trailing "0 changes" label sits a few points off
+    Apple's (an `HStack` of a label, a `Spacer` and a label: a text's
+    measured width).
 
 ## Android (T2)
 
