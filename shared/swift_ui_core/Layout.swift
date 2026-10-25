@@ -91,6 +91,14 @@ func measure(_ node: RenderNode, proposal: ProposedSize, ctx: LayoutContext) -> 
     if let minH = node.minHeight { size.height = max(size.height, minH) }
     if let maxW = node.maxWidth { size.width = min(size.width, maxW) }
     if let maxH = node.maxHeight { size.height = min(size.height, maxH) }
+    // A decoded geometry reader (FlatTreeDecoder) takes what it is offered,
+    // as a reader does here, whatever its content: the guest built that for
+    // the window until it hears the reader's size, and the size it hears
+    // must be the reader's, not its content's.
+    if node.layoutReport != nil {
+        if let width = proposal.width { size.width = width }
+        if let height = proposal.height { size.height = height }
+    }
     return size
 }
 
