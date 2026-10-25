@@ -26,12 +26,15 @@ swift_library(
         "//linux/libraries/swift_ui:LinuxWasmHost.swift",
         "//shared/renderers:srcs",
         "//shared/swift_ui_core:srcs",
+        # FileDocument's FileWrapper, which the toolchain's Foundation lacks.
+        "//foundation:FileWrapper.swift",
     ],
     copts = _LINUX_COPTS + ["-DISOMER_LINUX_HOST"],
     module_name = "SwiftUI",
     swiftc_inputs = ["//linux/libraries/swift_ui:renderer.h"],
     target_compatible_with = ["@platforms//os:linux"],
     deps = [
+        "//linux/libraries/image_io",
         "//shared/isomer_swift_ui",
         "//frameworks:for_core",
         "//linux/libraries/swift_ui:renderer",

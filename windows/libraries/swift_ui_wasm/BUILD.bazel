@@ -27,12 +27,15 @@ swift_library(
         "//windows/libraries/swift_ui:WindowsWasmHost.swift",
         "//shared/renderers:srcs",
         "//shared/swift_ui_core:srcs",
+        # FileDocument's FileWrapper, which the toolchain's Foundation lacks.
+        "//foundation:FileWrapper.swift",
     ],
     copts = _WINDOWS_COPTS + ["-DISOMER_WINDOWS_HOST"],
     module_name = "SwiftUI",
     swiftc_inputs = ["//windows/libraries/swift_ui:renderer.h"],
     target_compatible_with = ["@platforms//os:windows"],
     deps = [
+        "//windows/libraries/image_io",
         "//shared/isomer_swift_ui",
         "//frameworks:for_core",
         "//windows/libraries/swift_ui:renderer",
