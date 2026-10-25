@@ -76,6 +76,10 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
   renderer should draw those paths too (rasterized in Swift, or by each
   host's raster service). Reviews on Linux shows it (its list's Merged,
   Drafts and check marks).
+- **Linux's window title bar covers the top of the content** under GNOME
+  (Ubuntu 26.04): the Playground's projects' navigation titles (2048's)
+  are cut in half under it, in every 0.38 proof. The host lays
+  the tree out from the window's top, not from below its decorations.
 
 ## WasmView on Apple (T1)
 
