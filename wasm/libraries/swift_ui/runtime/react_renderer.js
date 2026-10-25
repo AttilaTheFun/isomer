@@ -2741,6 +2741,33 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
             onSelect: (i) => sendEvent(n.edit, String(i)),
           });
         }
+        // `.pickerStyle(.inline)`: the choices themselves, a row each, as
+        // SwiftUI draws them in a Form: iOS's rows with the chosen one
+        // checked in the tint, the Mac's radio buttons (two columns wide).
+        if (n.view === "picker" && p.style === "inline") {
+          const choices = n.options || [];
+          const chosen = Number(n.v) || 0;
+          const mac = isDesktop();
+          return h("div", {
+            ...props, role: "radiogroup",
+            style: { ...props.style, display: "flex", flexDirection: "column", alignSelf: "stretch", width: "100%", minWidth: 0 },
+          }, choices.map((title, i) => h("button", {
+            key: `o${i}`, type: "button", role: "radio", "aria-checked": i === chosen,
+            onClick: (e) => { e.stopPropagation(); sendEvent(n.edit, String(i)); },
+            style: {
+              display: "flex", alignItems: "center", gap: 8, width: "100%", minHeight: mac ? 24 : 44, padding: 0,
+              border: "none", borderTop: !mac && i > 0 ? "0.5px solid var(--iso-separator)" : "none",
+              background: "none", color: "inherit", fontFamily: SYSTEM_FONT, fontSize: mac ? 13 : 17,
+              textAlign: "left", cursor: "pointer",
+            },
+          },
+          mac ? h("span", { key: "r", style: {
+            width: 14, height: 14, borderRadius: 7, boxSizing: "border-box", flex: "0 0 auto",
+            border: i === chosen ? "4px solid var(--iso-tint, #007aff)" : "1px solid rgba(120,120,128,0.6)",
+            background: i === chosen ? "#fff" : "transparent" } }) : null,
+          h("span", { key: "t", style: { flex: "1 1 auto", minWidth: 0 } }, title),
+          !mac && i === chosen ? symbolSVG(h, "checkmark", 17, "var(--iso-tint, #007aff)", 600) : null)));
+        }
         // A pop-up panel (the platform's menu shape), not a <select>: a
         // Menu's options are its label then its actions; a picker's are
         // its choices with the current one checked.

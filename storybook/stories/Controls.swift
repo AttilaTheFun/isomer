@@ -22,6 +22,11 @@ extension StoryCatalog {
             summary: "One of several values, as segments or a menu. Each choice is tagged with the value it selects."
         ) { PickerStory() },
         Story(
+            "controls.inline", "Inline picker",
+            height: 300,
+            summary: "A picker's choices laid out in its section, one row each: a checkmark on the chosen row on iOS, radio buttons on the Mac and Android."
+        ) { InlinePickerStory() },
+        Story(
             "controls.date", "DatePicker",
             summary: "A date, a time, or both, in the platform's own picker."
         ) { DatePickerStory() },
@@ -114,6 +119,28 @@ struct PickerStory: View {
                 .font(.footnote)
                 .foregroundColor(.secondary)
         }
+    }
+}
+// end story
+
+// story: controls.inline
+struct InlinePickerStory: View {
+    @State private var delivery = "Standard"
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("Delivery", selection: $delivery) {
+                    ForEach(["Standard", "Express", "Pickup"], id: \.self) { Text($0).tag($0) }
+                }
+                .pickerStyle(.inline)
+            } header: {
+                Text("Delivery")
+            } footer: {
+                Text("\(delivery) chosen.")
+            }
+        }
+        .formStyle(.grouped)
     }
 }
 // end story

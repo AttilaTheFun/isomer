@@ -15,6 +15,10 @@ package dev.isomer.runtime
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.border
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.material3.RadioButton
+import androidx.compose.ui.semantics.Role
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.PaddingValues
@@ -2087,6 +2091,23 @@ private fun IsoHostView(n: JSONObject, m: Modifier) {
                             onClick = { sendEvent(edit, "$index") },
                             shape = SegmentedButtonDefaults.itemShape(index, labels.size),
                         ) { Text(option, maxLines = 1) }
+                    }
+                }
+                return
+            }
+            // `.pickerStyle(.inline)`: the choices themselves, a row each,
+            // Material's single choice: a radio button and its label.
+            if (view == "picker" && pickerStyle == "inline") {
+                Column(m.fillMaxWidth().selectableGroup()) {
+                    labels.forEachIndexed { index, option ->
+                        Row(
+                            Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                                .selectable(selected = index == selected, role = Role.RadioButton, onClick = { sendEvent(edit, "$index") }),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(selected = index == selected, onClick = null)
+                            Text(option, Modifier.padding(start = 12.dp), style = TextStyle(fontSize = 17.sp, color = MaterialTheme.colorScheme.onSurface))
+                        }
                     }
                 }
                 return
