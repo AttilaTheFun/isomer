@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AttilaTheFun/agent_ui.git",
       "state" : {
-        "revision" : "3c74af906e76199d27cd5da0221d01a6b4c737eb",
-        "version" : "0.39.0"
+        "revision" : "05df0071c165c930056af28252e45dcd39ad9572",
+        "version" : "0.39.1"
       }
     },
     {
