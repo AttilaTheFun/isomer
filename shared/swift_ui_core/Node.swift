@@ -500,6 +500,9 @@ package final class RenderNode {
     /// The reader's content for its size and its place in the window (nil
     /// before its host has measured it: the size is then the canvas's).
     var geometryBuild: ((CGSize, CGPoint?) -> RenderNode)?
+    /// A decoded tree's geometry reader (FlatTreeDecoder): told its frame
+    /// once the host has laid it out, to report it to the guest that drew it.
+    var layoutReport: ((CGRect) -> Void)?
 
     // Layout results.
     var frame = CGRect.zero

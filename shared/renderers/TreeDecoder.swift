@@ -20,6 +20,8 @@ package final class FlatTreeDecoder {
     /// stable id the encoder assigned (`"<path>.tap"`, `".text"`, `".slider"`,
     /// `".host"`, `"presentation.<id>"`). "tap" events send an empty value.
     private let send: (String, String) -> Void
+    /// What each geometry reader was last told (its `.geo` id: "<w>x<h>@<x>,<y>").
+    private var reportedGeometry: [String: String] = [:]
 
     public init(send: @escaping (String, String) -> Void) {
         self.send = send
@@ -118,6 +120,17 @@ package final class FlatTreeDecoder {
                 out.textSet = { value in route(edit, value) }
             }
         case .box:
+            // A geometry reader: the guest built its content for the whole
+            // window until told otherwise (TreeEncoder), so its frame here,
+            // once laid out, goes back to it. It builds again at that size,
+            // which then reports the same and settles. Untold, a reader's
+            // content as tall as the window under a navigation bar made the
+            // column taller than the window, and the window centred it: the
+            // bar half above the top.
+            for kv in n.params where kv.key == "geo" {
+                guard let id = kv.value else { continue }
+                out.layoutReport = { [weak self] frame in self?.report(id: id, frame: frame) }
+            }
             // `ViewThatFits`, for the core's layout to choose (Layout.swift).
             for kv in n.params where kv.key == "fits" {
                 var axes: Axis.Set = []
@@ -270,6 +283,13 @@ package final class FlatTreeDecoder {
             // inline as a depth stack (dismiss/style are dropped).
             return .stack(.depth)
         }
+    }
+
+    private func report(id: String, frame: CGRect) {
+        let value = "\(Double(frame.width))x\(Double(frame.height))@\(Double(frame.minX)),\(Double(frame.minY))"
+        guard reportedGeometry[id] != value else { return }
+        reportedGeometry[id] = value
+        send(id, value)
     }
 
     private func hostSpec(_ n: IsoFlat_Node) -> HostViewSpec {

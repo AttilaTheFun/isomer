@@ -873,6 +873,18 @@ package final class Runtime {
         let screen = CGRect(x: 0, y: 0, width: width, height: height)
         let frame = alignedRect(size: size, container: screen, alignment: .center)
         place(root, in: frame, ctx: layoutCtx)
+        // A decoded tree's geometry readers, told where they were laid out
+        // (after this frame: a report can make its guest draw again).
+        var reports: [() -> Void] = []
+        func collect(_ node: RenderNode) {
+            if let report = node.layoutReport {
+                let laid = node.frame
+                reports.append { report(laid) }
+            }
+            for child in node.children { collect(child) }
+        }
+        collect(root)
+        defer { for report in reports { report() } }
 
         let pass = RenderPass(host: host)
         host.beginFrame(width: width, height: height)

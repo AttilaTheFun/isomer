@@ -76,11 +76,6 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
   renderer should draw those paths too (rasterized in Swift, or by each
   host's raster service). Reviews on Linux shows it (its list's Merged,
   Drafts and check marks).
-- **A Playground project's navigation title is drawn half above the
-  window's top** on Linux and Windows (2048's, in every 0.38 proof): not
-  the window's decorations (Windows draws its title bar outside the client
-  area, and shows it too), so the GPU renderer or the desktop wasm hosts
-  place the guest's navigation bar too high.
 
 ## WasmView on Apple (T1)
 
