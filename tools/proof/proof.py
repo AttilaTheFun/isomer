@@ -133,14 +133,16 @@ def changed_stories(base):
 
 
 def crop(path, box):
-    """A screenshot cut down to `box` (left, top, right, bottom), kept whole
-    when the box doesn't fit inside it."""
+    """A screenshot cut down to `box` (left, top, right, bottom), within the
+    screenshot (a window larger than the screen is cut to what shows); kept
+    whole when nothing of the box is on it."""
     try:
         from PIL import Image
         image = Image.open(path)
         left, top, right, bottom = box
-        if 0 <= left < right <= image.width and 0 <= top < bottom <= image.height:
-            image.crop(box).save(path)
+        left, top, right, bottom = max(0, left), max(0, top), min(image.width, right), min(image.height, bottom)
+        if left < right and top < bottom:
+            image.crop((left, top, right, bottom)).save(path)
     except Exception as error:
         log(f"crop {os.path.basename(path)}: {error}")
 
@@ -749,9 +751,11 @@ def windows(review, story_list, builds):
             # as [char] codes ("Pokédex").
             return '"' + "".join(c if ord(c) < 128 and c not in '"$`' else f"$([char]0x{ord(c):X})" for c in value) + '"'
 
-        # The foreground window's visible bounds (DWM's, without the shadow),
-        # read in the desktop's session as the launch is: what a screenshot
-        # is cropped to, so the taskbar's clock and the wallpaper don't count.
+        # The foreground window's visible bounds (DWM's, without the shadow)
+        # within the desktop's work area (the screen less the taskbar), read
+        # in the desktop's session as the launch is: what a screenshot is
+        # cropped to, so the taskbar's clock and the wallpaper don't count. A
+        # window taller than the screen reaches behind the taskbar.
         rect_script = os.path.join(scripts, "rect.ps1")
         open(rect_script, "w").write("\r\n".join([
             'Add-Type @"',
@@ -759,12 +763,15 @@ def windows(review, story_list, builds):
             "public static class ProofWindow {",
             '  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();',
             '  [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr w, int a, out Rect r, int s);',
+            '  [DllImport("user32.dll")] public static extern bool SystemParametersInfo(int a, int b, ref Rect r, int c);',
             "  [StructLayout(LayoutKind.Sequential)] public struct Rect { public int L, T, R, B; }",
             "}",
             '"@',
             "$r = New-Object ProofWindow+Rect",
             "[ProofWindow]::DwmGetWindowAttribute([ProofWindow]::GetForegroundWindow(), 9, [ref]$r, 16) | Out-Null",
-            '"$($r.L) $($r.T) $($r.R) $($r.B)" | Set-Content C:\\proof\\rect.txt',
+            "$w = New-Object ProofWindow+Rect",
+            "[ProofWindow]::SystemParametersInfo(0x30, 0, [ref]$w, 0) | Out-Null",
+            '"$([Math]::Max($r.L, $w.L)) $([Math]::Max($r.T, $w.T)) $([Math]::Min($r.R, $w.R)) $([Math]::Min($r.B, $w.B))" | Set-Content C:\\proof\\rect.txt',
         ]) + "\r\n")
         scp(env, rect_script, "C:/proof/rect.ps1")
 
