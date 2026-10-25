@@ -6,6 +6,12 @@ update this file.
 
 ## The name
 
+Isomer's icon is `.github/Isomer.icon` (Icon Composer), rendered to
+`.github/icon.png` (`ictool .github/Isomer.icon --export-image --output-file
+.github/icon.png --platform iOS --rendition Default --width 512 --height 512
+--scale 1`; `ictool` is in Xcode's Icon Composer.app): repositories' icons
+live in `.github/`, apps' in their application's folder.
+
 This repo was `universal_ui` until 2026-09-29. It is now **Isomer** ("Isomer
 Swift" where the longer name reads better): the repo and the Bazel module are
 `isomer`, public types are `Isomer…` (`IsomerView`, `IsomerBridge`,
