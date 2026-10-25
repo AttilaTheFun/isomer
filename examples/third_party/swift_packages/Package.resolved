@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AttilaTheFun/agent_ui.git",
       "state" : {
-        "revision" : "cce4559d2c86fbdf7d6f8d75cc246caf8ae6928f",
-        "version" : "0.38.0"
+        "revision" : "3c74af906e76199d27cd5da0221d01a6b4c737eb",
+        "version" : "0.39.0"
       }
     },
     {
@@ -37,21 +37,12 @@
       }
     },
     {
-      "identity" : "h",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/rarestype/h",
-      "state" : {
-        "revision" : "aa3626829160917d4378330617971977cbd78f5b",
-        "version" : "1.0.1"
-      }
-    },
-    {
       "identity" : "open_router_cli",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AttilaTheFun/open_router_cli.git",
       "state" : {
-        "revision" : "080cbe2746312ef9d2c3593e15105780877b399a",
-        "version" : "0.4.0"
+        "revision" : "e059c0cdf4422e4bdb15861c1211d25ec4bc5967",
+        "version" : "0.5.0"
       }
     },
     {
@@ -61,15 +52,6 @@
       "state" : {
         "revision" : "87e50f483c54e6efd60e885f7f5aa946cee68023",
         "version" : "1.2.1"
-      }
-    },
-    {
-      "identity" : "swift-argument-parser",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/apple/swift-argument-parser",
-      "state" : {
-        "revision" : "6a52f3251125d74daf04fcbd5e6f08a75d074382",
-        "version" : "1.8.2"
       }
     },
     {
@@ -208,15 +190,6 @@
       }
     },
     {
-      "identity" : "swift-png",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/tayloraswift/swift-png",
-      "state" : {
-        "revision" : "2d17c6c51c098628574c0383f1119892655a73a2",
-        "version" : "4.5.2"
-      }
-    },
-    {
       "identity" : "swift-protobuf",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-protobuf.git",
@@ -250,15 +223,6 @@
       "state" : {
         "revision" : "feb21a6e9fe3aeac72c055c4092c34106a4f19df",
         "version" : "0.35.0"
-      }
-    },
-    {
-      "identity" : "swiftterm",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/migueldeicaza/SwiftTerm.git",
-      "state" : {
-        "revision" : "2dad6a1e516f755bed77cf9bbd09455062f54758",
-        "version" : "1.99.0"
       }
     }
   ],

@@ -661,8 +661,8 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
     since Isomer's Foundation has URLSession, the two would also make
     `URLSession` ambiguous. rules_swift_package_manager keeps the LAST
     configure_package per package and visits the root module first: a
-    dependency's tag beats the root's (visor_isomer patches visor's
-    MODULE.bazel for SwiftTerm).
+    dependency's tag beats the root's (visor_isomer patched visor's
+    MODULE.bazel for that, while AgentUI had SwiftTerm).
   - The `:foundation` aliases are `one_configuration` wrappers
     (foundation/defs.bzl): RSPM's per-package minimum-OS transitions would
     otherwise build Foundation twice (every Apple platform's option is
