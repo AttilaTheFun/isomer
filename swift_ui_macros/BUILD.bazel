@@ -1,0 +1,81 @@
+load("@rules_swift//swift:swift_compiler_plugin.bzl", "swift_compiler_plugin")
+load("@rules_swift//swift:swift_library.bzl", "swift_library")
+load("@rules_swift//swift:swift_test.bzl", "swift_test")
+
+package(
+    features = [
+        "swift.enable_v6",
+        "treat_warnings_as_errors",
+        "swift.treat_warnings_as_errors",
+        "swift.upcoming.ExistentialAny",
+        "swift.upcoming.StrictConcurrency",
+    ],
+)
+
+# SwiftUI's macros (@State and @Entry, and the helpers their expansions
+# use), expanded as Apple's SwiftUIMacros plugin expands them, naming
+# Isomer's SwiftUI module where Apple's name SwiftUICore. Every SwiftUI
+# library of Isomer's lists :SwiftUIMacros in its `plugins`; rules_swift then
+# loads it for every module that depends on one. docs/swiftui_macros.md.
+# (xcode/ builds the same plugin naming SwiftUICore, for
+# compare_with_xcode.sh.)
+
+# The macros for the tests. The plugin compiles the same sources itself: the
+# compiler asks it for `SwiftUIMacros.StateMacro`, so the types must be the
+# plugin module's own.
+swift_library(
+    name = "library",
+    srcs = [
+        "library/Entry.swift",
+        "library/State.swift",
+    ],
+    module_name = "SwiftUIMacrosLibrary",
+    deps = [
+        "@swift-syntax//:SwiftDiagnostics",
+        "@swift-syntax//:SwiftSyntax",
+        "@swift-syntax//:SwiftSyntaxMacros",
+    ],
+)
+
+filegroup(
+    name = "plugin_srcs",
+    srcs = [
+        "library/Entry.swift",
+        "library/State.swift",
+        "plugin/Plugin.swift",
+    ],
+    visibility = ["//swift_ui_macros:__subpackages__"],
+)
+
+# The module name is the one the macros' declarations name.
+swift_compiler_plugin(
+    name = "SwiftUIMacros",
+    srcs = [":plugin_srcs"],
+    module_name = "SwiftUIMacros",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@swift-syntax//:SwiftCompilerPlugin",
+        "@swift-syntax//:SwiftDiagnostics",
+        "@swift-syntax//:SwiftSyntax",
+        "@swift-syntax//:SwiftSyntaxMacros",
+    ],
+)
+
+swift_test(
+    name = "tests",
+    srcs = ["tests/ExpansionTests.swift"],
+    # Xcode's default @rpath goes through /var/db/xcode_select_link, which
+    # dyld doesn't follow when the test runs under /bin/bash (as swift_ffi's
+    # macro tests).
+    linkopts = [
+        "-Wl,-rpath,/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",  # keep
+        "-Wl,-rpath,/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",  # keep
+        "-Wl,-rpath,/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",  # keep
+    ],
+    deps = [
+        ":library",
+        "@swift-syntax//:SwiftSyntax",
+        "@swift-syntax//:SwiftSyntaxMacros",
+        "@swift-syntax//:SwiftSyntaxMacrosTestSupport",
+    ],
+)

@@ -55,10 +55,35 @@ final class _StateLocation<Value> {
 /// immutable, but the class instance it points to can be re-wired.
 final class _StateBacking<Value> {
     var location: _StateLocation<Value>?
-    var initialValue: Value
+    /// The value to start from, or (a LazyState's) the closure that makes
+    /// it, called once, when it is first wanted.
+    private var initial: Initial
+
+    enum Initial {
+        case value(Value)
+        case thunk(() -> Value)
+    }
 
     init(_ initialValue: Value) {
-        self.initialValue = initialValue
+        initial = .value(initialValue)
+    }
+
+    init(thunk: @escaping () -> Value) {
+        initial = .thunk(thunk)
+    }
+
+    var initialValue: Value {
+        get {
+            switch initial {
+            case .value(let value):
+                return value
+            case .thunk(let make):
+                let value = make()
+                initial = .value(value)
+                return value
+            }
+        }
+        set { initial = .value(newValue) }
     }
 }
 
@@ -72,6 +97,10 @@ public struct State<Value>: _DynamicProperty {
 
     public init(initialValue: Value) {
         self.init(wrappedValue: initialValue)
+    }
+
+    init(backing: _StateBacking<Value>) {
+        self.backing = backing
     }
 
     public var wrappedValue: Value {
@@ -121,6 +150,90 @@ public struct State<Value>: _DynamicProperty {
         }
     }
 }
+
+// MARK: - The @State macro's storage
+
+/// The storage SwiftUI's `@State` macro gives a private state with an
+/// initial value (`__name`): the value is made from its closure once, when
+/// the view is first installed, not each time the view's value is made.
+/// Otherwise a `State`: the same location, read and written the same way.
+@_documentation(visibility: internal)
+public struct LazyState<Value>: _DynamicProperty {
+    let state: State<Value>
+
+    public init(initialValue thunk: @escaping () -> Value) {
+        state = State(backing: _StateBacking(thunk: thunk))
+    }
+
+    public init(_initialValue: Value) {
+        state = State(initialValue: _initialValue)
+    }
+
+    public var wrappedValue: Value {
+        get { state.wrappedValue }
+        nonmutating set { state.wrappedValue = newValue }
+    }
+
+    public var projectedValue: Binding<Value> { state.projectedValue }
+
+    func _connect(storage: StateStorage, key: String, env: EnvironmentValues) {
+        state._connect(storage: storage, key: key, env: env)
+    }
+}
+
+extension LazyState: Sendable where Value: Sendable {}
+
+extension LazyState where Value: ExpressibleByNilLiteral {
+    public init() {
+        self.init(initialValue: { nil })
+    }
+}
+
+extension State {
+    /// The storage of a private `@State` with an initial value, made from
+    /// the closure that makes the value (the macro's `__name`).
+    public static func _makeStorage(_ makeInitialValue: @escaping () -> Value) -> LazyState<Value> {
+        LazyState(initialValue: makeInitialValue)
+    }
+
+    @_disfavoredOverload
+    public static func _makeStorage(_ makeInitialValue: @escaping () -> Value) -> State<Value> {
+        State<Value>(wrappedValue: makeInitialValue())
+    }
+
+    /// The same storage from a value already made (an initializer's).
+    public static func _makeStorage(initialValue: Value) -> LazyState<Value> {
+        LazyState(_initialValue: initialValue)
+    }
+
+    @_disfavoredOverload
+    public static func _makeStorage(initialValue: Value) -> State<Value> {
+        State<Value>(initialValue: initialValue)
+    }
+
+    public static func _makeStorageFrozen(_ makeInitialValue: @escaping () -> Value) -> LazyState<Value> {
+        LazyState(initialValue: makeInitialValue)
+    }
+
+    @_disfavoredOverload
+    public static func _makeStorageFrozen(_ makeInitialValue: @escaping () -> Value) -> State<Value> {
+        State<Value>(initialValue: makeInitialValue())
+    }
+
+    public static func _makeStorageFrozen(initialValue: Value) -> LazyState<Value> {
+        LazyState(_initialValue: initialValue)
+    }
+
+    @_disfavoredOverload
+    public static func _makeStorageFrozen(initialValue: Value) -> State<Value> {
+        State<Value>(initialValue: initialValue)
+    }
+}
+
+/// The macro's `_name` before it is set: nil of the State the closure would
+/// make (the closure only names the type).
+@_transparent
+public func _stateNil<T>(of _: () -> T) -> T? { nil }
 
 /// A state's value read: by the view whose build is running (InPlace.swift's
 /// readers), or, in a GeometryReader's content built while the tree is

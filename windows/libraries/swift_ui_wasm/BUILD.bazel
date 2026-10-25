@@ -1,4 +1,5 @@
 load("@rules_swift//swift:swift.bzl", "swift_library")
+load("//swift_ui_macros:defs.bzl", "SWIFT_UI_MACROS_PLUGINS")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -54,6 +55,7 @@ swift_library(
         # light up canImport(SwiftMap). See //shared/BUILD.bazel.
         "//shared:map_engine_windows",
     ],
+    plugins = SWIFT_UI_MACROS_PLUGINS,
 )
 
 # IsomerDesktopWasmHost: the cell's public entry (WindowsWasmApp) for a host program,

@@ -4,7 +4,7 @@
 
 import FlatBuffers
 import Foundation
-import IsomerCore
+import SwiftUI  // IsomerCore, aliased (BUILD.bazel)
 import IsomerSwiftUI
 
 /// The flat tree of the mock's last frame.
@@ -294,11 +294,11 @@ func checkEnvironmentValues(_ mock: MockRenderer) {
 
 struct HalfDisc: Shape {
     // (Isomer's geometry types: Foundation's share the names.)
-    func path(in rect: IsomerCore.CGRect) -> Path {
+    func path(in rect: SwiftUI.CGRect) -> Path {
         var path = Path()
-        path.addArc(center: IsomerCore.CGPoint(x: rect.midX, y: rect.midY), radius: rect.width / 2,
+        path.addArc(center: SwiftUI.CGPoint(x: rect.midX, y: rect.midY), radius: rect.width / 2,
                     startAngle: .degrees(0), endAngle: .degrees(180), clockwise: false)
-        path.addQuadCurve(to: IsomerCore.CGPoint(x: rect.maxX, y: rect.midY), control: IsomerCore.CGPoint(x: rect.midX, y: rect.minY))
+        path.addQuadCurve(to: SwiftUI.CGPoint(x: rect.maxX, y: rect.midY), control: SwiftUI.CGPoint(x: rect.midX, y: rect.minY))
         path.closeSubpath()
         return path
     }

@@ -2,7 +2,7 @@
 // core's CG stand-ins (CGSize/CGRect) resolve unambiguously (see
 // tests/snapshot/RecordingHost.swift for the same split).
 
-import IsomerCore
+import SwiftUI  // IsomerCore, aliased (BUILD.bazel)
 import IsomerSwiftUI
 
 /// Records every tree the runtime hands over — the test double any consumer

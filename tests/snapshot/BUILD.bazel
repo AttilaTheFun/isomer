@@ -1,5 +1,6 @@
 load("@rules_swift//swift:swift.bzl", "swift_binary", "swift_library")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("//swift_ui_macros:defs.bzl", "SWIFT_UI_MACROS_PLUGINS")
 
 # The platform-agnostic core, compiled for the host so it can be exercised in a
 # plain unit test (no GPU / browser). Module renamed so it doesn't collide with
@@ -24,6 +25,7 @@ swift_library(
         # The Apple-named ones (CoreTransferable, UniformTypeIdentifiers)
         # are the Mac's own here.
     ],
+    plugins = SWIFT_UI_MACROS_PLUGINS,
 )
 
 # Hermetic golden snapshot checker: renders views through the real pipeline with

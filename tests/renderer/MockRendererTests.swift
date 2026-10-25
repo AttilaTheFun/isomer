@@ -7,7 +7,7 @@
 
 import FlatBuffers
 import Foundation
-import IsomerCore
+import SwiftUI  // IsomerCore, aliased (BUILD.bazel)
 import Observation
 import IsomerSwiftUI
 
@@ -139,6 +139,63 @@ func checkOnChangeAfterReappearing(_ mock: MockRenderer) {
     changeValue = 3
     frame()
     expect(changesSeen == ["0→1", "2→3"], "and reports the next change from the value it came back with (\(changesSeen))")
+}
+
+nonisolated(unsafe) var stateMacroMade = 0
+nonisolated(unsafe) var stateMacroDidSet: [Int] = []
+nonisolated(unsafe) var stateMacroRebuilds = 0
+
+func makeStateMacroValue() -> Int {
+    stateMacroMade += 1
+    return 7
+}
+
+/// `@State` is SwiftUI's macro (Macros.swift): a private state with an
+/// initial value is a LazyState, its value made once; an observer runs
+/// around the write.
+struct StateMacroScreen: View {
+    @State private var made = makeStateMacroValue()
+    @State var count = 0 {
+        didSet { stateMacroDidSet.append(count) }
+    }
+
+    var body: some View {
+        Text("made \(made) count \(count)")
+            .onAppear { count += 1 }
+    }
+}
+
+struct StateMacroRoot: View {
+    var body: some View {
+        // Read, so a frame builds this body (and so a new StateMacroScreen) again.
+        let _ = stateMacroRebuilds
+        VStack { StateMacroScreen() }
+    }
+}
+
+@MainActor
+func checkStateMacro(_ mock: MockRenderer) {
+    @MainActor
+    func frame() {
+        stateMacroRebuilds += 1
+        Runtime.shared.setNeedsRender()
+        Runtime.shared.renderFrame()
+        guard let tree = mock.lastTree else { return }
+        let encoder = FlatTreeEncoder()
+        _ = encoder.encode(root: tree)
+        Runtime.shared.fireTreeAppearances(encoder.appearances, disappearances: encoder.disappearances)
+    }
+    Runtime.shared.installRootView { StateMacroRoot() }
+    Runtime.shared.start(host: StubHost(), width: 320, height: 480)
+    frame()
+    frame()
+    frame()
+    #if compiler(>=6.4)
+    // (The property wrapper, before 6.4, makes it with each view value.)
+    expect(stateMacroMade == 1, "a private @State's initial value is made once, however often its view is made (\(stateMacroMade))")
+    #endif
+    expect(stateMacroDidSet == [1], "didSet runs after the write, with the new value (\(stateMacroDidSet))")
+    expect(findTextInTree(mock.lastTree!, "made 7 count 1"), "the view reads both states")
 }
 
 /// An alert with a dismissive action, as Visor's "Sign In to Claude" has.
@@ -1075,11 +1132,11 @@ struct TintedProgressScreen: View {
 /// An app's own `Shape`: its `path(in:)` travels to the host as the shape
 /// node's `path` param, evaluated in the unit square.
 struct CheckerShape: Shape {
-    func path(in rect: IsomerCore.CGRect) -> Path {
+    func path(in rect: SwiftUI.CGRect) -> Path {
         var path = Path()
         let cell = rect.width / 2
-        path.addRect(IsomerCore.CGRect(x: rect.minX, y: rect.minY, width: cell, height: cell))
-        path.addRect(IsomerCore.CGRect(x: rect.minX + cell, y: rect.minY + cell, width: cell, height: cell))
+        path.addRect(SwiftUI.CGRect(x: rect.minX, y: rect.minY, width: cell, height: cell))
+        path.addRect(SwiftUI.CGRect(x: rect.minX + cell, y: rect.minY + cell, width: cell, height: cell))
         return path
     }
 }
@@ -2528,6 +2585,7 @@ struct Main {
         checkLazyRows(mock)
         checkTaskCancellation(mock)
         checkOnChangeAfterReappearing(mock)
+        checkStateMacro(mock)
         checkButtonRoles(mock)
         checkDisabledBarItems(mock)
         checkInspectorPlacement(mock)

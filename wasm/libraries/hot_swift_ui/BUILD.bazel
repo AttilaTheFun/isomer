@@ -79,7 +79,12 @@ swift_library(
     ],
     # The `Extern` feature is for the `@_extern(c, "main")` trampoline the
     # reactor uses to run the app's @main (it has no _start).
+    # SwiftUI's macros left out (Macros.swift): this is the SwiftUI the
+    # Playground's compilers build against, in a browser or on a phone,
+    # where no compiler plugin can run; a reactor built here with Bazel
+    # means the same with the property wrapper.
     copts = [
+        "-DISOMER_NO_SWIFTUI_MACROS",
         "-enable-experimental-feature",
         "Extern",
     ],
