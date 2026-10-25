@@ -1,4 +1,8 @@
-"""The Isomer example applications — a STANDALONE Bazel module.
+"""Isomer's applications — a STANDALONE Bazel module: the Storybook
+(//storybook, its apps //<platform>/storybook_<platform>_application), the
+Playground (//playground: write SwiftUI on the device, build it there, run
+it there; on iOS, the web and Android) and the example applications and
+probes.
 
 This module consumes isomer exactly the way an external application
 does: `bazel_dep` + an override (here `local_path_override` on the parent
@@ -185,8 +189,9 @@ bazel_dep(name = "rules_xcodeproj", version = "4.1.0")
 # runtime come from the package — cross-compiled to iOS, wasm32, Android).
 bazel_dep(name = "rules_swift_package_manager", version = "1.25.0")
 
-# rules_swift_package_manager on Windows (the Windows Storybook), the
-# Playground's patch (playground/MODULE.bazel says what it changes).
+# rules_swift_package_manager on Windows (the Windows Storybook and
+# Playground): tools/patches/rules_swift_package_manager_windows.patch says
+# what it changes.
 single_version_override(
     module_name = "rules_swift_package_manager",
     patch_strip = 1,
@@ -272,12 +277,30 @@ swift_deps.configure_package(
     target_deps = {"SwiftASN1": ["@isomer//:foundation"]},
 )
 
+# AgentUI (the Playground's agent page) imports SwiftUI and Foundation. On
+# Apple those are the system's; on the web and Android isomer's `SwiftUI` and
+# `Foundation` modules, each reached through one label that resolves per
+# platform (and to nothing on Apple). The canonical repository names: the
+# generated package repos cannot see this module's apparent names.
+swift_deps.configure_package(
+    name = "agent_ui",
+    target_deps = {
+        "AgentUI": ["@@isomer+//:swift_ui", "@@isomer+//:foundation"],
+        "InboxUI": ["@@isomer+//:swift_ui", "@@isomer+//:foundation"],
+        "MarkdownViews": ["@@isomer+//:swift_ui", "@@isomer+//:foundation"],
+        "MessagesCore": ["@@isomer+//:swift_ui", "@@isomer+//:foundation"],
+        "MessagesUI": ["@@isomer+//:swift_ui", "@@isomer+//:foundation"],
+        "NavigationUI": ["@@isomer+//:swift_ui", "@@isomer+//:foundation"],
+    },
+)
 use_repo(
     swift_deps,
     "swift_package",
+    "swiftpkg_agent_ui",
     "swiftpkg_grpc_swift_2",
     "swiftpkg_grpc_swift_nio_transport",
     "swiftpkg_grpc_swift_protobuf",
+    "swiftpkg_open_router_cli",
     "swiftpkg_swift_protobuf",
     "swiftpkg_swift_sql",
 )

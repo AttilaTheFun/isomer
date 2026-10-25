@@ -17,7 +17,7 @@ swift_library(
     # next to the reimplementation's module of the same name.
     tags = ["manual"],
     deps = [
-        "@isomer//storybook",
+        "//storybook",
         "//shared/platform_services",
         "@isomer//wasm/libraries/swift_ui",
         "@isomer//wasm/libraries/swift_ui:isomer",

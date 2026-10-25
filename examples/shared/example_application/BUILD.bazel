@@ -2,7 +2,7 @@ load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 
 # The example application's own sources (its @main, the native platform
 # services a compiled cell installs), compiled for all platforms beside
-# the Storybook library they show (@isomer//storybook): an app that
+# the Storybook library they show (//storybook): an app that
 # compiles :srcs depends on it.
 filegroup(
     name = "srcs",
@@ -13,13 +13,13 @@ filegroup(
 # The Storybook's images (its assets/ and asset catalog).
 alias(
     name = "assets",
-    actual = "@isomer//storybook:assets",
+    actual = "//storybook:assets",
     visibility = ["//visibility:public"],
 )
 
 alias(
     name = "xcassets",
-    actual = "@isomer//storybook:xcassets",
+    actual = "//storybook:xcassets",
     visibility = ["//visibility:public"],
 )
 

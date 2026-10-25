@@ -1,0 +1,29 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@isomer//tools/android:defs.bzl", "isomer_android_app")
+
+# The transcript stress app (//playground/shared/transcript_stress_application) as
+# compiled Swift under Jetpack Compose: scroll and stream a long AgentUI
+# conversation and measure frames.
+
+swift_library(
+    name = "app_swift",
+    srcs = ["//playground/shared/transcript_stress_application:srcs"],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "TranscriptStressApp",
+    tags = ["manual"],  # only meaningful through the android transition
+    deps = [
+        "@swiftpkg_agent_ui//:AgentUI",
+        "@isomer//android/libraries/swift_ui",
+        "@isomer//android/libraries/swift_ui:isomer",
+    ],
+)
+
+isomer_android_app(
+    name = "transcript_stress_android_application",
+    default_renderer = "jetpackCompose",
+    label = "Transcript Stress",
+    package = "dev.isomer.transcriptstress",
+    swift_library = ":app_swift",
+    visibility = ["//visibility:public"],
+)

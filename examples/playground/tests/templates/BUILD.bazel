@@ -1,0 +1,27 @@
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+
+
+# Every template a new project starts from compiles and links against the
+# Playground SDK, with the invocation the apps' compilers run
+# (tools/playground/dev_compile_server.py's, the iOS ToolchainCompiler's):
+# "out of the box" means none of them shows the reader an error. The host
+# toolchain stands in for the three on-device compilers (iOS, the browser,
+# Android), which take the same SDK; tests/e2e/run.py compiles the templates
+# with the Android and iOS apps' own.
+sh_test(
+    name = "templates_compile_test",
+    srcs = ["templates_compile_test.sh"],
+    args = [
+        "$(rootpath //playground/tools/playground:dev_compile_server.py)",
+        "$(rootpath //playground/apple/playground_ios_application:playground_sdk)",
+        "$(rootpaths //playground/web/playground_web_application:templates)",
+    ],
+    data = [
+        "//playground/apple/playground_ios_application:playground_sdk",
+        "//playground/tools/playground:dev_compile_server.py",
+        "//playground/web/playground_web_application:templates",
+    ],
+    # The host toolchain is read from Bazel's output base (the repositories
+    # the SDK was built with), outside the sandbox.
+    tags = ["local"],
+)

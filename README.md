@@ -93,12 +93,13 @@ package's values in `.bazelrc` (`build --minimum_os_version=14.0` next to
 `--macos_minimum_os=14.0`) and the transition is a no-op.
 
 **The Playground** (write SwiftUI on the device, build it there, run it on
-Isomer: an iOS app, a web site and an Android app) lives in `playground/`, a
-Bazel module of its own that consumes isomer from this checkout
-(`local_path_override`) as `examples/` does (`cd playground && bazel build
-//...`; its README and AGENTS.md say more).
+Isomer: an iOS app, a web site and an Android app) lives in
+`examples/playground/`, part of the examples' module, which consumes isomer
+from this checkout (`local_path_override`) as an outside application does
+(`cd examples && bazel build //playground/...`; its README and AGENTS.md say
+more).
 It was `examples/*/playground_*` here until 0.15, then a repository of its
-own until 0.35.
+own until 0.35, then a module of its own in `playground/` until 0.39.
 
 **Foundation and CoreGraphics.** On wasm and Android, `import Foundation`
 is Isomer's: swift-foundation's FoundationEssentials built from Isomer's fork
@@ -273,7 +274,7 @@ carries this repo's entire host boundary — `swift_ffi/examples` has
 standalone greeter apps per platform.
 
 What to expect once a window is up: the **Storybook**
-([storybook/](storybook/)), every SwiftUI API Isomer implements, a story
+([examples/storybook/](examples/storybook/)), every SwiftUI API Isomer implements, a story
 each, in fifteen areas (text, images, buttons, controls, text input, lists
 and forms, layout, scrolling, navigation, presentation, shapes and color,
 animation, gestures, state and data, and the Isomer module's own views). A

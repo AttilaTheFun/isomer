@@ -39,29 +39,11 @@ swift_library(
 )
 
 # The same bridge with Foundation's networking, for reactors whose host speaks
-# swift_ffi (the Playground's builds): it installs the transports the host
-# injects (the page's fetch and WebSocket, WasmView's URLSession, Android's),
-# so URLSession reaches the network. The plain one above keeps the slim
-# reactors free of swift_ffi.
-swift_library(
+# swift_ffi (the Playground's builds): network/BUILD.bazel. A package of its
+# own: it is a module named HotBridge too, and the examples build both.
+alias(
     name = "hot_bridge_network",
-    package_name = "isomer",
-    srcs = ["//wasm/libraries/swift_ui:HotBridge.swift"],
-    alwayslink = True,
-    copts = [
-        "-enable-experimental-feature",
-        "Extern",
-    ],
-    module_name = "HotBridge",
-    deps = [
-        ":hot_swift_ui",
-        "//shared/isomer_network_host",
-    ] + select({
-        # Natively (a host-configuration analysis, or apple/compiled): the
-        # host callbacks' C struct (apple/libraries/native_runtime).
-        "@platforms//os:wasi": [],
-        "//conditions:default": ["//apple/libraries/native_runtime:iso_hot_native"],
-    }),
+    actual = "//wasm/libraries/hot_swift_ui/network:hot_bridge_network",
 )
 
 # The Isomer module against the slim SwiftUI (the Playground SDK): what

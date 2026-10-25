@@ -39,8 +39,7 @@ the Playground:
 | `metal/` | (isomer) | Isomer's `Metal` (`//metal/metal`), IsomerMetal (`//metal/isomer_metal`: the MSL→WGSL translator, the backend interface), the web backend (`//metal/web`, `//metal/runtime`) |
 | `swift_gpu/` | (isomer) | the GPU abstraction (`//swift_gpu/{core,metal,apple,android,wasm,linux,windows}`) |
 | `swift_map/` | (isomer) | the OpenStreetMap renderer (`//swift_map/swift_map/{core,renderer}`, platform libraries under `//swift_map/<platform>/libraries/...`, its example apps and their small tools) |
-| `examples/` | `isomer_examples` | the example apps. A module of its own: it consumes isomer the way an outside application does. |
-| `playground/` | `isomer_playground` | the Playground (write SwiftUI on the device, build it there, run it on Isomer: iOS, web, Android). A module of its own, consuming isomer as `examples/` does; `playground/AGENTS.md` is its guide. |
+| `examples/` | `isomer_examples` | Isomer's applications: the Storybook (`examples/storybook`, its apps `examples/<platform>/storybook_<platform>_application`), the Playground (`examples/playground`: write SwiftUI on the device, build it there, run it on Isomer: iOS, web, Android; `examples/playground/AGENTS.md` is its guide) and the example apps and probes. A module of its own: it consumes isomer the way an outside application does. |
 
 Layering still points one way: CoreGraphics < Foundation < swift_ffi <
 Metal < swift_gpu < swift_map < the SwiftUI libraries < the Isomer module;
@@ -98,17 +97,15 @@ Things the fold taught:
   isomer overrode every consumer's SDK choice. Consumers declare
   `swift.toolchain`/`wasm_sdk`/`android_sdk` and register the Swift
   toolchains themselves (examples/MODULE.bazel is the block to copy).
-- **The Playground lives in `playground/`** (since 0.35), a Bazel module of
-  its own (`isomer_playground`) that consumes the parent checkout exactly as
-  `examples/` does (`bazel_dep` + `local_path_override(path = "..")`,
-  isomer's root-only overrides repeated, its registry in .bazelrc; the
-  root's .bazelignore lists it):
-  the iOS, web and Android apps, the splash page, the compilers' build
-  scripts (`tools/playground_toolchain`, `tools/browser_toolchain`), its
-  docs and tests; `playground/AGENTS.md` is its guide. It was
-  `examples/*/playground_*` until 0.15, then a repository of its own until
-  0.35. Its MODULE.bazel follows examples/MODULE.bazel: change an override
-  in both. What is framework stays in isomer proper: `wasm_sdk_bundle`,
+- **The Playground lives in `examples/playground/`** (since 0.39), part of
+  the examples' module (`//playground/...` there): the iOS, web and Android
+  apps, the splash page, the compilers' build scripts
+  (`tools/playground_toolchain`, `tools/browser_toolchain`), its docs and
+  tests; `examples/playground/AGENTS.md` is its guide. It was
+  `examples/*/playground_*` until 0.15, a repository of its own until 0.35,
+  and a module of its own in `playground/` until 0.39 (one output base and
+  one copy of isomer's overrides now, with the Storybook's: one Bazel
+  workspace for both apps). What is framework stays in isomer proper: `wasm_sdk_bundle`,
   `site_imports_test`, `assemble_directory` (tools/wasm/defs.bzl), WasmView,
   `AppHostViews`, hot_host.js. The headless Chrome drivers
   `cdp_shot.js`/`cdp_eval.js` are in `tools/testing` beside cdp.py.
@@ -213,7 +210,8 @@ renderers (and their baseline benchmark cells) and the WinUI stub are gone.
   swift_gpu), so every GPU backend looks and feels the same. The only native bridges there are
   app-authored representables and the invisible IME-capture text input.
 
-**The Storybook** (storybook/, `@isomer//storybook`, since 0.38): every
+**The Storybook** (examples/storybook/, the examples' `//storybook`, since
+0.38; in isomer's root until 0.39): every
 SwiftUI API Isomer implements, a story each (stories/<Area>.swift), its
 page the story's code, what the API does and the code running. A story's
 view sits between `// story: <id>` and `// end story` lines; :snippets

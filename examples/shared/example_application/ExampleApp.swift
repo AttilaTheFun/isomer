@@ -1,4 +1,4 @@
-// The example application: the Storybook (@isomer//storybook), compiled for
+// The example application: the Storybook (//storybook), compiled for
 // every platform. The Storybook apps (com.LoganShire.IsomerStorybook,
 // "Storybook") are its one cell per platform, each with that platform's
 // renderer:
