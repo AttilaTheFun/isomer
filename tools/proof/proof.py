@@ -123,7 +123,7 @@ def changed_stories(base):
     """Every story in a story file this checkout changes from `base` (its
     commits since they parted, and what isn't committed)."""
     merge_base = sh(["git", "merge-base", base, "HEAD"], cwd=ISOMER).stdout.strip()
-    names = sh(["git", "diff", "--name-only", merge_base, "--", "storybook/stories/"], cwd=ISOMER).stdout.split()
+    names = sh(["git", "diff", "--name-only", merge_base, "--", "examples/storybook/stories/"], cwd=ISOMER).stdout.split()
     found = set()
     for name in names:
         path = os.path.join(ISOMER, name)
