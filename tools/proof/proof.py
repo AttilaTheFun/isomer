@@ -24,6 +24,11 @@ every story in a story file the change touches, and the Playground. Its
 runs say `"scope": "quick"` and name no release, so they never stand for
 one: a release is always proven whole.
 
+The Storybook is launched once a platform and taken through its stories
+in place (its control file, ISO_STORYBOOK_CONTROL, or on Android the URL
+iso://story/<id>): a second or two a story where a launch each took five
+to fourteen. A story that doesn't open so is launched to on its own.
+
 What changes between runs without the apps changing is held still or left
 out: the iPhone's and Android's status bars (simctl's override, SystemUI's
 demo mode: 9:41), and on the desktops everything but the app's window (a
@@ -138,6 +143,45 @@ def crop(path, box):
             image.crop(box).save(path)
     except Exception as error:
         log(f"crop {os.path.basename(path)}: {error}")
+
+
+# Stories that load something (a picture from the network, a web page, map
+# tiles, a video) get longer to settle after they open.
+SLOW_STORIES = {"images.async": 4, "isomer.webview": 5, "isomer.map": 5, "isomer.video": 4}
+
+
+def wait_until(check, seconds):
+    """Whether `check()` came true within `seconds`."""
+    deadline = time.time() + seconds
+    while time.time() < deadline:
+        try:
+            if check():
+                return True
+        except Exception:
+            pass
+        time.sleep(0.25)
+    return False
+
+
+class Switcher:
+    """The Storybook taken through its stories in one launch. `start(path)`
+    launches it (its control file set) and shoots its opening screen;
+    `request(story)` asks for a story; `shown()` says which story it last
+    opened (None where it can't say: then a fixed wait); `shoot(path)`."""
+
+    def __init__(self, start, request, shoot, shown=None, settle=1.0):
+        self.start, self.request, self.shoot, self.shown, self.settle = start, request, shoot, shown, settle
+
+    def show(self, story, path):
+        """The story shot in place: False when it didn't open."""
+        self.request(story)
+        if self.shown is None:
+            time.sleep(self.settle + 1.0)
+        elif not wait_until(lambda: self.shown() == story, 10):
+            return False
+        time.sleep(self.settle + SLOW_STORIES.get(story, 0))
+        self.shoot(path)
+        return True
 
 
 # --- oss
@@ -261,21 +305,39 @@ def diff_images(reference, capture, out):
     return changed
 
 
-def shoot_apps(review, platform, device, orientation, launcher, story_list, waits):
+def storybook_shots(out, story_list, launcher, waits, switcher, app="storybook"):
+    """The Storybook's opening screen and every story's page into `out`:
+    in place through `switcher` where the platform has one, a launch each
+    otherwise (and for a story that didn't open in place)."""
+    shots = [("Stories", "stories.png")]
+    try:
+        if switcher:
+            switcher.start(os.path.join(out, "stories.png"))
+        else:
+            launcher(app, {}, waits["open"], os.path.join(out, "stories.png"))
+    except Exception as error:
+        log(f"{app} stories: {error}")
+    for story, title in story_list:
+        capture = os.path.join(out, f"{story}.png")
+        try:
+            if not (switcher and switcher.show(story, capture)):
+                if switcher:
+                    log(f"{app} {story}: didn't open in place; launched to")
+                launcher(app, {"ISO_STORYBOOK_STORY": story}, waits["story"] + SLOW_STORIES.get(story, 0), capture)
+        except Exception as error:
+            log(f"{app} {story}: {error}")
+        shots.append((title, f"{story}.png"))
+    return shots
+
+
+def shoot_apps(review, platform, device, orientation, launcher, story_list, waits, switcher=None):
     """Both apps on one platform. `launcher(app, environment, wait, path)`
     launches the app afresh with `environment`, waits, and shoots `path`.
     `waits`: seconds after a launch: open (the app's opening screen or a
-    page), story, run (a project built and running)."""
+    page), story, run (a project built and running). `switcher`: the
+    Storybook's stories in one launch (Switcher)."""
     out = review.dir(f"{platform}-storybook")
-    shots = []
-    for slug, title, environment in [("stories", "Stories", {})] + [
-            (story, title, {"ISO_STORYBOOK_STORY": story}) for story, title in story_list]:
-        capture = f"{slug}.png"
-        try:
-            launcher("storybook", environment, waits["open"] if not environment else waits["story"], os.path.join(out, capture))
-        except Exception as error:
-            log(f"storybook {slug}: {error}")
-        shots.append((title, capture))
+    shots = storybook_shots(out, story_list, launcher, waits, switcher)
     review.cell(f"{platform}-storybook", "storybook", device, orientation, shots)
 
     out = review.dir(f"{platform}-playground")
@@ -327,22 +389,29 @@ def ios(review, story_list, builds):
             time.sleep(wait)
             sh(["xcrun", "simctl", "io", udid, "screenshot", path])
 
-        shoot_apps(review, "ios", "iPhone (simulator)", "portrait", launcher, story_list,
-                   {"open": 5, "story": 4, "run": 25})
+        def switcher(app):
+            # The simulator runs on this Mac (oss's server is here): its apps
+            # read and write the control file where the proof does.
+            control = os.path.join(tempfile.mkdtemp(prefix=f"proof-ios-{app}-"), "control")
+
+            def read(path):
+                return open(path).read().strip() if os.path.exists(path) else None
+            return Switcher(start=lambda path: launcher(app, {"ISO_STORYBOOK_CONTROL": control}, 5, path),
+                            request=lambda story: open(control, "w").write(story),
+                            shown=lambda: read(control + ".shown"),
+                            shoot=lambda path: sh(["xcrun", "simctl", "io", udid, "screenshot", path]))
+
+        waits = {"open": 5, "story": 4, "run": 25}
+        shoot_apps(review, "ios", "iPhone (simulator)", "portrait", launcher, story_list, waits, switcher("storybook"))
         # The Storybook compiled against Isomer's frameworks, each story
         # beside the one just shot with Apple's SwiftUI.
         native = review.dir("ios-storybook")
         out = review.dir("ios-storybook-isomer")
         shots = []
-        for slug, title in [("stories", "Stories")] + story_list:
-            capture, reference = f"{slug}.png", f"{slug}.reference.png"
-            try:
-                launcher("storybook-isomer", {} if slug == "stories" else {"ISO_STORYBOOK_STORY": slug},
-                         5 if slug == "stories" else 4, os.path.join(out, capture))
-                if os.path.exists(os.path.join(native, capture)):
-                    shutil.copyfile(os.path.join(native, capture), os.path.join(out, reference))
-            except Exception as error:
-                log(f"storybook-isomer {slug}: {error}")
+        for title, capture in storybook_shots(out, story_list, launcher, waits, switcher("storybook-isomer"), app="storybook-isomer"):
+            reference = capture.replace(".png", ".reference.png")
+            if os.path.exists(os.path.join(native, capture)):
+                shutil.copyfile(os.path.join(native, capture), os.path.join(out, reference))
             shots.append((title, capture, reference))
         review.compared_cell("ios-storybook-isomer", "storybook", "iPhone (simulator), Isomer's SwiftUI against Apple's",
                              "portrait", shots)
@@ -373,20 +442,29 @@ def macos(review, story_list, builds):
         scp(env, helper, "/tmp/window_rect")
         names = " ".join(APPS[app]["name"] for app in APPS)
 
-        def launcher(app, environment, wait, path):
-            name = APPS[app]["name"]
-            ssh(env, f"pkill -x {name}; sleep 1", check=False)
-            flags = " ".join(f"--env {k}={shlex.quote(v)}" for k, v in environment.items())
-            ssh(env, f"sudo launchctl asuser $(id -u runner) open -n {flags} /tmp/{name}.app")
-            time.sleep(wait)
+        def shoot(path):
             oss_shot(env, path)
             rect = ssh(env, f"sudo launchctl asuser $(id -u runner) /tmp/window_rect {names}", check=False).stdout.split()
             if len(rect) == 4:
                 x, y, w, h = map(int, rect)
                 crop(path, (x, y, x + w, y + h))
 
+        def launcher(app, environment, wait, path):
+            name = APPS[app]["name"]
+            ssh(env, f"pkill -x {name}; sleep 1", check=False)
+            flags = " ".join(f"--env {k}={shlex.quote(v)}" for k, v in environment.items())
+            ssh(env, f"sudo launchctl asuser $(id -u runner) open -n {flags} /tmp/{name}.app")
+            time.sleep(wait)
+            shoot(path)
+
+        control = "/tmp/storybook-control"
+        ssh(env, f"rm -f {control} {control}.shown", check=False)
+        switcher = Switcher(start=lambda path: launcher("storybook", {"ISO_STORYBOOK_CONTROL": control}, 6, path),
+                            request=lambda story: ssh(env, f"printf %s {shlex.quote(story)} > {control}"),
+                            shown=lambda: ssh(env, f"cat {control}.shown 2>/dev/null", check=False).stdout.strip(),
+                            shoot=shoot)
         shoot_apps(review, "macos", "Mac (macOS 27 VM)", "landscape", launcher, story_list,
-                   {"open": 6, "story": 4, "run": 30})
+                   {"open": 6, "story": 4, "run": 30}, switcher)
         ssh(env, "pkill -x Storybook; pkill -x Playground", check=False)
     finally:
         release(env)
@@ -430,8 +508,16 @@ def android(review, story_list, builds):
         # The first launch after an install shows the splash a while longer.
         for app in APPS:
             launcher(app, {}, 8, os.path.join(tempfile.mkdtemp(), "warm.png"))
+        # The running Storybook takes iso://story/<id> (a VIEW intent to its
+        # single-task activity, onOpenURL); it can't say when it has opened
+        # one, so a fixed wait.
+        bundle = APPS["storybook"]["bundle"]
+        switcher = Switcher(start=lambda path: launcher("storybook", {}, 6, path),
+                            request=lambda story: sh(adb + ["shell", "am", "start", "-a", "android.intent.action.VIEW",
+                                                            "-d", shlex.quote(f"iso://story/{story}"), bundle]),
+                            shoot=lambda path: oss_shot(env, path), settle=1.5)
         shoot_apps(review, "android", "Android phone (emulator)", "portrait", launcher, story_list,
-                   {"open": 6, "story": 5, "run": 30})
+                   {"open": 6, "story": 5, "run": 30}, switcher)
         for app in APPS.values():
             sh(adb + ["shell", "am", "force-stop", app["bundle"]], check=False)
     finally:
@@ -518,19 +604,28 @@ def linux(review, story_list, builds):
         session = "XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0 DISPLAY=:0"
         kill = "for p in $(pgrep -x storybook) $(pgrep -x playground) $(pgrep -x playground_wasm); do kill $p; done"
 
-        def launcher(app, environment, wait, path):
-            ssh(env, f"{kill}; sleep 1", check=False)
-            assignments = " ".join(f"{k}={shlex.quote(v)}" for k, v in environment.items())
-            ssh(env, f"cd /tmp && ({session} {assignments} nohup /tmp/{app}-linux/run.sh >/tmp/{app}.log 2>&1 &)")
-            time.sleep(wait)
+        def shoot(path):
             oss_shot(env, path)
             # Below GNOME's top bar (its clock) and right of its dock.
             from PIL import Image
             width, height = Image.open(path).size
             crop(path, (67, 32, width, height))
 
+        def launcher(app, environment, wait, path):
+            ssh(env, f"{kill}; sleep 1", check=False)
+            assignments = " ".join(f"{k}={shlex.quote(v)}" for k, v in environment.items())
+            ssh(env, f"cd /tmp && ({session} {assignments} nohup /tmp/{app}-linux/run.sh >/tmp/{app}.log 2>&1 &)")
+            time.sleep(wait)
+            shoot(path)
+
+        control = "/tmp/storybook-control"
+        ssh(env, f"rm -f {control} {control}.shown", check=False)
+        switcher = Switcher(start=lambda path: launcher("storybook", {"ISO_STORYBOOK_CONTROL": control}, 8, path),
+                            request=lambda story: ssh(env, f"printf %s {shlex.quote(story)} > {control}"),
+                            shown=lambda: ssh(env, f"cat {control}.shown 2>/dev/null", check=False).stdout.strip(),
+                            shoot=shoot, settle=2.0)
         shoot_apps(review, "linux", "Ubuntu 26.04 (VM, llvmpipe)", "landscape", launcher, story_list,
-                   {"open": 8, "story": 6, "run": 50})
+                   {"open": 8, "story": 6, "run": 50}, switcher)
         ssh(env, kill, check=False)
     finally:
         release(env)
@@ -698,6 +793,9 @@ def windows(review, story_list, builds):
                "schtasks /create /f /tn IsomerProof /tr 'powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File C:\\proof\\run.ps1' "
                "/sc once /st 23:59 /ru runner /it | Out-Null; schtasks /run /tn IsomerProof | Out-Null")
             time.sleep(wait)
+            shoot(path)
+
+        def shoot(path):
             oss_shot(env, path)
             box = window_box()
             if box:
@@ -706,8 +804,14 @@ def windows(review, story_list, builds):
         # The first launch after packaging is scanned by Windows first: longer.
         launcher("storybook", {}, 30, os.path.join(tempfile.mkdtemp(), "warm.png"))
         launcher("playground", {}, 30, os.path.join(tempfile.mkdtemp(), "warm.png"))
+        control = "C:\\proof\\storybook-control.txt"
+        ps(f"if (Test-Path {control}.shown) {{ Remove-Item {control}.shown }}", check=False)
+        switcher = Switcher(start=lambda path: launcher("storybook", {"ISO_STORYBOOK_CONTROL": control}, 12, path),
+                            request=lambda story: ps(f"Set-Content -NoNewline -Path {control} -Value '{story}'"),
+                            shown=lambda: ps(f"if (Test-Path {control}.shown) {{ Get-Content {control}.shown }}", check=False).stdout.strip(),
+                            shoot=shoot, settle=2.0)
         shoot_apps(review, "windows", "Windows 11 (VM, ARM64)", "landscape", launcher, story_list,
-                   {"open": 12, "story": 10, "run": 60})
+                   {"open": 12, "story": 10, "run": 60}, switcher)
         ps(stop, check=False)
     finally:
         release(env)
