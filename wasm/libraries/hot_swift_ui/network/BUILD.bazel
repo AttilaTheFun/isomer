@@ -1,0 +1,32 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The iso_hot bridge with Foundation's networking, for reactors whose host
+# speaks swift_ffi (the Playground's builds): it installs the transports the
+# host injects (the page's fetch and WebSocket, WasmView's URLSession,
+# Android's), so URLSession reaches the network. The plain one
+# (../:hot_bridge) keeps the slim reactors free of swift_ffi. In a package
+# of its own: both are modules named HotBridge, and a build that has both
+# (the examples' module: its reactors and the Playground) would write two
+# HotBridge.swiftmodule in one directory.
+swift_library(
+    name = "hot_bridge_network",
+    package_name = "isomer",
+    srcs = ["//wasm/libraries/swift_ui:HotBridge.swift"],
+    alwayslink = True,
+    copts = [
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    module_name = "HotBridge",
+    deps = [
+        "//shared/isomer_network_host",
+        "//wasm/libraries/hot_swift_ui",
+    ] + select({
+        # Natively (a host-configuration analysis, or apple/compiled): the
+        # host callbacks' C struct (apple/libraries/native_runtime).
+        "@platforms//os:wasi": [],
+        "//conditions:default": ["//apple/libraries/native_runtime:iso_hot_native"],
+    }),
+)

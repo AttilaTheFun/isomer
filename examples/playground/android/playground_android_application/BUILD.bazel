@@ -1,0 +1,114 @@
+load("@isomer//tools/android:defs.bzl", "flat_assets", "isomer_android_app")
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+# The Playground on Android: the web Playground's Swift (projects, the agent
+# chat, the editor sheet, the run cover) built against Isomer's Android
+# SwiftUI under Jetpack Compose, with the host in Kotlin
+# (PlaygroundServices.kt). The compile is swift-frontend and wasm-ld built
+# for Android arm64 (tools/playground_toolchain's Android phases), shipped in
+# the APK's native library directory and run as processes — a compile of the
+# Counter takes seconds on a Pixel 3a; the build runs on WasmKit in a
+# WasmView, in a process of its own (RunActivity); chat goes to OpenRouter.
+#
+#   android/playground_android_application/stage_toolchain.sh   # once: toolchain/
+#   bazel run //playground/android/playground_android_application
+#
+# Without the staged toolchain the app builds and runs, and says so where the
+# compiler would be.
+
+swift_library(
+    name = "app_swift",
+    srcs = [
+        "//playground/shared/app:srcs",
+        "//playground/web/playground_web_application:WebApp.swift",
+    ],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "PlaygroundAndroid",
+    tags = ["manual"],
+    deps = [
+        "@isomer//shared/platform_services",
+        "@isomer//android/libraries/swift_ui",
+        "@isomer//android/libraries/swift_ui:isomer",
+        "@swiftpkg_agent_ui//:AgentUI",
+    ],
+)
+
+# The sample apps (the New Project templates), and the SDK when
+# stage_toolchain.sh has run (one zip: resource dir, sysroot, Isomer modules).
+flat_assets(
+    name = "assets",
+    srcs = [
+        ":web_site_zip",
+        "//playground/web/playground_web_application:templates",
+    ] + glob(["toolchain/toolchain.zip"], allow_empty = True),
+)
+
+# The web-run page — the iOS Playground's bundled site (index.html, the
+# react renderer, the generic iso_hot host) — as one zip the in-app server
+# unpacks; assets are flat, so a zip carries the runtime/ directory.
+genrule(
+    name = "web_site_zip",
+    srcs = ["//playground/apple/playground_ios_application:playground_site"],
+    outs = ["web_site.zip"],
+    cmd = "cd $(location //playground/apple/playground_ios_application:playground_site) && zip -q -r -X $$OLDPWD/$@ .",
+)
+
+# The compiler, the linker and their libraries, as prebuilt native libraries
+# the APK carries under lib/arm64-v8a (extracted at install: the app runs
+# libswift-frontend.so and libwasm-ld.so from its native library directory).
+cc_library(
+    name = "native_toolchain",
+    srcs = glob(["toolchain/native/*.so"], allow_empty = True),
+    tags = ["manual"],
+    target_compatible_with = ["@platforms//os:android"],
+)
+
+isomer_android_app(
+    name = "playground_android_application",
+    assets = ":assets",
+    default_renderer = "jetpackCompose",
+    # The build's window: its own process (see RunActivity.kt).
+    extra_application = """
+        <activity
+            android:name="dev.isomer.runtime.RunActivity"
+            android:process=":run"
+            android:exported="false" />""",
+    extra_binary_deps = [
+        ":native_toolchain",
+        # The wasm engine (WasmKit) the build's window runs a reactor on.
+        "@isomer//android/libraries/wasm_view:engine_native",
+    ],
+    label = "Playground",
+    icon = "//playground/artwork/playground_icon:ic_launcher.png",
+    package = "com.LoganShire.IsomerPlayground",
+    services_deps = [
+        "@isomer//android/libraries/wasm_view:wasm_engine_bindings",
+        "@isomer//tools/android:maven_androidx_browser_browser",
+        "@isomer//tools/android:maven_org_jetbrains_kotlinx_kotlinx_coroutines_android",
+        "@isomer//tools/android:maven_org_jetbrains_kotlinx_kotlinx_coroutines_core",
+    ],
+    services_installer = "dev.isomer.runtime.PlaygroundAndroidServices.install(this)",
+    services_kt = ":host_kotlin",
+    swift_library = ":app_swift",
+    # A project may fetch over plain HTTP (a dev server on the LAN).
+    uses_cleartext_traffic = True,
+    version_code = 38000,
+    version_name = "0.38.0",
+)
+
+# The host, with the WasmView the run surface embeds (the wasm_view Kotlin
+# is a source set compiled per app) and the reactor's platform services.
+filegroup(
+    name = "host_kotlin",
+    srcs = [
+        "PlaygroundServices.kt",
+        "RunActivity.kt",
+        "WebRunServer.kt",
+        # The example app's services (HTTP, the file sandbox, the keychain).
+        "//playground/android/platform_services:AppServices.kt",
+        "//playground/android/platform_services:wasm_srcs",
+        "@isomer//android/libraries/wasm_view:runtime_kotlin",
+    ],
+)

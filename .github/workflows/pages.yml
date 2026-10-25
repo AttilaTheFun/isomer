@@ -1,15 +1,15 @@
 # Deploys Isomer's web site to GitHub Pages (https://attilathefun.github.io/isomer/):
 # the front page at the root, the web Playground under playground/ and the
 # Playground's in-browser Swift toolchain under playground/toolchain/
-# (playground/docs/playground_web.md, "Publishing").
+# (examples/playground/docs/playground_web.md, "Publishing").
 #
 # The site is not built here. It is the `isomer-site.tar.gz` asset of a
-# GitHub release, made by playground/tools/playground/package_site.sh (a
+# GitHub release, made by examples/playground/tools/playground/package_site.sh (a
 # Bazel `-c opt` build of //web/splash_web_application:site plus the staged
 # toolchain) and attached with `gh release upload <tag> isomer-site.tar.gz`.
 # Compiled output never goes into git: the site is over 100 MB with the
 # compiler, and building it needs the compiler built by
-# playground/tools/browser_toolchain, which no runner has.
+# examples/playground/tools/browser_toolchain, which no runner has.
 #
 # Runs when a release is published (attach the asset to the draft before
 # publishing it), or by hand for any release that carries one:

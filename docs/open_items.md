@@ -115,7 +115,7 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
 - **The web's fastbuild overflows the stack** (the Playground's and the
   Storybook's: "RangeError: Maximum call stack size exceeded", a
   WebAssembly native stack overflow, in FlatTreeEncoder's flatten); `-c
-  opt` builds work and are what ships (playground/docs/playground_web.md).
+  opt` builds work and are what ships (examples/playground/docs/playground_web.md).
   The tree is shallow (the Storybook's is 14 levels); unoptimized,
   `flattenNode` (shared/renderers/TreeEncoder.swift, one ~900-line
   function) has so many wasm locals that each frame V8's baseline compiler
@@ -204,11 +204,11 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
 - **Playground projects**: an unedited project made from a template by any
   earlier build is brought to the current template at launch (the Playground
   `TemplateHistory`, rebuilt from git history by
-  `playground/tools/playground/template_history.py`); an edited one keeps its source and
+  `examples/playground/tools/playground/template_history.py`); an edited one keeps its source and
   needs a manual update where 0.31 removed API it used (`ObservableObject`,
   `DispatchQueue`, the injected services).
 - **The Playground's macro toolchain is built outside Bazel**:
-  `playground/tools/browser_toolchain`'s scripts build the WASI
+  `examples/playground/tools/browser_toolchain`'s scripts build the WASI
   compiler and `MacroPlugins.wasm` (ObservationMacros, SwiftMacros), and
   Android's prebuilt plugins are staged by `stage_toolchain.sh`; a toolchain
   bump means running them again by hand.

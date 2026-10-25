@@ -10,7 +10,7 @@ on the web, OpenGL on Linux, DirectX on Windows).
     (examples/apple/storybook_isomer_ios_application, a test, not released):
     each story beside its Apple-SwiftUI shot, with a diff, which should be
     empty (review-ios-storybook-isomer). A difference is Isomer's.
-  * The Playground (playground/): its projects, a project open, and 2048 and
+  * The Playground (examples/playground/): its projects, a project open, and 2048 and
     the Pokédex built on the device by the compiler it carries and running
     (ISO_PLAYGROUND_RUN_PROJECT=<name>).
 
@@ -31,14 +31,14 @@ Windows' (on its VM). Then the platforms run at once, each on a lease of
 its own (an iOS simulator, an Android emulator, macOS, Linux and Windows
 VMs; the web in this Mac's headless Chrome), released however the run
 ends. Stamp the build's version into both modules first, as CI does
-(playground/tools/playground/stamp.py and examples/tools/stamp_storybook.py),
+(examples/playground/tools/playground/stamp.py and examples/tools/stamp_storybook.py),
 and check the files out after.
 """
 import argparse, json, os, re, shlex, shutil, subprocess, sys, tempfile, threading, time, urllib.parse
 
 ISOMER = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 EXAMPLES = os.path.join(ISOMER, "examples")
-PLAYGROUND = os.path.join(ISOMER, "playground")
+PLAYGROUND = os.path.join(EXAMPLES, "playground")   # in the examples' module
 APPS = {
     "storybook": {"name": "Storybook", "bundle": "com.LoganShire.IsomerStorybook"},
     "playground": {"name": "Playground", "bundle": "com.LoganShire.IsomerPlayground"},
@@ -83,7 +83,7 @@ def bazel_output(cwd, target, *flags, suffix=""):
 def stories(only=None):
     """The Storybook's stories, (id, title), in its sidebar's order: the
     areas as Story.swift lists them, each area's stories as its file does."""
-    root = os.path.join(ISOMER, "storybook")
+    root = os.path.join(EXAMPLES, "storybook")
     order = re.search(r"areas: \[StoryArea\] = \[(.*?)\]", open(os.path.join(root, "Story.swift")).read(), re.S).group(1)
     order = [name.strip() for name in order.split(",") if name.strip()]
     areas = {}
@@ -249,7 +249,7 @@ def build_ios():
         "storybook-isomer": bazel_output(EXAMPLES, "//apple/storybook_isomer_ios_application", "-c", "opt",
                                          "--ios_multi_cpus=sim_arm64", suffix=".ipa"),
         # The compiler linked into the app (its staged embedded_toolchain).
-        "playground": bazel_output(PLAYGROUND, "//apple/playground_ios_application", "-c", "opt",
+        "playground": bazel_output(EXAMPLES, "//playground/apple/playground_ios_application", "-c", "opt",
                                    "--ios_multi_cpus=sim_arm64", "--define", "iso_playground_embedded=1", suffix=".ipa"),
     }
 
@@ -307,7 +307,7 @@ def ios(review, story_list, builds):
 def build_macos():
     return {
         "storybook": bazel_output(EXAMPLES, "//apple/storybook_macos_application", "-c", "opt", suffix=".zip"),
-        "playground": bazel_output(PLAYGROUND, "//apple/playground_macos_application", "-c", "opt", suffix=".zip"),
+        "playground": bazel_output(EXAMPLES, "//playground/apple/playground_macos_application", "-c", "opt", suffix=".zip"),
     }
 
 
@@ -339,7 +339,7 @@ def build_android():
     return {
         "storybook": bazel_output(EXAMPLES, "//android/storybook_android_application:storybook_android_application_apk",
                                   "-c", "opt", suffix="_apk.apk"),
-        "playground": bazel_output(PLAYGROUND, "//android/playground_android_application:playground_android_application_apk",
+        "playground": bazel_output(EXAMPLES, "//playground/android/playground_android_application:playground_android_application_apk",
                                    "-c", "opt", suffix="_apk.apk"),
     }
 
@@ -429,12 +429,12 @@ def build_linux():
         "--after", "linux/storybook_linux_application/package.sh /root/storybook-linux -c opt",
         "--out", "storybook-linux", os.path.join(work, "storybook-linux"),
         "-c", "opt", "//linux/storybook_linux_application:storybook_linux_application_bin"])
-    sh([script, "--module", "playground",
-        "--after", "linux/playground_linux_application/package.sh /root/playground-linux -c opt",
+    sh([script, "--module", "examples",
+        "--after", "playground/linux/playground_linux_application/package.sh /root/playground-linux -c opt",
         "--out", "playground-linux", os.path.join(work, "playground-linux"),
-        "-c", "opt", "//linux/playground_linux_application:playground_linux_application_bin",
-        "//linux/playground_linux_application:playground_wasm_loader", "//shared/compiler:toolchain",
-        "//apple/playground_ios_application:playground_sdk"])
+        "-c", "opt", "//playground/linux/playground_linux_application:playground_linux_application_bin",
+        "//playground/linux/playground_linux_application:playground_wasm_loader", "//playground/shared/compiler:toolchain",
+        "//playground/apple/playground_ios_application:playground_sdk"])
     packages = {}
     for app in APPS:
         package = os.path.join(work, f"{app}-linux.tgz")
@@ -474,8 +474,8 @@ def build_windows():
     SDK's sysroot and static stdlib (platform-independent files; the VM's
     own Swift toolchain gives the frontend and wasm-ld)."""
     work = tempfile.mkdtemp(prefix="proof-windows-")
-    sdk = bazel_output(PLAYGROUND, "//apple/playground_ios_application:playground_sdk", "-c", "opt")
-    toolchain = bazel_output(PLAYGROUND, "//shared/compiler:toolchain", "-c", "opt")
+    sdk = bazel_output(EXAMPLES, "//playground/apple/playground_ios_application:playground_sdk", "-c", "opt")
+    toolchain = bazel_output(EXAMPLES, "//playground/shared/compiler:toolchain", "-c", "opt")
     environment = dict(os.environ, COPYFILE_DISABLE="1")
     sh(["tar", "--no-xattrs", "-czhf", os.path.join(work, "playground_sdk.tgz"), "-C", os.path.dirname(sdk), os.path.basename(sdk)], env=environment)
     sh(["tar", "--no-xattrs", "-czhf", os.path.join(work, "wasm_data.tgz"), "-C", os.path.join(toolchain, "playground_toolchain"), "data"], env=environment)
@@ -492,7 +492,7 @@ def windows_package(app, version):
     if app == "storybook":
         out, executables = "$bin\\windows\\storybook_windows_application", ["storybook_windows_application.exe"]
     else:
-        out, executables = "$bin\\windows\\playground_windows_application", ["playground.exe", "playground_wasm_loader.exe"]
+        out, executables = "$bin\\playground\\windows\\playground_windows_application", ["playground.exe", "playground_wasm_loader.exe"]
     steps = [
         f"$out = \"{out}\"; $app = 'C:\\proof\\{app}'",
         "Remove-Item -Recurse -Force $app -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force $app | Out-Null",
@@ -503,7 +503,7 @@ def windows_package(app, version):
     ]
     if app == "storybook":
         steps += [
-            "Copy-Item -Recurse C:\\isomer\\storybook\\assets \"$app\\assets\"",
+            "Copy-Item -Recurse C:\\isomer\\examples\\storybook\\assets \"$app\\assets\"",
             "$lines = Get-ChildItem -Recurse \"$app\\assets\" -Filter *.png | ForEach-Object { "
             "'storybook/' + $_.FullName.Substring($app.Length + 1).Replace('\\', '/') + ' ' + $_.FullName }",
             "$lines | Set-Content \"$app\\storybook_windows_application.exe.runfiles_manifest\"",
@@ -570,8 +570,8 @@ def windows(review, story_list, builds):
         scp(env, build, "C:/Users/runner/build.cmd")
         for module, app, targets in (
                 ("examples", "storybook", "//windows/storybook_windows_application:storybook_windows_application"),
-                ("playground", "playground", "//windows/playground_windows_application:playground "
-                                             "//windows/playground_windows_application:playground_wasm_loader")):
+                ("examples", "playground", "//playground/windows/playground_windows_application:playground "
+                                           "//playground/windows/playground_windows_application:playground_wasm_loader")):
             ps(f"cmd /c C:\\Users\\runner\\build.cmd {module} build -c opt {targets}")
             ps(f"$bin = (cmd /c C:\\Users\\runner\\build.cmd {module} info -c opt bazel-bin 2>$null | Select-Object -Last 1); "
                + windows_package(app, review.version))

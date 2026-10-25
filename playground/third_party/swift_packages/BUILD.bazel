@@ -1,7 +1,0 @@
-# The SwiftPM graph rules_swift_package_manager resolves for the Playground
-# (MODULE.bazel's swift_deps.from_package). Re-resolve after editing
-# Package.swift: `cd third_party/swift_packages && swift package resolve`.
-exports_files([
-    "Package.swift",
-    "Package.resolved",
-])

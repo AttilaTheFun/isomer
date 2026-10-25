@@ -18,7 +18,7 @@ swift_library(
     deps = [
         "@isomer//:swift_ui",
         "@isomer//apple/libraries/compiled_swift_ui:hot_bridge",
-        "@isomer//storybook",
+        "//storybook",
     ],
 )
 

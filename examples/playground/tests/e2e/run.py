@@ -1,0 +1,601 @@
+#!/usr/bin/env python3
+"""End-to-end tests of the Playground apps: what a reader does, on an emulator
+and a simulator, against the builds that get installed.
+
+  tests/e2e/run.py [android] [ios]        (both when none is named)
+
+They exist because of two releases' worth of "Run on the web" opening a blank
+page on the phones: once the site's file list lacked a module the renderer
+had started importing, and once the installed APK was a stale build that
+lacked it though the source was right. Neither shows in a compile; both show
+the moment the page is loaded. So:
+
+android  Builds the APK the way it is installed (-c opt), installs it on an
+         emulator leased from oss (adb connected to it), or on the test
+         phone ANDROID_SERIAL names (the root-only template check is skipped
+         there), opens the 2048 project from the sidebar and
+         - taps "Run on the web": the app compiles the project ON the
+           emulator and serves the page; the page is loaded from the host in
+           headless Chrome (adb forward) and must show the board with no
+           failed request, uncaught exception or console error;
+         - taps "Run": the build must start in its own window (WasmView's
+           "[wasm-init] done" line, WasmKit's interpreter; no fatal signal) and
+           show the board;
+         then runs every other template on the web the same way (each must
+         compile on the emulator, the @Observable ones with the staged macro
+         plugins, and its page show its title: "out of the box"); then
+         puts a 2048 an earlier build shipped and an edited Counter in the
+         app's files and relaunches: the first must take this build's
+         template, the second keep its source (TemplateHistory).
+ios      Builds the simulator app (the embedded compiler when it is staged),
+         installs it on a simulator leased from oss, opens the Pokédex
+         project from the sidebar and taps "Run on the web" in the app: the
+         app compiles it in-process, and the page opens in the app's Safari view
+         (WebKit, as on the phone) and must show the project; then the
+         template check, on projects from before the store kept hashes; then
+         compiles every project with the app's compiler (ISO_PLAYGROUND_AUTORUN
+         =all; the host toolchain, as the simulator has no embedded one).
+         Driven by Isomer's XCUITest driver (ISOMER, default the parent
+         checkout: examples/tests/safari_probe).
+
+Neither touches a phone unless ANDROID_SERIAL names one. Exit status 1 when
+anything failed.
+
+  tests/e2e/run.py [android] [ios] --review <dir> [--commit <sha>]
+
+also writes the run as proof for the review store (reviews/MANIFEST.md, app
+"Playground", the version the apps show): first each app's screens in
+portrait and in landscape (`<platform>-<orientation>`, snapshots), then each
+road of the run recorded, with its last screen (`<platform>-e2e-portrait`, a
+UI test; a web road's screen is the page as headless Chrome showed it).
+"""
+import argparse, json, os, re, shutil, signal, subprocess, sys, time
+
+# The Playground (examples/playground/ in the isomer checkout).
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# The examples workspace the Playground is part of (Bazel's output paths are
+# under it), and the isomer checkout around that.
+WORKSPACE = os.path.dirname(ROOT)
+ISOMER = os.environ.get("ISOMER", os.path.dirname(WORKSPACE))
+ANDROID_PACKAGE = "com.LoganShire.IsomerPlayground"
+IOS_BUNDLE = "com.LoganShire.IsomerPlayground"
+SIMULATOR_TYPE = "iPhone"
+BOARD = "Swipe the board to merge tiles."
+# The web/Android templates (WebTemplate.all) and what each one's page shows
+# first; the iOS app seeds the same but "This website".
+TEMPLATES = {"Counter": "Tapped 0 times", "2048": BOARD, "Hacker News": "Hacker News", "Meme Creator": "Meme Creator",
+             "Pokédex": "Pokédex", "Date Planner": "Date Planner", "Map Explorer": "Map", "Floating Menu": "Floating Menu",
+             "This website": "What it is"}
+
+failures = []
+proof = None
+leases = []
+
+def oss_lease(platform):
+    """A machine of oss's (released at exit): its exports (OSS_ID, OSS_UDID, OSS_ADB…)."""
+    out = sh(["oss", "machine", "lease", platform, "--exports", "--minutes=120"]).stdout
+    env = dict(re.findall(r"(OSS_[A-Z_]+)='([^']*)'", out))
+    leases.append(env["OSS_ID"])
+    log(f"leased {platform} {env['OSS_ID']}")
+    return env
+
+def log(message): print(f"[e2e] {message}", flush=True)
+
+def check(ok, what, detail=""):
+    line = ("ok    " if ok else "FAIL  ") + what + (f": {detail}" if detail and not ok else "")
+    log(line)
+    if not ok: failures.append(what)
+    if proof: proof.note(line, ok)
+    return ok
+
+def sh(command, check_status=True, **kwargs):
+    result = subprocess.run(command, shell=isinstance(command, str), cwd=kwargs.pop("cwd", WORKSPACE),
+                            capture_output=True, text=True, **kwargs)
+    if check_status and result.returncode != 0:
+        raise SystemExit(f"{command}\n{result.stdout}{result.stderr}")
+    return result
+
+def bazel_output(target, *flags, suffix=""):
+    sh(["bazel", "build", target, *flags])
+    files = sh(["bazel", "cquery", "--output=files", target, *flags]).stdout.split()
+    return os.path.join(WORKSPACE, next(f for f in files if f.endswith(suffix)))
+
+def page_check(url, text, seconds=60):
+    environment = dict(os.environ)
+    if proof: environment["PAGE_CHECK_SHOT"] = proof.page_shot()
+    result = subprocess.run(["node", os.path.join(ROOT, "tests/e2e/page_check.js"), url, text, str(seconds)],
+                            capture_output=True, text=True, env=environment)
+    try: seen = json.loads(result.stdout)
+    except ValueError: seen = {"ok": False, "problems": [result.stdout + result.stderr]}
+    return seen
+
+def road(name):
+    if proof: proof.road(name)
+
+def playable(path):
+    """A recording ffprobe can't read (cut off by a restart) is dropped."""
+    if os.path.exists(path) and shutil.which("ffprobe") and \
+            subprocess.run(["ffprobe", "-v", "error", path], capture_output=True).returncode != 0:
+        os.remove(path)
+
+class Proof:
+    """The run as proof for the review store: each platform's screens
+    (snapshots, new until the store has a run before to judge them by) and
+    its roads (a UI test: each road's checks, its last screen, its
+    recording). A platform hands it how to shoot and record its screen."""
+    def __init__(self, folder, commit):
+        self.folder, self.commit = folder, commit
+        self.version = (re.search(r'version_name = "([^"]+)"',
+                                  open(os.path.join(ROOT, "android/playground_android_application/BUILD.bazel")).read()) or [None, "?"])[1]
+        self.current = None
+
+    def platform(self, name, device, shoot, record):
+        """shoot(path) writes the screen as a PNG; record(path) starts a
+        recording and returns what stops it."""
+        self.finish()
+        self.name, self.device, self.shoot, self.record = name, device, shoot, record
+        self.items = []
+
+    def manifest(self, folder, kind, target, orientation, items):
+        out = os.path.join(self.folder, folder)
+        json.dump({"schema": 1, "app": "Playground", "version": self.version, "release": self.version,
+                   "commit": self.commit, "kind": kind, "target": target, "device": self.device,
+                   "orientation": orientation, "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                   "items": items}, open(os.path.join(out, "manifest.json"), "w"), indent=1)
+        log(f"review: {out} ({len(items)} items)")
+
+    def screens(self, orientation, screens, show):
+        """Each screen as show(steps) leaves it, shot."""
+        # review-<run>: the folders the review server files.
+        folder = f"review-{self.name}-{orientation}"
+        os.makedirs(os.path.join(self.folder, folder), exist_ok=True)
+        items = []
+        for name, steps in screens:
+            show(steps)
+            self.shoot(os.path.join(self.folder, folder, f"{name}.png"))
+            items.append({"name": name, "status": "new", "capture": f"{name}.png"})
+        self.manifest(folder, "snapshots", self.name, orientation, items)
+
+    def road(self, name):
+        self.end()
+        folder = os.path.join(self.folder, f"review-{self.name}-e2e-portrait")
+        os.makedirs(folder, exist_ok=True)
+        slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+        self.current = {"name": name, "slug": slug, "folder": folder, "lines": [], "ok": True, "shot": False}
+        self.stop = self.record(os.path.join(folder, f"{slug}.mp4"))
+
+    def note(self, line, ok):
+        if self.current:
+            self.current["lines"].append(line)
+            self.current["ok"] &= ok
+
+    def page_shot(self):
+        """Where a road's web page is shot: its screen, instead of the device's."""
+        if not self.current: return "/tmp/playground-e2e-page.png"
+        self.current["shot"] = True
+        return os.path.join(self.current["folder"], f"{self.current['slug']}.png")
+
+    def end(self):
+        road, self.current = self.current, None
+        if not road: return
+        self.stop()
+        if not road["shot"]: self.shoot(os.path.join(road["folder"], f"{road['slug']}.png"))
+        item = {"name": road["name"], "status": "passed" if road["ok"] else "failed", "log": "\n".join(road["lines"])}
+        if os.path.exists(os.path.join(road["folder"], f"{road['slug']}.png")): item["capture"] = f"{road['slug']}.png"
+        if os.path.exists(os.path.join(road["folder"], f"{road['slug']}.mp4")): item["video"] = f"{road['slug']}.mp4"
+        self.items.append(item)
+
+    def finish(self):
+        self.end()
+        if getattr(self, "items", None):
+            self.manifest(f"review-{self.name}-e2e-portrait", "ui-test", f"{self.name}-e2e", "portrait", self.items)
+        self.items = []
+
+# --- Android
+
+def android():
+    # This machine's adb: the hermetic SDK repository is fetched for every
+    # host (androidsdk_darwin, _linux, _windows), and find's order is the
+    # directory's.
+    host = "darwin" if sys.platform == "darwin" else "linux"
+    adb = sh(f"find -L \"$(bazel info output_base)/external\" -maxdepth 4 -path '*androidsdk_{host}*platform-tools*' -name adb -type f | head -1").stdout.strip()
+    apk = bazel_output("//playground/android/playground_android_application:playground_android_application_apk", "-c", "opt", suffix="_apk.apk")
+    # A test phone when ANDROID_SERIAL names one (with ADB_SERVER_SOCKET when
+    # its adb server is not this Mac's), else this Mac's emulator.
+    serial = os.environ.get("ANDROID_SERIAL")
+    emulator = serial is None
+    if emulator:
+        # An emulator of oss's, through this Mac's adb.
+        serial = oss_lease("android")["OSS_ADB"]
+        sh([adb, "connect", serial])
+    a = [adb, "-s", serial]
+    started = None
+    def launch():
+        """The app's launcher activity, as a tap on its icon starts it. Not
+        `monkey -p … 1`: its one random event can be a keyboard-lid flip,
+        which on a test phone (a Pixel 3a) turned the screen to landscape
+        whatever the rotation lock said."""
+        component = sh(a + ["shell", "cmd", "package", "resolve-activity", "--brief",
+                            "-c", "android.intent.category.LAUNCHER", ANDROID_PACKAGE]).stdout.split()[-1]
+        sh(a + ["shell", "am", "start", "-n", component])
+
+    phone = not emulator
+    if phone:
+        # A test phone (no passcode): woken and unlocked, in case its screen
+        # went off.
+        sh(a + ["shell", "input", "keyevent", "KEYCODE_WAKEUP"], check_status=False)
+        sh(a + ["shell", "wm", "dismiss-keyguard"], check_status=False)
+        # Portrait, the reader's way, however the phone lies on the desk (the
+        # sensor off): taps land where the emulator's do.
+        sh(a + ["shell", "wm", "user-rotation", "lock", "0"], check_status=False)
+        sh(a + ["shell", "settings", "put", "system", "accelerometer_rotation", "0"], check_status=False)
+        sh(a + ["shell", "settings", "put", "system", "user_rotation", "0"], check_status=False)
+    try:
+        sh(a + ["install", "-r", apk])
+        # A reader's first launch: projects made from the templates this build
+        # carries (an earlier run's projects keep the sources of its day).
+        sh(a + ["shell", "pm", "clear", ANDROID_PACKAGE])
+        sh(a + ["shell", "am", "force-stop", ANDROID_PACKAGE])
+        sh(a + ["logcat", "-c"])
+        launch()
+
+        def bounds(attribute, value, tries=20):
+            """The centre of the node whose text / content-desc is `value`."""
+            for _ in range(tries):
+                sh(a + ["shell", "uiautomator", "dump", "/sdcard/playground-e2e.xml"], check_status=False)
+                dump = sh(a + ["shell", "cat", "/sdcard/playground-e2e.xml"], check_status=False).stdout
+                found = re.search(rf'{attribute}="{re.escape(value)}"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', dump)
+                if found:
+                    x1, y1, x2, y2 = map(int, found.groups())
+                    return (x1 + x2) // 2, (y1 + y2) // 2
+                time.sleep(1)
+            return None
+
+        def tap(attribute, value):
+            at = bounds(attribute, value)
+            if at: sh(a + ["shell", "input", "tap", str(at[0]), str(at[1])])
+            return at is not None
+
+        def evidence(label):
+            """What the device showed when a check failed: its screen and the
+            log lines of the app, its engine and the runtime."""
+            shot = f"/tmp/playground-e2e-{label}.png"
+            with open(shot, "wb") as f:
+                subprocess.run(a + ["exec-out", "screencap", "-p"], stdout=f, check=False)
+            lines = [l for l in sh(a + ["logcat", "-d"], check_status=False).stdout.splitlines()
+                     if re.search(r"wasm|Fatal|AndroidRuntime|playground|Isomer|ANR|lowmemorykiller", l, re.I)]
+            log(f"      evidence: {shot}")
+            for line in lines[-25:]:
+                log(f"      | {line[:220]}")
+
+        def logcat(pattern, seconds):
+            for _ in range(seconds):
+                found = re.search(pattern, sh(a + ["logcat", "-d"], check_status=False).stdout)
+                if found: return found
+                time.sleep(1)
+            return None
+
+        if proof:
+            def shoot(path):
+                with open(path, "wb") as f:
+                    subprocess.run(a + ["exec-out", "screencap", "-p"], stdout=f, check=False)
+            def record(path):
+                # Android's own recorder stops itself after 180 s; a longer
+                # road keeps its first three minutes.
+                process = subprocess.Popen(a + ["shell", "screenrecord", "--time-limit", "180", "/sdcard/playground-e2e.mp4"],
+                                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                def stop():
+                    sh(a + ["shell", "pkill", "-INT", "screenrecord"], check_status=False)
+                    try: process.wait(timeout=15)
+                    except subprocess.TimeoutExpired: process.kill()
+                    time.sleep(1)
+                    sh(a + ["pull", "/sdcard/playground-e2e.mp4", path], check_status=False)
+                    sh(a + ["shell", "rm", "-f", "/sdcard/playground-e2e.mp4"], check_status=False)
+                    playable(path)
+                return stop
+            def rotate(orientation):
+                sh(a + ["shell", "settings", "put", "system", "accelerometer_rotation", "0"], check_status=False)
+                sh(a + ["shell", "settings", "put", "system", "user_rotation", "1" if orientation == "landscape" else "0"], check_status=False)
+                time.sleep(2)
+            def show(steps):
+                sh(a + ["shell", "am", "force-stop", ANDROID_PACKAGE])
+                launch()
+                bounds("text", "New Project")
+                for kind, value in steps:
+                    if kind == "sleep": time.sleep(value)
+                    elif not tap(kind, value): log(f"      proof: no {value} to tap")
+                    time.sleep(2)
+                time.sleep(2)
+            prop = lambda name: sh(a + ["shell", "getprop", name], check_status=False).stdout.strip()
+            name = "Android emulator" if emulator else prop("ro.product.model")
+            proof.platform("android", f"{name}, Android {prop('ro.build.version.release')} ({prop('ro.product.cpu.abi')})", shoot, record)
+            screens = [("menu", []),
+                       ("project", [("text", "2048")]),
+                       ("editor", [("text", "2048"), ("content-desc", "Edit")]),
+                       ("new-project", [("text", "New Project")]),
+                       ("settings", [("content-desc", "Settings")]),
+                       ("run", [("text", "2048"), ("content-desc", "Run"), ("sleep", 45)])]
+            for orientation in ("portrait", "landscape"):
+                rotate(orientation)
+                proof.screens(orientation, screens, show)
+            rotate("portrait")
+            # The run starts again from a first launch.
+            sh(a + ["shell", "pm", "clear", ANDROID_PACKAGE])
+            sh(a + ["shell", "am", "force-stop", ANDROID_PACKAGE])
+            sh(a + ["logcat", "-c"])
+            launch()
+
+        road("2048 on the web")
+        if not check(tap("text", "2048"), "android: the 2048 project is listed"): return
+
+        # Run on the web: compiled on the emulator, served by the app, loaded here.
+        if check(tap("content-desc", "Run on the web"), "android: Run on the web is offered"):
+            published = logcat(r"\[web-run\] http://127\.0\.0\.1:(\d+)/index\.html", 180)
+            if check(published is not None, "android: the app compiled the project and published its page"):
+                sh(a + ["forward", "tcp:8794", f"tcp:{published.group(1)}"])
+                seen = page_check("http://127.0.0.1:8794/index.html", BOARD)
+                check(seen.get("ok"), "android: the web run's page shows the board, nothing failed on the way", json.dumps(seen))
+                sh(a + ["forward", "--remove", "tcp:8794"], check_status=False)
+        # Back from the browser to the project.
+        sh(a + ["shell", "am", "start", "-n", f"{ANDROID_PACKAGE}/.MainActivity"], check_status=False)
+        time.sleep(2)
+
+        # Run: the build in its own window, on the wasm engine.
+        road("2048 runs")
+        sh(a + ["logcat", "-c"])
+        if check(tap("content-desc", "Run"), "android: Run is offered"):
+            done = logcat(r"\[wasm-init\] done in (\d+)ms", 240)
+            if done is None:
+                evidence("run-not-started")
+            if check(done is not None, "android: the run started"):
+                log(f"      start-up {done.group(1)} ms")
+                check(bounds("text", BOARD) is not None, "android: the run shows the board")
+                sh(a + ["shell", "input", "swipe", "300", "900", "800", "900", "200"])
+                time.sleep(1)
+                fatal = re.search(r"Fatal signal.*", sh(a + ["logcat", "-d"], check_status=False).stdout)
+                check(fatal is None and bounds("text", BOARD, tries=3) is not None,
+                      "android: a swipe leaves the run alive", fatal.group(0) if fatal else "the board is gone")
+
+        # Every other template, out of the box: compiled on the emulator (the
+        # @Observable ones only with the staged macro plugins) and its page shown.
+        for name, text in TEMPLATES.items():
+            if name == "2048": continue
+            road(f"{name} on the web")
+            sh(a + ["shell", "am", "force-stop", ANDROID_PACKAGE])
+            sh(a + ["logcat", "-c"])
+            launch()
+            listed = tap("text", name)
+            if not listed:
+                evidence(f"not-listed-{name}")
+            if not (check(listed, f"android: the {name} project is listed") and
+                    check(tap("content-desc", "Run on the web"), f"android: Run on the web is offered for {name}")):
+                continue
+            published = logcat(r"\[web-run\] http://127\.0\.0\.1:(\d+)/index\.html", 240)
+            if check(published is not None, f"android: the app compiled {name}",
+                     (logcat(r"error: .*", 1) or [""])[0]):
+                sh(a + ["forward", "tcp:8794", f"tcp:{published.group(1)}"])
+                seen = page_check("http://127.0.0.1:8794/index.html", text)
+                check(seen.get("ok"), f"android: {name}'s page shows, nothing failed on the way", json.dumps(seen))
+                sh(a + ["forward", "--remove", "tcp:8794"], check_status=False)
+
+        # Templates out of the box: a project still holding a template an
+        # earlier build shipped takes this build's at launch; an edited one
+        # keeps its source. Written as root into the app's own files (the
+        # emulator's image allows `adb root`; a phone's does not: skipped).
+        if not emulator:
+            log("      the template check writes as root: emulator only, skipped on " + serial)
+            return
+        sys.path.insert(0, os.path.join(ROOT, "tools", "playground"))
+        import template_history
+        shipped = template_history.history(ISOMER)
+        # `adb root` restarts adbd, and a recording with it: the last road
+        # ends first, and this one is recorded from after it.
+        if proof: proof.end()
+        sh(a + ["shell", "am", "force-stop", ANDROID_PACKAGE])
+        sh(a + ["root"]); sh(a + ["wait-for-device"])
+        road("templates out of the box")
+        home = f"/data/data/{ANDROID_PACKAGE}/files/Library/Application Support/playground"
+        read = lambda path: sh(a + ["exec-out", f"cat '{home}/{path}'"], check_status=False).stdout
+        def write(path, text):
+            with open("/tmp/playground-e2e-source.swift", "w") as file: file.write(text)
+            sh(a + ["push", "/tmp/playground-e2e-source.swift", "/data/local/tmp/playground-e2e-source.swift"])
+            sh(a + ["shell", f"cat /data/local/tmp/playground-e2e-source.swift > '{home}/{path}'"])
+        ids = {p["name"]: p["id"] for p in json.loads(read("projects.json") or "{}").get("projects", [])}
+        if check("2048" in ids and "Counter" in ids, "android: the 2048 and Counter projects are on disk", str(ids)):
+            fresh = read(f"{ids['2048']}/App.swift")
+            older = [source.decode() for name, source in shipped.values()
+                     if name == "Game2048.swift" and source.decode() != fresh]
+            counter = [source.decode() for name, source in shipped.values() if name == "Counter.swift"]
+            edited = counter[-1] + "\n// The reader's own line.\n"
+            write(f"{ids['2048']}/App.swift", older[-1])
+            write(f"{ids['Counter']}/App.swift", edited)
+            check(read(f"{ids['2048']}/App.swift") == older[-1], "android: an older 2048 is written over this build's")
+            launch()
+            check(bounds("text", "2048") is not None, "android: the Playground launches over the older projects")
+            check(read(f"{ids['2048']}/App.swift") == fresh,
+                  f"android: an untouched 2048 from an earlier build ({len(older)} older versions) takes this build's template")
+            check(read(f"{ids['Counter']}/App.swift") == edited, "android: an edited Counter keeps its source")
+        if proof: proof.end()
+        sh(a + ["unroot"], check_status=False); sh(a + ["wait-for-device"], check_status=False)
+    finally:
+        if proof: proof.finish()
+        sh(a + ["shell", "am", "force-stop", ANDROID_PACKAGE], check_status=False)
+        if emulator: sh([adb, "disconnect", serial], check_status=False)
+
+# --- iOS (the simulator)
+
+def ios():
+    probe = os.path.join(ISOMER, "examples")
+    if not os.path.isdir(os.path.join(probe, "tests/safari_probe")):
+        check(False, f"ios: Isomer's XCUITest driver ({probe}/tests/safari_probe; set ISOMER)")
+        return
+    flags = ["--ios_multi_cpus=sim_arm64", "-c", "opt"]
+    if os.path.isdir(os.path.join(ROOT, "apple/playground_ios_application/embedded_toolchain/iphonesimulator/lib")):
+        flags.append("--define=iso_playground_embedded=1")
+    ipa = bazel_output("//playground/apple/playground_ios_application", *flags, suffix=".ipa")
+    # A simulator of oss's (the server is this Mac: simctl reaches it).
+    udid, was_booted = oss_lease("ios")["OSS_UDID"], True
+    sh(["xcrun", "simctl", "bootstatus", udid, "-b"])
+    folder = "/private/tmp/safari_probe"
+    driver = None
+    try:
+        sh(f"rm -rf /tmp/playground-e2e-app && mkdir /tmp/playground-e2e-app && unzip -oq '{ipa}' -d /tmp/playground-e2e-app")
+        app = sh("find /tmp/playground-e2e-app/Payload -maxdepth 1 -name '*.app' | head -1").stdout.strip()
+        sh(["xcrun", "simctl", "uninstall", udid, IOS_BUNDLE], check_status=False)
+        sh(["xcrun", "simctl", "install", udid, app])
+        # Past the sign-in screen (the key is never used: nothing here asks
+        # the agent anything), with the host's toolchain for a build without
+        # the embedded compiler.
+        output_base = sh("bazel info output_base").stdout.strip()
+        toolchain = f"{output_base}/external/rules_swift++swift+swift_toolchain_xcode/usr/bin"
+        slice_dir = sh(f"find '{output_base}/external/rules_swift++swift+swift_toolchain_wasm_sdk_xcode' -maxdepth 3 -name wasm32-unknown-wasip1 -type d | head -1").stdout.strip()
+        environment = dict(os.environ,
+                           SIMCTL_CHILD_ISO_PLAYGROUND_OPENROUTER_KEY="sk-or-e2e-not-a-key",
+                           SIMCTL_CHILD_ISO_PLAYGROUND_TOOLCHAIN_BIN=toolchain,
+                           SIMCTL_CHILD_ISO_PLAYGROUND_WASI_SDK=f"{slice_dir}/WASI.sdk",
+                           SIMCTL_CHILD_ISO_PLAYGROUND_SWIFT_STATIC=f"{slice_dir}/swift.xctoolchain/usr/lib/swift_static")
+        sh(["xcrun", "simctl", "launch", udid, IOS_BUNDLE], env=environment)
+
+        sh(f"mkdir -p {folder} && rm -f {folder}/cmd.txt {folder}/out.txt")
+        driver = subprocess.Popen(
+            ["bazel", "test", "//tests/safari_probe:safari_driver", "--nocache_test_results", "--ios_multi_cpus=sim_arm64",
+             f"--test_arg=--destination=platform=ios_simulator,id={udid}", "--spawn_strategy=local", "--test_timeout=3600"],
+            cwd=probe, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        def drive(*commands, seconds=180):
+            if os.path.exists(f"{folder}/out.txt"): os.remove(f"{folder}/out.txt")
+            open(f"{folder}/cmd.txt", "w").write("\n".join(commands) + "\n")
+            for _ in range(seconds):
+                if os.path.exists(f"{folder}/out.txt"): return open(f"{folder}/out.txt").read()
+                time.sleep(1)
+            return ""
+
+        for _ in range(600):
+            if os.path.exists(f"{folder}/out.txt"): break
+            time.sleep(1)
+        if not check(os.path.exists(f"{folder}/out.txt"), "ios: the XCUITest driver started"): return
+        if proof:
+            turned = {"landscape": False}
+            def shoot(path):
+                drive("shot playground-proof")
+                if not os.path.exists(f"{folder}/playground-proof.png"): return
+                shutil.move(f"{folder}/playground-proof.png", path)
+                # XCUITest's screenshot of a landscape screen is the display
+                # as it lies in portrait: turned upright here.
+                if turned["landscape"]:
+                    sh(["ffmpeg", "-v", "error", "-y", "-i", path, "-vf", "transpose=2", path + ".png"])
+                    os.replace(path + ".png", path)
+            def record(path):
+                process = subprocess.Popen(["xcrun", "simctl", "io", udid, "recordVideo", "--codec=h264", "--force", path],
+                                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                time.sleep(1)
+                def stop():
+                    process.send_signal(signal.SIGINT)
+                    try: process.wait(timeout=30)
+                    except subprocess.TimeoutExpired: process.kill()
+                    playable(path)
+                return stop
+            def show(commands):
+                sh(["xcrun", "simctl", "terminate", udid, IOS_BUNDLE], check_status=False)
+                sh(["xcrun", "simctl", "launch", udid, IOS_BUNDLE], env=environment)
+                drive(f"bundle {IOS_BUNDLE}", "sleep 3", *commands, "sleep 2")
+            runtime = next((key for key, devices in json.loads(sh("xcrun simctl list -j devices").stdout)["devices"].items()
+                            if any(d["udid"] == udid for d in devices)), "")
+            os_version = re.sub(r"^iOS-(\d+)-(\d+).*", r"iOS \1.\2", runtime.rsplit(".", 1)[-1])
+            proof.platform("ios", f"{SIMULATOR_TYPE} simulator, {os_version}", shoot, record)
+            screens = [("menu", []),
+                       ("project", ["tapany Pokédex"]),
+                       ("new-project", ["tapany new-project"]),
+                       ("settings", ["tapany settings"]),
+                       ("editor", ["tapany Pokédex", "sleep 1", "tapany Edit"]),
+                       ("run", ["tapany Pokédex", "sleep 1", "tapany Run", "sleep 45"])]
+            for orientation in ("portrait", "landscape"):
+                drive(f"orient {orientation}", "sleep 2")
+                turned["landscape"] = orientation == "landscape"
+                proof.screens(orientation, screens, show)
+            drive("orient portrait", "sleep 2")
+            turned["landscape"] = False
+            # The run starts again from a fresh install.
+            sh(["xcrun", "simctl", "terminate", udid, IOS_BUNDLE], check_status=False)
+            sh(["xcrun", "simctl", "uninstall", udid, IOS_BUNDLE], check_status=False)
+            sh(["xcrun", "simctl", "install", udid, app])
+            sh(["xcrun", "simctl", "launch", udid, IOS_BUNDLE], env=environment)
+            time.sleep(3)
+        # A fresh install opens on the sidebar; the Pokédex project from there.
+        road("Pokédex on the web")
+        said = drive(f"bundle {IOS_BUNDLE}", "sleep 2", "tapany Pokédex", "sleep 2", "tapany Run on the web", "sleep 40", "tree")
+        check("tapped Run on the web" in said, "ios: Run on the web is offered", said[:200])
+        # The page's own text, inside the app's Safari view (`tree` is the
+        # web view's elements): the project's title, there with no network.
+        check(re.search(r"StaticText[^\n]*label: 'Pokédex'", said) is not None,
+              "ios: the web run's page shows the project in the app's Safari view", said[-400:])
+
+        # Templates out of the box, as on Android, for projects from before the
+        # store kept their template's hash: one still holding a template an
+        # earlier build shipped takes this build's at launch; an edited one
+        # keeps its source.
+        road("templates out of the box")
+        sys.path.insert(0, os.path.join(ROOT, "tools", "playground"))
+        import template_history
+        shipped = template_history.history(ISOMER)
+        sh(["xcrun", "simctl", "terminate", udid, IOS_BUNDLE], check_status=False)
+        # The shared store: Application Support/playground/projects.json and
+        # <id>/App.swift, as on Android and the web.
+        home = os.path.join(sh(["xcrun", "simctl", "get_app_container", udid, IOS_BUNDLE, "data"]).stdout.strip(),
+                            "Library", "Application Support", "playground")
+        index = os.path.join(home, "projects.json")
+        ids = {p["name"]: p["id"] for p in json.load(open(index)).get("projects", [])} if os.path.exists(index) else {}
+        if check("2048" in ids and "Counter" in ids, "ios: the 2048 and Counter projects are on disk", str(list(ids))):
+            source = lambda name: os.path.join(home, ids[name], "App.swift")
+            fresh = open(source("2048")).read()
+            older = [text.decode() for name, text in shipped.values() if name == "Game2048.swift" and text.decode() != fresh]
+            edited = [text.decode() for name, text in shipped.values() if name == "Counter.swift"][-1] + "\n// The reader's own line.\n"
+            open(source("2048"), "w").write(older[-1])
+            open(source("Counter"), "w").write(edited)
+            sh(["xcrun", "simctl", "launch", udid, IOS_BUNDLE], env=environment)
+            time.sleep(8)
+            check(open(source("2048")).read() == fresh,
+                  f"ios: an untouched 2048 from an earlier build ({len(older)} older versions) takes this build's template")
+            check(open(source("Counter")).read() == edited, "ios: an edited Counter keeps its source")
+
+        # Every project with the app's compiler, out of the box (the edited
+        # Counter included: a comment line). Its log, read from the simulator.
+        road("every project compiles")
+        sh(["xcrun", "simctl", "terminate", udid, IOS_BUNDLE], check_status=False)
+        started_at = time.strftime("%Y-%m-%d %H:%M:%S")
+        sh(["xcrun", "simctl", "launch", udid, IOS_BUNDLE], env=dict(environment, SIMCTL_CHILD_ISO_PLAYGROUND_AUTORUN="all"))
+        lines = ""
+        for _ in range(120):
+            time.sleep(3)
+            lines = sh(["xcrun", "simctl", "spawn", udid, "log", "show", "--start", started_at, "--style", "compact",
+                        "--predicate", 'eventMessage CONTAINS "[playground] compile"'], check_status=False).stdout
+            if "[playground] compiled all" in lines: break
+        compiled = re.findall(r"\[playground\] compiled (.+?): \d+ bytes", lines)
+        failed = re.findall(r"\[playground\] compile failed (.+?): (.*)", lines)
+        check("[playground] compiled all" in lines and not failed and len(compiled) >= 6,
+              f"ios: every project compiles with the app's compiler ({', '.join(compiled)})", str(failed)[:600])
+    finally:
+        if proof: proof.finish()
+        if driver:
+            open(f"{folder}/cmd.txt", "w").write("quit\n")
+            try: driver.wait(timeout=60)
+            except subprocess.TimeoutExpired: driver.kill()
+        sh(["xcrun", "simctl", "terminate", udid, IOS_BUNDLE], check_status=False)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("targets", nargs="*", help="android, ios (both when none is named)")
+    parser.add_argument("--review", help="write the run as proof for the review store into this folder")
+    parser.add_argument("--commit", help="the commit the proof is of (else the checkout's)")
+    args = parser.parse_args()
+    if args.review:
+        os.makedirs(args.review, exist_ok=True)
+        proof = Proof(os.path.abspath(args.review), args.commit or sh(["git", "rev-parse", "HEAD"]).stdout.strip())
+    try:
+        for target in args.targets or ["android", "ios"]:
+            {"android": android, "ios": ios}[target]()
+    finally:
+        for lease in leases:
+            sh(["oss", "machine", "release", lease], check_status=False)
+    log("FAILED: " + "; ".join(failures) if failures else "all passed")
+    sys.exit(1 if failures else 0)

@@ -24,7 +24,7 @@ swift_library(
     module_name = "ExampleApplication",
     tags = ["manual"],  # only meaningful through the android transition
     deps = [
-        "@isomer//storybook",
+        "//storybook",
         "//shared/platform_services",
         "@isomer//android/libraries/swift_ui",
         "@isomer//android/libraries/swift_ui:isomer",
