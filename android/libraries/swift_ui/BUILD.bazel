@@ -1,6 +1,7 @@
 load("@rules_swift//swift:swift.bzl", "swift_library")
 load("@rules_swift//swift:swift_library_group.bzl", "swift_library_group")
 load("@rules_kotlin//kotlin:core.bzl", "kt_compiler_plugin")
+load("//swift_ui_macros:defs.bzl", "SWIFT_UI_MACROS_PLUGINS")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -58,6 +59,7 @@ swift_library(
         # light up canImport(SwiftMap). See //shared/BUILD.bazel.
         "//shared:map_engine_android",
     ],
+    plugins = SWIFT_UI_MACROS_PLUGINS,
 )
 
 # PhotosUI's SwiftUI photo picker, over this SwiftUI (//frameworks).

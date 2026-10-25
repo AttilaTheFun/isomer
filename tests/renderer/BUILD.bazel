@@ -12,7 +12,9 @@ swift_binary(
         "MockHost.swift",
         "MockRendererTests.swift",
     ],
-    copts = ["-parse-as-library"],
+    # SwiftUI's macros expand to `SwiftUI.State` and the like: the core is
+    # IsomerCore here, so the name is aliased to it, as in the core itself.
+    copts = ["-parse-as-library", "-module-alias", "SwiftUI=IsomerCore"],
     testonly = True,
     deps = ["//tests/snapshot:core_host"],
 )

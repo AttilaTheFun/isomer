@@ -3,6 +3,7 @@ load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
 load("@rules_swift//swift:swift.bzl", "swift_library")
 load("@rules_xcodeproj//xcodeproj:defs.bzl", "xcode_provisioning_profile")
 load("@isomer_signing//:signing.bzl", "TEAM_ID")
+load("@isomer//swift_ui_macros:defs.bzl", "SWIFT_UI_MACROS_PLUGINS")
 
 # The wasm+METAL iOS cell of the counter benchmark (docs/benchmarks.md#ios),
 # mostly a curiosity: the shared TapCounter.swift as a wasm reactor, drawn by
@@ -39,6 +40,7 @@ swift_library(
         "@flatbuffers//swift",
         "@isomer//swift_gpu/apple:swift_gpu",
     ],
+    plugins = SWIFT_UI_MACROS_PLUGINS,
 )
 
 local_provisioning_profile(

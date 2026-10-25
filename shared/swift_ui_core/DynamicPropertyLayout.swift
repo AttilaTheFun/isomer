@@ -85,7 +85,7 @@ nonisolated(unsafe) private var _holdsDynamicPropertiesByType: [ObjectIdentifier
 /// as a cast of every type of field, each one not a wrapper scanned the
 /// conformances. (With `_verifyViewKinds` on, checked against the cast.)
 private let _dynamicPropertyDescriptors: [UnsafeRawPointer] = ([
-    State<Int>.self, Environment<Int>.self, FocusState<Int>.self, AppStorage<Int>.self,
+    State<Int>.self, LazyState<Int>.self, Environment<Int>.self, FocusState<Int>.self, AppStorage<Int>.self,
 ] as [Any.Type]).compactMap { _typeDescriptor($0) }
 
 func _isDynamicPropertyType(_ type: Any.Type) -> Bool {

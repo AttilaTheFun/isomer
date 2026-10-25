@@ -591,6 +591,20 @@ iOS 18 since 0.38, WasmView linking WasmKit: the example is.) What the feature's
   (a list row's separator started at the symbol); fixed, two screens are
   pixel-identical and the rest differ in an animation's phase.
 
+## SwiftUI's macros (0.39)
+
+`@State` and `@Entry` are macros in Apple's SwiftUI since the iOS 27 SDK,
+and in Isomer's (shared/swift_ui_core/Macros.swift), expanded by
+//swift_ui_macros:SwiftUIMacros as Apple's plugin expands them (learned
+black-box from `-dump-macro-expansions`; compare_with_xcode.sh holds them to
+Apple's). Every library compiling the core lists the plugin
+(swift_ui_macros/defs.bzl); a core under another module name needs
+`-module-alias SwiftUI=<name>` in the modules that use `@State` against it.
+Declared only under Swift 6.4 (`#if compiler(>=6.4)`: Apple's expansion
+makes a memberwise initializer private before 6.4), so today on Apple
+platforms only; never in hot_swift_ui (the Playground's compilers run no
+plugin). docs/swiftui_macros.md.
+
 ## Apple's frameworks off Apple (0.31)
 
 An app that imports only Swift, SwiftUI, Metal, Foundation, Observation and

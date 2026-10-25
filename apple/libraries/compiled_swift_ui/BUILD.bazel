@@ -1,5 +1,6 @@
 load("@rules_swift//swift:swift.bzl", "swift_library")
 load("@rules_swift//swift:swift_library_group.bzl", "swift_library_group")
+load("//swift_ui_macros:defs.bzl", "SWIFT_UI_MACROS_PLUGINS")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -42,6 +43,7 @@ swift_library(
         "//shared/isomer_swift_ui",
         "@flatbuffers//swift",
     ],
+    plugins = SWIFT_UI_MACROS_PLUGINS,
 )
 
 # CoreTransferable (//frameworks/core_transferable): `Transferable`, as far

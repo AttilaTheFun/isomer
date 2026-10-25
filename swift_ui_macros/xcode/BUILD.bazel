@@ -1,0 +1,18 @@
+load("@rules_swift//swift:swift_compiler_plugin.bzl", "swift_compiler_plugin")
+
+# The plugin naming SwiftUICore, as Apple's does, for compare_with_xcode.sh:
+# Xcode's compiler, with this in place of Apple's plugin, must print the
+# same expansions. (A package of its own: its module is SwiftUIMacros too.)
+swift_compiler_plugin(
+    name = "SwiftUIMacrosForXcode",
+    srcs = ["//swift_ui_macros:plugin_srcs"],
+    defines = ["SWIFTUI_MACROS_SWIFTUICORE"],
+    features = ["swift.enable_v6"],
+    module_name = "SwiftUIMacros",
+    deps = [
+        "@swift-syntax//:SwiftCompilerPlugin",
+        "@swift-syntax//:SwiftDiagnostics",
+        "@swift-syntax//:SwiftSyntax",
+        "@swift-syntax//:SwiftSyntaxMacros",
+    ],
+)
