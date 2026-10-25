@@ -94,8 +94,8 @@ isomer_android_app(
     swift_library = ":app_swift",
     # A project may fetch over plain HTTP (a dev server on the LAN).
     uses_cleartext_traffic = True,
-    version_code = 38000,
-    version_name = "0.38.0",
+    version_code = 39000,
+    version_name = "0.39.0",
 )
 
 # The host, with the WasmView the run surface embeds (the wasm_view Kotlin

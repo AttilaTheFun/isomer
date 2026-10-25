@@ -31,7 +31,7 @@ module(
 #   git_override(module_name = "isomer",
 #                remote = "https://github.com/AttilaTheFun/isomer.git",
 #                commit = "<commit>")
-bazel_dep(name = "isomer", version = "0.38.0")
+bazel_dep(name = "isomer", version = "0.39.0")
 local_path_override(
     module_name = "isomer",
     path = "..",

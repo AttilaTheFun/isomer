@@ -30,7 +30,7 @@ swift_library(
 isomer_web_app(
     name = "storybook_web_application",
     assets = [
-        "//artwork/storybook_icon:web_icon",
+        "//storybook/artwork/storybook_icon:web_icon",
         "//shared/example_application:assets",
     ],
     index = "index.html",
