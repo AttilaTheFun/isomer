@@ -46,7 +46,7 @@ isomer_android_app(
     name = "storybook_android_application",
     assets = ":flat_assets",
     default_renderer = "jetpackCompose",
-    icon = "//artwork/storybook_icon:ic_launcher.png",
+    icon = "//storybook/artwork/storybook_icon:ic_launcher.png",
     label = "Storybook",
     package = "com.LoganShire.IsomerStorybook",
     # The app's platform services (shared/platform_services), installed into
@@ -55,7 +55,7 @@ isomer_android_app(
     services_kt = "AppServices.kt",
     swift_library = ":app_swift",
     url_scheme = "iso",
-    version_code = 38000,
-    version_name = "0.38.0",
+    version_code = 39000,
+    version_name = "0.39.0",
     visibility = ["//shared/example_application:__pkg__"],
 )

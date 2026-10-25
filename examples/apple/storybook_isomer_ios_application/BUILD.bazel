@@ -43,7 +43,7 @@ swift_library(
 
 ios_application(
     name = "storybook_isomer_ios_application",
-    app_icons = ["//artwork/storybook_icon:app_icon"],
+    app_icons = ["//storybook/artwork/storybook_icon:app_icon"],
     bundle_id = "com.LoganShire.IsomerStorybookCompiled",
     bundle_name = "StorybookIsomer",
     families = [

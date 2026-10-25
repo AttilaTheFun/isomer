@@ -106,7 +106,7 @@ enum DesktopFiles {
     /// is packaged), else the version this source was committed at.
     static var version: String {
         resource("version.txt").flatMap { try? String(contentsOf: $0, encoding: .utf8) }?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? "0.38.0"
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? "0.39.0"
     }
 }
 

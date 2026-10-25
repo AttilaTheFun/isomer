@@ -21,7 +21,7 @@ let package = Package(
         .package(url: "https://github.com/AttilaTheFun/swift_sql.git", exact: "0.35.0"),
         // AgentUI 0.39.0, whose Markdown is a product of its own
         // (MarkdownViews), shared with the other apps that render Markdown.
-        .package(url: "https://github.com/AttilaTheFun/agent_ui.git", exact: "0.39.0"),
+        .package(url: "https://github.com/AttilaTheFun/agent_ui.git", exact: "0.39.1"),
         // OpenRouterKit (the OpenRouter client, agent loop and coding
         // tools), the library behind the openrouter CLI; shared with
         // Visor. The Playground's own OpenRouter loop is to move onto it.

@@ -22,7 +22,7 @@ swift_library(
 # `bazel run //apple/storybook_macos_application` launches the app.
 macos_application(
     name = "storybook_macos_application",
-    app_icons = ["//artwork/storybook_icon:app_icon"],
+    app_icons = ["//storybook/artwork/storybook_icon:app_icon"],
     bundle_id = BUNDLE_ID,
     bundle_name = "Storybook",
     infoplists = ["Info.plist"],

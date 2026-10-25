@@ -46,7 +46,7 @@ xcode_provisioning_profile(
 # install and launch on an attached device instead.
 ios_application(
     name = "storybook_ios_application",
-    app_icons = ["//artwork/storybook_icon:app_icon"],
+    app_icons = ["//storybook/artwork/storybook_icon:app_icon"],
     bundle_id = BUNDLE_ID,
     bundle_name = "Storybook",
     # Its own app ID and keychain group: a wildcard profile's entitlements
@@ -69,7 +69,7 @@ ios_application(
 # --ios_multi_cpus=sim_arm64, then `xcrun simctl install` the Payload .app.
 ios_application(
     name = "storybook_ios_sim_application",
-    app_icons = ["//artwork/storybook_icon:app_icon"],
+    app_icons = ["//storybook/artwork/storybook_icon:app_icon"],
     bundle_id = BUNDLE_ID,
     bundle_name = "Storybook",
     families = [
