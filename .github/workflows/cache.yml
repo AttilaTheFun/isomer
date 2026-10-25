@@ -35,5 +35,8 @@ jobs:
       - name: Fill the cache
         env:
           OSS_CACHE_HOST: ${{ vars.OSS_CACHE_HOST }}
+          # The oss server as the runner's containers reach it: its LAN IP
+          # when the runner is on another Mac; unset on the oss server's own.
+          OSS_CACHE_CONTAINER_HOST: ${{ vars.OSS_CACHE_CONTAINER_HOST }}
           OSS_CACHE_WRITE_TOKEN: ${{ secrets.OSS_CACHE_WRITE_TOKEN }}
         run: tools/ci/populate_cache.py

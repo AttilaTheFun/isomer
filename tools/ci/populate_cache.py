@@ -33,9 +33,11 @@ EXAMPLES = os.path.join(ISOMER, "examples")
 # isomer: the runner runs as the Mac's user, so its home is theirs.
 IMAGE = os.environ.get("ISOMER_CACHE_IMAGE", "visor-agent:latest")
 SESSION_PATH = os.environ.get("ISOMER_SESSION_PATH", os.path.join(os.path.expanduser("~"), "Developer", "isomer"))
-# The oss server as a container reaches it: the Mac, the default network's
-# gateway (Apple's container, 192.168.64.0/24).
-CONTAINER_HOST = os.environ.get("OSS_CACHE_CONTAINER_HOST", "192.168.64.1")
+# The oss server as a container reaches it: on the oss server's own Mac its
+# default network's gateway (Apple's container, 192.168.64.0/24); from a
+# runner on another Mac, the oss server's LAN address, by IP (a container
+# resolves no .local names).
+CONTAINER_HOST = os.environ.get("OSS_CACHE_CONTAINER_HOST") or "192.168.64.1"
 
 # (directory under isomer, flags, targets), in the container: what agents
 # run most, each module's tests at Bazel's default settings, and the
