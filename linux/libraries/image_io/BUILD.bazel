@@ -1,0 +1,18 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# ImageIO's decoding subset (//shared/image_io), under Apple's module name:
+# a CGImage's bytes reach the renderer at its first draw (registerImage). A
+# package of its own: rules_swift puts a dependency's output directory on the
+# search path, and //linux/libraries/swift_ui's holds the native SwiftUI
+# module, which would shadow //linux/libraries/swift_ui_wasm's for those that
+# import the wasm cell's.
+swift_library(
+    name = "image_io",
+    package_name = "isomer",
+    srcs = ["//shared/image_io:srcs"],
+    module_name = "ImageIO",
+    target_compatible_with = ["@platforms//os:linux"],
+    deps = ["//:foundation"],
+)
