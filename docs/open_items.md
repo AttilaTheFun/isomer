@@ -100,10 +100,7 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
   - `ProgressView` centres its label;
   - `OutlineGroup`'s rows put the disclosure chevron first, without
     Apple's trailing one;
-  - `ContentUnavailableView`'s description is smaller than Apple's;
-  - Scroll phases' trailing "0 changes" label sits a few points off
-    Apple's (an `HStack` of a label, a `Spacer` and a label: a text's
-    measured width).
+  - `ContentUnavailableView`'s description is smaller than Apple's.
 
 ## Android (T2)
 
