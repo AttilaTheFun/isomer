@@ -1,0 +1,35 @@
+# Fills the oss server's Bazel cache with main's builds after each merge
+# (tools/ci/populate_cache.py): the release proof's builds with its flags,
+# and each module's tests as agents run them, so an oss lease, a container
+# or a Mac that reads the cache downloads what was built here.
+#
+# On the Mac mini's self-hosted runner (an instance of its own, so it never
+# queues behind pull requests' CI), and never for a pull request: the
+# cache's write token is in the `bazel-cache` environment, which only main
+# may use (Settings > Environments > bazel-cache: deployment branch main;
+# the secret OSS_CACHE_WRITE_TOKEN, put there with
+# `oss cache token --write | gh secret set OSS_CACHE_WRITE_TOKEN --env bazel-cache`
+# on the oss server's Mac, and the variable OSS_CACHE_HOST, its address).
+name: Bazel cache
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+# A newer main makes an older fill moot.
+concurrency:
+  group: bazel-cache
+  cancel-in-progress: true
+jobs:
+  populate:
+    runs-on: [self-hosted, macOS, isomer-cache]
+    environment: bazel-cache
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fill the cache
+        env:
+          OSS_CACHE_HOST: ${{ vars.OSS_CACHE_HOST }}
+          OSS_CACHE_WRITE_TOKEN: ${{ secrets.OSS_CACHE_WRITE_TOKEN }}
+        run: tools/ci/populate_cache.py
