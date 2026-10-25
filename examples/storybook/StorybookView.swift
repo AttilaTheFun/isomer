@@ -2,10 +2,15 @@
 // page beside it (its code, what it does, the code running). Visor's
 // two-column shape: a phone shows one column at a time, the sidebar first.
 //
-// Launch hook (the process environment natively, a reactor's WASI
+// Launch hooks (the process environment natively, a reactor's WASI
 // environment, an Android intent's ISO_ extras, the web page's ISO_ query):
-// ISO_STORYBOOK_STORY=<id> opens that story (the proof's way to each page).
+// ISO_STORYBOOK_STORY=<id> opens that story; ISO_STORYBOOK_CONTROL=<file>
+// opens whichever story the file names, read four times a second, and
+// writes `<file>.shown` with the story once it is open; and the URL
+// iso://story/<id> opens one too (Android's VIEW intents): the proof's ways
+// through every page without a launch each.
 
+import Foundation
 import SwiftUI
 #if canImport(Darwin)
 import Darwin
@@ -74,10 +79,40 @@ public struct StorybookView: View {
         }
         .onAppear { openFirstStoryIfWide() }
         .onChange(of: sizeClass) { openFirstStoryIfWide() }
+        .task { await followControl() }
+        .onOpenURL { url in
+            let id = url.path.split(separator: "/").last.map(String.init) ?? ""
+            if url.host == "story" { open(id) }
+        }
         .onChange(of: selection) { _, value in
             // A phone shows the story picked, and the sidebar again when none is.
             if compact { compactColumn = value == nil ? .sidebar : .detail }
         }
+    }
+
+    /// ISO_STORYBOOK_CONTROL: the story its file names, opened as it
+    /// changes; `<file>.shown` names it once its page has had a moment to
+    /// build.
+    private func followControl() async {
+        guard let path = launchEnvironment("ISO_STORYBOOK_CONTROL") else { return }
+        var shown: String?
+        while !Task.isCancelled {
+            let named = (try? String(contentsOfFile: path, encoding: .utf8))?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if let id = named, id != shown, StoryCatalog.story(id) != nil {
+                shown = id
+                open(id)
+                try? await Task.sleep(for: .milliseconds(300))
+                try? id.write(toFile: path + ".shown", atomically: true, encoding: .utf8)
+            }
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+    }
+
+    private func open(_ id: String) {
+        guard StoryCatalog.story(id) != nil else { return }
+        selection = id
+        compactColumn = .detail
     }
 
     /// Wide, the first story is open beside the sidebar; a phone stays on
