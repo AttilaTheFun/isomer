@@ -66,10 +66,19 @@ there.
   against Apple's SwiftUI twice:
   - **With Apple's plugin, and with ours** (built to name `SwiftUICore`).
   - **Then compares** what the compiler prints.
-  - **Identical:** `StateBasics`, `StateVariants` and `Entry`.
-  - **Whitespace only:** `Observers` and `EntryDefaults` differ in the
-    indentation inside observer closures, and in an empty closure default
-    (`{}` printed `{` newline `}`).
+  - **All seven are identical**, whitespace included: `StateBasics`,
+    `StateVariants`, `Observers`, `ObserversMultiline`, `ObserversEdges`,
+    `Entry` and `EntryDefaults`.
+  - **How the observer probes came to match** (from rules_applecross#84,
+    where the same plugin is kept): every line of the setter carries its
+    own indentation, which the expansion's formatter keeps.
+    - An observer's first body line goes at 4 when its closure is the
+      setter's first statement, otherwise at 8.
+    - Later lines keep their place in the source, relative to the first.
+    - Each closure ends at 8.
+  - **How `@Entry` came to match:** it is laid out by hand with its
+    formatter off (`formatMode = .disabled`), so a default such as `{}` is
+    kept as written.
 - `//tests/renderer:mock_renderer_test`'s `checkStateMacro` checks two
   things:
   - a private state's initial value is made once, under 6.4;
