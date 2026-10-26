@@ -505,16 +505,20 @@ def android(review, story_list, builds):
             time.sleep(wait)
             oss_shot(env, path)
 
-        # The status bar held still (SystemUI's demo mode): 9:41, full Wi-Fi,
-        # signal and battery, no notifications. Wi-Fi and the cellular network
-        # in broadcasts of their own: an intent keeps one value a key, and both
-        # take `level` (in one, Wi-Fi showed "!" and the network "3G").
+        # The status bar held still (SystemUI's demo mode), as every snapshot
+        # holds it (~/Developer/AGENTS.md): 9:41, Wi-Fi, a full battery, no
+        # cellular network (shown, the emulator drew it differently from run
+        # to run), no notifications. Twice, a few seconds apart: SystemUI may
+        # still be settling after boot.
         sh(adb + ["shell", "settings", "put", "global", "sysui_demo_allowed", "1"], check=False)
-        for command in (["enter"], ["clock", "-e", "hhmm", "0941"], ["battery", "-e", "level", "100", "-e", "plugged", "false"],
-                        ["network", "-e", "wifi", "show", "-e", "level", "4", "-e", "fully", "true"],
-                        ["network", "-e", "mobile", "show", "-e", "level", "4", "-e", "datatype", "none", "-e", "fully", "true"],
-                        ["notifications", "-e", "visible", "false"]):
-            sh(adb + ["shell", "am", "broadcast", "-a", "com.android.systemui.demo", "-e", "command", *command], check=False)
+        for attempt in range(2):
+            if attempt:
+                time.sleep(4)
+            for command in (["exit"], ["enter"], ["clock", "-e", "hhmm", "0941"], ["battery", "-e", "level", "100", "-e", "plugged", "false"],
+                            ["network", "-e", "wifi", "show", "-e", "level", "4", "-e", "fully", "true"],
+                            ["network", "-e", "mobile", "hide"], ["network", "-e", "nosim", "hide"],
+                            ["notifications", "-e", "visible", "false"]):
+                sh(adb + ["shell", "am", "broadcast", "-a", "com.android.systemui.demo", "-e", "command", *command], check=False)
         # The first launch after an install shows the splash a while longer.
         for app in APPS:
             launcher(app, {}, 8, os.path.join(tempfile.mkdtemp(), "warm.png"))
