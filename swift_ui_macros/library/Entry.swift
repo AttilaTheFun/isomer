@@ -50,6 +50,10 @@ struct EntryMessage: DiagnosticMessage {
 }
 
 public struct EntryMacro: AccessorMacro, PeerMacro {
+    // Laid out here, not by the expansion's formatter: a default is kept as
+    // written (`{}` stays on one line).
+    public static var formatMode: FormatMode { .disabled }
+
     public static func expansion(
         of node: AttributeSyntax,
         providingAccessorsOf declaration: some DeclSyntaxProtocol,
@@ -57,9 +61,9 @@ public struct EntryMacro: AccessorMacro, PeerMacro {
     ) throws -> [AccessorDeclSyntax] {
         let key = "__Key_\(try EntryProperty(declaration).name)"
         return [
-            "get {\nself[\(raw: key).self]\n}",
-            "set {\nself[\(raw: key).self] = newValue\n}",
-            "_modify {\nyield &self[\(raw: key).self]\n}",
+            "    get {\n        self[\(raw: key).self]\n    }",
+            "    set {\n        self[\(raw: key).self] = newValue\n    }",
+            "    _modify {\n        yield &self[\(raw: key).self]\n    }",
         ]
     }
 
@@ -82,13 +86,13 @@ public struct EntryMacro: AccessorMacro, PeerMacro {
             // A focused value is optional: its key names the wrapped type.
             let value = type.as(OptionalTypeSyntax.self)?.wrappedType.trimmed ?? type
             // FocusedValueKey is SwiftUI's own, not SwiftUICore's, in Apple's.
-            return ["private struct \(raw: "__Key_" + p.name): SwiftUI.\(raw: key.name) {\ntypealias Value = \(value)\n}"]
+            return ["private struct \(raw: "__Key_" + p.name): SwiftUI.\(raw: key.name) {\n    typealias Value = \(value)\n}"]
         }
         guard let defaultValue = p.defaultValue ?? (p.type?.is(OptionalTypeSyntax.self) == true ? "nil" : nil) else {
             throw MacroError(description: "'@Entry' needs a default value")
         }
         let typeAnnotation = p.type.map { ": \($0.trimmedDescription)" } ?? ""
-        var members = "@\(swiftUI).__EntryDefaultValue\nstatic var defaultValue\(typeAnnotation) = \(defaultValue.trimmedDescription)"
+        var members = "    @\(swiftUI).__EntryDefaultValue\n    static var defaultValue\(typeAnnotation) = \(defaultValue.trimmedDescription)"
         // A default made by a call is checked: a class's is made again on
         // every read (_SwiftUIEntryTypeCheck's class overload warns).
         if defaultValue.is(FunctionCallExprSyntax.self) {
@@ -97,9 +101,9 @@ public struct EntryMacro: AccessorMacro, PeerMacro {
             let line = location?.line.as(IntegerLiteralExprSyntax.self)?.literal.text ?? "1"
             members += """
 
-                #sourceLocation(file: "\(file)", line: \(line))
-                private static let _typeCheck: Void = #_SwiftUIEntryTypeCheck(Value.self, macroName: "Entry", propertyName: "\(p.name)")
-                #sourceLocation()
+                    #sourceLocation(file: "\(file)", line: \(line))
+                    private static let _typeCheck: Void = #_SwiftUIEntryTypeCheck(Value.self, macroName: "Entry", propertyName: "\(p.name)")
+                    #sourceLocation()
                 """
         }
         return ["private struct \(raw: "__Key_" + p.name): \(raw: swiftUI).\(raw: key.name) {\n\(raw: members)\n}"]
