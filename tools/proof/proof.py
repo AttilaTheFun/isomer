@@ -377,7 +377,11 @@ def ios(review, story_list, builds):
             sh(["unzip", "-q", ipa, "-d", work])
             payload = os.path.join(work, "Payload")
             sh(["xcrun", "simctl", "install", udid, os.path.join(payload, os.listdir(payload)[0])])
-        sh(["xcrun", "simctl", "status_bar", udid, "override", "--time", "9:41", "--batteryState", "charged", "--batteryLevel", "100"], check=False)
+        # The status bar held still, as every snapshot here holds it (~/Developer/AGENTS.md):
+        # 9:41, full Wi-Fi and signal, a full battery, no carrier.
+        sh(["xcrun", "simctl", "status_bar", udid, "override", "--time", "9:41", "--dataNetwork", "wifi", "--wifiMode", "active",
+            "--wifiBars", "3", "--cellularMode", "active", "--cellularBars", "4", "--operatorName", "",
+            "--batteryState", "charged", "--batteryLevel", "100"], check=False)
 
         def launcher(app, environment, wait, path):
             bundle = ISOMER_STORYBOOK["bundle"] if app == "storybook-isomer" else APPS[app]["bundle"]
@@ -501,11 +505,15 @@ def android(review, story_list, builds):
             time.sleep(wait)
             oss_shot(env, path)
 
-        # The status bar held still (SystemUI's demo mode): 9:41, full, no notifications.
+        # The status bar held still (SystemUI's demo mode): 9:41, full Wi-Fi,
+        # signal and battery, no notifications. Wi-Fi and the cellular network
+        # in broadcasts of their own: an intent keeps one value a key, and both
+        # take `level` (in one, Wi-Fi showed "!" and the network "3G").
         sh(adb + ["shell", "settings", "put", "global", "sysui_demo_allowed", "1"], check=False)
         for command in (["enter"], ["clock", "-e", "hhmm", "0941"], ["battery", "-e", "level", "100", "-e", "plugged", "false"],
-                        ["network", "-e", "wifi", "show", "-e", "level", "4", "-e", "mobile", "show", "-e", "datatype", "none",
-                         "-e", "level", "4"], ["notifications", "-e", "visible", "false"]):
+                        ["network", "-e", "wifi", "show", "-e", "level", "4", "-e", "fully", "true"],
+                        ["network", "-e", "mobile", "show", "-e", "level", "4", "-e", "datatype", "none", "-e", "fully", "true"],
+                        ["notifications", "-e", "visible", "false"]):
             sh(adb + ["shell", "am", "broadcast", "-a", "com.android.systemui.demo", "-e", "command", *command], check=False)
         # The first launch after an install shows the splash a while longer.
         for app in APPS:
