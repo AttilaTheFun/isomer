@@ -133,15 +133,37 @@ swift_library(
     deps = [":isomer"],
 )
 
-# What an application builds against (@isomer//:swift_ui): SwiftUI and the
-# Isomer module (Isomer's additions: `#if canImport(Isomer) import Isomer` in
-# code that also builds against Apple's frameworks), as on the web and
-# Android. A Swift package configured over @isomer//:swift_ui sees both.
+# PhotosUI's SwiftUI photo picker, over this SwiftUI (//frameworks), as on
+# the web and Android. Its picker is a request to the host, which this
+# self-drawing renderer doesn't run yet: here it picks nothing, as
+# `fileImporter` doesn't.
+swift_library(
+    name = "photos_ui",
+    package_name = "isomer",
+    srcs = ["//frameworks/photos_ui:srcs"],
+    copts = _WINDOWS_COPTS,
+    module_name = "PhotosUI",
+    swiftc_inputs = ["renderer.h"],
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        ":swift_ui",
+        "//frameworks/core_transferable",
+        "//frameworks/uniform_type_identifiers",
+    ],
+)
+
+# What an application builds against (@isomer//:swift_ui): SwiftUI, the
+# other Apple frameworks it may import beside it (PhotosUI,
+# UniformTypeIdentifiers), and the Isomer module (Isomer's additions: `#if
+# canImport(Isomer) import Isomer` in code that also builds against Apple's
+# frameworks), as on the web and Android. A Swift package configured over @isomer//:swift_ui sees both.
 swift_library_group(
     name = "sdk",
     deps = [
         ":isomer",
+        ":photos_ui",
         ":swift_ui",
+        "//frameworks/uniform_type_identifiers",
         "//windows/libraries/image_io",
     ],
 )
