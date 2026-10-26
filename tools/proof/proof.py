@@ -393,7 +393,7 @@ def ios(review, story_list, builds):
             for key, value in environment.items(): variables["SIMCTL_CHILD_" + key] = value
             subprocess.run(["xcrun", "simctl", "launch", udid, bundle], env=variables, capture_output=True)
             time.sleep(wait)
-            sh(["xcrun", "simctl", "io", udid, "screenshot", path])
+            sh(["xcrun", "simctl", "io", udid, "screenshot", "--mask=black", path])
 
         def switcher(app):
             # The simulator runs on this Mac (oss's server is here): its apps
@@ -405,7 +405,7 @@ def ios(review, story_list, builds):
             return Switcher(start=lambda path: launcher(app, {"ISO_STORYBOOK_CONTROL": control}, 5, path),
                             request=lambda story: open(control, "w").write(story),
                             shown=lambda: read(control + ".shown"),
-                            shoot=lambda path: sh(["xcrun", "simctl", "io", udid, "screenshot", path]))
+                            shoot=lambda path: sh(["xcrun", "simctl", "io", udid, "screenshot", "--mask=black", path]))
 
         waits = {"open": 5, "story": 4, "run": 25}
         shoot_apps(review, "ios", "iPhone (simulator)", "portrait", launcher, story_list, waits, switcher("storybook"))
