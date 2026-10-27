@@ -1,5 +1,5 @@
 # rules_applecross's patches to rules_apple and apple_support (bundling and
-# signing on Linux), copied from its patches/ at the commit MODULE.bazel pins:
+# signing on Linux), copied from its patches/ at the commit MODULE.bazel's version is:
 # Bazel applies a module's overrides only in the root module, so each root
 # (isomer's, the examples') repeats them.
 exports_files(glob(["*.patch"]))

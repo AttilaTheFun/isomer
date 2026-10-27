@@ -345,8 +345,9 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   `single_version_override` in each root (isomer's, the examples'): without
   it, MVS takes rules_applecross's 4.2.2 and loses the fork. A consumer that
   builds Apple targets with rules_applecross repeats it (Visor does).
-- **The Apple targets build on Linux too** (rules_applecross, pinned by
-  commit; 2026-10-26): Xcode 27.0's SDKs from an SDK archive, the Swift
+- **The Apple targets build on Linux too** (rules_applecross, 2026-10-26;
+  the project registry's 0.0.3.cc07dde, its main at cc07dde, until it has a
+  release in the BCR): Xcode 27.0's SDKs from an SDK archive, the Swift
   that built them (6.4.0) for the Apple targets alone (the rest keeps
   6.3.2), its clean-room actool, ibtool and codesign, and its ported tools
   from its main (tools/applecross/ported_tools.sha256: their codesign signs
