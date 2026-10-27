@@ -447,6 +447,11 @@ def macos(review, story_list, builds):
         sh(["swiftc", "-O", "-target", "arm64-apple-macos14", os.path.join(ISOMER, "tools", "proof", "window_rect.swift"), "-o", helper])
         scp(env, helper, "/tmp/window_rect")
         names = " ".join(APPS[app]["name"] for app in APPS)
+        # Scroll bars as overlays, shown only while scrolling. "Automatic" (the
+        # default) chose by the pointing devices it saw, so one lease drew
+        # legacy scroll bars, which take the sidebar's width, and another
+        # didn't. Set before the apps open, which read it as they start.
+        ssh(env, "sudo launchctl asuser $(id -u runner) defaults write -g AppleShowScrollBars -string WhenScrolling")
 
         def shoot(path):
             oss_shot(env, path)
@@ -570,7 +575,10 @@ def web(review, story_list, builds):
             page = "" if app == "storybook" else "playground/"
             query = "&".join(["renderer=react"] + [f"{k}={urllib.parse.quote(v)}" for k, v in environment.items()])
             url = f"http://127.0.0.1:{app_port}/{page}?{query}"
-            sh([sys.executable, cdp, url, path, f"wait={wait}", "width=1280", "height=800"])
+            # The page drawn (the renderer's first tree committed) before the
+            # wait, which is then the settling: a fixed wait alone shot a blank
+            # page when a load ran slow (0.39.1's web Storybook, three stories).
+            sh([sys.executable, cdp, url, path, "until=window.__isoLastTree", f"wait={wait}", "width=1280", "height=800"])
 
         # A fresh Chrome profile's first load compiles the reactor: warm both
         # sites up before the shots.

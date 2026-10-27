@@ -10,8 +10,10 @@ via --enable-unsafe-webgpu. The profile dir /tmp/iso-cdp-profile caches
 aggressively — `rm -rf` it if you see a stale build.
 
 Usage:
-  cdp.py <url> <out.png> [wait=SECONDS] [click=X,Y ...] [drag=X1,Y1,X2,Y2] [wheel=X,Y,DY] [type=TEXT] [key=[Shift+]Enter] [eval=JS] [shot=PATH] [width=W] [height=H]
-Steps run in argv order; `wait` sleeps, `click` sends a real mouse
+  cdp.py <url> <out.png> [wait=SECONDS] [until=JS] [click=X,Y ...] [drag=X1,Y1,X2,Y2] [wheel=X,Y,DY] [type=TEXT] [key=[Shift+]Enter] [eval=JS] [shot=PATH] [width=W] [height=H]
+Steps run in argv order; `wait` sleeps, `until` waits (at most 60 s) for a
+JS expression to be truthy (the page drawn: `until=window.__isoLastTree`),
+`click` sends a real mouse
 press+release, `drag` presses, moves in steps, and releases, `wheel` scrolls
 by DY at (X,Y) — all trusted input events.
 Handy evals against the React renderer (committed hooks in react_renderer.js):
@@ -208,6 +210,16 @@ def main():
                 frame = ws.send("Page.captureScreenshot", {"format": "png"})
                 with open(s.split("=", 1)[1], "wb") as fh:
                     fh.write(base64.b64decode(frame["data"]))
+            elif s.startswith("until="):
+                expression = s.split("=", 1)[1]
+                deadline = time.time() + 60
+                while time.time() < deadline:
+                    result = ws.send("Runtime.evaluate", {"expression": f"!!({expression})", "returnByValue": True})
+                    if result.get("result", {}).get("value") is True:
+                        break
+                    time.sleep(0.25)
+                else:
+                    print("UNTIL timed out:", expression)
             elif s.startswith("eval="):
                 result = ws.send("Runtime.evaluate",
                                  {"expression": s.split("=", 1)[1], "returnByValue": True})
