@@ -472,8 +472,13 @@ def macos(review, story_list, builds):
         # Scroll bars as overlays, shown only while scrolling. "Automatic" (the
         # default) chose by the pointing devices it saw, so one lease drew
         # legacy scroll bars, which take the sidebar's width, and another
-        # didn't. Set before the apps open, which read it as they start.
-        ssh(env, "sudo launchctl asuser $(id -u runner) defaults write -g AppleShowScrollBars -string WhenScrolling")
+        # didn't. Set before the apps open, which read it as they start, by
+        # runner itself (the SSH session's user): under `launchctl asuser`
+        # it was root's, and runner's apps never saw it.
+        ssh(env, "defaults write -g AppleShowScrollBars -string WhenScrolling")
+        shown = ssh(env, "defaults read -g AppleShowScrollBars", check=False).stdout.strip()
+        if shown != "WhenScrolling":
+            raise RuntimeError(f"AppleShowScrollBars is {shown!r}, not WhenScrolling")
 
         def shoot(path):
             oss_shot(env, path)
