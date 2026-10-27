@@ -80,6 +80,30 @@ run`), CoreGraphics and ImageIO for images.
   - the Playground's e2e runner (`tests/e2e/run.py`);
   - the pixel benchmark.
 
+## No Node
+
+Node never runs in an Isomer app. It is in the build and the tests (rules_nodejs
+6.7.5's hermetic Node; never npm), and it can go too:
+
+- **TypeScript.** swift_ffi's `ts_swift_library` compiles the generated web
+  bindings with `tsc` 5.8.3, through aspect_rules_ts and aspect_rules_js. If
+  swift_ffi generated JavaScript itself (with a `.d.ts` for typed callers),
+  `tsc` would go.
+- **esbuild** bundles the Metal web tests and swift_ffi's web example, run
+  through aspect_rules_esbuild's Node launcher. Serving those as plain ES
+  modules, as the web runtime already is, removes it.
+- **Tests run in Node:** tests/web_files (`file_system_test`, `blocks_test`),
+  tests/web_network (`network_test`) and swift_ffi's web example. They could
+  run in headless Chrome, the browser the code is for.
+- **Dev tools in Node:** tools/testing's `cdp_shot.js`, `cdp_eval.js`,
+  `run_files_check.js`, `run_network_check.js` and `network_server.js`, and
+  tools/metal's `run_metal_check.js` and `validate_wgsl.js`. They would be
+  Swift, with the Chrome driver (`cdp.py`, above).
+
+With all of them gone, rules_nodejs, aspect_rules_js, aspect_rules_ts and
+aspect_rules_esbuild leave MODULE.bazel. Electron's `main.js` runs in
+Electron's own Node, part of the Electron app rather than the build.
+
 ## Hermetic builds (tabled)
 
 - **Swift 6.4.0 everywhere.** Isomer pins Swift 6.3.2 for its host, wasm
