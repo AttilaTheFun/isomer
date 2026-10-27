@@ -32,8 +32,9 @@ to fourteen. A story that doesn't open so is launched to on its own.
 What changes between runs without the apps changing is held still or left
 out: the iPhone's and Android's status bars (simctl's override, SystemUI's
 demo mode: 9:41), and on the desktops everything but the app's window (a
-Mac's and Windows' screenshots are cropped to the app's frontmost window,
-Linux's below GNOME's top bar and right of its dock).
+Mac's and Windows' screenshots are cropped to the app's frontmost window, a
+Mac's rounded corners cut away, Linux's below GNOME's top bar and right of
+its dock).
 
 Each platform's apps are folders of the review store's snapshots,
 <dir>/review-<platform>-<app>/manifest.json (reviews/MANIFEST.md; the
@@ -145,6 +146,27 @@ def crop(path, box):
             image.crop((left, top, right, bottom)).save(path)
     except Exception as error:
         log(f"crop {os.path.basename(path)}: {error}")
+
+
+# A Mac window's corners in the VM's screenshots (macOS 27, at 1x): the curve
+# is 14 pixels in from its outer pixel; two more for a darker shadow.
+CORNER_RADIUS = 16
+
+
+def cut_corners(path):
+    """A Mac window's shot without what isn't the window's: its outer pixel
+    and the curve of its corners, where its edge blends with its shadow and
+    the desktop behind (OS Server's proof saw the edge 15-20 levels darker
+    in one of two runs, the window's own pixels the same), made transparent."""
+    try:
+        from PIL import Image, ImageDraw
+        image = Image.open(path).convert("RGBA")
+        image = image.crop((1, 1, image.width - 1, image.height - 1))
+        mask = Image.new("L", image.size, 0)
+        ImageDraw.Draw(mask).rounded_rectangle((0, 0, image.width - 1, image.height - 1), radius=CORNER_RADIUS, fill=255)
+        Image.composite(image, Image.new("RGBA", image.size, (0, 0, 0, 0)), mask).save(path)
+    except Exception as error:
+        log(f"corners {os.path.basename(path)}: {error}")
 
 
 # Stories that load something (a picture from the network, a web page, map
@@ -447,6 +469,16 @@ def macos(review, story_list, builds):
         sh(["swiftc", "-O", "-target", "arm64-apple-macos14", os.path.join(ISOMER, "tools", "proof", "window_rect.swift"), "-o", helper])
         scp(env, helper, "/tmp/window_rect")
         names = " ".join(APPS[app]["name"] for app in APPS)
+        # Scroll bars as overlays, shown only while scrolling. "Automatic" (the
+        # default) chose by the pointing devices it saw, so one lease drew
+        # legacy scroll bars, which take the sidebar's width, and another
+        # didn't. Set before the apps open, which read it as they start, by
+        # runner itself (the SSH session's user): under `launchctl asuser`
+        # it was root's, and runner's apps never saw it.
+        ssh(env, "defaults write -g AppleShowScrollBars -string WhenScrolling")
+        shown = ssh(env, "defaults read -g AppleShowScrollBars", check=False).stdout.strip()
+        if shown != "WhenScrolling":
+            raise RuntimeError(f"AppleShowScrollBars is {shown!r}, not WhenScrolling")
 
         def shoot(path):
             oss_shot(env, path)
@@ -454,6 +486,7 @@ def macos(review, story_list, builds):
             if len(rect) == 4:
                 x, y, w, h = map(int, rect)
                 crop(path, (x, y, x + w, y + h))
+                cut_corners(path)
 
         def launcher(app, environment, wait, path):
             name = APPS[app]["name"]
@@ -562,6 +595,11 @@ def web(review, story_list, builds):
                                                   cwd=builds["playground"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)),
     }
     cdp = os.path.join(ISOMER, "tools", "testing", "cdp.py")
+    # Chrome's profile is the run's own: a page's stored state outlasted the
+    # run that made it in the shared one (the Playground opened on the
+    # project the last run's 2048 shot had chosen).
+    profile = tempfile.mkdtemp(prefix="proof-chrome-")
+    chrome_env = dict(os.environ, CDP_PROFILE=profile)
     try:
         time.sleep(1)
 
@@ -570,7 +608,17 @@ def web(review, story_list, builds):
             page = "" if app == "storybook" else "playground/"
             query = "&".join(["renderer=react"] + [f"{k}={urllib.parse.quote(v)}" for k, v in environment.items()])
             url = f"http://127.0.0.1:{app_port}/{page}?{query}"
-            sh([sys.executable, cdp, url, path, f"wait={wait}", "width=1280", "height=800"])
+            # The page drawn (the renderer's first tree committed) before the
+            # wait, which is then the settling: a fixed wait alone shot a blank
+            # page when a load ran slow (0.39.1's web Storybook, three stories).
+            # A page that never drew in a minute is loaded again: one run's
+            # Pokédex was the bare background.
+            for attempt in range(3):
+                shot = sh([sys.executable, cdp, url, path, "until=window.__isoLastTree", f"wait={wait}",
+                           "width=1280", "height=800"], env=chrome_env)
+                if "UNTIL timed out" not in shot.stdout:
+                    break
+                log(f"web {os.path.basename(path)}: the page never drew (try {attempt + 1} of 3)")
 
         # A fresh Chrome profile's first load compiles the reactor: warm both
         # sites up before the shots.
@@ -582,6 +630,7 @@ def web(review, story_list, builds):
     finally:
         for _, server in servers.values():
             server.terminate()
+        shutil.rmtree(profile, ignore_errors=True)
 
 
 # --- Linux (built in a Linux container here, run on an oss VM)

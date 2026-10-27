@@ -7,11 +7,14 @@ screenshots are unreliable against the React renderer (React 18 event
 delegation): CDP Input.dispatchMouseEvent sends *trusted* events in real
 time, which is the only thing that clicks reliably. WebGPU works headless
 via --enable-unsafe-webgpu. The profile dir /tmp/iso-cdp-profile caches
-aggressively — `rm -rf` it if you see a stale build.
+aggressively — `rm -rf` it if you see a stale build; CDP_PROFILE names
+another (a run's own, which a page's stored state can't outlast).
 
 Usage:
-  cdp.py <url> <out.png> [wait=SECONDS] [click=X,Y ...] [drag=X1,Y1,X2,Y2] [wheel=X,Y,DY] [type=TEXT] [key=[Shift+]Enter] [eval=JS] [shot=PATH] [width=W] [height=H]
-Steps run in argv order; `wait` sleeps, `click` sends a real mouse
+  cdp.py <url> <out.png> [wait=SECONDS] [until=JS] [click=X,Y ...] [drag=X1,Y1,X2,Y2] [wheel=X,Y,DY] [type=TEXT] [key=[Shift+]Enter] [eval=JS] [shot=PATH] [width=W] [height=H]
+Steps run in argv order; `wait` sleeps, `until` waits (at most 60 s) for a
+JS expression to be truthy (the page drawn: `until=window.__isoLastTree`),
+`click` sends a real mouse
 press+release, `drag` presses, moves in steps, and releases, `wheel` scrolls
 by DY at (X,Y) — all trusted input events.
 Handy evals against the React renderer (committed hooks in react_renderer.js):
@@ -33,7 +36,6 @@ CHROME = os.environ.get("CDP_CHROME") or next(
     (path for path in ("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "/usr/bin/google-chrome",
                        "/usr/bin/chromium") if os.path.exists(path)),
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-PORT = 9223
 
 
 class WS:
@@ -122,24 +124,35 @@ def main():
             height = int(s.split("=", 1)[1])
     width, height = width or 1220, height or 880
 
+    profile = os.environ.get("CDP_PROFILE", "/tmp/iso-cdp-profile")
+    # DevTools on a port Chrome picks, read back from the profile: on a fixed
+    # one, two drivers at once (another checkout's cdp.py) reached each
+    # other's Chrome.
+    active_port = os.path.join(profile, "DevToolsActivePort")
+    if os.path.exists(active_port):
+        os.remove(active_port)
     chrome = subprocess.Popen(
         # No keychain or keyring: Chrome's cookie store waits for Linux's
         # GNOME keyring, locked or out of reach from a shell, and every
         # http(s) page then hangs (the JS drivers pass the same).
         [CHROME, "--headless=new", "--enable-unsafe-webgpu", "--enable-features=Vulkan",
          "--use-mock-keychain", "--password-store=basic",
-         f"--remote-debugging-port={PORT}",
-         f"--window-size={width},{height}", "--user-data-dir=/tmp/iso-cdp-profile",
+         "--remote-debugging-port=0",
+         f"--window-size={width},{height}",
+         "--user-data-dir=" + profile,
          # CDP_CHROME_FLAGS: extra switches (e.g. --disable-features=
          # LocalNetworkAccessChecks to reach a tailnet host from a page).
          *os.environ.get("CDP_CHROME_FLAGS", "").split(),
          "about:blank"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
+        port = None
         for _ in range(50):
             try:
+                if port is None:
+                    port = int(open(active_port).read().split()[0])
                 targets = json.loads(urllib.request.urlopen(
-                    f"http://127.0.0.1:{PORT}/json/list", timeout=1).read())
+                    f"http://127.0.0.1:{port}/json/list", timeout=1).read())
                 page = next(t for t in targets if t["type"] == "page")
                 break
             except Exception:
@@ -208,6 +221,16 @@ def main():
                 frame = ws.send("Page.captureScreenshot", {"format": "png"})
                 with open(s.split("=", 1)[1], "wb") as fh:
                     fh.write(base64.b64decode(frame["data"]))
+            elif s.startswith("until="):
+                expression = s.split("=", 1)[1]
+                deadline = time.time() + 60
+                while time.time() < deadline:
+                    result = ws.send("Runtime.evaluate", {"expression": f"!!({expression})", "returnByValue": True})
+                    if result.get("result", {}).get("value") is True:
+                        break
+                    time.sleep(0.25)
+                else:
+                    print("UNTIL timed out:", expression)
             elif s.startswith("eval="):
                 result = ws.send("Runtime.evaluate",
                                  {"expression": s.split("=", 1)[1], "returnByValue": True})
