@@ -611,8 +611,14 @@ def web(review, story_list, builds):
             # The page drawn (the renderer's first tree committed) before the
             # wait, which is then the settling: a fixed wait alone shot a blank
             # page when a load ran slow (0.39.1's web Storybook, three stories).
-            sh([sys.executable, cdp, url, path, "until=window.__isoLastTree", f"wait={wait}", "width=1280", "height=800"],
-               env=chrome_env)
+            # A page that never drew in a minute is loaded again: one run's
+            # Pokédex was the bare background.
+            for attempt in range(3):
+                shot = sh([sys.executable, cdp, url, path, "until=window.__isoLastTree", f"wait={wait}",
+                           "width=1280", "height=800"], env=chrome_env)
+                if "UNTIL timed out" not in shot.stdout:
+                    break
+                log(f"web {os.path.basename(path)}: the page never drew (try {attempt + 1} of 3)")
 
         # A fresh Chrome profile's first load compiles the reactor: warm both
         # sites up before the shots.

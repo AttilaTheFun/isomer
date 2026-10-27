@@ -36,7 +36,6 @@ CHROME = os.environ.get("CDP_CHROME") or next(
     (path for path in ("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "/usr/bin/google-chrome",
                        "/usr/bin/chromium") if os.path.exists(path)),
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-PORT = 9223
 
 
 class WS:
@@ -125,25 +124,35 @@ def main():
             height = int(s.split("=", 1)[1])
     width, height = width or 1220, height or 880
 
+    profile = os.environ.get("CDP_PROFILE", "/tmp/iso-cdp-profile")
+    # DevTools on a port Chrome picks, read back from the profile: on a fixed
+    # one, two drivers at once (another checkout's cdp.py) reached each
+    # other's Chrome.
+    active_port = os.path.join(profile, "DevToolsActivePort")
+    if os.path.exists(active_port):
+        os.remove(active_port)
     chrome = subprocess.Popen(
         # No keychain or keyring: Chrome's cookie store waits for Linux's
         # GNOME keyring, locked or out of reach from a shell, and every
         # http(s) page then hangs (the JS drivers pass the same).
         [CHROME, "--headless=new", "--enable-unsafe-webgpu", "--enable-features=Vulkan",
          "--use-mock-keychain", "--password-store=basic",
-         f"--remote-debugging-port={PORT}",
+         "--remote-debugging-port=0",
          f"--window-size={width},{height}",
-         "--user-data-dir=" + os.environ.get("CDP_PROFILE", "/tmp/iso-cdp-profile"),
+         "--user-data-dir=" + profile,
          # CDP_CHROME_FLAGS: extra switches (e.g. --disable-features=
          # LocalNetworkAccessChecks to reach a tailnet host from a page).
          *os.environ.get("CDP_CHROME_FLAGS", "").split(),
          "about:blank"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
+        port = None
         for _ in range(50):
             try:
+                if port is None:
+                    port = int(open(active_port).read().split()[0])
                 targets = json.loads(urllib.request.urlopen(
-                    f"http://127.0.0.1:{PORT}/json/list", timeout=1).read())
+                    f"http://127.0.0.1:{port}/json/list", timeout=1).read())
                 page = next(t for t in targets if t["type"] == "page")
                 break
             except Exception:
