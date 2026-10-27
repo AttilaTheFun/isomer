@@ -7,7 +7,8 @@ screenshots are unreliable against the React renderer (React 18 event
 delegation): CDP Input.dispatchMouseEvent sends *trusted* events in real
 time, which is the only thing that clicks reliably. WebGPU works headless
 via --enable-unsafe-webgpu. The profile dir /tmp/iso-cdp-profile caches
-aggressively — `rm -rf` it if you see a stale build.
+aggressively — `rm -rf` it if you see a stale build; CDP_PROFILE names
+another (a run's own, which a page's stored state can't outlast).
 
 Usage:
   cdp.py <url> <out.png> [wait=SECONDS] [until=JS] [click=X,Y ...] [drag=X1,Y1,X2,Y2] [wheel=X,Y,DY] [type=TEXT] [key=[Shift+]Enter] [eval=JS] [shot=PATH] [width=W] [height=H]
@@ -131,7 +132,8 @@ def main():
         [CHROME, "--headless=new", "--enable-unsafe-webgpu", "--enable-features=Vulkan",
          "--use-mock-keychain", "--password-store=basic",
          f"--remote-debugging-port={PORT}",
-         f"--window-size={width},{height}", "--user-data-dir=/tmp/iso-cdp-profile",
+         f"--window-size={width},{height}",
+         "--user-data-dir=" + os.environ.get("CDP_PROFILE", "/tmp/iso-cdp-profile"),
          # CDP_CHROME_FLAGS: extra switches (e.g. --disable-features=
          # LocalNetworkAccessChecks to reach a tailnet host from a page).
          *os.environ.get("CDP_CHROME_FLAGS", "").split(),

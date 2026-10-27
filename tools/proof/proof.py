@@ -595,6 +595,11 @@ def web(review, story_list, builds):
                                                   cwd=builds["playground"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)),
     }
     cdp = os.path.join(ISOMER, "tools", "testing", "cdp.py")
+    # Chrome's profile is the run's own: a page's stored state outlasted the
+    # run that made it in the shared one (the Playground opened on the
+    # project the last run's 2048 shot had chosen).
+    profile = tempfile.mkdtemp(prefix="proof-chrome-")
+    chrome_env = dict(os.environ, CDP_PROFILE=profile)
     try:
         time.sleep(1)
 
@@ -606,7 +611,8 @@ def web(review, story_list, builds):
             # The page drawn (the renderer's first tree committed) before the
             # wait, which is then the settling: a fixed wait alone shot a blank
             # page when a load ran slow (0.39.1's web Storybook, three stories).
-            sh([sys.executable, cdp, url, path, "until=window.__isoLastTree", f"wait={wait}", "width=1280", "height=800"])
+            sh([sys.executable, cdp, url, path, "until=window.__isoLastTree", f"wait={wait}", "width=1280", "height=800"],
+               env=chrome_env)
 
         # A fresh Chrome profile's first load compiles the reactor: warm both
         # sites up before the shots.
@@ -618,6 +624,7 @@ def web(review, story_list, builds):
     finally:
         for _, server in servers.values():
             server.terminate()
+        shutil.rmtree(profile, ignore_errors=True)
 
 
 # --- Linux (built in a Linux container here, run on an oss VM)
