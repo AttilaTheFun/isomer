@@ -142,11 +142,13 @@ register_toolchains(
 # placeholder each builder's .bazelrc.user resolves (`--distdir`, or a
 # `--downloader_config` to an OS Server's /files/sha256/<hex>), and its
 # toolchains turned on by .bazelrc's apple_on_linux. A Mac builds as before.
-bazel_dep(name = "rules_applecross", version = "0.0.3")
-git_override(
+# The project registry's 0.0.3.cc07dde: rules_applecross's main at cc07dde.
+bazel_dep(name = "rules_applecross", version = "0.0.3.cc07dde")
+# rules_apple, as rules_applecross's patch leaves it, asks for 0.0.3, which no
+# registry has: every request is this version.
+single_version_override(
     module_name = "rules_applecross",
-    commit = "cc07dde07b6cceab663a4c0c2fee0c60a7172ec9",
-    remote = "https://github.com/apple-cross-toolchain/rules_applecross.git",
+    version = "0.0.3.cc07dde",
 )
 apple_cross_toolchain = use_extension("@rules_applecross//toolchain:extensions.bzl", "apple_cross_toolchain")
 apple_cross_toolchain.swift(

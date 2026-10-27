@@ -447,11 +447,15 @@ register_toolchains(
 bazel_dep(name = "rules_go", version = "0.62.0", dev_dependency = True)
 go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk", dev_dependency = True)
 go_sdk.download(version = "1.24.12")
-bazel_dep(name = "rules_applecross", version = "0.0.3", dev_dependency = True)
-git_override(
+# From the project's registry: 0.0.3.cc07dde is rules_applecross's main at
+# cc07dde, as is (its module() version set to the entry's), until it has a
+# release in the BCR.
+bazel_dep(name = "rules_applecross", version = "0.0.3.cc07dde", dev_dependency = True)
+# rules_apple, as rules_applecross's patch leaves it, asks for 0.0.3, which no
+# registry has: every request is this version.
+single_version_override(
     module_name = "rules_applecross",
-    commit = "cc07dde07b6cceab663a4c0c2fee0c60a7172ec9",
-    remote = "https://github.com/apple-cross-toolchain/rules_applecross.git",
+    version = "0.0.3.cc07dde",
 )
 apple_cross_toolchain = use_extension("@rules_applecross//toolchain:extensions.bzl", "apple_cross_toolchain", dev_dependency = True)
 apple_cross_toolchain.swift(
