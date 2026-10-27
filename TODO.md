@@ -13,6 +13,38 @@ Open items that are not yet tracked in code or docs.
   Context: memory notes "wasi-threads Swift wasm" / "wasi-threads
   concurrency upstream"; docs/benchmarks.md (Parallelism section).
 
+## Hermetic builds (tabled)
+
+- **Swift 6.4.0 everywhere.** Isomer pins Swift 6.3.2 for its host, wasm
+  and Android toolchains. Moving all of them to 6.4.0 (the Swift that built
+  Xcode 27.0's SDKs) means:
+  - rules_swift 4.x, with the two patches in tools/patches ported (a new
+    registry version);
+  - rules_apple 5.x and apple_support 2.10, with rules_applecross's patches;
+  - the swift-foundation fork on 6.4.0;
+  - the wasi-threads SDK for 6.4;
+  - swift-syntax 604;
+  - the Playground's on-device compilers.
+
+  rules_applecross alone doesn't need it: it brings swift.org's 6.4.0 for
+  the Apple targets only, beside 6.3.2.
+- **Building on a Mac without Xcode.**
+  - rules_applecross stages the SDKs from the SDK archive on a Mac with no
+    Xcode (its #213).
+  - Bazel's XcodeLocalEnvProvider still looks up an installed Xcode
+    (xcode-locator, then `xcrun --sdk … --show-sdk-path`) for every action
+    that names XCODE_VERSION_OVERRIDE or APPLE_SDK_PLATFORM. Linux hosts
+    skip it.
+  - Bundling on a Mac runs Xcode's own tools, while the clean-room
+    actool, ibtool and codesign exist only as Linux builds.
+  - The exec configuration's host tools (swift-syntax and the macros,
+    swift_ffi's generator, flatc, protoc) need a C/C++ toolchain and a
+    macOS SDK: perhaps the staged MacOSX.sdk with the hermetic `llvm`
+    clang.
+  - The Linux-native targets, built from a Mac, need a Linux sysroot.
+  - To check first: nested virtualization, so that a macOS VM runs the
+    Linux-container build itself.
+
 ## Consuming the SwiftUI module from packages
 
 - **Apple framework for the `SwiftUI` module.** A SwiftPM package whose
