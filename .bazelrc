@@ -111,6 +111,28 @@ build:windows --action_env=PATH
 # exact versions). Don't read or write it.
 common --lockfile_mode=off
 
+# The Apple targets built on Linux with rules_applecross (MODULE.bazel), on
+# a builder that has Xcode 27.0's SDK archive: its .bazelrc.user says where
+# (`--distdir`, or a `--downloader_config` to an OS Server) and turns this on
+# with `build:linux --config=apple_on_linux`. Without it (GitHub's runners)
+# Linux builds what runs on Linux alone, and nothing fetches the SDKs. Its
+# toolchains (the clean-room Apple tools, LLD, the Swift that built the SDKs)
+# take the Apple targets; the host's own C and Swift toolchains still build
+# what runs on Linux (the Linux pieces link its system libraries);
+# rules_apple's own actions find the staged tools by DEVELOPER_DIR and PATH.
+# A Mac builds as before, with its own Xcode.
+startup --host_jvm_args=-DBAZEL_TRACK_SOURCE_DIRECTORIES=1
+common --incompatible_repo_env_ignores_action_env
+common:linux --repo_env=BAZEL_NO_APPLE_CPP_TOOLCHAIN=1
+build:apple_on_linux --extra_toolchains=@apple_cross_toolchain//:all
+build:apple_on_linux --xcode_version_config=@apple_cross_toolchain//:host_xcodes
+build:apple_on_linux --@build_bazel_rules_apple//apple:sdk_tool_files=@apple_cross_toolchain//:sdk_tool_files
+build:apple_on_linux --action_env=DEVELOPER_DIR=external/rules_applecross++apple_cross_toolchain+apple_cross_toolchain/Xcode.app/Contents/Developer
+build:apple_on_linux --action_env=PATH=external/rules_applecross++apple_cross_toolchain+apple_cross_toolchain/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin:/bin:/usr/bin:/usr/local/bin
+# Its clean-room tools make a near match to Xcode's output where they cannot
+# make it byte for byte (an Icon Composer icon, drawn flat).
+build:apple_on_linux --action_env=RULES_APPLECROSS_RESOURCE_OUTPUT_MODE=relaxed
+
 # Per-machine settings (untracked): e.g. --override_module for a fork
 # checked out beside isomer.
 try-import %workspace%/.bazelrc.user
