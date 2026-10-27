@@ -2,16 +2,83 @@
 
 Open items that are not yet tracked in code or docs.
 
-## Toolchain
+## Upstream releases, no forks
 
-- **Upstream the WASI-threads work into swift.** The `wasm32-wasip1-threads`
-  global-executor change (a pthread-pool `WASIGlobalExecutor` so
-  async/TaskGroup fan out on real cores) lives on our branch as
-  swiftlang/swift PR #90715 (base `main`), with the companion rules_swift
-  PR #1860 for the threads `{target_triple}`. Land #90715, then the
-  `release/6.4.x` cherry-pick, then bump swiftwasm-build's base tag.
-  Context: memory notes "wasi-threads Swift wasm" / "wasi-threads
-  concurrency upstream"; docs/benchmarks.md (Parallelism section).
+The goal: every dependency at an upstream tagged release (a BCR version, a
+SwiftPM version, a swift.org toolchain), with no forks, no patches and no
+git or archive overrides. Each change we carry goes upstream, and its fork
+or patch goes when a release has it. The project's registry
+(AttilaTheFun/bazel_registry) then holds only the project's own modules.
+What is carried today (on main, and with #39's rules_applecross):
+
+- **rules_swift**: the registry's 3.6.1.isomer.1 (4.1.0.isomer.2 with #39).
+  It is upstream plus:
+  - rules_swift#1860, open: a metadata-driven wasm SDK and its threads
+    variant;
+  - two patches of ours, not yet sent upstream (tools/patches):
+    `rules_swift_wasm_threads_beside.patch` (two `swift.wasm_sdk` tags) and
+    `rules_swift_wasm_clang_resource_dir.patch` (the SDK's clang headers
+    for C compiled for wasm).
+
+  #39 also holds it above the 4.2.2 that rules_applecross asks for.
+- **The threads Swift SDK** for wasm: AttilaTheFun/swift's build of 6.3.2
+  (branch threads-sdk-6.3.2) with swiftlang/swift#92018. That PR merged on
+  2026-10-09 (#90715 was closed in its favour), as did
+  swift-platform-executors#33. The fork goes when a swift.org release
+  carries them and publishes a wasip1-threads SDK.
+- **swift-foundation**: the registry's 6.3.2.isomer.1, AttilaTheFun's fork
+  (branch `isomer`). Its fixes for WASI and Android go upstream. What only
+  Isomer needs (its declarations made internal, so the `Foundation` module
+  stays a subset of Apple's) needs a form upstream would take, such as a
+  build setting, or a home outside the fork.
+- **WasmKit**: AttilaTheFun/WasmKit at a commit (an `http_archive` with our
+  BUILD file), carrying:
+  - the engine work: guard pages on iOS, and the dispatch fusions;
+  - two patches (tools/patches): Android's software bounds checks, and
+    MSVC's C without clang's atomics.
+
+  All of it goes to swiftwasm/WasmKit; then a tagged release, as a module
+  or a SwiftPM package.
+- **flatbuffers**: two patches, `flatbuffers_foundation_wasi.patch` and
+  `flatbuffers_swift_vectors.patch`, go to google/flatbuffers.
+  `rules_foreign_cc` is held at 0.15.1, because the 0.10.1 that grpc asks
+  for doesn't load on Bazel 9.
+- **rules_swift_package_manager**: the examples' Windows patch.
+- **With #39** (Apple targets built on Linux):
+  - rules_apple 5.3.1 with seven of rules_applecross's patches, and
+    apple_support 2.10.1 with one, which rules_applecross is taking
+    upstream;
+  - rules_applecross itself at a commit, until it has a release in the
+    BCR;
+  - hermetic_android_toolchains with
+    `hermetic_android_toolchains_linux_any_cpu.patch`.
+
+## Swift, not Python
+
+The tools should be Swift wherever Swift can do the job, with no Python in
+the repository: executable targets (`swift_binary`, or a package's `swift
+run`), CoreGraphics and ImageIO for images.
+
+- **Run by Bazel** (`py_binary`, on rules_python 2.0.2's hermetic Python
+  3.12):
+  - swift_ffi's `export_list.py` (a reactor's exports);
+  - tools/wasm's `icu_data.py`, `sdk_exports.py` and `serve.py` (the web
+    apps' `bazel run`, swift_map's too), and its `site_imports_test.py`;
+  - the Playground's `dev_compile_server.py`;
+  - the network probe's `network_check.py`.
+
+  With these in Swift, rules_python and its toolchain leave MODULE.bazel.
+- **Run by hand or by agents:**
+  - the release proof (`tools/proof/proof.py`);
+  - the headless Chrome driver (`tools/testing/cdp.py`, and swift_map's
+    copy);
+  - the parity reports (`tools/parity`);
+  - the SwiftUI audit (`tools/swiftui_audit`, nine scripts);
+  - `tools/foundation/check_link.py` and `tools/symbols/generate.py`;
+  - the version stamps (`examples/tools/stamp_storybook.py`, the
+    Playground's `stamp.py` and `template_history.py`);
+  - the Playground's e2e runner (`tests/e2e/run.py`);
+  - the pixel benchmark.
 
 ## Hermetic builds (tabled)
 
