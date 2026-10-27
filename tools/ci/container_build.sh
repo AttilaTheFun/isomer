@@ -20,6 +20,16 @@ IMAGE="${ISOMER_CI_IMAGE:-ghcr.io/attilathefun/visor-agent:0.41.2}"
 VOLUME="${ISOMER_CI_VOLUME:-isomer-ci}"
 SDK_SHA256="251c252f7f41bcd3e08655e49e182686682d705945f4a2807049b9051c606ebb"
 
+# `--inside` came in OS Server 0.12.0. An older oss takes it for an option it
+# doesn't know and runs the build on this Mac instead: refused here. (The
+# command line is inside the app: its version is the app's.)
+oss_app="$(python3 -c 'import os, shutil; print(os.path.realpath(shutil.which("oss")))' | sed 's|/Contents/Helpers/oss$||')"
+oss_version="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$oss_app/Contents/Info.plist" 2>/dev/null || echo 0)"
+if ! python3 -c 'import sys; v = [int(x) for x in sys.argv[1].split(".")[:3]] + [0, 0]; sys.exit(0 if v[:3] >= [0, 12, 0] else 1)' "$oss_version"; then
+    echo "container_build.sh: needs OS Server 0.12.0 or later on this Mac (oss machine run --inside); it has $oss_version" >&2
+    exit 1
+fi
+
 host="${OSS_FILES_HOST:-}"
 if [ -z "$host" ]; then
     tailscale=/Applications/Tailscale.app/Contents/MacOS/Tailscale
