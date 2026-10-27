@@ -1,0 +1,27 @@
+diff -ru a/BUILD.bazel b/BUILD.bazel
+--- a/BUILD.bazel	2026-10-26 19:31:48
++++ b/BUILD.bazel	2026-10-26 19:31:48
+@@ -2,9 +2,10 @@
+ 
+ config_setting(
+     name = "platform_linux",
++    # Google's Linux SDK and NDK are x86_64 programs; an arm64 Linux runs
++    # them under Rosetta or a binfmt emulator, so any Linux takes them.
+     constraint_values = [
+         "@platforms//os:linux",
+-        "@platforms//cpu:x86_64",
+     ],
+ )
+ 
+diff -ru a/private/utils.bzl b/private/utils.bzl
+--- a/private/utils.bzl	2026-10-26 19:31:48
++++ b/private/utils.bzl	2026-10-26 19:31:48
+@@ -9,7 +9,7 @@
+     },
+     "linux": {
+         "constraints": [
+-            ("linux", ["@platforms//os:linux", "@platforms//cpu:x86_64"]),
++            ("linux", ["@platforms//os:linux"]),
+         ],
+         "executable_extension": "",
+     },

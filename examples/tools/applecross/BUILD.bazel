@@ -1,0 +1,9 @@
+# rules_applecross's ported Apple tools (the clean-room actool, ibtool,
+# codesign and the rest), built from its main ahead of a release: the
+# archives' SHA-256s ("<sha256>  <tool>-linux-<cpu>.tar.zst", as its
+# toolchain/ported_tools.sha256), for MODULE.bazel's
+# apple_cross_toolchain.configure(ported_tools_manifest). Their codesign
+# signs a Mac app with nested code (the release's can't). The archives are
+# fetched by placeholder URL, as the SDK archive is: each builder's
+# .bazelrc.user resolves https://ported-tools.invalid/sha256/<sha256>.
+exports_files(["ported_tools.sha256"])

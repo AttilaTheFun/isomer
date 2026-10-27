@@ -68,9 +68,10 @@ the tag with one patch setting module() to 0.38.N (its tools/add_version.py
 by version at a release (a commit is fine on a branch, or on main between
 releases). Bazel modules come from bazel_registry, before the BCR: isomer's
 releases, visor's, and the forks isomer carries until upstream takes their
-changes, as patched versions that sort above upstream's (rules_swift
-3.6.1.isomer.1: the fork's commit plus tools/patches' two rules_swift
-patches; swift-foundation 6.3.2.isomer.1). A change to a fork or to those
+changes, as patched versions (rules_swift 4.1.0.isomer.2: upstream 4.1.0
+with rules_swift#1860, the worker's copy fix and tools/patches' two
+rules_swift patches, held by an override over the 4.2.2 rules_applecross
+asks for; swift-foundation 6.3.2.isomer.1). A change to a fork or to those
 patches is a new entry (.isomer.2), made with the registry's
 tools/add_version.py --fork and approved there like any version. Swift
 packages are SwiftPM's, through rules_swift_package_manager, never Bazel
@@ -340,8 +341,32 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   `include()` in MODULE.bazel, which Bazel 8 consumers choke on
   ("include() ... can only be used in the root module"). Upstream will bump
   their minimum eventually; it has not been raised with them.
-- **rules_swift 3.6.1** + `git_override` (the commit and its reason are in
-  MODULE.bazel; swap for a plain `bazel_dep` at the next release — see above).
+- **rules_swift 4.1.0.isomer.2** from the registry, held by a
+  `single_version_override` in each root (isomer's, the examples'): without
+  it, MVS takes rules_applecross's 4.2.2 and loses the fork. A consumer that
+  builds Apple targets with rules_applecross repeats it (Visor does).
+- **The Apple targets build on Linux too** (rules_applecross, pinned by
+  commit; 2026-10-26): Xcode 27.0's SDKs from an SDK archive, the Swift
+  that built them (6.4.0) for the Apple targets alone (the rest keeps
+  6.3.2), its clean-room actool, ibtool and codesign, and its ported tools
+  from its main (tools/applecross/ported_tools.sha256: their codesign signs
+  a Mac app's nested code). rules_apple 5.3.1 and apple_support 2.10.1 with
+  its patches (tools/patches/applecross, copied into the examples'), which
+  only a root's overrides apply. MODULE.bazel names the SDK archive and the
+  tools by placeholders (`https://apple-sdks.invalid/…`,
+  `https://ported-tools.invalid/sha256/{sha256}`): each builder's untracked
+  .bazelrc.user resolves them, with `--distdir=<a folder with them>` or a
+  `--downloader_config` rewriting them to an OS Server's
+  `/files/sha256/<hex>` (its read token in ~/.netrc), and turns the
+  toolchains on with `build:linux --config=apple_on_linux` (.bazelrc).
+  Without that, Linux builds what runs on Linux, and nothing fetches the
+  SDKs (GitHub's runners). A Mac builds with its own Xcode, as before.
+  Off a Mac a Mac app is arm64 and an iOS simulator app sim_arm64
+  (rules_applecross's rules_apple_arm64_default.patch: rules_apple's
+  default there was x86_64, which Apple silicon won't open without Rosetta
+  nor its simulators install; the `--*_cpus` flags still win); a device
+  build names `--ios_multi_cpus=arm64`, and the simulator wants a target
+  with no profile (`storybook_ios_sim_application`).
 - **`apple_support` must be declared BEFORE `rules_cc`** in MODULE.bazel, or
   rules_cc's local darwin toolchain (no `CC_TARGET_TRIPLE`) outranks it and
   Swift compiles fail with "Invalid target triple: local".
@@ -412,9 +437,21 @@ oss machines (~/Developer/AGENTS.md), never on this Mac's own screen.
 - **Linux from a Mac**: `tools/linux/build.sh [targets]` builds in a
   Linux container of Apple's `container` (isomer-linux-build: an Ubuntu
   image with Bazel and the libraries the Linux targets link: SDL2, SDL2_ttf,
-  GL/EGL, GTK 3, WebKitGTK; made with `container build` if missing, the
-  container kept between builds, `--stop` to remove it; an oss container
-  until 0.38, when oss became the GUI machines' alone). The container is arm64: MODULE.bazel registers swift.org's
+  GL/EGL, GTK 3, WebKitGTK, and x86_64 glibc for Android's tools, run under
+  Rosetta; made with `container build` when its Containerfile's hash is new,
+  the container kept between builds, `--stop` to remove it; an oss
+  container until 0.38, when oss became the GUI machines' alone). With
+  `--apple-sdks <dir>` (the SDK archive and the ported tools' archives) it
+  builds every platform: `tools/linux/build.sh --module examples
+  --apple-sdks ~/… <the Storybook's iOS (sim), macOS, web, Android and Linux
+  targets>` (3,168 actions from cold).
+- **Every platform in a session's container**: the same build runs in an
+  OS Server container lease of Visor's agent image (what a Visor session
+  works in: Swift 6.4.0, clang, the Linux libraries, x86_64 glibc, Rosetta),
+  the SDK and tools from OS Server's files: 5 min 50 s from cold.
+  tools/ci/container_build.sh is CI's (.github/workflows/build.yml, on a
+  self-hosted runner whose Mac runs OS Server; branches of this repository
+  only). The container is arm64: MODULE.bazel registers swift.org's
   ubuntu24.04 toolchains for aarch64 as well as x86_64, wasm SDK included
   (the wasm cell's reactor). tools/proof/proof.py runs what it builds in
   an oss Linux VM.
@@ -958,7 +995,8 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
 
 - Hermeticity is the point: no ANDROID_HOME, no host JDK, no Gradle, no npm.
   Every tool comes from a pinned repository. Keep it that way.
-- Apple builds are the sole exception (local Xcode, as all Bazel Apple builds).
+- Apple builds on a Mac take its Xcode; on Linux they take the pinned SDK
+  archive and rules_applecross's tools (see Toolchain).
 - MODULE.bazel and the `.bzl` files carry deliberate explanatory comments —
   maintain that density when editing.
 

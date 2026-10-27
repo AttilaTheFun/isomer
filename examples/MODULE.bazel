@@ -41,9 +41,14 @@ local_path_override(
 
 # rules_swift and swift-foundation: isomer's forks come from the project's
 # registry by version (.bazelrc lists it before the BCR), patches and all:
-# rules_swift 3.6.1.isomer.1 sorts above every release a module asks for,
-# and swift-foundation 6.3.2.isomer.1 comes with isomer. Nothing to override.
-bazel_dep(name = "rules_swift", version = "3.6.1.isomer.1")
+# rules_swift 4.1.0.isomer.2, held by an override over the 4.2.2
+# rules_applecross asks for (below), and swift-foundation 6.3.2.isomer.1,
+# which comes with isomer.
+bazel_dep(name = "rules_swift", version = "4.1.0.isomer.2")
+single_version_override(
+    module_name = "rules_swift",
+    version = "4.1.0.isomer.2",
+)
 
 # swift_ffi, swift_gpu and swift_map are part of the isomer module
 # (`@isomer//swift_ffi/...`, `@isomer//swift_gpu/...`, `@isomer//swift_map/...`):
@@ -131,9 +136,59 @@ register_toolchains(
     "@swift_toolchain//:swift_toolchain_android_x86_64_ubuntu24.04-aarch64",
 )
 
+# The Apple apps built on Linux (a container, a VM): rules_applecross, as in
+# isomer's MODULE.bazel (which says why each piece): the Swift that built
+# Xcode 27.0's SDKs for the Apple targets alone, the SDK archive by a
+# placeholder each builder's .bazelrc.user resolves (`--distdir`, or a
+# `--downloader_config` to an OS Server's /files/sha256/<hex>), and its
+# toolchains turned on by .bazelrc's apple_on_linux. A Mac builds as before.
+bazel_dep(name = "rules_applecross", version = "0.0.3")
+git_override(
+    module_name = "rules_applecross",
+    commit = "cc07dde07b6cceab663a4c0c2fee0c60a7172ec9",
+    remote = "https://github.com/apple-cross-toolchain/rules_applecross.git",
+)
+apple_cross_toolchain = use_extension("@rules_applecross//toolchain:extensions.bzl", "apple_cross_toolchain")
+apple_cross_toolchain.swift(
+    name = "applecross_swift",
+    platform_sha256 = {
+        "ubuntu24.04": "69f7b2b4dbce6090b6c92194b71149a057e16269093b5a9dded38afc4a05094e",
+        "ubuntu24.04-aarch64": "21eacfe571194717d269cc1e0030533bbee6131dfde82cd4f9cfbc2512e354a9",
+        "xcode": "8fd03185b98fe27f54a54631c2449decf75d5b466ce8e34abbd414141063c6aa",
+    },
+    swift_version = "6.4.0",
+)
+apple_cross_toolchain.configure(
+    name = "apple_cross_toolchain",
+    apple_sdk_urls = ["https://apple-sdks.invalid/apple-sdks-27.0.tar.gz"],
+    local_xcode = True,
+    # Its ported tools from its main, ahead of a release (tools/applecross).
+    ported_tools_manifest = "//tools/applecross:ported_tools.sha256",
+    ported_tools_urls = ["https://ported-tools.invalid/sha256/{sha256}"],
+    swift_tools = {
+        "aarch64": "@applecross_swift_ubuntu24.04-aarch64//:tools",
+        "x86_64": "@applecross_swift_ubuntu24.04//:tools",
+    },
+    swift_tools_macos = "@applecross_swift_xcode//:tools",
+    xcode_version = "27.0",
+)
+use_repo(apple_cross_toolchain, "apple_cross_toolchain")
+register_toolchains(
+    "@rules_applecross//toolchain:apple_bundling_on_linux",
+    "@rules_applecross//toolchain:apple_bundling_on_macos",
+)
+
 # The hermetic Android NDK/SDK (the extension requires root-module tags even
 # for Apple-only builds; accept the licenses in .bazelrc).
 bazel_dep(name = "hermetic_android_toolchains", version = "0.1.1")
+# Any Linux takes Google's x86_64 SDK and NDK tools: an arm64 Linux (a
+# container on a Mac) runs them under Rosetta, with x86_64 glibc beside its
+# own. (Only a root module's overrides apply.)
+single_version_override(
+    module_name = "hermetic_android_toolchains",
+    patch_strip = 1,
+    patches = ["//tools/patches:hermetic_android_toolchains_linux_any_cpu.patch"],
+)
 android = use_extension("@hermetic_android_toolchains//:extensions.bzl", "android")
 android.sdk(
     build_tools_version = "35.0.0",
@@ -171,8 +226,31 @@ use_repo(signing, "isomer_signing")
 
 bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "platforms", version = "1.1.0")
-bazel_dep(name = "rules_apple", version = "4.5.3", repo_name = "build_bazel_rules_apple")
-bazel_dep(name = "apple_support", version = "2.6.1")
+# rules_apple and apple_support at rules_applecross's versions, with its
+# patches (bundling and signing on Linux; tools/patches/applecross, copies of
+# isomer's), which only a root module's overrides apply.
+bazel_dep(name = "rules_apple", version = "5.3.1", repo_name = "build_bazel_rules_apple")
+single_version_override(
+    module_name = "rules_apple",
+    patch_strip = 1,
+    patches = [
+        "//tools/patches/applecross:rules_apple_execution_platform.patch",
+        "//tools/patches/applecross:rules_apple_bundletool_path.patch",
+        "//tools/patches/applecross:rules_apple_no_absolute_tool_paths.patch",
+        "//tools/patches/applecross:rules_apple_codesign_inputs_sdk_tools.patch",
+        "//tools/patches/applecross:rules_apple_alticonstool_missing_icons.patch",
+        "//tools/patches/applecross:rules_apple_xctoolrunner_sorted_listdir.patch",
+        "//tools/patches/applecross:rules_apple_arm64_default.patch",
+    ],
+    version = "5.3.1",
+)
+bazel_dep(name = "apple_support", version = "2.10.1")
+single_version_override(
+    module_name = "apple_support",
+    patch_strip = 1,
+    patches = ["//tools/patches/applecross:apple_support_bazel8_xcode_properties.patch"],
+    version = "2.10.1",
+)
 
 # Declared after apple_support so apple_support's apple cc toolchain keeps
 # resolution priority over rules_cc's local_config_cc darwin toolchain.
