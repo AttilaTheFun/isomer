@@ -132,6 +132,9 @@ build:apple_on_linux --action_env=PATH=external/rules_applecross++apple_cross_to
 # Its clean-room tools make a near match to Xcode's output where they cannot
 # make it byte for byte (an Icon Composer icon, drawn flat).
 build:apple_on_linux --action_env=RULES_APPLECROSS_RESOURCE_OUTPUT_MODE=relaxed
+# A Mac app for Apple silicon: rules_apple's macOS default off a Mac is x86_64,
+# which an Apple-silicon Mac without Rosetta won't open (LaunchServices -10669).
+build:apple_on_linux --macos_cpus=arm64
 
 # Per-machine settings (untracked): e.g. --override_module for a fork
 # checked out beside isomer.

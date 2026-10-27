@@ -17,6 +17,12 @@
 #                                              # another repository's checkout (an app on
 #                                              # Isomer: reviews), built the same way in
 #                                              # /work/<its name>
+#   tools/linux/build.sh --apple-sdks <dir> …  # also the Apple targets (rules_applecross): the
+#                                              # SDK archive in <dir> (apple-sdks-27.0.tar.gz)
+#                                              # and the ported tools' archives (named by their
+#                                              # SHA-256, in <dir> or a folder in it) copied into
+#                                              # the container once, Bazel given them by
+#                                              # --distdir, and .bazelrc's apple_on_linux on
 #   tools/linux/build.sh --stop                # remove the container (and its Bazel tree)
 #
 # The container is named isomer-linux-build: started when stopped, made
@@ -32,11 +38,14 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
-IMAGE="isomer-linux-builder:dev"
+# Tagged by the Containerfile's hash: a changed one makes a new image (and,
+# for a container of an older one, a new container).
+IMAGE="isomer-linux-builder:$(shasum -a 256 "$HERE/Containerfile" | cut -c1-12)"
 module=""
 checkout=""
 after=""
 out=""
+apple_sdks=""
 out_dir=""
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -44,6 +53,7 @@ while [ $# -gt 0 ]; do
         --checkout) checkout="$(cd "$2" && pwd)"; shift 2 ;;
         --after) after="$2"; shift 2 ;;
         --out) out="$2"; out_dir="$3"; shift 3 ;;
+        --apple-sdks) apple_sdks="$(cd "$2" && pwd)"; shift 2 ;;
         --stop)
             container delete --force isomer-linux-build >/dev/null 2>&1 || true
             exit 0 ;;
@@ -51,19 +61,25 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-if ! container image list 2>/dev/null | grep -q "^isomer-linux-builder *dev"; then
+if ! container image list 2>/dev/null | awk '{print $1":"$2}' | grep -qx "$IMAGE"; then
     container build --tag "$IMAGE" --file "$HERE/Containerfile" "$HERE" >/dev/null
     # Apple's builder is a container of its own (2 GB): not kept after.
     container builder stop >/dev/null 2>&1 || true
 fi
 id="isomer-linux-build"
 state="$(container list --all 2>/dev/null | awk -v id="$id" '$1 == id {print $5}')"
+# A container of an older image: made again.
+if [ -n "$state" ] && ! container list --all 2>/dev/null | awk -v id="$id" '$1 == id {print $2}' | grep -q "$IMAGE\$"; then
+    container delete --force "$id" >/dev/null 2>&1 || true
+    state=""
+fi
 if [ "$state" = "stopped" ]; then
     container start "$id" >/dev/null
 elif [ "$state" != "running" ]; then
     # Kept alive by a sleep; the builds run in it with exec. 6 CPUs and
     # 16 GB, the VMs' size (a Swift build thrashes in less).
-    container run --detach --name "$id" --label isomer=linux-build --cpus 6 --memory 16g \
+    # Rosetta, for Android's x86_64 SDK and NDK tools.
+    container run --detach --name "$id" --label isomer=linux-build --cpus 6 --memory 16g --rosetta \
         "$IMAGE" sleep infinity >/dev/null
 fi
 
@@ -82,6 +98,19 @@ echo "startup --output_user_root=/var/cache/bazel" > "$staging/bazelrc"
 container cp "$staging/bazelrc" "$id:/root/.bazelrc" >/dev/null
 
 flags="--keep_going"
+# The Apple SDK archive and the ported tools' archives, once, by their names:
+# Bazel takes them from --distdir.
+if [ -n "$apple_sdks" ]; then
+    find -E "$apple_sdks" -maxdepth 2 -type f \( -name 'apple-sdks-*.tar.gz' -o -regex '.*/[0-9a-f]{64}' \) | while read -r archive; do
+        base="$(basename "$archive")"
+        # (Their stdin isn't the list's.)
+        if ! container exec "$id" test -f "/var/cache/apple-sdks/$base" </dev/null; then
+            container exec "$id" mkdir -p /var/cache/apple-sdks </dev/null
+            container cp "$archive" "$id:/var/cache/apple-sdks/$base" >/dev/null </dev/null
+        fi
+    done
+    flags="$flags --config=apple_on_linux --distdir=/var/cache/apple-sdks"
+fi
 if [ -n "$checkout" ]; then
     command="cd /work/$name && bazel build $flags $*"
     [ -n "$after" ] && command="$command && $after"

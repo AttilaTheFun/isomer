@@ -145,7 +145,7 @@ register_toolchains(
 bazel_dep(name = "rules_applecross", version = "0.0.3")
 git_override(
     module_name = "rules_applecross",
-    commit = "661bdf4f50b4b34eb40384b5e302abe3dc3cca4c",
+    commit = "0c1833bc46ef8ea27129e44663a75bc2da1c1f70",
     remote = "https://github.com/apple-cross-toolchain/rules_applecross.git",
 )
 apple_cross_toolchain = use_extension("@rules_applecross//toolchain:extensions.bzl", "apple_cross_toolchain")
@@ -162,6 +162,9 @@ apple_cross_toolchain.configure(
     name = "apple_cross_toolchain",
     apple_sdk_urls = ["https://apple-sdks.invalid/apple-sdks-27.0.tar.gz"],
     local_xcode = True,
+    # Its ported tools from its main, ahead of a release (tools/applecross).
+    ported_tools_manifest = "//tools/applecross:ported_tools.sha256",
+    ported_tools_urls = ["https://ported-tools.invalid/sha256/{sha256}"],
     swift_tools = {
         "aarch64": "@applecross_swift_ubuntu24.04-aarch64//:tools",
         "x86_64": "@applecross_swift_ubuntu24.04//:tools",
