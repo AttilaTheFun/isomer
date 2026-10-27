@@ -1,0 +1,28 @@
+# Every platform's Storybook built in a Linux container: iOS (the
+# simulator's), macOS, web, Android and Linux, the Apple targets with
+# rules_applecross. On a self-hosted runner whose Mac runs OS Server
+# (tools/ci/container_build.sh: the container leased there, Xcode's SDK and
+# the ported tools from its files).
+#
+# Only branches of this repository run it: a self-hosted runner never runs a
+# fork's code. GitHub's own Linux runners can take what needs no SDK (Linux,
+# web, Android) once they're wanted.
+name: Build
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  container:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, isomer-containers]
+    # One at a time: the container's Bazel tree is one volume.
+    concurrency:
+      group: isomer-container-build
+      cancel-in-progress: false
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - run: tools/ci/container_build.sh

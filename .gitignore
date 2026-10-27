@@ -17,3 +17,4 @@ examples/proto_greeter/.build/
 # and .bazelrc.user above cover it too.
 examples/playground/apple/playground_ios_application/embedded_toolchain/
 examples/playground/android/playground_android_application/toolchain/
+/.ci/
