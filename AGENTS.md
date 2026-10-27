@@ -361,11 +361,12 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   toolchains on with `build:linux --config=apple_on_linux` (.bazelrc).
   Without that, Linux builds what runs on Linux, and nothing fetches the
   SDKs (GitHub's runners). A Mac builds with its own Xcode, as before.
-  Off a Mac a Mac app is arm64 (rules_applecross's
-  rules_apple_macos_arm64_default.patch: rules_apple's default there was
-  x86_64, which won't open on Apple silicon without Rosetta; `--macos_cpus`
-  still wins); an iOS app for the simulator is `--ios_multi_cpus=sim_arm64`
-  and a target with no profile (`storybook_ios_sim_application`).
+  Off a Mac a Mac app is arm64 and an iOS simulator app sim_arm64
+  (rules_applecross's rules_apple_arm64_default.patch: rules_apple's
+  default there was x86_64, which Apple silicon won't open without Rosetta
+  nor its simulators install; the `--*_cpus` flags still win); a device
+  build names `--ios_multi_cpus=arm64`, and the simulator wants a target
+  with no profile (`storybook_ios_sim_application`).
 - **`apple_support` must be declared BEFORE `rules_cc`** in MODULE.bazel, or
   rules_cc's local darwin toolchain (no `CC_TARGET_TRIPLE`) outranks it and
   Swift compiles fail with "Invalid target triple: local".
