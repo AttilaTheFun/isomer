@@ -32,8 +32,9 @@ to fourteen. A story that doesn't open so is launched to on its own.
 What changes between runs without the apps changing is held still or left
 out: the iPhone's and Android's status bars (simctl's override, SystemUI's
 demo mode: 9:41), and on the desktops everything but the app's window (a
-Mac's and Windows' screenshots are cropped to the app's frontmost window,
-Linux's below GNOME's top bar and right of its dock).
+Mac's and Windows' screenshots are cropped to the app's frontmost window, a
+Mac's rounded corners cut away, Linux's below GNOME's top bar and right of
+its dock).
 
 Each platform's apps are folders of the review store's snapshots,
 <dir>/review-<platform>-<app>/manifest.json (reviews/MANIFEST.md; the
@@ -145,6 +146,27 @@ def crop(path, box):
             image.crop((left, top, right, bottom)).save(path)
     except Exception as error:
         log(f"crop {os.path.basename(path)}: {error}")
+
+
+# A Mac window's corners in the VM's screenshots (macOS 27, at 1x): the curve
+# is 14 pixels in from its outer pixel; two more for a darker shadow.
+CORNER_RADIUS = 16
+
+
+def cut_corners(path):
+    """A Mac window's shot without what isn't the window's: its outer pixel
+    and the curve of its corners, where its edge blends with its shadow and
+    the desktop behind (OS Server's proof saw the edge 15-20 levels darker
+    in one of two runs, the window's own pixels the same), made transparent."""
+    try:
+        from PIL import Image, ImageDraw
+        image = Image.open(path).convert("RGBA")
+        image = image.crop((1, 1, image.width - 1, image.height - 1))
+        mask = Image.new("L", image.size, 0)
+        ImageDraw.Draw(mask).rounded_rectangle((0, 0, image.width - 1, image.height - 1), radius=CORNER_RADIUS, fill=255)
+        Image.composite(image, Image.new("RGBA", image.size, (0, 0, 0, 0)), mask).save(path)
+    except Exception as error:
+        log(f"corners {os.path.basename(path)}: {error}")
 
 
 # Stories that load something (a picture from the network, a web page, map
@@ -459,6 +481,7 @@ def macos(review, story_list, builds):
             if len(rect) == 4:
                 x, y, w, h = map(int, rect)
                 crop(path, (x, y, x + w, y + h))
+                cut_corners(path)
 
         def launcher(app, environment, wait, path):
             name = APPS[app]["name"]
