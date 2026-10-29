@@ -14,6 +14,11 @@
 #                    (default: this Mac's tailnet name, from Tailscale)
 #   ISOMER_CI_IMAGE  the image (default: Visor's agent image, below)
 #   ISOMER_CI_VOLUME Bazel's tree, kept between builds (default: isomer-ci)
+#
+# With no arguments (CI's run) the core's checks run after the build, in the
+# same container: the mock renderer's and the snapshots' (isomer's own module,
+# //tests/renderer and //tests/snapshot), their output in the log. Either the
+# build or a check failing fails the run.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 IMAGE="${ISOMER_CI_IMAGE:-ghcr.io/attilathefun/visor-agent:0.41.2}"
@@ -43,7 +48,9 @@ rewrite apple-sdks\.invalid/.* http://$host:7490/files/sha256/$SDK_SHA256
 rewrite ported-tools\.invalid/sha256/(.*) http://$host:7490/files/sha256/\$1
 EOF
 
+checks=0
 if [ $# -eq 0 ]; then
+    checks=1
     set -- --ios_multi_cpus=sim_arm64 \
         //apple/storybook_ios_application:storybook_ios_sim_application \
         //apple/storybook_macos_application:storybook_macos_application \
@@ -52,8 +59,26 @@ if [ $# -eq 0 ]; then
         //linux/storybook_linux_application:storybook_linux_application
 fi
 
+# In the container: the build in the examples' module, then (CI's run) the
+# checks in isomer's, each Bazel reading the cache (--cache writes the
+# container's ~/.bazelrc).
+steps='
+root=$1 checks=$2; shift 2
+cd "$root/examples"
+bazel build --keep_going --config=apple_on_linux --downloader_config="$root/.ci/downloader.cfg" "$@"
+built=$?
+[ "$checks" = 1 ] || exit $built
+cd "$root"
+start=$SECONDS
+bazel test --test_output=all //tests/renderer:mock_renderer_test //tests/snapshot:snapshot_test
+checked=$?
+echo "container_build.sh: the checks took $((SECONDS - start)) s"
+[ $built -ne 0 ] && exit $built
+exit $checked
+'
+
 cd "$ROOT/examples"
 exec oss machine run container --image="$IMAGE" --rosetta --cpus=6 --memory=16 \
     --mount="$ROOT:$ROOT" --volume="$VOLUME:/var/cache/bazel:128" \
     --inside --cache="$host" -- \
-    bazel build --keep_going --config=apple_on_linux --downloader_config="$ROOT/.ci/downloader.cfg" "$@"
+    bash -c "$steps" container_build "$ROOT" "$checks" "$@"

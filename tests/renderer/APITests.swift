@@ -425,7 +425,12 @@ struct AttributedScreen: View {
     }
 
     static var markdown: AttributedString {
-        var attributed = try! AttributedString(markdown: "See [the notes](https://example.com/notes) for the rules.")
+        // The runs Apple's parser makes of "See [the notes](…) for the
+        // rules.", built by hand: the toolchain's Foundation on Linux
+        // parses no markdown.
+        var notes = AttributedString("the notes")
+        notes.link = URL(string: "https://example.com/notes")
+        var attributed = AttributedString("See ") + notes + AttributedString(" for the rules.")
         for run in attributed.runs where run.link != nil {
             attributed[run.range].foregroundColor = .secondary
             attributed[run.range].underlineStyle = .single

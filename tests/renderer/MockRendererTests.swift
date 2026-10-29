@@ -1463,6 +1463,306 @@ func checkCompactSplitBack(_ previous: MockRenderer) {
     }
 }
 
+/// Sub-pages of a chat (a fork, a side question): a split view's detail is
+/// a NavigationStack bound to a path of routes, the chat at its root with
+/// the destination for the routes' type. A button's action appends a
+/// route, a link pushes one by value, and Back returns to the chat before
+/// the sidebar, as SwiftUI's split view does wide and on a phone.
+enum ChatRoute: Hashable { case fork(Int), question(Int) }
+
+@Observable final class SplitPathModel {
+    var column: NavigationSplitViewColumn = .detail
+    var selection: String? = "Session"
+}
+
+/// The detail's path where the app holds it, for the checks to read and set.
+nonisolated(unsafe) var splitPathRoutes: Binding<[ChatRoute]>?
+
+struct SplitPathScreen: View {
+    @Bindable var model: SplitPathModel
+    var body: some View {
+        NavigationSplitView(preferredCompactColumn: $model.column) {
+            List(selection: $model.selection) {
+                Text("Session").tag("Session")
+            }
+            .navigationTitle("Sessions")
+        } detail: {
+            SplitPathDetail()
+        }
+    }
+}
+
+struct SplitPathDetail: View {
+    @State private var routes: [ChatRoute] = []
+    var body: some View {
+        splitPathRoutes = $routes
+        return NavigationStack(path: $routes) {
+            SplitPathChat(routes: $routes)
+        }
+    }
+}
+
+struct SplitPathChat: View {
+    @Binding var routes: [ChatRoute]
+    var body: some View {
+        VStack {
+            Text("Chat body")
+            Button("Fork") { routes.append(.fork(1)) }
+            NavigationLink("Ask", value: ChatRoute.question(1))
+        }
+        .navigationTitle("Chat")
+        .navigationDestination(for: ChatRoute.self) { route in
+            SplitPathSubpage(route: route, routes: $routes)
+        }
+    }
+}
+
+struct SplitPathSubpage: View {
+    let route: ChatRoute
+    @Binding var routes: [ChatRoute]
+    @ViewBuilder var body: some View {
+        switch route {
+        case .fork(let number):
+            VStack {
+                Text("Fork \(number) body")
+                Button("Fork again") { routes.append(.fork(number + 1)) }
+            }
+            .navigationTitle("Fork \(number)")
+        case .question(let number):
+            Text("Question \(number) body").navigationTitle("Question \(number)")
+        }
+    }
+}
+
+/// A frame as a host sees it: the flat tree, and the handlers its taps and
+/// edits go to.
+@MainActor
+final class HostFrame {
+    let encoder = FlatTreeEncoder()
+    let root: IsoFlat_Node
+
+    init(_ tree: RenderNode) {
+        var buffer = ByteBuffer(bytes: encoder.encode(root: tree))
+        root = getRoot(byteBuffer: &buffer)
+    }
+
+    func shows(_ text: String) -> Bool { findText(root, text) }
+
+    /// The host views of a kind, in the tree's order.
+    func hostViews(_ kind: String) -> [IsoFlat_Node] { flatHostViews(root, kind) }
+
+    /// The innermost tap target whose label holds the text.
+    func tapTarget(_ label: String) -> String? {
+        func walk(_ node: IsoFlat_Node) -> String? {
+            for child in node.ch { if let found = walk(child) { return found } }
+            if let tap = node.tap, findText(node, label) { return tap }
+            return nil
+        }
+        return walk(root)
+    }
+
+    /// A host's event (a tap, a bar's "back"), then the frame it asks for.
+    @discardableResult
+    func send(_ id: String?, _ value: String = "") -> Bool {
+        guard let id, encoder.handlers[id] != nil else { return false }
+        Runtime.shared.installTreeHandlers(encoder.handlers)
+        Runtime.shared.hostViewEvent(id: id, value: value)
+        Runtime.shared.renderFrame()
+        return true
+    }
+
+    @discardableResult
+    func tap(_ label: String) -> Bool { send(tapTarget(label)) }
+}
+
+func flatHostViews(_ node: IsoFlat_Node, _ kind: String) -> [IsoFlat_Node] {
+    var found: [IsoFlat_Node] = []
+    func walk(_ node: IsoFlat_Node) {
+        if node.kind == .hostview, node.view == kind { found.append(node) }
+        for child in node.ch { walk(child) }
+    }
+    walk(node)
+    return found
+}
+
+func flatParam(_ node: IsoFlat_Node, _ key: String) -> String? {
+    for kv in node.params where kv.key == key { return kv.value }
+    return nil
+}
+
+func columnName(_ column: NavigationSplitViewColumn) -> String {
+    column == .sidebar ? "sidebar" : column == .content ? "content" : "detail"
+}
+
+/// The screens SplitPathScreen can show, by their texts.
+let splitPathScreens = ["Session", "Chat body", "Fork 1 body", "Fork 2 body", "Question 1 body"]
+
+/// What a host with navigation of its own is handed of the split: the
+/// detail's navstack (its depth, title and the one screen it carries, the
+/// top) and the sidebar's rows beside it; on a phone, the column the split
+/// is asked to show.
+@MainActor
+func describeSemanticSplit(_ frame: HostFrame) -> String {
+    guard let split = frame.hostViews("navsplit").first, split.ch.count == 2,
+          let sidebar = flatHostViews(split.ch[0], "navstack").first,
+          let detail = flatHostViews(split.ch[1], "navstack").first
+    else { return "no split" }
+    let shown = splitPathScreens.filter { findText(detail, $0) }.joined(separator: ", ")
+    var text = "depth \(flatParam(detail, "depth") ?? "-") \(flatParam(detail, "title") ?? "-"): \(shown)"
+    if findText(sidebar, "Session") { text += " | sidebar" }
+    if Runtime.shared.compactWidth { text += " | compact \(flatParam(split, "compact") ?? "-")" }
+    return text
+}
+
+/// What the drawn split shows: the detail's bar (its Back and title) over
+/// its screen, and the sidebar when it is in the frame.
+@MainActor
+func describeDrawnSplit(_ frame: HostFrame) -> String {
+    let bar = frame.hostViews("navbar").last
+    let shown = splitPathScreens.filter { frame.shows($0) }.joined(separator: ", ")
+    return "back \(bar.flatMap { flatParam($0, "back") } ?? "-") \(bar.flatMap { flatParam($0, "title") } ?? "-"): \(shown)"
+}
+
+/// The steps a host takes through SplitPathScreen, and what each shows.
+enum SplitPathStep {
+    /// Nothing: what the frame shows as it is.
+    case look
+    /// A tap on what the label names.
+    case tap(String)
+    /// The detail bar's Back.
+    case back
+    /// The system's Back (`handleBackButton`), and whether the runtime took it.
+    case systemBack(Bool)
+    /// The app taking the last route off its path.
+    case removeLast
+    /// The host's split moving its column ("compact:<column>[:back]").
+    case split(String)
+}
+
+@MainActor
+func runSplitPath(
+    _ label: String, model: SplitPathModel, tree: () -> RenderNode, describe: (HostFrame) -> String,
+    backID: (HostFrame) -> String?, _ steps: [(SplitPathStep, String, [ChatRoute], String)]
+) {
+    for (step, expected, routes, what) in steps {
+        let frame = HostFrame(tree())
+        switch step {
+        case .look:
+            break
+        case .tap(let target):
+            expect(frame.tap(target), "\(label): \(target) is a tap target")
+        case .back:
+            expect(frame.send(backID(frame), "back"), "\(label): the detail's bar has a Back")
+        case .systemBack(let taken):
+            let took = Runtime.shared.handleBackButton()
+            Runtime.shared.renderFrame()
+            expect(took == taken, "\(label): the system's Back is \(taken ? "taken" : "left to the host") (\(what))")
+        case .removeLast:
+            splitPathRoutes?.wrappedValue.removeLast()
+            Runtime.shared.renderFrame()
+        case .split(let value):
+            expect(frame.send(frame.hostViews("navsplit").first?.edit, value), "\(label): the split takes the host's \(value)")
+        }
+        let got = describe(HostFrame(tree())) + " / \(columnName(model.column)) \(model.selection ?? "nil")"
+        expect(got == expected, "\(label): \(what) (got \(got), wanted \(expected))")
+        expect(splitPathRoutes?.wrappedValue == routes,
+               "\(label): \(what): the path is \(routes) (\(splitPathRoutes?.wrappedValue.description ?? "none"))")
+    }
+}
+
+/// Under a host with navigation of its own (Apple's tree renderer, React,
+/// Compose): wide, the detail's navstack goes one level deeper for each
+/// route and back one at a time, its sidebar beside it; on a phone its bar's
+/// Back and the system's pop the route and leave the chat's Back to the
+/// host's split, which goes to the sidebar.
+@MainActor
+func checkSplitDetailPath(_ mock: MockRenderer) {
+    let wide = SplitPathModel()
+    Runtime.shared.installRootView { SplitPathScreen(model: wide) }
+    Runtime.shared.start(host: StubHost(), width: 1200, height: 800)
+    let detailBack: (HostFrame) -> String? = { frame in
+        guard let split = frame.hostViews("navsplit").first, split.ch.count == 2 else { return nil }
+        return flatHostViews(split.ch[1], "navstack").first?.edit
+    }
+    runSplitPath("semantic, wide", model: wide, tree: { mock.lastTree! }, describe: describeSemanticSplit, backID: detailBack, [
+        (.look, "depth 0 Chat: Chat body | sidebar / detail Session", [], "the chat shows beside the sidebar"),
+        (.tap("Fork"), "depth 1 Fork 1: Fork 1 body | sidebar / detail Session", [.fork(1)],
+         "a route appended by a button's action pushes in the detail, the sidebar beside it"),
+        (.tap("Fork again"), "depth 2 Fork 2: Fork 2 body | sidebar / detail Session", [.fork(1), .fork(2)], "a second route pushes again"),
+        (.back, "depth 1 Fork 1: Fork 1 body | sidebar / detail Session", [.fork(1)], "Back pops one level"),
+        (.back, "depth 0 Chat: Chat body | sidebar / detail Session", [], "and the next to the chat"),
+        (.tap("Ask"), "depth 1 Question 1: Question 1 body | sidebar / detail Session", [.question(1)],
+         "a link with a value pushes the same way"),
+        (.removeLast, "depth 0 Chat: Chat body | sidebar / detail Session", [], "the app taking the route off pops it"),
+        (.tap("Fork"), "depth 1 Fork 1: Fork 1 body | sidebar / detail Session", [.fork(1)], "pushed again"),
+        (.systemBack(true), "depth 0 Chat: Chat body | sidebar / detail Session", [], "the system's Back pops it too"),
+    ])
+
+    let phone = SplitPathModel()
+    Runtime.shared.installRootView { SplitPathScreen(model: phone) }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    runSplitPath("semantic, compact", model: phone, tree: { mock.lastTree! }, describe: describeSemanticSplit, backID: detailBack, [
+        (.look, "depth 0 Chat: Chat body | sidebar | compact detail / detail Session", [], "the split is asked to show the detail"),
+        (.tap("Fork"), "depth 1 Fork 1: Fork 1 body | sidebar | compact detail / detail Session", [.fork(1)],
+         "a route appended by a button's action pushes"),
+        (.back, "depth 0 Chat: Chat body | sidebar | compact detail / detail Session", [], "Back returns to the chat, not the sidebar"),
+        (.systemBack(false), "depth 0 Chat: Chat body | sidebar | compact detail / detail Session", [],
+         "the system's Back at the chat is the host's split's"),
+        (.split("compact:sidebar:back"), "depth 0 Chat: Chat body | sidebar | compact sidebar / sidebar nil", [],
+         "the split's Back goes to the sidebar and clears its selection"),
+        (.tap("Session"), "depth 0 Chat: Chat body | sidebar | compact detail / sidebar Session", [], "a row opens the detail"),
+        (.split("compact:detail"), "depth 0 Chat: Chat body | sidebar | compact detail / detail Session", [], "the host shows it"),
+        (.tap("Fork"), "depth 1 Fork 1: Fork 1 body | sidebar | compact detail / detail Session", [.fork(1)], "pushed again"),
+        (.systemBack(true), "depth 0 Chat: Chat body | sidebar | compact detail / detail Session", [],
+         "the system's Back returns to the chat, as the bar's does"),
+        (.systemBack(false), "depth 0 Chat: Chat body | sidebar | compact detail / detail Session", [],
+         "and then is the split's, as the bar's is"),
+    ])
+}
+
+/// Under the drawn renderer (the GPU renderer's path): wide, the detail's
+/// bar gets a Back for each route and steps back one at a time beside the
+/// sidebar; on a phone its Back returns to the chat and then to the
+/// sidebar, and the system's Back goes the same way.
+@MainActor
+func checkDrawnSplitDetailPath(_ previous: MockRenderer) {
+    let drawing = DrawingMockRenderer()
+    Renderer.bind(drawing)
+    defer { Renderer.bind(previous) }
+    let barBack: (HostFrame) -> String? = { $0.hostViews("navbar").last?.edit }
+
+    let wide = SplitPathModel()
+    Runtime.shared.installRootView { SplitPathScreen(model: wide) }
+    Runtime.shared.start(host: StubHost(), width: 1200, height: 800)
+    runSplitPath("drawn, wide", model: wide, tree: { drawing.lastTree! }, describe: describeDrawnSplit, backID: barBack, [
+        (.look, "back 0 Chat: Session, Chat body / detail Session", [], "the chat shows beside the sidebar"),
+        (.tap("Fork"), "back 1 Fork 1: Session, Fork 1 body / detail Session", [.fork(1)],
+         "a route appended by a button's action pushes in the detail, the sidebar beside it"),
+        (.tap("Fork again"), "back 1 Fork 2: Session, Fork 2 body / detail Session", [.fork(1), .fork(2)], "a second route pushes again"),
+        (.back, "back 1 Fork 1: Session, Fork 1 body / detail Session", [.fork(1)], "Back pops one level"),
+        (.back, "back 0 Chat: Session, Chat body / detail Session", [], "and the next to the chat"),
+        (.tap("Ask"), "back 1 Question 1: Session, Question 1 body / detail Session", [.question(1)],
+         "a link with a value pushes the same way"),
+        (.removeLast, "back 0 Chat: Session, Chat body / detail Session", [], "the app taking the route off pops it"),
+        (.tap("Fork"), "back 1 Fork 1: Session, Fork 1 body / detail Session", [.fork(1)], "pushed again"),
+        (.systemBack(true), "back 0 Chat: Session, Chat body / detail Session", [], "the system's Back pops it too"),
+    ])
+
+    let phone = SplitPathModel()
+    Runtime.shared.installRootView { SplitPathScreen(model: phone) }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    runSplitPath("drawn, compact", model: phone, tree: { drawing.lastTree! }, describe: describeDrawnSplit, backID: barBack, [
+        (.look, "back 1 Chat: Chat body / detail Session", [], "the detail shows, its Back the sidebar's"),
+        (.tap("Fork"), "back 1 Fork 1: Fork 1 body / detail Session", [.fork(1)], "a route appended by a button's action pushes"),
+        (.back, "back 1 Chat: Chat body / detail Session", [], "Back returns to the chat, whose Back is the sidebar's"),
+        (.back, "back - -: Session / sidebar nil", [], "the next Back goes to the sidebar and clears its selection"),
+        (.tap("Session"), "back 1 Chat: Chat body / detail Session", [], "a row opens the detail again"),
+        (.tap("Fork"), "back 1 Fork 1: Fork 1 body / detail Session", [.fork(1)], "pushed again"),
+        (.systemBack(true), "back 1 Chat: Chat body / detail Session", [], "the system's Back returns to the chat, as the bar's does"),
+        (.systemBack(true), "back - -: Session / sidebar nil", [], "and then goes to the sidebar, as the bar's does"),
+    ])
+}
+
 /// A binding read stops reuse only between the state's owner and the
 /// reader: the owner is reused while nothing of its changed, and a change
 /// to the state reaches the reader.
@@ -2628,6 +2928,8 @@ struct Main {
         checkStateReaders(mock)
         checkAPIAdditions(mock)
         checkCompactSplitBack(mock)
+        checkSplitDetailPath(mock)
+        checkDrawnSplitDetailPath(mock)
 
         // Row actions: the tagged row is a tap target and carries its menu.
         Runtime.shared.installRootView { RowScreen() }
