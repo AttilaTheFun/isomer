@@ -11,7 +11,11 @@ swift_library(
     srcs = [
         "//shared/renderers:srcs",
         "//shared/swift_ui_core:srcs",
-    ],
+    ] + select({
+        # FileDocument's FileWrapper, which the toolchain's Foundation lacks.
+        "@platforms//os:linux": ["//foundation:FileWrapper.swift"],
+        "//conditions:default": [],
+    }),
     # The shared core spells its own types `SwiftUI.X` where a generic
     # parameter shadows the name (`Button where Label == SwiftUI.Label<…>`),
     # as Apple's interface does; this module is that SwiftUI under another name.
@@ -23,7 +27,9 @@ swift_library(
         "//shared/isomer_swift_ui",
         "@flatbuffers//swift",
         # The Apple-named ones (CoreTransferable, UniformTypeIdentifiers)
-        # are the Mac's own here.
+        # are the Mac's own on a Mac, Isomer's on Linux (a container's
+        # host), as the Linux SwiftUI has them.
+        "//frameworks:for_core",
     ],
     plugins = SWIFT_UI_MACROS_PLUGINS,
 )

@@ -49,6 +49,9 @@ final class NavigationState {
     /// Its storage key ("<stack path>#navigation"): a push or a pop marks it
     /// changed, so the stack is built again (and reused otherwise).
     var key: String?
+    /// In a drawn compact split's column, the way back to the column before
+    /// it: its root's Back, the bar's and the system's (set each build).
+    var splitBack: (() -> Void)?
 
     func push(_ makeView: @escaping () -> any View) {
         stack.append(Entry(makeView: makeView, title: nil))
@@ -237,6 +240,7 @@ extension NavigationStack: _PrimitiveView {
             ctx.storage.locations[key] = nav
         }
         nav.key = key
+        nav.splitBack = Runtime.shared.compactSplitBack
         // Value-based navigation: the screens the path says, each built by
         // the destination for its value's type.
         nav.path = path
@@ -710,6 +714,11 @@ public struct NavigationSplitViewColumn: Hashable, Sendable {
         case .detail: return "detail"
         }
     }
+
+    /// The column a wire name names (the sidebar for any other).
+    static func named(_ name: String) -> NavigationSplitViewColumn {
+        name == "detail" ? .detail : name == "content" ? .content : .sidebar
+    }
 }
 
 /// `columnVisibility` — Apple's shape. Regular width: `.all` shows every
@@ -1179,14 +1188,26 @@ extension NavigationSplitView: _PrimitiveView {
         var widthHints: [String: Double] = [:]
         let splitID = ctx.path + "#navsplit"
         var advanceTo: String?
+        // What clears the selection of the list the column just built holds.
+        var clearer: (() -> Void)?
+        let preferredBinding = preferredCompactColumn
         @MainActor
         func column(_ view: any View, _ suffix: String, wrapInBar: Bool, backTo: String? = nil) -> RenderNode {
             var sub = ctx.descend(suffix)
             Runtime.shared.columnWidthHint = nil
             Runtime.shared.splitColumnBuilding = suffix == "detail" ? nil : suffix
             Runtime.shared.splitSelectionSnapshot = nil
+            Runtime.shared.splitSelectionClearer = nil
+            // Back to the column before, as the semantic hosts report theirs
+            // ("compact:<column>:back"): the app's preferred column follows,
+            // and that column's selection is cleared as it is built next.
             Runtime.shared.compactSplitBack = backTo.map { previous in
-                { Runtime.shared.drawnSplitColumn[splitID] = previous; Runtime.shared.setNeedsRender() }
+                {
+                    Runtime.shared.drawnSplitColumn[splitID] = previous
+                    Runtime.shared.drawnSplitClearing[splitID] = previous
+                    preferredBinding?.wrappedValue = .named(previous)
+                    Runtime.shared.setNeedsRender()
+                }
             }
             // Give the sidebar/content their own nav-bar chrome; the detail is
             // already a NavigationStack from the app.
@@ -1197,6 +1218,8 @@ extension NavigationSplitView: _PrimitiveView {
             if let hint = Runtime.shared.columnWidthHint { widthHints[suffix] = hint }
             Runtime.shared.columnWidthHint = nil
             Runtime.shared.splitColumnBuilding = nil
+            clearer = Runtime.shared.splitSelectionClearer
+            Runtime.shared.splitSelectionClearer = nil
             if suffix != "detail" {
                 // Same rule as the semantic path: a selection CHANGE to a
                 // value (or a re-tap) advances a compact presentation.
@@ -1233,10 +1256,23 @@ extension NavigationSplitView: _PrimitiveView {
             }
             var box = build(shown)
             Runtime.shared.splitReselectRequested = false
+            // Back to this column clears its list's selection, as SwiftUI's
+            // compact split does when it pops back: once the list has said
+            // what clears it, and the column is built again without it (a
+            // selection that changed meanwhile does not advance past it).
+            if Runtime.shared.drawnSplitClearing.removeValue(forKey: splitID) == shown, let clear = clearer {
+                clear()
+                advanceTo = nil
+                box = build(shown)
+            }
             // A selection change in the shown column advances IN THIS build
-            // (the column just built is discarded for the next one).
+            // (the column just built is discarded for the next one); the
+            // app's preferred column follows after the frame.
             if let advanceTo, advanceTo != shown {
                 Runtime.shared.drawnSplitColumn[splitID] = advanceTo
+                if let preferredBinding {
+                    Runtime.shared.deferredActions.append { preferredBinding.wrappedValue = .named(advanceTo) }
+                }
                 shown = advanceTo
                 box = build(shown)
             }

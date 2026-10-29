@@ -67,6 +67,7 @@ one_configuration(
 exports_files(["FileWrapper.swift"], visibility = [
     "//linux/libraries/swift_ui:__pkg__",
     "//linux/libraries/swift_ui_wasm:__pkg__",
+    "//tests/snapshot:__pkg__",
     "//windows/libraries/swift_ui:__pkg__",
     "//windows/libraries/swift_ui_wasm:__pkg__",
 ])

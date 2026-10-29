@@ -196,6 +196,9 @@ package final class Runtime {
     /// shows ("sidebar" / "content" / "detail"); advances on selection, and
     /// the shown column's bar gets a Back to the previous one.
     var drawnSplitColumn: [String: String] = [:]
+    /// The column a drawn compact split went back to, whose selection is
+    /// cleared as it is built next.
+    var drawnSplitClearing: [String: String] = [:]
     /// Set while a compact split view builds a column that has a previous
     /// column to go back to: the column's root NavigationStack shows Back.
     var compactSplitBack: (() -> Void)?
@@ -458,6 +461,15 @@ package final class Runtime {
         for nav in navigationStates.reversed() where !nav.stack.isEmpty {
             nav.pop()
             return true
+        }
+        // Nothing pushed: a drawn compact split's column goes back to the
+        // column before it, as its bar's Back does (hosts with split views
+        // of their own take that Back themselves).
+        for nav in navigationStates.reversed() {
+            if let back = nav.splitBack {
+                back()
+                return true
+            }
         }
         return false
     }
