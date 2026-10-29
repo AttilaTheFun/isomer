@@ -5,13 +5,14 @@
 # OS Server (tools/ci/container_build.sh: the container leased there, Xcode's
 # SDK and the ported tools from its files).
 #
-# Pull requests and main get the build and the checks alone. A published
-# release also gets the proof (tools/ci/proof.sh): the Storybook and the
+# Pull requests get the build and the checks alone. Each commit on main also
+# gets the proof (tools/ci/proof.sh), after it merges: the Storybook and the
 # Playground on every platform, pictured on machines leased from the same OS
-# Server, each picture compared with the previous release's, uploaded as the
-# `proof` artifact Reviews reads. A release's is the core set (a story from
-# each area and the Playground's projects); the full set (every story) only
-# when asked for by hand (workflow_dispatch).
+# Server, each picture compared with the commit before's, uploaded as the
+# `proof` artifact Reviews reads, so a regression is found by the commit that
+# made it. A release is promoted only from a main commit whose proof is in.
+# The core set (a story from each area and the Playground's projects); the
+# full set (every story) only when asked for by hand (workflow_dispatch).
 #
 # Only branches of this repository run it: a self-hosted runner never runs a
 # fork's code. GitHub's own Linux runners can take what needs no SDK (Linux,
@@ -53,8 +54,8 @@ jobs:
   proof:
     # After the build: no proof of a tree that doesn't build.
     needs: container
-    # A published release's, or one asked for by hand: never a pull request's or main's.
-    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    # Each commit on main's, or one asked for by hand: never a pull request's.
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: [self-hosted, isomer-containers]
     concurrency:
       group: isomer-proof-${{ github.ref }}

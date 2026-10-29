@@ -242,3 +242,12 @@ Electron's own Node, part of the Electron app rather than the build.
   so a package can produce its bindings without Bazel, then add
   integrations for other build systems — a Gradle plugin for the Kotlin
   facade + JNI adapter, an npm/tsc step for the web bridge.
+
+Decided since (the proof's shape): pull requests get the build and the
+checks alone; each commit on main gets the proof (the core set, 136
+pictures), compared with the commit before's, so a regression is found by
+the commit that made it; the full set (605) only by hand. A release is
+promoted only from a main commit whose proof is in: Reviews' Publish waits
+for it. Still to do: a main commit whose parent has no proof (one skipped or
+failed) is compared with the nearest one that has; Reviews' release page
+holds Publish until the commit's proof is there.
