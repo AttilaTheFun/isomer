@@ -244,9 +244,17 @@ and every story is held to Apple's SwiftUI's same screen
 and Reviews' parity): they should match, and a difference is Isomer's (it
 found radial and angular gradients drawn linear, Grid's columns unaligned
 and text runs' `.primary` drawn at the Mac's 85% black in the tree view).
-The platforms run at once, each on its own oss lease, after this Mac's
-builds; the runs go to the review server, and Reviews holds a release
-until its commit has them.
+The platforms run at once, each on its own oss lease. CI makes it, and
+only CI's counts (the Build workflow's `proof` job, tools/ci/proof.sh, on
+the runner's Mac after the build): a pull request's quick, main's and a
+published release's full, each picture compared with the base's (a pull
+request's base branch's, main's parent's, the previous release's: never
+the change's own) by tools/ci/proof_compare.swift, and uploaded as the
+`proof` artifact Reviews reads (proof.json, screens/, before/, diffs/;
+90 days). A release is approved by publishing its tag, and its run makes
+its full proof. The Playground's staged compilers reach CI from OS
+Server's files (proof.sh names their SHA-256s): after staging new ones,
+`oss files add` their archives and change those.
 
 **Adoption levels** (docs/adoption_levels.md): (1) rules_swift — raw Swift
 on the platform; (2) swift_ffi — idiomatic bindings; (3) embedded Isomer

@@ -37,8 +37,9 @@ Mac's rounded corners cut away, Linux's below GNOME's top bar and right of
 its dock).
 
 Each platform's apps are folders of the review store's snapshots,
-<dir>/review-<platform>-<app>/manifest.json (reviews/MANIFEST.md; the
-review server files only review- folders). The launch hooks reach each
+<dir>/review-<platform>-<app>/manifest.json (reviews/MANIFEST.md). CI runs
+it (tools/ci/proof.sh), which makes the `proof` artifact of those folders'
+pictures; only CI's proof counts. The launch hooks reach each
 platform as it passes a process environment: simctl's SIMCTL_CHILD_, `open
 --env`, an Android intent's ISO_ extras, the web page's ISO_ query, the
 desktops' environment.
