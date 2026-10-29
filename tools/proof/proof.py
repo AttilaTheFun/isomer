@@ -175,6 +175,21 @@ def cut_corners(path):
 SLOW_STORIES = {"images.async": 4, "isomer.webview": 5, "isomer.map": 5, "isomer.video": 4}
 
 
+def steady_shot(shoot, path, tries=6, pause=2.0):
+    """`shoot(path)` again until two shots in a row are the same, at most
+    `tries` more: what was still settling as the screen came up (iOS's
+    glass toolbar of a build that just started) settles before it counts."""
+    shoot(path)
+    again = path + ".again.png"
+    for _ in range(tries):
+        time.sleep(pause)
+        shoot(again)
+        same = open(path, "rb").read() == open(again, "rb").read()
+        os.replace(again, path)
+        if same:
+            return
+
+
 def wait_until(check, seconds):
     """Whether `check()` came true within `seconds`."""
     deadline = time.time() + seconds
@@ -420,7 +435,7 @@ def ios(review, story_list, builds):
             for key, value in environment.items(): variables["SIMCTL_CHILD_" + key] = value
             subprocess.run(["xcrun", "simctl", "launch", udid, bundle], env=variables, capture_output=True)
             time.sleep(wait)
-            sh(["xcrun", "simctl", "io", udid, "screenshot", "--mask=black", path])
+            steady_shot(lambda shot: sh(["xcrun", "simctl", "io", udid, "screenshot", "--mask=black", shot]), path)
 
         def switcher(app):
             # The simulator runs on this Mac (oss's server is here): its apps
@@ -484,13 +499,6 @@ def macos(review, story_list, builds):
         shown = ssh(env, "defaults read -g AppleShowScrollBars", check=False).stdout.strip()
         if shown != "WhenScrolling":
             raise RuntimeError(f"AppleShowScrollBars is {shown!r}, not WhenScrolling")
-        # Light, as every platform's shots are, whatever the VM's base was
-        # left at (a lease in dark drew every screen dark); the same way.
-        ssh(env, "defaults delete -g AppleInterfaceStyle; defaults write -g AppleInterfaceStyleSwitchesAutomatically -bool false",
-            check=False)
-        style = ssh(env, "defaults read -g AppleInterfaceStyle", check=False).stdout.strip()
-        if style:
-            raise RuntimeError(f"AppleInterfaceStyle is {style!r}, not light's (none)")
 
         def shoot(path):
             oss_shot(env, path)
@@ -504,7 +512,11 @@ def macos(review, story_list, builds):
             name = APPS[app]["name"]
             ssh(env, f"pkill -x {name}; sleep 1", check=False)
             flags = " ".join(f"--env {k}={shlex.quote(v)}" for k, v in environment.items())
-            ssh(env, f"sudo launchctl asuser $(id -u runner) open -n {flags} /tmp/{name}.app")
+            # Light, as every platform's shots are, whatever the VM's session
+            # is in (its leases came up dark, and a defaults write doesn't
+            # change a running session's appearance): the app's own choice.
+            ssh(env, f"sudo launchctl asuser $(id -u runner) open -n {flags} /tmp/{name}.app"
+                " --args -NSRequiresAquaSystemAppearance YES")
             time.sleep(wait)
             shoot(path)
 
@@ -885,7 +897,10 @@ def windows(review, story_list, builds):
             oss_shot(env, path)
             box = window_box()
             if box:
-                crop(path, box)
+                # Less the window's outer pixel, its border, which blends
+                # with the desktop behind it differently from run to run.
+                left, top, right, bottom = box
+                crop(path, (left + 1, top + 1, right - 1, bottom - 1))
 
         # The first launch after packaging is scanned by Windows first: longer.
         launcher("storybook", {}, 30, os.path.join(tempfile.mkdtemp(), "warm.png"))
