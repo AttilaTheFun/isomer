@@ -488,8 +488,8 @@ def macos(review, story_list, builds):
         # left at (a lease in dark drew every screen dark); the same way.
         ssh(env, "defaults delete -g AppleInterfaceStyle; defaults write -g AppleInterfaceStyleSwitchesAutomatically -bool false",
             check=False)
-        style = ssh(env, "defaults read -g AppleInterfaceStyle 2>&1", check=False).stdout.strip()
-        if "does not exist" not in style:
+        style = ssh(env, "defaults read -g AppleInterfaceStyle", check=False).stdout.strip()
+        if style:
             raise RuntimeError(f"AppleInterfaceStyle is {style!r}, not light's (none)")
 
         def shoot(path):
