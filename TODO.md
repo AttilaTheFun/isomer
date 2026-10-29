@@ -68,8 +68,12 @@ run`), CoreGraphics and ImageIO for images.
   - the network probe's `network_check.py`.
 
   With these in Swift, rules_python and its toolchain leave MODULE.bazel.
+- **Run by CI:** the proof (`tools/proof/proof.py`, which CI's
+  `tools/ci/proof.sh` runs on every platform: its builds, its leases, the
+  apps' launches, story switching, the hold-still status bars and the
+  window crops with Pillow). Its comparing and its `proof.json` are
+  Swift already (`tools/ci/proof_compare.swift`).
 - **Run by hand or by agents:**
-  - the release proof (`tools/proof/proof.py`);
   - the headless Chrome driver (`tools/testing/cdp.py`, and swift_map's
     copy);
   - the parity reports (`tools/parity`);

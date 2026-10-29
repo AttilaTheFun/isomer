@@ -220,7 +220,8 @@ def lease(platform, *flags):
         env["held"] = True
         log(f"using held {platform} {env['OSS_ID']}")
         return env
-    out = sh(["oss", "machine", "lease", platform, "--exports", "--minutes=180", *flags]).stdout
+    # --wait: CI's leases queue for a machine other runs hold.
+    out = sh(["oss", "machine", "lease", platform, "--exports", "--minutes=180", "--wait", *flags]).stdout
     env = dict(re.findall(r"(OSS_[A-Z_]+)='([^']*)'", out))
     log(f"leased {platform} {env['OSS_ID']}")
     return env
@@ -635,8 +636,11 @@ def web(review, story_list, builds):
 
 # --- Linux (built in a Linux container here, run on an oss VM)
 
-def build_linux():
-    """Both apps built and packaged in the container, each one directory."""
+def build_linux(packaged=None):
+    """Both apps built and packaged in the container, each one directory;
+    or (CI's) packaged already, `<packaged>/<app>-linux.tgz`."""
+    if packaged:
+        return {app: os.path.join(packaged, f"{app}-linux.tgz") for app in APPS}
     work = tempfile.mkdtemp(prefix="proof-linux-")
     script = os.path.join(ISOMER, "tools", "linux", "build.sh")
     sh([script, "--module", "examples",
@@ -903,6 +907,8 @@ def main():
     parser.add_argument("--base", default="origin/main", help="what --quick compares with (default origin/main)")
     parser.add_argument("--web-toolchain", default=None,
                         help="a staged in-browser compiler (an earlier site's playground/toolchain) for the web Playground")
+    parser.add_argument("--linux-packages", default=None,
+                        help="the Linux apps packaged already (<dir>/storybook-linux.tgz, playground-linux.tgz): CI's, from a container")
     parser.add_argument("--held", action="append", default=[], metavar="PLATFORM=FILE",
                         help="a lease you hold, its `oss machine lease --exports` output in FILE: used, not released")
     args = parser.parse_args()
@@ -925,7 +931,9 @@ def main():
             if not args.web_toolchain:
                 raise SystemExit("the web needs --web-toolchain (an earlier site's playground/toolchain)")
             builds[name] = lambda toolchain=os.path.abspath(args.web_toolchain): build_web(toolchain)
-        elif name in ("linux", "windows"):
+        elif name == "linux":
+            builds[name] = lambda packaged=args.linux_packages: build_linux(packaged)
+        elif name == "windows":
             builds[name] = make
         else:
             log(f"building {name}")
