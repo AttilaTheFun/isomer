@@ -163,6 +163,11 @@ def main():
             ws.send("Runtime.enable")
         ws.send("Emulation.setDeviceMetricsOverride",
                 {"width": width, "height": height, "deviceScaleFactor": 1, "mobile": False})
+        # CDP_COLOR_SCHEME=light|dark: the page's prefers-color-scheme,
+        # whatever the machine's appearance is (the proof holds it still).
+        if os.environ.get("CDP_COLOR_SCHEME"):
+            ws.send("Emulation.setEmulatedMedia", {"features": [
+                {"name": "prefers-color-scheme", "value": os.environ["CDP_COLOR_SCHEME"]}]})
         ws.send("Page.navigate", {"url": url})
         for s in steps:
             if s.startswith("wait="):

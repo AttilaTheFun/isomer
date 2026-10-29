@@ -102,12 +102,14 @@ kill_tree() {
 release_ours() {
     # This job's leases, by the label OS Server gives a CI job's ("… #<run> · <job>").
     [ -n "${GITHUB_RUN_ID:-}" ] && [ -n "${GITHUB_JOB:-}" ] || return 0
-    oss machine list 2> /dev/null | grep -F " #$GITHUB_RUN_ID · $GITHUB_JOB" | awk '{ print $1 }' | while read -r id; do
+    { oss machine list 2> /dev/null | grep -F " #$GITHUB_RUN_ID · $GITHUB_JOB" || true; } | awk '{ print $1 }' | while read -r id; do
         oss machine release "$id" > /dev/null 2>&1 && echo "proof.sh: released $id" || true
     done
 }
 cleanup() {
     local status=$?
+    # The exit's status stands: nothing here may end it otherwise.
+    set +e
     for pid in $children; do kill_tree "$pid"; done
     # A lease asked for as it was stopped may land a moment later.
     release_ours

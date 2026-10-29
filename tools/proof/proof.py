@@ -407,6 +407,8 @@ def ios(review, story_list, builds):
         sh(["xcrun", "simctl", "status_bar", udid, "override", "--time", "9:41", "--dataNetwork", "wifi", "--wifiMode", "active",
             "--wifiBars", "3", "--cellularMode", "active", "--cellularBars", "4", "--operatorName", "",
             "--batteryState", "charged", "--batteryLevel", "100"], check=False)
+        # Light, as every platform's shots are.
+        sh(["xcrun", "simctl", "ui", udid, "appearance", "light"], check=False)
 
         def launcher(app, environment, wait, path):
             bundle = ISOMER_STORYBOOK["bundle"] if app == "storybook-isomer" else APPS[app]["bundle"]
@@ -482,6 +484,13 @@ def macos(review, story_list, builds):
         shown = ssh(env, "defaults read -g AppleShowScrollBars", check=False).stdout.strip()
         if shown != "WhenScrolling":
             raise RuntimeError(f"AppleShowScrollBars is {shown!r}, not WhenScrolling")
+        # Light, as every platform's shots are, whatever the VM's base was
+        # left at (a lease in dark drew every screen dark); the same way.
+        ssh(env, "defaults delete -g AppleInterfaceStyle; defaults write -g AppleInterfaceStyleSwitchesAutomatically -bool false",
+            check=False)
+        style = ssh(env, "defaults read -g AppleInterfaceStyle 2>&1", check=False).stdout.strip()
+        if "does not exist" not in style:
+            raise RuntimeError(f"AppleInterfaceStyle is {style!r}, not light's (none)")
 
         def shoot(path):
             oss_shot(env, path)
@@ -546,6 +555,8 @@ def android(review, story_list, builds):
         # cellular network (shown, the emulator drew it differently from run
         # to run), no notifications. Twice, a few seconds apart: SystemUI may
         # still be settling after boot.
+        # Light, as every platform's shots are.
+        sh(adb + ["shell", "cmd", "uimode", "night", "no"], check=False)
         sh(adb + ["shell", "settings", "put", "global", "sysui_demo_allowed", "1"], check=False)
         for attempt in range(2):
             if attempt:
@@ -602,7 +613,8 @@ def web(review, story_list, builds):
     # run that made it in the shared one (the Playground opened on the
     # project the last run's 2048 shot had chosen).
     profile = tempfile.mkdtemp(prefix="proof-chrome-")
-    chrome_env = dict(os.environ, CDP_PROFILE=profile)
+    # Light, whatever this Mac's appearance is (Chrome follows it).
+    chrome_env = dict(os.environ, CDP_PROFILE=profile, CDP_COLOR_SCHEME="light")
     try:
         time.sleep(1)
 
