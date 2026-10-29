@@ -86,10 +86,18 @@ def log(message):
         print(f"[proof {name}] {message}", flush=True)
 
 
+def failed(command, result):
+    """A command's failure, for the log: its output, less any password
+    (oss prints a lease it fails to reach, its passwords too, and CI's log
+    is public)."""
+    text = f"{command}\n{result.stdout[-3000:]}{result.stderr[-3000:]}"
+    return RuntimeError(re.sub(r'("\w*[Pp]assword"\s*:\s*")[^"]*"', r'\1***"', text))
+
+
 def sh(command, check=True, cwd=ISOMER, **kwargs):
     result = subprocess.run(command, shell=isinstance(command, str), cwd=cwd, capture_output=True, text=True, **kwargs)
     if check and result.returncode != 0:
-        raise RuntimeError(f"{command}\n{result.stdout[-3000:]}{result.stderr[-3000:]}")
+        raise failed(command, result)
     return result
 
 
@@ -239,6 +247,9 @@ def lease(platform, *flags):
     # --wait: CI's leases queue for a machine other runs hold.
     out = sh(["oss", "machine", "lease", platform, "--exports", "--minutes=180", "--wait", *flags]).stdout
     env = dict(re.findall(r"(OSS_[A-Z_]+)='([^']*)'", out))
+    # Its VNC password never in CI's log (a workflow command; the line itself isn't shown).
+    if os.environ.get("GITHUB_ACTIONS") and env.get("OSS_VNC_PASSWORD"):
+        print(f"::add-mask::{env['OSS_VNC_PASSWORD']}", flush=True)
     log(f"leased {platform} {env['OSS_ID']}")
     return env
 
@@ -249,7 +260,16 @@ def release(env):
 
 
 def ssh(env, command, check=True):
-    return sh(["oss", "machine", "ssh", env["OSS_ID"], "--", command], check=check)
+    command_line = ["oss", "machine", "ssh", env["OSS_ID"], "--", command]
+    result = sh(command_line, check=False)
+    if result.returncode != 0 and result.stderr.startswith("oss:"):
+        # oss failed before ssh ran (looking the lease up: once, a Windows
+        # build's packaging step), so the command never did: once more.
+        time.sleep(5)
+        result = sh(command_line, check=False)
+    if check and result.returncode != 0:
+        raise failed(command_line, result)
+    return result
 
 
 def scp(env, source, destination):
