@@ -2,6 +2,84 @@
 
 Open items that are not yet tracked in code or docs.
 
+## Where the CI proof stands (branch ci-proof, PR #45, a draft)
+
+Stopped mid-verification on 2026-10-29, at Logan's request.
+
+**What works**
+- **The `proof` job**, after `container` in .github/workflows/build.yml:
+  - a pull request gets the quick proof, main's pushes and published
+    releases the full one;
+  - it runs `exec tools/ci/proof.sh` on the isomer-containers runner;
+  - it uploads the `proof` artifact (proof.json, screens/, before/, diffs/;
+    90 days).
+- **The latest quick runs** (rounds 6, 7 and 9 on PR #45) were green, with
+  every platform's 136 screens. Quick takes about 40 min after the
+  container job's 9 to 13.
+- **Holding still.** Two runs of one commit (rounds 6 and 7, e3c248a7)
+  matched on 135 of 136 screens. The other one was the Mac Pokédex's
+  blinking caret, fixed since (round 9 shows it solid).
+  - iOS 26's glass restart button in 2048 is lit one of two ways per launch.
+    It is ignored in tools/ci/proof_ignore.txt, with why.
+  - Light appearance is pinned on every platform; Windows' window border
+    is cut away.
+- **The full kind works** in a dry run in leases (proof.sh `--kind full`
+  from a checkout): 605 pictures in 42 min.
+
+**What's left**
+- **Compare round 10 with round 9** (the same commit, f5549884). Round 10
+  was still running when the session stopped.
+  - The check: `proof_compare <round 10's screens> <round 9's screens> out
+    --commit x --ref y --kind quick --base-commit z --ignore
+    tools/ci/proof_ignore.txt` (swiftc tools/ci/proof_compare.swift).
+  - Expect 0 changed.
+- **The full proof's live stories aren't held still yet** (0.39.2's runs
+  saw them move):
+  - `controls.progress` (an indeterminate spinner, every platform);
+  - `isomer.webview` (a live Wikipedia page);
+  - `isomer.video` (a remote video; the web's playback bar);
+  - `isomer.map` (OpenStreetMap tiles);
+  - `images.async` (a remote image).
+
+  They need bundled content and paused animations under the proof, or
+  listed regions. A second full run, compared with a first, would say
+  which ones really move.
+- **Not yet in CI:**
+  - a full run (it needs a push to main, a release, or a `workflow_dispatch`
+    with `kind=full`, which the Claude app can't send: it lacks Actions
+    write);
+  - a release run.
+- **The PR body**, a placeholder, wants the summary
+  (/tmp drafts are gone).
+- **The Pokédex reads PokéAPI live.** Its pictures held still so far.
+
+**Kept pictures: not in the repository.** The baseline is the base's
+`proof` artifact, fetched with gh:
+- a pull request: its base branch's newest proof at or before where it
+  branched;
+- a push to main: its parent's;
+- a release: the previous release's run;
+- `workflow_dispatch`: `baseline_run`.
+
+A full proof is 605 pictures and every visible change would rewrite some.
+Artifacts last 90 days, so a release more than 90 days after the previous
+one compares with nothing; attaching screens to the release would fix
+that.
+
+**Open questions**
+- **Actions write for the Claude app**, so agents can dispatch a full proof
+  or a rerun.
+- **The release asset**, as above.
+- **oss**: `oss machine ssh` printed a lease's JSON, passwords included,
+  when its lookup failed (round 8's log, run 40955851424; that VM is
+  deleted). proof.py now redacts it; oss itself should not print it.
+- **The staged Playground compilers** reach CI from OS Server's files
+  (`oss files add`; proof.sh names their SHA-256s). Restaging them means
+  adding the new archives and changing those.
+
+Runs: the last green is 40960663857 (round 9, f5549884). The last started is
+40967787636 (round 10, same commit, running at the stop).
+
 ## Upstream releases, no forks
 
 The goal: every dependency at an upstream tagged release (a BCR version, a
