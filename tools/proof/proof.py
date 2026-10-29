@@ -387,8 +387,9 @@ def build_ios():
         "storybook-isomer": bazel_output(EXAMPLES, "//apple/storybook_isomer_ios_application", "-c", "opt",
                                          "--ios_multi_cpus=sim_arm64", suffix=".ipa"),
         # The compiler linked into the app (its staged embedded_toolchain).
-        "playground": bazel_output(EXAMPLES, "//playground/apple/playground_ios_application", "-c", "opt",
-                                   "--ios_multi_cpus=sim_arm64", "--define", "iso_playground_embedded=1", suffix=".ipa"),
+        "playground": bazel_output(EXAMPLES, "//playground/apple/playground_ios_application:playground_ios_sim_application",
+                                   "-c", "opt", "--ios_multi_cpus=sim_arm64", "--define", "iso_playground_embedded=1",
+                                   suffix=".ipa"),
     }
 
 
