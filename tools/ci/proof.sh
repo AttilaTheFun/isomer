@@ -31,8 +31,11 @@
 #   diffs/<name>.png    each that changed, its changed pixels red
 #   proof.json          {"commit", "ref", "kind", "run", "base": {"ref", "commit"},
 #                        "screens": [{"name", "changed", "changedPixels"}]}
-# The script fails when the apps don't build or a picture doesn't come
-# back; pictures that changed are for review, not failures.
+# A pixel counts as changed by more than 24 in a channel, and never in a
+# region tools/ci/proof_ignore.txt names (what a platform draws differently
+# from run to run however it's held, with why). The script fails when the
+# apps don't build or a picture doesn't come back; pictures that changed
+# are for review, not failures.
 #
 # The builds: proof.py's, on this runner's Mac (the Apple apps with its
 # Xcode; Android's, the web's), except Linux's (packaged in a container
@@ -43,6 +46,8 @@
 # and the in-browser one from the latest release's site.
 #
 #   PROOF_REF           the ref the proof is of (default: GITHUB_REF, else the branch)
+#   PROOF_PYTHON        the python3 that runs proof.py, with Pillow, which crops
+#                       the desktops' pictures (default: the PATH's python3)
 #   PROOF_BASELINE_RUN  a run whose proof is the baseline (above)
 #   OSS_FILES_HOST      the name a container reaches this Mac's OS Server by
 #                       (default: this Mac's tailnet name, from Tailscale)
@@ -121,8 +126,12 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 143' TERM INT
 
-# The tools first: nothing leased if one doesn't build.
+# The tools first: nothing leased if one doesn't build. proof.py's python
+# with Pillow: without, its desktops' pictures go uncropped (the clocks,
+# the wallpaper), which it only logs.
 xcrun swiftc -O -o "$work/proof_compare" "$ROOT/tools/ci/proof_compare.swift"
+python="${PROOF_PYTHON:-python3}"
+"$python" -c 'import PIL' 2> /dev/null || { echo "::error::$python has no Pillow (PROOF_PYTHON names one that has)"; exit 1; }
 
 echo "::group::The Playground's compilers"
 # A staged compiler from OS Server's files, unpacked where the app's
@@ -220,7 +229,8 @@ steps='
 set -e
 root=$1 out=$2
 cd "$root/examples"
-bazel build -c opt //linux/storybook_linux_application:storybook_linux_application_bin \
+bazel build -c opt --experimental_convenience_symlinks=ignore \
+    //linux/storybook_linux_application:storybook_linux_application_bin \
     //playground/linux/playground_linux_application:playground_linux_application_bin \
     //playground/linux/playground_linux_application:playground_wasm_loader \
     //playground/shared/compiler:toolchain //playground/apple/playground_ios_application:playground_sdk
@@ -230,7 +240,7 @@ tar -czf "$out/storybook-linux.tgz" -C /root storybook-linux
 tar -czf "$out/playground-linux.tgz" -C /root playground-linux
 '
 background oss machine run container --image="$IMAGE" --cpus=6 --memory=16 \
-    --mount="$ROOT:$ROOT" --volume="isomer-proof:/var/cache/bazel:128" --inside --cache="$host" -- \
+    --mount="$ROOT:$ROOT" --volume="isomer-proof-${GITHUB_RUN_ID:-$$}:/var/cache/bazel:128" --inside --cache="$host" -- \
     bash -c "$steps" proof "$ROOT" "$linux" || { echo "::error::the Linux apps didn't build"; exit 1; }
 echo "::endgroup::"
 phase "Linux packaged"
@@ -240,7 +250,7 @@ quick=()
 if [ "$kind" = quick ]; then quick=(--quick --base "origin/${GITHUB_BASE_REF:-main}"); fi
 status=0
 # shellcheck disable=SC2086
-background python3 -u "$ROOT/tools/proof/proof.py" $PLATFORMS --review "$work/review" --commit "$commit" \
+background "$python" -u "$ROOT/tools/proof/proof.py" $PLATFORMS --review "$work/review" --commit "$commit" \
     --web-toolchain "$web_toolchain" --linux-packages "$linux" ${quick[@]+"${quick[@]}"} \
     || { echo "::error::tools/proof/proof.py: a build failed or a picture didn't come back"; status=1; }
 echo "::endgroup::"
@@ -271,7 +281,7 @@ done
 
 "$work/proof_compare" "$work/pictures" "$baseline" "$proof" --commit "$commit" --ref "$ref" --kind "$kind" \
     ${GITHUB_RUN_ID:+--run "$GITHUB_RUN_ID"} ${base_ref:+--base-ref "$base_ref"} ${base_commit:+--base-commit "$base_commit"} \
-    > "$work/summary.md"
+    --ignore "$ROOT/tools/ci/proof_ignore.txt" > "$work/summary.md"
 cat "$work/summary.md"
 [ -z "${GITHUB_STEP_SUMMARY:-}" ] || cat "$work/summary.md" >> "$GITHUB_STEP_SUMMARY"
 phase "done: $(ls "$proof/screens" | wc -l | tr -d ' ') pictures"

@@ -3,7 +3,7 @@
 // with swiftc on the runner):
 //
 //   proof_compare <pictures> <baseline> <proof> --commit <sha> --ref <ref> --kind quick|full
-//       [--run <id>] [--base-ref <ref>] [--base-commit <sha>]
+//       [--run <id>] [--base-ref <ref>] [--base-commit <sha>] [--ignore <file>]
 //
 // <pictures> holds this commit's pictures, <name>.png; <baseline> the
 // base's (its proof's screens/), or "-" when there is none. Into <proof>:
@@ -22,6 +22,12 @@
 // changed; a screen the base had no picture of changed everywhere. A
 // Markdown table of the screens that changed goes to stdout (the job's
 // summary).
+//
+// --ignore names regions whose pixels never count, one a line: `<screen>
+// <x> <y> <width> <height>`, in the picture's pixels, then why after a #.
+// Only for what the platform draws differently from run to run however
+// the proof holds it (tools/ci/proof_ignore.txt says what and why); the
+// region still shows, before and after.
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -60,8 +66,8 @@ func fail(_ message: String) -> Never {
 }
 
 /// How many pixels changed from `kept` (nil: the base had no picture) to
-/// `new`, and the diff picture when any did.
-func compare(_ kept: CGImage?, _ new: CGImage) -> (changed: Int, diff: CGImage?) {
+/// `new`, not counting those in `ignored`, and the diff picture when any did.
+func compare(_ kept: CGImage?, _ new: CGImage, ignoring ignored: [CGRect] = []) -> (changed: Int, diff: CGImage?) {
     let width = max(new.width, kept?.width ?? 0)
     let height = max(new.height, kept?.height ?? 0)
     let after = Pixels(new, width: width, height: height)
@@ -73,7 +79,10 @@ func compare(_ kept: CGImage?, _ new: CGImage) -> (changed: Int, diff: CGImage?)
             diff.withUnsafeMutableBufferPointer { d in
                 for index in stride(from: 0, to: a.count, by: 4) {
                     var differs = false
-                    for channel in 0..<4 where abs(Int(a[index + channel]) - Int(b[index + channel])) > 24 {
+                    let pixel = index / 4
+                    let point = CGPoint(x: pixel % width, y: pixel / width)
+                    for channel in 0..<4 where abs(Int(a[index + channel]) - Int(b[index + channel])) > 24
+                        && !ignored.contains(where: { $0.contains(point) }) {
                         differs = true
                         break
                     }
@@ -152,6 +161,19 @@ for folder in ["screens", "before", "diffs"] {
     try? files.createDirectory(atPath: "\(proof)/\(folder)", withIntermediateDirectories: true)
 }
 
+// The regions that never count, by screen.
+var ignored: [String: [CGRect]] = [:]
+if let path = options["ignore"] {
+    guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { fail("can't read \(path)") }
+    for line in text.split(separator: "\n") {
+        let fields = line.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false).first?.split(separator: " ") ?? []
+        guard !fields.isEmpty else { continue }
+        let numbers = fields.dropFirst().compactMap { Double($0) }
+        guard numbers.count == 4 else { fail("\(path): \(line): <screen> <x> <y> <width> <height>") }
+        ignored[String(fields[0]), default: []].append(CGRect(x: numbers[0], y: numbers[1], width: numbers[2], height: numbers[3]))
+    }
+}
+
 var screens: [Screen] = []
 for name in names {
     let picture = "\(pictures)/\(name).png"
@@ -166,7 +188,7 @@ for name in names {
     guard let new = load(picture) else { fail("can't read \(picture)") }
     let keptImage = kept.flatMap(load)
     if kept != nil, keptImage == nil { fail("can't read \(kept!)") }
-    let (changed, diff) = compare(keptImage, new)
+    let (changed, diff) = compare(keptImage, new, ignoring: kept == nil ? [] : ignored[name] ?? [])
     if let diff {
         write(diff, to: "\(proof)/diffs/\(name).png")
         if let kept { try? files.copyItem(atPath: kept, toPath: "\(proof)/before/\(name).png") }

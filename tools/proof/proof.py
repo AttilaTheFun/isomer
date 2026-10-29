@@ -515,8 +515,11 @@ def macos(review, story_list, builds):
             # Light, as every platform's shots are, whatever the VM's session
             # is in (its leases came up dark, and a defaults write doesn't
             # change a running session's appearance): the app's own choice.
+            # And a caret that doesn't blink (the Pokédex's focused search
+            # field was shot mid-blink): on for a day.
             ssh(env, f"sudo launchctl asuser $(id -u runner) open -n {flags} /tmp/{name}.app"
-                " --args -NSRequiresAquaSystemAppearance YES")
+                " --args -NSRequiresAquaSystemAppearance YES"
+                " -NSTextInsertionPointBlinkPeriodOn 100000000 -NSTextInsertionPointBlinkPeriodOff 0")
             time.sleep(wait)
             shoot(path)
 

@@ -251,7 +251,10 @@ published release's full, each picture compared with the base's (a pull
 request's base branch's, main's parent's, the previous release's: never
 the change's own) by tools/ci/proof_compare.swift, and uploaded as the
 `proof` artifact Reviews reads (proof.json, screens/, before/, diffs/;
-90 days). A release is approved by publishing its tag, and its run makes
+90 days). What a platform draws differently from run to run is held still
+at its source (proof.py: the status bars, light appearance, window crops,
+the Mac's caret); only what can't be is listed, with why, in
+tools/ci/proof_ignore.txt. A release is approved by publishing its tag, and its run makes
 its full proof. The Playground's staged compilers reach CI from OS
 Server's files (proof.sh names their SHA-256s): after staging new ones,
 `oss files add` their archives and change those.
