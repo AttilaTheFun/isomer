@@ -5,6 +5,15 @@
 # OS Server (tools/ci/container_build.sh: the container leased there, Xcode's
 # SDK and the ported tools from its files).
 #
+# Pull requests get the build and the checks alone. Each commit on main also
+# gets the proof (tools/ci/proof.sh), after it merges: the Storybook and the
+# Playground on every platform, pictured on machines leased from the same OS
+# Server, each picture compared with the commit before's, uploaded as the
+# `proof` artifact Reviews reads, so a regression is found by the commit that
+# made it. A release is promoted only from a main commit whose proof is in.
+# The core set (a story from each area and the Playground's projects); the
+# full set (every story) only when asked for by hand (workflow_dispatch).
+#
 # Only branches of this repository run it: a self-hosted runner never runs a
 # fork's code. GitHub's own Linux runners can take what needs no SDK (Linux,
 # web, Android) once they're wanted.
@@ -13,7 +22,21 @@ on:
   push:
     branches: [main]
   pull_request:
+  release:
+    types: [published]
   workflow_dispatch:
+    inputs:
+      kind:
+        description: The proof's kind
+        type: choice
+        options: [quick, full]
+        default: quick
+      baseline_run:
+        description: A run whose proof to compare with (empty for the base's)
+        required: false
+        default: ""
+permissions:
+  contents: read
 
 jobs:
   container:
@@ -27,3 +50,42 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - run: tools/ci/container_build.sh
+
+  proof:
+    # After the build: no proof of a tree that doesn't build.
+    needs: container
+    # Each commit on main's, or one asked for by hand: never a pull request's.
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, isomer-containers]
+    concurrency:
+      group: isomer-proof-${{ github.ref }}
+      cancel-in-progress: false
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      # The baseline: an earlier run's proof artifact.
+      actions: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # A pull request's own head, not GitHub's merge of it: the commit
+          # its proof is listed under. The whole history: the baseline is
+          # found along the base branch.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: The apps on every platform, pictured, and the proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # The branch, for a pull request's head (its run's ref is GitHub's merge).
+          PROOF_REF: ${{ github.event.pull_request && format('refs/heads/{0}', github.head_ref) || github.ref }}
+          PROOF_KIND: ${{ inputs.kind || 'quick' }}
+          PROOF_BASELINE_RUN: ${{ inputs.baseline_run }}
+        # exec: the runner's cancel reaches the script's trap, which releases its leases.
+        run: exec tools/ci/proof.sh --kind "$PROOF_KIND" --proof "$RUNNER_TEMP/proof"
+      # The proof whether every picture came or not: a broken screen is what it's for.
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: proof
+          path: ${{ runner.temp }}/proof
+          retention-days: 90

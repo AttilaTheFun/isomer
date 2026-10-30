@@ -37,8 +37,9 @@ Mac's rounded corners cut away, Linux's below GNOME's top bar and right of
 its dock).
 
 Each platform's apps are folders of the review store's snapshots,
-<dir>/review-<platform>-<app>/manifest.json (reviews/MANIFEST.md; the
-review server files only review- folders). The launch hooks reach each
+<dir>/review-<platform>-<app>/manifest.json (reviews/MANIFEST.md). CI runs
+it (tools/ci/proof.sh), which makes the `proof` artifact of those folders'
+pictures; only CI's proof counts. The launch hooks reach each
 platform as it passes a process environment: simctl's SIMCTL_CHILD_, `open
 --env`, an Android intent's ISO_ extras, the web page's ISO_ query, the
 desktops' environment.
@@ -85,10 +86,18 @@ def log(message):
         print(f"[proof {name}] {message}", flush=True)
 
 
+def failed(command, result):
+    """A command's failure, for the log: its output, less any password
+    (oss prints a lease it fails to reach, its passwords too, and CI's log
+    is public)."""
+    text = f"{command}\n{result.stdout[-3000:]}{result.stderr[-3000:]}"
+    return RuntimeError(re.sub(r'("\w*[Pp]assword"\s*:\s*")[^"]*"', r'\1***"', text))
+
+
 def sh(command, check=True, cwd=ISOMER, **kwargs):
     result = subprocess.run(command, shell=isinstance(command, str), cwd=cwd, capture_output=True, text=True, **kwargs)
     if check and result.returncode != 0:
-        raise RuntimeError(f"{command}\n{result.stdout[-3000:]}{result.stderr[-3000:]}")
+        raise failed(command, result)
     return result
 
 
@@ -174,6 +183,21 @@ def cut_corners(path):
 SLOW_STORIES = {"images.async": 4, "isomer.webview": 5, "isomer.map": 5, "isomer.video": 4}
 
 
+def steady_shot(shoot, path, tries=6, pause=2.0):
+    """`shoot(path)` again until two shots in a row are the same, at most
+    `tries` more: what was still settling as the screen came up (iOS's
+    glass toolbar of a build that just started) settles before it counts."""
+    shoot(path)
+    again = path + ".again.png"
+    for _ in range(tries):
+        time.sleep(pause)
+        shoot(again)
+        same = open(path, "rb").read() == open(again, "rb").read()
+        os.replace(again, path)
+        if same:
+            return
+
+
 def wait_until(check, seconds):
     """Whether `check()` came true within `seconds`."""
     deadline = time.time() + seconds
@@ -220,8 +244,12 @@ def lease(platform, *flags):
         env["held"] = True
         log(f"using held {platform} {env['OSS_ID']}")
         return env
-    out = sh(["oss", "machine", "lease", platform, "--exports", "--minutes=180", *flags]).stdout
+    # --wait: CI's leases queue for a machine other runs hold.
+    out = sh(["oss", "machine", "lease", platform, "--exports", "--minutes=180", "--wait", *flags]).stdout
     env = dict(re.findall(r"(OSS_[A-Z_]+)='([^']*)'", out))
+    # Its VNC password never in CI's log (a workflow command; the line itself isn't shown).
+    if os.environ.get("GITHUB_ACTIONS") and env.get("OSS_VNC_PASSWORD"):
+        print(f"::add-mask::{env['OSS_VNC_PASSWORD']}", flush=True)
     log(f"leased {platform} {env['OSS_ID']}")
     return env
 
@@ -232,7 +260,16 @@ def release(env):
 
 
 def ssh(env, command, check=True):
-    return sh(["oss", "machine", "ssh", env["OSS_ID"], "--", command], check=check)
+    command_line = ["oss", "machine", "ssh", env["OSS_ID"], "--", command]
+    result = sh(command_line, check=False)
+    if result.returncode != 0 and result.stderr.startswith("oss:"):
+        # oss failed before ssh ran (looking the lease up: once, a Windows
+        # build's packaging step), so the command never did: once more.
+        time.sleep(5)
+        result = sh(command_line, check=False)
+    if check and result.returncode != 0:
+        raise failed(command_line, result)
+    return result
 
 
 def scp(env, source, destination):
@@ -385,8 +422,9 @@ def build_ios():
         "storybook-isomer": bazel_output(EXAMPLES, "//apple/storybook_isomer_ios_application", "-c", "opt",
                                          "--ios_multi_cpus=sim_arm64", suffix=".ipa"),
         # The compiler linked into the app (its staged embedded_toolchain).
-        "playground": bazel_output(EXAMPLES, "//playground/apple/playground_ios_application", "-c", "opt",
-                                   "--ios_multi_cpus=sim_arm64", "--define", "iso_playground_embedded=1", suffix=".ipa"),
+        "playground": bazel_output(EXAMPLES, "//playground/apple/playground_ios_application:playground_ios_sim_application",
+                                   "-c", "opt", "--ios_multi_cpus=sim_arm64", "--define", "iso_playground_embedded=1",
+                                   suffix=".ipa"),
     }
 
 
@@ -404,6 +442,8 @@ def ios(review, story_list, builds):
         sh(["xcrun", "simctl", "status_bar", udid, "override", "--time", "9:41", "--dataNetwork", "wifi", "--wifiMode", "active",
             "--wifiBars", "3", "--cellularMode", "active", "--cellularBars", "4", "--operatorName", "",
             "--batteryState", "charged", "--batteryLevel", "100"], check=False)
+        # Light, as every platform's shots are.
+        sh(["xcrun", "simctl", "ui", udid, "appearance", "light"], check=False)
 
         def launcher(app, environment, wait, path):
             bundle = ISOMER_STORYBOOK["bundle"] if app == "storybook-isomer" else APPS[app]["bundle"]
@@ -415,7 +455,7 @@ def ios(review, story_list, builds):
             for key, value in environment.items(): variables["SIMCTL_CHILD_" + key] = value
             subprocess.run(["xcrun", "simctl", "launch", udid, bundle], env=variables, capture_output=True)
             time.sleep(wait)
-            sh(["xcrun", "simctl", "io", udid, "screenshot", "--mask=black", path])
+            steady_shot(lambda shot: sh(["xcrun", "simctl", "io", udid, "screenshot", "--mask=black", shot]), path)
 
         def switcher(app):
             # The simulator runs on this Mac (oss's server is here): its apps
@@ -492,7 +532,14 @@ def macos(review, story_list, builds):
             name = APPS[app]["name"]
             ssh(env, f"pkill -x {name}; sleep 1", check=False)
             flags = " ".join(f"--env {k}={shlex.quote(v)}" for k, v in environment.items())
-            ssh(env, f"sudo launchctl asuser $(id -u runner) open -n {flags} /tmp/{name}.app")
+            # Light, as every platform's shots are, whatever the VM's session
+            # is in (its leases came up dark, and a defaults write doesn't
+            # change a running session's appearance): the app's own choice.
+            # And a caret that doesn't blink (the Pokédex's focused search
+            # field was shot mid-blink): on for a day.
+            ssh(env, f"sudo launchctl asuser $(id -u runner) open -n {flags} /tmp/{name}.app"
+                " --args -NSRequiresAquaSystemAppearance YES"
+                " -NSTextInsertionPointBlinkPeriodOn 100000000 -NSTextInsertionPointBlinkPeriodOff 0")
             time.sleep(wait)
             shoot(path)
 
@@ -543,6 +590,8 @@ def android(review, story_list, builds):
         # cellular network (shown, the emulator drew it differently from run
         # to run), no notifications. Twice, a few seconds apart: SystemUI may
         # still be settling after boot.
+        # Light, as every platform's shots are.
+        sh(adb + ["shell", "cmd", "uimode", "night", "no"], check=False)
         sh(adb + ["shell", "settings", "put", "global", "sysui_demo_allowed", "1"], check=False)
         for attempt in range(2):
             if attempt:
@@ -599,7 +648,8 @@ def web(review, story_list, builds):
     # run that made it in the shared one (the Playground opened on the
     # project the last run's 2048 shot had chosen).
     profile = tempfile.mkdtemp(prefix="proof-chrome-")
-    chrome_env = dict(os.environ, CDP_PROFILE=profile)
+    # Light, whatever this Mac's appearance is (Chrome follows it).
+    chrome_env = dict(os.environ, CDP_PROFILE=profile, CDP_COLOR_SCHEME="light")
     try:
         time.sleep(1)
 
@@ -635,8 +685,11 @@ def web(review, story_list, builds):
 
 # --- Linux (built in a Linux container here, run on an oss VM)
 
-def build_linux():
-    """Both apps built and packaged in the container, each one directory."""
+def build_linux(packaged=None):
+    """Both apps built and packaged in the container, each one directory;
+    or (CI's) packaged already, `<packaged>/<app>-linux.tgz`."""
+    if packaged:
+        return {app: os.path.join(packaged, f"{app}-linux.tgz") for app in APPS}
     work = tempfile.mkdtemp(prefix="proof-linux-")
     script = os.path.join(ISOMER, "tools", "linux", "build.sh")
     sh([script, "--module", "examples",
@@ -867,7 +920,10 @@ def windows(review, story_list, builds):
             oss_shot(env, path)
             box = window_box()
             if box:
-                crop(path, box)
+                # Less the window's outer pixel, its border, which blends
+                # with the desktop behind it differently from run to run.
+                left, top, right, bottom = box
+                crop(path, (left + 1, top + 1, right - 1, bottom - 1))
 
         # The first launch after packaging is scanned by Windows first: longer.
         launcher("storybook", {}, 30, os.path.join(tempfile.mkdtemp(), "warm.png"))
@@ -903,6 +959,8 @@ def main():
     parser.add_argument("--base", default="origin/main", help="what --quick compares with (default origin/main)")
     parser.add_argument("--web-toolchain", default=None,
                         help="a staged in-browser compiler (an earlier site's playground/toolchain) for the web Playground")
+    parser.add_argument("--linux-packages", default=None,
+                        help="the Linux apps packaged already (<dir>/storybook-linux.tgz, playground-linux.tgz): CI's, from a container")
     parser.add_argument("--held", action="append", default=[], metavar="PLATFORM=FILE",
                         help="a lease you hold, its `oss machine lease --exports` output in FILE: used, not released")
     args = parser.parse_args()
@@ -925,7 +983,9 @@ def main():
             if not args.web_toolchain:
                 raise SystemExit("the web needs --web-toolchain (an earlier site's playground/toolchain)")
             builds[name] = lambda toolchain=os.path.abspath(args.web_toolchain): build_web(toolchain)
-        elif name in ("linux", "windows"):
+        elif name == "linux":
+            builds[name] = lambda packaged=args.linux_packages: build_linux(packaged)
+        elif name == "windows":
             builds[name] = make
         else:
             log(f"building {name}")

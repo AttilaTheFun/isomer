@@ -334,6 +334,14 @@ local_provisioning_profile(
     team_id = TEAM_ID,
 )
 
+_RESOURCES = [
+    ":playground_sdk",
+    ":playground_site",
+] + select({
+    ":embedded_toolchain_enabled": [":embedded_toolchain_data"],
+    "//conditions:default": [],
+})
+
 ios_application(
     name = "playground_ios_application",
     app_icons = ["//playground/artwork/playground_icon:app_icon"],
@@ -349,13 +357,26 @@ ios_application(
     ],
     infoplists = ["Info.plist"],
     minimum_os_version = "18.0",
-    resources = [
-        ":playground_sdk",
-        ":playground_site",
-    ] + select({
-        ":embedded_toolchain_enabled": [":embedded_toolchain_data"],
-        "//conditions:default": [],
-    }),
+    resources = _RESOURCES,
+    deps = [":playground_lib"],
+)
+
+# Simulator-only, as the Storybook's: no provisioning profile (nor the
+# entitlements, which name the profile's team), so it builds where no team
+# is set (CI's proof). Build with --ios_multi_cpus=sim_arm64.
+ios_application(
+    name = "playground_ios_sim_application",
+    app_icons = ["//playground/artwork/playground_icon:app_icon"],
+    bundle_id = "com.LoganShire.IsomerPlayground",
+    bundle_name = "Playground",
+    families = [
+        "iphone",
+        "ipad",
+    ],
+    infoplists = ["Info.plist"],
+    minimum_os_version = "18.0",
+    resources = _RESOURCES,
+    tags = ["manual"],
     deps = [":playground_lib"],
 )
 

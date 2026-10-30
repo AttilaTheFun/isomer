@@ -19,7 +19,10 @@ out="${1:-/root/playground-linux}"
 [ $# -gt 0 ] && shift
 rm -rf "$out" && mkdir -p "$out/lib"
 # The outputs of the build that ran: the same flags name its configuration.
-files() { bazel cquery "$@" --output=files 2>/dev/null; }
+# cquery names them under the execution root (the workspace's bazel-out
+# link isn't there in a checkout mounted into the container).
+execution_root="$(bazel info execution_root 2>/dev/null)"
+files() { bazel cquery "$@" --output=files 2>/dev/null | sed "s|^|$execution_root/|"; }
 output_base="$(bazel info output_base 2>/dev/null)"
 flags=("$@")
 cp -L "$(files "${flags[@]}" //playground/linux/playground_linux_application:playground_linux_application_bin)" "$out/playground"

@@ -2,6 +2,32 @@
 
 Open items that are not yet tracked in code or docs.
 
+## The CI proof: what's left
+
+The Build workflow's `proof` job pictures the Storybook and the Playground
+on every platform after each commit merges to main (the core set, 136
+pictures, about 40 min after the build), each compared with the newest
+commit before it that has a proof (AGENTS.md). Two runs of one commit
+(40960663857, 40967787636) matched on 135 of 136 screens; the other is
+iOS 26's glass restart button over 2048, in tools/ci/proof_ignore.txt.
+
+- **Reviews' Publish waits for the proof** of the release's commit (a
+  change in Reviews).
+- **The full set's live stories don't hold still yet**:
+  `controls.progress` (an indeterminate spinner), `isomer.webview` (a live
+  page), `isomer.video` (a remote video), `isomer.map` (OpenStreetMap
+  tiles), `images.async` (a remote image). They need bundled content and
+  paused animations under the proof, or listed regions; two full runs
+  compared would say which really move. The full set runs only by hand.
+- **The Pokédex reads PokéAPI live.** Its pictures have held still so far.
+- **Proofs last 90 days** (artifacts): a commit's proof could be attached
+  to its release so a later one still has it.
+- **Actions write for the Claude app**, so agents can start a full proof or
+  rerun a failed job.
+- **oss**: `oss machine ssh` printed a lease's JSON, passwords included,
+  when its lookup failed (run 40955851424; that VM is deleted). proof.py
+  now redacts it; oss itself should not print it.
+
 ## Upstream releases, no forks
 
 The goal: every dependency at an upstream tagged release (a BCR version, a
@@ -68,8 +94,12 @@ run`), CoreGraphics and ImageIO for images.
   - the network probe's `network_check.py`.
 
   With these in Swift, rules_python and its toolchain leave MODULE.bazel.
+- **Run by CI:** the proof (`tools/proof/proof.py`, which CI's
+  `tools/ci/proof.sh` runs on every platform: its builds, its leases, the
+  apps' launches, story switching, the hold-still status bars and the
+  window crops with Pillow). Its comparing and its `proof.json` are
+  Swift already (`tools/ci/proof_compare.swift`).
 - **Run by hand or by agents:**
-  - the release proof (`tools/proof/proof.py`);
   - the headless Chrome driver (`tools/testing/cdp.py`, and swift_map's
     copy);
   - the parity reports (`tools/parity`);
@@ -160,3 +190,12 @@ Electron's own Node, part of the Electron app rather than the build.
   so a package can produce its bindings without Bazel, then add
   integrations for other build systems — a Gradle plugin for the Kotlin
   facade + JNI adapter, an npm/tsc step for the web bridge.
+
+Decided since (the proof's shape): pull requests get the build and the
+checks alone; each commit on main gets the proof (the core set, 136
+pictures), compared with the commit before's, so a regression is found by
+the commit that made it; the full set (605) only by hand. A release is
+promoted only from a main commit whose proof is in: Reviews' Publish waits
+for it. Still to do: a main commit whose parent has no proof (one skipped or
+failed) is compared with the nearest one that has; Reviews' release page
+holds Publish until the commit's proof is there.
