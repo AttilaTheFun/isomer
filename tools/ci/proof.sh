@@ -8,9 +8,10 @@
 #
 #   tools/ci/proof.sh --proof <dir> [--kind quick|full]
 #
-# quick (a pull request's): both apps still built on every platform, a core
-# set of stories and every story in a story file the change touches, and
-# the Playground's screens. full (main's, a release's): every story.
+# quick (each commit on main's; a branch's when run by hand): both apps
+# still built on every platform, a core set of stories (and every story in
+# a story file a branch touches), and the Playground's screens. full (only
+# by hand): every story.
 #
 # The baseline is the base's pictures, never the change's own:
 #   a pull request (or a branch's run): its base branch's proof, of the

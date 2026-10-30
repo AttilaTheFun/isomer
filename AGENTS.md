@@ -246,10 +246,13 @@ found radial and angular gradients drawn linear, Grid's columns unaligned
 and text runs' `.primary` drawn at the Mac's 85% black in the tree view).
 The platforms run at once, each on its own oss lease. CI makes it, and
 only CI's counts (the Build workflow's `proof` job, tools/ci/proof.sh, on
-the runner's Mac after the build): a pull request's quick, main's and a
-published release's full, each picture compared with the base's (a pull
-request's base branch's, main's parent's, the previous release's: never
-the change's own) by tools/ci/proof_compare.swift, and uploaded as the
+the runner's Mac after the build): each commit merged to main gets the
+core set (a story from each area and the Playground's projects), each
+picture compared with the newest commit before it that has a proof (never
+the change's own), so a regression shows on the commit that made it;
+pull requests get the build and the checks alone, the full set (every
+story) runs only by hand, and a release is cut only from a main commit
+whose proof is in by tools/ci/proof_compare.swift, and uploaded as the
 `proof` artifact Reviews reads (proof.json, screens/, before/, diffs/;
 90 days). What a platform draws differently from run to run is held still
 at its source (proof.py: the status bars, light appearance, window crops,
