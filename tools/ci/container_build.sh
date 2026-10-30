@@ -13,7 +13,8 @@
 #   OSS_FILES_HOST   the name the container reaches this Mac's OS Server by
 #                    (default: this Mac's tailnet name, from Tailscale)
 #   ISOMER_CI_IMAGE  the image (default: Visor's agent image, below)
-#   ISOMER_CI_VOLUME Bazel's tree, kept between builds (default: isomer-ci)
+#   ISOMER_CI_VOLUME Bazel's tree, kept between builds (default: isomer-ci;
+#                    `:keep`, so OS Server keeps it when the lease ends)
 #
 # With no arguments (CI's run) the core's checks run after the build, in the
 # same container: the mock renderer's and the snapshots' (isomer's own module,
@@ -79,6 +80,6 @@ exit $checked
 
 cd "$ROOT/examples"
 exec oss machine run container --image="$IMAGE" --rosetta --cpus=6 --memory=16 \
-    --mount="$ROOT:$ROOT" --volume="$VOLUME:/var/cache/bazel:128" \
+    --mount="$ROOT:$ROOT" --volume="$VOLUME:/var/cache/bazel:128:keep" \
     --inside --cache="$host" -- \
     bash -c "$steps" container_build "$ROOT" "$checks" "$@"
