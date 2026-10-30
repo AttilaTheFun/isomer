@@ -1,0 +1,11 @@
+# Regions of the proof's pictures whose pixels never count as changed
+# (tools/ci/proof_compare.swift --ignore): `<screen> <x> <y> <width> <height>`
+# in the picture's pixels, and why. Only what a platform draws differently
+# from run to run however the proof holds it still; each still shows in the
+# pictures, before and after.
+
+# iOS 26's glass restart button in 2048's bar, over its beige: lit one of
+# two ways per launch (the whole button, by up to 25 levels), the same
+# throughout a launch, whatever the wait, Reduce Motion or a change of
+# appearance. The Storybook's glass buttons, over white, hold still.
+ios-playground-game2048 1020 180 144 144
