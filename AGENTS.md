@@ -360,7 +360,7 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   it, MVS takes rules_applecross's 4.2.2 and loses the fork. A consumer that
   builds Apple targets with rules_applecross repeats it (Visor does).
 - **The Apple targets build on Linux too** (rules_applecross, 2026-10-26;
-  the project registry's 0.0.3.cc07dde, its main at cc07dde, until it has a
+  the project registry's 0.0.3.3251084, its main at 3251084, until it has a
   release in the BCR): Xcode 27.0's SDKs from an SDK archive, the Swift
   that built them (6.4.0) for the Apple targets alone (the rest keeps
   6.3.2), its clean-room actool, ibtool and codesign, and its ported tools

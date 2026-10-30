@@ -142,13 +142,13 @@ register_toolchains(
 # placeholder each builder's .bazelrc.user resolves (`--distdir`, or a
 # `--downloader_config` to an OS Server's /files/sha256/<hex>), and its
 # toolchains turned on by .bazelrc's apple_on_linux. A Mac builds as before.
-# The project registry's 0.0.3.cc07dde: rules_applecross's main at cc07dde.
-bazel_dep(name = "rules_applecross", version = "0.0.3.cc07dde")
+# The project registry's 0.0.3.3251084: rules_applecross's main at 3251084.
+bazel_dep(name = "rules_applecross", version = "0.0.3.3251084")
 # rules_apple, as rules_applecross's patch leaves it, asks for 0.0.3, which no
 # registry has: every request is this version.
 single_version_override(
     module_name = "rules_applecross",
-    version = "0.0.3.cc07dde",
+    version = "0.0.3.3251084",
 )
 apple_cross_toolchain = use_extension("@rules_applecross//toolchain:extensions.bzl", "apple_cross_toolchain")
 apple_cross_toolchain.swift(
@@ -243,6 +243,9 @@ single_version_override(
         "//tools/patches/applecross:rules_apple_alticonstool_missing_icons.patch",
         "//tools/patches/applecross:rules_apple_xctoolrunner_sorted_listdir.patch",
         "//tools/patches/applecross:rules_apple_arm64_default.patch",
+        "//tools/patches/applecross:rules_apple_codesign_smartcards_off_mac.patch",
+        "//tools/patches/applecross:rules_apple_app_intents_off_mac.patch",
+        "//tools/patches/applecross:rules_apple_coreml_off_mac.patch",
     ],
     version = "5.3.1",
 )

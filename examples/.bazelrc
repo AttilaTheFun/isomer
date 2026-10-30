@@ -147,8 +147,12 @@ build:apple_on_linux --@build_bazel_rules_apple//apple:sdk_tool_files=@apple_cro
 build:apple_on_linux --action_env=DEVELOPER_DIR=external/rules_applecross++apple_cross_toolchain+apple_cross_toolchain/Xcode.app/Contents/Developer
 build:apple_on_linux --action_env=PATH=external/rules_applecross++apple_cross_toolchain+apple_cross_toolchain/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin:/bin:/usr/bin:/usr/local/bin
 # Its clean-room tools make a near match to Xcode's output where they cannot
-# make it byte for byte (an Icon Composer icon, drawn flat).
+# make it byte for byte. An Icon Composer icon's layers are Xcode's (its
+# appearances, groups and image stacks, so dark and tinted icons work); only
+# its flattened images are this actool's, which macOS and iOS 26 and later
+# don't draw.
 build:apple_on_linux --action_env=RULES_APPLECROSS_RESOURCE_OUTPUT_MODE=relaxed
+build:apple_on_linux --action_env=RULES_APPLECROSS_RELAX_ACTOOL_ICON_COMPOSER=1
 
 # Per-machine settings (untracked), e.g. --override_module for a fork checked
 # out beside isomer.
