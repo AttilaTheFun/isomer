@@ -75,6 +75,9 @@ single_version_override(
         "//tools/patches/applecross:rules_apple_alticonstool_missing_icons.patch",
         "//tools/patches/applecross:rules_apple_xctoolrunner_sorted_listdir.patch",
         "//tools/patches/applecross:rules_apple_arm64_default.patch",
+        "//tools/patches/applecross:rules_apple_codesign_smartcards_off_mac.patch",
+        "//tools/patches/applecross:rules_apple_app_intents_off_mac.patch",
+        "//tools/patches/applecross:rules_apple_coreml_off_mac.patch",
     ],
     version = "5.3.1",
 )
@@ -447,15 +450,15 @@ register_toolchains(
 bazel_dep(name = "rules_go", version = "0.62.0", dev_dependency = True)
 go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk", dev_dependency = True)
 go_sdk.download(version = "1.24.12")
-# From the project's registry: 0.0.3.cc07dde is rules_applecross's main at
-# cc07dde, as is (its module() version set to the entry's), until it has a
+# From the project's registry: 0.0.3.3251084 is rules_applecross's main at
+# 3251084, as is (its module() version set to the entry's), until it has a
 # release in the BCR.
-bazel_dep(name = "rules_applecross", version = "0.0.3.cc07dde", dev_dependency = True)
+bazel_dep(name = "rules_applecross", version = "0.0.3.3251084", dev_dependency = True)
 # rules_apple, as rules_applecross's patch leaves it, asks for 0.0.3, which no
 # registry has: every request is this version.
 single_version_override(
     module_name = "rules_applecross",
-    version = "0.0.3.cc07dde",
+    version = "0.0.3.3251084",
 )
 apple_cross_toolchain = use_extension("@rules_applecross//toolchain:extensions.bzl", "apple_cross_toolchain", dev_dependency = True)
 apple_cross_toolchain.swift(
