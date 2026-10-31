@@ -12,7 +12,7 @@
 #
 #   OSS_FILES_HOST   the name the container reaches this Mac's OS Server by
 #                    (default: this Mac's tailnet name, from Tailscale)
-#   ISOMER_CI_IMAGE  the image (default: Visor's agent image, below)
+#   ISOMER_CI_IMAGE  the image (default: Visor's agent image, tools/ci/agent_image)
 #   ISOMER_CI_VOLUME Bazel's tree, kept between builds (default: isomer-ci;
 #                    `:keep`, so OS Server keeps it when the lease ends)
 #
@@ -22,7 +22,7 @@
 # build or a check failing fails the run.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-IMAGE="${ISOMER_CI_IMAGE:-ghcr.io/attilathefun/visor-agent:0.41.2}"
+IMAGE="${ISOMER_CI_IMAGE:-$(cat "$ROOT/tools/ci/agent_image")}"
 VOLUME="${ISOMER_CI_VOLUME:-isomer-ci}"
 SDK_SHA256="251c252f7f41bcd3e08655e49e182686682d705945f4a2807049b9051c606ebb"
 
