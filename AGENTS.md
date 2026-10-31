@@ -437,7 +437,7 @@ bazel run //examples/electron/example_full_react_electron_application
 # android: example_partial_{compiled,wasm}_…; web/electron:
 # example_partial_{react,webgpu}_… — see README's tables.
 
-# Linux/Windows: Linux builds in a container here (tools/linux/build.sh) and
+# Linux/Windows: Linux builds in an OS Server container (tools/linux/build.sh) and
 # runs on an oss VM, Windows builds and runs on the oss Windows VM (see
 # "Platform tiers").
 ```
@@ -450,12 +450,16 @@ Chrome and the hermetic emulator. T3 (Linux, Windows): built and run on
 oss machines (~/Developer/AGENTS.md), never on this Mac's own screen.
 
 - **Linux from a Mac**: `tools/linux/build.sh [targets]` builds in a
-  Linux container of Apple's `container` (isomer-linux-build: an Ubuntu
-  image with Bazel and the libraries the Linux targets link: SDL2, SDL2_ttf,
-  GL/EGL, GTK 3, WebKitGTK, and x86_64 glibc for Android's tools, run under
-  Rosetta; made with `container build` when its Containerfile's hash is new,
-  the container kept between builds, `--stop` to remove it; an oss
-  container until 0.38, when oss became the GUI machines' alone). With
+  container leased from OS Server (`oss machine run container`, released
+  however the script ends) of Visor's agent image, CI's
+  (tools/ci/agent_image: Bazel and the libraries the Linux targets link,
+  SDL2, SDL2_ttf, GL/EGL, GTK 3, WebKitGTK, and x86_64 glibc for Android's
+  tools, run under Rosetta). The checkout goes in and `--out` comes back
+  through oss (upload, exec), nothing mounted, so it runs from any oss
+  client; Bazel's tree is the kept volume isomer-linux-build, warm between
+  runs, one build at a time; `--stop` releases a lease left over and
+  deletes the volume (`oss volume delete`, on OS Server's Mac). It was a
+  plain Apple `container` it made itself from 0.38 until 2026-10-31. With
   `--apple-sdks <dir>` (the SDK archive and the ported tools' archives) it
   builds every platform: `tools/linux/build.sh --module examples
   --apple-sdks ~/… <the Storybook's iOS (sim), macOS, web, Android and Linux

@@ -128,7 +128,7 @@ register_toolchains(
     "@swift_toolchain//:swift_toolchain_wasm32_ubuntu24.04",
     "@swift_toolchain//:swift_toolchain_android_aarch64_ubuntu24.04",
     "@swift_toolchain//:swift_toolchain_android_x86_64_ubuntu24.04",
-    # arm64 Linux (and the podman machine tools/linux/build.sh uses on a Mac).
+    # arm64 Linux (and the OS Server containers tools/linux/build.sh and CI build in).
     "@swift_toolchain//:swift_toolchain_exec_ubuntu24.04-aarch64",
     "@swift_toolchain//:cc_toolchain_wasm32_ubuntu24.04-aarch64",
     "@swift_toolchain//:swift_toolchain_wasm32_ubuntu24.04-aarch64",
