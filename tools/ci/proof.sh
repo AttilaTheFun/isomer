@@ -59,7 +59,7 @@
 # here) every lease labelled with this job.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-IMAGE="ghcr.io/attilathefun/visor-agent:0.41.2"
+IMAGE="$(cat "$ROOT/tools/ci/agent_image")"
 # The Playground's staged compilers, served by OS Server (`oss files list`):
 # examples/playground/apple/playground_ios_application/embedded_toolchain/
 # {iphonesimulator,data}, and examples/playground/android/

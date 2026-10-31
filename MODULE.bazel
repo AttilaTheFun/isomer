@@ -411,8 +411,8 @@ register_toolchains(
 # only fetched when a toolchain is actually resolved (i.e. on a Linux host) —
 # and their `exec_compatible_with = [os:linux, cpu:...]` constraints mean they
 # are simply ignored on the macOS/Windows hosts. Both architectures: x86_64
-# (SteamOS, most desktops) and aarch64 (ARM machines, and the arm64 podman
-# machine tools/linux/build.sh builds in on a Mac). The wasm/Android
+# (SteamOS, most desktops) and aarch64 (ARM machines, and the arm64 OS
+# Server containers tools/linux/build.sh and CI build in). The wasm/Android
 # *cross* SDK toolchains paired with this host are registered too, so
 # `bazel build //...` from a Linux host can target those as well. C++ (the GL
 # renderer) and final linking use Bazel's autoconfigured host cc toolchain
