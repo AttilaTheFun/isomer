@@ -11,6 +11,13 @@
 # compiler, and building it needs the compiler built by
 # examples/playground/tools/browser_toolchain, which no runner has.
 #
+# On isomer's self-hosted runner (a Mac that runs OS Server, as build.yml's),
+# with nothing of the Mac's but its own curl and tar: the asset comes from
+# the release's public download URL (no gh), and the Pages artifact is made
+# here rather than by upload-pages-artifact, whose macOS step runs GNU tar
+# (gtar), which a runner may not count on. The site is already dereferenced
+# (package_site.sh), so the system's tar archives it as is.
+#
 # Runs when a release is published (attach the asset to the draft before
 # publishing it), or by hand for any release that carries one:
 #   gh workflow run pages.yml [-f tag=<tag>]     (no tag: the latest release)
@@ -38,25 +45,39 @@ concurrency:
   group: pages
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, isomer-containers]
+    timeout-minutes: 30
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # In the job's temporary folder, which the runner empties after the
+      # job: a self-hosted runner's workspace outlives it.
       - name: Download the release's site
         env:
-          GH_TOKEN: ${{ github.token }}
           # The published release's tag, or the input; none means the
           # latest release.
           TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
-          if [ -n "$TAG" ]; then set -- "$TAG"; else set --; fi
-          gh release download "$@" --repo "$GITHUB_REPOSITORY" --pattern isomer-site.tar.gz
+          if [ -n "$TAG" ]; then path="download/$TAG"; else path="latest/download"; fi
+          cd "$RUNNER_TEMP"
+          curl -fsSL --retry 3 -o isomer-site.tar.gz "https://github.com/$GITHUB_REPOSITORY/releases/$path/isomer-site.tar.gz"
           mkdir site
           tar -xzf isomer-site.tar.gz -C site
           test -f site/index.html && test -f site/playground/toolchain/manifest.json
-      - uses: actions/upload-pages-artifact@v3
+      # What upload-pages-artifact makes: the site as one plain tar,
+      # artifact.tar, in an artifact named github-pages, which deploy-pages
+      # takes. COPYFILE_DISABLE and --no-mac-metadata keep the Mac's
+      # extended attributes (`._` files) out of it.
+      - name: Archive the site
+        run: |
+          COPYFILE_DISABLE=1 tar --no-mac-metadata -cf "$RUNNER_TEMP/artifact.tar" \
+            -C "$RUNNER_TEMP/site" --exclude=.git --exclude=.github .
+      - uses: actions/upload-artifact@v4
         with:
-          path: site
+          name: github-pages
+          path: ${{ runner.temp }}/artifact.tar
+          retention-days: 1
+          if-no-files-found: error
       - id: deployment
         uses: actions/deploy-pages@v4
