@@ -1,3 +1,17 @@
-# Every change to main is approved by the code owner: an agent's pull
-# request (opened by its GitHub App) merges only with that review.
-* @AttilaTheFun
+# Pull requests that touch these paths need the code owner's review: CI,
+# what publishes, stamps, signs or notarizes builds, the agents' rules and
+# the license. Anything else may be merged by an agent once CI is green and
+# the branch is up to date with main.
+
+# CI: its workflows, and this file.
+/.github/ @AttilaTheFun
+
+# Publishing, versions and signing.
+/examples/playground/tools/playground/package_site.sh @AttilaTheFun
+/examples/playground/tools/playground/stamp.py @AttilaTheFun
+/examples/tools/signing/ @AttilaTheFun
+
+# The agents' rules, anywhere in the tree, and the license.
+AGENTS.md @AttilaTheFun
+CLAUDE.md @AttilaTheFun
+LICENSE @AttilaTheFun
