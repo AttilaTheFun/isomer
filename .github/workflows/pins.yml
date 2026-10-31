@@ -3,6 +3,10 @@
 # a registry. A pull request may still pin a revision while what it needs is
 # in development; a release may not, and Reviews holds a release until its
 # commit's `pins` check passes.
+#
+# On isomer's self-hosted runner (a Mac that runs OS Server, as build.yml's):
+# the script is sh, git, grep and awk, which the Mac has, so it runs there
+# and leases nothing.
 name: Pins
 on:
   push:
@@ -12,7 +16,8 @@ permissions:
   contents: read
 jobs:
   pins:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, isomer-containers]
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
       - run: tools/released_pins.sh
