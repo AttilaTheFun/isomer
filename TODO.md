@@ -191,11 +191,10 @@ Electron's own Node, part of the Electron app rather than the build.
   integrations for other build systems — a Gradle plugin for the Kotlin
   facade + JNI adapter, an npm/tsc step for the web bridge.
 
-Decided since (the proof's shape): pull requests get the build and the
-checks alone; each commit on main gets the proof (the core set, 136
-pictures), compared with the commit before's, so a regression is found by
-the commit that made it; the full set (605) only by hand. A release is
-promoted only from a main commit whose proof is in: Reviews' Publish waits
-for it. Still to do: a main commit whose parent has no proof (one skipped or
-failed) is compared with the nearest one that has; Reviews' release page
-holds Publish until the commit's proof is there.
+Decided since (the proof's shape, 2026-11-01): pull requests and main's
+commits get the build and the checks alone; the proof runs by hand, the
+full set (605 pictures) to propose a release, compared with the previous
+release's, and after the fact on earlier commits to bisect a regression.
+A release is promoted only from a main commit whose proof is in: Reviews'
+Publish waits for it. Still to do: Reviews' release page holds Publish
+until the commit's proof is there.
