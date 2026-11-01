@@ -38,6 +38,13 @@ on:
         description: A run whose proof to compare with (empty for the previous release's)
         required: false
         default: ""
+# A pull request's newer push (a rebase, an update with main) cancels its
+# older run, whose result no longer counts. Every other run (main's, a
+# release's, a proof by hand) is a group of its own: GitHub keeps one
+# pending run a group and cancels the rest, which would skip main's commits.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('build-pr-{0}', github.event.pull_request.number) || format('build-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read
 
