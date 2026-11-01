@@ -8,15 +8,19 @@
 #
 #   tools/ci/proof.sh --proof <dir> [--kind quick|full]
 #
-# quick (each commit on main's; a branch's when run by hand): both apps
-# still built on every platform, a core set of stories (and every story in
-# a story file a branch touches), and the Playground's screens. full (only
-# by hand): every story.
+# Run only by hand (the Build workflow's workflow_dispatch), to propose a
+# release or, after the fact, to bisect a regression. full: every story.
+# quick: both apps still built on every platform, a core set of stories
+# (and every story in a story file a branch touches), and the Playground's
+# screens.
 #
 # The baseline is the base's pictures, never the change's own:
-#   a pull request (or a branch's run): its base branch's proof, of the
-#     newest commit there at or before the one the branch parted from;
-#   a push to main: its parent's (the newest commit before it with one);
+#   a commit on main (run on main, or on a branch pushed at a commit of
+#     main's, to prove it after the fact): the previous release's (the
+#     newest release tag before it), else the newest commit before it with
+#     one;
+#   a branch's own commits: its base branch's proof, of the newest commit
+#     there at or before the one the branch parted from;
 #   a release: the previous release's run (else its commit's on main);
 #   PROOF_BASELINE_RUN: a run of this workflow whose proof to compare with
 #     instead (how a second run of one commit shows it held still).
@@ -168,11 +172,13 @@ echo "::group::The baseline"
 gh api --paginate "repos/$repo/actions/artifacts?name=proof&per_page=100" \
     --jq '.artifacts[] | select(.expired | not) | "\(.workflow_run.head_sha) \(.workflow_run.id) \(.workflow_run.head_branch)"' \
     | sort -k2,2nr > "$work/artifacts" || { echo "::warning::the kept proofs couldn't be listed"; : > "$work/artifacts"; }
-# The run of the newest commit on <branch>'s first-parent line from <start> with a proof.
+# The run of the newest commit on the first-parent line from <start> with a
+# proof. By commit, whatever branch it ran on: a commit proved after the
+# fact ran on a branch pushed at it.
 newest_on() {
-    local branch="$1" start="$2" sha run
+    local start="$1" sha run
     for sha in $(git rev-list --first-parent -n 300 "$start" 2> /dev/null); do
-        run="$(awk -v sha="$sha" -v branch="$branch" '$1 == sha && $3 == branch { print $2; exit }' "$work/artifacts")"
+        run="$(awk -v sha="$sha" '$1 == sha { print $2; exit }' "$work/artifacts")"
         if [ -n "$run" ]; then echo "$sha $run"; return 0; fi
     done
     return 1
@@ -190,15 +196,23 @@ elif [ "${GITHUB_EVENT_NAME:-}" = release ]; then
         base_ref="refs/tags/$previous"
         run="$(awk -v branch="$previous" '$3 == branch { print $2; exit }' "$work/artifacts")"
         sha="$(git rev-list -n 1 "$previous" 2> /dev/null || true)"
-        if [ -n "$run" ]; then found="$sha $run"; elif [ -n "$sha" ]; then found="$(newest_on main "$sha" || true)"; fi
+        if [ -n "$run" ]; then found="$sha $run"; elif [ -n "$sha" ]; then found="$(newest_on "$sha" || true)"; fi
     fi
-elif [ "$ref" = refs/heads/main ]; then
-    base_ref=refs/heads/main
-    found="$(newest_on main HEAD^ || true)"
+elif [ "$ref" = refs/heads/main ] || { [ -z "${GITHUB_BASE_REF:-}" ] && git merge-base --is-ancestor HEAD origin/main 2> /dev/null; }; then
+    # The previous release's proof: what this commit would replace.
+    previous="$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD^ 2> /dev/null || true)"
+    if [ -n "$previous" ]; then
+        base_ref="refs/tags/$previous"
+        found="$(newest_on "$(git rev-list -n 1 "$previous")" || true)"
+    fi
+    if [ -z "$found" ]; then
+        base_ref=refs/heads/main
+        found="$(newest_on HEAD^ || true)"
+    fi
 else
     branch="${GITHUB_BASE_REF:-main}"
     base_ref="refs/heads/$branch"
-    found="$(newest_on "$branch" "$(git merge-base HEAD "origin/$branch")" || true)"
+    found="$(newest_on "$(git merge-base HEAD "origin/$branch")" || true)"
 fi
 baseline="-"
 base_commit=""
