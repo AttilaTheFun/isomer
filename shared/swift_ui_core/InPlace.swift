@@ -90,6 +90,7 @@ struct _BuildStacks {
     let buttonBorderShape: [ButtonBorderShape]
     let textAlignment: [TextAlignment]
     let labelStyle: [LabelStyleOption]
+    let toggleStyle: [ToggleStyleOption]
     let tabCustomization: [Binding<TabViewCustomization>?]
     let splitColumn: String?
     let compactSplitBack: (() -> Void)?
@@ -110,7 +111,7 @@ extension Runtime {
                 tabViewStyle: tabViewStyleStack, pickerStyle: pickerStyleStack, buttonStyle: buttonStyleStack,
                 controlSize: controlSizeStack, buttonBorderShape: buttonBorderShapeStack,
                 textAlignment: textAlignmentStack, labelStyle: labelStyleStack,
-                tabCustomization: tabCustomizationStack, splitColumn: splitColumnBuilding,
+                toggleStyle: toggleStyleStack, tabCustomization: tabCustomizationStack, splitColumn: splitColumnBuilding,
                 compactSplitBack: compactSplitBack)
         }
         set {
@@ -121,6 +122,7 @@ extension Runtime {
             buttonBorderShapeStack = newValue.buttonBorderShape
             textAlignmentStack = newValue.textAlignment
             labelStyleStack = newValue.labelStyle
+            toggleStyleStack = newValue.toggleStyle
             tabCustomizationStack = newValue.tabCustomization
             splitColumnBuilding = newValue.splitColumn
             compactSplitBack = newValue.compactSplitBack

@@ -446,6 +446,11 @@ extension Toggle where Label == Text {
 extension Toggle: _PrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
+        // An app's `ToggleStyle` (or `.button`) makes the toggle itself
+        // (ToggleStyle.swift); the built-in styles are the switch below.
+        if let custom = Runtime.shared.toggleStyleStack.last?.custom {
+            return makeStyledNode(custom, ctx: &ctx)
+        }
         var sub = ctx.descend("toggle")
         let labelNode = buildNode(view: label, ctx: &sub)
 

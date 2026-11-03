@@ -11,6 +11,7 @@ import { browserNetworkHosts } from "./network.js";
 import { createRasterHost, registerImageBytes } from "./raster.js";
 import { createReactTreeRenderer } from "./react_renderer.js";
 import { applyPatch } from "./flat_tree.js";
+import { loadBundledFonts } from "./fonts.js";
 
 // `rendererName` picks the renderer (docs/renderer_layers.md): "webGPU"
 // (default) binds the self-drawing SwiftGPURenderer; "react" binds the
@@ -68,8 +69,15 @@ export async function boot({
   // scroll is the page's own, its bars fixed over it (react_renderer.js).
   // Also `?scroll=document` in the page's URL.
   documentScroll = new URLSearchParams(location.search).get("scroll") === "document",
+  // Where the app's own fonts are (`isomer_web_app(fonts = ...)`: a
+  // directory with fonts.json, fonts.js); null for none. An embedded app's
+  // page brings its own.
+  fonts = embedded ? null : "./fonts/",
 } = {}) {
   const react = rendererName === "react";
+  // `Font.custom`'s fonts, loaded while the rest starts and before the
+  // first frame: text is measured and drawn with them from the start.
+  const fontsLoading = fonts ? loadBundledFonts(fonts) : null;
   // The app's files, read from IndexedDB while the rest starts: the reactor
   // finds them from its first instruction.
   const filesOpening = openAppFiles(appFilesKey(bundleIdentifier, bundle ? undefined : wasmURL));
@@ -583,6 +591,7 @@ export async function boot({
   // (file_system.js); a page's own overrides go on top.
   const files = await filesOpening;
   appFiles = files;
+  await fontsLoading;
   // The page's ISO_ query parameters are the guest's ISO_ environment, as a
   // native host's process environment is: the launch hooks
   // (`?ISO_OPEN_APP=todo`).

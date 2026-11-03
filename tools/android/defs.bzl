@@ -198,6 +198,43 @@ flat_assets = rule(
     doc = "Flattens nested asset files into a single dir keyed by basename.",
 )
 
+def _app_assets_impl(ctx):
+    """One assets/ directory out of an app's own assets and its fonts.
+
+    rules_android packages ONE assets directory per library (`assets_dir`),
+    so `isomer_android_app(assets = ..., fonts = ...)` merges the two here:
+    each of `assets` (a directory such as a `flat_assets` target's, copied
+    whole, or a file, by its basename) at the root, and each of `fonts` in
+    `fonts/` by its basename, where the runtime looks for `Font.custom`'s
+    typefaces (HostServices.bundledTypeface).
+    """
+    out = ctx.actions.declare_directory(ctx.label.name)
+    cmds = ['mkdir -p "%s/fonts"' % out.path]
+    for f in ctx.files.assets:
+        if f.is_directory:
+            cmds.append('cp -R "%s/." "%s/"' % (f.path, out.path))
+        else:
+            cmds.append('cp "%s" "%s/%s"' % (f.path, out.path, f.basename))
+    for f in ctx.files.fonts:
+        cmds.append('cp "%s" "%s/fonts/%s"' % (f.path, out.path, f.basename))
+    ctx.actions.run_shell(
+        inputs = ctx.files.assets + ctx.files.fonts,
+        outputs = [out],
+        command = " && ".join(cmds),
+        mnemonic = "AppAssets",
+        progress_message = "Merging assets and fonts into %s" % out.short_path,
+    )
+    return [DefaultInfo(files = depset([out]))]
+
+_app_assets = rule(
+    implementation = _app_assets_impl,
+    attrs = {
+        "assets": attr.label_list(allow_files = True),
+        "fonts": attr.label_list(allow_files = [".ttf", ".otf"]),
+    },
+    doc = "An app's assets/ directory: its assets at the root, its fonts in fonts/.",
+)
+
 def apk_install_run(name, apk, activity, extras = "", **kwargs):
     """`bazel run`-able target: installs the APK via adb and launches it.
     `extras` are appended to `am start` (e.g. "--es renderer jetpackCompose"
@@ -403,6 +440,7 @@ def isomer_android_app(
         package,
         label = "Isomer",
         assets = None,
+        fonts = [],
         default_renderer = "jetpackCompose",
         url_scheme = None,
         services_kt = None,
@@ -450,6 +488,14 @@ def isomer_android_app(
     in the APK as `@mipmap/ic_launcher` and named by the application's
     `android:icon` and `android:roundIcon`. Without one, Android draws its
     default.
+
+    `assets` is what the APK's assets/ holds (a `flat_assets` directory, or
+    a list of them and of files); `fonts` are .ttf/.otf files for
+    `Font.custom`, put in assets/fonts/ beside them (the two merged into one
+    directory, `<name>_assets`, as rules_android takes one). The runtime
+    finds a font by its PostScript name, full name or family name (as
+    iOS's `Font.custom` does), or by its file's name (HostServices.kt's
+    `bundledTypeface`).
 
     Declares:
       <name>          install + launch (default_renderer)
@@ -532,9 +578,21 @@ def isomer_android_app(
     kt_kwargs = {}
     if icon:
         kt_kwargs["resource_files"] = [":%s_icon" % name]
-    if assets:
-        kt_kwargs["assets"] = [assets]
-        kt_kwargs["assets_dir"] = assets.removeprefix(":")
+    asset_list = assets if type(assets) == "list" else ([assets] if assets else [])
+    if fonts or len(asset_list) > 1:
+        # One directory for rules_android: the assets and fonts/ merged.
+        _app_assets(
+            name = name + "_assets",
+            assets = asset_list,
+            fonts = fonts,
+            tags = ["manual"],
+        )
+        kt_kwargs["assets"] = [":%s_assets" % name]
+        kt_kwargs["assets_dir"] = name + "_assets"
+    elif asset_list:
+        # A single directory (a `flat_assets` target) goes in as it is.
+        kt_kwargs["assets"] = asset_list
+        kt_kwargs["assets_dir"] = asset_list[0].removeprefix(":")
     kt_android_library(
         name = name + "_app_lib",
         srcs = [":%s_main_activity" % name],

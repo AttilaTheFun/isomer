@@ -268,6 +268,99 @@ package final class SwiftGPURenderer: HostBridge, TreeRenderer {
         popClip()
     }
 
+    /// A template image: the picture's alpha, filled with `tint`.
+    public func drawImage(
+        _ source: String, isRemote: Bool, in dest: CGRect, clip: CGRect,
+        cornerRadius: Double, opacity: Double, tint: HostColor
+    ) {
+        flushRects()
+        guard let pass else { return }
+        let spec = "{\"kind\":\"image\",\"source\":\"\(jsonEscapedGPU(source))\",\"remote\":\(isRemote)}"
+        let key = spec + "|template \(tint.red) \(tint.green) \(tint.blue) \(tint.opacity)"
+        guard let texture = rasterTexture(spec: spec, key: key, recolor: tint) else { return }
+        pushClip(clip, cornerRadius: cornerRadius)
+        pass.drawTextured(vertices: quadVertices(dest), texture: texture)
+        popClip()
+    }
+
+    // MARK: - Paths (rasterized here, as the host rasterizes text)
+
+    /// An app's path of lines: covered on the CPU at the display's scale
+    /// (the fill by the non-zero rule, four rows of samples a pixel with
+    /// exact horizontal coverage; the stroke by each pixel's distance from
+    /// the nearest segment), then drawn as one texture over its bounds.
+    public func drawPath(
+        _ subpaths: [[CGPoint]], closed: [Bool], fill: HostColor?, stroke: HostColor?, lineWidth: Double
+    ) {
+        let half = stroke == nil ? 0 : max(lineWidth, 0) / 2
+        var minX = Double.infinity, minY = Double.infinity, maxX = -Double.infinity, maxY = -Double.infinity
+        for subpath in subpaths {
+            for p in subpath {
+                minX = min(minX, Double(p.x)); minY = min(minY, Double(p.y))
+                maxX = max(maxX, Double(p.x)); maxY = max(maxY, Double(p.y))
+            }
+        }
+        guard minX <= maxX, fill != nil || stroke != nil else { return }
+        // A pixel of margin for the antialiased edge.
+        minX -= half + 1; minY -= half + 1; maxX += half + 1; maxY += half + 1
+        let scale = max(surface.displayScale, 0.001)
+        let width = min(4096, Int(((maxX - minX) * scale).rounded(.up)))
+        let height = min(4096, Int(((maxY - minY) * scale).rounded(.up)))
+        guard width > 0, height > 0 else { return }
+        var hasher = Hasher()
+        for subpath in subpaths {
+            hasher.combine(subpath.count)
+            for p in subpath { hasher.combine(Double(p.x) - minX); hasher.combine(Double(p.y) - minY) }
+        }
+        hasher.combine(closed)
+        hasher.combine(fill)
+        hasher.combine(stroke)
+        hasher.combine(lineWidth)
+        hasher.combine(width)
+        hasher.combine(height)
+        let key = "path \(hasher.finalize())"
+        flushRects()
+        guard let pass else { return }
+        let texture = rasterCache[key] ?? {
+            // The points in device pixels, from the raster's corner.
+            let rings = subpaths.map { $0.map { (Double($0.x) - minX) * scale } }
+            let ringsY = subpaths.map { $0.map { (Double($0.y) - minY) * scale } }
+            var rgba = [UInt8](repeating: 0, count: width * height * 4)
+            var fillCoverage = [Float]()
+            if fill != nil {
+                fillCoverage = PathRaster.fill(xs: rings, ys: ringsY, width: width, height: height)
+            }
+            var strokeCoverage = [Float]()
+            if stroke != nil, lineWidth > 0 {
+                strokeCoverage = PathRaster.stroke(
+                    xs: rings, ys: ringsY, closed: closed, halfWidth: half * scale, width: width, height: height)
+            }
+            for i in 0..<(width * height) {
+                var r = 0.0, g = 0.0, b = 0.0, a = 0.0
+                if let fill, !fillCoverage.isEmpty {
+                    let alpha = fill.opacity * Double(fillCoverage[i])
+                    r = fill.red * alpha; g = fill.green * alpha; b = fill.blue * alpha; a = alpha
+                }
+                if let stroke, !strokeCoverage.isEmpty {
+                    let alpha = stroke.opacity * Double(strokeCoverage[i])
+                    r = stroke.red * alpha + r * (1 - alpha)
+                    g = stroke.green * alpha + g * (1 - alpha)
+                    b = stroke.blue * alpha + b * (1 - alpha)
+                    a = alpha + a * (1 - alpha)
+                }
+                rgba[i * 4] = UInt8(min(255, max(0, (r * 255).rounded())))
+                rgba[i * 4 + 1] = UInt8(min(255, max(0, (g * 255).rounded())))
+                rgba[i * 4 + 2] = UInt8(min(255, max(0, (b * 255).rounded())))
+                rgba[i * 4 + 3] = UInt8(min(255, max(0, (a * 255).rounded())))
+            }
+            let made = surface.device.makeTexture(width: width, height: height, rgba: rgba)
+            keepRaster(made, key: key)
+            return made
+        }()
+        let rect = CGRect(x: minX, y: minY, width: Double(width) / scale, height: Double(height) / scale)
+        pass.drawTextured(vertices: quadVertices(rect), texture: texture)
+    }
+
     private func drawRaster(spec: String, in rect: CGRect) {
         flushRects()
         guard let pass, let texture = rasterTexture(spec: spec) else { return }
@@ -277,8 +370,11 @@ package final class SwiftGPURenderer: HostBridge, TreeRenderer {
     /// Fetch (or rasterize + cache) the texture for a raster spec. The host
     /// returns [width u32 LE][height u32 LE][rgba…]; empty means "not ready"
     /// (e.g. an image still loading — the host re-renders when it lands).
-    private func rasterTexture(spec: String) -> GPUTexture? {
-        if let cached = rasterCache[spec] {
+    /// `recolor`: a template's, the raster's alpha filled with that colour
+    /// (cached under `key`, the spec and the colour).
+    private func rasterTexture(spec: String, key: String? = nil, recolor: HostColor? = nil) -> GPUTexture? {
+        let key = key ?? spec
+        if let cached = rasterCache[key] {
             return cached
         }
         let payload = services.rasterize(spec)
@@ -286,16 +382,32 @@ package final class SwiftGPURenderer: HostBridge, TreeRenderer {
         let width = Int(payload[0]) | Int(payload[1]) << 8 | Int(payload[2]) << 16 | Int(payload[3]) << 24
         let height = Int(payload[4]) | Int(payload[5]) << 8 | Int(payload[6]) << 16 | Int(payload[7]) << 24
         guard width > 0, height > 0, payload.count >= 8 + width * height * 4 else { return nil }
-        let texture = surface.device.makeTexture(width: width, height: height, rgba: Array(payload[8...]))
-        rasterCache[spec] = texture
-        rasterOrder.append(spec)
+        var rgba = Array(payload[8..<(8 + width * height * 4)])
+        if let tint = recolor {
+            // Premultiplied: each pixel's colour is the tint at its alpha.
+            for i in stride(from: 0, to: rgba.count, by: 4) {
+                let alpha = Double(rgba[i + 3]) / 255 * tint.opacity
+                rgba[i] = UInt8(min(255, (tint.red * alpha * 255).rounded()))
+                rgba[i + 1] = UInt8(min(255, (tint.green * alpha * 255).rounded()))
+                rgba[i + 2] = UInt8(min(255, (tint.blue * alpha * 255).rounded()))
+                rgba[i + 3] = UInt8(min(255, (alpha * 255).rounded()))
+            }
+        }
+        let texture = surface.device.makeTexture(width: width, height: height, rgba: rgba)
+        keepRaster(texture, key: key)
+        return texture
+    }
+
+    /// Caches a raster's texture, evicting the oldest beyond the budget.
+    private func keepRaster(_ texture: GPUTexture, key: String) {
+        rasterCache[key] = texture
+        rasterOrder.append(key)
         if rasterOrder.count > rasterBudget {
             let evicted = rasterOrder.removeFirst()
             if let texture = rasterCache.removeValue(forKey: evicted) {
                 surface.device.destroyTexture(texture)
             }
         }
-        return texture
     }
 
     private func quadVertices(_ rect: CGRect) -> [Float] {

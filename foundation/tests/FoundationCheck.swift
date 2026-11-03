@@ -28,6 +28,7 @@ struct FoundationCheck {
         try checkFoundation()
         try checkClasses()
         checkErrors()
+        await checkObjects()
         await checkNetwork()
     }
 

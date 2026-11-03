@@ -395,6 +395,11 @@ extension EnvironmentValues {
 
 extension ToolbarContent {
     @available(*, unavailable, message: "Not yet in Isomer: Navigation, tabs and search (docs/parity/SwiftUI.md)")
+    public nonisolated func hidden(_ hidden: Bool = true) -> some ToolbarContent { self }
+}
+
+extension ToolbarContent {
+    @available(*, unavailable, message: "Not yet in Isomer: Navigation, tabs and search (docs/parity/SwiftUI.md)")
     public nonisolated func sharedBackgroundVisibility(_ visibility: Visibility) -> some ToolbarContent { self }
 }
 
@@ -474,11 +479,6 @@ extension View {
 }
 
 extension View {
-    @available(*, unavailable, message: "Not yet in Isomer: Controls (docs/parity/SwiftUI.md)")
-    public nonisolated func navigationBarBackButtonHidden(_ hidesBackButton: Bool = true) -> some View { self }
-}
-
-extension View {
     @available(*, unavailable, message: "Not yet in Isomer: Scrolling (docs/parity/SwiftUI.md)")
     public nonisolated func onScrollTargetVisibilityChange<ID>(idType: ID.Type, threshold: Double = 0.5, _ action: @escaping ([ID]) -> Void) -> some View where ID : Hashable { self }
 }
@@ -526,11 +526,6 @@ extension Color {
 extension Color {
     @available(*, unavailable, message: "Not yet in Isomer: Shapes, colors and geometry (docs/parity/SwiftUI.md)")
     public func exposureAdjust(_ stops: Double) -> Color { fatalError() }
-}
-
-extension Path {
-    @available(*, unavailable, message: "Not yet in Isomer: Shapes, colors and geometry (docs/parity/SwiftUI.md)")
-    public var cgPath: CGPath { fatalError() }
 }
 
 extension Path {
@@ -1121,5 +1116,25 @@ extension View {
 extension View {
     @available(*, unavailable, message: "Not yet in Isomer: New in iOS 27 (docs/parity/SwiftUI.md)")
     public nonisolated func defaultTabBarPlacement(_ defaultPlacement: AdaptableTabBarPlacement) -> some View { self }
+}
+
+extension EnvironmentValues {
+    @available(*, unavailable, message: "Not yet in Isomer: New in iOS 27 (docs/parity/SwiftUI.md)")
+    public var toolbarVerticalEdge: HorizontalEdge? { fatalError() }
+}
+
+extension View {
+    @available(*, unavailable, message: "Not yet in Isomer: New in iOS 27 (docs/parity/SwiftUI.md)")
+    public nonisolated func splitArrangementFixedLayoutSize(horizontal: Bool = true, vertical: Bool = true) -> some View { self }
+}
+
+extension View {
+    @available(*, unavailable, message: "Not yet in Isomer: New in iOS 27 (docs/parity/SwiftUI.md)")
+    public nonisolated func overlayArrangementEdge(_ edge: VerticalEdge?) -> some View { self }
+}
+
+extension View {
+    @available(*, unavailable, message: "Not yet in Isomer: New in iOS 27 (docs/parity/SwiftUI.md)")
+    public nonisolated func overlayArrangementEdge(_ edge: HorizontalEdge?) -> some View { self }
 }
 

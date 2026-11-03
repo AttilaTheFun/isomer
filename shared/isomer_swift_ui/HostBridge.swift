@@ -38,6 +38,10 @@ public enum ImageStatus: Sendable {
 public protocol HostBridge {
     /// Measure a single- or multi-line text run, wrapping at `wrapWidth`.
     func measureText(_ text: String, fontSize: Double, weight: Int, wrapWidth: Double?) -> CGSize
+    /// The same, set in `family` (`Font.custom`'s name: a host measures
+    /// with the app's bundled font by that name, the system's without one).
+    /// Default: `family` ignored.
+    func measureText(_ text: String, fontSize: Double, weight: Int, family: String?, wrapWidth: Double?) -> CGSize
 
     /// Query (and implicitly start loading) an image. Hosts cache by source
     /// and call `scheduleRender()` when an asynchronous load completes.
@@ -60,6 +64,19 @@ public protocol HostBridge {
     func drawImage(
         _ source: String, isRemote: Bool, in dest: CGRect, clip: CGRect,
         cornerRadius: Double, opacity: Double
+    )
+    /// Draw an image as a template (`Image.renderingMode(.template)`): its
+    /// shape, from its alpha, in `tint`. Default: the image as it is.
+    func drawImage(
+        _ source: String, isRemote: Bool, in dest: CGRect, clip: CGRect,
+        cornerRadius: Double, opacity: Double, tint: HostColor
+    )
+    /// Fill and/or stroke a path of lines (an app's `Path`, its curves
+    /// already turned to lines): each subpath's points, closed where
+    /// `closed` says (a fill closes every one), filled by the non-zero rule.
+    /// Default: nothing.
+    func drawPath(
+        _ subpaths: [[CGPoint]], closed: [Bool], fill: HostColor?, stroke: HostColor?, lineWidth: Double
     )
     func pushClip(_ rect: CGRect, cornerRadius: Double)
     func popClip()
@@ -144,6 +161,9 @@ public protocol HostBridge {
 }
 
 extension HostBridge {
+    public func measureText(_ text: String, fontSize: Double, weight: Int, family: String?, wrapWidth: Double?) -> CGSize {
+        measureText(text, fontSize: fontSize, weight: weight, wrapWidth: wrapWidth)
+    }
     public func registerImage(_ source: String, bytes: [UInt8]) {}
     public func hostValue(_ key: String) -> String? { nil }
     // The drawing half. Only a self-drawing renderer (Isomer's
@@ -165,6 +185,15 @@ extension HostBridge {
     public func drawImage(
         _ source: String, isRemote: Bool, in dest: CGRect, clip: CGRect,
         cornerRadius: Double, opacity: Double
+    ) {}
+    public func drawImage(
+        _ source: String, isRemote: Bool, in dest: CGRect, clip: CGRect,
+        cornerRadius: Double, opacity: Double, tint: HostColor
+    ) {
+        drawImage(source, isRemote: isRemote, in: dest, clip: clip, cornerRadius: cornerRadius, opacity: opacity)
+    }
+    public func drawPath(
+        _ subpaths: [[CGPoint]], closed: [Bool], fill: HostColor?, stroke: HostColor?, lineWidth: Double
     ) {}
     public func pushClip(_ rect: CGRect, cornerRadius: Double) {}
     public func popClip() {}

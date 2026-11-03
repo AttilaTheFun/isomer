@@ -32,3 +32,11 @@
 #if ISOMER_FOUNDATION_INTERNATIONALIZATION
 @_exported import FoundationInternationalization
 #endif
+
+// Dispatch's time constants (NSEC_PER_SEC and its family), which Apple's
+// Foundation reaches through Dispatch: neither the Android SDK's libdispatch
+// nor WASI (no Dispatch) gives them, so a module of their own does
+// (//foundation/dispatch_time), re-exported here as Apple's re-exports Dispatch.
+#if os(Android) || os(WASI)
+@_exported import IsomerDispatchTime
+#endif

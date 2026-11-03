@@ -46,6 +46,8 @@ isomer_android_app(
     name = "storybook_android_application",
     assets = ":flat_assets",
     default_renderer = "jetpackCompose",
+    # Font.custom's fonts (the text.custom story), in assets/fonts/.
+    fonts = ["//storybook:fonts"],
     icon = "//storybook/artwork/storybook_icon:ic_launcher.png",
     label = "Storybook",
     package = "com.LoganShire.IsomerStorybook",

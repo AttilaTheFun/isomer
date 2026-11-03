@@ -44,8 +44,8 @@ object NativeBridge {
 
     /** The Swift-facing host: measurement, chrome, and services. */
     private val host = object : AndroidHost {
-        override fun measureText(text: String, fontSize: Double, weight: Int, wrapWidth: Double): TextMetrics {
-            val wh = HostServices.measureText(text, fontSize, weight, wrapWidth)
+        override fun measureText(text: String, fontSize: Double, weight: Int, family: String, wrapWidth: Double): TextMetrics {
+            val wh = HostServices.measureText(text, fontSize, weight, wrapWidth, family)
             return TextMetrics(wh[0], wh[1])
         }
 

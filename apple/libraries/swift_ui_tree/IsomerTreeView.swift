@@ -459,8 +459,13 @@ struct NodeView: View, Equatable {
 
     /// The text's font: its text style where it has one (the platform's
     /// leading and Dynamic Type), else its size; with its weight and design.
+    /// A named typeface (`Font.custom`, param "family") is the system's
+    /// by that name, the app's bundled fonts among them.
     private var textFont: Font {
         let weight = flatFontWeight(node.weight ?? 400)
+        if let family = nodeParam("family") {
+            return Font.custom(family, fixedSize: node.size.map { CGFloat($0) } ?? 15).weight(weight)
+        }
         let design: Font.Design = nodeParam("mono") == "1" ? .monospaced : .default
         if let style = nodeParam("textStyle").flatMap(hostTextStyle) {
             if #available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *) {
@@ -553,6 +558,10 @@ struct NodeView: View, Equatable {
             }
         } else if node.remote == true, let url = URL(string: source) {
             RemoteImageView(url: url, fit: node.fit == true, pixelated: pixelated)
+        } else if let tint = nodeParam("template").flatMap(colorFromHex) {
+            // `.renderingMode(.template)`: the picture's shape in the colour.
+            fitted(Image(source).renderingMode(.template).resizable().interpolation(pixelated ? .none : .medium))
+                .foregroundStyle(tint)
         } else {
             fitted(Image(source).resizable().interpolation(pixelated ? .none : .medium))
         }
@@ -1481,6 +1490,7 @@ struct NavStackBody: View {
         content
             .navigationTitle(param("title") ?? "")
             .modifier(TitleDisplayModeModifier(mode: param("displayMode")))
+            .modifier(BackButtonHiddenModifier(hidden: param("backHidden") == "1"))
             .modifier(PreferredSchemeModifier(scheme: param("scheme")))
             .modifier(NavSearchModifier(
                 prompt: param("searchPrompt"),
@@ -1664,6 +1674,19 @@ struct TitleDisplayModeModifier: ViewModifier {
         // `.automatic` already does, and `.large` isn't available on macOS.
         if mode == "inline", #available(macOS 14.0, iOS 17.0, tvOS 17.0, watchOS 10.0, *) {
             content.toolbarTitleDisplayMode(.inline)
+        } else {
+            content
+        }
+    }
+}
+
+/// `.navigationBarBackButtonHidden`, where the OS has it.
+struct BackButtonHiddenModifier: ViewModifier {
+    let hidden: Bool
+
+    func body(content: Content) -> some View {
+        if hidden, #available(macOS 13.0, iOS 13.0, tvOS 13.0, watchOS 6.0, *) {
+            content.navigationBarBackButtonHidden(true)
         } else {
             content
         }

@@ -33,6 +33,8 @@ isomer_web_app(
         "//storybook/artwork/storybook_icon:web_icon",
         "//shared/example_application:assets",
     ],
+    # Font.custom's fonts (the text.custom story), served from fonts/.
+    fonts = ["//storybook:fonts"],
     index = "index.html",
     query = "renderer=react",
     site_visibility = [

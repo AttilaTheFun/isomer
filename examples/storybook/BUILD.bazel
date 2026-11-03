@@ -48,3 +48,14 @@ filegroup(
     name = "xcassets",
     srcs = glob(["assets/Assets.xcassets/**"]),
 )
+
+# The fonts the stories name with Font.custom (text.custom): Karla, under
+# the SIL Open Font License (fonts/OFL.txt). The web site serves them from
+# fonts/, the APK carries them in assets/fonts/, an Apple bundle in its
+# resources (UIAppFonts on iOS, ATSApplicationFontsPath on the Mac).
+filegroup(
+    name = "fonts",
+    srcs = glob(["fonts/*.ttf"]),
+)
+
+exports_files(["fonts/OFL.txt"])

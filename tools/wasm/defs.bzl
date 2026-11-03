@@ -41,6 +41,22 @@ def _static_site_impl(ctx):
             name = asset.basename,
         ))
 
+    # `Font.custom`'s fonts: fonts/<file>, listed in fonts/fonts.json, which
+    # boot.js reads (runtime/fonts.js adds each to document.fonts under its
+    # PostScript, full, family and file names). The list is written for
+    # every site, `[]` without fonts, so a page never asks for a missing one.
+    commands.append("mkdir -p {out}/fonts".format(out = out.path))
+    for font in ctx.files.fonts:
+        commands.append("cp {src} {out}/fonts/{name}".format(
+            src = font.path,
+            out = out.path,
+            name = font.basename,
+        ))
+    commands.append("printf '%s' '{list}' > {out}/fonts/fonts.json".format(
+        list = json.encode([font.basename for font in ctx.files.fonts]),
+        out = out.path,
+    ))
+
     # Verify every relative ES-module import in the served JS resolves to a
     # file in the site. A broken module graph evaluates NOTHING at runtime —
     # the page renders as a silent blank — so turn the miss into a build
@@ -75,7 +91,7 @@ perl -pi -e 's/(<script[^>]*\ssrc=")(\.\/[^"?]+?\.js)(")/$1$2?v='"$V"'$3/g' inde
 """)
 
     ctx.actions.run_shell(
-        inputs = [ctx.file.index, ctx.file.wasm] + ctx.files.extra_pages + ctx.files.runtime_js + ctx.files.root_js + ctx.files.assets,
+        inputs = [ctx.file.index, ctx.file.wasm] + ctx.files.extra_pages + ctx.files.runtime_js + ctx.files.root_js + ctx.files.assets + ctx.files.fonts,
         outputs = [out],
         command = " && ".join(commands),
         mnemonic = "AssembleStaticSite",
@@ -95,6 +111,8 @@ static_site = rule(
         "runtime_js": attr.label_list(allow_files = [".js"]),
         "root_js": attr.label_list(allow_files = [".js"]),
         "assets": attr.label_list(allow_files = True),
+        # .ttf/.otf files for `Font.custom`, served from fonts/.
+        "fonts": attr.label_list(allow_files = [".ttf", ".otf"]),
     },
     doc = "Assembles index.html + app.wasm + JS runtime + assets into one directory.",
 )
@@ -251,6 +269,9 @@ _ISO_RUNTIME_JS = [
     Label("//wasm/libraries/swift_ui:runtime/network.js"),
     # `.sensoryFeedback`'s vibrations (boot.js and hot_host.js import it).
     Label("//wasm/libraries/swift_ui:runtime/haptics.js"),
+    # `Font.custom`'s bundled fonts, loaded before the first frame (boot.js
+    # imports it).
+    Label("//wasm/libraries/swift_ui:runtime/fonts.js"),
     # Isomer's Metal executor: the only navigator.gpu code.
     Label("//metal/runtime:runtime_js"),
 ]
@@ -311,6 +332,7 @@ def isomer_web_app(
         swift_library,
         index,
         assets = [],
+        fonts = [],
         extra_pages = [],
         query = "renderer=react",
         icu_locales = None,
@@ -322,7 +344,10 @@ def isomer_web_app(
     on //wasm/libraries/swift_ui), transpiles the bindings, assembles the
     static site around `index`, and declares a `bazel run` dev server.
     `icu_locales` (language codes) keeps only those languages' ICU locale
-    data in an app that has ICU.
+    data in an app that has ICU. `fonts` are .ttf/.otf files for
+    `Font.custom`, served from the site's fonts/ and loaded before the first
+    frame; a font is found by its PostScript, full or family name (as on
+    iOS) or its file's name (runtime/fonts.js).
 
     Declares:
       <name>       `bazel run` dev server opening `index` with `query`
@@ -373,6 +398,7 @@ def isomer_web_app(
         name = name + "_site",
         assets = assets,
         extra_pages = extra_pages,
+        fonts = fonts,
         index = index,
         # The generic iso_hot host sits at the site root beside the ffi
         # runtime it imports (it runs feature bundles compiled outside bazel —

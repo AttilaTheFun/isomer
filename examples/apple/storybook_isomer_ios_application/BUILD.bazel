@@ -52,6 +52,8 @@ ios_application(
     ],
     infoplists = ["Info.plist"],
     minimum_os_version = "18.0",
+    # Font.custom's fonts (the text.custom story), named in UIAppFonts.
+    resources = ["//storybook:fonts"],
     tags = ["manual"],
     deps = [
         ":app_lib",

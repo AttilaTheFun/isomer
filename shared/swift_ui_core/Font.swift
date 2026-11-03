@@ -56,6 +56,13 @@ public struct Font: Hashable, Sendable {
         return font
     }
 
+    /// `Font.custom(_:fixedSize:)`: the named typeface at a size Dynamic
+    /// Type leaves alone (Isomer's custom sizes never scale, so the same
+    /// font as `custom(_:size:)`).
+    public static func custom(_ name: String, fixedSize: CGFloat) -> Font {
+        custom(name, size: fixedSize)
+    }
+
     /// `Font.system(_:design:weight:)`: a text style in a design and weight.
     public static func system(_ style: Font.TextStyle, design: Design? = nil, weight: Weight? = nil) -> Font {
         var font = style.font

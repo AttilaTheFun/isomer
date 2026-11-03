@@ -74,6 +74,22 @@ alias(
     visibility = ["//visibility:public"],
 )
 
+# OSLog's Logger: Apple's on Apple platforms (nothing to link), Isomer's
+# elsewhere (frameworks/os_log): to logcat on Android, standard error
+# beyond. Also in each platform's SDK group (@isomer//:swift_ui).
+alias(
+    name = "os_log",
+    actual = select({
+        "@platforms//os:macos": ":system_framework",
+        "@platforms//os:ios": ":system_framework",
+        "@platforms//os:tvos": ":system_framework",
+        "@platforms//os:watchos": ":system_framework",
+        "@platforms//os:visionos": ":system_framework",
+        "//conditions:default": "//frameworks/os_log",
+    }),
+    visibility = ["//visibility:public"],
+)
+
 alias(
     name = "core_graphics",
     actual = select({

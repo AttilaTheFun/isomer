@@ -227,6 +227,7 @@ extension Runtime {
         s += controlSizeStack.last.map { "\($0)" } ?? "-"; s += "|"
         s += buttonBorderShapeStack.last.map { "\($0)" } ?? "-"; s += "|"
         s += labelStyleStack.last.map { "\($0)" } ?? "-"; s += "|"
+        s += toggleStyleStack.last.map { "\($0)" } ?? "-"; s += "|"
         s += pickerStyleStack.last ?? "-"; s += "|"
         s += tabViewStyleStack.last ?? "-"; s += "|"
         s += "\(tabCustomizationStack.count)"

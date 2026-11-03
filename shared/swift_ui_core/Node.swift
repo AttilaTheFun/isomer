@@ -155,6 +155,12 @@ package final class RenderNode {
     var aspectFill = false
     /// `Image.interpolation(.none)`: hosts draw the image without smoothing.
     var imageInterpolation: String?
+    /// `Image.renderingMode(.template)`: the colour hosts fill the image's
+    /// shape with (param "template").
+    var imageTint: Color?
+    /// An app's shape's size where a `.frame` fixes it: the size its
+    /// `path(in:)` is asked in for the hosts (Shapes.swift's `unitPath`).
+    var pathSize: CGSize?
     /// `.tint`: the accent color for controls in this subtree (a param for
     /// component hosts; core controls read it from the environment).
     var tint: Color?

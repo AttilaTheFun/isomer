@@ -1,0 +1,22 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# OSLog's Logger, for the platforms without Apple's: to logcat on Android,
+# to standard error elsewhere (Logger.swift).
+swift_library(
+    name = "os_log",
+    package_name = "isomer",
+    # Apple platforms have the real one; this one would shadow it.
+    target_compatible_with = select({
+        "@platforms//os:macos": ["@platforms//:incompatible"],
+        "@platforms//os:ios": ["@platforms//:incompatible"],
+        "@platforms//os:tvos": ["@platforms//:incompatible"],
+        "@platforms//os:watchos": ["@platforms//:incompatible"],
+        "@platforms//os:visionos": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
+    srcs = glob(["*.swift"]),
+    module_name = "OSLog",
+    deps = ["//:foundation"],
+)

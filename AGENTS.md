@@ -41,7 +41,7 @@ the Playground:
 | `.` | `isomer` | everything below |
 | `swift_ffi/` | (isomer) | the Swift <-> Kotlin/TypeScript/C bridge generator: macros, analyzer, generator, rules, runtimes. Labels `//swift_ffi/...` (`@isomer//swift_ffi/...` from outside). Its own examples are `swift_ffi/examples`; docs in `docs/swift_ffi/`. Every BUILD file under it carries `package(features = [swift.enable_v6, treat_warnings_as_errors, ...])` — what its REPO.bazel said when it was a repo; keep that on new packages there |
 | `core_graphics/`, `foundation/` | (isomer) | Isomer's `CoreGraphics` and `Foundation` for the platforms without Apple's (see "Apple's frameworks off Apple") |
-| `frameworks/` | (isomer) | the other Apple frameworks SwiftUI's interface names, off Apple: `CoreTransferable`, `UniformTypeIdentifiers`, `PhotosUI`. Not Combine, UIKit or Dispatch (see "Apple's frameworks off Apple") |
+| `frameworks/` | (isomer) | the other Apple frameworks SwiftUI's interface names, off Apple: `CoreTransferable`, `UniformTypeIdentifiers`, `PhotosUI`, `OSLog` (`Logger`: logcat on Android, standard error elsewhere; `@isomer//:os_log`, and in each platform's SDK group). Not Combine, UIKit or Dispatch (see "Apple's frameworks off Apple") |
 | `metal/` | (isomer) | Isomer's `Metal` (`//metal/metal`), IsomerMetal (`//metal/isomer_metal`: the MSL→WGSL translator, the backend interface), the web backend (`//metal/web`, `//metal/runtime`) |
 | `swift_gpu/` | (isomer) | the GPU abstraction (`//swift_gpu/{core,metal,apple,android,wasm,linux,windows}`) |
 | `swift_map/` | (isomer) | the OpenStreetMap renderer (`//swift_map/swift_map/{core,renderer}`, platform libraries under `//swift_map/<platform>/libraries/...`, its example apps and their small tools) |
@@ -694,7 +694,13 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
   numbers bridge to it as on Apple's platforms: `json["n"] as? Int` is an
   exact cast, through `_ObjectiveCBridgeable`, which Swift's runtime honours
   off Objective-C too), JSONSerialization, ISO8601DateFormatter,
-  FileWrapper, `String(format:)`, Bundle, streams. UserDefaults has Apple's
+  FileWrapper, `String(format:)`, Bundle (and `NSLocalizedString`, which
+  reads no tables yet: the value or the key), streams, NSObject and
+  NSObjectProtocol (identity equality, no runtime), NotificationCenter's
+  `post` and block observers (over swift-foundation's registrar, its
+  corelibs SPI) with an OperationQueue of blocks (the main queue's on the
+  main actor), a session's cookie and credential storage (kept, holding
+  nothing), and Dispatch's NSEC_PER_SEC family on Android and wasm. UserDefaults has Apple's
   argument domain: `-key value` among the program's arguments, or, where a
   host starts no program with arguments (Android), in ISO_ARGUMENTS
   (`am start -e ISO_ARGUMENTS '-reviews.fixture YES'`: the generated

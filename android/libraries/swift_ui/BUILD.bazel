@@ -78,7 +78,7 @@ swift_library(
 
 # What an application builds against (@isomer//:swift_ui): SwiftUI, the
 # other Apple frameworks it may import beside it (PhotosUI,
-# UniformTypeIdentifiers), as an Apple SDK has them, and the Isomer module
+# UniformTypeIdentifiers, OSLog), as an Apple SDK has them, and the Isomer module
 # (Isomer's additions: `#if canImport(Isomer) import Isomer` in code that
 # also builds against Apple's frameworks).
 swift_library_group(
@@ -88,6 +88,7 @@ swift_library_group(
         ":isomer",
         ":photos_ui",
         ":swift_ui",
+        "//frameworks/os_log",
         "//frameworks/uniform_type_identifiers",
     ],
 )

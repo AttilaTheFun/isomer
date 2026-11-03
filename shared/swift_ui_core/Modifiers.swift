@@ -188,6 +188,10 @@ extension View {
             if width != nil || height != nil {
                 propagateImageFixedSize(inner, width: width, height: height)
             }
+            // An app's shape framed to a size: its path is asked in it.
+            if let width, let height, case .shape(.path, _, _) = inner.kind {
+                inner.pathSize = CGSize(width: width, height: height)
+            }
             let box = RenderNode.box(child: inner)
             box.fixedWidth = width
             box.fixedHeight = height
@@ -402,19 +406,67 @@ extension View {
     /// what UI tests find it by). Set on the view's own node, so a Button
     /// keeps a single accessibility element. Apple's shape: the accessibility
     /// modifiers return `ModifiedContent<Self, AccessibilityAttachmentModifier>`.
+    @_disfavoredOverload
     nonisolated public func accessibilityLabel<S: StringProtocol>(_ label: S) -> ModifiedContent<Self, AccessibilityAttachmentModifier> {
         let label = String(label)
         return modifier(AccessibilityAttachmentModifier { $0.accessibilityLabel = label })
     }
 
+    /// The label as a `Text` (its words; styling means nothing to assistive
+    /// tech) or a key (a literal: its markdown read as words).
+    nonisolated public func accessibilityLabel(_ label: Text) -> ModifiedContent<Self, AccessibilityAttachmentModifier> {
+        accessibilityLabel(label.content)
+    }
+
+    nonisolated public func accessibilityLabel(_ labelKey: LocalizedStringKey) -> ModifiedContent<Self, AccessibilityAttachmentModifier> {
+        accessibilityLabel(Text(labelKey).content)
+    }
+
+    @_disfavoredOverload
     nonisolated public func accessibilityHint<S: StringProtocol>(_ hint: S) -> ModifiedContent<Self, AccessibilityAttachmentModifier> {
         let hint = String(hint)
         return modifier(AccessibilityAttachmentModifier { $0.accessibilityHint = hint })
     }
 
+    nonisolated public func accessibilityHint(_ hint: Text) -> ModifiedContent<Self, AccessibilityAttachmentModifier> {
+        accessibilityHint(hint.content)
+    }
+
+    nonisolated public func accessibilityHint(_ hintKey: LocalizedStringKey) -> ModifiedContent<Self, AccessibilityAttachmentModifier> {
+        accessibilityHint(Text(hintKey).content)
+    }
+
+    @_disfavoredOverload
     nonisolated public func accessibilityValue<S: StringProtocol>(_ value: S) -> ModifiedContent<Self, AccessibilityAttachmentModifier> {
         let value = String(value)
         return modifier(AccessibilityAttachmentModifier { $0.accessibilityValue = value })
+    }
+
+    nonisolated public func accessibilityValue(_ valueDescription: Text) -> ModifiedContent<Self, AccessibilityAttachmentModifier> {
+        accessibilityValue(valueDescription.content)
+    }
+
+    nonisolated public func accessibilityValue(_ valueKey: LocalizedStringKey) -> ModifiedContent<Self, AccessibilityAttachmentModifier> {
+        accessibilityValue(Text(valueKey).content)
+    }
+
+    /// `.accessibilityRepresentation`: assistive tech reads this view as the
+    /// representation (a custom control as the `Toggle` or `Button` it acts
+    /// like). Hosts derive an element from the drawn node, so what crosses
+    /// over is the representation's label (and a toggle's value), when it
+    /// is a control with a text label or a `Text`; the view draws as itself.
+    nonisolated public func accessibilityRepresentation<V: View>(@ViewBuilder representation: () -> V) -> some View {
+        let represented = representation() as? _AccessibilityRepresented
+        return _ModifiedView(child: self, descend: "a11yrep", pure: true) { inner, _ in
+            // Read as the view builds (a toggle's binding, current).
+            if let label = represented?._representedLabel, inner.accessibilityLabel == nil {
+                inner.accessibilityLabel = label
+            }
+            if let value = represented?._representedValue, inner.accessibilityValue == nil {
+                inner.accessibilityValue = value
+            }
+            return inner
+        }
     }
 
     nonisolated public func accessibilityIdentifier(_ identifier: String) -> ModifiedContent<Self, AccessibilityAttachmentModifier> {
@@ -1276,4 +1328,28 @@ extension AccessibilityAttachmentModifier: ViewModifier {
             return inner
         }
     }
+}
+
+/// What an `accessibilityRepresentation` carries over from the view it is
+/// given: its words, and a toggle's state.
+protocol _AccessibilityRepresented {
+    var _representedLabel: String? { get }
+    var _representedValue: String? { get }
+}
+
+extension _AccessibilityRepresented {
+    var _representedValue: String? { nil }
+}
+
+extension Text: _AccessibilityRepresented {
+    var _representedLabel: String? { content }
+}
+
+extension Button: _AccessibilityRepresented {
+    var _representedLabel: String? { (label as? Text)?.content }
+}
+
+extension Toggle: _AccessibilityRepresented {
+    var _representedLabel: String? { (label as? Text)?.content }
+    var _representedValue: String? { isOn.wrappedValue ? "1" : "0" }
 }

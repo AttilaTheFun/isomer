@@ -14,7 +14,10 @@ final class NavigationState {
 
     var stack: [Entry] = []
     /// `NavigationStack(path:)`: the bound path, read and written as values.
-    /// Set by the stack each build (nil without one).
+    /// Set by the stack each build (nil without one). Only a push or a pop
+    /// writes it, and its `set` skips a write that would leave it as it is
+    /// (an app's setter sees only real changes); a build, a resize or a
+    /// focus change never writes it.
     var path: (get: () -> [AnyHashable], set: ([AnyHashable]) -> Void)?
     /// `navigationDestination(for:)`: how a value of each type is shown,
     /// registered as the views that declare them build (and kept: the screen
@@ -41,6 +44,9 @@ final class NavigationState {
     var principalContent: RenderNode?
     /// `.toolbarTitleDisplayMode` of the visible screen (reset every build).
     var titleDisplayMode: ToolbarTitleDisplayMode = .automatic
+    /// `.navigationBarBackButtonHidden` on the visible screen (reset every
+    /// build): its bar has no Back (params "back" 0, "backHidden" 1).
+    var backButtonHidden = false
     /// Push/pop transition animation state.
     var lastDepth = 0
     var transitionStart: Double = -1
@@ -60,10 +66,13 @@ final class NavigationState {
     }
 
     /// `NavigationLink(value:)`: the value onto the bound path, or (no path)
-    /// onto the stack's own.
+    /// onto the stack's own. A value the bound path can't hold (another
+    /// type than its elements') changes nothing: no write, no rebuild.
     func push(value: AnyHashable) {
         if let path {
-            path.set(path.get() + [value])
+            let before = path.get()
+            path.set(before + [value])
+            if path.get() == before { return }
         } else {
             stack.append(entry(for: value))
         }
@@ -172,13 +181,25 @@ public struct NavigationStack<Content: View> {
     where Data: MutableCollection, Data: RandomAccessCollection, Data: RangeReplaceableCollection, Data.Element: Hashable {
         content = root()
         self.path = (get: { path.wrappedValue.map { AnyHashable($0) } },
-                     // A value of another type than the path's has nowhere to go.
-                     set: { values in path.wrappedValue = Data(values.compactMap { $0.base as? Data.Element }) })
+                     set: { values in
+                         // A value of another type than the path's has
+                         // nowhere to go. The binding is written only when
+                         // the path changes: an app's setter (a model's
+                         // `didSet`, a write that marks the model changed)
+                         // must not see a stack that stayed as it was.
+                         let elements = values.compactMap { $0.base as? Data.Element }
+                         guard !elements.elementsEqual(path.wrappedValue) else { return }
+                         path.wrappedValue = Data(elements)
+                     })
     }
 
     public init(path: Binding<NavigationPath>, @ViewBuilder root: () -> Content) {
         content = root()
-        self.path = (get: { path.wrappedValue.elements }, set: { path.wrappedValue = NavigationPath(elements: $0) })
+        self.path = (get: { path.wrappedValue.elements }, set: { values in
+            // Written only when the path changes (as above).
+            guard values != path.wrappedValue.elements else { return }
+            path.wrappedValue = NavigationPath(elements: values)
+        })
     }
 
     init(staticTitleFallback: Bool, @ViewBuilder root: () -> Content) {
@@ -288,6 +309,7 @@ extension NavigationStack: _PrimitiveView {
         nav.principalContent = nil
         nav.bottomBarItems = []
         nav.titleDisplayMode = .automatic
+        nav.backButtonHidden = false
         var sub = ctx.descend("level\(nav.stack.count)")
         sub.navigation = nav
         sub.navigationLevel = nav.stack.count
@@ -412,7 +434,7 @@ extension NavigationStack: _PrimitiveView {
             params: [
                 "title": nav.currentTitle,
                 "subtitle": nav.currentSubtitle,
-                "back": nav.stack.isEmpty ? (splitBack == nil ? "0" : "1") : "1",
+                "back": nav.backButtonHidden ? "0" : nav.stack.isEmpty ? (splitBack == nil ? "0" : "1") : "1",
                 "dark": Runtime.shared.colorScheme == .dark ? "1" : "0",
                 "scheme": _schemeParam(),
                 "large": hasLargeTitle ? "1" : "0",
@@ -532,6 +554,7 @@ extension NavigationStack {
             nav.principalContent = nil
             nav.bottomBarItems = []
             nav.titleDisplayMode = .automatic
+            nav.backButtonHidden = false
         }
         var sub = ctx.descend("level\(nav.stack.count)")
         sub.navigation = nav
@@ -551,6 +574,8 @@ extension NavigationStack {
             "title": nav.currentTitle,
                 "subtitle": nav.currentSubtitle,
             "depth": "\(nav.stack.count)",
+            // `.navigationBarBackButtonHidden`: the host's bar shows no Back.
+            "backHidden": nav.backButtonHidden ? "1" : "0",
             // `.preferredColorScheme` ("light"/"dark", "" = system): hosts
             // apply it to the native chrome around this level.
             "scheme": _schemeParam(),
@@ -1986,6 +2011,33 @@ public struct ToolbarTitleDisplayMode: Sendable {
     public static let large = ToolbarTitleDisplayMode(.large)
 }
 
+extension View {
+    /// `.navigationBarBackButtonHidden`: the screen's bar has no Back (a
+    /// flow the app moves through itself); each renderer's bar leaves it
+    /// out, the title and items stay.
+    nonisolated public func navigationBarBackButtonHidden(_ hidesBackButton: Bool = true) -> some View {
+        _BackButtonHiddenView(child: self, hidden: hidesBackButton)
+    }
+}
+
+struct _BackButtonHiddenView {
+    let child: any View
+    let hidden: Bool
+
+    typealias Body = Never
+    var body: Never { fatalError("primitive view") }
+}
+
+extension _BackButtonHiddenView: _PrimitiveView {
+    @MainActor
+    func makeNode(_ ctx: inout BuildContext) -> RenderNode {
+        let nav = ctx.navigation, hidden = hidden
+        Runtime.shared.registerFrameEffect { if hidden { nav?.backButtonHidden = true } }
+        var sub = ctx.descend("backhidden")
+        return buildNode(view: child, ctx: &sub)
+    }
+}
+
 struct _ToolbarTitleDisplayModeView {
     let child: any View
     let mode: ToolbarTitleDisplayMode
@@ -2188,3 +2240,4 @@ extension _BottomBarSpacer: View {}
 extension _SafeAreaInsetView: View {}
 extension _ToolbarView: View {}
 extension _ToolbarTitleDisplayModeView: View {}
+extension _BackButtonHiddenView: View {}

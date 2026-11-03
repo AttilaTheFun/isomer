@@ -2,15 +2,15 @@
 
 On Apple platforms an Isomer app uses Apple's frameworks. Elsewhere `import SwiftUI`, `Foundation`, `CoreGraphics`, `Metal`, `CoreTransferable`, `UniformTypeIdentifiers`, `PhotosUI`, `ImageIO`, `Observation` and `Synchronization` are Isomer's (or, for Observation and Synchronization, the Swift toolchain's own), with Apple's names and as much of Apple's interface as can be written in Swift. Each page says what is implemented, what is not, why, and whether it is planned, and would list what the module has that Apple's does not: declarations, other signatures or conformances. None has any but ImageIO, a known gap (superset.md): each other interface is a strict subset of Apple's, and `tools/parity/parity.py --check --strict` keeps it so.
 
-Against Apple's iOS 27.0 SDK. Regenerate with `tools/parity/parity.py`.
+Against Apple's iOS 27.2 SDK. Regenerate with `tools/parity/parity.py`.
 
 missing/<Module>.md lists each module's missing declarations one by one, with Apple's signatures, by area and type (and the conformances, Sendable and overloads its types lack): what to choose the next work from. [superset.md](superset.md) is the other direction: what Isomer has beyond Apple's interfaces, checked or not, and what its own modules add.
 
 | Module | Counted | Implemented | Excluded | Not yet | Unclassified | Missing, listed |
 |---|---|---|---|---|---|---|
 | [CoreGraphics](CoreGraphics.md) | 1357 | 425 (31%) | 627 | 303 | 2 | [missing/CoreGraphics.md](missing/CoreGraphics.md) |
-| [Foundation](Foundation.md) | 12077 | 4836 (40%) | 3575 | 3666 | 0 | [missing/Foundation.md](missing/Foundation.md) |
-| [SwiftUI](SwiftUI.md) | 7784 | 2016 (26%) | 530 | 5238 | 0 | [missing/SwiftUI.md](missing/SwiftUI.md) |
+| [Foundation](Foundation.md) | 12079 | 4883 (40%) | 3564 | 3632 | 0 | [missing/Foundation.md](missing/Foundation.md) |
+| [SwiftUI](SwiftUI.md) | 7924 | 2054 (26%) | 530 | 5340 | 0 | [missing/SwiftUI.md](missing/SwiftUI.md) |
 | [Metal](Metal.md) | 3580 | 860 (24%) | 1156 | 1563 | 1 | [missing/Metal.md](missing/Metal.md) |
 | [CoreTransferable](CoreTransferable.md) | 83 | 1 (1%) | 2 | 80 | 0 | [missing/CoreTransferable.md](missing/CoreTransferable.md) |
 | [UniformTypeIdentifiers](UniformTypeIdentifiers.md) | 229 | 32 (14%) | 8 | 189 | 0 | [missing/UniformTypeIdentifiers.md](missing/UniformTypeIdentifiers.md) |
