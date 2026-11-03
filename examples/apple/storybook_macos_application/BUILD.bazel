@@ -15,6 +15,8 @@ BUNDLE_ID = "com.LoganShire.IsomerStorybook"
 variant_infoplist(
     name = "variant_plist",
     display_name = "Storybook",
+    # Its link scheme: how Applications opens it, and links into it.
+    url_scheme = "storybook",
 )
 
 # The Storybook (//shared/example_application), compiled against Apple's
