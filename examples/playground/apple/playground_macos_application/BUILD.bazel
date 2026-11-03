@@ -19,6 +19,8 @@ load("//tools/variant:defs.bzl", "variant_infoplist")
 variant_infoplist(
     name = "variant_plist",
     display_name = "Playground",
+    # Its link scheme: how Applications opens it, and links into it.
+    url_scheme = "playground",
 )
 
 swift_library(
