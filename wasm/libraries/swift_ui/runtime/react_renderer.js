@@ -265,6 +265,46 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
     return SYSTEM_FONT;
   }
 
+  // A bundled family's heaviest face, from the page's FontFaces (fonts.js
+  // adds a family's faces under its name with their own weights): null for
+  // a family the page has no face of (the system's, whose weights are all
+  // there). Read again whenever the page's set of faces changes.
+  const familyWeights = new Map();
+  let familyWeightsSize = -1;
+  function heaviestFace(family) {
+    if (typeof document === "undefined" || !document.fonts) return null;
+    if (document.fonts.size !== familyWeightsSize) { familyWeights.clear(); familyWeightsSize = document.fonts.size; }
+    const key = family.toLowerCase();
+    if (familyWeights.has(key)) return familyWeights.get(key);
+    let heaviest = null;
+    document.fonts.forEach((face) => {
+      if (face.family.replace(/^["']|["']$/g, "").toLowerCase() !== key) return;
+      const weights = String(face.weight).split(/\s+/)
+        .map((w) => (w === "bold" ? 700 : w === "normal" ? 400 : Number(w)))
+        .filter((w) => isFinite(w));
+      for (const w of weights.length ? weights : [400]) heaviest = Math.max(heaviest ?? 0, w);
+    });
+    familyWeights.set(key, heaviest);
+    return heaviest;
+  }
+
+  // A bold weight the font has no face for is drawn emboldened, as Apple's
+  // and Android's text are: Chrome's own synthesis of a bundled regular
+  // face is all but invisible at text sizes, so it is turned off and the
+  // glyphs are stroked instead, Skia's fake-bold amount (Android's: a
+  // twenty-fourth of the size at 9 px down to a thirty-second at 36 px),
+  // which leaves the advances, so the text's measured size, as they were.
+  function synthesizeBold(s, family, weight, size) {
+    if (!family || !(weight >= 600)) return;
+    const heaviest = heaviestFace(family);
+    if (heaviest == null || heaviest >= 600) return;
+    const px = Number(size) || 17;
+    const t = Math.min(1, Math.max(0, (px - 9) / 27));
+    const width = px * (1 / 24 + t * (1 / 32 - 1 / 24));
+    s.fontSynthesisWeight = "none";
+    s.WebkitTextStroke = `${width.toFixed(2)}px ${s.color || "currentColor"}`;
+  }
+
   // A list row's padding: `.listRowInsets` ("top,leading,bottom,trailing",
   // "-" for a side left to the list), each side the list's `d` otherwise.
   const rowInsetValues = (p, d) => {
@@ -3817,6 +3857,7 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
         if (/\S{20,}/.test(n.v || "")) s.overflowWrap = "anywhere";
         else { s.overflowWrap = "break-word"; s.minWidth = "min-content"; }
         s.fontFamily = fontFamilyCSS(n.params);
+        synthesizeBold(s, (n.params || {}).family, s.fontWeight, s.fontSize);
         // `.monospacedDigit()`: tabular figures.
         if ((n.params || {}).tnum === "1") s.fontVariantNumeric = "tabular-nums";
         // `.multilineTextAlignment` reaches the text itself.

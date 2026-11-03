@@ -717,12 +717,16 @@ def linux(review, story_list, builds):
             scp(env, package, f"/tmp/{app}-linux.tgz")
             ssh(env, f"cd /tmp && tar -xzf {app}-linux.tgz")
         ssh(env, "sudo apt-get install -y -q libsdl2-2.0-0 libsdl2-ttf-2.0-0 libwebkit2gtk-4.1-0 libgtk-3-0t64 libcurl4t64 >/dev/null")
-        session = "XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0 DISPLAY=:0"
+        # The window maximized (ISO_WINDOW_MAXIMIZED, the Linux host's): at
+        # its own 1100x720 it sat small in the VM's 1920x1080 desktop, which
+        # the crop below kept around it.
+        session = "XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0 DISPLAY=:0 ISO_WINDOW_MAXIMIZED=1"
         kill = "for p in $(pgrep -x storybook) $(pgrep -x playground) $(pgrep -x playground_wasm); do kill $p; done"
 
         def shoot(path):
             oss_shot(env, path)
-            # Below GNOME's top bar (its clock) and right of its dock.
+            # Below GNOME's top bar (its clock) and right of its dock: the
+            # maximized window, its title bar included.
             from PIL import Image
             width, height = Image.open(path).size
             crop(path, (67, 32, width, height))

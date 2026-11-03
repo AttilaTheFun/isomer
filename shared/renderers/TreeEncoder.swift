@@ -550,6 +550,22 @@ package final class FlatTreeEncoder {
             out.children = backgroundLayers + out.children + overlayLayers + maskLayers
         }
 
+        // What the node is and carries, written by a function of its own:
+        // this one recurses (children, decorations), and a browser's
+        // baseline wasm compiler gives every frame of it a slot for each
+        // of its locals. With the hundreds of kinds and modifiers below in
+        // it, a frame was some 80 KB, and a tree a dozen deep exhausted
+        // V8's stack in a page's first frames (before the optimizing tier
+        // took over): a story opened by link at launch did (isomer#56).
+        describe(node, into: &out, scrollTargets: scrollTargets, handle: handle)
+        return out
+    }
+
+    /// Everything of `node` but its children and decorations, onto `out`:
+    /// its kind, values, handlers and modifiers. Never inlined into
+    /// `flattenNode`, whose frames stay small (see there).
+    @inline(never)
+    private func describe(_ node: RenderNode, into out: inout FlatNode, scrollTargets: Set<String>, handle: () -> String) {
         var shapeRadius: Double? = nil
         switch node.kind {
         case .box:
@@ -1208,8 +1224,6 @@ package final class FlatTreeEncoder {
         // The view a popover hangs from (hosts that present popovers
         // natively anchor it here; the others ignore it).
         if let popover = node.popoverAnchor { out.params = (out.params ?? []) + [("popover", popover)] }
-
-        return out
     }
 
     // MARK: - Serialize (FlatNode -> FlatBuffer Node)

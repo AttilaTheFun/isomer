@@ -409,9 +409,14 @@ int iso_window_create(double width, double height, const char *title) {
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
   SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
 
+  // ISO_WINDOW_MAXIMIZED=1: the window opens maximized, filling the desktop
+  // beside its bars (the proof's shots, cropped to below GNOME's top bar and
+  // right of its dock, are then the window whatever the screen's size).
+  Uint32 flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
+  const char *maximized = getenv("ISO_WINDOW_MAXIMIZED");
+  if (maximized && strcmp(maximized, "1") == 0) flags |= SDL_WINDOW_MAXIMIZED;
   g.window = SDL_CreateWindow(
-      title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, (int)width, (int)height,
-      SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+      title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, (int)width, (int)height, flags);
   if (!g.window) {
     fprintf(stderr, "[iso] SDL_CreateWindow failed: %s\n", SDL_GetError());
     return 0;

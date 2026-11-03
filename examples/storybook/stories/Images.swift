@@ -83,18 +83,18 @@ struct AppImagesStory: View {
 struct TemplateImageStory: View {
     var body: some View {
         HStack(spacing: 16) {
-            Image("iso-logo")
+            Image("iso-glyph")
                 .renderingMode(.original)
                 .resizable()
                 .scaledToFit()
                 .frame(width: 72, height: 72)
-            Image("iso-logo")
+            Image("iso-glyph")
                 .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
                 .frame(width: 72, height: 72)
                 .foregroundStyle(Color.blue)
-            Image("iso-logo")
+            Image("iso-glyph")
                 .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
