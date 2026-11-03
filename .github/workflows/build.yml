@@ -17,18 +17,49 @@
 # commit and run the workflow on that branch (its proof is listed under the
 # commit, as one on main would be).
 #
+# The two apps, the Storybook (com.LoganShire.IsomerStorybook) and the
+# Playground (com.LoganShire.IsomerPlayground), are published to
+# Applications Server for the iPhone and iPad (.ipa), the Mac (.zip) and
+# Android (.apk), as AttilaTheFun/reviews' CI publishes Reviews:
+# - alpha: the Alpha (--config=alpha) of each commit on main, after
+#   `container`: its version asked of Applications Server and stamped in
+#   (tools/ci/stamp_apps.sh), the apps built in a Linux container
+#   (tools/ci/container_build.sh package), the Mac apps' icons checked for
+#   the dark appearance (tools/ci/check_mac_icons.sh), unsigned, and
+#   published to the server (tools/ci/publish_from_ci.sh), which signs the
+#   Apple ones (and notarizes the Mac's); an .apk goes as its build signed it;
+# - adhoc: the same with --config=adhoc for a branch that is neither main
+#   nor a release branch, run by hand with `run: adhoc` (`gh workflow run
+#   Build --ref <branch> -f run=adhoc`): how an agent tries the pipeline
+#   before merging, and how a pull request's build reaches a phone. The
+#   server takes it as an AdHoc build. No proof then: a run by hand is the
+#   proof or the AdHoc build, not both;
+# - release: the same with --config=prod for a push to a release branch
+#   (release-MAJOR-MINOR, cut from a main commit), which the server takes as
+#   production.
+# No signing key, notary key or password here: the publishing jobs' OIDC
+# token says where their builds came from, and which commit's version they
+# are given (AttilaTheFun/applications' docs/CI.md).
+#
 # Only branches of this repository run it: a self-hosted runner never runs a
 # fork's code. GitHub's own Linux runners can take what needs no SDK (Linux,
 # web, Android) once they're wanted.
 name: Build
 on:
   push:
-    branches: [main]
+    # main's commits, and the owner's releases: a release-MAJOR-MINOR branch,
+    # cut from a main commit.
+    branches: [main, 'release-*']
   pull_request:
   release:
     types: [published]
   workflow_dispatch:
     inputs:
+      run:
+        description: What to run by hand (adhoc on a branch other than main or a release branch)
+        type: choice
+        options: [proof, adhoc]
+        default: proof
       kind:
         description: The proof's kind
         type: choice
@@ -47,10 +78,30 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read
+# What the publishing jobs build, each with its own --config: the Storybook's
+# and the Playground's iPhone and iPad apps (device builds, signed ad hoc with
+# a placeholder profile by --config=ci_device, which the server signs again
+# with the bundle id's own), Mac apps and Android apps (their android_binary,
+# whose signed .apk is published), optimized, as they ship. Flags as
+# --name=value (tools/ci/container_build.sh package).
+# Not yet the Playground's iPhone and Mac apps: built in the Linux container,
+# the Mac app would carry Linux's swift-frontend (toolchain.bzl copies the
+# building machine's compiler) and the iPhone app none (the phone's compiler
+# isn't among OS Server's files); they go to a Mac slot next.
+env:
+  PUBLISHED_APPS: >-
+    --config=ci_device --compilation_mode=opt
+    //apple/storybook_ios_application:storybook_ios_application
+    //apple/storybook_macos_application:storybook_macos_application
+    //android/storybook_android_application:storybook_android_application_apk
+    //playground/android/playground_android_application:playground_android_application_apk
 
 jobs:
   container:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # Not for an AdHoc build by hand, which builds what it publishes itself.
+    if: >
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) &&
+      inputs.run != 'adhoc'
     runs-on: [self-hosted, isomer-containers]
     # One at a time, as the container's Bazel tree is one kept volume:
     # OS Server queues them (`oss machine run` waits while another lease
@@ -65,7 +116,7 @@ jobs:
     # After the build: no proof of a tree that doesn't build.
     needs: container
     # Only when asked for by hand: never a pull request's or a push's.
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.run != 'adhoc'
     runs-on: [self-hosted, isomer-containers]
     concurrency:
       group: isomer-proof-${{ github.ref }}
@@ -99,3 +150,139 @@ jobs:
           name: proof
           path: ${{ runner.temp }}/proof
           retention-days: 90
+
+  alpha:
+    # After container: nothing published from a tree that doesn't build.
+    needs: container
+    # The Alpha of each commit on main, never a pull request's nor a release
+    # branch's (release, below).
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, isomer-containers]
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      # The OIDC token Applications Server checks.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      # The builds' version, 0.39.N: the next of the committed line for the
+      # token's commit, from Applications Server (the Playground's number,
+      # which releases are tagged with), stamped into the checkout (both
+      # apps' Info.plists, Android's versionName and versionCode) before the
+      # build and never committed.
+      - name: Version
+        env:
+          APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
+        run: tools/ci/stamp_apps.sh
+      # The Playground's Android compiler, which the APK carries (OS Server's
+      # files). The iPhone's device compiler isn't among them yet, and the
+      # Mac's is assembled from the build machine's toolchain (Linux's, in
+      # the container): until both are fixed, the iPhone and Mac Playgrounds
+      # published here run but can't compile a project.
+      - name: The Playground's compilers
+        run: tools/ci/stage_playground_compilers.sh android
+      # Built in a Linux container, as everything else is, with
+      # rules_applecross's actool, which compiles the Icon Composer icons'
+      # dark and tinted appearances. Bazel's tree a volume of the publishing
+      # jobs' own, kept between runs. exec: the runner's cancel reaches oss,
+      # which ends the build and releases the container.
+      - name: Build
+        env:
+          ISOMER_CI_VOLUME: isomer-ci-publish
+        run: exec tools/ci/container_build.sh package .ci/packages --config=alpha $PUBLISHED_APPS
+      # Nothing is published if a Mac app's icon has no dark appearance.
+      - name: The icons' dark appearance
+        run: tools/ci/check_mac_icons.sh .ci/packages
+      # Untrusted text reaches the shell through env, never ${{ }} in run.
+      - name: Notes
+        env:
+          SUMMARY: ${{ github.event.head_commit.message }}
+        run: printf '%s\n' "$SUMMARY" > "$RUNNER_TEMP/notes.md"
+      - name: Publish
+        env:
+          APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
+        run: tools/ci/publish_from_ci.sh --notes-file "$RUNNER_TEMP/notes.md" .ci/packages/*.zip .ci/packages/*.ipa .ci/packages/*.apk
+
+  # AdHoc: a branch built by hand (workflow_dispatch with run: adhoc, on a
+  # branch that is neither main nor a release branch), the apps built as
+  # alpha's are with --config=adhoc and published; the server takes them as
+  # AdHoc builds, kept a week. Not after container, which a run by hand
+  # skips for it: the build itself stops a tree that doesn't build.
+  adhoc:
+    if: >
+      github.event_name == 'workflow_dispatch' && inputs.run == 'adhoc' &&
+      github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/heads/release-')
+    runs-on: [self-hosted, isomer-containers]
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Version
+        env:
+          APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
+        run: tools/ci/stamp_apps.sh
+      - name: The Playground's compilers
+        run: tools/ci/stage_playground_compilers.sh android
+      - name: Build
+        env:
+          ISOMER_CI_VOLUME: isomer-ci-publish
+        run: exec tools/ci/container_build.sh package .ci/packages --config=adhoc $PUBLISHED_APPS
+      - name: The icons' dark appearance
+        run: tools/ci/check_mac_icons.sh .ci/packages
+      # The branch's commit's message, from git: a run by hand has no
+      # head_commit in its event.
+      - name: Notes
+        run: git log -1 --format=%B > "$RUNNER_TEMP/notes.md"
+      - name: Publish
+        env:
+          APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
+        run: tools/ci/publish_from_ci.sh --notes-file "$RUNNER_TEMP/notes.md" .ci/packages/*.zip .ci/packages/*.ipa .ci/packages/*.apk
+
+  # Production, from a push to a release branch (release-MAJOR-MINOR) the
+  # owner cut from a main commit: the server takes the token's ref
+  # (refs/heads/release-*) as production.
+  #
+  # A gap, as in reviews': Production should be the commit's Alpha promoted
+  # (its BuildVariant rewritten to Production and signed again), not built
+  # again (Logan, 2026-11-02). Until the server promotes, this builds the
+  # release's commit again with --config=prod, as reviews' release job does.
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release-')
+    runs-on: [self-hosted, isomer-containers]
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # The release branch's commit, with main's history beside it.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      # A release is a main commit: a branch whose commit isn't on main
+      # stops here.
+      - name: The release is a main commit
+        run: git merge-base --is-ancestor HEAD origin/main || { echo "::error::$GITHUB_REF_NAME's commit is not on main"; exit 1; }
+      # From the same line as the Alphas: the release's commit is main's, so
+      # the release is given the version main's Alpha of it was.
+      - name: Version
+        env:
+          APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
+        run: tools/ci/stamp_apps.sh
+      - name: The Playground's compilers
+        run: tools/ci/stage_playground_compilers.sh android
+      - name: Build
+        env:
+          ISOMER_CI_VOLUME: isomer-ci-publish
+        run: exec tools/ci/container_build.sh package .ci/packages --config=prod $PUBLISHED_APPS
+      - name: The icons' dark appearance
+        run: tools/ci/check_mac_icons.sh .ci/packages
+      - name: Notes
+        env:
+          BODY: ${{ github.event.head_commit.message }}
+        run: printf '%s\n' "$BODY" > "$RUNNER_TEMP/notes.md"
+      - name: Publish
+        env:
+          APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
+        run: tools/ci/publish_from_ci.sh --notes-file "$RUNNER_TEMP/notes.md" .ci/packages/*.zip .ci/packages/*.ipa .ci/packages/*.apk
