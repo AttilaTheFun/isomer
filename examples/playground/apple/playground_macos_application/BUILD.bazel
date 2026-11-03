@@ -1,5 +1,6 @@
 load("@build_bazel_rules_apple//apple:macos.bzl", "macos_application")
 load("@rules_swift//swift:swift.bzl", "swift_library")
+load("//tools/variant:defs.bzl", "variant_infoplist")
 
 # The Playground on the Mac: the shared shell (shared/app) against Apple's
 # SwiftUI, with the Apple host (apple/host). It compiles a project with the
@@ -9,6 +10,16 @@ load("@rules_swift//swift:swift.bzl", "swift_library")
 # renderer).
 #
 #   bazel build //playground/apple/playground_macos_application
+
+# BuildVariant and the name under its icon (//tools/variant), as the
+# iPhone's; one bundle id for both. No entitlements here: Applications' app
+# group comes with the Developer ID profile Applications Server signs it
+# with, as Reviews' Mac app's; until then AppUpdates.start() logs that there
+# is no container.
+variant_infoplist(
+    name = "variant_plist",
+    display_name = "Playground",
+)
 
 swift_library(
     name = "playground_macos_lib",
@@ -26,6 +37,9 @@ swift_library(
         "@isomer//shared/platform_services",
         "@isomer//swift_ffi/runtime/swift_wasm_host",
         "@swiftpkg_agent_ui//:AgentUI",
+        # The build it is, written for Applications at launch
+        # (apple/host/PlaygroundApp.swift).
+        "@swiftpkg_applications//:ApplicationUpdates",
     ],
 )
 
@@ -34,7 +48,10 @@ macos_application(
     app_icons = ["//playground/artwork/playground_icon:app_icon"],
     bundle_id = "com.LoganShire.IsomerPlayground",
     bundle_name = "Playground",
-    infoplists = ["Info.plist"],
+    infoplists = [
+        "Info.plist",
+        ":variant_plist",
+    ],
     minimum_os_version = "15.0",
     resources = [
         "//playground/shared/compiler:toolchain",

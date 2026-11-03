@@ -10,6 +10,15 @@
       }
     },
     {
+      "identity" : "applications",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/AttilaTheFun/applications.git",
+      "state" : {
+        "revision" : "b0cdd2d70208193b70a1b89f2d13b8cf612f68f7",
+        "version" : "0.10.45"
+      }
+    },
+    {
       "identity" : "grpc-swift-2",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/grpc/grpc-swift-2.git",
