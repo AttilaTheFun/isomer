@@ -47,8 +47,8 @@
 # leased from OS Server, as tools/ci/container_build.sh builds) and
 # Windows' (on its VM). The Playground's compilers that Bazel doesn't make:
 # the iPhone simulator's and Android's staged ones from OS Server's files
-# (by SHA-256, as the Apple SDK archive is: `oss files add` on its Mac),
-# and the in-browser one from the latest release's site.
+# (tools/ci/stage_playground_compilers.sh), and the in-browser one from the
+# latest release's site.
 #
 #   PROOF_REF           the ref the proof is of (default: GITHUB_REF, else the branch)
 #   PROOF_PYTHON        the python3 that runs proof.py, with Pillow, which crops
@@ -64,12 +64,6 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 IMAGE="$(cat "$ROOT/tools/ci/agent_image")"
-# The Playground's staged compilers, served by OS Server (`oss files list`):
-# examples/playground/apple/playground_ios_application/embedded_toolchain/
-# {iphonesimulator,data}, and examples/playground/android/
-# playground_android_application/toolchain/.
-IOS_SIMULATOR_TOOLCHAIN=4e23b747153a2f3b75fa91a0f9ca14bcd5a58d68af71c8d9be14ceea47386f05
-ANDROID_TOOLCHAIN=0b52a5d3322042317f661ab762cf3b123af5e2ce52cf192c95de31e9779f52c8
 PLATFORMS="ios macos android web linux windows"
 
 usage() { echo "usage: tools/ci/proof.sh --proof <dir> [--kind quick|full]" >&2; exit 2; }
@@ -139,25 +133,9 @@ python="${PROOF_PYTHON:-python3}"
 "$python" -c 'import PIL' 2> /dev/null || { echo "::error::$python has no Pillow (PROOF_PYTHON names one that has)"; exit 1; }
 
 echo "::group::The Playground's compilers"
-# A staged compiler from OS Server's files, unpacked where the app's
-# BUILD finds it (the checkout's gitignored folders). One staged by hand (a
-# checkout of an agent's, with the device's too) is kept as it is.
-stage() {
-    local sha="$1" folder="$2" into="$3"
-    if [ "$(cat "$folder/.sha256" 2> /dev/null)" = "$sha" ]; then return 0; fi
-    if [ -d "$folder" ] && [ ! -f "$folder/.sha256" ]; then return 0; fi
-    rm -rf "$folder"
-    oss storage get "$sha" "$work/$sha.tar.gz" > /dev/null
-    [ "$(shasum -a 256 "$work/$sha.tar.gz" | cut -d' ' -f1)" = "$sha" ] || { echo "::error::$sha's bytes don't match it"; exit 1; }
-    tar -xzf "$work/$sha.tar.gz" -C "$into"
-    rm "$work/$sha.tar.gz"
-    echo "$sha" > "$folder/.sha256"
-}
-playground="$ROOT/examples/playground"
-stage "$IOS_SIMULATOR_TOOLCHAIN" "$playground/apple/playground_ios_application/embedded_toolchain" \
-    "$playground/apple/playground_ios_application"
-stage "$ANDROID_TOOLCHAIN" "$playground/android/playground_android_application/toolchain" \
-    "$playground/android/playground_android_application"
+# The staged compilers from OS Server's files, unpacked where the apps'
+# BUILD files find them (the checkout's gitignored folders).
+"$ROOT/tools/ci/stage_playground_compilers.sh" ios-simulator android
 # The browser's: the latest release's site's.
 mkdir -p "$work/site"
 gh release download --repo "$repo" --pattern isomer-site.tar.gz --dir "$work/site"

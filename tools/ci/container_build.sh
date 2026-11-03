@@ -9,6 +9,11 @@
 # named in the repository.
 #
 #   tools/ci/container_build.sh [<bazel build args>…]   # default: every platform's Storybook
+#   tools/ci/container_build.sh package <dir> <bazel build args>…
+#                                     # the build, then the targets' packages
+#                                     # (.ipa, a Mac app's .zip, the signed
+#                                     # .apk) copied to <dir>, in this checkout,
+#                                     # for CI to publish
 #
 #   OSS_FILES_HOST   the name the container reaches this Mac's OS Server by
 #                    (default: this Mac's tailnet name, from Tailscale)
@@ -20,6 +25,16 @@
 # same container: the mock renderer's and the snapshots' (isomer's own module,
 # //tests/renderer and //tests/snapshot), their output in the log. Either the
 # build or a check failing fails the run.
+#
+# package (the publishing jobs', as AttilaTheFun/reviews' container_build.sh
+# has it): Bazel's tree is the container's (a volume), so what CI publishes
+# is copied out into the checkout, the one folder of the Mac's the
+# container sees, found by cquery with the build's own flags, from the
+# execution root. Flags as --name=value (--compilation_mode=opt, not -c
+# opt): every argument that doesn't start with "-" is taken for a target.
+# An Android app's files are its signed .apk (published as signed by its
+# build: Applications Server keeps no Android key), its unsigned one and its
+# deploy jar; only the first is copied.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 IMAGE="${ISOMER_CI_IMAGE:-$(cat "$ROOT/tools/ci/agent_image")}"
@@ -49,9 +64,22 @@ rewrite apple-sdks\.invalid/.* http://$host:7490/files/sha256/$SDK_SHA256
 rewrite ported-tools\.invalid/sha256/(.*) http://$host:7490/files/sha256/\$1
 EOF
 
-checks=0
-if [ $# -eq 0 ]; then
-    checks=1
+mode=build
+out=""
+if [ "${1:-}" = package ]; then
+    [ $# -ge 3 ] || { echo "usage: tools/ci/container_build.sh package <dir> <bazel build args…>" >&2; exit 1; }
+    mkdir -p "$2"
+    out="$(cd "$2" && pwd)"
+    case "$out/" in
+        "$ROOT"/*) ;;
+        *) echo "container_build.sh: package's folder must be in this checkout ($ROOT)" >&2; exit 1 ;;
+    esac
+    rm -f "$out"/*
+    chmod 775 "$out"
+    mode=package
+    shift 2
+elif [ $# -eq 0 ]; then
+    mode=checks
     set -- --ios_multi_cpus=sim_arm64 \
         //apple/storybook_ios_application:storybook_ios_sim_application \
         //apple/storybook_macos_application:storybook_macos_application \
@@ -61,14 +89,34 @@ if [ $# -eq 0 ]; then
 fi
 
 # In the container: the build in the examples' module, then (CI's run) the
-# checks in isomer's, each Bazel reading the cache (--cache writes the
-# container's ~/.bazelrc).
+# checks in isomer's, or (package) the packages copied out, each Bazel
+# reading the cache (--cache writes the container's ~/.bazelrc).
 steps='
-root=$1 checks=$2; shift 2
+root=$1 mode=$2 out=$3; shift 3
 cd "$root/examples"
-bazel build --keep_going --config=apple_on_linux --downloader_config="$root/.ci/downloader.cfg" "$@"
+flags=(--config=apple_on_linux "--downloader_config=$root/.ci/downloader.cfg")
+bazel build --keep_going "${flags[@]}" "$@"
 built=$?
-[ "$checks" = 1 ] || exit $built
+if [ "$mode" = package ]; then
+    [ $built -eq 0 ] || exit $built
+    options=()
+    query=""
+    # cquery takes one expression: the targets as a union of them.
+    for argument in "$@"; do
+        case "$argument" in -*) options+=("$argument") ;; *) query="${query:+$query + }$argument" ;; esac
+    done
+    exec_root="$(bazel info "${flags[@]}" "${options[@]}" execution_root)" || exit
+    files="$(bazel cquery "${flags[@]}" "${options[@]}" "$query" --output=files 2> /dev/null)" || exit
+    for file in $files; do
+        case "$file" in
+            *_unsigned.apk) ;;
+            *.ipa | *.zip | *.apk) cp "$exec_root/$file" "$out/" || exit ;;
+        esac
+    done
+    ls -l "$out"
+    exit 0
+fi
+[ "$mode" = checks ] || exit $built
 cd "$root"
 start=$SECONDS
 bazel test --test_output=all //tests/renderer:mock_renderer_test //tests/snapshot:snapshot_test
@@ -82,4 +130,4 @@ cd "$ROOT/examples"
 exec oss machine run container --image="$IMAGE" --rosetta --cpus=6 --memory=16 \
     --mount="$ROOT:$ROOT" --volume="$VOLUME:/var/cache/bazel:128:keep" \
     --inside --cache="$host" -- \
-    bash -c "$steps" container_build "$ROOT" "$checks" "$@"
+    bash -c "$steps" container_build "$ROOT" "$mode" "$out" "$@"
