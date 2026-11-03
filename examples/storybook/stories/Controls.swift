@@ -10,6 +10,11 @@ extension StoryCatalog {
             summary: "An on-off switch bound to a Bool: a switch on iOS and Android, a checkbox or switch on the Mac, the page's own on the web."
         ) { ToggleStory() },
         Story(
+            "controls.togglestyle", "ToggleStyle",
+            height: 300,
+            summary: "How a toggle looks: the switch, a button that stays pressed while on, or a style of your own that makes the toggle from its label and binding. A Toggle inside a style's body draws as the switch."
+        ) { ToggleStyleStory() },
+        Story(
             "controls.slider", "Slider",
             summary: "A value picked from a range by dragging: a fraction by default, or any range."
         ) { SliderStory() },
@@ -54,6 +59,57 @@ struct ToggleStory: View {
             Text("Wi-Fi \(wifi ? "on" : "off"), Bluetooth \(bluetooth ? "on" : "off")")
                 .font(.footnote)
                 .foregroundColor(.secondary)
+        }
+    }
+}
+// end story
+
+// story: controls.togglestyle
+struct ToggleStyleStory: View {
+    /// A checkbox: the label after a box that fills when on.
+    struct CheckboxStyle: ToggleStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            Button {
+                configuration.isOn.toggle()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: configuration.isOn ? "checkmark.square.fill" : "square")
+                        .foregroundStyle(configuration.isOn ? Color.accentColor : Color.secondary)
+                    configuration.label
+                }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    /// The switch, with a caption under it saying what it does.
+    struct CaptionedStyle: ToggleStyle {
+        let caption: String
+        func makeBody(configuration: Configuration) -> some View {
+            VStack(alignment: .leading, spacing: 2) {
+                Toggle(configuration)
+                Text(configuration.isOn ? "\(caption): on" : "\(caption): off")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @State private var reminders = true
+    @State private var sounds = false
+    @State private var bold = false
+    @State private var sync = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Toggle("Reminders", isOn: $reminders)
+                .toggleStyle(.switch)
+            Toggle("Sounds", isOn: $sounds)
+                .toggleStyle(CheckboxStyle())
+            Toggle("Bold", isOn: $bold)
+                .toggleStyle(.button)
+            Toggle("Sync", isOn: $sync)
+                .toggleStyle(CaptionedStyle(caption: "Syncing"))
         }
     }
 }

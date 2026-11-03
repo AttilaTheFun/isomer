@@ -1,0 +1,28 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@isomer//tools/android:defs.bzl", "isomer_android_app")
+
+# The path field probe (shared/path_field_probe_application) on Android:
+# push a screen onto a model's path, tap its field (the keyboard comes up)
+# and type; the screen's counters (read with uiautomator) must settle.
+swift_library(
+    name = "app_swift",
+    srcs = ["//shared/path_field_probe_application:srcs"],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "PathFieldProbe",
+    tags = ["manual"],
+    deps = [
+        "@isomer//:foundation",
+        "@isomer//:swift_ui",
+        "@isomer//android/libraries/swift_ui",
+        "@isomer//android/libraries/swift_ui:isomer",
+    ],
+)
+
+isomer_android_app(
+    name = "path_field_probe_android_application",
+    default_renderer = "jetpackCompose",
+    label = "Path Field Probe",
+    package = "dev.isomer.pathfieldprobe",
+    swift_library = ":app_swift",
+)

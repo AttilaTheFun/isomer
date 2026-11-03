@@ -207,6 +207,8 @@ package final class FlatTreeDecoder {
             case "posX": out.positionX = Double(kv.value).map { CGFloat($0) }
             case "posY": out.positionY = Double(kv.value).map { CGFloat($0) }
             case "clip": out.clipsContent = kv.value == "1"
+            // A template image's colour ("#rrggbbaa").
+            case "template": out.imageTint = kv.value.flatMap(Self.hexColor)
             // A `.mask` layer: kept in its place (patches address children
             // by position) but not drawn; the masked view shows unmasked
             // here for now.
@@ -310,6 +312,26 @@ package final class FlatTreeDecoder {
     }
 
     // MARK: - Scalar mappings
+
+    /// "#rrggbbaa" (the encoder's `wireHexColor`) as a colour.
+    static func hexColor(_ text: String) -> Color? {
+        let digits = Array(text.utf8.dropFirst())
+        guard text.hasPrefix("#"), digits.count == 8 else { return nil }
+        func nibble(_ c: UInt8) -> Int? {
+            switch c {
+            case UInt8(ascii: "0")...UInt8(ascii: "9"): return Int(c - UInt8(ascii: "0"))
+            case UInt8(ascii: "a")...UInt8(ascii: "f"): return Int(c - UInt8(ascii: "a")) + 10
+            case UInt8(ascii: "A")...UInt8(ascii: "F"): return Int(c - UInt8(ascii: "A")) + 10
+            default: return nil
+            }
+        }
+        var parts: [Double] = []
+        for i in stride(from: 0, to: 8, by: 2) {
+            guard let high = nibble(digits[i]), let low = nibble(digits[i + 1]) else { return nil }
+            parts.append(Double(high * 16 + low) / 255)
+        }
+        return Color(red: parts[0], green: parts[1], blue: parts[2], opacity: parts[3])
+    }
 
     private func color(_ c: IsoFlat_ColorRGBA) -> Color {
         Color(red: Double(c.r), green: Double(c.g), blue: Double(c.b), opacity: Double(c.a))

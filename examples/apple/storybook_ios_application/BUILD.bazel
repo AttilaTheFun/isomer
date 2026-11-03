@@ -60,6 +60,8 @@ ios_application(
     infoplists = ["Info.plist"],
     minimum_os_version = "17.0",
     provisioning_profile = ":_development_profile",
+    # Font.custom's fonts (the text.custom story), named in UIAppFonts.
+    resources = ["//storybook:fonts"],
     visibility = ["//visibility:public"],
     deps = [":storybook_ios_application_lib"],
 )
@@ -78,6 +80,7 @@ ios_application(
     ],
     infoplists = ["Info.plist"],
     minimum_os_version = "17.0",
+    resources = ["//storybook:fonts"],
     tags = ["manual"],
     visibility = ["//visibility:public"],
     deps = [":storybook_ios_application_lib"],

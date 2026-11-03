@@ -669,4 +669,250 @@ func checkAPIAdditions(_ mock: MockRenderer) {
     checkAttributedText(mock)
     checkRowSeparatorTrait(mock)
     checkTextFieldSelection(mock)
+    checkToggleStyles(mock)
+    checkAccessibilityText(mock)
+    checkTemplateImages(mock)
+    checkPathArcs()
+    checkDragPrediction()
+    checkBackButtonHidden(mock)
+    checkPathInFrame(mock)
+}
+
+// MARK: ToggleStyle
+
+/// An app's style that keeps the switch and adds a caption beside it.
+struct CaptionedSwitchStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack {
+            Text(configuration.isOn ? "caption on" : "caption off")
+            Toggle(configuration)
+        }
+    }
+}
+
+/// An app's style with no switch at all: a button that flips the value.
+struct TapToFlipStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Button { configuration.isOn.toggle() } label: {
+            HStack {
+                configuration.label
+                Text(configuration.isOn ? "is ON" : "is OFF")
+            }
+        }
+    }
+}
+
+struct ToggleStyleScreen: View {
+    @State private var alpha = false
+    @State private var beta = true
+    var body: some View {
+        VStack {
+            Toggle("Alpha", isOn: $alpha).toggleStyle(CaptionedSwitchStyle())
+            Toggle("Beta", isOn: $beta).toggleStyle(TapToFlipStyle())
+            Toggle("Gamma", isOn: .constant(true)).toggleStyle(.switch)
+            Toggle("Delta", isOn: .constant(false))
+            // Styles compose: the captioned style's inner Toggle is drawn
+            // by the style around it.
+            VStack {
+                Toggle("Epsilon", isOn: .constant(false)).toggleStyle(CaptionedSwitchStyle())
+            }
+            .toggleStyle(TapToFlipStyle())
+        }
+    }
+}
+
+@MainActor
+func checkToggleStyles(_ mock: MockRenderer) {
+    let verifying = Runtime.shared.verifyPartialFrames
+    Runtime.shared.verifyPartialFrames = true
+    defer { Runtime.shared.verifyPartialFrames = verifying }
+    let mismatches = Runtime.shared.partialMismatches
+    Runtime.shared.installRootView { ToggleStyleScreen() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    var frame = HostFrame(mock.lastTree!)
+    let switches = frame.hostViews("toggle")
+    expect(switches.count == 3, "the captioned style's inner Toggle, .switch and the default draw switches; the button styles none (got \(switches.count))")
+    expect(countFlatTexts(frame.root, "caption off") == 2 && frame.shows("Alpha"), "a custom style's body replaces the toggle, its inner Toggle keeping the label")
+    expect(frame.shows("Beta") && frame.shows("is ON"), "the button style shows its label and state")
+    expect(frame.tapTarget("Epsilon") != nil && frame.shows("is OFF"), "a style's inner Toggle takes the style around it")
+    // The inner switch flips the style's binding.
+    frame.send(switches.first?.edit, "1")
+    frame = HostFrame(mock.lastTree!)
+    expect(frame.shows("caption on"), "the inner switch writes through the configuration's binding")
+    // The button style flips its own.
+    frame.tap("is ON")
+    frame = HostFrame(mock.lastTree!)
+    expect(frame.shows("is OFF"), "a custom style's button flips $isOn")
+    expect(Runtime.shared.partialMismatches == mismatches, "frames built in place match whole builds")
+}
+
+// MARK: accessibility
+
+struct AccessibilityTextScreen: View {
+    var body: some View {
+        VStack {
+            Image(systemName: "star").accessibilityLabel(Text("Favourite")).accessibilityHint(Text("Adds it"))
+                .accessibilityValue(Text("3 stars"))
+            Rectangle().frame(width: 20, height: 20)
+                .accessibilityRepresentation { Toggle("Represented", isOn: .constant(true)) }
+        }
+    }
+}
+
+@MainActor
+func checkAccessibilityText(_ mock: MockRenderer) {
+    Runtime.shared.installRootView { AccessibilityTextScreen() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    let root = lastFlatTree(mock)
+    let labels = allParams(root, key: "a11yLabel")
+    func has(_ text: String) -> Bool { flatNodes(root) { node in node.params.contains { $0.value == text } }.count > 0 }
+    expect(has("Favourite") && has("Adds it") && has("3 stars"), "Text label, hint and value cross as words (\(labels))")
+    expect(has("Represented"), "a representation's label crosses over")
+}
+
+// MARK: Image.renderingMode
+
+struct TemplateImageScreen: View {
+    var body: some View {
+        VStack {
+            Image("icon").renderingMode(.template).foregroundStyle(Color.red)
+            Image("icon").renderingMode(.original)
+            Image("icon")
+        }
+    }
+}
+
+@MainActor
+func checkTemplateImages(_ mock: MockRenderer) {
+    Runtime.shared.installRootView { TemplateImageScreen() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    let images = flatNodes(lastFlatTree(mock)) { $0.kind == .image }
+    expect(images.count == 3 && param(images[0], "template")?.hasPrefix("#ff") == true
+           && param(images[1], "template") == nil && param(images[2], "template") == nil,
+           "only the template image carries its colour (got \(images.map { param($0, "template") }))")
+}
+
+// MARK: Path arcs and curves
+
+@MainActor
+func checkPathArcs() {
+    func close(_ a: CGPoint?, _ b: CGPoint, _ tolerance: CGFloat = 0.01) -> Bool {
+        guard let a else { return false }
+        return abs(a.x - b.x) < tolerance && abs(a.y - b.y) < tolerance
+    }
+    // A quarter turn from the x axis toward +y ends at (0, r).
+    var arc = Path()
+    arc.addArc(center: .zero, radius: 10, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
+    expect(close(arc.currentPoint, CGPoint(x: 0, y: 10)), "addArc ends at its end angle (\(String(describing: arc.currentPoint)))")
+    var relative = Path()
+    relative.addRelativeArc(center: .zero, radius: 10, startAngle: .degrees(0), delta: .degrees(-90))
+    expect(close(relative.currentPoint, CGPoint(x: 0, y: -10)), "addRelativeArc turns by its delta")
+    // A rounded corner: from (0,0) toward (10,0), turning down to (10,10).
+    var corner = Path()
+    corner.move(to: .zero)
+    corner.addArc(tangent1End: CGPoint(x: 10, y: 0), tangent2End: CGPoint(x: 10, y: 10), radius: 4)
+    expect(close(corner.currentPoint, CGPoint(x: 10, y: 4)), "the tangent arc ends where it meets the second line")
+    expect(corner.boundingRect.maxX <= 10.01 && corner.boundingRect.minY >= -0.01, "the tangent arc stays inside the corner")
+    var curves = Path()
+    curves.move(to: .zero)
+    curves.addQuadCurve(to: CGPoint(x: 10, y: 0), control: CGPoint(x: 5, y: 10))
+    curves.addCurve(to: CGPoint(x: 20, y: 0), control1: CGPoint(x: 12, y: -10), control2: CGPoint(x: 18, y: -10))
+    expect(close(curves.currentPoint, CGPoint(x: 20, y: 0)), "curves end at their ends")
+    expect(abs(curves.boundingRect.maxY - 5) < 0.1, "the quadratic peaks halfway to its control (\(curves.boundingRect))")
+    // A Core Graphics capsule: two arcs and two lines.
+    let capsule = CGMutablePath()
+    capsule.addArc(center: CGPoint(x: 10, y: 10), radius: 10, startAngle: .pi / 2, endAngle: 3 * .pi / 2, clockwise: false)
+    capsule.addArc(center: CGPoint(x: 30, y: 10), radius: 10, startAngle: 3 * .pi / 2, endAngle: .pi / 2, clockwise: false)
+    capsule.closeSubpath()
+    let fromCG = Path(capsule)
+    let box = fromCG.boundingRect
+    expect(abs(box.minX) < 0.05 && abs(box.maxX - 40) < 0.05 && abs(box.minY) < 0.05 && abs(box.maxY - 20) < 0.05,
+           "Path(CGPath) keeps a capsule's bounds (\(box))")
+    expect(fromCG.cgPath.boundingBoxOfPath.width > 39.9, "and goes back to a CGPath")
+}
+
+// MARK: DragGesture's prediction
+
+@MainActor
+func checkDragPrediction() {
+    var tracker = DragGesture.VelocityTracker()
+    _ = tracker.add(CGPoint(x: 0, y: 0), at: 1.0)
+    _ = tracker.add(CGPoint(x: 10, y: 0), at: 1.05)
+    let velocity = tracker.add(CGPoint(x: 20, y: 0), at: 1.1)
+    expect(abs(velocity.width - 200) < 0.5 && velocity.height == 0, "200 pt/s across (got \(velocity))")
+    let value = DragGesture.Value(startLocation: .zero, location: CGPoint(x: 20, y: 0), velocity: velocity)
+    expect(abs(value.predictedEndTranslation.width - 70) < 0.5, "the prediction runs on a quarter second (\(value.predictedEndTranslation))")
+    expect(abs(value.velocity.width - 200) < 0.5, "and gives the velocity back")
+    // A finger held still before letting go flings nothing.
+    let still = tracker.add(CGPoint(x: 20, y: 0), at: 1.5)
+    expect(still == .zero, "a pause brings the velocity to rest (\(still))")
+}
+
+// MARK: navigationBarBackButtonHidden
+
+struct BackHiddenScreen: View {
+    var body: some View {
+        NavigationStack(path: .constant([1])) {
+            Text("Root")
+                .navigationDestination(for: Int.self) { number in
+                    Text("Screen \(number)").navigationTitle("Pushed").navigationBarBackButtonHidden()
+                }
+        }
+    }
+}
+
+@MainActor
+func checkBackButtonHidden(_ previous: MockRenderer) {
+    Runtime.shared.installRootView { BackHiddenScreen() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    let semantic = lastFlatTree(previous)
+    expect(findParam(semantic, key: "backHidden") == "1", "a host's own stack hears the Back is hidden")
+    let drawing = DrawingMockRenderer()
+    Renderer.bind(drawing)
+    defer { Renderer.bind(previous) }
+    Runtime.shared.installRootView { BackHiddenScreen() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    let drawn = HostFrame(drawing.lastTree!)
+    expect(drawn.shows("Screen 1"), "the pushed screen shows")
+    expect(flatNavbarParam(drawn.root, "back") == "0", "the drawn bar has no Back")
+}
+
+// MARK: a shape asked for its path in its own size
+
+/// A pill from Core Graphics arcs, its radius half the height it is given.
+struct CGPillShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let radius = rect.height / 2
+        let pill = CGMutablePath()
+        pill.addArc(center: CGPoint(x: rect.minX + radius, y: rect.midY), radius: radius,
+                    startAngle: .pi / 2, endAngle: 3 * .pi / 2, clockwise: false)
+        pill.addArc(center: CGPoint(x: rect.maxX - radius, y: rect.midY), radius: radius,
+                    startAngle: 3 * .pi / 2, endAngle: .pi / 2, clockwise: false)
+        pill.closeSubpath()
+        return Path(pill)
+    }
+}
+
+struct PillScreen: View {
+    var body: some View {
+        CGPillShape().fill(Color.blue).frame(width: 100, height: 20)
+    }
+}
+
+@MainActor
+func checkPathInFrame(_ mock: MockRenderer) {
+    Runtime.shared.installRootView { PillScreen() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    let shapes = flatNodes(lastFlatTree(mock)) { $0.kind == .shape }
+    guard let text = shapes.first.flatMap({ param($0, "path") }) else { return expect(false, "the pill carries a path") }
+    // Its top edge: the points on y = 0 run from one end's radius to the other's.
+    let numbers = text.split(separator: " ").compactMap { Double($0) }
+    var top: [Double] = []
+    var i = 0
+    while i + 1 < numbers.count {
+        if abs(numbers[i + 1]) < 0.001 { top.append(numbers[i]) }
+        i += 2
+    }
+    expect(abs((top.min() ?? 0) - 0.1) < 0.01 && abs((top.max() ?? 0) - 0.9) < 0.01,
+           "the pill's ends are as round as it is tall in its 100 x 20 frame (top edge \(top.min() ?? -1)...\(top.max() ?? -1))")
 }

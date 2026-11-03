@@ -162,6 +162,8 @@ package final class Runtime {
     /// `.multilineTextAlignment` / `.labelStyle` scopes.
     var textAlignmentStack: [TextAlignment] = [] { didSet { reuseContextCache = nil } }
     var labelStyleStack: [LabelStyleOption] = [] { didSet { reuseContextCache = nil } }
+    /// `.toggleStyle` scopes (ToggleStyle.swift).
+    var toggleStyleStack: [ToggleStyleOption] = [] { didSet { reuseContextCache = nil } }
     /// `.tabViewCustomization` bindings in effect during the build.
     var tabCustomizationStack: [Binding<TabViewCustomization>?] = [] { didSet { reuseContextCache = nil } }
     /// Where `@AppStorage` keeps what names no store of its own: the
@@ -411,6 +413,8 @@ package final class Runtime {
     var activeSlider: SliderRegion?
     var activeDrag: DragRegion?
     var dragStartPoint = CGPoint.zero
+    /// The active drag's velocity, for its value's predicted end.
+    var dragVelocityTracker = DragGesture.VelocityTracker()
     /// A horizontal-swipe drag waiting to see if the gesture is horizontal (then
     /// it engages) or vertical (then it yields to scrolling). See `swipeGesture`.
     var pendingHorizontalDrag: DragRegion?
@@ -1144,15 +1148,18 @@ package final class Runtime {
     }
 
     func cachedMeasure(text: String, font: Font, wrapWidth: CGFloat?) -> CGSize {
-        let key = "\(text)|\(font.size)|\(font.weight.value)|\(wrapWidth ?? -1)"
+        let key = "\(text)|\(font.size)|\(font.weight.value)|\(font.family ?? "")|\(wrapWidth ?? -1)"
         if let cached = measureCache[key] {
             return cached
         }
         guard let host else { return .zero }
+        // `Font.custom`'s family: the host measures with the font the
+        // renderer draws (Android's bundled typeface, HostServices).
         let size = host.measureText(
             text,
             fontSize: font.size,
             weight: font.weight.value,
+            family: font.family,
             wrapWidth: wrapWidth.map { Double($0) }
         )
         measureCache[key] = size
@@ -1304,6 +1311,8 @@ package final class Runtime {
             for path in coasting { reportScrollPhase(path, .idle) }
             dragVelocity = 0
             pointerLastTime = host?.now() ?? 0
+            dragVelocityTracker.reset()
+            _ = dragVelocityTracker.add(point, at: pointerLastTime)
             activeSlider = sliderRegions.reversed().first {
                 $0.rect.insetBy(dx: -6, dy: -6).contains(point)
             }
@@ -1358,11 +1367,9 @@ package final class Runtime {
             }
             if let drag = activeDrag {
                 // A drag gesture preempts scroll/tap once it owns the pointer.
-                let translation = CGSize(
-                    width: point.x - dragStartPoint.x, height: point.y - dragStartPoint.y)
+                let velocity = dragVelocityTracker.add(point, at: host?.now() ?? 0)
                 drag.gesture.onChangedAction?(DragGesture.Value(
-                    startLocation: dragStartPoint, location: point,
-                    translation: translation, predictedEndLocation: point))
+                    startLocation: dragStartPoint, location: point, velocity: velocity))
                 pressedTap = nil
                 releasePressFeedback()
                 pointerLast = point
@@ -1420,11 +1427,9 @@ package final class Runtime {
 
         case 1:
             if let drag = activeDrag {
-                let translation = CGSize(
-                    width: point.x - dragStartPoint.x, height: point.y - dragStartPoint.y)
+                let velocity = dragVelocityTracker.add(point, at: host?.now() ?? 0)
                 drag.gesture.onEndedAction?(DragGesture.Value(
-                    startLocation: dragStartPoint, location: point,
-                    translation: translation, predictedEndLocation: point))
+                    startLocation: dragStartPoint, location: point, velocity: velocity))
                 activeDrag = nil
                 pointerIsDown = false
                 pressedTap = nil
@@ -1746,18 +1751,41 @@ private func _draw(_ node: RenderNode, pass: RenderPass) {
         if clipped { host.popClip() }
 
     case .shape(.path(let path), let fill, let stroke):
-        // An app's own shape: its rects, rounded rects and ellipses, scaled
-        // to the frame. (Subpaths of lines are not filled here yet.)
-        for element in path.scaled(to: node.frame).elements {
+        // An app's own shape, scaled to the frame: its rects, rounded rects
+        // and ellipses as the host draws them whole, its subpaths of lines
+        // (curves and arcs are lines by now) as one polygon path.
+        var subpaths: [[CGPoint]] = []
+        var closed: [Bool] = []
+        func move(to point: CGPoint) {
+            if subpaths.last?.count == 1 { subpaths.removeLast(); closed.removeLast() }
+            subpaths.append([point])
+            closed.append(false)
+        }
+        for element in path.unitPath(for: node.frame.size).scaled(to: node.frame).elements {
             let (rect, radius): (CGRect, CGFloat)
             switch element {
             case .rect(let r): (rect, radius) = (r, 0)
             case .roundedRect(let r, let cornerRadius): (rect, radius) = (r, cornerRadius)
             case .ellipse(let r): (rect, radius) = (r, min(r.width, r.height) / 2)
-            case .move, .line, .closeSubpath: continue
+            case .move(let p):
+                move(to: p)
+                continue
+            case .line(let p):
+                if subpaths.isEmpty || closed.last == true { move(to: subpaths.last?.first ?? p) }
+                subpaths[subpaths.count - 1].append(p)
+                continue
+            case .closeSubpath:
+                if !closed.isEmpty { closed[closed.count - 1] = true }
+                continue
             }
             if let fill { host.fillRect(rect, cornerRadius: radius, color: fill) }
             if let (color, lineWidth) = stroke { host.strokeRect(rect, cornerRadius: radius, lineWidth: lineWidth, color: color) }
+        }
+        if subpaths.last?.count == 1 { subpaths.removeLast(); closed.removeLast() }
+        if !subpaths.isEmpty {
+            host.drawPath(
+                subpaths, closed: closed, fill: fill?.hostColor, stroke: stroke?.0.hostColor,
+                lineWidth: Double(stroke?.1 ?? 0))
         }
 
     case .shape(let kind, let fill, let stroke):
@@ -1775,14 +1803,21 @@ private func _draw(_ node: RenderNode, pass: RenderPass) {
             let dest = fit
                 ? aspectFitRect(intrinsic, in: node.frame)
                 : aspectFillRect(intrinsic, in: node.frame)
-            host.drawImage(
-                source,
-                isRemote: isRemote,
-                in: dest,
-                clip: node.frame,
-                cornerRadius: node.imageCornerRadius,
-                opacity: node.opacity
-            )
+            if let tint = node.imageTint {
+                // A template: the picture's shape in its colour.
+                host.drawImage(
+                    source, isRemote: isRemote, in: dest, clip: node.frame,
+                    cornerRadius: node.imageCornerRadius, opacity: node.opacity, tint: tint.hostColor)
+            } else {
+                host.drawImage(
+                    source,
+                    isRemote: isRemote,
+                    in: dest,
+                    clip: node.frame,
+                    cornerRadius: node.imageCornerRadius,
+                    opacity: node.opacity
+                )
+            }
         case .loading:
             let r = node.imageCornerRadius > 0 ? node.imageCornerRadius : 8
             host.fillRect(node.frame, cornerRadius: r, color: Color(white: 0, opacity: 0.08))

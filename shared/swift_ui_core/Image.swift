@@ -30,6 +30,24 @@ public struct Image {
         copy.interpolation = interpolation
         return copy
     }
+
+    /// Whether a picture draws as it is or as a template: its shape (its
+    /// alpha) in the foreground style, as a symbol draws.
+    public enum TemplateRenderingMode: Hashable, Sendable {
+        case template
+        case original
+    }
+
+    /// `.renderingMode(.template)`: the picture's shape in the foreground
+    /// style (a tinted icon); `.original` or nil, its own colours. Symbols
+    /// draw in the foreground style here either way.
+    var renderingMode: TemplateRenderingMode?
+
+    public func renderingMode(_ renderingMode: TemplateRenderingMode?) -> Image {
+        var copy = self
+        copy.renderingMode = renderingMode
+        return copy
+    }
     /// A decoded picture this image draws (`Image(_ cgImage:…)`): kept with
     /// the view so the host keeps its bitmap while the view is drawn.
     var handle: AnyObject?
@@ -239,6 +257,7 @@ extension Image: _PrimitiveView {
             node.fixedWidth = iconSize
             node.fixedHeight = iconSize
             node.opacity = ctx.env.opacity
+            if renderingMode == .template { node.imageTint = ctx.env.foregroundColor }
             return node
         }
         // A decoded picture whose host decodes at the first draw: its bytes
@@ -256,6 +275,7 @@ extension Image: _PrimitiveView {
         ))
         node.opacity = ctx.env.opacity
         if interpolation == Interpolation.none { node.imageInterpolation = "none" }
+        if renderingMode == .template { node.imageTint = ctx.env.foregroundColor }
         return node
     }
 }

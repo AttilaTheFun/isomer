@@ -35,6 +35,10 @@ extension StoryCatalog {
             summary: "Digits of one width (monospacedDigit), so a number that changes keeps its place; and a line too long for its width, drawn smaller to fit, down to its minimumScaleFactor."
         ) { TextFitStory() },
         Story(
+            "text.custom", "Custom fonts",
+            summary: "A font the app bundles, named with Font.custom: by its PostScript name or its family name, at a size or a fixed size. A name the app has no font for falls back to the system's."
+        ) { TextCustomFontStory() },
+        Story(
             "text.label", "Label",
             summary: "A title with an icon, shown whole, as its icon or as its title. Lists, menus and toolbars choose a style for the labels in them."
         ) { LabelStory() },
@@ -156,6 +160,28 @@ struct TextLinesStory: View {
                 .multilineTextAlignment(.trailing)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+}
+// end story
+
+// story: text.custom
+struct TextCustomFontStory: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Karla, by its PostScript name")
+                .font(.custom("Karla-Regular", size: 22))
+            Text("Karla, by its family name")
+                .font(.custom("Karla", size: 17))
+            Text("Karla at a fixed size, bold")
+                .font(.custom("Karla", fixedSize: 17).bold())
+            Text("The quick brown fox jumps over the lazy dog, set in Karla and wrapping as any text does.")
+                .font(.custom("Karla", size: 17))
+                .fixedSize(horizontal: false, vertical: true)
+            Text("The system's font, for comparison")
+                .font(.system(size: 17))
+            Text("A font the app lacks: the system's")
+                .font(.custom("No Such Font", size: 17))
         }
     }
 }

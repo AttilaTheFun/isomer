@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 public protocol Shape: View {
@@ -15,13 +16,21 @@ extension Shape {
     nonisolated public var body: Never { fatalError("primitive view") }
 
     /// What the hosts draw: a built-in shape's kind, or an app's own shape's
-    /// path, asked for once in the unit square and scaled to the frame the
-    /// view gets. Geometry proportional to the rect (a QR code's grid, a
-    /// chevron) draws exactly; a shape that wants a fixed inset or
-    /// `min(width, height)` in a non-square frame should be given its
-    /// aspect ratio (`.aspectRatio(1, contentMode: .fit)`).
+    /// path, asked for in the unit square and scaled to the frame the view
+    /// gets. Geometry proportional to the rect (a QR code's grid, a
+    /// chevron) draws exactly that way. The path keeps the shape's
+    /// `path(in:)` too, asked again where the size is known (a shape framed
+    /// to a width and height, every shape under the GPU renderer), so a fixed
+    /// inset, a radius of `min(width, height) / 2` or an arc of a given
+    /// radius draws as SwiftUI draws it there (`Path.unitPath(for:)`).
+    /// Elsewhere a shape like that wants its aspect ratio
+    /// (`.aspectRatio(1, contentMode: .fit)`).
     nonisolated var shapeKind: ShapeKind {
-        (self as? any PrimitiveShape)?.primitiveKind ?? .path(path(in: CGRect(x: 0, y: 0, width: 1, height: 1)))
+        if let primitive = (self as? any PrimitiveShape)?.primitiveKind { return primitive }
+        var unit = path(in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        let shape = self
+        unit.source = _PathSource { rect in shape.path(in: rect) }
+        return .path(unit)
     }
 
     /// `.trim(from:to:)`: the fraction of the shape's outline to draw, from
@@ -308,10 +317,11 @@ public struct Ellipse {
 }
 
 /// An outline: SwiftUI's `Path`, the subset the hosts draw — subpaths of
-/// lines, and rects, rounded rects and ellipses added whole. The host
-/// scales a custom shape's path from the unit square to the frame; the
-/// SwiftGPU renderer draws its rects, rounded rects and ellipses (a
-/// polygon of lines is not filled there yet).
+/// lines (curves and arcs as runs of short lines), and rects, rounded
+/// rects and ellipses added whole. The host scales a custom shape's path
+/// from the unit square to the frame: SVG on the web, an android Path in
+/// Compose; the SwiftGPU renderer draws the whole shapes with its rect
+/// pipeline and covers the lines itself (PathRaster).
 public struct Path: Equatable, Sendable {
     /// A path's parts as Apple's `Path.forEach` gives them.
     public enum Element: Equatable, Sendable {
@@ -334,6 +344,12 @@ public struct Path: Equatable, Sendable {
     }
 
     private(set) var elements: [Segment] = []
+
+    /// An app's shape's `path(in:)`, kept to be asked again in the size the
+    /// view is drawn at (`unitPath(for:)`); not part of the path's value.
+    var source: _PathSource?
+
+    public static func == (lhs: Path, rhs: Path) -> Bool { lhs.elements == rhs.elements }
 
     public init() {}
     public init(_ rect: CGRect) { addRect(rect) }
@@ -542,6 +558,64 @@ public struct Path: Equatable, Sendable {
         for step in 1...steps { addLine(to: point(start + direction * sweep * Double(step) / Double(steps))) }
     }
 
+    /// `addRelativeArc(center:radius:startAngle:delta:)`: an arc turning
+    /// `delta` from `startAngle` (positive toward +y, as Core Graphics).
+    public mutating func addRelativeArc(
+        center: CGPoint, radius: CGFloat, startAngle: Angle, delta: Angle,
+        transform: CGAffineTransform = .identity
+    ) {
+        addArc(
+            center: center, radius: radius, startAngle: startAngle,
+            endAngle: .radians(startAngle.radians + delta.radians), clockwise: delta.radians < 0,
+            transform: transform)
+    }
+
+    /// `addArc(tangent1End:tangent2End:radius:)`: a line toward
+    /// `tangent1End`, rounded off by an arc of `radius` that meets the line
+    /// from there to `tangent2End` (CGPathAddArcToPoint; a rounded corner).
+    /// Worked out without trigonometry: the arc's ends are where the circle
+    /// touches the two lines, and it is drawn by halving it.
+    public mutating func addArc(
+        tangent1End: CGPoint, tangent2End: CGPoint, radius: CGFloat,
+        transform: CGAffineTransform = .identity
+    ) {
+        func length(_ x: CGFloat, _ y: CGFloat) -> CGFloat { CGFloat((Double(x * x + y * y)).squareRoot()) }
+        // The current point, back in the arc's own space.
+        let p0 = currentPoint.map { $0.applying(transform.inverted()) } ?? tangent1End
+        let p1 = tangent1End, p2 = tangent2End
+        let l1 = length(p0.x - p1.x, p0.y - p1.y), l2 = length(p2.x - p1.x, p2.y - p1.y)
+        let u1 = l1 > 0 ? CGPoint(x: (p0.x - p1.x) / l1, y: (p0.y - p1.y) / l1) : .zero
+        let u2 = l2 > 0 ? CGPoint(x: (p2.x - p1.x) / l2, y: (p2.y - p1.y) / l2) : .zero
+        let cosine = u1.x * u2.x + u1.y * u2.y
+        let cross = u1.x * u2.y - u1.y * u2.x
+        // A line that doesn't turn (or no radius): just the line, as Core
+        // Graphics draws it.
+        guard l1 > 0, l2 > 0, radius > 0, abs(cross) > 1e-9, cosine > -1 + 1e-9 else {
+            begin(at: p1.applying(transform))
+            return
+        }
+        // Where the circle touches each line: r / tan(θ/2) from the corner.
+        let along = radius * CGFloat(Double((1 + cosine) / (1 - cosine)).squareRoot())
+        let t1 = CGPoint(x: p1.x + u1.x * along, y: p1.y + u1.y * along)
+        let t2 = CGPoint(x: p1.x + u2.x * along, y: p1.y + u2.y * along)
+        let bx = u1.x + u2.x, by = u1.y + u2.y, bl = length(bx, by)
+        let reach = CGFloat(Double(radius * radius + along * along).squareRoot())
+        let center = CGPoint(x: p1.x + bx / bl * reach, y: p1.y + by / bl * reach)
+        begin(at: t1.applying(transform))
+        // The arc is under a half turn: halving it four times is 16 chords.
+        var points: [CGPoint] = []
+        func halve(_ a: CGPoint, _ b: CGPoint, _ depth: Int) {
+            guard depth > 0 else { points.append(b); return }
+            let mx = (a.x + b.x) / 2 - center.x, my = (a.y + b.y) / 2 - center.y
+            let ml = length(mx, my)
+            let mid = ml > 0 ? CGPoint(x: center.x + mx / ml * radius, y: center.y + my / ml * radius) : a
+            halve(a, mid, depth - 1)
+            halve(mid, b, depth - 1)
+        }
+        halve(t1, t2, 4)
+        for point in points { addLine(to: point.applying(transform)) }
+    }
+
     /// `addQuadCurve(to:control:)`: a quadratic Bézier from the current point.
     public mutating func addQuadCurve(to end: CGPoint, control: CGPoint) {
         let from = currentPoint ?? end
@@ -565,6 +639,82 @@ public struct Path: Equatable, Sendable {
             addLine(to: CGPoint(x: a * from.x + b * control1.x + c * control2.x + d * end.x,
                                 y: a * from.y + b * control1.y + c * control2.y + d * end.y))
         }
+    }
+
+    /// A Core Graphics path (Isomer's CoreGraphics, or Apple's): its moves
+    /// and lines as they are, its curves (arcs and ellipses are curves
+    /// there) as the lines they are drawn with here.
+    public init(_ path: CGPath) {
+        var elements: [(CGPathElementType, [CGPoint])] = []
+        path.applyWithBlock { element in
+            let type = element.pointee.type
+            let count: Int
+            switch type {
+            case .moveToPoint, .addLineToPoint: count = 1
+            case .addQuadCurveToPoint: count = 2
+            case .addCurveToPoint: count = 3
+            default: count = 0
+            }
+            elements.append((type, (0..<count).map { element.pointee.points[$0] }))
+        }
+        for (type, points) in elements {
+            switch type {
+            case .moveToPoint: move(to: points[0])
+            case .addLineToPoint: addLine(to: points[0])
+            case .addQuadCurveToPoint: addQuadCurve(to: points[1], control: points[0])
+            case .addCurveToPoint: addCurve(to: points[2], control1: points[0], control2: points[1])
+            default: if type == .closeSubpath { closeSubpath() }
+            }
+        }
+    }
+
+    public init(_ path: CGMutablePath) {
+        self.init(path as CGPath)
+    }
+
+    /// The path as Core Graphics': each part as `forEach` gives it.
+    public var cgPath: CGPath {
+        let path = CGMutablePath()
+        forEach { element in
+            switch element {
+            case .move(let p): path.move(to: p)
+            case .line(let p): path.addLine(to: p)
+            case .quadCurve(let p, let c): path.addQuadCurve(to: p, control: c)
+            case .curve(let p, let c1, let c2): path.addCurve(to: p, control1: c1, control2: c2)
+            case .closeSubpath: path.closeSubpath()
+            }
+        }
+        return path
+    }
+
+    /// The path in the unit square for a view of `size`: its shape's
+    /// `path(in:)` asked in that size and divided down, where the path
+    /// keeps one (else the path as it is). Hosts scale it back to the size
+    /// along each axis, so a rounded rect in a frame that is not square
+    /// goes as its outline (its radius would otherwise stretch).
+    func unitPath(for size: CGSize) -> Path {
+        guard let source, size.width > 0, size.height > 0 else { return self }
+        let w = size.width, h = size.height
+        func point(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x / w, y: p.y / h) }
+        func box(_ r: CGRect) -> CGRect { CGRect(x: r.minX / w, y: r.minY / h, width: r.width / w, height: r.height / h) }
+        var out = Path()
+        for segment in source.make(CGRect(origin: .zero, size: size)).elements {
+            switch segment {
+            case .move(let p): out.elements.append(.move(to: point(p)))
+            case .line(let p): out.elements.append(.line(to: point(p)))
+            case .rect(let r): out.elements.append(.rect(box(r)))
+            case .ellipse(let r): out.elements.append(.ellipse(in: box(r)))
+            case .roundedRect(let r, let radius) where w == h:
+                out.elements.append(.roundedRect(box(r), cornerRadius: radius / w))
+            case .roundedRect:
+                for (i, p) in Path.outline(segment).enumerated() {
+                    out.elements.append(i == 0 ? .move(to: point(p)) : .line(to: point(p)))
+                }
+                out.elements.append(.closeSubpath)
+            case .closeSubpath: out.elements.append(.closeSubpath)
+            }
+        }
+        return out
     }
 
     /// The path scaled from the unit square to `rect` (what a host does).
@@ -764,3 +914,9 @@ extension Ellipse: InsettableShape {
 extension _ShapeFill: View {}
 extension _ForegroundFill: View {}
 extension _ShapeView: View {}
+
+/// A shape's `path(in:)`, held by the unit-square path made from it.
+final class _PathSource: @unchecked Sendable {
+    let make: (CGRect) -> Path
+    init(_ make: @escaping (CGRect) -> Path) { self.make = make }
+}

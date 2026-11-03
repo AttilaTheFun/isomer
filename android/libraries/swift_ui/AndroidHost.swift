@@ -40,8 +40,15 @@ struct AndroidHostBridge: HostBridge {
     }
 
     func measureText(_ text: String, fontSize: Double, weight: Int, wrapWidth: Double?) -> CGSize {
+        measureText(text, fontSize: fontSize, weight: weight, family: nil, wrapWidth: wrapWidth)
+    }
+
+    /// `Font.custom`'s family: measured with the app's bundled typeface by
+    /// that name (HostServices.bundledTypeface), the one Compose draws.
+    func measureText(_ text: String, fontSize: Double, weight: Int, family: String?, wrapWidth: Double?) -> CGSize {
         let metrics = host.measureText(
-            text: text, fontSize: fontSize, weight: Int32(weight), wrapWidth: wrapWidth ?? -1)
+            text: text, fontSize: fontSize, weight: Int32(weight), family: family ?? "",
+            wrapWidth: wrapWidth ?? -1)
         return CGSize(width: metrics.width, height: metrics.height)
     }
 

@@ -1411,7 +1411,8 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
           // No title over the Mac's sidebar: the window's is the detail's.
           title: deskColumn && deskColumn.column === "sidebar" ? "" : inline || !p.title ? (p.title || "") : "",
           subtitle: inline ? (p.subtitle || "") : "",
-          back: depth > 0 || splitBack ? "1" : "0",
+          // `.navigationBarBackButtonHidden` takes the Back away.
+          back: p.backHidden !== "1" && (depth > 0 || splitBack) ? "1" : "0",
           dark: p.dark,
           leading: p.leading,
           trailingItems: p.trailingItems,
@@ -3974,6 +3975,19 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
         const src = /^(https?:|data:|blob:)/.test(given) ? given : assetBase + n.src + (n.src.includes(".") ? "" : ".png");
         props.src = src;
         s.objectFit = n.fit ? "contain" : "cover";
+        // `.renderingMode(.template)`: the picture's shape (its alpha) in
+        // the colour, as a mask over a fill; the <img> keeps its size, its
+        // own pixels moved out of its box.
+        const template = (n.params || {}).template;
+        if (template) {
+          const mask = `url("${src.replace(/"/g, '\\"')}")`;
+          s.objectPosition = "-99999px 0";
+          s.backgroundColor = template;
+          s.maskImage = s.WebkitMaskImage = mask;
+          s.maskSize = s.WebkitMaskSize = n.fit ? "contain" : "cover";
+          s.maskRepeat = s.WebkitMaskRepeat = "no-repeat";
+          s.maskPosition = s.WebkitMaskPosition = "center";
+        }
         // scaledToFill: fill the frame box and crop (matching real SwiftUI
         // and the self-drawing renderers) — a bare <img> would render at its
         // natural size and overflow the frame into neighboring content. An

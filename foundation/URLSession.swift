@@ -71,6 +71,11 @@ open class URLSessionConfiguration: @unchecked Sendable {
     open var enablesEarlyData = false
     open var multipathServiceType: MultipathServiceType = .none
 
+    /// Where the session's cookies and credentials are kept: kept, and not
+    /// acted on (the hosts' stacks keep their own; HTTPCookieStorage).
+    open var httpCookieStorage: HTTPCookieStorage? = .shared
+    open var urlCredentialStorage: URLCredentialStorage? = .shared
+
     /// How a connection may use more than one network at a time
     /// (Multipath TCP); kept, not acted on.
     public enum MultipathServiceType: Int, Sendable {
@@ -102,6 +107,8 @@ open class URLSessionConfiguration: @unchecked Sendable {
         copy.usesClassicLoadingMode = usesClassicLoadingMode
         copy.enablesEarlyData = enablesEarlyData
         copy.multipathServiceType = multipathServiceType
+        copy.httpCookieStorage = httpCookieStorage
+        copy.urlCredentialStorage = urlCredentialStorage
         return copy
     }
 

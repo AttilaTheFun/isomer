@@ -188,3 +188,10 @@ open class Bundle: Hashable, CustomStringConvertible, @unchecked Sendable {
 
     open var description: String { "Bundle <\(bundlePath)>" }
 }
+
+/// `key` localized from `bundle`'s strings: the value, or the key when there
+/// is no value (Isomer's Bundle reads no strings tables).
+public func NSLocalizedString(_ key: String, tableName: String? = nil, bundle: Bundle = Bundle.main, value: String = "",
+                              comment: String) -> String {
+    bundle.localizedString(forKey: key, value: value, table: tableName)
+}

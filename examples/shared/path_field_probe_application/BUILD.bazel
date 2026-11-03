@@ -1,0 +1,7 @@
+# A text field on a screen pushed onto a path an @Observable model holds
+# (the Android probe: android/path_field_probe_android_application).
+filegroup(
+    name = "srcs",
+    srcs = glob(["*.swift"]),
+    visibility = ["//visibility:public"],
+)

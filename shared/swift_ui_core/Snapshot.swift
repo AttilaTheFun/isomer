@@ -22,7 +22,7 @@ package func renderViewOnce(
 
     let layoutCtx = LayoutContext(
         measureText: { text, font, wrapWidth in
-            host.measureText(text, fontSize: font.size, weight: font.weight.value, wrapWidth: wrapWidth.map { Double($0) })
+            host.measureText(text, fontSize: font.size, weight: font.weight.value, family: font.family, wrapWidth: wrapWidth.map { Double($0) })
         },
         imageInfo: { source, isRemote in
             host.imageInfo(source, isRemote: isRemote)

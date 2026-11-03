@@ -147,7 +147,71 @@ public struct DragGesture {
         public var startLocation: CGPoint
         public var location: CGPoint
         public var translation: CGSize
+        /// Where the drag would come to rest if let go now: a quarter
+        /// second further at its current velocity, as SwiftUI predicts
+        /// (its `velocity` is four times the way left to go).
         public var predictedEndLocation: CGPoint
+
+        /// `predictedEndLocation` from where the drag began.
+        public var predictedEndTranslation: CGSize {
+            CGSize(width: predictedEndLocation.x - startLocation.x, height: predictedEndLocation.y - startLocation.y)
+        }
+
+        /// Points per second, as Apple's interface defines it.
+        public var velocity: CGSize {
+            CGSize(width: 4 * (predictedEndLocation.x - location.x), height: 4 * (predictedEndLocation.y - location.y))
+        }
+
+        init(startLocation: CGPoint, location: CGPoint, translation: CGSize, predictedEndLocation: CGPoint) {
+            self.startLocation = startLocation
+            self.location = location
+            self.translation = translation
+            self.predictedEndLocation = predictedEndLocation
+        }
+
+        /// A drag at `velocity` points per second.
+        package init(startLocation: CGPoint, location: CGPoint, velocity: CGSize) {
+            self.init(
+                startLocation: startLocation, location: location,
+                translation: CGSize(width: location.x - startLocation.x, height: location.y - startLocation.y),
+                predictedEndLocation: CGPoint(x: location.x + velocity.width / 4, y: location.y + velocity.height / 4))
+        }
+    }
+
+    /// A drag's velocity from the points it has passed: the last
+    /// few samples' (points per second), smoothed, gone to rest after a
+    /// pause (a finger held still before letting go flings nothing).
+    package struct VelocityTracker {
+        private var samples: [(time: Double, point: CGPoint)] = []
+
+        package init() {}
+
+        package mutating func reset() { samples = [] }
+
+        /// Adds where the drag is at `time` (seconds) and returns its
+        /// velocity there.
+        package mutating func add(_ point: CGPoint, at time: Double) -> CGSize {
+            samples.append((time, point))
+            // What the last 100 ms say (SwiftUI's estimate looks about as far).
+            samples.removeAll { time - $0.time > 0.1 }
+            guard let first = samples.first, samples.count > 1 else { return .zero }
+            let dt = time - first.time
+            guard dt > 0.001 else { return .zero }
+            return CGSize(width: (point.x - first.point.x) / CGFloat(dt), height: (point.y - first.point.y) / CGFloat(dt))
+        }
+
+        /// The drags component hosts report (by their event id), whose
+        /// velocity the guest works out from the points as they come.
+        nonisolated(unsafe) private static var hostDrags: [String: VelocityTracker] = [:]
+
+        /// Adds a host-reported point of the drag `id` (dropped once it
+        /// ends) and returns its velocity there.
+        package static func add(_ point: CGPoint, id: String, ended: Bool) -> CGSize {
+            var tracker = hostDrags[id] ?? VelocityTracker()
+            let velocity = tracker.add(point, at: Runtime.shared.host?.now() ?? 0)
+            hostDrags[id] = ended ? nil : tracker
+            return velocity
+        }
     }
 
     let minimumDistance: CGFloat

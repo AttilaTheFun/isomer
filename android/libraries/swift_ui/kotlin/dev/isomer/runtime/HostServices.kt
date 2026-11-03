@@ -235,6 +235,114 @@ object HostServices {
         context.startActivity(intent)
     }
 
+    // MARK: Bundled fonts (`Font.custom`)
+    //
+    // An app's own .ttf/.otf files, in the APK's assets/fonts/
+    // (`isomer_android_app(fonts = [...])`). `Font.custom(name, size:)`
+    // names one as iOS's does: by its PostScript name ("Karla-Regular"),
+    // or its full or family name ("Karla"; a family's Regular face first),
+    // read from the font's own `name` table; failing those, by its file's
+    // name with or without the extension. Matched without regard to case.
+
+    /** Lowercased name → asset path, built once from assets/fonts/. */
+    @Volatile private var fontIndex: Map<String, String>? = null
+
+    /** Typefaces loaded so far, by asset path. */
+    private val bundledTypefaces = ConcurrentHashMap<String, android.graphics.Typeface>()
+
+    /** The app's bundled typeface `Font.custom` names `name`, or null when
+     *  it bundles none by that name (the caller falls back to the system's). */
+    fun bundledTypeface(name: String): android.graphics.Typeface? {
+        if (name.isEmpty()) return null
+        val context = appContext ?: return null
+        val path = fontIndex(context)[name.lowercase()] ?: return null
+        bundledTypefaces[path]?.let { return it }
+        val typeface = try {
+            android.graphics.Typeface.createFromAsset(context.assets, path)
+        } catch (_: Exception) {
+            return null
+        }
+        return bundledTypefaces.putIfAbsent(path, typeface) ?: typeface
+    }
+
+    private fun fontIndex(context: Context): Map<String, String> {
+        fontIndex?.let { return it }
+        synchronized(this) {
+            fontIndex?.let { return it }
+            // name → (rank, path): a stronger kind of name wins a clash.
+            val ranked = HashMap<String, Pair<Int, String>>()
+            fun put(key: String?, rank: Int, path: String) {
+                if (key.isNullOrEmpty()) return
+                val lower = key.lowercase()
+                val held = ranked[lower]
+                if (held == null || held.first < rank) ranked[lower] = rank to path
+            }
+            val files = try { context.assets.list("fonts") ?: emptyArray() } catch (_: Exception) { emptyArray() }
+            for (file in files.sorted()) {
+                val lower = file.lowercase()
+                if (!lower.endsWith(".ttf") && !lower.endsWith(".otf")) continue
+                val path = "fonts/$file"
+                put(file, 1, path)
+                put(file.substringBeforeLast('.'), 1, path)
+                val names = try {
+                    context.assets.open(path).use { fontNames(it.readBytes()) }
+                } catch (_: Exception) {
+                    emptyMap()
+                }
+                val family = names[16] ?: names[1]
+                val style = names[17] ?: names[2]
+                put(family, if (style.equals("Regular", ignoreCase = true)) 3 else 2, path)
+                put(names[4], 4, path)
+                put(names[6], 5, path)
+            }
+            val index = ranked.mapValues { it.value.second }
+            fontIndex = index
+            return index
+        }
+    }
+
+    /** An sfnt font's `name` table: name ID → string (1 family, 2
+     *  subfamily, 4 full name, 6 PostScript name, 16/17 the typographic
+     *  family/subfamily), Windows' English records first, else the first. */
+    private fun fontNames(bytes: ByteArray): Map<Int, String> {
+        val b = java.nio.ByteBuffer.wrap(bytes) // big-endian, as sfnt is
+        fun u16(at: Int) = b.getShort(at).toInt() and 0xFFFF
+        val names = HashMap<Int, String>()
+        val preferred = HashSet<Int>()
+        val tables = u16(4)
+        for (i in 0 until tables) {
+            val record = 12 + i * 16
+            val tag = String(bytes, record, 4, Charsets.US_ASCII)
+            if (tag != "name") continue
+            val table = b.getInt(record + 8)
+            val count = u16(table + 2)
+            val strings = table + u16(table + 4)
+            for (j in 0 until count) {
+                val r = table + 6 + j * 12
+                val platform = u16(r)
+                val encoding = u16(r + 2)
+                val language = u16(r + 4)
+                val id = u16(r + 6)
+                if (id !in setOf(1, 2, 4, 6, 16, 17) || id in preferred) continue
+                val start = strings + u16(r + 10)
+                val length = u16(r + 8)
+                if (start + length > bytes.size) continue
+                val value = when {
+                    platform == 3 || platform == 0 -> String(bytes, start, length, Charsets.UTF_16BE)
+                    platform == 1 && encoding == 0 -> String(bytes, start, length, Charsets.ISO_8859_1)
+                    else -> continue
+                }
+                if (platform == 3 && language == 0x409) {
+                    names[id] = value
+                    preferred.add(id)
+                } else if (id !in names) {
+                    names[id] = value
+                }
+            }
+        }
+        return names
+    }
+
     // MARK: Text measurement + SwiftGPU rasterization
     //
     // Pure-Kotlin (Paint/Canvas), free of Compose and of the compiled path
@@ -244,16 +352,19 @@ object HostServices {
 
     private val measurePaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
 
-    fun configurePaint(paint: android.graphics.Paint, sizePoints: Float, weight: Int) {
+    /** `family` is `Font.custom`'s name: the app's bundled typeface by
+     *  that name (else the system's), the system's default without one. */
+    fun configurePaint(paint: android.graphics.Paint, sizePoints: Float, weight: Int, family: String? = null) {
         paint.textSize = sizePoints * density
-        paint.typeface = android.graphics.Typeface.create(
-            android.graphics.Typeface.DEFAULT, weight, false)
+        val base = if (family.isNullOrEmpty()) android.graphics.Typeface.DEFAULT
+            else bundledTypeface(family) ?: android.graphics.Typeface.create(family, android.graphics.Typeface.NORMAL)
+        paint.typeface = android.graphics.Typeface.create(base, weight, false)
     }
 
     /** Measure wrapped text; returns {width, height} in logical points.
      *  `wrapWidth` in points, < 0 = unwrapped. */
-    fun measureText(text: String, fontSize: Double, weight: Int, wrapWidth: Double): DoubleArray {
-        configurePaint(measurePaint, fontSize.toFloat(), weight)
+    fun measureText(text: String, fontSize: Double, weight: Int, wrapWidth: Double, family: String? = null): DoubleArray {
+        configurePaint(measurePaint, fontSize.toFloat(), weight, family)
         val wrapPx = if (wrapWidth < 0) null else wrapWidth.toFloat() * density
         val lines = wrapLines(measurePaint, text, wrapPx)
         var maxWidth = 0f
@@ -365,7 +476,7 @@ object HostServices {
                 // configurePaint scales textSize by density: the paint
                 // measures and draws in DEVICE PIXELS (no canvas scale).
                 val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-                configurePaint(paint, size, weight)
+                configurePaint(paint, size, weight, json.optString("family"))
                 paint.color = argbColor(json.getDouble("r"), json.getDouble("g"), json.getDouble("b"), json.getDouble("a"))
                 // +1px epsilon: the wrap width is usually the measured
                 // width itself; density rounding must not re-wrap it.

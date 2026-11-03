@@ -27,6 +27,9 @@ macos_application(
     bundle_name = "Storybook",
     infoplists = ["Info.plist"],
     minimum_os_version = "14.0",
+    # Font.custom's fonts (the text.custom story): ATSApplicationFontsPath
+    # names the bundle's Resources.
+    resources = ["//storybook:fonts"],
     visibility = ["//visibility:public"],
     deps = [":storybook_macos_application_lib"],
 )

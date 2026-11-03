@@ -2930,6 +2930,7 @@ struct Main {
         checkCompactSplitBack(mock)
         checkSplitDetailPath(mock)
         checkDrawnSplitDetailPath(mock)
+        checkFieldOnPathScreen(mock)
 
         // Row actions: the tagged row is a tap target and carries its menu.
         Runtime.shared.installRootView { RowScreen() }
@@ -3130,4 +3131,112 @@ func checkScrollPhaseOnAppear(_ mock: MockRenderer) {
         Runtime.shared.fireTreeAppearances(encoder.appearances, disappearances: encoder.disappearances)
     }
     expect(scrollPhaseCalls == ["idle -> idle"], "the action ran once as the scroll view appeared, idle to idle (\(scrollPhaseCalls))")
+}
+
+/// A stack bound to an `@Observable` model's path (the model held in
+/// `@State`), its pushed screen a field: focusing the field and the
+/// keyboard resizing the window settle in a frame or two, and nothing
+/// writes the path but a push or a pop that changes it (a link whose value
+/// the path can't hold leaves the binding unwritten).
+@Observable final class FieldPathModel {
+    var path: [Int] = [] { didSet { fieldPathWrites += 1 } }
+    var name = ""
+}
+nonisolated(unsafe) var fieldPathWrites = 0
+nonisolated(unsafe) var fieldPathRootBuilds = 0
+
+struct FieldPathScreen: View {
+    @State private var model = FieldPathModel()
+    var body: some View {
+        fieldPathRootBuilds += 1
+        return NavigationStack(path: $model.path) {
+            List {
+                NavigationLink("Edit 1", value: 1)
+                // Not an Int: an [Int] path has nowhere to put it.
+                NavigationLink("Stray", value: "stray")
+            }
+            .navigationTitle("Items")
+            .navigationDestination(for: Int.self) { number in
+                FieldPathEditor(number: number, model: model)
+            }
+        }
+    }
+}
+
+struct FieldPathEditor: View {
+    let number: Int
+    @Bindable var model: FieldPathModel
+    @FocusState private var focused: Bool
+    var body: some View {
+        Form {
+            TextField("Name", text: $model.name).focused($focused)
+            Text(focused ? "editing \(number)" : "item \(number)")
+        }
+        .navigationTitle("Item \(number)")
+    }
+}
+
+@MainActor
+func checkFieldOnPathScreen(_ mock: MockRenderer) {
+    fieldPathWrites = 0
+    Runtime.shared.installRootView { FieldPathScreen() }
+    Runtime.shared.start(host: StubHost(), width: 411, height: 914)
+    /// Frames until nothing more is asked for (at most `limit`).
+    func settle(_ limit: Int = 20) -> Int {
+        var frames = 0
+        while Runtime.shared.wantsFrame && frames < limit {
+            Runtime.shared.renderFrame()
+            frames += 1
+        }
+        return frames
+    }
+    _ = settle()
+    let open = HostFrame(mock.lastTree!)
+    guard let tap = open.tapTarget("Edit 1") else { expect(false, "the link is a tap target"); return }
+    Runtime.shared.installTreeHandlers(open.encoder.handlers)
+    Runtime.shared.hostViewEvent(id: tap, value: "")
+    let pushFrames = settle()
+    expect(pushFrames < 20, "the push settles (\(pushFrames) frames)")
+    expect(fieldPathWrites == 1, "the push wrote the path once (\(fieldPathWrites))")
+    expect(findTextInTree(mock.lastTree!, "item 1"), "the pushed screen shows")
+    let writesBefore = fieldPathWrites
+    let rootBuildsBefore = fieldPathRootBuilds
+    // The host focuses the field; the keyboard then shrinks the window
+    // (below its width at the end: a landscape window builds every view
+    // afresh).
+    let pushed = HostFrame(mock.lastTree!)
+    guard let focusID = findParam(pushed.root, key: "focusId") else { expect(false, "the field names its focus handler"); return }
+    Runtime.shared.installTreeHandlers(pushed.encoder.handlers)
+    Runtime.shared.hostViewEvent(id: focusID, value: "1")
+    let focusFrames = settle()
+    expect(focusFrames < 20, "focusing the field settles (\(focusFrames) frames)")
+    expect(findTextInTree(mock.lastTree!, "editing 1"), "the field's focus reaches the screen")
+    for height in stride(from: 900.0, through: 350.0, by: -50.0) {
+        Runtime.shared.resize(width: 411, height: height)
+        let frames = settle()
+        expect(frames < 20, "the keyboard's resize to \(height) settles (\(frames) frames)")
+    }
+    let typed = HostFrame(mock.lastTree!)
+    if let edit = typed.encoder.handlers.keys.first(where: { $0.hasSuffix(".text") }) {
+        Runtime.shared.installTreeHandlers(typed.encoder.handlers)
+        Runtime.shared.hostViewEvent(id: edit, value: "Ada")
+        let frames = settle()
+        expect(frames < 20, "typing settles (\(frames) frames)")
+    } else {
+        expect(false, "the field takes edits")
+    }
+    expect(fieldPathWrites == writesBefore, "focus, resize and typing never wrote the path (\(fieldPathWrites - writesBefore) writes)")
+    print("field on a path screen: root built \(fieldPathRootBuilds - rootBuildsBefore) more times")
+    // Back: one write, the path empty again.
+    expect(Runtime.shared.handleBackButton(), "back pops the pushed screen")
+    _ = settle()
+    expect(fieldPathWrites == writesBefore + 1, "the pop wrote the path once (\(fieldPathWrites - writesBefore))")
+    // A link whose value the path can't hold changes nothing: no write.
+    let root = HostFrame(mock.lastTree!)
+    guard let stray = root.tapTarget("Stray") else { expect(false, "the stray link is a tap target"); return }
+    Runtime.shared.installTreeHandlers(root.encoder.handlers)
+    Runtime.shared.hostViewEvent(id: stray, value: "")
+    _ = settle()
+    expect(fieldPathWrites == writesBefore + 1, "a value the path can't hold left the binding unwritten (\(fieldPathWrites - writesBefore - 1) writes)")
+    Runtime.shared.resize(width: 411, height: 914)
 }

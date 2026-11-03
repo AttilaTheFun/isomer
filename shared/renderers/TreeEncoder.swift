@@ -629,9 +629,11 @@ package final class FlatTreeEncoder {
             out.kind = .shape
             (out.shape, shapeRadius) = flatShape(shapeKind)
             // An app's own shape: its path in the unit square, for the host
-            // to scale to the frame.
+            // to scale to the frame (asked in the frame's size when the
+            // view has a fixed one, Shapes.swift's `unitPath(for:)`).
             if case .path(let path) = shapeKind {
-                out.params = (out.params ?? []) + [("path", path.serialized)]
+                let unit = node.pathSize.map { path.unitPath(for: $0) } ?? path
+                out.params = (out.params ?? []) + [("path", unit.serialized)]
             }
             // `.trim(from:to:)`: the arc a ring draws.
             if let trim = node.trim {
@@ -1105,6 +1107,9 @@ package final class FlatTreeEncoder {
         if let interpolation = node.imageInterpolation {
             out.params = (out.params ?? []) + [("interp", interpolation)]
         }
+        if let tint = node.imageTint {
+            out.params = (out.params ?? []) + [("template", hexColor(tint))]
+        }
         if node.zIndex != 0 { out.params = (out.params ?? []) + [("z", formatNumber(node.zIndex))] }
         if node.buttonDisabled { out.params = (out.params ?? []) + [("disabled", "1")] }
         if node.hitTestingDisabled { out.params = (out.params ?? []) + [("nohit", "1")] }
@@ -1159,10 +1164,11 @@ package final class FlatTreeEncoder {
                 guard parts.count == 2 else { return }
                 let numbers = parts[1].split(separator: ",")
                 guard numbers.count == 2, let x = Double(numbers[0]), let y = Double(numbers[1]) else { return }
-                let translation = CGSize(width: x, height: y)
-                let payload = DragGesture.Value(
-                    startLocation: .zero, location: CGPoint(x: x, y: y),
-                    translation: translation, predictedEndLocation: CGPoint(x: x, y: y))
+                // The velocity is worked out here, from the translations as
+                // they arrive (hosts report none).
+                let velocity = DragGesture.VelocityTracker.add(
+                    CGPoint(x: x, y: y), id: id, ended: parts[0] == "ended")
+                let payload = DragGesture.Value(startLocation: .zero, location: CGPoint(x: x, y: y), velocity: velocity)
                 switch parts[0] {
                 case "changed": gesture.onChangedAction?(payload)
                 case "ended": gesture.onEndedAction?(payload)

@@ -14,6 +14,10 @@ extension StoryCatalog {
             summary: "An image the app ships, by name: an asset catalog's on Apple's platforms, the app's assets elsewhere. Resizable, it fits or fills the frame it is given."
         ) { AppImagesStory() },
         Story(
+            "images.template", "Rendering mode",
+            summary: "An image drawn as a template (renderingMode(.template)): its shape, from its transparency, in the foreground style, as an icon is tinted. .original keeps its own colours."
+        ) { TemplateImageStory() },
+        Story(
             "images.async", "AsyncImage",
             summary: "An image loaded from a URL, with a placeholder until it arrives."
         ) { AsyncImageStory() },
@@ -70,6 +74,32 @@ struct AppImagesStory: View {
                 .padding(8)
                 .background(Color.blue.opacity(0.15))
                 .clipShape(Circle())
+        }
+    }
+}
+// end story
+
+// story: images.template
+struct TemplateImageStory: View {
+    var body: some View {
+        HStack(spacing: 16) {
+            Image("iso-logo")
+                .renderingMode(.original)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 72, height: 72)
+            Image("iso-logo")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 72, height: 72)
+                .foregroundStyle(Color.blue)
+            Image("iso-logo")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 72, height: 72)
+                .foregroundStyle(Color.orange)
         }
     }
 }

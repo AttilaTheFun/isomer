@@ -40,7 +40,8 @@ package struct ImageInfoValue {
 /// arrives through `renderTree`.
 @ExportedInterface
 package protocol AndroidHost {
-    func measureText(text: String, fontSize: Double, weight: Int32, wrapWidth: Double) -> TextMetrics
+    /// `family`: `Font.custom`'s name ("" for the system's font).
+    func measureText(text: String, fontSize: Double, weight: Int32, family: String, wrapWidth: Double) -> TextMetrics
     func imageInfo(source: String, isRemote: Bool) -> ImageInfoValue
     func openURL(url: String)
     func platformCommand(key: String, value: String)

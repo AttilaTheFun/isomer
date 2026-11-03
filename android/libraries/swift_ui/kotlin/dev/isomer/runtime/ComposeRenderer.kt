@@ -992,7 +992,7 @@ fun IsoNode(
                     fontSize = (j.optDouble("size", 17.0) * scale).sp,
                     fontWeight = FontWeight(j.optInt("weight", 400)),
                     color = onSelection(colorOf(j, "color") ?: Color.Black),
-                    fontFamily = textFontFamily(params),
+                    fontFamily = textFontFamily(params, j.optInt("weight", 400)),
                     // `.monospacedDigit()`: tabular figures.
                     fontFeatureSettings = if (params?.optString("tnum") == "1") "tnum" else null,
                 )
@@ -1034,7 +1034,8 @@ fun IsoNode(
             }
         }
         "image" -> IsoImage(j.optString("src"), j.optBoolean("remote"), j.optBoolean("fit"), m,
-            resizable = j.optBoolean("resizable") && !j.has("width") && !j.has("height"))
+            resizable = j.optBoolean("resizable") && !j.has("width") && !j.has("height"),
+            tint = j.optJSONObject("params")?.optString("template")?.let(::hexColorOf))
         "textField" -> IsoTextField(
             id = j.optString("id"),
             value = j.optString("v"),
@@ -1374,7 +1375,7 @@ private fun boxChildModifier(c: UNode): Modifier {
 }
 
 @Composable
-private fun IsoImage(source: String, remote: Boolean, fit: Boolean, m: Modifier, resizable: Boolean = false) {
+private fun IsoImage(source: String, remote: Boolean, fit: Boolean, m: Modifier, resizable: Boolean = false, tint: Color? = null) {
     // Read imageTick HERE so this leaf subscribes to it directly: when an async
     // load completes the tick bumps and this composable re-queries the cache
     // even if its parent IsoNode skipped (unchanged node identity).
@@ -1393,6 +1394,8 @@ private fun IsoImage(source: String, remote: Boolean, fit: Boolean, m: Modifier,
             contentDescription = source,
             modifier = sized,
             contentScale = if (fit) ContentScale.Fit else ContentScale.Crop,
+            // `.renderingMode(.template)`: the picture's shape in the colour.
+            colorFilter = tint?.let { androidx.compose.ui.graphics.ColorFilter.tint(it) },
         )
     } ?: Spacer(m.size(24.dp))
 }
@@ -1671,7 +1674,9 @@ private fun IsoNavStack(node: UNode, m: Modifier, bw: Boolean, bh: Boolean) {
             .put("edit", edit)
             .put("params", JSONObject()
                 .put("title", if (inline) title else "")
-                .put("back", if (depth > 0 || splitBack != null) "1" else "0")
+                // `.navigationBarBackButtonHidden` takes the Back away (the
+                // system's back still pops, as Android's always does).
+                .put("back", if (p.optString("backHidden") != "1" && (depth > 0 || splitBack != null)) "1" else "0")
                 .put("leading", p.optString("leading"))
                 .put("trailingItems", p.optString("trailingItems"))
                 .put("leadingSymbols", p.optString("leadingSymbols"))
@@ -2955,11 +2960,25 @@ private fun IsoLazyList(n: UNode, column: UNode, m: Modifier, bw: Boolean) {
     }
 }
 
-/** A text's typeface: a named one (`Font.custom`, when the system has it),
- *  the design's (`.serif`, `.monospaced`), else the system's. */
-private fun textFontFamily(params: JSONObject?): FontFamily? {
+/** `Font.custom`'s families by name and weight, made once (so a
+ *  recomposition's TextStyle equals the last one's). */
+private val namedFontFamilies = java.util.concurrent.ConcurrentHashMap<String, FontFamily>()
+
+/** A text's typeface: a named one (`Font.custom`: the app's bundled font
+ *  by that name, HostServices.bundledTypeface, else the system's), the
+ *  design's (`.serif`, `.monospaced`), else the system's. Text measures
+ *  and draws with this one family (Compose lays the text out itself).
+ *  A named one is made at the text's `weight`: Compose doesn't weight a
+ *  family of one Typeface, so `.bold()` would draw it regular; the system
+ *  makes a weight the face lacks, as HostServices.configurePaint's
+ *  measurement does. */
+private fun textFontFamily(params: JSONObject?, weight: Int = 400): FontFamily? {
     val family = params?.optString("family") ?: ""
-    if (family.isNotEmpty()) return FontFamily(android.graphics.Typeface.create(family, android.graphics.Typeface.NORMAL))
+    if (family.isNotEmpty()) return namedFontFamilies.getOrPut("$family|$weight") {
+        val base = HostServices.bundledTypeface(family)
+            ?: android.graphics.Typeface.create(family, android.graphics.Typeface.NORMAL)
+        FontFamily(android.graphics.Typeface.create(base, weight.coerceIn(1, 1000), false))
+    }
     return when {
         params?.optString("mono") == "1" -> FontFamily.Monospace
         params?.optString("design") == "serif" -> FontFamily.Serif
