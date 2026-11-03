@@ -3,10 +3,20 @@ load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
 load("@rules_swift//swift:swift.bzl", "swift_library")
 load("@rules_xcodeproj//xcodeproj:defs.bzl", "top_level_target", "xcode_provisioning_profile", "xcodeproj")
 load("@isomer_signing//:signing.bzl", "TEAM_ID")
+load("//tools/variant:defs.bzl", "variant_infoplist")
 
 # The Storybook on iOS: the Storybook's own app, which releases hand out.
+# One bundle id for every build, Alpha, Beta, Production and AdHoc, and for
+# the Mac's (AttilaTheFun/applications' docs/VARIANTS.md).
 BUNDLE_ID = "com.LoganShire.IsomerStorybook"
 
+# What this build of the Storybook is, BuildVariant (Alpha, Beta, Production
+# or AdHoc, by --config=alpha|beta|prod|adhoc), and its name under its icon,
+# "Storybook" for all of them (Info.plist leaves those keys out).
+variant_infoplist(
+    name = "variant_plist",
+    display_name = "Storybook",
+)
 
 # The Storybook (//shared/example_application), compiled against Apple's
 # SwiftUI for iOS.
@@ -19,6 +29,8 @@ swift_library(
         "//shared/platform_services",
         "@isomer//apple/libraries/swift_ui",
         "@isomer//apple/libraries/swift_ui:isomer",
+        # The build it is, written for Applications at launch (ExampleApp.swift).
+        "@swiftpkg_applications//:ApplicationUpdates",
     ],
 )
 
@@ -51,15 +63,30 @@ ios_application(
     bundle_name = "Storybook",
     # Its own app ID and keychain group: a wildcard profile's entitlements
     # would otherwise be copied as-is (application-identifier TEAM.*), which
-    # the release server refuses.
-    entitlements = "Storybook.entitlements",
+    # the release server refuses. And Applications' app group, which CI's
+    # build carries (the bundle id's own profile grants it when Applications
+    # Server signs it again); a local device build under the wildcard
+    # profile, which can grant no app group, goes without.
+    entitlements = select({
+        "//tools/ci_device": "Storybook.entitlements",
+        "@apple_support//constraints:device": "Storybook.wildcard.entitlements",
+        "//conditions:default": "Storybook.entitlements",
+    }),
     families = [
         "ipad",
         "iphone",
     ],
-    infoplists = ["Info.plist"],
+    infoplists = [
+        "Info.plist",
+        ":variant_plist",
+    ],
     minimum_os_version = "17.0",
-    provisioning_profile = ":_development_profile",
+    # CI's device build (--config=ci_device) signs ad hoc with a placeholder
+    # profile, which Applications Server replaces with the bundle id's own.
+    provisioning_profile = select({
+        "//tools/ci_device": "//tools/ci_device:ci_placeholder_profile",
+        "//conditions:default": ":_development_profile",
+    }),
     # Font.custom's fonts (the text.custom story), named in UIAppFonts.
     resources = ["//storybook:fonts"],
     visibility = ["//visibility:public"],
@@ -74,11 +101,16 @@ ios_application(
     app_icons = ["//storybook/artwork/storybook_icon:app_icon"],
     bundle_id = BUNDLE_ID,
     bundle_name = "Storybook",
+    # The bundle id's keychain group and Applications' app group, no team.
+    entitlements = "Storybook.simulator.entitlements",
     families = [
         "ipad",
         "iphone",
     ],
-    infoplists = ["Info.plist"],
+    infoplists = [
+        "Info.plist",
+        ":variant_plist",
+    ],
     minimum_os_version = "17.0",
     resources = ["//storybook:fonts"],
     tags = ["manual"],

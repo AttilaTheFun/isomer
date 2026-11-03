@@ -154,6 +154,24 @@ build:apple_on_linux --action_env=PATH=external/rules_applecross++apple_cross_to
 build:apple_on_linux --action_env=RULES_APPLECROSS_RESOURCE_OUTPUT_MODE=relaxed
 build:apple_on_linux --action_env=RULES_APPLECROSS_RELAX_ACTOOL_ICON_COMPOSER=1
 
+# Which of an app's builds (AttilaTheFun/applications' docs/VARIANTS.md):
+# Alpha, the default (every main and pull request build), Beta (TestFlight's,
+# for later), Production, which only CI's release job builds, on a release
+# branch, or AdHoc, a pull request's branch built by hand. One bundle id,
+# name and link scheme for all of them; the build says which it is in its
+# Info.plist's BuildVariant (//tools/variant). The Storybook's and the
+# Playground's iPhone, iPad and Mac apps alone so far: Android, the web,
+# Linux and Windows are built the same whatever the config.
+build:alpha --//tools/variant:variant=alpha
+build:beta --//tools/variant:variant=beta
+build:prod --//tools/variant:variant=production
+build:adhoc --//tools/variant:variant=adhoc
+# CI's iPhone and iPad apps: a device build, signed ad hoc with a placeholder
+# profile (//tools/ci_device), which Applications Server signs again with the
+# team's identity and the bundle id's profile when it is published.
+build:ci_device --ios_multi_cpus=arm64
+build:ci_device --ios_signing_cert_name=-
+
 # Per-machine settings (untracked), e.g. --override_module for a fork checked
 # out beside isomer.
 try-import %workspace%/.bazelrc.user

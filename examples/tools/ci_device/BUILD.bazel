@@ -1,0 +1,84 @@
+load("@isomer_signing//:signing.bzl", "TEAM_ID")
+
+package(default_visibility = ["//visibility:public"])
+
+# CI's device build of the Storybook's and the Playground's iPhone and iPad
+# apps (--config=ci_device, .bazelrc), as Reviews' is: CI holds no profile of
+# the team's, so it signs ad hoc (--ios_signing_cert_name=-) with this
+# placeholder, which allows what the apps' entitlements ask for (their own
+# app ID and keychain group, and Applications' app group). Applications
+# Server replaces both, the profile and the signature, with the bundle id's
+# own (AttilaTheFun/applications' docs/CI.md, "What the server does with
+# each build"). A plain plist: rules_applecross's `security cms -D` off a
+# Mac reads the plist in a profile, so this builds on Linux alone, as CI
+# does. The setting refines the device's alone, so an app's select takes it
+# before its development profile.
+config_setting(
+    name = "ci_device",
+    constraint_values = ["@apple_support//constraints:device"],
+    values = {"ios_signing_cert_name": "-"},
+)
+
+genrule(
+    name = "ci_placeholder_profile",
+    outs = ["ci_placeholder.mobileprovision"],
+    cmd = """cat > $@ <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>AppIDName</key>
+	<string>Isomer apps (CI placeholder)</string>
+	<key>ApplicationIdentifierPrefix</key>
+	<array>
+		<string>{team}</string>
+	</array>
+	<key>CreationDate</key>
+	<date>2026-01-01T00:00:00Z</date>
+	<key>DeveloperCertificates</key>
+	<array>
+	</array>
+	<key>Entitlements</key>
+	<dict>
+		<key>application-identifier</key>
+		<string>{team}.*</string>
+		<key>com.apple.developer.team-identifier</key>
+		<string>{team}</string>
+		<key>com.apple.security.application-groups</key>
+		<array>
+			<string>group.com.LoganShire.Applications</string>
+		</array>
+		<key>get-task-allow</key>
+		<true/>
+		<key>keychain-access-groups</key>
+		<array>
+			<string>{team}.*</string>
+		</array>
+	</dict>
+	<key>ExpirationDate</key>
+	<date>2036-01-01T00:00:00Z</date>
+	<key>Name</key>
+	<string>Isomer apps CI placeholder</string>
+	<key>Platform</key>
+	<array>
+		<string>iOS</string>
+	</array>
+	<key>ProvisionedDevices</key>
+	<array>
+	</array>
+	<key>TeamIdentifier</key>
+	<array>
+		<string>{team}</string>
+	</array>
+	<key>TeamName</key>
+	<string>CI placeholder</string>
+	<key>TimeToLive</key>
+	<integer>3652</integer>
+	<key>UUID</key>
+	<string>00000000-0000-4000-8000-0000000000c3</string>
+	<key>Version</key>
+	<integer>1</integer>
+</dict>
+</plist>
+EOF""".format(team = TEAM_ID),
+)

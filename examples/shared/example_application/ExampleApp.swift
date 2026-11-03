@@ -11,6 +11,9 @@
 // (example_full_wasm_*, example_full_feature), the web's GPU renderer
 // (example_full_webgpu_*), Electron.
 
+#if canImport(ApplicationUpdates)
+import ApplicationUpdates
+#endif
 import Storybook
 import SwiftUI
 
@@ -20,6 +23,13 @@ struct ExampleApplication: App {
         // The example's host-side dependency injection for compiled cells
         // (PlatformServicesInstall.swift); a no-op wherever the host injected first.
         installPlatformDependenciesIfNeeded()
+        #if canImport(ApplicationUpdates)
+        // The build it is, written for Applications at each launch; and its
+        // updates, told of while it is in front. The iPhone's and the Mac's
+        // Storybook alone link ApplicationUpdates: elsewhere Applications
+        // learns the version otherwise (Android's package manager), or not.
+        AppUpdates.start()
+        #endif
     }
 
     var body: some Scene {

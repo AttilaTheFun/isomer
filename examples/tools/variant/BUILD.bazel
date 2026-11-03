@@ -1,0 +1,21 @@
+load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
+
+package(default_visibility = ["//visibility:public"])
+
+# Which of an app's builds this is (AttilaTheFun/applications'
+# docs/VARIANTS.md, whose tools/variant this is): Alpha, the default
+# (every main and pull request build), Beta (TestFlight's, for later),
+# Production (a release branch's) or AdHoc (a pull request's branch, built
+# by hand). One bundle id for all of them; the build says which it is in its
+# Info.plist's BuildVariant. Set by --config=alpha, --config=beta,
+# --config=prod and --config=adhoc (.bazelrc); read through defs.bzl.
+string_flag(
+    name = "variant",
+    build_setting_default = "alpha",
+    values = [
+        "alpha",
+        "beta",
+        "production",
+        "adhoc",
+    ],
+)

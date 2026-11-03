@@ -376,10 +376,21 @@ swift_deps.configure_package(
         "NavigationUI": ["@@isomer+//:swift_ui", "@@isomer+//:foundation"],
     },
 )
+# ApplicationUpdates (AttilaTheFun/applications): the Storybook's and the
+# Playground's iPhone and Mac apps write the build they are for Applications.
+# Apple's alone today, where the label resolves to nothing; on wasm and
+# Android it would be Isomer's Foundation, as for the packages above.
+swift_deps.configure_package(
+    name = "applications",
+    target_deps = {
+        "ApplicationUpdates": ["@@isomer+//:foundation"],
+    },
+)
 use_repo(
     swift_deps,
     "swift_package",
     "swiftpkg_agent_ui",
+    "swiftpkg_applications",
     "swiftpkg_grpc_swift_2",
     "swiftpkg_grpc_swift_nio_transport",
     "swiftpkg_grpc_swift_protobuf",

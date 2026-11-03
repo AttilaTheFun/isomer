@@ -1,9 +1,21 @@
 load("@build_bazel_rules_apple//apple:macos.bzl", "macos_application")
 load("@rules_swift//swift:swift.bzl", "swift_library")
 load("@rules_xcodeproj//xcodeproj:defs.bzl", "top_level_target", "xcodeproj")
+load("//tools/variant:defs.bzl", "variant_infoplist")
 
 # The Storybook on the Mac: the Storybook's own app, which releases hand out.
+# One bundle id for every build and for the iPhone's
+# (AttilaTheFun/applications' docs/VARIANTS.md).
 BUNDLE_ID = "com.LoganShire.IsomerStorybook"
+
+# BuildVariant and the name under its icon (//tools/variant), as the
+# iPhone's. No entitlements here: Applications' app group comes with the
+# Developer ID profile Applications Server signs it with, as Reviews' Mac
+# app's; until then AppUpdates.start() logs that there is no container.
+variant_infoplist(
+    name = "variant_plist",
+    display_name = "Storybook",
+)
 
 # The Storybook (//shared/example_application), compiled against Apple's
 # SwiftUI for macOS.
@@ -16,6 +28,8 @@ swift_library(
         "//shared/platform_services",
         "@isomer//apple/libraries/swift_ui",
         "@isomer//apple/libraries/swift_ui:isomer",
+        # The build it is, written for Applications at launch (ExampleApp.swift).
+        "@swiftpkg_applications//:ApplicationUpdates",
     ],
 )
 
@@ -25,7 +39,10 @@ macos_application(
     app_icons = ["//storybook/artwork/storybook_icon:app_icon"],
     bundle_id = BUNDLE_ID,
     bundle_name = "Storybook",
-    infoplists = ["Info.plist"],
+    infoplists = [
+        "Info.plist",
+        ":variant_plist",
+    ],
     minimum_os_version = "14.0",
     # Font.custom's fonts (the text.custom story): ATSApplicationFontsPath
     # names the bundle's Resources.
