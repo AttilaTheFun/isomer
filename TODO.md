@@ -28,6 +28,27 @@ iOS 26's glass restart button over 2048, in tools/ci/proof_ignore.txt.
   when its lookup failed (run 40955851424; that VM is deleted). proof.py
   now redacts it; oss itself should not print it.
 
+## Mac slots and app distribution (2026-11-03)
+
+- **The proof's Mac pictures on a slot.** The proof leases a whole macOS VM
+  to launch and photograph the Storybook's and the Playground's Mac apps
+  (tools/proof/proof.py's `macos` step). CI should lease a `mac` slot on
+  OS Server's primary macOS VM instead, never a whole GUI VM. Slots run test
+  bundles today (`oss machine xctest`, `--gui` for tests that draw); an app
+  run and its screenshot need `oss machine exec` and screenshots on `mac`
+  leases first (oss docs/primary-vms.md, "Apps on a slot"). The iPhone's
+  pictures follow when `ios` leases move into the primary.
+- **Alphas of the Storybook and the Playground through Applications.**
+  Neither app writes its build to the Applications app group
+  (ApplicationUpdates: `group.com.LoganShire.Applications`, `AppUpdates.start()`
+  at launch) or carries a build variant (Alpha, Production, AdHoc), and CI
+  publishes no builds. Wanted, as reviews and visor do it: an Alpha of each
+  for every main commit (iPhone, Mac, Android), published to Applications
+  Server by OIDC (`publish_from_ci.sh`); AdHoc builds before merging, when
+  asked; Production as an Alpha promoted (its plist key rewritten and
+  re-signed), not rebuilt. Visor on Isomer: AdHoc builds only, writing its
+  version to the app group all the same.
+
 ## Upstream releases, no forks
 
 The goal: every dependency at an upstream tagged release (a BCR version, a
