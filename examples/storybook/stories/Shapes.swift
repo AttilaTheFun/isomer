@@ -19,7 +19,6 @@ extension StoryCatalog {
         ) { PathStory() },
         Story(
             "shapes.arcs", "Arcs and curves",
-            height: 260,
             summary: "A path's arcs and curves: an arc around a centre, a corner rounded between two lines, quadratic and cubic Béziers, and a Core Graphics path brought over whole."
         ) { ArcsStory() },
         Story(
@@ -120,89 +119,30 @@ struct PathStory: View {
 
 // story: shapes.arcs
 struct ArcsStory: View {
-    /// A pie chart's slice: two radii and the arc between them.
-    struct Wedge: Shape {
-        var start: Angle
-        var end: Angle
-        func path(in rect: CGRect) -> Path {
-            let center = CGPoint(x: rect.midX, y: rect.midY)
-            var path = Path()
-            path.move(to: center)
-            path.addArc(center: center, radius: min(rect.width, rect.height) / 2,
-                        startAngle: start, endAngle: end, clockwise: false)
-            path.closeSubpath()
-            return path
-        }
+    /// A shape whose path a closure draws, in a 60-point square.
+    struct Drawn: Shape {
+        let draw: @Sendable (inout Path) -> Void
+        func path(in rect: CGRect) -> Path { Path(draw) }
     }
-
-    /// A speech bubble: rounded corners drawn with tangent arcs, a tail
-    /// with a quadratic curve.
-    struct Bubble: Shape {
-        func path(in rect: CGRect) -> Path {
-            let r = min(rect.width, rect.height) * 0.2
-            let body = CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height * 0.8)
-            var path = Path()
-            path.move(to: CGPoint(x: body.midX, y: body.minY))
-            path.addArc(tangent1End: CGPoint(x: body.maxX, y: body.minY), tangent2End: CGPoint(x: body.maxX, y: body.maxY), radius: r)
-            path.addArc(tangent1End: CGPoint(x: body.maxX, y: body.maxY), tangent2End: CGPoint(x: body.minX, y: body.maxY), radius: r)
-            path.addLine(to: CGPoint(x: body.minX + body.width * 0.35, y: body.maxY))
-            path.addQuadCurve(to: CGPoint(x: body.minX + body.width * 0.15, y: rect.maxY),
-                              control: CGPoint(x: body.minX + body.width * 0.3, y: rect.maxY))
-            path.addLine(to: CGPoint(x: body.minX + body.width * 0.2, y: body.maxY))
-            path.addArc(tangent1End: CGPoint(x: body.minX, y: body.maxY), tangent2End: CGPoint(x: body.minX, y: body.minY), radius: r)
-            path.addArc(tangent1End: CGPoint(x: body.minX, y: body.minY), tangent2End: CGPoint(x: body.maxX, y: body.minY), radius: r)
-            path.closeSubpath()
-            return path
-        }
-    }
-
-    /// A heart: two cubic curves.
-    struct Heart: Shape {
-        func path(in rect: CGRect) -> Path {
-            var path = Path()
-            path.move(to: CGPoint(x: rect.midX, y: rect.maxY))
-            path.addCurve(to: CGPoint(x: rect.midX, y: rect.minY + rect.height * 0.25),
-                          control1: CGPoint(x: rect.minX - rect.width * 0.1, y: rect.midY),
-                          control2: CGPoint(x: rect.minX + rect.width * 0.2, y: rect.minY - rect.height * 0.1))
-            path.addCurve(to: CGPoint(x: rect.midX, y: rect.maxY),
-                          control1: CGPoint(x: rect.maxX - rect.width * 0.2, y: rect.minY - rect.height * 0.1),
-                          control2: CGPoint(x: rect.maxX + rect.width * 0.1, y: rect.midY))
-            path.closeSubpath()
-            return path
-        }
-    }
-
-    /// A pill made with Core Graphics: two half circles as tall as the
-    /// rect, joined, turned into a SwiftUI path.
-    struct CorePill: Shape {
-        func path(in rect: CGRect) -> Path {
-            let radius = rect.height / 2
-            let pill = CGMutablePath()
-            pill.addArc(center: CGPoint(x: rect.minX + radius, y: rect.midY), radius: radius,
-                        startAngle: .pi / 2, endAngle: 3 * .pi / 2, clockwise: false)
-            pill.addArc(center: CGPoint(x: rect.maxX - radius, y: rect.midY), radius: radius,
-                        startAngle: 3 * .pi / 2, endAngle: .pi / 2, clockwise: false)
-            pill.closeSubpath()
-            return Path(pill)
-        }
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 18) {
-                ZStack {
-                    Wedge(start: .degrees(-90), end: .degrees(30)).fill(Color.blue)
-                    Wedge(start: .degrees(30), end: .degrees(150)).fill(Color.orange)
-                    Wedge(start: .degrees(150), end: .degrees(270)).fill(Color.green)
-                }
-                .frame(width: 80, height: 80)
-                Bubble().fill(Color.teal).frame(width: 90, height: 70)
-                Heart().fill(Color.red).frame(width: 70, height: 64)
-            }
-            HStack(spacing: 18) {
-                CorePill().fill(Color.purple).frame(width: 140, height: 36)
-                CorePill().stroke(Color.purple, lineWidth: 2).frame(width: 90, height: 36)
-            }
+        HStack(spacing: 16) {
+            Drawn { p in // an arc around a centre: a pie slice
+                p.move(to: CGPoint(x: 30, y: 30))
+                p.addArc(center: CGPoint(x: 30, y: 30), radius: 30, startAngle: .degrees(-90), endAngle: .degrees(150), clockwise: false)
+            }.fill(Color.blue).frame(width: 60, height: 60)
+            Drawn { p in // a corner rounded between two lines, then a quadratic curve
+                p.move(to: CGPoint(x: 2, y: 60))
+                p.addArc(tangent1End: CGPoint(x: 2, y: 2), tangent2End: CGPoint(x: 60, y: 2), radius: 24)
+                p.addQuadCurve(to: CGPoint(x: 58, y: 60), control: CGPoint(x: 58, y: 2))
+            }.stroke(Color.orange, lineWidth: 4).frame(width: 60, height: 60)
+            Drawn { p in // two cubic curves: a heart
+                p.move(to: CGPoint(x: 30, y: 58))
+                p.addCurve(to: CGPoint(x: 30, y: 16), control1: CGPoint(x: -6, y: 32), control2: CGPoint(x: 12, y: -6))
+                p.addCurve(to: CGPoint(x: 30, y: 58), control1: CGPoint(x: 48, y: -6), control2: CGPoint(x: 66, y: 32))
+            }.fill(Color.red).frame(width: 60, height: 60)
+            Drawn { p in // a Core Graphics path, brought over whole
+                p = Path(CGPath(ellipseIn: CGRect(x: 0, y: 15, width: 60, height: 30), transform: nil))
+            }.fill(Color.purple).frame(width: 60, height: 60)
         }
     }
 }
