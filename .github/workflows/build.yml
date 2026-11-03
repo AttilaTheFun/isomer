@@ -90,16 +90,13 @@ permissions:
 # nothing else reads), the Mac's Resources take the Mac's staged one (built
 # in the Linux container, the building machine's compiler would be Linux's:
 # shared/compiler/toolchain.bzl), and the APK carries Android's.
-# Not yet the Playground's iPhone app: in the container, rules_apple's
-# ImportedDynamicFrameworkProcessor wants /usr/bin/ditto for the compiler's
-# frameworks (a rules_applecross gap, with Apple Cross). Its compiler is
-# staged all the same, for when it builds.
 env:
   PUBLISHED_APPS: >-
     --config=ci_device --compilation_mode=opt --define=iso_playground_embedded=1
     //apple/storybook_ios_application:storybook_ios_application
     //apple/storybook_macos_application:storybook_macos_application
     //android/storybook_android_application:storybook_android_application_apk
+    //playground/apple/playground_ios_application:playground_ios_application
     //playground/apple/playground_macos_application:playground_macos_application
     //playground/android/playground_android_application:playground_android_application_apk
 
