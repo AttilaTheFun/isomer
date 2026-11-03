@@ -45,6 +45,24 @@ swift_library(
     ],
 )
 
+# The compiler staged for the Mac (gitignored; tools/ci/stage_playground_compilers.sh
+# macos, from OS Server's files): a playground_toolchain/ tree a Mac assembled,
+# which the app's Resources take instead of the building machine's compiler
+# (shared/compiler/toolchain.bzl). Empty, as in a fresh clone, the app carries
+# the compiler of the Mac that builds it.
+filegroup(
+    name = "staged_toolchain",
+    srcs = glob(
+        ["staged_toolchain/**"],
+        allow_empty = True,
+        exclude = [
+            "staged_toolchain/.sha256",
+            "**/.DS_Store",
+        ],
+    ),
+    visibility = ["//playground/shared/compiler:__pkg__"],
+)
+
 macos_application(
     name = "playground_macos_application",
     app_icons = ["//playground/artwork/playground_icon:app_icon"],

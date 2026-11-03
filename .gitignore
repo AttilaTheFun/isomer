@@ -17,4 +17,6 @@ examples/proto_greeter/.build/
 # and .bazelrc.user above cover it too.
 examples/playground/apple/playground_ios_application/embedded_toolchain/
 examples/playground/android/playground_android_application/toolchain/
+# The Mac's compiler staged from OS Server's files (CI's; tools/ci/stage_playground_compilers.sh macos).
+examples/playground/apple/playground_macos_application/staged_toolchain/
 /.ci/

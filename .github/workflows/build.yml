@@ -84,16 +84,20 @@ permissions:
 # with the bundle id's own), Mac apps and Android apps (their android_binary,
 # whose signed .apk is published), optimized, as they ship. Flags as
 # --name=value (tools/ci/container_build.sh package).
-# Not yet the Playground's iPhone and Mac apps: built in the Linux container,
-# the Mac app would carry Linux's swift-frontend (toolchain.bzl copies the
-# building machine's compiler) and the iPhone app none (the phone's compiler
-# isn't among OS Server's files); they go to a Mac slot next.
+# The Playground's compilers come staged from OS Server's files (each job's
+# "The Playground's compilers", tools/ci/stage_playground_compilers.sh): the
+# iPhone's links the device's in (--define=iso_playground_embedded=1, which
+# nothing else reads), the Mac's Resources take the Mac's staged one (built
+# in the Linux container, the building machine's compiler would be Linux's:
+# shared/compiler/toolchain.bzl), and the APK carries Android's.
 env:
   PUBLISHED_APPS: >-
-    --config=ci_device --compilation_mode=opt
+    --config=ci_device --compilation_mode=opt --define=iso_playground_embedded=1
     //apple/storybook_ios_application:storybook_ios_application
     //apple/storybook_macos_application:storybook_macos_application
     //android/storybook_android_application:storybook_android_application_apk
+    //playground/apple/playground_ios_application:playground_ios_application
+    //playground/apple/playground_macos_application:playground_macos_application
     //playground/android/playground_android_application:playground_android_application_apk
 
 jobs:
@@ -174,13 +178,12 @@ jobs:
         env:
           APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
         run: tools/ci/stamp_apps.sh
-      # The Playground's Android compiler, which the APK carries (OS Server's
-      # files). The iPhone's device compiler isn't among them yet, and the
-      # Mac's is assembled from the build machine's toolchain (Linux's, in
-      # the container): until both are fixed, the iPhone and Mac Playgrounds
-      # published here run but can't compile a project.
+      # The Playground's compilers from OS Server's files, into the
+      # checkout's gitignored folders, which the container sees: the
+      # iPhone's (linked into the device's app), the Mac's (its Resources')
+      # and Android's (the APK's).
       - name: The Playground's compilers
-        run: tools/ci/stage_playground_compilers.sh android
+        run: tools/ci/stage_playground_compilers.sh ios-device macos android
       # Built in a Linux container, as everything else is, with
       # rules_applecross's actool, which compiles the Icon Composer icons'
       # dark and tinted appearances. Bazel's tree a volume of the publishing
@@ -224,7 +227,7 @@ jobs:
           APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
         run: tools/ci/stamp_apps.sh
       - name: The Playground's compilers
-        run: tools/ci/stage_playground_compilers.sh android
+        run: tools/ci/stage_playground_compilers.sh ios-device macos android
       - name: Build
         env:
           ISOMER_CI_VOLUME: isomer-ci-publish
@@ -271,7 +274,7 @@ jobs:
           APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
         run: tools/ci/stamp_apps.sh
       - name: The Playground's compilers
-        run: tools/ci/stage_playground_compilers.sh android
+        run: tools/ci/stage_playground_compilers.sh ios-device macos android
       - name: Build
         env:
           ISOMER_CI_VOLUME: isomer-ci-publish
