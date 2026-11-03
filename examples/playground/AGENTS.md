@@ -87,7 +87,15 @@ of its own (pinning isomer by commit), back in isomer as `playground/` at
   for wasm32 (shared/compiler/toolchain.bzl: the host toolchain's
   swift-frontend, wasm-ld, macro plugin server and plugins, thinned to
   arm64 on a Mac, and the wasm SDK's sysroot and static stdlib, about
-  470 MB: the Mac's Resources, beside the Linux app). Windows has no such
+  470 MB: the Mac's Resources, beside the Linux app). That is the building
+  machine's compiler, so a Mac app built on Linux (CI's publishing jobs)
+  takes a staged one instead: when the gitignored
+  `apple/playground_macos_application/staged_toolchain` is there (a
+  playground_toolchain/ tree a Mac assembled), the Mac's Resources are it.
+  CI stages these from OS Server's files with
+  tools/ci/stage_playground_compilers.sh (`ios-simulator`, `ios-device`,
+  `macos`, `android`; a new archive is `oss files add`ed on the server's Mac
+  and its SHA-256 changed there). Windows has no such
   toolchain in rules_swift; its package takes the build VM's installed
   Swift's (isomer's tools/proof/proof.py does), with the wasm SDK's data
   and the Playground SDK from the Mac. Linux's lld wants Ubuntu 24.04's

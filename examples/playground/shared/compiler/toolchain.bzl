@@ -9,9 +9,15 @@ the same arguments (CompilerArguments.swift).
 Everything comes from the toolchains rules_swift registered for wasm32,
 resolved for the platform the app is built on: the Swift toolchain's files
 (the host compiler, its libraries and macro plugins, the wasm SDK bundle)
-and the C toolchain's (lld). Nothing is staged by hand. On a Mac the Mach-O
-files are thinned to arm64 (lipo), about half their universal size; each
-slice keeps its own signature.
+and the C toolchain's (lld). On a Mac the Mach-O files are thinned to arm64
+(lipo), about half their universal size; each slice keeps its own signature.
+
+That is the compiler of the machine that builds: a Mac app built on Linux
+(CI's, in OS Server's container) would carry Linux's swift-frontend. So the
+Mac app can take a staged one instead (`staged`): a playground_toolchain/
+tree a Mac assembled, unpacked into the Mac app's gitignored
+staged_toolchain/ (tools/ci/stage_playground_compilers.sh macos), copied
+as it is. Without it, the building machine's, as above.
 
     playground_toolchain/usr/bin/{swift-frontend,wasm-ld}
     playground_toolchain/usr/lib/swift/host/compiler/lib_CompilerSwift*   (what the frontend links)
@@ -91,17 +97,27 @@ def _destination(path):
                 return "data/%s/%s" % (name, path.split(marker, 1)[1])
     return None
 
+_STAGED = "/staged_toolchain/"
+
 def _playground_toolchain_impl(ctx):
     out = ctx.actions.declare_directory(ctx.attr.name)
     files = []
     lines = []
     seen = {}
-    for f in ctx.files.files:
-        destination = _destination(f.path)
-        if destination and destination not in seen:
-            seen[destination] = True
+    if ctx.files.staged:
+        # A staged compiler, already laid out as playground_toolchain/ (and
+        # thinned): every file in its place, nothing of the building
+        # machine's.
+        for f in ctx.files.staged:
             files.append(f)
-            lines.append("%s\t%s" % (f.path, destination))
+            lines.append("%s\t%s" % (f.path, f.short_path.split(_STAGED, 1)[1]))
+    else:
+        for f in ctx.files.files:
+            destination = _destination(f.path)
+            if destination and destination not in seen:
+                seen[destination] = True
+                files.append(f)
+                lines.append("%s\t%s" % (f.path, destination))
     manifest = ctx.actions.declare_file(ctx.attr.name + ".manifest")
     ctx.actions.write(manifest, "\n".join(lines) + "\n")
     ctx.actions.run_shell(
@@ -138,6 +154,10 @@ playground_toolchain = rule(
     implementation = _playground_toolchain_impl,
     attrs = {
         "files": attr.label_list(allow_files = True, doc = "The toolchains' files (wasm_swift_sdk_files)."),
+        "staged": attr.label_list(
+            allow_files = True,
+            doc = "A staged playground_toolchain/ tree's files, under a staged_toolchain/ folder: when there are any, the compiler is these, not `files`.",
+        ),
         "thin_arm64": attr.bool(doc = "Thin universal Mach-O files to arm64 (lipo; a Mac's)."),
     },
     doc = "The Playground's compiler as one directory the app ships with.",

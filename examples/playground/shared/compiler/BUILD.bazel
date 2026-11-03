@@ -14,10 +14,16 @@ filegroup(
     srcs = glob(["*.swift"]),
 )
 
-# The compiler, assembled for the platform the app is built on.
+# The compiler, assembled for the platform the app is built on; the Mac's a
+# staged one when the Mac app's staged_toolchain/ is there (CI's, built on
+# Linux: toolchain.bzl).
 playground_toolchain(
     name = "toolchain",
     files = [":wasm_sdk_files"],
+    staged = select({
+        "@platforms//os:macos": ["//playground/apple/playground_macos_application:staged_toolchain"],
+        "//conditions:default": [],
+    }),
     tags = ["manual"],
     thin_arm64 = select({
         "@platforms//os:macos": True,
