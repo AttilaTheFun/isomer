@@ -30,13 +30,16 @@ lease_id() { oss machine lease "$@" --wait --json | sed -n 's/.*"id" *: *"\([^"]
 drawn() {
     [ -s "$1" ] && [ "$(wc -c <"$1")" -gt 20000 ]
 }
-# Two pictures in a row alike, at most a few more tries.
+# Two pictures in a row alike, at most a few more tries. A shot that fails
+# (the window between frames, on a screen another run shares) is one more try.
 steady() {
-    local shoot="$1" path="$2"
-    $shoot "$path" || return 1
+    local shoot="$1" path="$2" tries=0
+    until $shoot "$path"; do
+        tries=$((tries + 1)); [ $tries -lt 5 ] || return 1; sleep 2
+    done
     for _ in 1 2 3 4 5; do
         sleep 2
-        $shoot "$path.again.png" || return 1
+        $shoot "$path.again.png" || continue
         if cmp -s "$path" "$path.again.png"; then rm -f "$path.again.png"; return 0; fi
         mv "$path.again.png" "$path"
     done
