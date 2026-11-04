@@ -1,0 +1,82 @@
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load(":stories.bzl", "SMOKE_STORIES")
+
+# Each platform's Storybook opened on the same stories and pictured, where CI
+# builds it: the web, Linux, Windows (under Wine) and Android (an emulator)
+# in its Linux container, iOS and the Mac on slots of OS Server's primary
+# macOS VM. A story that doesn't draw, or crashes, fails its platform's
+# test; the pictures are the tests' outputs. These are checks, not the proof
+# (tools/proof/proof.py), which compares every story with a release's.
+
+# The web: headless Chrome, Chrome for Testing on Linux (MODULE.bazel), the
+# Mac's own Chrome on a Mac.
+sh_test(
+    name = "storybook_web_test",
+    size = "large",
+    srcs = ["web_test.sh"],
+    args = [
+        "$(rootpath @isomer//tools/testing/browser_check)",
+        "$(rootpath //web/storybook_web_application:storybook_web_application_site)",
+    ] + select({
+        ":linux_arm64": ["$(rootpath @chrome_linux_arm64//:chrome)"],
+        ":linux_x86_64": ["$(rootpath @chrome_linux_x86_64//:chrome)"],
+        "//conditions:default": ["''"],
+    }) + SMOKE_STORIES,
+    data = [
+        "//web/storybook_web_application:storybook_web_application_site",
+        "@isomer//tools/testing/browser_check",
+    ] + select({
+        ":linux_arm64": [
+            "@chrome_linux_arm64//:chrome",
+            "@chrome_linux_arm64//:files",
+        ],
+        ":linux_x86_64": [
+            "@chrome_linux_x86_64//:chrome",
+            "@chrome_linux_x86_64//:files",
+        ],
+        "//conditions:default": [],
+    }),
+    # Chrome starts its own sandbox (or, as root in a container, none):
+    # not inside Bazel's.
+    tags = [
+        "no-sandbox",
+        "platform-test",
+    ],
+)
+
+config_setting(
+    name = "linux_arm64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
+config_setting(
+    name = "linux_x86_64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+# Linux: the SDL2 and OpenGL host under Xvfb with Mesa's llvmpipe (or SDL's
+# offscreen driver), its own frame dumps checked and kept.
+sh_test(
+    name = "storybook_linux_test",
+    size = "large",
+    srcs = ["linux_test.sh"],
+    args = [
+        "$(rootpath //linux/storybook_linux_application)",
+        "$(rootpath @isomer//tools/testing/picture_check)",
+    ] + SMOKE_STORIES,
+    data = [
+        "//linux/storybook_linux_application",
+        "@isomer//tools/testing/picture_check",
+    ],
+    tags = [
+        "no-sandbox",
+        "platform-test",
+    ],
+    target_compatible_with = ["@platforms//os:linux"],
+)

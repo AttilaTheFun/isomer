@@ -207,6 +207,14 @@ build:apple_on_linux --action_env=PATH=external/rules_applecross++apple_cross_to
 build:apple_on_linux --action_env=RULES_APPLECROSS_RESOURCE_OUTPUT_MODE=relaxed
 build:apple_on_linux --action_env=RULES_APPLECROSS_RELAX_ACTOOL_ICON_COMPOSER=1
 
+# Windows on Arm (and x64) built on Linux (@isomer//tools/windows): the host's
+# Swift with the Windows Swift SDK and Microsoft's SDK and MSVC libraries,
+# both archives by placeholders (MODULE.bazel's swift_windows_sdk) each
+# builder resolves as it does the Apple SDK's, and their toolchains turned on
+# here alone, so no other build fetches them. Build a Windows target with
+# `--config=windows_on_linux --platforms=@isomer//tools/platforms:windows_arm64`.
+build:windows_on_linux --extra_toolchains=@swift_windows_sdk//:all
+
 # Which of an app's builds (AttilaTheFun/applications' docs/VARIANTS.md):
 # Alpha, the default (every main and pull request build), Beta (TestFlight's,
 # for later), Production, which only CI's release job builds, on a release

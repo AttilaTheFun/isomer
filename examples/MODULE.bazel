@@ -110,6 +110,7 @@ swift.android_sdk()
 use_repo(
     swift,
     "swift_toolchain",
+    "swift_toolchain_ubuntu24.04-aarch64",
     "swift_toolchain_xcode",
 )
 
@@ -457,3 +458,46 @@ use_repo(maven, "rules_android_maven")
 go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk")
 go_sdk.download(version = "1.24.12")
 
+
+# Chrome for Testing, the browser the web apps' tests load their sites in on
+# Linux (//tests/platforms, in CI's container): Google's own build for each
+# Linux architecture, pinned by version. A Mac's tests use the Mac's Chrome.
+# It needs the system libraries a desktop Chrome does (NSS, ATK, GBM, …):
+# tools/ci/container_build.sh installs them in the container.
+chrome_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+chrome_archive(
+    name = "chrome_linux_arm64",
+    build_file_content = 'exports_files(["chrome"])\nfilegroup(name = "files", srcs = glob(["**"]), visibility = ["//visibility:public"])',
+    sha256 = "5517510e61657ff43ee9ab804ecd1a499b3d5bd3caf72f097516bd6565ba5a17",
+    strip_prefix = "chrome-linux-arm64",
+    url = "https://storage.googleapis.com/chrome-for-testing-public/157.0.8103.38/linux-arm64/chrome-linux-arm64.zip",
+)
+
+chrome_archive(
+    name = "chrome_linux_x86_64",
+    build_file_content = 'exports_files(["chrome"])\nfilegroup(name = "files", srcs = glob(["**"]), visibility = ["//visibility:public"])',
+    sha256 = "8cdeb344e9b2cefe59f4aea8d1d93d5d93054c03cde217665c16fc1f62e72a66",
+    strip_prefix = "chrome-linux64",
+    url = "https://storage.googleapis.com/chrome-for-testing-public/157.0.8103.38/linux64/chrome-linux64.zip",
+)
+
+# Swift for Windows built on Linux (@isomer//tools/windows): the host's Swift
+# (arm64 Linux: OS Server's containers) with the Windows Swift SDK, out of
+# swift.org's 6.3.2 Windows installer (tools/windows/make_swift_sdk.sh), and
+# Microsoft's SDK and MSVC libraries (make_msvc_sysroot.ps1 and .sh), which
+# may be used but not redistributed: both by placeholders a builder's
+# .bazelrc.user resolves (tools/ci/container_build.sh: OS Server's files, by
+# SHA-256), and turned on by --config=windows_on_linux only.
+swift_windows_sdk = use_repo_rule("@isomer//tools/windows:defs.bzl", "swift_windows_sdk_repository")
+
+swift_windows_sdk(
+    name = "swift_windows_sdk",
+    msvc_sysroot_sha256 = "c800e77cf79ed0174c8a76c9d321f7949524a847d5b70f3cf02b26da6e3f4382",
+    msvc_sysroot_url = "https://windows-sdks.invalid/sha256/c800e77cf79ed0174c8a76c9d321f7949524a847d5b70f3cf02b26da6e3f4382",
+    swift_sdk_sha256 = "a7a641d618533c7402a094f1ee23e611ccc3b765d8e8a48f837efdc635a3bf35",
+    swift_sdk_url = "https://windows-sdks.invalid/sha256/a7a641d618533c7402a094f1ee23e611ccc3b765d8e8a48f837efdc635a3bf35",
+    swift_toolchain_repo = "swift_toolchain_ubuntu24.04-aarch64",
+    swift_version = "6.3.2",
+    swiftc = "@swift_toolchain_ubuntu24.04-aarch64//:usr/bin/swiftc",
+)

@@ -19,7 +19,10 @@ if [ -z "${RUNFILES}" ]; then
 fi
 RUNFILES="$(cd "${RUNFILES}" && pwd)"
 
-REAL="${RUNFILES}/_main/examples/linux/storybook_linux_application/storybook_linux_application_bin"
+# The examples are a module of their own (their runfiles' _main), and were
+# isomer's examples/ (_main/examples) before.
+REAL="${RUNFILES}/_main/linux/storybook_linux_application/storybook_linux_application_bin"
+[ -e "${REAL}" ] || REAL="${RUNFILES}/_main/examples/linux/storybook_linux_application/storybook_linux_application_bin"
 if [ ! -e "${REAL}" ]; then
   echo "error: app binary not found at ${REAL}" >&2
   exit 1

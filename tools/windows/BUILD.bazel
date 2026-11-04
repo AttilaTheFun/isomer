@@ -1,0 +1,9 @@
+# Swift for Windows built on Linux (defs.bzl): the repository rule's BUILD
+# template, and the scripts that make its two archives (README.md).
+exports_files(
+    [
+        "case_links.swift",
+        "swift_windows_sdk.BUILD",
+    ],
+    visibility = ["//visibility:public"],
+)

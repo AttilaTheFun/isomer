@@ -42,35 +42,35 @@ Applications Server (#59, #60, #62). Left:
   OS Server's Mac. It moves when OS Server has an Ubuntu primary VM (held
   for the Mac Studio) or Android emulators in containers (being tried).
 
-## Linux pictures and GL checks in a container (2026-11-04)
+## The platforms' tests in containers (2026-11-04): what's left
 
-The proof leases a whole Linux VM (16 GB, GNOME) for the Linux pictures,
-though that VM has no GPU either: Mesa's llvmpipe draws its OpenGL. A Linux
-container (CI's own, Visor's agent image: SDL2, SDL2_ttf, GL and EGL) can
-draw the same way.
+Every platform's Storybook is now tested where it runs (AGENTS.md,
+"Platform tiers"): the web, Linux and the GL checks in CI's build container,
+Windows built on Linux and run under arm64 Wine, Android on Cuttlefish in a
+container with its own KVM, the iPhone and the Mac on slots. Left:
 
-- **`gl_backend_check` in CI.** `//swift_gpu/linux:gl_backend_check`
-  renders into an EGL pbuffer, no window, and nothing runs it today. Run it
-  in the container job (Mesa's EGL in the image, surfaceless or pbuffer),
-  so a GL regression fails a pull request.
-- **The proof's Linux part in a container**: the apps under Xvfb (a fixed
-  screen size) with llvmpipe, the X display photographed; proof.py behind a
-  switch first, as `PROOF_MAC=vm`, its pictures held against the VM's
-  until the only differences are expected (no GNOME title bar; the fonts,
-  pinned to the VM's family), then the default. Frees a whole VM a proof.
-
-## Windows without a Windows VM (2026-11-04: not now)
-
-Wine in an arm64 Linux container could run the arm64 Windows build, but:
-
-- the build still needs Windows: no Swift toolchain cross-compiles to
-  Windows (AGENTS.md), so a Windows machine is leased either way;
-- its pictures would be Wine's, not Windows': Direct3D 11 through Wine's
-  translation onto Mesa, DirectWrite and Direct2D as Wine reimplements them,
-  no Segoe UI, no WebView2. A launch smoke test at most, never the proof.
-
-The Windows primary VM with slots (OS Server, held for the Mac Studio) is
-what replaces the whole Windows VM.
+- **The proof's Linux and Windows parts** still lease whole VMs. Linux's
+  could move to the container's Xvfb (its pictures then lose GNOME's title
+  bar, a one-time change); Windows' pixels stay Windows' (a Windows slot of
+  a Windows primary, OS Server's backlog for the Mac Studio). The proof's
+  Android part could use the container phone once its boot is fast enough.
+- **Android in a container is slow on a Mac**, so CI tests Android on an
+  emulator leased from OS Server (the Mac's own hypervisor) and Cuttlefish
+  in a container is the by-hand path (tools/ci/android_device.sh). Not
+  nesting: Virtualization's vCPU threads aren't real-time, and macOS's
+  timer leeway makes every timed wait in a guest oversleep by about half
+  (OS Server's maintainers measured it; no Virtualization setting changes
+  it; a report to Apple is filed). Android's timeouts are scaled by 20
+  and the container's CPUs kept from idling, which brought system_server
+  from 75 to 18 minutes into a boot. On a Linux host with KVM, the
+  container is the fast path.
+- **Upstream the Windows cross toolchain** (tools/windows): a
+  `swift.windows_sdk` tag in rules_swift, as `wasm_sdk` and `android_sdk`
+  are, Microsoft's half behind a URL the builder supplies.
+- **The build image**: container_build.sh installs Xvfb, Mesa's drivers and
+  Chrome's libraries into Visor's agent image at each run; Wine 10 needs
+  Ubuntu 26.04, so Windows runs in a container of its own. An image of
+  Isomer's (or these in Visor's) would save both.
 
 ## Upstream releases, no forks
 

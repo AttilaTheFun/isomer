@@ -456,6 +456,33 @@ the Mac on every change. T2 (wasm: web and Electron; Android): headless
 Chrome and the hermetic emulator. T3 (Linux, Windows): built and run on
 oss machines (~/Developer/AGENTS.md), never on this Mac's own screen.
 
+- **Every platform's tests in containers (2026-11-04).** CI's container
+  builds every platform, Windows too, and tests each where it runs, the
+  Storybook on its test stories (examples/tests/platforms/stories.bzl),
+  each picture checked for having drawn and kept as the run's
+  `platform-tests` artifact:
+  - in the build container (tools/ci/container_build.sh): the web in
+    headless Chrome (Chrome for Testing for linux-arm64, MODULE.bazel;
+    //tools/testing/browser_check), Linux under Xvfb with Mesa's llvmpipe
+    (the host's ISO_SHOT frame dumps), the GL backend's checks on Mesa's
+    EGL, and the core's tests (`//tests/platforms:all` in the examples);
+  - Windows: built in the same container for Windows on Arm
+    (`--config=windows_on_linux`, tools/windows: the Windows Swift SDK and
+    Microsoft's libraries beside the host's Swift, README there), run under
+    arm64 Wine 10 in an Ubuntu 26.04 container (tools/ci/windows_test.sh;
+    Wine's own fonts and DirectWrite: a check, never the proof's pixels);
+  - Android: an emulator leased from OS Server (`oss machine lease
+    android`), on its Mac's own hypervisor, through `oss machine adb` and
+    `screenshot` (tools/ci/android_test.sh). A Cuttlefish phone in a
+    container with its own KVM (`--virtualization`, OS Server's API 22;
+    tools/ci/android_device.sh) also works, by hand: on a Mac it boots in
+    about half an hour at best, as Virtualization's vCPU threads oversleep
+    every timed wait (macOS's timer leeway); on a Linux host with KVM it
+    would be the fast path;
+  - the iPhone and the Mac: built in the container (rules_applecross), run
+    on an `ios` lease and a `mac` slot of OS Server's primary macOS VM
+    (tools/ci/apple_test.sh);
+  - all of it after the build, at once: tools/ci/platform_tests.sh.
 - **Linux from a Mac**: `tools/linux/build.sh [targets]` builds in a
   container leased from OS Server (`oss machine run container`, released
   however the script ends) of Visor's agent image, CI's

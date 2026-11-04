@@ -18,7 +18,10 @@ if [ -z "${RUNFILES}" ]; then
 fi
 RUNFILES="$(cd "${RUNFILES}" && pwd)"
 
-REAL="${RUNFILES}/_main/examples/linux/example_full_opengl_wasm_linux_application/example_full_opengl_wasm_linux_application_bin"
+# The examples are a module of their own (their runfiles' _main), and were
+# isomer's examples/ (_main/examples) before.
+REAL="${RUNFILES}/_main/linux/example_full_opengl_wasm_linux_application/example_full_opengl_wasm_linux_application_bin"
+[ -e "${REAL}" ] || REAL="${RUNFILES}/_main/examples/linux/example_full_opengl_wasm_linux_application/example_full_opengl_wasm_linux_application_bin"
 # An explicit reactor path argument wins (benchmark cells run other reactors
 # through this same loader); otherwise the bundled example_full.wasm.
 if [ "$#" -ge 1 ] && [ -e "${1}" ]; then

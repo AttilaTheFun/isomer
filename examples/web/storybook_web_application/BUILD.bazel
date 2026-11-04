@@ -41,6 +41,7 @@ isomer_web_app(
         "//electron/example_full_react_electron_application:__pkg__",
         "//electron/example_full_webgpu_electron_application:__pkg__",
         "//shared/example_application:__pkg__",
+        "//tests/platforms:__pkg__",
         "//web/example_full_webgpu_web_application:__pkg__",
     ],
     swift_library = ":app_lib",

@@ -1,0 +1,12 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+# A test's picture of an app (the Linux host's ISO_SHOT PPM, a Windows
+# host's BMP) checked for having drawn something, and written as a PNG for
+# the test's outputs (//examples' tests/platforms).
+swift_binary(
+    name = "picture_check",
+    package_name = "isomer",
+    srcs = ["main.swift"],
+)
