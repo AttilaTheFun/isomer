@@ -1,0 +1,16 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+# A site's pages loaded in headless Chrome, waited for and pictured: the web
+# apps' tests in a Linux container (CI's, with Chrome for Testing from the
+# examples' MODULE.bazel), and by hand on a Mac. Swift, as the tools here
+# are to be (TODO.md, "Swift, not Python"; "No Node"): the site served on a
+# loopback port, Chrome driven over the DevTools protocol on a pipe.
+#   bazel run //tools/testing/browser_check -- --site <dir> --chrome <chrome> \
+#       --until 'window.__isoLastTree' --page '?ISO_STORYBOOK_STORY=text.styles=/tmp/out.png'
+swift_binary(
+    name = "browser_check",
+    package_name = "isomer",
+    srcs = ["main.swift"],
+)

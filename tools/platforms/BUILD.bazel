@@ -41,6 +41,16 @@ platform(
     ],
 )
 
+# Windows on Arm, built on Linux (tools/windows: the Windows Swift SDK and
+# Microsoft's libraries beside the host's Swift; `--config=windows_on_linux`).
+platform(
+    name = "windows_arm64",
+    constraint_values = [
+        "@platforms//cpu:aarch64",
+        "@platforms//os:windows",
+    ],
+)
+
 # Native Linux (e.g. SteamOS / Ubuntu) is built on the Linux host using the
 # swift.org `ubuntu24.04` standalone toolchain registered in MODULE.bazel as the
 # host exec toolchain. Like Windows, the app owns `main`, creates its window and

@@ -103,7 +103,12 @@ public struct StorybookView: View {
                 shown = id
                 open(id)
                 try? await Task.sleep(for: .milliseconds(300))
-                try? id.write(toFile: path + ".shown", atomically: true, encoding: .utf8)
+                // Atomically where it can be; Wine's file replacement fails
+                // on its Unix drive, so plainly there (whoever reads it
+                // reads until it names the story).
+                if (try? id.write(toFile: path + ".shown", atomically: true, encoding: .utf8)) == nil {
+                    try? id.write(toFile: path + ".shown", atomically: false, encoding: .utf8)
+                }
             }
             try? await Task.sleep(for: .milliseconds(250))
         }
