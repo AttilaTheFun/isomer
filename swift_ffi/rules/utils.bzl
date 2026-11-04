@@ -31,14 +31,22 @@ def _analyze_sources(ctx, analyzer, label, srcs, module_name):
     for src in srcs:
         if not src.path.endswith(".swift"):
             continue
-        # Named by the source's path in its package: two files of one
-        # target may share a basename in different directories.
+        # In a directory of the target's own, named by the source's path in
+        # its package (two files of one target may share a basename in
+        # different directories): `<target>_swift_ffi/<path>.json`. The
+        # target's name is in the directory alone, never in a file name
+        # beside the source's, so a long target name and a long source name
+        # don't add up past a file system's 255-byte name limit. Generators
+        # read these from the manifest's list, never by name.
         relative = src.short_path
         if label.package and relative.find(label.package + "/") >= 0:
             relative = relative[relative.find(label.package + "/") + len(label.package) + 1:]
-        analysis_file = ctx.actions.declare_file("{}_{}_ffi.json".format(
+        elif relative.startswith("../"):
+            # A source of another repository: its path within that repository.
+            relative = relative.split("/", 2)[2]
+        analysis_file = ctx.actions.declare_file("{}_swift_ffi/{}.json".format(
             label.name,
-            relative.replace("/", "__").replace(".", "_"),
+            relative,
         ))
         args = ctx.actions.args()
         args.add("--source-file-path", src)

@@ -76,7 +76,8 @@ alias(
 
 # OSLog's Logger: Apple's on Apple platforms (nothing to link), Isomer's
 # elsewhere (frameworks/os_log): to logcat on Android, standard error
-# beyond. Also in each platform's SDK group (@isomer//:swift_ui).
+# beyond. Both modules, OSLog and `os` (which re-exports it, as Apple's
+# does). Also in each platform's SDK group (@isomer//:swift_ui).
 alias(
     name = "os_log",
     actual = select({
@@ -85,7 +86,7 @@ alias(
         "@platforms//os:tvos": ":system_framework",
         "@platforms//os:watchos": ":system_framework",
         "@platforms//os:visionos": ":system_framework",
-        "//conditions:default": "//frameworks/os_log",
+        "//conditions:default": "//frameworks/os_log:os_log_and_os",
     }),
     visibility = ["//visibility:public"],
 )

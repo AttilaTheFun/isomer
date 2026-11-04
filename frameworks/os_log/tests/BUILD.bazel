@@ -5,8 +5,14 @@ load("//tools/platforms:transition.bzl", "transition_binary")
 swift_binary(
     name = "os_log_check",
     package_name = "isomer",
-    srcs = ["OSLogCheck.swift"],
-    deps = ["//frameworks/os_log"],
+    srcs = [
+        "OSCheck.swift",
+        "OSLogCheck.swift",
+    ],
+    deps = [
+        "//frameworks/os_log",
+        "//frameworks/os_log/os",
+    ],
     tags = ["manual"],
 )
 

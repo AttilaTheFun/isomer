@@ -465,7 +465,13 @@ def isomer_android_app(
 
     App-owned services (`services_kt` + `services_installer`) may need more
     than the runtime's own dependency graph: `services_deps` appends to the
-    runtime kt_android_library's deps. `permissions` adds
+    runtime kt_android_library's deps. `services_kt` is the app's Kotlin
+    compiled into that library (package dev.isomer.runtime's, beside the
+    runtime and the generated bindings it calls): a file or a filegroup, or
+    a list of them. Kotlin that doesn't use the runtime can be a
+    kt_android_library of its own, in `services_deps`; one that does is
+    compiled here, since the runtime library depending on a library that
+    depends on it back would be a cycle. `permissions` adds
     `<uses-permission/>` entries beyond the defaults (full names, e.g.
     "android.permission.RECORD_AUDIO"). Every app has INTERNET and
     ACCESS_NETWORK_STATE, for Foundation's URLSession (and libwebrtc, whose
@@ -509,7 +515,8 @@ def isomer_android_app(
     isomer_android_library(
         name = name + "_runtime",
         swift_library = swift_library,
-        extra_kotlin_srcs = [services_kt] if services_kt else [],
+        # One label or a list of them.
+        extra_kotlin_srcs = (services_kt if type(services_kt) == "list" else [services_kt]) if services_kt else [],
         extra_deps = services_deps,
     )
 
