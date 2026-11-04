@@ -46,8 +46,11 @@ failures=0
 # The iPhone.
 ios="$(lease_id ios --kind=ci --label="Isomer: the iPhone Storybook's tests")"
 if [ -z "$ios" ]; then echo "apple_test: no ios lease" >&2; exit 1; fi
-(cd "$work" && unzip -q "$ipa")
-oss machine simctl "$ios" install "$work/Payload/Storybook.app" || exit 1
+# Installed from OS Server's storage, which unpacks the .ipa itself: simctl
+# install of a local .app would zip it here with ditto, which only a Mac has.
+object="$(oss storage put "$ipa" --ttl=2h --json | sed -n 's/.*"sha256" *: *"\([0-9a-f]*\)".*/\1/p' | head -1)"
+if [ -z "$object" ]; then echo "apple_test: the .ipa didn't reach OS Server's storage" >&2; exit 1; fi
+oss machine install "$ios" "$object" || exit 1
 oss machine simctl "$ios" ui booted appearance light >/dev/null 2>&1
 ios_shot() { oss machine screenshot "$ios" "$1" >/dev/null; }
 for story in "$@"; do
