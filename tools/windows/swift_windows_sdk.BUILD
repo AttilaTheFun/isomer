@@ -69,7 +69,11 @@ swift_tools(
         # rules_swift puts XCTest's DLLs on a Windows test's Path, which it
         # takes from here (a host's; on Linux nothing reads it).
         env = {"Path": "/usr/bin:/bin"},
-        features = ["swift.module_map_no_private_headers"],
+        features = [
+            "swift.module_map_no_private_headers",
+            # No -add_ast_path: a Darwin linker's, which lld-link ignores with a warning.
+            "swift.no_embed_debug_module",
+        ],
         linker_inputs = [
             ":sdk_files",
             ":msvc_files",
