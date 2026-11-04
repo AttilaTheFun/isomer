@@ -21,10 +21,16 @@
 #   ISOMER_CI_VOLUME Bazel's tree, kept between builds (default: isomer-ci;
 #                    `:keep`, so OS Server keeps it when the lease ends)
 #
-# With no arguments (CI's run) the core's checks run after the build, in the
-# same container: the mock renderer's and the snapshots' (isomer's own module,
-# //tests/renderer and //tests/snapshot), their output in the log. Either the
-# build or a check failing fails the run.
+# With no arguments (CI's run) the tests run after the build, in the same
+# container: the core's (the mock renderer's and the snapshots', isomer's own
+# module), the GL backend's on Mesa's EGL, and each platform's Storybook that
+# runs here (//tests/platforms in the examples: the web in headless Chrome,
+# Linux under Xvfb), their output in the log; and the apps tested elsewhere
+# are put in .ci/platforms for tools/ci/platform_tests.sh: the iPhone's and
+# the Mac's (slots of OS Server's primary macOS VM), Android's (a phone in a
+# container) and Windows' (built here for Windows on Arm,
+# --config=windows_on_linux, and run under Wine in a container). Any build or
+# test failing fails the run.
 #
 # package (the publishing jobs', as AttilaTheFun/reviews' container_build.sh
 # has it): Bazel's tree is the container's (a volume), so what CI publishes
@@ -62,6 +68,7 @@ mkdir -p "$ROOT/.ci"
 cat > "$ROOT/.ci/downloader.cfg" <<EOF
 rewrite apple-sdks\.invalid/.* http://$host:7490/files/sha256/$SDK_SHA256
 rewrite ported-tools\.invalid/sha256/(.*) http://$host:7490/files/sha256/\$1
+rewrite windows-sdks\.invalid/sha256/(.*) http://$host:7490/files/sha256/\$1
 EOF
 
 mode=build
@@ -85,6 +92,7 @@ elif [ $# -eq 0 ]; then
         //apple/storybook_macos_application:storybook_macos_application \
         //web/storybook_web_application:storybook_web_application \
         //android/storybook_android_application:storybook_android_application \
+        //android/storybook_android_application:storybook_android_application_apk \
         //linux/storybook_linux_application:storybook_linux_application
 fi
 
@@ -117,13 +125,50 @@ if [ "$mode" = package ]; then
     exit 0
 fi
 [ "$mode" = checks ] || exit $built
-cd "$root"
 start=$SECONDS
-bazel test --test_output=all //tests/renderer:mock_renderer_test //tests/snapshot:snapshot_test
+# What the tests here need beyond the image: Xvfb, Mesa'"'"'s drivers, and the
+# libraries Chrome for Testing loads.
+if ! command -v Xvfb >/dev/null || [ ! -e /usr/lib/aarch64-linux-gnu/libnss3.so ]; then
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends xvfb libnss3 \
+        libgl1-mesa-dri libegl-mesa0 libasound2t64 libxkbcommon0 libxcomposite1 libxdamage1 \
+        libxrandr2 libpango-1.0-0 libcairo2 libcups2t64 libdrm2 fonts-dejavu-core >/dev/null ||
+        { apt-get update -qq >/dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
+            --no-install-recommends xvfb libnss3 libgl1-mesa-dri libegl-mesa0 libasound2t64 \
+            libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libpango-1.0-0 libcairo2 \
+            libcups2t64 libdrm2 fonts-dejavu-core >/dev/null; }
+fi
+# Windows on Arm, built here.
+windows=(--config=windows_on_linux --platforms=@isomer//tools/platforms:windows_arm64)
+bazel build "${flags[@]}" "${windows[@]}" //windows/storybook_windows_application
+built_windows=$?
+bazel test "${flags[@]}" --test_output=errors //tests/platforms:all
+tested_here=$?
+cd "$root"
+bazel test --test_output=errors //tests/renderer:mock_renderer_test //tests/snapshot:snapshot_test \
+    //swift_gpu/linux:gl_backend_test
 checked=$?
-echo "container_build.sh: the checks took $((SECONDS - start)) s"
-[ $built -ne 0 ] && exit $built
-exit $checked
+echo "container_build.sh: the tests took $((SECONDS - start)) s"
+
+# The apps tested elsewhere, for tools/ci/platform_tests.sh.
+cd "$root/examples"
+platforms="$root/.ci/platforms"
+rm -rf "$platforms" && mkdir -p "$platforms/windows" && chmod -R 777 "$platforms"
+exec_root="$(bazel info "${flags[@]}" execution_root)"
+files() { bazel cquery "${flags[@]}" "$@" --output=files 2> /dev/null; }
+for f in $(files --ios_multi_cpus=sim_arm64 //apple/storybook_ios_application:storybook_ios_sim_application) \
+         $(files //apple/storybook_macos_application) $(files //android/storybook_android_application:storybook_android_application_apk); do
+    case "$f" in *_unsigned.apk) ;; *.ipa | *.zip | *.apk) cp "$exec_root/$f" "$platforms/" ;; esac
+done
+for f in $(files "${windows[@]}" //windows/storybook_windows_application); do
+    case "$f" in *.exe) cp "$exec_root/$f" "$platforms/windows/" ;; esac
+done
+cp "$(bazel info "${flags[@]}" output_base)"/external/+swift_windows_sdk_repository+swift_windows_sdk/swift-windows-sdk/runtime/aarch64/*.dll \
+    "$platforms/windows/" 2>/dev/null
+cp -R "$root/examples/storybook/assets" "$platforms/windows/assets"
+chmod -R a+rwX "$platforms"
+ls -l "$platforms"
+for result in $built $built_windows $tested_here $checked; do [ "$result" -ne 0 ] && exit "$result"; done
+exit 0
 '
 
 cd "$ROOT/examples"

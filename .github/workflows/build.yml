@@ -114,7 +114,27 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v5
-      - run: tools/ci/container_build.sh
+      # Every platform built in the Linux container (Windows on Arm with
+      # --config=windows_on_linux), and the tests that run there: the core's,
+      # the GL backend's, the web Storybook in headless Chrome and the Linux
+      # one under Xvfb. The apps tested elsewhere go to .ci/platforms.
+      - name: Build, and the tests in the build container
+        run: exec tools/ci/container_build.sh
+      # The other platforms where they run, at once: Windows under arm64
+      # Wine in a container, the iPhone and the Mac on slots of OS Server's
+      # primary macOS VM, and (main's pushes, and by hand: a boot under
+      # nested virtualization takes ten minutes or more) Android on a
+      # Cuttlefish phone in a container with its own KVM.
+      - name: The other platforms' tests
+        env:
+          ANDROID: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && '--android' || '' }}
+        run: exec tools/ci/platform_tests.sh $ANDROID .ci/platform-tests
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: platform-tests
+          path: .ci/platform-tests
+          retention-days: 14
 
   proof:
     # After the build: no proof of a tree that doesn't build.
