@@ -7,6 +7,7 @@
 
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@rules_swift//swift:swift_library_group.bzl", "swift_library_group")
 load(":defs.bzl", "one_configuration")
 
 package(default_visibility = ["//visibility:public"])
@@ -61,10 +62,20 @@ swift_library(
 )
 
 # What dependents use (through @isomer//:foundation): built in one
-# configuration whatever theirs (defs.bzl).
+# configuration whatever theirs (defs.bzl). FoundationNetworking with it
+# (networking/: Isomer's Foundation under corelibs' other name), so code
+# that imports both sees one URLSession.
+swift_library_group(
+    name = "foundation_and_networking",
+    deps = [
+        ":foundation",
+        "//foundation/networking",
+    ],
+)
+
 one_configuration(
     name = "for_dependents",
-    actual = ":foundation",
+    actual = ":foundation_and_networking",
 )
 
 # FileWrapper, compiled into the SwiftUI of Linux and Windows too (their

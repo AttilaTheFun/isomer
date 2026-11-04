@@ -141,7 +141,7 @@ fi
 windows=(--config=windows_on_linux --platforms=@isomer//tools/platforms:windows_arm64)
 bazel build "${flags[@]}" "${windows[@]}" //windows/storybook_windows_application
 built_windows=$?
-bazel test "${flags[@]}" --test_output=errors //tests/platforms:all
+bazel test "${flags[@]}" --test_output=errors //tests/platforms:all //tests/foundation_networking:networking_test
 tested_here=$?
 cd "$root"
 bazel test --test_output=errors //tests/renderer:mock_renderer_test //tests/snapshot:snapshot_test \
