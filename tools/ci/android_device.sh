@@ -51,7 +51,7 @@ fi
 su root -c "export PATH='$PATH' HOME='$HOME'; cd '$cache/device' && ./bin/launch_cvd --daemon \
     --start_webrtc=false --netsim=false --netsim_bt=false --netsim_uwb=false \
     --gpu_mode=guest_swiftshader --report_anonymous_usage_stats=n \
-    --cpus=2 --memory_mb=4096 --boot_timeout_secs=2400" >&2
+    --cpus=2 --memory_mb=4096 --boot_timeout_secs=2400 --resume=false" >&2
 serial="0.0.0.0:6520"
 "$cache/device/bin/adb" connect "$serial" >/dev/null
 "$cache/device/bin/adb" -s "$serial" wait-for-device

@@ -10,9 +10,11 @@
 #
 #   tools/ci/apple_test.sh <storybook_ios_sim_application .ipa> <storybook_macos_application .zip> <out> <story>…
 set -uo pipefail
-ipa="$1" macos_zip="$2" out="$3"
+absolute() { printf '%s/%s' "$(cd "$(dirname "$1")" && pwd)" "$(basename "$1")"; }
+ipa="$(absolute "$1")" macos_zip="$(absolute "$2")"
+mkdir -p "$3"
+out="$(cd "$3" && pwd)"
 shift 3
-mkdir -p "$out"
 work="$(mktemp -d)"
 ios="" mac=""
 BUNDLE=com.LoganShire.IsomerStorybook
@@ -43,7 +45,7 @@ failures=0
 # The iPhone.
 ios="$(lease_id ios --kind=ci --label="Isomer: the iPhone Storybook's tests")"
 if [ -z "$ios" ]; then echo "apple_test: no ios lease" >&2; exit 1; fi
-(cd "$work" && unzip -q "$(cd "$(dirname "$ipa")" && pwd)/$(basename "$ipa")")
+(cd "$work" && unzip -q "$ipa")
 oss machine simctl "$ios" install "$work/Payload/Storybook.app" || exit 1
 oss machine simctl "$ios" ui booted appearance light >/dev/null 2>&1
 ios_shot() { oss machine screenshot "$ios" "$1" >/dev/null; }
