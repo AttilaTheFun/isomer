@@ -6,7 +6,9 @@
 # drawn in software (SwiftShader). Its host tools come from Cuttlefish's apt
 # repository, the device from Android's CI by `cvd fetch`, both kept in
 # <cache> (a kept volume) between runs. Prints the adb serial once the phone
-# has booted.
+# has booted. CI tests Android on an emulator leased from OS Server instead
+# (platform_tests.sh); this is the by-hand path, and the fast one on a Linux
+# host with KVM.
 #
 #   tools/ci/android_device.sh start <cache>      # installs what's missing, boots it
 #   tools/ci/android_device.sh stop <cache>

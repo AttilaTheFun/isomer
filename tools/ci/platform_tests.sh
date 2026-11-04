@@ -3,20 +3,17 @@
 # once, after tools/ci/container_build.sh put their apps in .ci/platforms:
 #   - Windows under arm64 Wine 10 in a Linux container (Ubuntu 26.04's Wine:
 #     tools/ci/windows_test.sh);
-#   - Android on a Cuttlefish phone in a Linux container with its own KVM
-#     (tools/ci/android_device.sh, android_test.sh), with --android: a boot
-#     under nested virtualization takes ten minutes or more;
+#   - Android on an emulator leased from OS Server, on its Mac's own
+#     hypervisor (tools/ci/android_test.sh);
 #   - the iPhone and the Mac on OS Server's primary macOS VM (an `ios` lease
 #     and a `mac` slot: tools/ci/apple_test.sh), from this Mac.
 # Each opens the Storybook's test stories (examples/tests/platforms/
 # stories.bzl), pictures each and fails on one that doesn't draw; the
 # pictures go to <out>/<platform>. Any failing fails the run.
 #
-#   tools/ci/platform_tests.sh [--android] <out>
+#   tools/ci/platform_tests.sh <out>
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-android=0
-[ "${1:-}" = --android ] && { android=1; shift; }
 out="$(mkdir -p "$1" && cd "$1" && pwd)"
 case "$out/" in "$ROOT"/*) ;; *) echo "platform_tests.sh: <out> must be in this checkout" >&2; exit 1 ;; esac
 apps="$ROOT/.ci/platforms"
@@ -38,18 +35,19 @@ oss machine run container --image=docker.io/library/ubuntu:26.04 --cpus=4 --memo
     windows "$ROOT" "$apps/windows" "$out/windows" "${stories[@]}" >"$out/windows.log" 2>&1 &
 pids+=($!) names+=(windows)
 
-if [ $android -eq 1 ]; then
-    apk="$(ls "$apps"/*storybook_android*.apk 2>/dev/null | head -1)"
-    oss machine run container --image=docker.io/library/ubuntu:24.04 --virtualization --cpus=6 --memory=10 \
-        --mount="$ROOT:$ROOT" --volume=isomer-ci-android:/var/cache/cf:64:keep --inside -- \
-        bash -c 'set -e
-            serial="$("$1/tools/ci/android_device.sh" start /var/cache/cf)"
-            "$1/tools/ci/android_test.sh" /var/cache/cf/device/bin/adb "$serial" "$2" "$3" "${@:4}"; status=$?
-            "$1/tools/ci/android_device.sh" stop /var/cache/cf
-            exit $status' \
-        android "$ROOT" "$apk" "$out/android" "${stories[@]}" >"$out/android.log" 2>&1 &
-    pids+=($!) names+=(android)
-fi
+# Android: an emulator leased from OS Server, run on its Mac's own
+# hypervisor (outside Apple's Virtualization, whose vCPU threads oversleep
+# every timed wait: a phone in a container takes over an hour to boot,
+# tools/ci/android_device.sh, so that stays a by-hand path).
+(
+    id="$(oss machine lease android --kind=ci --label="Isomer: the Android Storybook's tests" --wait --json |
+        sed -n 's/.*"id" *: *"\([^"]*\)".*/\1/p' | head -1)"
+    [ -n "$id" ] || { echo "platform_tests.sh: no android lease" >&2; exit 1; }
+    trap 'oss machine release "$id" >/dev/null 2>&1' EXIT
+    "$ROOT/tools/ci/android_test.sh" oss "$id" "$(ls "$apps"/*storybook_android*.apk | head -1)" \
+        "$out/android" "${stories[@]}"
+) >"$out/android.log" 2>&1 &
+pids+=($!) names+=(android)
 
 "$ROOT/tools/ci/apple_test.sh" "$(ls "$apps"/*storybook_ios*.ipa | head -1)" \
     "$(ls "$apps"/*storybook_macos*.zip | head -1)" "$out/apple" "${stories[@]}" >"$out/apple.log" 2>&1 &
