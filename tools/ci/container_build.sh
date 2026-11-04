@@ -47,21 +47,25 @@ IMAGE="${ISOMER_CI_IMAGE:-$(cat "$ROOT/tools/ci/agent_image")}"
 VOLUME="${ISOMER_CI_VOLUME:-isomer-ci}"
 SDK_SHA256="251c252f7f41bcd3e08655e49e182686682d705945f4a2807049b9051c606ebb"
 
-# `--inside` came in OS Server 0.12.0. An older oss takes it for an option it
-# doesn't know and runs the build on this Mac instead: refused here. (The
-# command line is inside the app: its version is the app's.)
-oss_app="$(python3 -c 'import os, shutil; print(os.path.realpath(shutil.which("oss")))' | sed 's|/Contents/Helpers/oss$||')"
-oss_version="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$oss_app/Contents/Info.plist" 2>/dev/null || echo 0)"
-if ! python3 -c 'import sys; v = [int(x) for x in sys.argv[1].split(".")[:3]] + [0, 0]; sys.exit(0 if v[:3] >= [0, 12, 0] else 1)' "$oss_version"; then
-    echo "container_build.sh: needs OS Server 0.12.0 or later on this Mac (oss machine run --inside); it has $oss_version" >&2
-    exit 1
-fi
+# In CI the job's own container builds (the isomer-jit runners: OS Server's
+# single-use Linux containers, its cache's read token in ~/.netrc and its
+# cache in ~/.bazelrc already), in place. On a Mac (OS Server's own, whose
+# folders containers may mount) it leases one, as before.
+inside=""
+[ "$(uname -s)" = Darwin ] || inside=1
 
 host="${OSS_FILES_HOST:-}"
-if [ -z "$host" ]; then
+if [ -z "$host" ] && [ -n "${OSS_SERVERS:-}" ]; then
+    # The first of the servers' addresses (a URL, or host:port).
+    host="${OSS_SERVERS%%[ ,]*}"
+    host="${host#*://}"
+    host="${host%%[:/]*}"
+fi
+if [ -z "$host" ] && [ -z "$inside" ]; then
     tailscale=/Applications/Tailscale.app/Contents/MacOS/Tailscale
     host="$("$tailscale" status --json | python3 -c 'import json, sys; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))')"
 fi
+[ -n "$host" ] || { echo "container_build.sh: no host for OS Server's files: set OSS_FILES_HOST (or OSS_SERVERS)" >&2; exit 1; }
 
 # The placeholders in MODULE.bazel, to this Mac's OS Server.
 mkdir -p "$ROOT/.ci"
@@ -128,11 +132,12 @@ fi
 start=$SECONDS
 # What the tests here need beyond the image: Xvfb, Mesa'"'"'s drivers, and the
 # libraries Chrome for Testing loads.
+root_do() { if [ "$(id -u)" = 0 ]; then "$@"; else sudo "$@"; fi; }
 if ! command -v Xvfb >/dev/null || [ ! -e /usr/lib/aarch64-linux-gnu/libnss3.so ]; then
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends xvfb libnss3 \
+    root_do env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends xvfb libnss3 \
         libgl1-mesa-dri libegl-mesa0 libasound2t64 libxkbcommon0 libxcomposite1 libxdamage1 \
         libxrandr2 libpango-1.0-0 libcairo2 libcups2t64 libdrm2 fonts-dejavu-core >/dev/null ||
-        { apt-get update -qq >/dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
+        { root_do apt-get update -qq >/dev/null && root_do env DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
             --no-install-recommends xvfb libnss3 libgl1-mesa-dri libegl-mesa0 libasound2t64 \
             libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libpango-1.0-0 libcairo2 \
             libcups2t64 libdrm2 fonts-dejavu-core >/dev/null; }
@@ -172,6 +177,9 @@ exit 0
 '
 
 cd "$ROOT/examples"
+if [ -n "$inside" ]; then
+    exec bash -c "$steps" container_build "$ROOT" "$mode" "$out" "$@"
+fi
 exec oss machine run container --image="$IMAGE" --rosetta --cpus=6 --memory=16 \
     --mount="$ROOT:$ROOT" --volume="$VOLUME:/var/cache/bazel:128:keep" \
     --inside --cache="$host" -- \

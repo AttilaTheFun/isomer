@@ -106,11 +106,10 @@ jobs:
     if: >
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) &&
       inputs.run != 'adhoc'
-    runs-on: [self-hosted, isomer-containers]
-    # One at a time, as the container's Bazel tree is one kept volume:
-    # OS Server queues them (`oss machine run` waits while another lease
-    # holds the volume, OS Server 0.14). Not a concurrency group: GitHub
-    # keeps one pending job a group and cancels the others.
+    runs-on: [self-hosted, isomer-jit]
+    # OS Server's single-use Linux containers (the image Visor's sessions
+    # work in), its cache's read token and cache already in them: the job's
+    # own container builds, and leases what runs elsewhere through oss.
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v5
@@ -178,7 +177,7 @@ jobs:
     # The Alpha of each commit on main, never a pull request's nor a release
     # branch's (release, below).
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: [self-hosted, isomer-containers]
+    runs-on: [self-hosted, isomer-jit]
     timeout-minutes: 120
     permissions:
       contents: read
@@ -232,7 +231,7 @@ jobs:
     if: >
       github.event_name == 'workflow_dispatch' && inputs.run == 'adhoc' &&
       github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/heads/release-')
-    runs-on: [self-hosted, isomer-containers]
+    runs-on: [self-hosted, isomer-jit]
     timeout-minutes: 120
     permissions:
       contents: read
@@ -270,7 +269,7 @@ jobs:
   # release's commit again with --config=prod, as reviews' release job does.
   release:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release-')
-    runs-on: [self-hosted, isomer-containers]
+    runs-on: [self-hosted, isomer-jit]
     timeout-minutes: 120
     permissions:
       contents: read

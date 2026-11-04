@@ -6,7 +6,8 @@
 # (`exec --gui` in its console session, pictured by `screenshot --window`).
 # Each story opened at launch (ISO_STORYBOOK_STORY), pictured once two
 # pictures in a row agree, and checked for having drawn something; the
-# pictures kept in <out>. Both leases released however it ends.
+# pictures kept in <out>. Both leases released however it ends. All through
+# oss's API: it runs in a CI job's Linux container as on a Mac.
 #
 #   tools/ci/apple_test.sh <storybook_ios_sim_application .ipa> <storybook_macos_application .zip> <out> <story>…
 set -uo pipefail
@@ -25,9 +26,9 @@ cleanup() {
 }
 trap cleanup EXIT
 lease_id() { oss machine lease "$@" --wait --json | sed -n 's/.*"id" *: *"\([^"]*\)".*/\1/p' | head -1; }
-# One colour throughout: nothing drawn (sips reads PNGs on the runner's Mac).
+# A picture of almost nothing (one colour compresses to a few KB): nothing drawn.
 drawn() {
-    [ -s "$1" ] && [ "$(stat -f %z "$1")" -gt 20000 ]
+    [ -s "$1" ] && [ "$(wc -c <"$1")" -gt 20000 ]
 }
 # Two pictures in a row alike, at most a few more tries.
 steady() {
