@@ -28,26 +28,49 @@ iOS 26's glass restart button over 2048, in tools/ci/proof_ignore.txt.
   when its lookup failed (run 40955851424; that VM is deleted). proof.py
   now redacts it; oss itself should not print it.
 
-## Mac slots and app distribution (2026-11-03)
+## Slots and app distribution (2026-11-03, done but for these)
 
-- **The proof's Mac pictures on a slot.** The proof leases a whole macOS VM
-  to launch and photograph the Storybook's and the Playground's Mac apps
-  (tools/proof/proof.py's `macos` step). CI should lease a `mac` slot on
-  OS Server's primary macOS VM instead, never a whole GUI VM. Slots run test
-  bundles today (`oss machine xctest`, `--gui` for tests that draw); an app
-  run and its screenshot need `oss machine exec` and screenshots on `mac`
-  leases first (oss docs/primary-vms.md, "Apps on a slot"). The iPhone's
-  pictures follow when `ios` leases move into the primary.
-- **Alphas of the Storybook and the Playground through Applications.**
-  Neither app writes its build to the Applications app group
-  (ApplicationUpdates: `group.com.LoganShire.Applications`, `AppUpdates.start()`
-  at launch) or carries a build variant (Alpha, Production, AdHoc), and CI
-  publishes no builds. Wanted, as reviews and visor do it: an Alpha of each
-  for every main commit (iPhone, Mac, Android), published to Applications
-  Server by OIDC (`publish_from_ci.sh`); AdHoc builds before merging, when
-  asked; Production as an Alpha promoted (its plist key rewritten and
-  re-signed), not rebuilt. Visor on Isomer: AdHoc builds only, writing its
-  version to the app group all the same.
+The proof's Mac part runs on a `mac` slot of OS Server's primary macOS VM
+(#64) and its iPhone part in a simulator inside that VM (#65); the
+Storybook and the Playground publish an Alpha of each main commit to
+Applications Server (#59, #60, #62). Left:
+
+- **Production promoted, not rebuilt**: the release job asks Applications
+  Server to stamp the release commit's Alpha (BuildVariant rewritten,
+  re-signed) once it has that route; it rebuilds with `--config=prod` today.
+- **Android on a slot**: the proof's Android part still uses an emulator on
+  OS Server's Mac. It moves when OS Server has an Ubuntu primary VM (held
+  for the Mac Studio) or Android emulators in containers (being tried).
+
+## Linux pictures and GL checks in a container (2026-11-04)
+
+The proof leases a whole Linux VM (16 GB, GNOME) for the Linux pictures,
+though that VM has no GPU either: Mesa's llvmpipe draws its OpenGL. A Linux
+container (CI's own, Visor's agent image: SDL2, SDL2_ttf, GL and EGL) can
+draw the same way.
+
+- **`gl_backend_check` in CI.** `//swift_gpu/linux:gl_backend_check`
+  renders into an EGL pbuffer, no window, and nothing runs it today. Run it
+  in the container job (Mesa's EGL in the image, surfaceless or pbuffer),
+  so a GL regression fails a pull request.
+- **The proof's Linux part in a container**: the apps under Xvfb (a fixed
+  screen size) with llvmpipe, the X display photographed; proof.py behind a
+  switch first, as `PROOF_MAC=vm`, its pictures held against the VM's
+  until the only differences are expected (no GNOME title bar; the fonts,
+  pinned to the VM's family), then the default. Frees a whole VM a proof.
+
+## Windows without a Windows VM (2026-11-04: not now)
+
+Wine in an arm64 Linux container could run the arm64 Windows build, but:
+
+- the build still needs Windows: no Swift toolchain cross-compiles to
+  Windows (AGENTS.md), so a Windows machine is leased either way;
+- its pictures would be Wine's, not Windows': Direct3D 11 through Wine's
+  translation onto Mesa, DirectWrite and Direct2D as Wine reimplements them,
+  no Segoe UI, no WebView2. A launch smoke test at most, never the proof.
+
+The Windows primary VM with slots (OS Server, held for the Mac Studio) is
+what replaces the whole Windows VM.
 
 ## Upstream releases, no forks
 
