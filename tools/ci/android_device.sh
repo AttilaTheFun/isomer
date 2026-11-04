@@ -27,6 +27,7 @@ mkdir -p "$cache/device"
 
 if [ "$command" = stop ]; then
     (cd "$cache/device" && ./bin/stop_cvd >/dev/null 2>&1) || true
+    [ -f "$cache/spinners.pid" ] && { kill $(cat "$cache/spinners.pid") 2>/dev/null; rm -f "$cache/spinners.pid"; }
     exit 0
 fi
 
@@ -51,11 +52,18 @@ done
 if [ ! -x "$cache/device/bin/launch_cvd" ]; then
     cvd fetch --default_build="$build" --target_directory="$cache/device" >&2
 fi
+# The container's CPUs kept from idling while the phone runs: a spinner on
+# each at the lowest priority (SCHED_IDLE, so crosvm's threads always come
+# first). An idle CPU sleeps in Virtualization's vCPU thread, whose wakes
+# macOS delays by up to half the wait; a busy one doesn't sleep.
+if [ ! -f "$cache/spinners.pid" ]; then
+    for _ in $(seq 1 "$(nproc)"); do chrt -i 0 sh -c 'while :; do :; done' & echo $! >>"$cache/spinners.pid"; done
+fi
 # Its groups take effect in a new login: launched through su.
 su root -c "export PATH='$PATH' HOME='$HOME'; cd '$cache/device' && ./bin/launch_cvd --daemon \
     --start_webrtc=false --netsim=false --netsim_bt=false --netsim_uwb=false \
     --gpu_mode=guest_swiftshader --report_anonymous_usage_stats=n \
-    --cpus=2 --memory_mb=4096 --boot_timeout_secs=6000 --resume=false \
+    --cpus=2 --memory_mb=4096 --boot_timeout_secs=14400 --resume=false \
     --extra_bootconfig_args=androidboot.hw_timeout_multiplier=20" >&2
 serial="0.0.0.0:6520"
 "$cache/device/bin/adb" connect "$serial" >/dev/null
