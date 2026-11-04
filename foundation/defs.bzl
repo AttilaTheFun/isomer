@@ -11,7 +11,13 @@ Foundation through `@isomer//:foundation`, would then be built twice, at the
 package's minimum and at the rest of the build's, and both copies linked:
 duplicate symbols. Reached through this rule it is built once, with the
 minimum OS versions cleared (they mean nothing off Apple platforms, where
-these libraries build).
+these libraries build), and without the Swift language features a consumer
+may set for its whole build (`--features=swift.enable_v6`, upcoming ones,
+warnings as errors, library evolution): Foundation and what it is built
+from (swift-foundation, its bundled collections) are a module of their own,
+which a consumer's REPO.bazel can't reach, and they build in the language
+mode and with the warnings they are tested with. Other features pass
+through as given.
 """
 
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
@@ -27,13 +33,38 @@ _OPTIONS = [
     "//command_line_option:watchos_minimum_os",
 ]
 
-def _clear_minimum_os_impl(_settings, _attr):
-    return {option: None for option in _OPTIONS}
+# Swift features that change the language or the module's form, which a
+# consumer may set on the command line for its own code: dropped here.
+_SWIFT_LANGUAGE_FEATURES = [
+    "swift.enable_v6",
+    "swift.treat_warnings_as_errors",
+    "swift.enable_library_evolution",
+    "swift.emit_swiftinterface",
+]
+_SWIFT_LANGUAGE_PREFIXES = ["swift.upcoming.", "swift.experimental."]
+
+def _language_feature(feature):
+    name = feature[1:] if feature.startswith("-") else feature
+    if name in _SWIFT_LANGUAGE_FEATURES:
+        return True
+    for prefix in _SWIFT_LANGUAGE_PREFIXES:
+        if name.startswith(prefix):
+            return True
+    return False
+
+def _clear_minimum_os_impl(settings, _attr):
+    cleared = {option: None for option in _OPTIONS}
+    cleared["//command_line_option:features"] = [
+        feature
+        for feature in settings["//command_line_option:features"]
+        if not _language_feature(feature)
+    ]
+    return cleared
 
 _clear_minimum_os = transition(
     implementation = _clear_minimum_os_impl,
-    inputs = [],
-    outputs = _OPTIONS,
+    inputs = ["//command_line_option:features"],
+    outputs = _OPTIONS + ["//command_line_option:features"],
 )
 
 def _one_configuration_impl(ctx):

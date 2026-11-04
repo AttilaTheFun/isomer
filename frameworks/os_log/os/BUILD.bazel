@@ -1,0 +1,22 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The `os` module for the platforms without Apple's: Isomer's OSLog,
+# re-exported (os.swift), so code written `import os` finds Logger.
+swift_library(
+    name = "os",
+    package_name = "isomer",
+    # Apple platforms have the real one; this one would shadow it.
+    target_compatible_with = select({
+        "@platforms//os:macos": ["@platforms//:incompatible"],
+        "@platforms//os:ios": ["@platforms//:incompatible"],
+        "@platforms//os:tvos": ["@platforms//:incompatible"],
+        "@platforms//os:watchos": ["@platforms//:incompatible"],
+        "@platforms//os:visionos": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
+    srcs = ["os.swift"],
+    module_name = "os",
+    deps = ["//frameworks/os_log"],
+)

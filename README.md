@@ -689,6 +689,48 @@ themselves an external consumer (a standalone module over
 license acceptance, `--strategy=SwiftCompile=local`, …) and
 `.bazelversion` for the Bazel release.
 
+### Swift features, Java and library evolution
+
+- **Scope Swift features to your own repository.** `build
+  --features=swift.enable_v6` (or `swift.upcoming.StrictConcurrency`,
+  `swift.treat_warnings_as_errors`, `swift.enable_library_evolution`) in a
+  .bazelrc applies to every repository in the build: isomer, and every
+  SwiftPM package and module beneath it. Put them in your repository's
+  `REPO.bazel` instead (or a `package(features = [...])`), where they reach
+  your packages alone:
+
+  ```starlark
+  # REPO.bazel, at your workspace's root
+  repo(features = ["swift.enable_v6", "swift.treat_warnings_as_errors"])
+  ```
+
+  isomer's own REPO.bazel turns the common ones off for its packages (a
+  repository's `-feature` wins over the command line's), so its modules
+  build as they are tested whatever you set; it can't do so for its
+  dependencies (swift-foundation's collections fail under Swift 6's strict
+  concurrency, its FoundationEssentials under warnings-as-errors) or yours.
+- **Java 17 for Android's tools.** `--java_language_version=17` and
+  `--tool_java_language_version=17` (with the remote JDK 17 runtimes,
+  examples/.bazelrc's four lines): rules_android's dexer is Java with
+  records, and at a lower language level fails with "records are not
+  supported in -source 11".
+- **Library evolution is for Apple's binary frameworks, not isomer's
+  platforms.** isomer's modules (Foundation, SwiftUI, Isomer and the rest)
+  are compiled without `-enable-library-evolution`: they are linked into each
+  app, and on Android, wasm, Linux and Windows there is no binary-stable
+  system framework for resilience to serve. Don't enable it for your
+  targets there. If you do (an Apple framework built from the same
+  library), each import of an isomer module warns "module 'SwiftUI' was not
+  compiled with library evolution support", and that warning has no
+  diagnostic group in Swift 6.3 (`-Wwarning <group>` can't exempt it from
+  warnings-as-errors): turn library evolution, or warnings-as-errors, off for
+  those platforms with a `select` on the target's `features`, e.g.
+  `features = select({"@platforms//os:android": ["-swift.enable_library_evolution"], "//conditions:default": []})`,
+  or opt Isomer's Android and wasm modules into it as well with
+  examples/.bazelrc's `--config=isomer_library_evolution` (copy its lines:
+  rules_swift's per-target copts; they build and link, the Storybook's
+  apps the check, and the warnings go).
+
 Apple-only consumers can skip the Android blocks' *registrations* but not the
 `android.sdk`/`android.ndk` tags (the extension requires them from the root
 module), and never fetch what they don't build — extensions and SDK downloads

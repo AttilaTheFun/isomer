@@ -89,6 +89,7 @@ swift_library_group(
         ":photos_ui",
         ":swift_ui",
         "//frameworks/os_log",
+        "//frameworks/os_log/os",
         "//frameworks/uniform_type_identifiers",
     ],
 )

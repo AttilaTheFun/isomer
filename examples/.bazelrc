@@ -46,6 +46,9 @@ common --android_platforms=@rules_android//:arm64-v8a
 
 # Use rules_java's hermetic remote JDK 17 for rules_android's Java actions
 # (aapt2/d8/apksigner wrappers) instead of requiring a host JDK (local_jdk).
+# A consumer needs the two language versions too, at 17 or more: rules_android's
+# own tools (the dexer) are Java with records, and built at a lower language
+# level they fail with "records are not supported in -source 11".
 common --java_language_version=17
 common --java_runtime_version=remotejdk_17
 common --tool_java_language_version=17
@@ -70,6 +73,56 @@ build:linux --repo_env=CXX=clang++
 # (an ARM machine, a container on a Mac) — missing dirs are skipped.
 build:linux --repo_env=C_INCLUDE_PATH=/usr/lib/glib-2.0/include:/usr/lib/dbus-1.0/include:/usr/lib/x86_64-linux-gnu/glib-2.0/include:/usr/lib/x86_64-linux-gnu/dbus-1.0/include:/usr/lib/aarch64-linux-gnu/glib-2.0/include:/usr/lib/aarch64-linux-gnu/dbus-1.0/include
 build:linux --action_env=C_INCLUDE_PATH=/usr/lib/glib-2.0/include:/usr/lib/dbus-1.0/include:/usr/lib/x86_64-linux-gnu/glib-2.0/include:/usr/lib/x86_64-linux-gnu/dbus-1.0/include:/usr/lib/aarch64-linux-gnu/glib-2.0/include:/usr/lib/aarch64-linux-gnu/dbus-1.0/include
+
+# No `build --features=swift.…` here, and none in a consumer's .bazelrc:
+# --features apply to every repository in the build, isomer and every
+# SwiftPM package and module beneath it included (swift-foundation's
+# collections fail under swift.enable_v6/StrictConcurrency, its
+# FoundationEssentials under swift.treat_warnings_as_errors, which conflicts
+# with its own -suppress-warnings). Isomer's REPO.bazel turns the common
+# ones off for its own packages, but it can't for the others. Scope Swift
+# features to your own repository instead, in its REPO.bazel:
+#   repo(features = ["swift.enable_v6", "swift.treat_warnings_as_errors"])
+# (or per package with package(features = [...])). Don't turn on
+# swift.enable_library_evolution for Android, wasm, Linux or Windows
+# targets at all: there is no binary-stable system framework there for it to
+# serve, and Isomer's modules are built without it (README, "Swift features").
+#
+# If your targets there must be resilient anyway (and warnings-as-errors
+# fails each import on "module 'SwiftUI' was not compiled with library
+# evolution support"), `--config=isomer_library_evolution` builds Isomer's
+# Android and wasm modules resilient too, through rules_swift's per-target
+# copts (keyed by the canonical label, hence `@@isomer+`). Off by default:
+# resilience costs every access across those modules an indirection.
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//core_graphics:core_graphics=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//foundation:foundation=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//foundation/dispatch_time:dispatch_time=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//foundation/isomer_foundation:isomer_foundation=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//frameworks/core_transferable:core_transferable=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//frameworks/os_log:os_log=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//frameworks/os_log/os:os=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//frameworks/uniform_type_identifiers:uniform_type_identifiers=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//metal/isomer_metal:isomer_metal=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//metal/metal:metal=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//metal/web:web=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//shared/isomer_network_host:isomer_network_host=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//shared/isomer_swift_ui:isomer_swift_ui=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//shared/platform_services:platform_services=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//swift_ffi/swift_ffi:swift_ffi=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//swift_gpu/android:swift_gpu=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//swift_gpu/wasm:swift_gpu=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//swift_map/android/libraries/swift_map_engine:engine=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//swift_map/wasm/libraries/swift_map_engine:engine=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//android/libraries/swift_ui:image_io=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//android/libraries/swift_ui:isomer=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//android/libraries/swift_ui:photos_ui=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//android/libraries/swift_ui:sdk=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//android/libraries/swift_ui:swift_ui=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//wasm/libraries/swift_ui:image_io=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//wasm/libraries/swift_ui:isomer=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//wasm/libraries/swift_ui:photos_ui=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//wasm/libraries/swift_ui:sdk=-enable-library-evolution
+build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//wasm/libraries/swift_ui:swift_ui=-enable-library-evolution
 
 # Nicer error output from Swift cross-compile actions.
 build --show_progress_rate_limit=5

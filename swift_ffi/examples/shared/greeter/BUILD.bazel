@@ -3,6 +3,7 @@
 # library, unchanged, and delivers it in one of two modes — compiled (linked
 # natively over the C ABI) or wasm (a reactor run under an engine).
 
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
 load("@rules_swift//swift:swift_library.bzl", "swift_library")
 load("//swift_ffi/rules:c_host_library.bzl", "c_host_library")
 load("//swift_ffi/rules:cc_swift_library.bzl", "cc_swift_library")
@@ -75,4 +76,46 @@ swift_wasm_reactor(
         "swift_ffi_dependentCount",
     ],
     swift = ":greeter",
+)
+
+# Long names: the analyzer aspect's per-source outputs live in a directory of
+# the target's own (`<target>_swift_ffi/<source path>.json`), so neither a
+# 150-character target name nor a source in a directory named after it
+# reaches the 255-byte limit on one file name. (The outputs were once
+# `<target>_<source path, flattened>_ffi.json`: these two together were
+# over 300 bytes, "File name too long".) Its sources are the greeter's, in a
+# directory named after the target, as generated code often is.
+_LONG_NAME = "greeter_with_a_target_name_long_enough_that_it_and_a_source_named_after_it_would_overflow_a_file_name_if_the_analysis_output_put_both_in_one_component"
+
+genrule(
+    name = "long_name_srcs",
+    srcs = [
+        "Greeter.swift",
+        "Lazy+Bridgeable.swift",
+    ],
+    outs = [
+        _LONG_NAME + "/Greeter.swift",
+        _LONG_NAME + "/Lazy+Bridgeable.swift",
+    ],
+    cmd = "cp $(location Greeter.swift) $(location %s/Greeter.swift) && cp $(location Lazy+Bridgeable.swift) $(location %s/Lazy+Bridgeable.swift)" % (_LONG_NAME, _LONG_NAME),
+)
+
+swift_library(
+    name = _LONG_NAME,
+    srcs = [":long_name_srcs"],
+    module_name = "GreeterLongName",
+    tags = ["manual"],
+    deps = ["//swift_ffi/swift_ffi"],
+)
+
+# Generating bindings runs the aspect over it (no Swift compile needed).
+c_host_library(
+    name = "greeter_long_name_c_host",
+    swift = ":" + _LONG_NAME,
+    tags = ["manual"],
+)
+
+build_test(
+    name = "long_name_analysis_test",
+    targets = [":greeter_long_name_c_host_src"],
 )

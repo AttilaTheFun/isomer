@@ -1,0 +1,58 @@
+# Isomer's repository: the default features of every package in it.
+#
+# A consumer's `--features` on the command line (or in its .bazelrc) apply
+# to every repository in the build, Isomer's included: `build
+# --features=swift.enable_library_evolution` would build Isomer's SwiftUI and
+# Foundation resilient, `--features=swift.enable_v6` or
+# `swift.upcoming.StrictConcurrency` would put Isomer's Swift 5 modules in
+# a language mode they aren't written for, `swift.treat_warnings_as_errors`
+# would fail them on a warning a newer compiler adds. Isomer builds its
+# modules the way it tests them, whatever the consumer's features: each one
+# below is disabled here, and Bazel lets a package's or a target's own
+# features override the repository's, so a package that wants one (swift_ffi
+# is Swift 6, strict and warning-free; a target built resilient on purpose,
+# swift_map's XCFramework) still turns it on for itself.
+#
+# This protects Isomer's own packages only: a SwiftPM package or another
+# module Isomer depends on gets the consumer's features still. A consumer
+# scopes its Swift features to its own repository with its own REPO.bazel
+# `repo(features = [...])`, not globally (README's "Consuming isomer").
+repo(
+    features = [
+        # Library evolution: Isomer's modules are linked into each app, never
+        # shipped as a binary-stable framework, and are tested so. (A consumer
+        # that wants them resilient opts in: examples/.bazelrc's
+        # isomer_library_evolution config, per-target copts this doesn't
+        # turn off.)
+        "-swift.enable_library_evolution",
+        "-swift.emit_swiftinterface",
+        "-swift.emit_private_swiftinterface",
+        # The language mode and warnings: a package sets its own.
+        "-swift.enable_v6",
+        "-swift.treat_warnings_as_errors",
+        "-treat_warnings_as_errors",
+        # Swift's upcoming features (Swift 6 mode has them all; each package
+        # in Swift 5 mode chooses its own).
+        "-swift.upcoming.BareSlashRegexLiterals",
+        "-swift.upcoming.ConciseMagicFile",
+        "-swift.upcoming.DeprecateApplicationMain",
+        "-swift.upcoming.DisableOutwardActorInference",
+        "-swift.upcoming.DynamicActorIsolation",
+        "-swift.upcoming.ExistentialAny",
+        "-swift.upcoming.ForwardTrailingClosures",
+        "-swift.upcoming.GlobalActorIsolatedTypesUsability",
+        "-swift.upcoming.GlobalConcurrency",
+        "-swift.upcoming.ImmutableWeakCaptures",
+        "-swift.upcoming.ImplicitOpenExistentials",
+        "-swift.upcoming.ImportObjcForwardDeclarations",
+        "-swift.upcoming.InferIsolatedConformances",
+        "-swift.upcoming.InferSendableFromCaptures",
+        "-swift.upcoming.InternalImportsByDefault",
+        "-swift.upcoming.IsolatedDefaultValues",
+        "-swift.upcoming.MemberImportVisibility",
+        "-swift.upcoming.NonfrozenEnumExhaustivity",
+        "-swift.upcoming.NonisolatedNonsendingByDefault",
+        "-swift.upcoming.RegionBasedIsolation",
+        "-swift.upcoming.StrictConcurrency",
+    ],
+)

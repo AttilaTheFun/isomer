@@ -5,7 +5,8 @@
 // on the web). The interpolation takes Apple's `privacy:`, `format:` and
 // `align:` arguments; privacy is accepted and not acted on (nothing is
 // redacted: the log stays on the device, as a debug build's does), and the
-// formats are applied. No log store to read back (OSLogStore), signposts or
+// formats are applied. `import os` gives it too, as on Apple platforms (the
+// `os` module beside this one, frameworks/os_log/os). No log store to read back (OSLogStore), signposts or
 // `os_log`'s C-style formats.
 
 #if canImport(Android)
@@ -215,6 +216,21 @@ public struct OSLogInterpolation: StringInterpolationProtocol {
 
     public mutating func appendInterpolation(_ argumentObject: @autoclosure @escaping () -> NSObject, privacy: OSLogPrivacy = .auto) {
         text += argumentObject().description
+    }
+
+    // An error, as Apple's writes it (bridged to NSError there, its
+    // description; String(describing:) here). Disfavoured, as Apple's are: an
+    // error that is also CustomStringConvertible takes the overload above.
+    @_disfavoredOverload
+    public mutating func appendInterpolation(_ error: @autoclosure @escaping () -> any Error, privacy: OSLogPrivacy = .auto,
+                                             attributes: String = "") {
+        text += String(describing: error())
+    }
+
+    @_disfavoredOverload
+    public mutating func appendInterpolation(_ error: @autoclosure @escaping () -> (any Error)?, privacy: OSLogPrivacy = .auto,
+                                             attributes: String = "") {
+        text += error().map { String(describing: $0) } ?? "(null)"
     }
 }
 
