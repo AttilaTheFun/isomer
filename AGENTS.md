@@ -610,8 +610,9 @@ how Isomer runs it.
 An Apple app's Swift can be compiled natively against Isomer's frameworks
 instead of Apple's (2026-10-13: an A/B of the two on one source, and
 Isomer's frameworks where Apple's are too new for an older iOS; the blue
-Visor, com.LoganShire.VisorIsomer, is built this way, the red one with
-Apple's). `isomer_compiled_feature` (apple/compiled/defs.bzl) builds a
+Visor's iPhone app, com.LoganShire.VisorIsomer, was built this way, the red
+one with Apple's, until visor#225 removed Visor Isomer's iPhone apps on
+2026-11-04; Visor on Isomer is Android and the web now). `isomer_compiled_feature` (apple/compiled/defs.bzl) builds a
 feature's libraries in a configuration of their own: //apple/compiled:feature
 on (`@isomer//:swift_ui` is then //apple/libraries/compiled_swift_ui, the core
 named `SwiftUI`), rules_swift's module mapping //apple/compiled:mapping (every
@@ -625,8 +626,8 @@ apple/libraries/native_runtime/iso_hot_native.h); the host app registers
 `NativeFeatureRuntime` (the wasm engine seam over the C exports) and shows
 `WasmView(provider: CompiledFeatureProvider())`, so WasmView runs it as it
 runs a reactor. examples/apple/tap_counter_compiled_isomer_ios_application is
-the example (simulator: `--ios_multi_cpus=sim_arm64`); visor_isomer's
-applications/visor_isomer_compiled_ios is Visor's whole client so. The
+the example (simulator: `--ios_multi_cpus=sim_arm64`); Visor's whole
+client was built so until 2026-11-04 (visor_isomer_compiled_ios). The
 features are iOS 16: SwiftUI, Observation and Synchronization are Isomer's
 there, Foundation still Apple's. (An app that shows one through WasmView is
 iOS 18 since 0.38, WasmView linking WasmKit: the example is.) What the feature's configuration has and what bit:
@@ -660,13 +661,12 @@ iOS 18 since 0.38, WasmView linking WasmKit: the example is.) What the feature's
   own. The host side is iOS 18 / macOS 15 since 0.38: WasmView runs
   reactors on WasmKit, which stands on Swift's Synchronization (Mutex,
   Atomic), so the examples' wasm apps (example_full_wasm_ios_application,
-  iOS 15 until then) were raised to 18. visor_isomer's wasm blue Visor
-  (visor_isomer_ios, iOS 15) needs the same raise when it moves to isomer
-  0.38. The tree renderer itself still keeps newer APIs behind availability
+  iOS 15 until then) were raised to 18. The tree renderer itself still keeps newer APIs behind availability
   checks from its iOS 15 days.
-- RSPM refuses a package to an app below the package's own minimum:
-  visor_isomer lowers AgentUI's (iOS 18 → 16) with a `patch_cmds` on its
-  configure_package.
+- RSPM refuses a package to an app below the package's own minimum: an
+  app below it lowers the package's with a `patch_cmds` on its
+  configure_package (as the compiled blue Visor lowered AgentUI's, iOS 18
+  → 16).
 
 - `@isomer//:swift_ui` there is a group (compiled_swift_ui:sdk): SwiftUI,
   PhotosUI, QuickLook (Isomer's `quickLookPreview`, frameworks/quick_look,
@@ -692,9 +692,10 @@ iOS 18 since 0.38, WasmView linking WasmKit: the example is.) What the feature's
   must not load Apple's: it crashes the compiler.
 - `Image(_ cgImage:…)` there takes Apple's CGImage (PNG-encoded once and
   handed to the host like a guest's picture).
-- A/B: launch it with visor's fixture (`-visor.fixture snapshot
-  -visor.fixture.screen <screen>`) on the harness's simulator and compare
-  with tests/snapshots/ios/<screen>.png, which are red Visor's
+- The A/B (while the blue Visor's iPhone app was built so): it launched
+  with visor's fixture (`-visor.fixture snapshot -visor.fixture.screen
+  <screen>`) on the harness's simulator, compared with
+  tests/snapshots/ios/<screen>.png, which are red Visor's
   (tools/snapshots/pngdiff.py; the status bar overridden as the harness
   does). It found link colours, and `Image(systemName:)` drawn as text
   (a list row's separator started at the symbol); fixed, two screens are

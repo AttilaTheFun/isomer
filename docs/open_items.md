@@ -166,8 +166,8 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
 - **A text field's `selection` where a host doesn't report it**
   (shared/swift_ui_core/TextSelection.swift): the web, Compose and the Apple
   tree view on iOS 18 and macOS 15 report the caret and show a selection the
-  app sets (0.33, examples' selection_probe_* apps); below iOS 18 (the
-  compiled blue Visor's iOS 16), and in the GPU renderer's, Linux's and
+  app sets (0.33, examples' selection_probe_* apps); below iOS 18 (a
+  compiled feature's iOS 16), and in the GPU renderer's, Linux's and
   Windows' fields, the binding still follows the end of the text.
 - **QuickLook (`quickLookPreview`) is only in compiled Apple features**:
   the web and Android have no preview to present (an AgentUI attachment
@@ -194,7 +194,8 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
 
 - **A WasmView guest's first requests wait for its first draw** (0.35
   candidate, 2026-10-17: acceptable for now, a possible improvement): at a cold start the blue Visor's
-  sign-in leaves about 0.4 s after the store asks for it on the simulator,
+  iPhone app (removed 2026-11-04, visor#225; any WasmView host is the same)
+  sent its sign-in about 0.4 s after the store asks for it on the simulator,
   because WasmKitRuntime holds the guest's main-actor jobs
   while a tree is undrawn (`treeUndrawn`, which keeps a chat's place while
   pages load in above it) and a guest thread's swift_ffi calls wait for the
