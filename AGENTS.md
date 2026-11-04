@@ -244,7 +244,9 @@ and every story is held to Apple's SwiftUI's same screen
 and Reviews' parity): they should match, and a difference is Isomer's (it
 found radial and angular gradients drawn linear, Grid's columns unaligned
 and text runs' `.primary` drawn at the Mac's 85% black in the tree view).
-The platforms run at once, each on its own oss lease. CI makes it, and
+The platforms run at once, each on its own oss lease (the Mac's a `mac`
+slot of OS Server's primary macOS VM, its apps run by `exec --gui` and
+pictured by `screenshot --window`; PROOF_MAC=vm a macOS VM of its own). CI makes it, and
 only CI's counts (the Build workflow's `proof` job, tools/ci/proof.sh, on
 the runner's Mac after the build). It runs only by hand (since
 2026-11-01, for CI's time): an agent runs the Build workflow on main to
