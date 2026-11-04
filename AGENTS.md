@@ -748,17 +748,20 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
     `tools/foundation/check_link.py [<bazel flags>] <targets>` names the
     leak; give it the flags the targets were built with (it refuses to pass
     on autolink files that are not on disk).
-  - On Android the Swift SDK's FoundationNetworking and
-    FoundationInternationalization stay importable beside Isomer's
-    Foundation (`canImport` is true), so `#if canImport(FoundationNetworking)
-    import FoundationNetworking` links the SDK's, corelibs Foundation with
-    it. A library Isomer builds must not take that branch there (an app's
-    protocol library skips it on Android and goes through its host for HTTP);
-    since Isomer's Foundation has URLSession, the two would also make
-    `URLSession` ambiguous. rules_swift_package_manager keeps the LAST
-    configure_package per package and visits the root module first: a
-    dependency's tag beats the root's (visor_isomer patched visor's
-    MODULE.bazel for that, while AgentUI had SwiftTerm).
+  - **FoundationNetworking** (0.39.15): where Isomer's Foundation is the
+    Foundation (Android, the web), `@isomer//:foundation` brings a module
+    of that name too (//foundation/networking), which re-exports Isomer's
+    Foundation, whose URLSession, URLRequest and URLResponse are those
+    corelibs keeps there. Code written for Linux (`#if
+    canImport(FoundationNetworking) import FoundationNetworking`) then sees
+    one URLSession. Before, the Android Swift SDK's own FoundationNetworking
+    (corelibs') was found, and once Isomer's Foundation had NSObject
+    (0.39.3) its URLSession loaded beside Isomer's: ambiguous (the examples'
+    //tests/foundation_networking checks it). The SDK's
+    FoundationInternationalization is still importable on Android.
+    rules_swift_package_manager keeps the LAST configure_package per
+    package and visits the root module first: a dependency's tag beats the
+    root's.
   - The `:foundation` aliases are `one_configuration` wrappers
     (foundation/defs.bzl): RSPM's per-package minimum-OS transitions would
     otherwise build Foundation twice (every Apple platform's option is

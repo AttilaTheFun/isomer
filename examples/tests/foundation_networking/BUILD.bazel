@@ -1,0 +1,34 @@
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+load("@isomer//tools/platforms:transition.bzl", "transition_binary")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+# `#if canImport(FoundationNetworking) import FoundationNetworking`, as code
+# written for Linux has it, built against Isomer's Foundation on Android and
+# the web: one URLSession (@isomer//foundation/networking), where the Swift
+# SDK's own FoundationNetworking made it ambiguous on Android.
+swift_library(
+    name = "networking",
+    srcs = ["Networking.swift"],
+    tags = ["manual"],
+    deps = ["@isomer//:foundation"],
+)
+
+transition_binary(
+    name = "networking_android",
+    binary = ":networking",
+    platform = "@isomer//tools/platforms:android_arm64",
+)
+
+transition_binary(
+    name = "networking_wasm",
+    binary = ":networking",
+    platform = "@isomer//tools/platforms:wasm32",
+)
+
+build_test(
+    name = "networking_test",
+    targets = [
+        ":networking_android",
+        ":networking_wasm",
+    ],
+)
