@@ -64,6 +64,19 @@ tagged v0.38.N, the build it releases. The registry's isomer 0.38.N entry is
 the tag with one patch setting module() to 0.38.N (its tools/add_version.py
 --stamped). The examples' apps are tests and stay at 1.0.
 
+**Which number a release bumps (2026-11-04).** Semantic versioning, by the
+public interface (the Isomer module, the Apple-named modules, the Bazel
+macros and rules a consumer loads):
+- before 1.0: a breaking change bumps the minor (0.39.N → 0.40.0, whose
+  builds then count from 0), anything else stays in the minor, its third
+  number the build's;
+- from 1.0: major for a breaking change, minor for an addition, patch for
+  a fix that leaves the public interface as it was.
+
+Before proposing a release, check what changed since the last one against
+that interface; a break means MODULE.bazel and the apps move to the next
+minor (MAJOR.MINOR.0) before the release's commit.
+
 **Pins by version (2026-10-20).** Pins between the project's repos are
 by version at a release (a commit is fine on a branch, or on main between
 releases). Bazel modules come from bazel_registry, before the BCR: isomer's
