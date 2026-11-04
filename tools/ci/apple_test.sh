@@ -80,10 +80,16 @@ home="$(oss machine exec "$mac" -- /bin/sh -c 'printf %s "$HOME"')"
 mac_shot() { oss machine screenshot "$mac" "$1" --window="$BUNDLE" >/dev/null; }
 for story in "$@"; do
     oss machine exec "$mac" --gui --env=ISO_STORYBOOK_STORY="$story" --env=CFFIXED_USER_HOME="$home/test-home" -- \
-        "$home/Storybook.app/Contents/MacOS/Storybook" -NSRequiresAquaSystemAppearance YES \
+        "$home/Storybook.app/Contents/MacOS/Storybook" -AppleInterfaceStyle Light -NSRequiresAquaSystemAppearance YES \
         -AppleShowScrollBars WhenScrolling -ApplePersistenceIgnoreState YES >"$work/mac.log" 2>&1 &
     run=$!
-    sleep 6
+    # The primary's screen is one `--gui` run at a time: another job's may
+    # hold it, and this one's app starts only when it's let go.
+    for _ in $(seq 1 60); do
+        sleep 5
+        mac_shot "$out/macos-$story.png" 2>/dev/null && break
+    done
+    sleep 3
     if steady mac_shot "$out/macos-$story.png" && drawn "$out/macos-$story.png"; then
         echo "apple_test: macos $story"
     else
