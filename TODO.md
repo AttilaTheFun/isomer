@@ -54,10 +54,14 @@ container with its own KVM, the iPhone and the Mac on slots. Left:
   bar, a one-time change); Windows' pixels stay Windows' (a Windows slot of
   a Windows primary, OS Server's backlog for the Mac Studio). The proof's
   Android part could use the container phone once its boot is fast enough.
-- **Nested virtualization is slow**: Android's userspace runs 10-20 times
-  slower than on hardware, so a boot takes ten minutes or more and the
-  Android tests run on main's pushes and by hand only. Shireworks measures
-  the container kernel's settings.
+- **Android in a container is slow**: a boot takes over an hour, so its
+  tests run by hand only. Not nesting: Virtualization's vCPU threads aren't
+  real-time, and macOS's timer leeway makes every timed wait in the guest
+  oversleep by about half (OS Server's maintainers measured it; no
+  Virtualization setting changes it, and a report to Apple is drafted).
+  Android's timeouts are scaled by 20 (hw_timeout_multiplier) to survive
+  it. Next: boot once and restore Cuttlefish snapshots after, so a run
+  skips the boot; a host-side emulator stays the fast path.
 - **Upstream the Windows cross toolchain** (tools/windows): a
   `swift.windows_sdk` tag in rules_swift, as `wasm_sdk` and `android_sdk`
   are, Microsoft's half behind a URL the builder supplies.

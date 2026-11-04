@@ -474,8 +474,10 @@ oss machines (~/Developer/AGENTS.md), never on this Mac's own screen.
   - Android: a Cuttlefish phone (AOSP's arm64 virtual device) in a
     container with its own KVM (`oss machine run container
     --virtualization`, OS Server's API 22; tools/ci/android_device.sh and
-    android_test.sh), main's pushes and runs by hand only (a boot under
-    nested virtualization takes ten minutes or more);
+    android_test.sh), by hand only (`gh workflow run build.yml`): a boot
+    there takes over an hour, as Virtualization's vCPU threads oversleep
+    every timed wait by half (macOS's timer leeway), and Android's timeouts
+    are scaled by 20 to survive it;
   - the iPhone and the Mac: built in the container (rules_applecross), run
     on an `ios` lease and a `mac` slot of OS Server's primary macOS VM
     (tools/ci/apple_test.sh);

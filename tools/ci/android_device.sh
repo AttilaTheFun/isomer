@@ -11,10 +11,14 @@
 #   tools/ci/android_device.sh start <cache>      # installs what's missing, boots it
 #   tools/ci/android_device.sh stop <cache>
 #
-# Nested virtualization makes it slow: 2 vCPUs boot faster than 4 (fewer
-# interrupts between them to emulate), and a boot can take ten minutes or
-# more. Its browser view (WebRTC) and radio simulator (netsim) are off: both
-# want services a container doesn't run, and either ending ends the device.
+# Slow: Virtualization's vCPU threads aren't real-time, so every timed wait
+# in the guest oversleeps by about half (macOS's timer leeway, measured by
+# OS Server's maintainers), across thousands of Android's threads. A boot
+# takes over an hour; 2 vCPUs do better than 4; Android's own timeouts (the
+# system server's watchdog, ART's thread suspension) are scaled by 20
+# (hw_timeout_multiplier), or they end the boot first. Its browser view
+# (WebRTC) and radio simulator (netsim) are off: both want services a
+# container doesn't run, and either ending ends the device.
 set -euo pipefail
 command="$1" cache="$2"
 build="${CUTTLEFISH_BUILD:-aosp-android-latest-release/aosp_cf_arm64_only_phone-userdebug}"
@@ -51,7 +55,8 @@ fi
 su root -c "export PATH='$PATH' HOME='$HOME'; cd '$cache/device' && ./bin/launch_cvd --daemon \
     --start_webrtc=false --netsim=false --netsim_bt=false --netsim_uwb=false \
     --gpu_mode=guest_swiftshader --report_anonymous_usage_stats=n \
-    --cpus=2 --memory_mb=4096 --boot_timeout_secs=2400 --resume=false" >&2
+    --cpus=2 --memory_mb=4096 --boot_timeout_secs=6000 --resume=false \
+    --extra_bootconfig_args=androidboot.hw_timeout_multiplier=20" >&2
 serial="0.0.0.0:6520"
 "$cache/device/bin/adb" connect "$serial" >/dev/null
 "$cache/device/bin/adb" -s "$serial" wait-for-device

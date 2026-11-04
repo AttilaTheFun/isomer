@@ -111,7 +111,7 @@ jobs:
     # OS Server queues them (`oss machine run` waits while another lease
     # holds the volume, OS Server 0.14). Not a concurrency group: GitHub
     # keeps one pending job a group and cancels the others.
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v5
       # Every platform built in the Linux container (Windows on Arm with
@@ -122,12 +122,12 @@ jobs:
         run: exec tools/ci/container_build.sh
       # The other platforms where they run, at once: Windows under arm64
       # Wine in a container, the iPhone and the Mac on slots of OS Server's
-      # primary macOS VM, and (main's pushes, and by hand: a boot under
-      # nested virtualization takes ten minutes or more) Android on a
-      # Cuttlefish phone in a container with its own KVM.
+      # primary macOS VM, and (by hand only: a boot there takes over an
+      # hour, tools/ci/android_device.sh says why) Android on a Cuttlefish
+      # phone in a container with its own KVM.
       - name: The other platforms' tests
         env:
-          ANDROID: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && '--android' || '' }}
+          ANDROID: ${{ github.event_name == 'workflow_dispatch' && '--android' || '' }}
         run: exec tools/ci/platform_tests.sh $ANDROID .ci/platform-tests
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
