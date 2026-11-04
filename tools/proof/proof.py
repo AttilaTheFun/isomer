@@ -30,24 +30,27 @@ iso://story/<id>): a second or two a story where a launch each took five
 to fourteen. A story that doesn't open so is launched to on its own.
 
 What changes between runs without the apps changing is held still or left
-out: the iPhone's and Android's status bars (simctl's override, SystemUI's
-demo mode: 9:41), and on the desktops everything but the app's window (a
-Mac's and Windows' screenshots are cropped to the app's frontmost window (a
-Mac slot's by OS Server), a Mac's rounded corners cut away, Linux's below
-GNOME's top bar and right of its dock).
+out: the iPhone's and Android's status bars (oss's simctl override from an
+ios lease's start, SystemUI's demo mode: 9:41), and on the desktops
+everything but the app's window (a Mac's and Windows' screenshots are
+cropped to the app's frontmost window (a Mac slot's by OS Server), a Mac's
+rounded corners cut away, Linux's below GNOME's top bar and right of its
+dock).
 
 Each platform's apps are folders of the review store's snapshots,
 <dir>/review-<platform>-<app>/manifest.json (reviews/MANIFEST.md). CI runs
 it (tools/ci/proof.sh), which makes the `proof` artifact of those folders'
 pictures; only CI's proof counts. The launch hooks reach each
-platform as it passes a process environment: simctl's SIMCTL_CHILD_, `open
---env`, an Android intent's ISO_ extras, the web page's ISO_ query, the
-desktops' environment.
+platform as it passes a process environment: simctl's SIMCTL_CHILD_ (`oss
+machine simctl --env`), `open --env`, an Android intent's ISO_ extras, the
+web page's ISO_ query, the desktops' environment.
 
 The builds are this checkout's, made here (-c opt) before the platforms
 start, except Linux's (a Linux container: tools/linux/build.sh) and
 Windows' (on its VM). Then the platforms run at once, each on a lease of
-its own (an iOS simulator, an Android emulator, a slot of OS Server's
+its own (an iOS simulator, in OS Server's primary macOS VM, driven through
+oss alone (PROOF_IOS=local: simctl on this Mac, for a server whose
+simulators are its Mac's), an Android emulator, a slot of OS Server's
 primary macOS VM (PROOF_MAC=vm: a macOS VM of its own), Linux and Windows
 VMs; the web in this Mac's headless Chrome), released however the run
 ends. Stamp the build's version into both modules first, as CI does
@@ -414,7 +417,11 @@ def shoot_apps(review, platform, device, orientation, launcher, story_list, wait
     review.cell(f"{platform}-playground", "playground", device, orientation, shots)
 
 
-# --- iOS (an oss simulator lease: simctl on the server, which is this Mac)
+# --- iOS (an oss simulator lease: since OS Server put its `ios` leases in
+# its primary macOS VM, the simulator isn't on this Mac, so everything goes
+# through oss's verbs: simctl, upload, download, screenshot. PROOF_IOS=local:
+# simctl here, against the lease's OSS_UDID, for a server whose simulators
+# are its own Mac's, primary.macos.simulators 0.)
 
 def build_ios():
     return {
@@ -429,46 +436,145 @@ def build_ios():
     }
 
 
+def oss_api():
+    """The oss server's API level (`oss capabilities`)."""
+    return json.loads(sh(["oss", "capabilities"]).stdout).get("api", 0)
+
+
+class LeasedSimulator:
+    """An oss `ios` lease's simulator, wherever OS Server runs it (its
+    primary macOS VM since 0.14), through oss alone: `simctl` (a local .app
+    uploaded first; `--env=NAME=VALUE` its SIMCTL_CHILD_NAME, `@name` a file
+    of the lease's own folder), `upload`/`download` for that folder's files,
+    `screenshot` (masked, the status bar held at 9:41 since the lease began).
+    API 20 for the environment and the folder."""
+
+    def __init__(self, lease_id):
+        self.id = lease_id
+
+    def simctl(self, *arguments, environment=None, check=True):
+        command = ["oss", "machine", "simctl", self.id]
+        if environment:
+            command += [f"--env={key}={value}" for key, value in environment.items()] + ["--"]
+        return sh(command + list(arguments), check=check)
+
+    def install(self, app):
+        self.simctl("install", app)
+
+    def prepare(self):
+        # Light, as every platform's shots are. (The status bar: oss holds
+        # every ios lease's at 9:41 from the start.)
+        self.simctl("ui", "booted", "appearance", "light", check=False)
+
+    def terminate(self, bundle):
+        self.simctl("terminate", "booted", bundle, check=False)   # not running: fine
+
+    def launch(self, bundle, environment):
+        result = self.simctl("launch", "booted", bundle, environment=environment, check=False)
+        if result.returncode != 0:
+            log(f"launch {bundle}: {result.stdout[-500:]}{result.stderr[-500:]}")
+
+    def screenshot(self, path):
+        sh(["oss", "machine", "screenshot", self.id, path])
+
+    def control(self, app):
+        """The Storybook's control file, `<app>-control` in the lease's
+        folder (one an app: the other's `.shown` isn't this one's): its
+        environment value, `request(story)` and `shown()`."""
+        name = f"{app}-control"
+        local = os.path.join(tempfile.mkdtemp(prefix=f"proof-ios-{app}-"), "control")
+
+        def request(story):
+            with open(local, "w") as file:
+                file.write(story)
+            sh(["oss", "machine", "upload", self.id, local, name])
+
+        def shown():
+            got = local + ".shown"
+            if os.path.exists(got):
+                os.remove(got)
+            if sh(["oss", "machine", "download", self.id, f"{name}.shown", got], check=False).returncode != 0:
+                return None   # none yet
+            return open(got).read().strip() if os.path.exists(got) else None
+        # There before the app starts, naming no story (it follows the file
+        # once a story id is in it).
+        request("none")
+        return f"@{name}", request, shown
+
+
+class LocalSimulator:
+    """PROOF_IOS=local: the lease's simulator on this Mac, by simctl here
+    (OSS_UDID), its control file this Mac's."""
+
+    def __init__(self, udid):
+        self.udid = udid
+
+    def install(self, app):
+        sh(["xcrun", "simctl", "install", self.udid, app])
+
+    def prepare(self):
+        # The status bar held still, as every snapshot here holds it (~/Developer/AGENTS.md):
+        # 9:41, full Wi-Fi and signal, a full battery, no carrier.
+        sh(["xcrun", "simctl", "status_bar", self.udid, "override", "--time", "9:41", "--dataNetwork", "wifi", "--wifiMode", "active",
+            "--wifiBars", "3", "--cellularMode", "active", "--cellularBars", "4", "--operatorName", "",
+            "--batteryState", "charged", "--batteryLevel", "100"], check=False)
+        sh(["xcrun", "simctl", "ui", self.udid, "appearance", "light"], check=False)
+
+    def terminate(self, bundle):
+        sh(["xcrun", "simctl", "terminate", self.udid, bundle], check=False)
+
+    def launch(self, bundle, environment):
+        variables = dict(os.environ)
+        for key, value in environment.items():
+            variables["SIMCTL_CHILD_" + key] = value
+        subprocess.run(["xcrun", "simctl", "launch", self.udid, bundle], env=variables, capture_output=True)
+
+    def screenshot(self, path):
+        sh(["xcrun", "simctl", "io", self.udid, "screenshot", "--mask=black", path])
+
+    def control(self, app):
+        control = os.path.join(tempfile.mkdtemp(prefix=f"proof-ios-{app}-"), "control")
+
+        def request(story):
+            with open(control, "w") as file:
+                file.write(story)
+
+        def shown():
+            path = control + ".shown"
+            return open(path).read().strip() if os.path.exists(path) else None
+        return control, request, shown
+
+
 def ios(review, story_list, builds):
+    local = os.environ.get("PROOF_IOS", "oss") == "local"
+    if not local and (api := oss_api()) < 20:
+        raise RuntimeError(f"the iPhone's proof needs OS Server's API 20 (an ios lease's launch environment and its "
+                           f"folder's files); this server's is {api}. PROOF_IOS=local for a server whose simulators are its Mac's")
     env = lease("ios")
     try:
-        udid = env["OSS_UDID"]
+        simulator = LocalSimulator(env["OSS_UDID"]) if local else LeasedSimulator(env["OSS_ID"])
         for app, ipa in builds.items():
             work = tempfile.mkdtemp(prefix=f"proof-ios-{app}-")
             sh(["unzip", "-q", ipa, "-d", work])
             payload = os.path.join(work, "Payload")
-            sh(["xcrun", "simctl", "install", udid, os.path.join(payload, os.listdir(payload)[0])])
-        # The status bar held still, as every snapshot here holds it (~/Developer/AGENTS.md):
-        # 9:41, full Wi-Fi and signal, a full battery, no carrier.
-        sh(["xcrun", "simctl", "status_bar", udid, "override", "--time", "9:41", "--dataNetwork", "wifi", "--wifiMode", "active",
-            "--wifiBars", "3", "--cellularMode", "active", "--cellularBars", "4", "--operatorName", "",
-            "--batteryState", "charged", "--batteryLevel", "100"], check=False)
-        # Light, as every platform's shots are.
-        sh(["xcrun", "simctl", "ui", udid, "appearance", "light"], check=False)
+            simulator.install(os.path.join(payload, os.listdir(payload)[0]))
+        simulator.prepare()
+        everyone = list(APPS.values()) + [ISOMER_STORYBOOK]
 
         def launcher(app, environment, wait, path):
             bundle = ISOMER_STORYBOOK["bundle"] if app == "storybook-isomer" else APPS[app]["bundle"]
             # Every app closed: launched with another in front, iOS shows a
             # "◀ <that app>" link in the status bar.
-            for other in list(APPS.values()) + [ISOMER_STORYBOOK]:
-                sh(["xcrun", "simctl", "terminate", udid, other["bundle"]], check=False)
-            variables = dict(os.environ)
-            for key, value in environment.items(): variables["SIMCTL_CHILD_" + key] = value
-            subprocess.run(["xcrun", "simctl", "launch", udid, bundle], env=variables, capture_output=True)
+            for other in everyone:
+                simulator.terminate(other["bundle"])
+            simulator.launch(bundle, environment)
             time.sleep(wait)
-            steady_shot(lambda shot: sh(["xcrun", "simctl", "io", udid, "screenshot", "--mask=black", shot]), path)
+            steady_shot(simulator.screenshot, path)
 
         def switcher(app):
-            # The simulator runs on this Mac (oss's server is here): its apps
-            # read and write the control file where the proof does.
-            control = os.path.join(tempfile.mkdtemp(prefix=f"proof-ios-{app}-"), "control")
-
-            def read(path):
-                return open(path).read().strip() if os.path.exists(path) else None
+            control, request, shown = simulator.control(app)
             return Switcher(start=lambda path: launcher(app, {"ISO_STORYBOOK_CONTROL": control}, 5, path),
-                            request=lambda story: open(control, "w").write(story),
-                            shown=lambda: read(control + ".shown"),
-                            shoot=lambda path: sh(["xcrun", "simctl", "io", udid, "screenshot", "--mask=black", path]))
+                            request=request, shown=shown, shoot=simulator.screenshot)
 
         waits = {"open": 5, "story": 4, "run": 25}
         shoot_apps(review, "ios", "iPhone (simulator)", "portrait", launcher, story_list, waits, switcher("storybook"))
@@ -484,8 +590,8 @@ def ios(review, story_list, builds):
             shots.append((title, capture, reference))
         review.compared_cell("ios-storybook-isomer", "storybook", "iPhone (simulator), Isomer's SwiftUI against Apple's",
                              "portrait", shots)
-        for app in list(APPS.values()) + [ISOMER_STORYBOOK]:
-            sh(["xcrun", "simctl", "terminate", udid, app["bundle"]], check=False)
+        for app in everyone:
+            simulator.terminate(app["bundle"])
     finally:
         release(env)
 
