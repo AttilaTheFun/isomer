@@ -54,6 +54,8 @@
 #   PROOF_PYTHON        the python3 that runs proof.py, with Pillow, which crops
 #                       the desktops' pictures (default: the PATH's python3)
 #   PROOF_BASELINE_RUN  a run whose proof is the baseline (above)
+#   PROOF_MAC           vm: the Mac's pictures on a macOS VM of their own, as
+#                       before 2026-11-03 (default: a slot of OS Server's primary)
 #   OSS_FILES_HOST      the name a container reaches this Mac's OS Server by
 #                       (default: this Mac's tailnet name, from Tailscale)
 #   GH_TOKEN            gh's token (the job's)

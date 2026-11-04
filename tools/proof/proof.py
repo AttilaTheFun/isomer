@@ -32,9 +32,9 @@ to fourteen. A story that doesn't open so is launched to on its own.
 What changes between runs without the apps changing is held still or left
 out: the iPhone's and Android's status bars (simctl's override, SystemUI's
 demo mode: 9:41), and on the desktops everything but the app's window (a
-Mac's and Windows' screenshots are cropped to the app's frontmost window, a
-Mac's rounded corners cut away, Linux's below GNOME's top bar and right of
-its dock).
+Mac's and Windows' screenshots are cropped to the app's frontmost window (a
+Mac slot's by OS Server), a Mac's rounded corners cut away, Linux's below
+GNOME's top bar and right of its dock).
 
 Each platform's apps are folders of the review store's snapshots,
 <dir>/review-<platform>-<app>/manifest.json (reviews/MANIFEST.md). CI runs
@@ -47,7 +47,8 @@ desktops' environment.
 The builds are this checkout's, made here (-c opt) before the platforms
 start, except Linux's (a Linux container: tools/linux/build.sh) and
 Windows' (on its VM). Then the platforms run at once, each on a lease of
-its own (an iOS simulator, an Android emulator, macOS, Linux and Windows
+its own (an iOS simulator, an Android emulator, a slot of OS Server's
+primary macOS VM (PROOF_MAC=vm: a macOS VM of its own), Linux and Windows
 VMs; the web in this Mac's headless Chrome), released however the run
 ends. Stamp the build's version into both modules first, as CI does
 (examples/playground/tools/playground/stamp.py and examples/tools/stamp_storybook.py),
@@ -489,7 +490,8 @@ def ios(review, story_list, builds):
         release(env)
 
 
-# --- macOS (a vanilla oss VM: no Xcode, no Swift; the apps copied in)
+# --- macOS (a slot of OS Server's primary macOS VM; PROOF_MAC=vm: a whole
+# vanilla VM, as until 2026-11-03. Either way the apps built here, copied in)
 
 def build_macos():
     return {
@@ -498,7 +500,131 @@ def build_macos():
     }
 
 
+# What the Mac apps are launched with, on a slot and a VM alike. Light, as
+# every platform's shots are, whatever the session is in (the VMs' and the
+# primary's come up dark, and a defaults write doesn't change a running
+# session's appearance): the app's own choice. A caret that doesn't blink
+# (the Pokédex's focused search field was shot mid-blink): on for a day.
+MAC_ARGUMENTS = ["-NSRequiresAquaSystemAppearance", "YES",
+                 "-NSTextInsertionPointBlinkPeriodOn", "100000000", "-NSTextInsertionPointBlinkPeriodOff", "0"]
+
+# A slot's app, run by `oss machine exec --gui` in the primary's console
+# session (its user's, not the slot's). Started by its binary, so that it is
+# the exec's child and ends with it (the server signals the exec's process
+# group when the client goes: nothing found by name), then made frontmost by
+# `open` of its bundle, which activates the running one: started so alone,
+# its window stayed behind, inactive (grey traffic lights, no vibrancy in
+# the sidebar), which the VM's never were.
+SLOT_LAUNCH = """
+app=$1; shift
+"$app/Contents/MacOS/$(basename "$app" .app)" "$@" &
+pid=$!
+sleep 2
+kill -0 "$pid" 2> /dev/null && /usr/bin/open "$app"
+wait "$pid"
+"""
+
+
 def macos(review, story_list, builds):
+    """On a slot of OS Server's primary macOS VM (a `mac` lease), unless
+    PROOF_MAC=vm: then a whole macOS VM of its own."""
+    if os.environ.get("PROOF_MAC", "slot") == "vm":
+        macos_vm(review, story_list, builds)
+    else:
+        macos_slot(review, story_list, builds)
+
+
+def macos_slot(review, story_list, builds):
+    """The Mac's pictures on a slot: the apps unzipped in the slot's home,
+    each run by `exec --gui` (one GUI run at a time on the primary, the
+    server queueing the others' turns) and pictured by `screenshot
+    --window`, which the server crops to the app's frontmost window.
+
+    The primary is shared and lives on, where a VM lease was fresh: what
+    the apps keep goes to a home of the proof's own (CFFIXED_USER_HOME, which
+    Foundation's home directory, Application Support and the defaults
+    follow), not the console user's, so the Playground's projects and both
+    apps' defaults start as on a fresh VM; and the scroll bars are set in
+    the apps' argument domain rather than the session's defaults."""
+    env = lease("mac")
+    slot = env["OSS_ID"]
+    running = []
+
+    def run(*command, check=True):
+        return sh(["oss", "machine", "exec", slot, "--", *command], check=check)
+
+    def stop():
+        # The exec's client ended: the server ends its process group (TERM,
+        # then KILL), so the app with it.
+        while running:
+            process = running.pop()
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=30)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+
+    work = f"/tmp/oss-proof-{slot}"
+    home = f"{work}/home"
+    control = f"{work}/storybook-control"
+    try:
+        apps = run("/bin/sh", "-c", 'printf %s "$HOME"').stdout.strip()
+        for app, archive in builds.items():
+            sh(["oss", "machine", "upload", slot, archive, f"{app}.zip"])
+            run("/bin/sh", "-c", 'rm -rf "$1.app" && /usr/bin/ditto -x -k "$2.zip" . && rm "$2.zip"', "unzip",
+                APPS[app]["name"], app)
+        # The slot's user makes it; the console user's apps write in it
+        # (the home, the control file's `.shown`).
+        run("/bin/sh", "-c", 'rm -rf "$1" && mkdir -p "$1/home" && chmod 777 "$1" "$1/home"', "work", work)
+        logs = tempfile.mkdtemp(prefix="proof-macos-")
+
+        def shoot(path, app="storybook"):
+            sh(["oss", "machine", "screenshot", slot, path, f"--window={APPS[app]['bundle']}"])
+            cut_corners(path)
+
+        def launcher(app, environment, wait, path):
+            stop()
+            name = APPS[app]["name"]
+            variables = {"CFFIXED_USER_HOME": home, **environment}
+            command = ["oss", "machine", "exec", slot, "--gui", *(f"--env={k}={v}" for k, v in variables.items()), "--",
+                       "/bin/sh", "-c", SLOT_LAUNCH, "launch", f"{apps}/{name}.app",
+                       *MAC_ARGUMENTS, "-AppleShowScrollBars", "WhenScrolling", "-ApplePersistenceIgnoreState", "YES"]
+            output = open(os.path.join(logs, f"{app}.log"), "ab")
+            process = subprocess.Popen(command, stdout=output, stderr=subprocess.STDOUT)
+            running.append(process)
+            # Its window once the GUI turn is the slot's (another slot's run
+            # may hold it): until then the screenshot is refused.
+            probe = os.path.join(logs, "window.png")
+            deadline = time.time() + 900
+            while subprocess.run(["oss", "machine", "screenshot", slot, probe, f"--window={APPS[app]['bundle']}"],
+                                 capture_output=True).returncode != 0:
+                if process.poll() is not None:
+                    raise RuntimeError(f"{name} ended ({process.returncode}) before its window showed: {output.name}")
+                if time.time() > deadline:
+                    raise RuntimeError(f"no window of {name} in 15 minutes")
+                time.sleep(1)
+            time.sleep(wait)
+            shoot(path, app)
+
+        switcher = Switcher(start=lambda path: launcher("storybook", {"ISO_STORYBOOK_CONTROL": control}, 6, path),
+                            request=lambda story: run("/bin/sh", "-c", 'printf %s "$1" > "$2"', "request", story, control),
+                            shown=lambda: run("/bin/cat", f"{control}.shown", check=False).stdout.strip(),
+                            shoot=shoot)
+        shoot_apps(review, "macos", "Mac (macOS 27 VM)", "landscape", launcher, story_list,
+                   {"open": 6, "story": 4, "run": 30}, switcher)
+    finally:
+        stop()
+        # The proof's folder outlives the slot (it's the primary's /tmp, not
+        # the slot's home): the console user's files in it removed by that
+        # user (a GUI turn), then the folder by the slot's.
+        sh(["oss", "machine", "exec", slot, "--gui", "--", "/bin/rm", "-rf", home], check=False)
+        run("/bin/rm", "-rf", work, check=False)
+        release(env)
+
+
+def macos_vm(review, story_list, builds):
     env = lease("macos")
     try:
         for app, archive in builds.items():
@@ -532,14 +658,8 @@ def macos(review, story_list, builds):
             name = APPS[app]["name"]
             ssh(env, f"pkill -x {name}; sleep 1", check=False)
             flags = " ".join(f"--env {k}={shlex.quote(v)}" for k, v in environment.items())
-            # Light, as every platform's shots are, whatever the VM's session
-            # is in (its leases came up dark, and a defaults write doesn't
-            # change a running session's appearance): the app's own choice.
-            # And a caret that doesn't blink (the Pokédex's focused search
-            # field was shot mid-blink): on for a day.
             ssh(env, f"sudo launchctl asuser $(id -u runner) open -n {flags} /tmp/{name}.app"
-                " --args -NSRequiresAquaSystemAppearance YES"
-                " -NSTextInsertionPointBlinkPeriodOn 100000000 -NSTextInsertionPointBlinkPeriodOff 0")
+                f" --args {shlex.join(MAC_ARGUMENTS)}")
             time.sleep(wait)
             shoot(path)
 
