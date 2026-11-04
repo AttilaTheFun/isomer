@@ -611,7 +611,10 @@ def build_macos():
 # primary's come up dark, and a defaults write doesn't change a running
 # session's appearance): the app's own choice. A caret that doesn't blink
 # (the Pokédex's focused search field was shot mid-blink): on for a day.
-MAC_ARGUMENTS = ["-NSRequiresAquaSystemAppearance", "YES",
+# Light, in the app's argument domain (AppKit reads AppleInterfaceStyle as
+# a user default): the primary's screen is shared, and its user's own
+# appearance (Dark, once another run set it) is not the proof's to change.
+MAC_ARGUMENTS = ["-AppleInterfaceStyle", "Light", "-NSRequiresAquaSystemAppearance", "YES",
                  "-NSTextInsertionPointBlinkPeriodOn", "100000000", "-NSTextInsertionPointBlinkPeriodOff", "0"]
 
 # A slot's app, run by `oss machine exec --gui` in the primary's console
