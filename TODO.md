@@ -54,19 +54,19 @@ container with its own KVM, the iPhone and the Mac on slots. Left:
   bar, a one-time change); Windows' pixels stay Windows' (a Windows slot of
   a Windows primary, OS Server's backlog for the Mac Studio). The proof's
   Android part could use the container phone once its boot is fast enough.
-- **Android in a container is slow on a Mac**, so CI tests Android on an
-  emulator leased from OS Server (the Mac's own hypervisor) and Cuttlefish
-  in a container is the by-hand path (tools/ci/android_device.sh). Not
-  nesting: Virtualization's vCPU threads aren't real-time, and macOS's
-  timer leeway makes every timed wait in a guest oversleep by about half
-  (OS Server's maintainers measured it; no Virtualization setting changes
-  it; a report to Apple is filed). Android's timeouts are scaled by 20
-  and the container's CPUs kept from idling, which brought system_server
-  from 75 to 18 minutes into a boot. On a Linux host with KVM, the
-  container is the fast path.
-- **Upstream the Windows cross toolchain** (tools/windows): a
-  `swift.windows_sdk` tag in rules_swift, as `wasm_sdk` and `android_sdk`
-  are, Microsoft's half behind a URL the builder supplies.
+- **Android in a container doesn't finish booting on a Mac**, so CI tests
+  Android on an emulator leased from OS Server (the Mac's own hypervisor).
+  Cuttlefish in a container with its own KVM (tools/ci/android_device.sh)
+  boots far into the system server, which then restarts each time
+  WebView's zygote times out starting. Not nesting: Virtualization's vCPU
+  threads aren't real-time, and macOS's timer leeway makes every timed wait
+  in a guest oversleep by about half (OS Server's maintainers measured it;
+  no Virtualization setting changes it; a report to Apple is filed).
+  Android's timeouts scaled by 20 and the container's CPUs kept from idling
+  got the system server from 75 to 18 minutes into a boot. On a Linux host
+  with KVM the container is the fast path.
+- **The Windows cross toolchain upstream**: bazelbuild/rules_swift#1988
+  (`swift.windows_sdk`, draft); tools/windows gives way to it once released.
 - **The build image**: container_build.sh installs Xvfb, Mesa's drivers and
   Chrome's libraries into Visor's agent image at each run; Wine 10 needs
   Ubuntu 26.04, so Windows runs in a container of its own. An image of
@@ -76,52 +76,54 @@ container with its own KVM, the iPhone and the Mac on slots. Left:
 
 The goal: every dependency at an upstream tagged release (a BCR version, a
 SwiftPM version, a swift.org toolchain), with no forks, no patches and no
-git or archive overrides. Each change we carry goes upstream, and its fork
-or patch goes when a release has it. The project's registry
-(AttilaTheFun/bazel_registry) then holds only the project's own modules.
-What is carried today (on main, and with #39's rules_applecross):
+git or archive overrides; the project's registry then holds only the
+project's own modules. Every change we carry has an upstream PR now
+(2026-11-04, drafts unless noted); each patch or fork goes when a release
+has it.
 
-- **rules_swift**: the registry's 3.6.1.isomer.1 (4.1.0.isomer.2 with #39).
-  It is upstream plus:
-  - rules_swift#1860, open: a metadata-driven wasm SDK and its threads
-    variant;
-  - two patches of ours, not yet sent upstream (tools/patches):
-    `rules_swift_wasm_threads_beside.patch` (two `swift.wasm_sdk` tags) and
-    `rules_swift_wasm_clang_resource_dir.patch` (the SDK's clang headers
-    for C compiled for wasm).
-
-  #39 also holds it above the 4.2.2 that rules_applecross asks for.
-- **The threads Swift SDK** for wasm: AttilaTheFun/swift's build of 6.3.2
-  (branch threads-sdk-6.3.2) with swiftlang/swift#92018. That PR merged on
-  2026-10-09 (#90715 was closed in its favour), as did
-  swift-platform-executors#33. The fork goes when a swift.org release
-  carries them and publishes a wasip1-threads SDK.
-- **swift-foundation**: the registry's 6.3.2.isomer.1, AttilaTheFun's fork
-  (branch `isomer`). Its fixes for WASI and Android go upstream. What only
-  Isomer needs (its declarations made internal, so the `Foundation` module
-  stays a subset of Apple's) needs a form upstream would take, such as a
-  build setting, or a home outside the fork.
-- **WasmKit**: AttilaTheFun/WasmKit at a commit (an `http_archive` with our
-  BUILD file), carrying:
-  - the engine work: guard pages on iOS, and the dispatch fusions;
-  - two patches (tools/patches): Android's software bounds checks, and
-    MSVC's C without clang's atomics.
-
-  All of it goes to swiftwasm/WasmKit; then a tagged release, as a module
-  or a SwiftPM package.
-- **flatbuffers**: two patches, `flatbuffers_foundation_wasi.patch` and
-  `flatbuffers_swift_vectors.patch`, go to google/flatbuffers.
-  `rules_foreign_cc` is held at 0.15.1, because the 0.10.1 that grpc asks
-  for doesn't load on Bazel 9.
-- **rules_swift_package_manager**: the examples' Windows patch.
-- **With #39** (Apple targets built on Linux):
-  - rules_apple 5.3.1 with seven of rules_applecross's patches, and
-    apple_support 2.10.1 with one, which rules_applecross is taking
-    upstream;
-  - rules_applecross itself at a commit, until it has a release in the
-    BCR;
-  - hermetic_android_toolchains with
-    `hermetic_android_toolchains_linux_any_cpu.patch`.
+- **rules_swift** (the registry's 4.1.0.isomer.2):
+  - bazelbuild/rules_swift#1860 (open): the metadata-driven wasm SDK and its
+    wasip1-threads variant;
+  - #1990 (draft, on #1860): a single-threaded and a threads wasm SDK side
+    by side (`rules_swift_wasm_threads_beside.patch`);
+  - #1989 (draft): the wasm SDK's clang resource directory for C compiles
+    (`rules_swift_wasm_clang_resource_dir.patch`);
+  - the worker's copy fix is upstream since 4.2.0 (#1905): the patch goes
+    with the move to a 4.2 release;
+  - #1988 (draft): `swift.windows_sdk`, Windows built on Linux with the
+    builder's own SDKs (Isomer's tools/windows, upstream's
+    tools/windows_sdk), which tools/windows then gives way to.
+- **swift-foundation** (AttilaTheFun's fork, 6.3.2.isomer.1):
+  - swiftlang/swift-foundation#2409 (draft): `createDirectory(withIntermediateDirectories:)`
+    stops at "/" (WASI);
+  - Android's `fts_open` workaround isn't needed upstream: the Android Swift
+    SDK's apinotes fix it, so Isomer's Android compiles should load them;
+  - the rest is Isomer's own (Apple's signatures, swift-foundation's extra
+    declarations made internal, the NSString-style string API,
+    `String(format:)`, the Bazel build): it needs a form upstream would take
+    (a build setting for a standalone FoundationEssentials) or a home
+    outside the fork.
+- **WasmKit** (AttilaTheFun's fork, and two patches): swiftwasm/WasmKit #513
+  (iOS guard pages), #514 (Android's software bounds checks), #515 (MSVC's C),
+  #516 (constant-pool reservations), #517 (internal calls off the native
+  stack) and #518 (the dispatch fusions, on #517). #517's CoreMark needs a
+  measurement on a quiet machine.
+- **flatbuffers**: google/flatbuffers#9461 (draft): FlatBuffers without
+  Foundation on WASI (Android's part of `flatbuffers_foundation_wasi.patch`
+  stays ours); the Swift Vectors glob is fixed upstream (#8875) and goes with
+  the next BCR release. rules_foreign_cc stays held at 0.15.1 (grpc asks for
+  0.10.1, which doesn't load on Bazel 9).
+- **rules_swift_package_manager**: cgrindel/rules_swift_package_manager#2621
+  (draft): Windows hosts.
+- **hermetic_android_toolchains**: keith/hermetic_android_toolchains#110
+  (draft): Linux hosts of any CPU.
+- **rules_apple** (rules_applecross's patches): bazelbuild/rules_apple #3114
+  to #3124 (drafts, tracked in apple-cross-toolchain/rules_applecross#273);
+  three workarounds stay in rules_applecross until upstream fixes exist.
+- **apple_support**: its patch is upstream in 2.11.0 (#669): move to 2.11.0
+  and drop it.
+- **The threads Swift SDK** for wasm: swiftlang/swift#92018 is merged; the
+  fork goes when swift.org publishes a wasip1-threads SDK.
 
 ## Swift, not Python
 

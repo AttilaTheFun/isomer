@@ -488,10 +488,10 @@ oss machines (~/Developer/AGENTS.md), never on this Mac's own screen.
     android`), on its Mac's own hypervisor, through `oss machine adb` and
     `screenshot` (tools/ci/android_test.sh). A Cuttlefish phone in a
     container with its own KVM (`--virtualization`, OS Server's API 22;
-    tools/ci/android_device.sh) also works, by hand: on a Mac it boots in
-    about half an hour at best, as Virtualization's vCPU threads oversleep
-    every timed wait (macOS's timer leeway); on a Linux host with KVM it
-    would be the fast path;
+    tools/ci/android_device.sh) boots far on a Mac but doesn't finish:
+    Virtualization's vCPU threads oversleep every timed wait (macOS's timer
+    leeway), and WebView's zygote times out starting, restarting the system
+    server. On a Linux host with KVM it would be the fast path (TODO.md);
   - the iPhone and the Mac: built in the container (rules_applecross), run
     on an `ios` lease and a `mac` slot of OS Server's primary macOS VM
     (tools/ci/apple_test.sh);
