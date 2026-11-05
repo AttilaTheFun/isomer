@@ -1038,8 +1038,8 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
   `Color.dynamic(light:dark:)`, `swipeGesture`, `cameraCapture`,
   `VideoPlayer(url:)`, Platform, platform modifiers, JSON, the platform
   bridge) and is the umbrella over the Isomer* modules (shared/isomer/
-  Exports.swift). SwiftUIExtensions and IsomerBridge are one-line
-  re-exports of it. On the reimplementation those are
+  Exports.swift). Its names before 0.31, SwiftUIExtensions and
+  IsomerBridge, were kept as re-exports until 0.40. On the reimplementation those are
   shared/swift_ui_extensions, over SwiftUI's `package` plumbing:
   `PlatformViewRepresentable` is the Isomer module's own protocol, whose
   body is SwiftUI's `HostViewPrimitive`. The runtime's plumbing (Runtime,

@@ -160,7 +160,7 @@ exports_files([
 
 # Core native-bridging API (logging, clock, URLs), Linux implementation.
 # What Isomer provides beyond Apple's SwiftUI API (see
-# //shared/swift_ui_extensions); IsomerBridge re-exports it.
+# //shared/swift_ui_extensions).
 swift_library(
     name = "isomer",
     package_name = "isomer",
@@ -179,25 +179,6 @@ swift_library(
         "//swift_ffi/swift_ffi",
         "//shared/isomer_swift_ui",
     ],
-)
-
-# The names the Isomer module had before 0.31: each re-exports it.
-swift_library(
-    name = "swift_ui_extensions",
-    package_name = "isomer",
-    srcs = ["//shared/isomer:Compatibility.swift"],
-    module_name = "SwiftUIExtensions",
-    target_compatible_with = ["@platforms//os:linux"],
-    deps = [":isomer"],
-)
-
-swift_library(
-    name = "isomer_bridge",
-    package_name = "isomer",
-    srcs = ["//shared/isomer:Compatibility.swift"],
-    module_name = "IsomerBridge",
-    target_compatible_with = ["@platforms//os:linux"],
-    deps = [":isomer"],
 )
 
 # PhotosUI's SwiftUI photo picker, over this SwiftUI (//frameworks), as on

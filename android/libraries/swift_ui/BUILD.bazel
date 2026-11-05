@@ -96,7 +96,7 @@ swift_library_group(
 
 # Core native-bridging API, Android implementation.
 # What Isomer provides beyond Apple's SwiftUI API (see
-# //shared/swift_ui_extensions); IsomerBridge re-exports it.
+# //shared/swift_ui_extensions).
 swift_library(
     name = "isomer",
     package_name = "isomer",
@@ -117,26 +117,6 @@ swift_library(
         "//shared/isomer_swift_ui",
     ],
 )
-
-# The names the Isomer module had before 0.31: each re-exports it.
-swift_library(
-    name = "swift_ui_extensions",
-    package_name = "isomer",
-    srcs = ["//shared/isomer:Compatibility.swift"],
-    module_name = "SwiftUIExtensions",
-    target_compatible_with = ["@platforms//os:android"],
-    deps = [":isomer"],
-)
-
-swift_library(
-    name = "isomer_bridge",
-    package_name = "isomer",
-    srcs = ["//shared/isomer:Compatibility.swift"],
-    module_name = "IsomerBridge",
-    target_compatible_with = ["@platforms//os:android"],
-    deps = [":isomer"],
-)
-
 
 # The reusable Android runtime host (dev.isomer.runtime): the JNI host
 # implementation, the GL surface view, the Compose interpreter, and the
