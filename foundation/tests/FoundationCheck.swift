@@ -4,7 +4,7 @@ import Synchronization
 
 // Isomer's Foundation, run under a WASI engine: what Essentials gives (JSON,
 // Date, URL, UUID, Data), the CoreGraphics geometry it re-exports, the
-// string API the fork adds (CharacterSet, searching, replacing, trimming,
+// string API Isomer adds (CharacterSet, searching, replacing, trimming,
 // percent encoding, String(format:)), what corelibs adds, UserDefaults, and
 // URLSession over transports installed as a host would (NetworkCheck.swift).
 // Each line prints "ok" or what differed.

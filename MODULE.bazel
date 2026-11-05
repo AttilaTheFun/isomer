@@ -103,18 +103,23 @@ single_version_override(
 bazel_dep(name = "swift-syntax", version = "603.0.2")
 
 # --- Foundation (non-Apple platforms) -----------------------------------------
-# Isomer's Foundation is built from its fork of swift-foundation
-# (AttilaTheFun/swift-foundation, branch `isomer`, from swift-6.3.2-RELEASE),
-# a Bazel module of its own; //foundation assembles the `Foundation` module
-# from FoundationEssentials (and FoundationInternationalization when an app
-# asks for it). Apple platforms use Apple's Foundation.
+# Isomer's Foundation is built from swift-foundation's swift-6.3.2-RELEASE, a
+# Bazel module of its own; //foundation assembles the `Foundation` module from
+# FoundationEssentials (and FoundationInternationalization when an app asks
+# for it), adding what corelibs gives Swift code elsewhere (CharacterSet,
+# NSString's string API, String(format:) and the rest of foundation/). Apple
+# platforms use Apple's Foundation.
 #
-# From this project's registry, as rules_swift is: 6.3.2.isomer.1 is the fork
-# at b04a549 (its module() version set to the entry's). A newer fork commit is
-# a new entry (6.3.2.isomer.2, tools/add_version.py --fork). Developing the
-# fork beside isomer: put `common --override_module=swift-foundation=<path to
-# the checkout>` in an untracked .bazelrc.user.
-bazel_dep(name = "swift-foundation", version = "6.3.2.isomer.1")
+# From this project's registry, as rules_swift is: 6.3.2.isomer.2 is
+# swiftlang's tag with patches: the Bazel build (its MODULE.bazel and BUILD
+# files), swift-foundation#2409 (merged upstream), Android's fts_open, Apple's
+# signatures where swift-foundation's differ and its extra declarations made
+# internal, and `package` on the Essentials helpers //foundation searches
+# strings with (it is built in swift-foundation's package for that). A change
+# is a new entry (6.3.2.isomer.3, tools/add_version.py --fork). Developing
+# against a checkout: `common --override_module=swift-foundation=<path>` in an
+# untracked .bazelrc.user.
+bazel_dep(name = "swift-foundation", version = "6.3.2.isomer.2")
 
 # CLI parsing for the analyzer / generator tools.
 bazel_dep(name = "swift_argument_parser", version = "1.7.0")

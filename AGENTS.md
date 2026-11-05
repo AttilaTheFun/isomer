@@ -86,7 +86,7 @@ releases, visor's, and the forks isomer carries until upstream takes their
 changes, as patched versions (rules_swift 4.1.0.isomer.3: upstream 4.1.0
 with rules_swift#1860, the worker's copy fix and tools/patches' three
 rules_swift patches, held by an override over the 4.2.2 rules_applecross
-asks for; swift-foundation 6.3.2.isomer.1). A change to a fork or to those
+asks for; swift-foundation 6.3.2.isomer.2: swiftlang's tag, patched). A change to a fork or to those
 patches is a new entry (.isomer.4), made with the registry's
 tools/add_version.py --fork and approved there like any version. Swift
 packages are SwiftPM's, through rules_swift_package_manager, never Bazel
@@ -145,8 +145,8 @@ What building a whole application on the stack taught (a todos app, with a
 gRPC server over PostgreSQL, was the reference until 0.35, when it moved to
 a repository of its own):
 
-- **Foundation on wasm/Android** is Isomer's (//foundation, from the
-  swift-foundation fork; see "Foundation and CoreGraphics" below). Every
+- **Foundation on wasm/Android** is Isomer's (//foundation, over
+  swift-foundation; see "Foundation and CoreGraphics" below). Every
   SwiftPM package an app links there depends on `@isomer//:foundation`
   through `configure_package(target_deps = ...)` in its MODULE.bazel;
   `tools/foundation/check_link.py <app targets>` finds one that doesn't.
@@ -745,18 +745,22 @@ stubs (shared/swift_ui_core/NotYet.swift, generated: the compiler says "Not
 yet in Isomer: <group>"); implementing one means running it again (or
 deleting the stub); tools/parity/stubs_skip.txt keeps one out.
 
-- **Foundation** (//foundation, `@isomer//:foundation`): built from Isomer's
-  fork of swift-foundation (AttilaTheFun/swift-foundation, branch `isomer`;
-  the registry's 6.3.2.isomer.1 is its commit; develop against a
-  checkout with `common --override_module=swift-foundation=<path>` in an
-  untracked .bazelrc.user). FoundationEssentials, plus what corelibs has
-  that apps reach for, written in Swift here: NSRange, NSRegularExpression
+- **Foundation** (//foundation, `@isomer//:foundation`): built from
+  swift-foundation's swift-6.3.2-RELEASE (the registry's 6.3.2.isomer.2:
+  the tag, its Bazel build and a few patches, MODULE.bazel says which;
+  develop against a checkout with `common
+  --override_module=swift-foundation=<path>` in an untracked .bazelrc.user).
+  FoundationEssentials, plus what corelibs has that apps reach for, written
+  in Swift here: CharacterSet, NSString's string API (searching, replacing,
+  trimming, comparing, percent encoding; built in swift-foundation's
+  package, `package_name = "SwiftFoundation"`, to search with Essentials'
+  own helpers), `String(format:)`, NSRange, NSRegularExpression
   (over Swift's Regex, UTF-16 ranges), NSLock/NSRecursiveLock/NSCondition,
   Thread (pthreads; one thread in wasm), FileHandle, NSNumber (Swift's
   numbers bridge to it as on Apple's platforms: `json["n"] as? Int` is an
   exact cast, through `_ObjectiveCBridgeable`, which Swift's runtime honours
   off Objective-C too), JSONSerialization, ISO8601DateFormatter,
-  FileWrapper, `String(format:)`, Bundle (its strings tables, `<language>.lproj/<table>.strings`, read by
+  FileWrapper, Bundle (its strings tables, `<language>.lproj/<table>.strings`, read by
   `NSLocalizedString` and `localizedString(forKey:value:table:)` in the
   host's preferred language, ISOMER_PREFERRED_LANGUAGES; on Android
   isomer_android_app's `resources`, unpacked from the APK as Bundle.main), streams, NSObject and
@@ -845,8 +849,8 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
     the app's; Android's Kotlin `WasmKitRuntime` takes a `homeDirectory` and
     `bundleIdentifier` too. Hosts that pass none (the tests, the
     Linux/Windows hosts, Android's WasmView for now) give the guest no home:
-    its directories are not writable, and swift-foundation (fork commit
-    e8b0c06) answers `createDirectory(withIntermediateDirectories:)` there
+    its directories are not writable, and swift-foundation (#2409,
+    patched in until a release has it) answers `createDirectory(withIntermediateDirectories:)` there
     with an error rather than recursing past "/".
   - **SQLite** (swift_sql, a Swift package: `@swiftpkg_swift_sql//:SwiftSQL`
     over `//:CSwiftSQL` there): the system SQLite on Apple platforms, SQLite's
@@ -977,7 +981,7 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
   Apple's interfaces lack; so does a conformance Apple's same type lacks
   (`Hashable` on Metal's C structs, `View` on toolbar items; the marker
   protocols such as Sendable aside, whose graphs differ by tool), and so
-  do swift-foundation's own declarations (the fork makes them internal).
+  do swift-foundation's own declarations (the registry's patch makes them internal).
   `python3 tools/parity/parity.py --check` fails
   when an Apple-named module has anything of Isomer's own; `--check
   --strict` also when a declaration's types are not one of Apple's

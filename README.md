@@ -102,11 +102,11 @@ It was `examples/*/playground_*` here until 0.15, then a repository of its
 own until 0.35, then a module of its own in `playground/` until 0.39.
 
 **Foundation and CoreGraphics.** On wasm and Android, `import Foundation`
-is Isomer's: swift-foundation's FoundationEssentials built from Isomer's fork
-([AttilaTheFun/swift-foundation](https://github.com/AttilaTheFun/swift-foundation),
-branch `isomer`), with no swift-corelibs-foundation layer (no CoreFoundation;
-of corelibs' `NS` classes only what apps reach for, written in Swift:
-`NSRange`, `NSRegularExpression`, the locks, `Thread`, `FileHandle`,
+is Isomer's: swift-foundation's FoundationEssentials, built from its
+swift-6.3.2-RELEASE with a few patches (MODULE.bazel lists them), with no
+swift-corelibs-foundation layer (no CoreFoundation; of what corelibs gives
+Swift code only what apps reach for, written in Swift: `CharacterSet`,
+`NSString`'s string API, `String(format:)`, `NSRange`, `NSRegularExpression`, the locks, `Thread`, `FileHandle`,
 `NSNumber`) and no ICU unless an app asks for
 `--@isomer//foundation:internationalization` (FoundationInternationalization
 over the Swift SDK's ICU; `isomer_web_app(icu_locales = ["en"])` trims its
@@ -668,8 +668,8 @@ and add isomer as a `bazel_dep` by its release's version (0.36.0 on; a
 ```starlark
 bazel_dep(name = "isomer", version = "0.36.1")
 ```
- The rules_swift and
-swift-foundation forks isomer needs come from that registry by version,
+ The patched
+rules_swift and swift-foundation isomer needs come from that registry by version,
 patches and all, FlatBuffers among them (25.12.19.isomer.1, since 0.40).
 Because bzlmod honours `single_version_override` **only from the root
 module**, your MODULE.bazel must still repeat isomer's override of
@@ -791,7 +791,7 @@ and paste the printed blocks.
 swift_ffi/            Swift <-> Kotlin/TypeScript/C bindings: macros, analyzer,
                       generator, Bazel rules, runtimes (and its own examples)
 core_graphics/        Isomer's CoreGraphics (wasm, Android)
-foundation/           Isomer's Foundation, from the swift-foundation fork
+foundation/           Isomer's Foundation, over swift-foundation's Essentials
 metal/                Isomer's Metal: the API, the MSL→WGSL translator, the
                       WebGPU backend and its JS executor
 swift_gpu/            the GPU abstraction: Metal (Apple's and Isomer's),

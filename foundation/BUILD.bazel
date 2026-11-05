@@ -24,7 +24,10 @@ config_setting(
 
 swift_library(
     name = "foundation",
-    package_name = "isomer",
+    # swift-foundation's package: the string API here (StringProtocol+NSString.swift)
+    # searches with Essentials' own `package` helpers. Nothing here is
+    # Isomer's `package` plumbing.
+    package_name = "SwiftFoundation",
     # Apple platforms have the real one; this one would shadow it.
     target_compatible_with = select({
         "@platforms//os:macos": ["@platforms//:incompatible"],

@@ -117,16 +117,20 @@ has it.
   - #1988 (draft): `swift.windows_sdk`, Windows built on Linux with the
     builder's own SDKs (Isomer's tools/windows, upstream's
     tools/windows_sdk), which tools/windows then gives way to.
-- **swift-foundation** (AttilaTheFun's fork, 6.3.2.isomer.1):
-  - swiftlang/swift-foundation#2409 (draft): `createDirectory(withIntermediateDirectories:)`
-    stops at "/" (WASI);
+- **swift-foundation** (the registry's 6.3.2.isomer.2: swiftlang's
+  swift-6.3.2-RELEASE and patches; no fork since 0.40):
+  - swiftlang/swift-foundation#2409 (merged): `createDirectory(withIntermediateDirectories:)`
+    stops at "/" (WASI); patched in until a release has it;
   - Android's `fts_open` workaround isn't needed upstream: the Android Swift
-    SDK's apinotes fix it, so Isomer's Android compiles should load them;
-  - the rest is Isomer's own (Apple's signatures, swift-foundation's extra
-    declarations made internal, the NSString-style string API,
-    `String(format:)`, the Bazel build): it needs a form upstream would take
-    (a build setting for a standalone FoundationEssentials) or a home
-    outside the fork.
+    SDK's apinotes fix it, but rules_swift's Android toolchain compiles with
+    the static resource directory, which has none (`swift-<arch>/apinotes`
+    only): a rules_swift change to load them, then the patch goes;
+  - CharacterSet, NSString's string API and `String(format:)` are in
+    //foundation; upstream's own CharacterSet (#2314) arrives with the
+    next major release, and ours then gives way;
+  - Isomer's own, with no upstream form: the Bazel build, Apple's signatures
+    and swift-foundation's extra declarations made internal, `package` on
+    the string helpers //foundation uses.
 - **WasmKit** (AttilaTheFun's fork, and two patches): swiftwasm/WasmKit #513
   (iOS guard pages), #514 (Android's software bounds checks), #515 (MSVC's C),
   #516 (constant-pool reservations), #517 (internal calls off the native
