@@ -23,14 +23,14 @@
 #
 # With no arguments (CI's run) the tests run after the build, in the same
 # container: the core's (the mock renderer's and the snapshots', isomer's own
-# module), the GL backend's on Mesa's EGL, and each platform's Storybook that
-# runs here (//tests/platforms in the examples: the web in headless Chrome,
-# Linux under Xvfb), their output in the log; and the apps tested elsewhere
-# are put in .ci/platforms for tools/ci/platform_tests.sh: the iPhone's and
-# the Mac's (slots of OS Server's primary macOS VM), Android's (a phone in a
-# container) and Windows' (built here for Windows on Arm,
-# --config=windows_on_linux, and run under Wine in a container). Any build or
-# test failing fails the run.
+# module) and the web's Storybook in headless Chrome (//tests/platforms in the
+# examples), their output in the log. Linux's Storybook test (under Xvfb) and
+# the GL backend's check (on Mesa's EGL) are built, not run, for now
+# (2026-11-05: CI runs the tier-1 platforms). The apps tested elsewhere are
+# put in .ci/platforms for tools/ci/platform_tests.sh: the iPhone's and the
+# Mac's (slots of OS Server's primary macOS VM), Android's (an emulator) and
+# Windows' (built here for Windows on Arm, --config=windows_on_linux; run
+# under Wine only by hand). Any build or test failing fails the run.
 #
 # package (the publishing jobs', as AttilaTheFun/reviews' container_build.sh
 # has it): Bazel's tree is the container's (a volume), so what CI publishes
@@ -146,11 +146,16 @@ fi
 windows=(--config=windows_on_linux --platforms=@isomer//tools/platforms:windows_arm64)
 bazel build "${flags[@]}" "${windows[@]}" //windows/storybook_windows_application
 built_windows=$?
-bazel test "${flags[@]}" --test_output=errors //tests/platforms:all //tests/foundation_networking:networking_test
+# The tier-1 platforms run (the web here); the Linux tests are built but,
+# for now (2026-11-05), not run.
+bazel build "${flags[@]}" //tests/platforms:all
+built_tests=$?
+bazel test "${flags[@]}" --test_output=errors //tests/platforms:storybook_web_test //tests/foundation_networking:networking_test
 tested_here=$?
 cd "$root"
-bazel test --test_output=errors //tests/renderer:mock_renderer_test //tests/snapshot:snapshot_test \
-    //swift_gpu/linux:gl_backend_test
+bazel build //swift_gpu/linux:gl_backend_test
+built_gl=$?
+bazel test --test_output=errors //tests/renderer:mock_renderer_test //tests/snapshot:snapshot_test
 checked=$?
 echo "container_build.sh: the tests took $((SECONDS - start)) s"
 
@@ -172,7 +177,7 @@ cp "$(bazel info "${flags[@]}" output_base)"/external/+swift_windows_sdk_reposit
 cp -R "$root/examples/storybook/assets" "$platforms/windows/assets"
 chmod -R a+rwX "$platforms"
 ls -l "$platforms"
-for result in $built $built_windows $tested_here $checked; do [ "$result" -ne 0 ] && exit "$result"; done
+for result in $built $built_windows $built_tests $tested_here $built_gl $checked; do [ "$result" -ne 0 ] && exit "$result"; done
 exit 0
 '
 

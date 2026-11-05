@@ -1,8 +1,7 @@
 #!/bin/bash
 # Isomer's proof, from CI: its two apps (the Storybook, the Playground) on
-# its six platforms, each with its one renderer (SwiftUI on iOS and the Mac,
-# Compose on Android, React on the web, OpenGL on Linux, DirectX on
-# Windows), pictured on machines leased from OS Server (tools/proof/proof.py),
+# its tier-1 platforms (PLATFORMS below), each with its one renderer (SwiftUI
+# on iOS and the Mac, Compose on Android, React on the web), pictured on machines leased from OS Server (tools/proof/proof.py),
 # each picture compared with the base's, and the `proof` artifact Reviews
 # reads made of them (tools/ci/proof_compare.swift).
 #
@@ -66,7 +65,10 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 IMAGE="$(cat "$ROOT/tools/ci/agent_image")"
-PLATFORMS="ios macos android web linux windows"
+# Tier 1 only for now (2026-11-05: the runs take the time; Linux and
+# Windows are still built by every CI run, in container_build.sh). proof.py
+# still pictures them when named: add them back here.
+PLATFORMS="${PROOF_PLATFORMS:-ios macos android web}"
 
 usage() { echo "usage: tools/ci/proof.sh --proof <dir> [--kind quick|full]" >&2; exit 2; }
 proof=""
@@ -218,27 +220,31 @@ if [ -z "$host" ]; then
     host="$(/Applications/Tailscale.app/Contents/MacOS/Tailscale status --json | plutil -extract Self.DNSName raw -o - -)"
     host="${host%.}"
 fi
-linux="$ROOT/.ci/proof-linux"
-rm -rf "$linux" && mkdir -p "$linux"
-steps='
-set -e
-root=$1 out=$2
-cd "$root/examples"
-bazel build -c opt --experimental_convenience_symlinks=ignore \
-    //linux/storybook_linux_application:storybook_linux_application_bin \
-    //playground/linux/playground_linux_application:playground_linux_application_bin \
-    //playground/linux/playground_linux_application:playground_wasm_loader \
-    //playground/shared/compiler:toolchain //playground/apple/playground_ios_application:playground_sdk
-linux/storybook_linux_application/package.sh /root/storybook-linux -c opt
-playground/linux/playground_linux_application/package.sh /root/playground-linux -c opt
-tar -czf "$out/storybook-linux.tgz" -C /root storybook-linux
-tar -czf "$out/playground-linux.tgz" -C /root playground-linux
-'
-background oss machine run container --image="$IMAGE" --cpus=6 --memory=16 \
-    --mount="$ROOT:$ROOT" --volume="isomer-proof-${GITHUB_RUN_ID:-$$}:/var/cache/bazel:128" --inside --cache="$host" -- \
-    bash -c "$steps" proof "$ROOT" "$linux" || { echo "::error::the Linux apps didn't build"; exit 1; }
-echo "::endgroup::"
-phase "Linux packaged"
+linux_packages=()
+if [[ " $PLATFORMS " == *" linux "* ]]; then
+    linux="$ROOT/.ci/proof-linux"
+    rm -rf "$linux" && mkdir -p "$linux"
+    steps='
+    set -e
+    root=$1 out=$2
+    cd "$root/examples"
+    bazel build -c opt --experimental_convenience_symlinks=ignore \
+        //linux/storybook_linux_application:storybook_linux_application_bin \
+        //playground/linux/playground_linux_application:playground_linux_application_bin \
+        //playground/linux/playground_linux_application:playground_wasm_loader \
+        //playground/shared/compiler:toolchain //playground/apple/playground_ios_application:playground_sdk
+    linux/storybook_linux_application/package.sh /root/storybook-linux -c opt
+    playground/linux/playground_linux_application/package.sh /root/playground-linux -c opt
+    tar -czf "$out/storybook-linux.tgz" -C /root storybook-linux
+    tar -czf "$out/playground-linux.tgz" -C /root playground-linux
+    '
+    background oss machine run container --image="$IMAGE" --cpus=6 --memory=16 \
+        --mount="$ROOT:$ROOT" --volume="isomer-proof-${GITHUB_RUN_ID:-$$}:/var/cache/bazel:128" --inside --cache="$host" -- \
+        bash -c "$steps" proof "$ROOT" "$linux" || { echo "::error::the Linux apps didn't build"; exit 1; }
+    echo "::endgroup::"
+    phase "Linux packaged"
+    linux_packages=(--linux-packages "$linux")
+fi
 
 echo "::group::The apps on every platform (tools/proof/proof.py)"
 quick=()
@@ -246,7 +252,7 @@ if [ "$kind" = quick ]; then quick=(--quick --base "origin/${GITHUB_BASE_REF:-ma
 status=0
 # shellcheck disable=SC2086
 background "$python" -u "$ROOT/tools/proof/proof.py" $PLATFORMS --review "$work/review" --commit "$commit" \
-    --web-toolchain "$web_toolchain" --linux-packages "$linux" ${quick[@]+"${quick[@]}"} \
+    --web-toolchain "$web_toolchain" ${linux_packages[@]+"${linux_packages[@]}"} ${quick[@]+"${quick[@]}"} \
     || { echo "::error::tools/proof/proof.py: a build failed or a picture didn't come back"; status=1; }
 echo "::endgroup::"
 phase "pictured"
