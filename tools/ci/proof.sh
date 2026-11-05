@@ -161,13 +161,6 @@ if [ -n "$inside" ]; then
     root_do env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends "${packages[@]}" > /dev/null ||
         { root_do apt-get update -qq > /dev/null &&
           root_do env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends "${packages[@]}" > /dev/null; }
-    # Stopgap until rules_applecross covers it: rules_apple's lipo.py runs
-    # `xcrun lipo` for an imported dynamic framework (the Playground's
-    # embedded compiler on the simulator); here xcrun runs its tool from PATH.
-    printf '%s\n' '#!/bin/sh' 'tool=$1; shift' \
-        'if [ "$tool" = lipo ] && ! command -v lipo > /dev/null; then tool=llvm-lipo; fi' \
-        'exec "$tool" "$@"' | root_do tee /usr/local/bin/xcrun > /dev/null
-    root_do chmod 755 /usr/local/bin/xcrun
     # The Apple targets' toolchains and SDK archive (OS Server's files),
     # for every Bazel command in the examples (proof.py's, package_site.sh's).
     sdk="$(sed -n 's/^SDK_SHA256="\(.*\)"/\1/p' "$ROOT/tools/ci/container_build.sh")"
@@ -177,6 +170,13 @@ rewrite ported-tools\.invalid/sha256/(.*) http://$host:7490/files/sha256/\$1
 rewrite windows-sdks\.invalid/sha256/(.*) http://$host:7490/files/sha256/\$1
 EOF2
     printf 'build --config=apple_on_linux\ncommon --downloader_config=%s\n' "$work/downloader.cfg" > "$ROOT/examples/.bazelrc.user"
+    # Stopgap until rules_applecross has it: rules_apple runs the imported
+    # dynamic framework action (the simulator Playground's embedded compiler)
+    # with no PATH, so its `xcrun lipo` doesn't find rules_applecross's
+    # xcrun; one in /usr/bin runs the tool from that toolchain.
+    tools="$(cd "$ROOT/examples" && bazel info output_base)/external/rules_applecross++apple_cross_toolchain+apple_cross_toolchain/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin"
+    printf '%s\n' '#!/bin/sh' "tool=\$1; shift" "exec \"$tools/\$tool\" \"\$@\"" | root_do tee /usr/bin/xcrun > /dev/null
+    root_do chmod 755 /usr/bin/xcrun
     # The web's pictures in Chrome for Testing (MODULE.bazel), for cdp.py.
     case "$(uname -m)" in aarch64 | arm64) chrome=chrome_linux_arm64 ;; *) chrome=chrome_linux_x86_64 ;; esac
     (cd "$ROOT/examples" && bazel build "@$chrome//:files" > /dev/null)
