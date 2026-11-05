@@ -76,8 +76,18 @@ struct PlatformStory: View {
 
 // story: isomer.webview
 struct WebViewStory: View {
+    // A page of the story's own, so it looks the same every time.
+    private let page = """
+        <meta name="viewport" content="width=device-width">
+        <body style="font-family: system-ui, sans-serif; margin: 16px">
+        <h1>Hello from a web view</h1>
+        <p>HTML drawn by the platform's own web view, in the app.</p>
+        </body>
+        """
+
     var body: some View {
-        WebView(url: URL(string: "https://en.wikipedia.org/wiki/Swift_(programming_language)"))
+        WebView(url: URL(string: "data:text/html;charset=utf-8,"
+            + (page.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")))
     }
 }
 // end story
