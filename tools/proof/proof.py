@@ -108,7 +108,10 @@ def sh(command, check=True, cwd=ISOMER, **kwargs):
 def bazel_output(cwd, target, *flags, suffix=""):
     sh(["bazel", "build", target, *flags], cwd=cwd)
     files = sh(["bazel", "cquery", "--output=files", target, *flags], cwd=cwd).stdout.split()
-    return os.path.join(cwd, next(f for f in files if f.endswith(suffix)))
+    # cquery names outputs under the execution root (no bazel-out link in
+    # the workspace where convenience symlinks are off, as in CI).
+    root = sh(["bazel", "info", "execution_root", *flags], cwd=cwd).stdout.strip()
+    return os.path.join(root, next(f for f in files if f.endswith(suffix)))
 
 
 def stories(only=None):
@@ -461,6 +464,13 @@ class LeasedSimulator:
     def install(self, app):
         self.simctl("install", app)
 
+    def install_ipa(self, ipa):
+        # Through OS Server's storage, which unpacks the .ipa itself: simctl
+        # install of a local .app zips it here first, with ditto, which only
+        # a Mac has (the proof runs in a Linux container).
+        put = json.loads(sh(["oss", "storage", "put", ipa, "--ttl=2h", "--json"]).stdout)
+        sh(["oss", "machine", "install", self.id, put["object"]["sha256"]])
+
     def prepare(self):
         # Light, as every platform's shots are. (The status bar: oss holds
         # every ios lease's at 9:41 from the start.)
@@ -554,10 +564,13 @@ def ios(review, story_list, builds):
     try:
         simulator = LocalSimulator(env["OSS_UDID"]) if local else LeasedSimulator(env["OSS_ID"])
         for app, ipa in builds.items():
-            work = tempfile.mkdtemp(prefix=f"proof-ios-{app}-")
-            sh(["unzip", "-q", ipa, "-d", work])
-            payload = os.path.join(work, "Payload")
-            simulator.install(os.path.join(payload, os.listdir(payload)[0]))
+            if local:
+                work = tempfile.mkdtemp(prefix=f"proof-ios-{app}-")
+                sh(["unzip", "-q", ipa, "-d", work])
+                payload = os.path.join(work, "Payload")
+                simulator.install(os.path.join(payload, os.listdir(payload)[0]))
+            else:
+                simulator.install_ipa(ipa)
         simulator.prepare()
         everyone = list(APPS.values()) + [ISOMER_STORYBOOK]
 
@@ -620,17 +633,26 @@ MAC_ARGUMENTS = ["-AppleInterfaceStyle", "Light", "-NSRequiresAquaSystemAppearan
 # A slot's app, run by `oss machine exec --gui` in the primary's console
 # session (its user's, not the slot's). Started by its binary, so that it is
 # the exec's child and ends with it (the server signals the exec's process
-# group when the client goes: nothing found by name), then made frontmost by
-# `open` of its bundle, which activates the running one: started so alone,
-# its window stayed behind, inactive (grey traffic lights, no vibrancy in
-# the sidebar), which the VM's never were.
+# group when the client goes, and this script ends the app then). Started by
+# `open -n -a`, as the Dock starts it, so that its window is frontmost and
+# active (started by its binary, it stayed behind, inactive: grey traffic
+# lights, no vibrancy), its environment passed by `--env` and its arguments
+# by `--args`; then found by its binary's path, which is under this slot's
+# own home (no other slot's copy matches it), waited for, and ended with
+# the exec.
 SLOT_LAUNCH = """
 app=$1; shift
-"$app/Contents/MacOS/$(basename "$app" .app)" "$@" &
-pid=$!
-sleep 2
-kill -0 "$pid" 2> /dev/null && /usr/bin/open "$app"
-wait "$pid"
+binary="$app/Contents/MacOS/$(basename "$app" .app)"
+# Its environment for the app (LaunchServices starts it, not this shell).
+set --  --args "$@"
+for name in $(env | grep -oE '^(ISO_[A-Z0-9_]+|CFFIXED_USER_HOME)=' | tr -d =); do
+    set -- --env "$name=$(printenv "$name")" "$@"
+done
+/usr/bin/open -n -a "$app" "$@" || exit 1
+for _ in $(seq 1 50); do pid=$(/usr/bin/pgrep -n -f "^$binary") && break; sleep 0.2; done
+[ -n "$pid" ] || exit 1
+trap 'kill "$pid" 2> /dev/null; exit 0' TERM INT HUP
+while kill -0 "$pid" 2> /dev/null; do sleep 1; done
 """
 
 

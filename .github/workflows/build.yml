@@ -137,7 +137,10 @@ jobs:
     needs: container
     # Only when asked for by hand: never a pull request's or a push's.
     if: github.event_name == 'workflow_dispatch' && inputs.run != 'adhoc'
-    runs-on: [self-hosted, isomer-containers]
+    # OS Server's single-use Linux containers, as the build's: the apps built
+    # in it (rules_applecross for the Apple ones), pictured on machines it
+    # leases, the web in Chrome for Testing there.
+    runs-on: [self-hosted, isomer-jit]
     concurrency:
       group: isomer-proof-${{ github.ref }}
       cancel-in-progress: false

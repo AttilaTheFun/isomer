@@ -24,7 +24,7 @@ while [ $# -gt 0 ]; do case "$1" in
 split_binary() {  # <src> <name> → prints the JSON entry
   local src="$1" name="$2"
   gzip -6 -c "$src" > "$OUT/$name.gz.whole"
-  local size; size=$(stat -f %z "$OUT/$name.gz.whole")
+  local size; size=$(wc -c < "$OUT/$name.gz.whole" | tr -d ' ')
   if [ "$size" -le 94371840 ]; then
     mv "$OUT/$name.gz.whole" "$OUT/$name.gz"; echo "\"$name\""
   else
