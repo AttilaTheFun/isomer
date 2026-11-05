@@ -173,9 +173,9 @@ EOF2
     # Stopgap until rules_applecross has it: rules_apple runs the imported
     # dynamic framework action (the simulator Playground's embedded compiler)
     # with no PATH, so its `xcrun lipo` doesn't find rules_applecross's
-    # xcrun; one in /usr/bin runs the tool from that toolchain.
+    # xcrun; one in /usr/bin hands everything to that toolchain's own xcrun.
     tools="$(cd "$ROOT/examples" && bazel info output_base)/external/rules_applecross++apple_cross_toolchain+apple_cross_toolchain/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin"
-    printf '%s\n' '#!/bin/sh' "tool=\$1; shift" "exec \"$tools/\$tool\" \"\$@\"" | root_do tee /usr/bin/xcrun > /dev/null
+    printf '%s\n' '#!/bin/sh' "PATH=\"$tools:\$PATH\" exec \"$tools/xcrun\" \"\$@\"" | root_do tee /usr/bin/xcrun > /dev/null
     root_do chmod 755 /usr/bin/xcrun
     # The web's pictures in Chrome for Testing (MODULE.bazel), for cdp.py.
     case "$(uname -m)" in aarch64 | arm64) chrome=chrome_linux_arm64 ;; *) chrome=chrome_linux_x86_64 ;; esac
