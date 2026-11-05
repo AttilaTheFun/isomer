@@ -114,22 +114,67 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       # Every platform built in the Linux container (Windows on Arm with
-      # --config=windows_on_linux), and the tests that run there: the core's,
-      # the GL backend's, the web Storybook in headless Chrome and the Linux
-      # one under Xvfb. The apps tested elsewhere go to .ci/platforms.
+      # --config=windows_on_linux), and the build checks that run there: the
+      # core's tests, Foundation's on Android and wasm, C++ interop on
+      # Android. The apps the platforms' tests run go to .ci/platforms.
       - name: Build, and the tests in the build container
         run: exec tools/ci/container_build.sh
-      # The other platforms where they run, at once: Windows under arm64
-      # Wine in a container, Android on an emulator leased from OS Server
-      # (its Mac's own hypervisor), and the iPhone and the Mac on slots of
-      # OS Server's primary macOS VM.
-      - name: The other platforms' tests
+      # The apps for the platforms' tests on GitHub's runners (hosted-tests).
+      - uses: actions/upload-artifact@v4
+        with:
+          name: platform-apps
+          path: .ci/platforms
+          retention-days: 1
+      # The platforms whose tests lease from OS Server: the iPhone and the
+      # Mac on slots of its primary macOS VM; in a private copy of this
+      # repository (no free hosted runners) Android on an emulator lease too.
+      - name: The leased platforms' tests
+        env:
+          PLATFORM_TESTS: ${{ github.event.repository.private && 'android apple' || 'apple' }}
         run: exec tools/ci/platform_tests.sh .ci/platform-tests
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
           name: platform-tests
           path: .ci/platform-tests
+          retention-days: 14
+
+  # The platforms' tests on GitHub's runners (free for a public repository):
+  # the apps built above, run where they run (tools/ci/hosted_tests.sh). A
+  # private copy runs the same script in our containers.
+  hosted-tests:
+    needs: container
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: web
+            runner: ubuntu-24.04-arm
+          - platform: linux
+            runner: ubuntu-24.04-arm
+          # GitHub's x86_64 runners have KVM (its arm64 ones don't): an
+          # x86_64 emulator, the test APK carrying x86_64 too.
+          - platform: android
+            runner: ubuntu-latest
+    runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted", "isomer-jit"]') || matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: platform-apps
+          path: .ci/platforms
+      - name: The ${{ matrix.platform }} Storybook's tests
+        # Android in a private copy runs on its emulator lease, above.
+        if: ${{ !(github.event.repository.private && matrix.platform == 'android') }}
+        run: |
+          chmod -R u+x .ci/platforms/linux
+          exec tools/ci/hosted_tests.sh ${{ matrix.platform }} .ci/platforms .ci/platform-tests/${{ matrix.platform }}
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: platform-tests-${{ matrix.platform }}
+          path: .ci/platform-tests/${{ matrix.platform }}
           retention-days: 14
 
   proof:

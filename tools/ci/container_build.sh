@@ -146,13 +146,18 @@ fi
 windows=(--config=windows_on_linux --platforms=@isomer//tools/platforms:windows_arm64)
 bazel build "${flags[@]}" "${windows[@]}" //windows/storybook_windows_application
 built_windows=$?
-# The tier-1 platforms run (the web here); the Linux tests are built but,
-# for now (2026-11-05), not run.
+# The platform tests are built here and run on GitHub'"'"'s runners
+# (tools/ci/hosted_tests.sh: the web, Linux, Android), or in CI'"'"'s own
+# container for a private copy of this repository; the build checks run here.
 bazel build "${flags[@]}" //tests/platforms:all
 built_tests=$?
-bazel test "${flags[@]}" --test_output=errors //tests/platforms:storybook_web_test //tests/foundation_networking:networking_test \
+bazel test "${flags[@]}" --test_output=errors //tests/foundation_networking:networking_test \
     //tests/cxx_interop:cxx_interop_test
 tested_here=$?
+# Android'"'"'s test APK for an x86_64 emulator too (GitHub'"'"'s runners with KVM).
+android_test_platforms=(--android_platforms=@rules_android//:arm64-v8a,@rules_android//:x86_64)
+bazel build "${flags[@]}" "${android_test_platforms[@]}" //android/storybook_android_application:storybook_android_application_apk
+built_android_test=$?
 cd "$root"
 bazel build //swift_gpu/linux:gl_backend_test
 built_gl=$?
@@ -176,9 +181,19 @@ done
 cp "$(bazel info "${flags[@]}" output_base)"/external/+swift_windows_sdk_repository+swift_windows_sdk/swift-windows-sdk/runtime/aarch64/*.dll \
     "$platforms/windows/" 2>/dev/null
 cp -R "$root/examples/storybook/assets" "$platforms/windows/assets"
+# For tools/ci/hosted_tests.sh: each platform in a folder of its own.
+mkdir -p "$platforms/android-test" "$platforms/web" "$platforms/linux/bin"
+for f in $(files "${android_test_platforms[@]}" //android/storybook_android_application:storybook_android_application_apk); do
+    case "$f" in *_unsigned.apk) ;; *.apk) cp "$exec_root/$f" "$platforms/android-test/storybook.apk" ;; esac
+done
+cp -RL "$exec_root/$(files //web/storybook_web_application:storybook_web_application_site | head -1)"/. "$platforms/web/"
+linux/storybook_linux_application/package.sh "$platforms/linux" "${flags[@]}" > /dev/null
+for tool in browser_check picture_check; do
+    cp -L "$exec_root/$(files @isomer//tools/testing/$tool | head -1)" "$platforms/linux/bin/$tool"
+done
 chmod -R a+rwX "$platforms"
 ls -l "$platforms"
-for result in $built $built_windows $built_tests $tested_here $built_gl $checked; do [ "$result" -ne 0 ] && exit "$result"; done
+for result in $built $built_windows $built_tests $tested_here $built_android_test $built_gl $checked; do [ "$result" -ne 0 ] && exit "$result"; done
 exit 0
 '
 
