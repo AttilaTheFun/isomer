@@ -53,7 +53,9 @@ nothing under `swift_ffi/` may depend on anything outside it but Foundation,
 and so on up. A consumer pins ONE version of isomer (by version from the
 project's registry, AttilaTheFun/bazel_registry, from 0.36.0; a commit
 between releases), lists that registry before the BCR in its .bazelrc, and
-repeats the root-only overrides (flatbuffers + patches, rules_foreign_cc).
+repeats the root-only override of rules_swift (rules_applecross asks for a
+newer one). FlatBuffers is a registry version with isomer's patches since
+0.40 (25.12.19.isomer.1): no override of it, nor of rules_foreign_cc.
 
 **Versions (from 0.38).** A version is MAJOR.MINOR.BUILD; there are no
 point releases. MODULE.bazel and the Playground's apps commit MAJOR.MINOR.0
@@ -384,14 +386,15 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   it, MVS takes rules_applecross's 4.2.2 and loses the fork. A consumer that
   builds Apple targets with rules_applecross repeats it (Visor does).
 - **The Apple targets build on Linux too** (rules_applecross, 2026-10-26;
-  the project registry's 0.0.3.3251084, its main at 3251084, until it has a
+  the project registry's 0.0.3.382f8c3, its main at 382f8c3, until it has a
   release in the BCR): Xcode 27.0's SDKs from an SDK archive, the Swift
   that built them (6.4.0) for the Apple targets alone (the rest keeps
   6.3.2), its clean-room actool, ibtool and codesign, and its ported tools
   from its main (tools/applecross/ported_tools.sha256: their codesign signs
-  a Mac app's nested code). rules_apple 5.3.1 and apple_support 2.10.1 with
-  its patches (tools/patches/applecross, copied into the examples'), which
-  only a root's overrides apply. MODULE.bazel names the SDK archive and the
+  a Mac app's nested code). rules_apple is the registry's preset 5.3.1.applecross.6
+  (rules_apple 5.3.1 with rules_applecross's patches, asking for that
+  rules_applecross, which asks for it back), apple_support the BCR's
+  2.11.0: no override of either in any root, since 0.40. MODULE.bazel names the SDK archive and the
   tools by placeholders (`https://apple-sdks.invalid/…`,
   `https://ported-tools.invalid/sha256/{sha256}`): each builder's untracked
   .bazelrc.user resolves them, with `--distdir=<a folder with them>` or a

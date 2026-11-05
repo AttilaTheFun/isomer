@@ -66,35 +66,14 @@ single_version_override(
     module_name = "rules_swift",
     version = "4.1.0.isomer.3",
 )
-# rules_apple and apple_support at rules_applecross's versions, with its
-# patches (bundling and signing on Linux; tools/patches/applecross), which
-# only a root module's overrides apply.
-bazel_dep(name = "rules_apple", version = "5.3.1", repo_name = "build_bazel_rules_apple")
-single_version_override(
-    module_name = "rules_apple",
-    patch_strip = 1,
-    patches = [
-        "//tools/patches/applecross:rules_apple_execution_platform.patch",
-        "//tools/patches/applecross:rules_apple_bundletool_path.patch",
-        "//tools/patches/applecross:rules_apple_no_absolute_tool_paths.patch",
-        "//tools/patches/applecross:rules_apple_codesign_inputs_sdk_tools.patch",
-        "//tools/patches/applecross:rules_apple_alticonstool_missing_icons.patch",
-        "//tools/patches/applecross:rules_apple_xctoolrunner_sorted_listdir.patch",
-        "//tools/patches/applecross:rules_apple_arm64_default.patch",
-        "//tools/patches/applecross:rules_apple_codesign_smartcards_off_mac.patch",
-        "//tools/patches/applecross:rules_apple_app_intents_off_mac.patch",
-        "//tools/patches/applecross:rules_apple_coreml_off_mac.patch",
-        "//tools/patches/applecross:rules_apple_ditto_off_mac.patch",
-    ],
-    version = "5.3.1",
-)
-bazel_dep(name = "apple_support", version = "2.10.1")
-single_version_override(
-    module_name = "apple_support",
-    patch_strip = 1,
-    patches = ["//tools/patches/applecross:apple_support_bazel8_xcode_properties.patch"],
-    version = "2.10.1",
-)
+# rules_apple and apple_support at rules_applecross's versions, from this
+# project's registry: rules_apple 5.3.1.applecross.6 is rules_apple 5.3.1
+# with rules_applecross's patches (bundling and signing on Linux), asking
+# for rules_applecross 0.0.3.382f8c3, which asks for it back (a preset
+# pair: no override, and no copies of the patches, in any root);
+# apple_support is the BCR's 2.11.0, which has the fix it was patched for.
+bazel_dep(name = "rules_apple", version = "5.3.1.applecross.6", repo_name = "build_bazel_rules_apple")
+bazel_dep(name = "apple_support", version = "2.11.0")
 # Declared after apple_support so apple_support's apple cc toolchain keeps
 # resolution priority over rules_cc's local_config_cc darwin toolchain (which
 # lacks CC_TARGET_TRIPLE and breaks the Xcode Swift toolchain). Needed as a
@@ -181,10 +160,9 @@ bazel_dep(name = "rules_nodejs", version = "6.7.5")
 # The tsc that ts_project runs. Pins @npm_typescript (the tsc ts_swift_library
 # compiles bridges with) in this module's own repo mapping, so consumers need
 # no rules_ts setup. The version is given here rather than read from a
-# package.json: nothing in the module uses npm packages, and the root module
-# must not use rules_js's `npm` extension at all — flatbuffers (below) hands it
-# a tag rules_js 3 rejects, which only stays harmless while the extension is
-# never evaluated.
+# package.json: nothing in the module uses npm packages. (flatbuffers' own
+# use of rules_js's `npm` extension, with a tag rules_js 3 rejects, is
+# dev-only in the registry's 25.12.19.isomer.1.)
 rules_ts_ext = use_extension("@aspect_rules_ts//ts:extensions.bzl", "ext")
 rules_ts_ext.deps(ts_version = "5.8.3")
 use_repo(rules_ts_ext, "npm_typescript")
@@ -209,26 +187,15 @@ register_toolchains("@rust_toolchains//:all", dev_dependency = True)
 # patch above (the SDK's clang resource directory).
 
 # FlatBuffers: the render-tree wire format (tree.fbs in shared/renderers) —
-# flatc for codegen plus the Swift runtime the encoder/decoders link.
-bazel_dep(name = "flatbuffers", version = "25.12.19")
-
-single_version_override(
-    module_name = "flatbuffers",
-    # The release's swift BUILD glob misses Sources/FlatBuffers/Vectors/
-    # (fixed on upstream master) — patched in; drop at the next release.
-    patch_strip = 1,
-    patches = [
-        "//tools/patches:flatbuffers_foundation_wasi.patch",
-        "//tools/patches:flatbuffers_swift_vectors.patch",
-    ],
-    version = "25.12.19",
-)
-# flatbuffers -> grpc -> rules_foreign_cc 0.10.1 fails to even load under
-# this Bazel; force a compatible release (nothing of it is built here).
-single_version_override(
-    module_name = "rules_foreign_cc",
-    version = "0.15.1",
-)
+# flatc for codegen plus the Swift runtime the encoder/decoders link. From
+# this project's registry: 25.12.19.isomer.1 is upstream's 25.12.19 with
+# tools/patches' three: its JavaScript, TypeScript, Go and gRPC dependencies
+# dev-only (nothing of them builds flatc or the Swift runtime, and gRPC
+# brought a rules_foreign_cc that doesn't load under Bazel 9), Foundation
+# left out on WASI (google/flatbuffers#9461), and the Swift BUILD glob's
+# missing Vectors/ (upstream #8875, in its next release). A version, so a
+# consumer repeats no override of it.
+bazel_dep(name = "flatbuffers", version = "25.12.19.isomer.1")
 
 # swift_map (//swift_map/...) backs the SwiftUI `Map` view on Apple (Metal) and
 # on every SwiftGPURenderer platform; the platform SwiftUI modules reference
@@ -457,16 +424,10 @@ register_toolchains(
 bazel_dep(name = "rules_go", version = "0.62.0", dev_dependency = True)
 go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk", dev_dependency = True)
 go_sdk.download(version = "1.24.12")
-# From the project's registry: 0.0.3.a2b0558 is rules_applecross's main at
-# a2b0558, as is (its module() version set to the entry's), until it has a
-# release in the BCR.
-bazel_dep(name = "rules_applecross", version = "0.0.3.a2b0558", dev_dependency = True)
-# rules_apple, as rules_applecross's patch leaves it, asks for 0.0.3, which no
-# registry has: every request is this version.
-single_version_override(
-    module_name = "rules_applecross",
-    version = "0.0.3.a2b0558",
-)
+# From the project's registry: 0.0.3.382f8c3 is rules_applecross's main at
+# 382f8c3 (its module() version set to the entry's, and rules_apple asked
+# for as the preset 5.3.1.applecross.6), until it has a release in the BCR.
+bazel_dep(name = "rules_applecross", version = "0.0.3.382f8c3", dev_dependency = True)
 apple_cross_toolchain = use_extension("@rules_applecross//toolchain:extensions.bzl", "apple_cross_toolchain", dev_dependency = True)
 apple_cross_toolchain.swift(
     name = "applecross_swift",

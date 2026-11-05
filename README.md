@@ -116,7 +116,11 @@ architecture), `CGAffineTransform`, `CGColor`, `CGPath`. `SwiftUI` re-exports
 both, as Apple's does. Any library built for those platforms that imports
 Foundation depends on `@isomer//:foundation` (a SwiftPM package through
 rules_swift_package_manager's `target_deps`); `tools/foundation/check_link.py`
-finds an app that links the Swift SDK's Foundation instead. Linux and
+finds an app that links the Swift SDK's Foundation instead. A library that
+depends on `@isomer//:swift_ui` has Foundation through it already (SwiftUI
+re-exports it), so it needs no `@isomer//:foundation` of its own; a macro of
+yours that adds `@isomer//:foundation` to a target's `deps` must not be given
+it again, as Bazel rejects a label listed twice in one attribute. Linux and
 Windows still use the toolchain's Foundation. docs/isomer_031_plan.md has the
 plan and docs/parity/ what each module covers.
 
@@ -666,11 +670,11 @@ bazel_dep(name = "isomer", version = "0.36.1")
 ```
  The rules_swift and
 swift-foundation forks isomer needs come from that registry by version,
-patches and all. Because bzlmod honours `single_version_override` **only
-from the root module**, your MODULE.bazel must still repeat isomer's other
-overrides — the flatbuffers patches (vendored: bzlmod applies override
-patches only from the root repo) and rules_foreign_cc — and the toolchain
-registrations. That is the whole list: the bridge generator, the GPU layer and the map
+patches and all, FlatBuffers among them (25.12.19.isomer.1, since 0.40).
+Because bzlmod honours `single_version_override` **only from the root
+module**, your MODULE.bazel must still repeat isomer's override of
+rules_swift (to its registry version, over the newer one rules_applecross
+asks for) and the toolchain registrations. That is the whole list: the bridge generator, the GPU layer and the map
 renderer are all part of this one module (`@isomer//swift_ffi/...`,
 `@isomer//swift_gpu/...`, `@isomer//swift_map/...`), so one commit pins all of
 them. SQLite (swift_sql, a Swift package: list it in the Package.swift

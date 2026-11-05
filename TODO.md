@@ -2,6 +2,28 @@
 
 Open items that are not yet tracked in code or docs.
 
+## Move isomer to the Isomer Swift organization (after the next release)
+
+GitHub's hosted-runner limits are per account (20 jobs at once on the free
+plan, 5 of them macOS): in an organization of its own, isomer's tests stop
+sharing a pool with visor's and agent_ui's. Moved between releases:
+
+- Transfer the repository to the organization (GitHub redirects the old
+  URL, archives included, while nothing new takes `AttilaTheFun/isomer`).
+- Register our self-hosted runners again under the new owner: OS Server's
+  `isomer-jit` and the Mac's `isomer-containers` (the Shireworks session's).
+- Install the agents' GitHub App on the organization; check that the code
+  owner can still approve and that Container Helper's merges still work.
+- Move what isn't the repository's own: account-level secrets and
+  variables (Applications' CI code).
+- The new URL where the old one is written:
+  - bazel_registry's isomer entries (new ones; old ones redirect);
+  - README, AGENTS.md, docs, the Playground's links;
+  - the Pages site's address (`attilathefun.github.io/isomer` → the
+    organization's), and the links to it;
+  - consumers' MODULE.bazel comments and docs (Visor, Reviews).
+- Tell Visor, Reviews, Shireworks and Upstream.
+
 ## The CI proof: what's left
 
 The Build workflow's `proof` job pictures the Storybook and the Playground
@@ -110,11 +132,13 @@ has it.
   #516 (constant-pool reservations), #517 (internal calls off the native
   stack) and #518 (the dispatch fusions, on #517). #517's CoreMark needs a
   measurement on a quiet machine.
-- **flatbuffers**: google/flatbuffers#9461 (draft): FlatBuffers without
-  Foundation on WASI (Android's part of `flatbuffers_foundation_wasi.patch`
-  stays ours); the Swift Vectors glob is fixed upstream (#8875) and goes with
-  the next BCR release. rules_foreign_cc stays held at 0.15.1 (grpc asks for
-  0.10.1, which doesn't load on Bazel 9).
+- **flatbuffers** (the registry's 25.12.19.isomer.1): google/flatbuffers#9461
+  (open): FlatBuffers without Foundation on WASI (Android's part of
+  `flatbuffers_foundation_wasi.patch` stays ours); the Swift Vectors glob is
+  fixed upstream (#8875) and goes with the next release.
+  `flatbuffers_dev_dependencies.patch` (its JS, TS, Go and gRPC dependencies
+  dev-only, so no rules_foreign_cc in a consumer's graph) is ours to keep
+  until the BCR's entry does the same, or upstream's MODULE.bazel.
 - **rules_swift_package_manager**: cgrindel/rules_swift_package_manager#2621
   (draft): Windows hosts.
 - **hermetic_android_toolchains**: keith/hermetic_android_toolchains#110

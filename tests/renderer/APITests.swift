@@ -676,6 +676,7 @@ func checkAPIAdditions(_ mock: MockRenderer) {
     checkDragPrediction()
     checkBackButtonHidden(mock)
     checkPathInFrame(mock)
+    checkGesturePriorities(mock)
 }
 
 // MARK: ToggleStyle
@@ -915,4 +916,36 @@ func checkPathInFrame(_ mock: MockRenderer) {
     }
     expect(abs((top.min() ?? 0) - 0.1) < 0.01 && abs((top.max() ?? 0) - 0.9) < 0.01,
            "the pill's ends are as round as it is tall in its 100 x 20 frame (top edge \(top.min() ?? -1)...\(top.max() ?? -1))")
+}
+
+// MARK: Gesture priorities, springs and accessibility actions
+
+struct GesturePrioritiesScreen: View {
+    var body: some View {
+        VStack {
+            Rectangle().frame(height: 100).highPriorityGesture(DragGesture())
+            Rectangle().frame(height: 100).simultaneousGesture(DragGesture(), isEnabled: false)
+            Rectangle().frame(height: 100)
+                .accessibilityAction { }
+                .accessibilityAction(.escape) { }
+                .accessibilityAction(named: "Archive") { }
+                .accessibilityAction(named: Text("Delete")) { }
+        }
+        // `.spring()` resolves (Apple's response spring is disfavoured), as do
+        // the interactive springs.
+        .animation(.spring(), value: 1)
+        .animation(.interactiveSpring, value: 2)
+        .animation(.interactiveSpring(response: 0.2), value: 3)
+    }
+}
+
+@MainActor
+func checkGesturePriorities(_ mock: MockRenderer) {
+    Runtime.shared.installRootView { GesturePrioritiesScreen() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    let encoder = FlatTreeEncoder()
+    _ = lastFlatTree(mock, encoder)
+    let drags = encoder.handlers.keys.filter { $0.hasSuffix(".drag") }.count
+    expect(drags == 1, "a high-priority gesture recognizes and a disabled simultaneous one doesn't (\(drags) drag handlers)")
+    expect(AccessibilityActionKind(named: Text("Archive")) != .default, "a named action kind is its own")
 }

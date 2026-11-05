@@ -317,6 +317,33 @@ extension View {
     nonisolated public func gesture<G: Gesture>(_ gesture: G, including mask: GestureMask = .all) -> some View {
         _GestureModifier(child: self, gesture: gesture)
     }
+
+    /// A gesture that takes precedence over the subviews', and one that runs
+    /// with them. Isomer's hosts don't arbitrate between a view's gesture
+    /// and its subviews' yet: both recognize as `.gesture(_:)`'s does.
+    nonisolated public func highPriorityGesture<T>(_ gesture: T, including mask: GestureMask = .all) -> some View where T: Gesture {
+        _GestureModifier(child: self, gesture: gesture)
+    }
+
+    nonisolated public func highPriorityGesture<T>(_ gesture: T, isEnabled: Bool) -> some View where T: Gesture {
+        _GestureModifier(child: self, gesture: gesture, enabled: isEnabled)
+    }
+
+    nonisolated public func highPriorityGesture<T>(_ gesture: T, name: String, isEnabled: Bool = true) -> some View where T: Gesture {
+        _GestureModifier(child: self, gesture: gesture, enabled: isEnabled)
+    }
+
+    nonisolated public func simultaneousGesture<T>(_ gesture: T, including mask: GestureMask = .all) -> some View where T: Gesture {
+        _GestureModifier(child: self, gesture: gesture)
+    }
+
+    nonisolated public func simultaneousGesture<T>(_ gesture: T, isEnabled: Bool) -> some View where T: Gesture {
+        _GestureModifier(child: self, gesture: gesture, enabled: isEnabled)
+    }
+
+    nonisolated public func simultaneousGesture<T>(_ gesture: T, name: String, isEnabled: Bool = true) -> some View where T: Gesture {
+        _GestureModifier(child: self, gesture: gesture, enabled: isEnabled)
+    }
 }
 
 /// Which gestures `.gesture(_:including:)` enables (accepted for source
@@ -333,6 +360,8 @@ public struct GestureMask: OptionSet, Sendable {
 struct _GestureModifier<Child: View, G: Gesture> {
     let child: Child
     let gesture: G
+    /// Off: the view as if it had no gesture.
+    var enabled = true
 
     typealias Body = Never
     var body: Never { fatalError("primitive view") }
@@ -344,6 +373,7 @@ extension _GestureModifier: _PrimitiveView {
         var sub = ctx.descend("gesture")
         let inner = buildNode(view: child, ctx: &sub)
         let box = RenderNode.box(child: inner)
+        guard enabled else { return box }
         let parts = gestureParts(gesture, onChanged: nil, onEnded: nil)
         box.dragGesture = parts.drag
         box.magnifyChanged = parts.magnifyChanged
