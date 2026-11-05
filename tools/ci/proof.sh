@@ -161,6 +161,13 @@ if [ -n "$inside" ]; then
     root_do env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends "${packages[@]}" > /dev/null ||
         { root_do apt-get update -qq > /dev/null &&
           root_do env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends "${packages[@]}" > /dev/null; }
+    # Stopgap until rules_applecross covers it: rules_apple's lipo.py runs
+    # `xcrun lipo` for an imported dynamic framework (the Playground's
+    # embedded compiler on the simulator); here xcrun runs its tool from PATH.
+    printf '%s\n' '#!/bin/sh' 'tool=$1; shift' \
+        'if [ "$tool" = lipo ] && ! command -v lipo > /dev/null; then tool=llvm-lipo; fi' \
+        'exec "$tool" "$@"' | root_do tee /usr/local/bin/xcrun > /dev/null
+    root_do chmod 755 /usr/local/bin/xcrun
     # The Apple targets' toolchains and SDK archive (OS Server's files),
     # for every Bazel command in the examples (proof.py's, package_site.sh's).
     sdk="$(sed -n 's/^SDK_SHA256="\(.*\)"/\1/p' "$ROOT/tools/ci/container_build.sh")"
