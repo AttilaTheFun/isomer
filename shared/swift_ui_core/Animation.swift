@@ -81,9 +81,24 @@ public struct Animation: Equatable, Sendable {
         Animation(duration: duration, curve: .easeInOut)
     }
     /// Approximated as a slightly longer ease-out (no spring solver here).
+    /// Disfavoured, as Apple's is: `.spring()` is the duration-and-bounce one.
+    @_disfavoredOverload
     public static func spring(response: Double = 0.5, dampingFraction: Double = 0.825, blendDuration: TimeInterval = 0) -> Animation {
         Animation(duration: response, curve: .easeOut)
     }
+
+    /// The quick spring of interactive changes (a drag's follow), as an
+    /// ease-out of its response.
+    @_disfavoredOverload
+    public static func interactiveSpring(response: Double = 0.15, dampingFraction: Double = 0.86, blendDuration: TimeInterval = 0.25) -> Animation {
+        Animation(duration: response, curve: .easeOut)
+    }
+
+    public static func interactiveSpring(duration: TimeInterval = 0.15, extraBounce: Double = 0.0, blendDuration: TimeInterval = 0.25) -> Animation {
+        Animation(duration: duration, curve: .easeOut)
+    }
+
+    public static var interactiveSpring: Animation { interactiveSpring() }
 
     /// The duration-and-bounce spring (iOS 17): an ease-out of that length.
     public static func spring(duration: Double = 0.5, bounce: Double = 0, blendDuration: Double = 0) -> Animation {

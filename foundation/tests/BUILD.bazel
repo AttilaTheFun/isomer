@@ -15,6 +15,7 @@ swift_binary(
         "FoundationCheck.swift",
         "NetworkCheck.swift",
         "ObjectsCheck.swift",
+        "RelativeDatesCheck.swift",
         "StringsCheck.swift",
     ],
     deps = [
