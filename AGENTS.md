@@ -81,11 +81,11 @@ minor (MAJOR.MINOR.0) before the release's commit.
 by version at a release (a commit is fine on a branch, or on main between
 releases). Bazel modules come from bazel_registry, before the BCR: isomer's
 releases, visor's, and the forks isomer carries until upstream takes their
-changes, as patched versions (rules_swift 4.1.0.isomer.2: upstream 4.1.0
-with rules_swift#1860, the worker's copy fix and tools/patches' two
+changes, as patched versions (rules_swift 4.1.0.isomer.3: upstream 4.1.0
+with rules_swift#1860, the worker's copy fix and tools/patches' three
 rules_swift patches, held by an override over the 4.2.2 rules_applecross
 asks for; swift-foundation 6.3.2.isomer.1). A change to a fork or to those
-patches is a new entry (.isomer.2), made with the registry's
+patches is a new entry (.isomer.4), made with the registry's
 tools/add_version.py --fork and approved there like any version. Swift
 packages are SwiftPM's, through rules_swift_package_manager, never Bazel
 modules. tools/released_pins.sh says whether every pin is a released
@@ -377,7 +377,7 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   `include()` in MODULE.bazel, which Bazel 8 consumers choke on
   ("include() ... can only be used in the root module"). Upstream will bump
   their minimum eventually; it has not been raised with them.
-- **rules_swift 4.1.0.isomer.2** from the registry, held by a
+- **rules_swift 4.1.0.isomer.3** from the registry, held by a
   `single_version_override` in each root (isomer's, the examples'): without
   it, MVS takes rules_applecross's 4.2.2 and loses the fork. A consumer that
   builds Apple targets with rules_applecross repeats it (Visor does).
