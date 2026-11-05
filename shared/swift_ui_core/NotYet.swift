@@ -104,36 +104,6 @@ extension View {
 }
 
 extension View {
-    @available(*, unavailable, message: "Not yet in Isomer: Gestures (docs/parity/SwiftUI.md)")
-    public nonisolated func highPriorityGesture<T>(_ gesture: T, including mask: GestureMask = .all) -> some View where T : Gesture { self }
-}
-
-extension View {
-    @available(*, unavailable, message: "Not yet in Isomer: Gestures (docs/parity/SwiftUI.md)")
-    public nonisolated func simultaneousGesture<T>(_ gesture: T, including mask: GestureMask = .all) -> some View where T : Gesture { self }
-}
-
-extension View {
-    @available(*, unavailable, message: "Not yet in Isomer: Gestures (docs/parity/SwiftUI.md)")
-    public nonisolated func highPriorityGesture<T>(_ gesture: T, isEnabled: Bool) -> some View where T : Gesture { self }
-}
-
-extension View {
-    @available(*, unavailable, message: "Not yet in Isomer: Gestures (docs/parity/SwiftUI.md)")
-    public nonisolated func simultaneousGesture<T>(_ gesture: T, isEnabled: Bool) -> some View where T : Gesture { self }
-}
-
-extension View {
-    @available(*, unavailable, message: "Not yet in Isomer: Gestures (docs/parity/SwiftUI.md)")
-    public nonisolated func highPriorityGesture<T>(_ gesture: T, name: String, isEnabled: Bool = true) -> some View where T : Gesture { self }
-}
-
-extension View {
-    @available(*, unavailable, message: "Not yet in Isomer: Gestures (docs/parity/SwiftUI.md)")
-    public nonisolated func simultaneousGesture<T>(_ gesture: T, name: String, isEnabled: Bool = true) -> some View where T : Gesture { self }
-}
-
-extension View {
     @available(*, unavailable, message: "Not yet in Isomer: Layout (docs/parity/SwiftUI.md)")
     public nonisolated func scrollTargetLayout(isEnabled: Bool = true) -> some View { self }
 }
@@ -261,11 +231,6 @@ extension Animation {
 extension Animation {
     @available(*, unavailable, message: "Not yet in Isomer: Animation and transitions (docs/parity/SwiftUI.md)")
     public static var interpolatingSpring: Animation { fatalError() }
-}
-
-extension Animation {
-    @available(*, unavailable, message: "Not yet in Isomer: Animation and transitions (docs/parity/SwiftUI.md)")
-    public static var interactiveSpring: Animation { fatalError() }
 }
 
 extension View {

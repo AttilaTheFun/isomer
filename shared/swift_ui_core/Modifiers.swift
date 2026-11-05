@@ -450,6 +450,32 @@ extension View {
         accessibilityValue(Text(valueKey).content)
     }
 
+    /// `.accessibilityAction`: what assistive tech may do with the view (its
+    /// default activation, escape, a named custom action). Accepted, with
+    /// Apple's signatures; Isomer's hosts don't offer the actions to
+    /// assistive tech yet, so the handler isn't called.
+    nonisolated public func accessibilityAction(_ actionKind: AccessibilityActionKind = .default,
+                                                _ handler: @escaping () -> Void) -> ModifiedContent<Self, AccessibilityAttachmentModifier> {
+        modifier(AccessibilityAttachmentModifier { _ in })
+    }
+
+    nonisolated public func accessibilityAction(named name: Text,
+                                                _ handler: @escaping () -> Void) -> ModifiedContent<Self, AccessibilityAttachmentModifier> {
+        accessibilityAction(AccessibilityActionKind(named: name), handler)
+    }
+
+    nonisolated public func accessibilityAction(named nameKey: LocalizedStringKey,
+                                                _ handler: @escaping () -> Void) -> ModifiedContent<Self, AccessibilityAttachmentModifier> {
+        accessibilityAction(named: Text(nameKey), handler)
+    }
+
+    @_disfavoredOverload
+    nonisolated public func accessibilityAction<S>(named name: S,
+                                                   _ handler: @escaping () -> Void) -> ModifiedContent<Self, AccessibilityAttachmentModifier>
+        where S: StringProtocol {
+        accessibilityAction(named: Text(String(name)), handler)
+    }
+
     /// `.accessibilityRepresentation`: assistive tech reads this view as the
     /// representation (a custom control as the `Toggle` or `Button` it acts
     /// like). Hosts derive an element from the drawn node, so what crosses
@@ -1352,4 +1378,21 @@ extension Button: _AccessibilityRepresented {
 extension Toggle: _AccessibilityRepresented {
     var _representedLabel: String? { (label as? Text)?.content }
     var _representedValue: String? { isOn.wrappedValue ? "1" : "0" }
+}
+
+/// The kinds of action `accessibilityAction` names: the view's default
+/// activation, escape, the magic tap, delete, showing a menu, or a custom
+/// action by its name.
+public struct AccessibilityActionKind: Equatable, Sendable {
+    let name: String
+
+    public static let `default` = AccessibilityActionKind(name: "default")
+    public static let escape = AccessibilityActionKind(name: "escape")
+    public static let magicTap = AccessibilityActionKind(name: "magicTap")
+    public static let delete = AccessibilityActionKind(name: "delete")
+    public static let showMenu = AccessibilityActionKind(name: "showMenu")
+
+    init(name: String) { self.name = name }
+
+    public init(named name: Text) { self.name = "named:" + name.content }
 }
