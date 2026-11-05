@@ -2,7 +2,8 @@
 # frameworks (Platform.current, the platform-command modifiers, WebView, the
 # JSON helpers, the calendar helpers the sample apps use). The `SwiftUI`
 # module carries only Apple's surface; code that wants these imports Isomer
-# (SwiftUIExtensions and IsomerBridge remain as names that re-export it).
+# (SwiftUIExtensions and IsomerBridge, its names before 0.31, are gone since
+# 0.40).
 # Each platform compiles them against its own SwiftUI module.
 
 package(default_visibility = ["//visibility:public"])

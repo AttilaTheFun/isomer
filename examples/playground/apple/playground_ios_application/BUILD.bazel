@@ -45,7 +45,6 @@ wasm_sdk_bundle(
         "@isomer//:foundation",
         "@isomer//wasm/libraries/hot_swift_ui:hot_bridge_network",
         "@isomer//wasm/libraries/hot_swift_ui:isomer",
-        "@isomer//wasm/libraries/hot_swift_ui:swift_ui_extensions",
     ],
 )
 

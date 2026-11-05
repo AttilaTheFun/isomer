@@ -61,15 +61,6 @@ swift_library(
     deps = [":hot_swift_ui"],
 )
 
-# The name the Isomer module had before 0.31: it re-exports it.
-swift_library(
-    name = "swift_ui_extensions",
-    package_name = "isomer",
-    srcs = ["//shared/isomer:Compatibility.swift"],
-    module_name = "SwiftUIExtensions",
-    deps = [":isomer"],
-)
-
 swift_library(
     name = "hot_swift_ui",
     package_name = "isomer",

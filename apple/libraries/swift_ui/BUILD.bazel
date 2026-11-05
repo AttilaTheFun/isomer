@@ -29,26 +29,10 @@ swift_library(
     ],
 )
 
-# What `swift_ui` named before 0.31 (SwiftUIExtensions, now re-exporting
-# Isomer).
+# The package's default target: the Isomer module (Apple's SwiftUI with
+# Isomer's additions).
 alias(
     name = "swift_ui",
-    actual = ":swift_ui_extensions",
+    actual = ":isomer",
 )
 
-# The names the Isomer module had before 0.31: each re-exports it.
-swift_library(
-    name = "swift_ui_extensions",
-    package_name = "isomer",
-    srcs = ["//shared/isomer:Compatibility.swift"],
-    module_name = "SwiftUIExtensions",
-    deps = [":isomer"],
-)
-
-swift_library(
-    name = "isomer_bridge",
-    package_name = "isomer",
-    srcs = ["//shared/isomer:Compatibility.swift"],
-    module_name = "IsomerBridge",
-    deps = [":isomer"],
-)

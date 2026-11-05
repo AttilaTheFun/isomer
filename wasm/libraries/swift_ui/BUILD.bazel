@@ -94,7 +94,7 @@ swift_library_group(
 
 # Core native-bridging API (logging, clock, URLs), routed through the WebHost.
 # What Isomer provides beyond Apple's SwiftUI API (see
-# //shared/swift_ui_extensions); IsomerBridge re-exports it.
+# //shared/swift_ui_extensions).
 swift_library(
     name = "isomer",
     package_name = "isomer",
@@ -117,24 +117,6 @@ swift_library(
         "//shared/isomer_swift_ui",
     ],
 )
-
-# The names the Isomer module had before 0.31: each re-exports it.
-swift_library(
-    name = "swift_ui_extensions",
-    package_name = "isomer",
-    srcs = ["//shared/isomer:Compatibility.swift"],
-    module_name = "SwiftUIExtensions",
-    deps = [":isomer"],
-)
-
-swift_library(
-    name = "isomer_bridge",
-    package_name = "isomer",
-    srcs = ["//shared/isomer:Compatibility.swift"],
-    module_name = "IsomerBridge",
-    deps = [":isomer"],
-)
-
 
 # The framework-owned `iso_hot` reactor ABI over this SwiftUI: a reactor links
 # it (`deps`) next to its app library rather than copying the glue, which
