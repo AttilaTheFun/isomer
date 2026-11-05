@@ -154,8 +154,9 @@ if [ -n "$inside" ]; then
     [ -n "$host" ] || { echo "::error::no host for OS Server's files: set OSS_FILES_HOST (or OSS_SERVERS)"; exit 1; }
     echo "::group::The container's tools"
     root_do() { if [ "$(id -u)" = 0 ]; then "$@"; else sudo "$@"; fi; }
-    # Python with Pillow for proof.py; what Chrome for Testing loads; unzip.
-    packages=(python3 python3-pil unzip libnss3 libasound2t64 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2
+    # gh (the baseline, the release site); Python with Pillow for proof.py;
+    # what Chrome for Testing loads; unzip.
+    packages=(gh git python3 python3-pil unzip libnss3 libasound2t64 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2
               libpango-1.0-0 libcairo2 libcups2t64 libdrm2 libgbm1 fonts-dejavu-core)
     root_do env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends "${packages[@]}" > /dev/null ||
         { root_do apt-get update -qq > /dev/null &&
