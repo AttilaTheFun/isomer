@@ -1,0 +1,62 @@
+--- a/MODULE.bazel
++++ b/MODULE.bazel
+@@ -8,23 +8,28 @@
+ bazel_dep(
+     name = "aspect_bazel_lib",
+     version = "2.11.0",
++    dev_dependency = True,
+ )
+ bazel_dep(
+     name = "aspect_rules_esbuild",
+     version = "0.21.0",
++    dev_dependency = True,
+ )
+ bazel_dep(
+     name = "aspect_rules_js",
+     version = "2.3.8",
++    dev_dependency = True,
+ )
+ bazel_dep(
+     name = "aspect_rules_ts",
+     version = "3.6.0",
++    dev_dependency = True,
+ )
+ bazel_dep(
+     name = "grpc",
+     version = "1.70.1",
+     repo_name = "com_github_grpc_grpc",
++    dev_dependency = True,
+ )
+ bazel_dep(
+     name = "platforms",
+@@ -38,10 +43,12 @@
+     name = "rules_go",
+     version = "0.50.1",
+     repo_name = "io_bazel_rules_go",
++    dev_dependency = True,
+ )
+ bazel_dep(
+     name = "rules_nodejs",
+     version = "6.3.3",
++    dev_dependency = True,
+ )
+ bazel_dep(
+     name = "rules_shell",
+@@ -57,7 +64,7 @@
+     version = "1.7.1",
+ )
+ 
+-npm = use_extension("@aspect_rules_js//npm:extensions.bzl", "npm")
++npm = use_extension("@aspect_rules_js//npm:extensions.bzl", "npm", dev_dependency = True)
+ npm.npm_translate_lock(
+     name = "flatbuffers_npm",
+     npmrc = "//:.npmrc",
+@@ -69,7 +76,7 @@
+ )
+ use_repo(npm, "flatbuffers_npm")
+ 
+-node = use_extension("@rules_nodejs//nodejs:extensions.bzl", "node")
++node = use_extension("@rules_nodejs//nodejs:extensions.bzl", "node", dev_dependency = True)
+ use_repo(node, "nodejs_linux_amd64")
+ 
+ rules_ts_ext = use_extension("@aspect_rules_ts//ts:extensions.bzl", "ext", dev_dependency = True)

@@ -670,11 +670,11 @@ bazel_dep(name = "isomer", version = "0.36.1")
 ```
  The rules_swift and
 swift-foundation forks isomer needs come from that registry by version,
-patches and all. Because bzlmod honours `single_version_override` **only
-from the root module**, your MODULE.bazel must still repeat isomer's other
-overrides — the flatbuffers patches (vendored: bzlmod applies override
-patches only from the root repo) and rules_foreign_cc — and the toolchain
-registrations. That is the whole list: the bridge generator, the GPU layer and the map
+patches and all, FlatBuffers among them (25.12.19.isomer.1, since 0.40).
+Because bzlmod honours `single_version_override` **only from the root
+module**, your MODULE.bazel must still repeat isomer's override of
+rules_swift (to its registry version, over the newer one rules_applecross
+asks for) and the toolchain registrations. That is the whole list: the bridge generator, the GPU layer and the map
 renderer are all part of this one module (`@isomer//swift_ffi/...`,
 `@isomer//swift_gpu/...`, `@isomer//swift_map/...`), so one commit pins all of
 them. SQLite (swift_sql, a Swift package: list it in the Package.swift
