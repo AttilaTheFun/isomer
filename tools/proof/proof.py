@@ -633,14 +633,26 @@ MAC_ARGUMENTS = ["-AppleInterfaceStyle", "Light", "-NSRequiresAquaSystemAppearan
 # A slot's app, run by `oss machine exec --gui` in the primary's console
 # session (its user's, not the slot's). Started by its binary, so that it is
 # the exec's child and ends with it (the server signals the exec's process
-# group when the client goes: nothing found by name). Its binary alone, as
-# tools/ci/apple_test.sh starts it: `open` of its bundle afterwards, which
-# once brought a window that stayed behind to the front, starts a second
-# instance of an app built on Linux, without the arguments (dark, scroll
-# bars); started so, today's slots draw it frontmost and active.
+# group when the client goes, and this script ends the app then). Started by
+# `open -n -a`, as the Dock starts it, so that its window is frontmost and
+# active (started by its binary, it stayed behind, inactive: grey traffic
+# lights, no vibrancy), its environment passed by `--env` and its arguments
+# by `--args`; then found by its binary's path, which is under this slot's
+# own home (no other slot's copy matches it), waited for, and ended with
+# the exec.
 SLOT_LAUNCH = """
 app=$1; shift
-exec "$app/Contents/MacOS/$(basename "$app" .app)" "$@"
+binary="$app/Contents/MacOS/$(basename "$app" .app)"
+# Its environment for the app (LaunchServices starts it, not this shell).
+set --  --args "$@"
+for name in $(env | grep -oE '^(ISO_[A-Z0-9_]+|CFFIXED_USER_HOME)=' | tr -d =); do
+    set -- --env "$name=$(printenv "$name")" "$@"
+done
+/usr/bin/open -n -a "$app" "$@" || exit 1
+for _ in $(seq 1 50); do pid=$(/usr/bin/pgrep -n -f "^$binary") && break; sleep 0.2; done
+[ -n "$pid" ] || exit 1
+trap 'kill "$pid" 2> /dev/null; exit 0' TERM INT HUP
+while kill -0 "$pid" 2> /dev/null; do sleep 1; done
 """
 
 
@@ -706,9 +718,7 @@ def macos_slot(review, story_list, builds):
         def launcher(app, environment, wait, path):
             stop()
             name = APPS[app]["name"]
-            # ISO_ACTIVATE: the app puts itself in front (started by its binary
-            # on the shared screen, nothing else does).
-            variables = {"CFFIXED_USER_HOME": home, "ISO_ACTIVATE": "1", **environment}
+            variables = {"CFFIXED_USER_HOME": home, **environment}
             command = ["oss", "machine", "exec", slot, "--gui", *(f"--env={k}={v}" for k, v in variables.items()), "--",
                        "/bin/sh", "-c", SLOT_LAUNCH, "launch", f"{apps}/{name}.app",
                        *MAC_ARGUMENTS, "-AppleShowScrollBars", "WhenScrolling", "-ApplePersistenceIgnoreState", "YES"]

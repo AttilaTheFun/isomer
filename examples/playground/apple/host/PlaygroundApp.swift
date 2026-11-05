@@ -7,9 +7,6 @@ import ApplePlatformServices
 import ApplicationUpdates
 import PlatformServices
 import SwiftUI
-#if os(macOS)
-import AppKit
-#endif
 
 @main
 struct PlaygroundApp: App {
@@ -33,16 +30,7 @@ struct PlaygroundApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("Playground") {
-            PlaygroundRoot()
-                #if os(macOS)
-                // ISO_ACTIVATE (the proof's, on a shared screen): in front, as
-                // a launch from the Dock would be, when started by its binary.
-                .onAppear {
-                    if ProcessInfo.processInfo.environment["ISO_ACTIVATE"] != nil { NSApplication.shared.activate() }
-                }
-                #endif
-        }
+        WindowGroup("Playground") { PlaygroundRoot() }
         #if os(macOS)
             .defaultSize(width: 1280, height: 820)
         #endif

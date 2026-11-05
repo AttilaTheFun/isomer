@@ -188,7 +188,7 @@ python="${PROOF_PYTHON:-python3}"
 echo "::group::The Playground's compilers"
 # The staged compilers from OS Server's files, unpacked where the apps'
 # BUILD files find them (the checkout's gitignored folders).
-"$ROOT/tools/ci/stage_playground_compilers.sh" ios-simulator android
+"$ROOT/tools/ci/stage_playground_compilers.sh" ios-simulator android macos
 # The browser's: the latest release's site's.
 mkdir -p "$work/site"
 gh release download --repo "$repo" --pattern isomer-site.tar.gz --dir "$work/site"

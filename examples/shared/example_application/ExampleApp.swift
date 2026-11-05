@@ -16,9 +16,6 @@ import ApplicationUpdates
 #endif
 import Storybook
 import SwiftUI
-#if os(macOS)
-import AppKit
-#endif
 
 @main
 struct ExampleApplication: App {
@@ -39,13 +36,6 @@ struct ExampleApplication: App {
         // The title reaches the host as the document/window/task title.
         WindowGroup("Storybook") {
             StorybookView()
-                #if os(macOS)
-                // ISO_ACTIVATE (the proof's, on a shared screen): in front, as
-                // a launch from the Dock would be, when started by its binary.
-                .onAppear {
-                    if ProcessInfo.processInfo.environment["ISO_ACTIVATE"] != nil { NSApplication.shared.activate() }
-                }
-                #endif
         }
         #if os(macOS)
         .defaultSize(width: 1280, height: 820)
