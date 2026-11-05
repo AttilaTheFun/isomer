@@ -108,7 +108,10 @@ def sh(command, check=True, cwd=ISOMER, **kwargs):
 def bazel_output(cwd, target, *flags, suffix=""):
     sh(["bazel", "build", target, *flags], cwd=cwd)
     files = sh(["bazel", "cquery", "--output=files", target, *flags], cwd=cwd).stdout.split()
-    return os.path.join(cwd, next(f for f in files if f.endswith(suffix)))
+    # cquery names outputs under the execution root (no bazel-out link in
+    # the workspace where convenience symlinks are off, as in CI).
+    root = sh(["bazel", "info", "execution_root", *flags], cwd=cwd).stdout.strip()
+    return os.path.join(root, next(f for f in files if f.endswith(suffix)))
 
 
 def stories(only=None):
