@@ -246,9 +246,11 @@ SwiftUI (iOS 17, macOS 14) and Isomer's have: the web build is the check.
 The mini apps are the Playground's canned projects only.
 
 **The release proof** (tools/proof/proof.py, since 0.38): Isomer's two apps
-on its six platforms, one renderer each (SwiftUI on iOS and the Mac,
-Compose on Android, React on the web, OpenGL on Linux, DirectX on
-Windows): the Storybook's every story, and the Playground's projects with
+on its tier-1 platforms, one renderer each (SwiftUI on iOS and the Mac,
+Compose on Android, React on the web; since 2026-11-05 CI pictures only
+these, to save its time, and builds Linux and Windows without running them;
+proof.py still pictures Linux with OpenGL and Windows with DirectX when
+tools/ci/proof.sh's PROOF_PLATFORMS names them): the Storybook's every story, and the Playground's projects with
 2048 and the Pokédex built on the device and running. On the iPhone the
 Storybook is also compiled against Isomer's frameworks
 (examples/apple/storybook_isomer_ios_application: a test, not released)
@@ -462,15 +464,24 @@ bazel run //examples/electron/example_full_react_electron_application
 # "Platform tiers").
 ```
 
-## Platform tiers (2026-10-13)
+## Platform tiers (2026-11-05)
 
-Linux and Windows are T3, wasm and Android T2, iOS and macOS T1. T1 (iOS, macOS): simulators and
-the Mac on every change. T2 (wasm: web and Electron; Android): headless
-Chrome and the hermetic emulator. T3 (Linux, Windows): built and run on
-oss machines (~/Developer/AGENTS.md), never on this Mac's own screen.
+Tier 1 is iOS, macOS, Android and the web (wasm: the browser and Electron);
+tier 2 is Linux and Windows. Building an iOS app for Android is Isomer's
+headline, and the project's other apps (Visor, Reviews) ship iOS, the Mac
+and Android, Android through Isomer. CI runs and pictures tier 1 on every
+change: the iPhone and the Mac on slots of OS Server's primary, Android on
+an emulator lease, the web in headless Chrome. It builds tier 2 on every
+change, but runs it only by hand for now (until the build machine has the
+room): Linux in a container under Xvfb, Windows under Wine in a container
+or on an oss Windows VM, never on this Mac's own screen. Tier 2's pictures
+may differ from real hardware (Wine's fonts), which is acceptable.
 
 - **Every platform's tests in containers (2026-11-04).** CI's container
-  builds every platform, Windows too, and tests each where it runs, the
+  builds every platform, Windows too, and tests each where it runs (since
+  2026-11-05 the tier-1 platforms only: iOS, the Mac, Android and the web
+  run; Linux's test and the GL check are built, and Windows under Wine runs
+  when tools/ci/platform_tests.sh's PLATFORM_TESTS names it), the
   Storybook on its test stories (examples/tests/platforms/stories.bzl),
   each picture checked for having drawn and kept as the run's
   `platform-tests` artifact:
