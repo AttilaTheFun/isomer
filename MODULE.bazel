@@ -35,10 +35,10 @@ bazel_dep(name = "platforms", version = "1.1.0")
 
 # Apple platform (uses the locally installed Xcode, as all Bazel apple builds do).
 # rules_swift from this project's registry (AttilaTheFun/bazel_registry,
-# listed before the BCR in .bazelrc): 4.1.0.isomer.2 is upstream's 4.1.0
+# listed before the BCR in .bazelrc): 4.1.0.isomer.3 is upstream's 4.1.0
 # with rules_swift#1860 (a metadata-driven wasm SDK and its threads variant,
 # not yet merged), the worker's incremental-copy fix (upstream #1905, from
-# 4.2.0), and two patches of ours until rules_swift has them, kept in
+# 4.2.0), and three patches of ours until rules_swift has them, kept in
 # tools/patches and copied into the registry entry:
 #   * rules_swift_wasm_threads_beside.patch: a wasi-threads SDK declared
 #     beside the single-threaded one (two `swift.wasm_sdk` tags), chosen by a
@@ -48,17 +48,23 @@ bazel_dep(name = "platforms", version = "1.1.0")
 #     do), so clang's own headers (<stdarg.h>, <stddef.h>) come from the SDK,
 #     among the action's inputs, not by an absolute path into the host
 #     toolchain that Bazel's inclusion check rejects. C such as SQLite's
-#     amalgamation (swift_sql) builds as is.
+#     amalgamation (swift_sql) builds as is;
+#   * rules_swift_android_cxx_interop.patch (rules_swift#1995): Swift/C++
+#     interop on Android compiles (the SDK's clang resource directory, which
+#     points into the machine that built the bundle, linked to the paired
+#     toolchain's, with no -I ahead of the NDK's libc++) and links (swiftCxx
+#     and swiftCxxStdlib found beside the shared runtime, -lc++ the static
+#     libc++).
 # rules_applecross (below) asks for 4.2.2, which sorts above it: the root's
 # override keeps the fork, and a consumer that builds Apple targets with
 # rules_applecross repeats it. A change to either patch, or a newer fork
-# commit, is a new entry (4.1.0.isomer.3) made with the registry's
+# commit, is a new entry (4.1.0.isomer.4) made with the registry's
 # tools/add_version.py --fork. Back to a plain BCR version at the next
 # rules_swift release that has them.
-bazel_dep(name = "rules_swift", version = "4.1.0.isomer.2")
+bazel_dep(name = "rules_swift", version = "4.1.0.isomer.3")
 single_version_override(
     module_name = "rules_swift",
-    version = "4.1.0.isomer.2",
+    version = "4.1.0.isomer.3",
 )
 # rules_apple and apple_support at rules_applecross's versions, with its
 # patches (bundling and signing on Linux; tools/patches/applecross), which
