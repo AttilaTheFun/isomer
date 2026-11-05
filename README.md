@@ -116,7 +116,11 @@ architecture), `CGAffineTransform`, `CGColor`, `CGPath`. `SwiftUI` re-exports
 both, as Apple's does. Any library built for those platforms that imports
 Foundation depends on `@isomer//:foundation` (a SwiftPM package through
 rules_swift_package_manager's `target_deps`); `tools/foundation/check_link.py`
-finds an app that links the Swift SDK's Foundation instead. Linux and
+finds an app that links the Swift SDK's Foundation instead. A library that
+depends on `@isomer//:swift_ui` has Foundation through it already (SwiftUI
+re-exports it), so it needs no `@isomer//:foundation` of its own; a macro of
+yours that adds `@isomer//:foundation` to a target's `deps` must not be given
+it again, as Bazel rejects a label listed twice in one attribute. Linux and
 Windows still use the toolchain's Foundation. docs/isomer_031_plan.md has the
 plan and docs/parity/ what each module covers.
 

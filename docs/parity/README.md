@@ -9,8 +9,8 @@ missing/<Module>.md lists each module's missing declarations one by one, with Ap
 | Module | Counted | Implemented | Excluded | Not yet | Unclassified | Missing, listed |
 |---|---|---|---|---|---|---|
 | [CoreGraphics](CoreGraphics.md) | 1357 | 425 (31%) | 627 | 303 | 2 | [missing/CoreGraphics.md](missing/CoreGraphics.md) |
-| [Foundation](Foundation.md) | 12079 | 4896 (41%) | 3557 | 3626 | 0 | [missing/Foundation.md](missing/Foundation.md) |
-| [SwiftUI](SwiftUI.md) | 7924 | 2054 (26%) | 530 | 5340 | 0 | [missing/SwiftUI.md](missing/SwiftUI.md) |
+| [Foundation](Foundation.md) | 12079 | 4915 (41%) | 3557 | 3607 | 0 | [missing/Foundation.md](missing/Foundation.md) |
+| [SwiftUI](SwiftUI.md) | 7924 | 2078 (26%) | 530 | 5316 | 0 | [missing/SwiftUI.md](missing/SwiftUI.md) |
 | [Metal](Metal.md) | 3580 | 860 (24%) | 1156 | 1563 | 1 | [missing/Metal.md](missing/Metal.md) |
 | [CoreTransferable](CoreTransferable.md) | 83 | 1 (1%) | 2 | 80 | 0 | [missing/CoreTransferable.md](missing/CoreTransferable.md) |
 | [UniformTypeIdentifiers](UniformTypeIdentifiers.md) | 229 | 32 (14%) | 8 | 189 | 0 | [missing/UniformTypeIdentifiers.md](missing/UniformTypeIdentifiers.md) |
