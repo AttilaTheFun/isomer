@@ -1,0 +1,39 @@
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+load("@isomer//tools/platforms:transition.bzl", "transition_binary")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_swift//swift:swift.bzl", "swift_binary", "swift_interop_hint")
+
+# Swift/C++ interoperability on Android: a C++ header using the standard
+# library, imported with the C++ standard library's module, compiled and
+# linked for Android (the clang headers the SDK's resource directory finds,
+# and the C++ runtime it links).
+swift_interop_hint(
+    name = "greeter_module",
+    module_name = "Greeter",
+)
+
+cc_library(
+    name = "greeter",
+    hdrs = ["greeter.h"],
+    aspect_hints = [":greeter_module"],
+    tags = ["manual"],
+)
+
+swift_binary(
+    name = "interop",
+    srcs = ["main.swift"],
+    copts = ["-cxx-interoperability-mode=default"],
+    tags = ["manual"],
+    deps = [":greeter"],
+)
+
+transition_binary(
+    name = "interop_android",
+    binary = ":interop",
+    platform = "@isomer//tools/platforms:android_arm64",
+)
+
+build_test(
+    name = "cxx_interop_test",
+    targets = [":interop_android"],
+)

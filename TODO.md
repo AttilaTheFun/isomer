@@ -81,13 +81,15 @@ project's own modules. Every change we carry has an upstream PR now
 (2026-11-04, drafts unless noted); each patch or fork goes when a release
 has it.
 
-- **rules_swift** (the registry's 4.1.0.isomer.2):
+- **rules_swift** (the registry's 4.1.0.isomer.3):
   - bazelbuild/rules_swift#1860 (open): the metadata-driven wasm SDK and its
     wasip1-threads variant;
-  - #1990 (draft, on #1860): a single-threaded and a threads wasm SDK side
+  - #1990 (open, on #1860): a single-threaded and a threads wasm SDK side
     by side (`rules_swift_wasm_threads_beside.patch`);
-  - #1989 (draft): the wasm SDK's clang resource directory for C compiles
+  - #1989 (open): the wasm SDK's clang resource directory for C compiles
     (`rules_swift_wasm_clang_resource_dir.patch`);
+  - #1995 (open): Swift/C++ interop on Android
+    (`rules_swift_android_cxx_interop.patch`);
   - the worker's copy fix is upstream since 4.2.0 (#1905): the patch goes
     with the move to a 4.2 release;
   - #1988 (draft): `swift.windows_sdk`, Windows built on Linux with the
