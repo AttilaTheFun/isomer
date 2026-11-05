@@ -706,7 +706,9 @@ def macos_slot(review, story_list, builds):
         def launcher(app, environment, wait, path):
             stop()
             name = APPS[app]["name"]
-            variables = {"CFFIXED_USER_HOME": home, **environment}
+            # ISO_ACTIVATE: the app puts itself in front (started by its binary
+            # on the shared screen, nothing else does).
+            variables = {"CFFIXED_USER_HOME": home, "ISO_ACTIVATE": "1", **environment}
             command = ["oss", "machine", "exec", slot, "--gui", *(f"--env={k}={v}" for k, v in variables.items()), "--",
                        "/bin/sh", "-c", SLOT_LAUNCH, "launch", f"{apps}/{name}.app",
                        *MAC_ARGUMENTS, "-AppleShowScrollBars", "WhenScrolling", "-ApplePersistenceIgnoreState", "YES"]
