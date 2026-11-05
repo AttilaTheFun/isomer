@@ -140,8 +140,13 @@ if find "$WORK/site" -type f -size +95M | grep -q .; then
 fi
 # No owner names and no macOS metadata (._ files, xattrs) in the archive.
 rm -f "$OUT"
-tar --no-mac-metadata --no-xattrs --numeric-owner --uid 0 --gid 0 -czf "$OUT" -C "$WORK/site" .
-largest="$(find "$WORK/site" -type f -exec stat -f '%z %N' {} + | sort -n | tail -1)"
-echo "wrote $OUT: $(stat -f %z "$OUT") bytes, $(find "$WORK/site" -type f | wc -l | tr -d ' ') files"
+# A Mac's bsdtar or Linux's GNU tar (the proof packages it in a container).
+if tar --version | grep -q GNU; then
+  tar --no-xattrs --numeric-owner --owner=0 --group=0 -czf "$OUT" -C "$WORK/site" .
+else
+  tar --no-mac-metadata --no-xattrs --numeric-owner --uid 0 --gid 0 -czf "$OUT" -C "$WORK/site" .
+fi
+largest="$(find "$WORK/site" -type f -exec wc -c {} + | grep -v ' total$' | sort -n | tail -1 | sed 's/^ *//')"
+echo "wrote $OUT: $(wc -c < "$OUT" | tr -d ' ') bytes, $(find "$WORK/site" -type f | wc -l | tr -d ' ') files"
 echo "largest file: ${largest#* "$WORK/site/"} (${largest%% *} bytes)"
 echo "next: gh release upload <tag> $OUT"

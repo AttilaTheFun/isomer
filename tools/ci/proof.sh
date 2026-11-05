@@ -41,10 +41,12 @@
 # apps don't build or a picture doesn't come back; pictures that changed
 # are for review, not failures.
 #
-# The builds: proof.py's, on this runner's Mac (the Apple apps with its
-# Xcode; Android's, the web's), except Linux's (packaged in a container
-# leased from OS Server, as tools/ci/container_build.sh builds) and
-# Windows' (on its VM). The Playground's compilers that Bazel doesn't make:
+# The builds: proof.py's, in CI's own Linux container (the isomer-jit
+# runners: the Apple apps with rules_applecross, the SDK archive from OS
+# Server's files; Android's, the web's, its pictures in Chrome for Testing
+# there), or on a Mac with its Xcode and Chrome when run by hand there.
+# Linux's (when PROOF_PLATFORMS names it) are packaged in a container leased
+# from OS Server; Windows' are built on its VM. The Playground's compilers that Bazel doesn't make:
 # the iPhone simulator's and Android's staged ones from OS Server's files
 # (tools/ci/stage_playground_compilers.sh), and the in-browser one from the
 # latest release's site.
@@ -55,8 +57,8 @@
 #   PROOF_BASELINE_RUN  a run whose proof is the baseline (above)
 #   PROOF_MAC           vm: the Mac's pictures on a macOS VM of their own, as
 #                       before 2026-11-03 (default: a slot of OS Server's primary)
-#   OSS_FILES_HOST      the name a container reaches this Mac's OS Server by
-#                       (default: this Mac's tailnet name, from Tailscale)
+#   OSS_FILES_HOST      the name OS Server's files are reached by (default: the
+#                       first of OSS_SERVERS, else this Mac's tailnet name)
 #   GH_TOKEN            gh's token (the job's)
 #
 # Every lease is released however the script ends: proof.py's own as it
@@ -132,7 +134,53 @@ trap 'exit 143' TERM INT
 # The tools first: nothing leased if one doesn't build. proof.py's python
 # with Pillow: without, its desktops' pictures go uncropped (the clocks,
 # the wallpaper), which it only logs.
-xcrun swiftc -O -o "$work/proof_compare" "$ROOT/tools/ci/proof_compare.swift"
+# In CI the job's own container (the isomer-jit runners: OS Server's
+# single-use Linux containers) builds and pictures, in place; on a Mac
+# (OS Server's own) it builds with the Mac's Xcode.
+inside=""
+[ "$(uname -s)" = Darwin ] || inside=1
+host="${OSS_FILES_HOST:-}"
+if [ -z "$host" ] && [ -n "${OSS_SERVERS:-}" ]; then
+    # The first of the servers' addresses (a URL, or host:port).
+    host="${OSS_SERVERS%%[ ,]*}"
+    host="${host#*://}"
+    host="${host%%[:/]*}"
+fi
+if [ -z "$host" ] && [ -z "$inside" ]; then
+    host="$(/Applications/Tailscale.app/Contents/MacOS/Tailscale status --json | plutil -extract Self.DNSName raw -o - -)"
+    host="${host%.}"
+fi
+if [ -n "$inside" ]; then
+    [ -n "$host" ] || { echo "::error::no host for OS Server's files: set OSS_FILES_HOST (or OSS_SERVERS)"; exit 1; }
+    echo "::group::The container's tools"
+    root_do() { if [ "$(id -u)" = 0 ]; then "$@"; else sudo "$@"; fi; }
+    # Python with Pillow for proof.py; what Chrome for Testing loads; unzip.
+    packages=(python3 python3-pil unzip libnss3 libasound2t64 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2
+              libpango-1.0-0 libcairo2 libcups2t64 libdrm2 libgbm1 fonts-dejavu-core)
+    root_do env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends "${packages[@]}" > /dev/null ||
+        { root_do apt-get update -qq > /dev/null &&
+          root_do env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends "${packages[@]}" > /dev/null; }
+    # The Apple targets' toolchains and SDK archive (OS Server's files),
+    # for every Bazel command in the examples (proof.py's, package_site.sh's).
+    sdk="$(sed -n 's/^SDK_SHA256="\(.*\)"/\1/p' "$ROOT/tools/ci/container_build.sh")"
+    cat > "$work/downloader.cfg" <<EOF2
+rewrite apple-sdks\.invalid/.* http://$host:7490/files/sha256/$sdk
+rewrite ported-tools\.invalid/sha256/(.*) http://$host:7490/files/sha256/\$1
+rewrite windows-sdks\.invalid/sha256/(.*) http://$host:7490/files/sha256/\$1
+EOF2
+    printf 'build --config=apple_on_linux\ncommon --downloader_config=%s\n' "$work/downloader.cfg" > "$ROOT/examples/.bazelrc.user"
+    # The web's pictures in Chrome for Testing (MODULE.bazel), for cdp.py.
+    case "$(uname -m)" in aarch64 | arm64) chrome=chrome_linux_arm64 ;; *) chrome=chrome_linux_x86_64 ;; esac
+    (cd "$ROOT/examples" && bazel build "@$chrome//:files" > /dev/null)
+    export CDP_CHROME="$(cd "$ROOT/examples" && echo "$(bazel info output_base)/$(bazel cquery --output=files "@$chrome//:chrome" 2> /dev/null)")"
+    [ -x "$CDP_CHROME" ] || { echo "::error::no Chrome for Testing at $CDP_CHROME"; exit 1; }
+    # A container has no user namespaces for Chrome's own sandbox.
+    export CDP_CHROME_FLAGS="--no-sandbox ${CDP_CHROME_FLAGS:-}"
+    echo "::endgroup::"
+    swiftc -O -o "$work/proof_compare" "$ROOT/tools/ci/proof_compare.swift"
+else
+    xcrun swiftc -O -o "$work/proof_compare" "$ROOT/tools/ci/proof_compare.swift"
+fi
 python="${PROOF_PYTHON:-python3}"
 "$python" -c 'import PIL' 2> /dev/null || { echo "::error::$python has no Pillow (PROOF_PYTHON names one that has)"; exit 1; }
 
@@ -215,11 +263,6 @@ echo "::endgroup::"
 echo "::group::The Linux apps, packaged in a container"
 # Bazel's tree in a volume of the lease's, the checkout mounted (the
 # packages come out under .ci/, in it).
-host="${OSS_FILES_HOST:-}"
-if [ -z "$host" ]; then
-    host="$(/Applications/Tailscale.app/Contents/MacOS/Tailscale status --json | plutil -extract Self.DNSName raw -o - -)"
-    host="${host%.}"
-fi
 linux_packages=()
 if [[ " $PLATFORMS " == *" linux "* ]]; then
     linux="$ROOT/.ci/proof-linux"

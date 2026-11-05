@@ -265,8 +265,10 @@ pictured by `screenshot --window`; PROOF_MAC=vm a macOS VM of its own; the
 iPhone's an `ios` lease in that VM, driven by oss's simctl `--env`, upload,
 download and screenshot alone, OS Server's API 20; PROOF_IOS=local simctl on
 the server's Mac). CI makes it, and
-only CI's counts (the Build workflow's `proof` job, tools/ci/proof.sh, on
-the runner's Mac after the build). It runs only by hand (since
+only CI's counts (the Build workflow's `proof` job, tools/ci/proof.sh, in
+CI's own Linux container after the build: the apps built there, the Apple
+ones with rules_applecross, and the web pictured in Chrome for Testing
+there). It runs only by hand (since
 2026-11-01, for CI's time): an agent runs the Build workflow on main to
 propose a release, the full set (every story; `quick` the core set: a
 story from each area and the Playground's projects), each picture

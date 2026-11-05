@@ -461,6 +461,13 @@ class LeasedSimulator:
     def install(self, app):
         self.simctl("install", app)
 
+    def install_ipa(self, ipa):
+        # Through OS Server's storage, which unpacks the .ipa itself: simctl
+        # install of a local .app zips it here first, with ditto, which only
+        # a Mac has (the proof runs in a Linux container).
+        put = json.loads(sh(["oss", "storage", "put", ipa, "--ttl=2h", "--json"]).stdout)
+        sh(["oss", "machine", "install", self.id, put["object"]["sha256"]])
+
     def prepare(self):
         # Light, as every platform's shots are. (The status bar: oss holds
         # every ios lease's at 9:41 from the start.)
@@ -554,10 +561,13 @@ def ios(review, story_list, builds):
     try:
         simulator = LocalSimulator(env["OSS_UDID"]) if local else LeasedSimulator(env["OSS_ID"])
         for app, ipa in builds.items():
-            work = tempfile.mkdtemp(prefix=f"proof-ios-{app}-")
-            sh(["unzip", "-q", ipa, "-d", work])
-            payload = os.path.join(work, "Payload")
-            simulator.install(os.path.join(payload, os.listdir(payload)[0]))
+            if local:
+                work = tempfile.mkdtemp(prefix=f"proof-ios-{app}-")
+                sh(["unzip", "-q", ipa, "-d", work])
+                payload = os.path.join(work, "Payload")
+                simulator.install(os.path.join(payload, os.listdir(payload)[0]))
+            else:
+                simulator.install_ipa(ipa)
         simulator.prepare()
         everyone = list(APPS.values()) + [ISOMER_STORYBOOK]
 
