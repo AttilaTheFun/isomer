@@ -1,0 +1,2 @@
+/* The probe's greeting */
+"probe.greeting" = "Hello from the bundle";
