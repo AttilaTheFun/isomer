@@ -2,6 +2,28 @@
 
 Open items that are not yet tracked in code or docs.
 
+## Move isomer to the Isomer Swift organization (after the next release)
+
+GitHub's hosted-runner limits are per account (20 jobs at once on the free
+plan, 5 of them macOS): in an organization of its own, isomer's tests stop
+sharing a pool with visor's and agent_ui's. Moved between releases:
+
+- Transfer the repository to the organization (GitHub redirects the old
+  URL, archives included, while nothing new takes `AttilaTheFun/isomer`).
+- Register our self-hosted runners again under the new owner: OS Server's
+  `isomer-jit` and the Mac's `isomer-containers` (the Shireworks session's).
+- Install the agents' GitHub App on the organization; check that the code
+  owner can still approve and that Container Helper's merges still work.
+- Move what isn't the repository's own: account-level secrets and
+  variables (Applications' CI code).
+- The new URL where the old one is written:
+  - bazel_registry's isomer entries (new ones; old ones redirect);
+  - README, AGENTS.md, docs, the Playground's links;
+  - the Pages site's address (`attilathefun.github.io/isomer` → the
+    organization's), and the links to it;
+  - consumers' MODULE.bazel comments and docs (Visor, Reviews).
+- Tell Visor, Reviews, Shireworks and Upstream.
+
 ## The CI proof: what's left
 
 The Build workflow's `proof` job pictures the Storybook and the Playground
