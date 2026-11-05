@@ -15,6 +15,7 @@ swift_binary(
         "FoundationCheck.swift",
         "NetworkCheck.swift",
         "ObjectsCheck.swift",
+        "StringsCheck.swift",
     ],
     deps = [
         "//foundation",
@@ -40,6 +41,8 @@ sh_test(
         # UserDefaults' argument domain (ClassesCheck.swift): one from the
         # program's arguments, one from ISO_ARGUMENTS.
         "'--env=ISO_ARGUMENTS=-check.flag YES'",
+        # The languages Bundle's strings tables are looked up in (StringsCheck.swift).
+        "--env=ISOMER_PREFERRED_LANGUAGES=fr-CA,en",
         "-check.argument",
         "given",
     ],

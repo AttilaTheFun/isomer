@@ -27,6 +27,7 @@ struct FoundationCheck {
     static func main() async throws {
         try checkFoundation()
         try checkClasses()
+        try checkStrings()
         checkErrors()
         await checkObjects()
         await checkNetwork()
