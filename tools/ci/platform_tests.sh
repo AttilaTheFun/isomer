@@ -8,7 +8,9 @@
 #     hypervisor (tools/ci/android_test.sh);
 #   - the iPhone and the Mac on OS Server's primary macOS VM (an `ios` lease
 #     and a `mac` slot: tools/ci/apple_test.sh), from this Mac.
-# Each opens the Storybook's test stories (examples/tests/platforms/
+# All through oss's API, so it runs anywhere OS Server's command line does
+# (a CI job's container: the isomer-jit runners). Each opens the Storybook's
+# test stories (examples/tests/platforms/
 # stories.bzl), pictures each and fails on one that doesn't draw; the
 # pictures go to <out>/<platform>. Any failing fails the run.
 #
@@ -16,7 +18,6 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 out="$(mkdir -p "$1" && cd "$1" && pwd)"
-case "$out/" in "$ROOT"/*) ;; *) echo "platform_tests.sh: <out> must be in this checkout" >&2; exit 1 ;; esac
 apps="$ROOT/.ci/platforms"
 stories=($(sed -n 's/^ *"\([a-z]*\.[a-z]*\)",$/\1/p' "$ROOT/examples/tests/platforms/stories.bzl"))
 [ ${#stories[@]} -gt 0 ] || { echo "platform_tests.sh: no stories" >&2; exit 1; }
@@ -27,16 +28,34 @@ pids=() names=()
 platforms=" ${PLATFORM_TESTS:-android apple} "
 
 # Windows: Wine and what it draws on, from Ubuntu 26.04's apt (its archives
-# kept in a volume between runs).
+# kept in a volume between runs), in a container of its own. Nothing of
+# this runner's is mounted (a CI job's container can't mount): the app and
+# the script go in through oss, the pictures come back the same way.
 if [[ $platforms == *" windows "* ]]; then
-    oss machine run container --image=docker.io/library/ubuntu:26.04 --cpus=4 --memory=6 \
-        --mount="$ROOT:$ROOT" --volume=isomer-ci-wine-apt:/var/cache/apt/archives:8:keep --inside -- \
-        bash -c 'set -e
+    (
+        set -e
+        id="$(oss machine lease container --image=docker.io/library/ubuntu:26.04 --cpus=4 --memory=4 \
+            --volume=isomer-ci-wine-apt:/var/cache/apt/archives:8:keep --minutes=60 \
+            --kind=ci --label="Isomer: the Windows Storybook's tests (Wine)" --wait --json |
+            sed -n 's/.*"id" *: *"\([^"]*\)".*/\1/p' | head -1)"
+        [ -n "$id" ] || { echo "platform_tests.sh: no container for Wine" >&2; exit 1; }
+        trap 'oss machine release "$id" >/dev/null 2>&1' EXIT
+        tar -czf "$out/windows.tgz" -C "$apps" windows -C "$ROOT/tools/ci" windows_test.sh
+        oss machine upload "$id" "$out/windows.tgz" /tmp/windows.tgz >/dev/null
+        rm -f "$out/windows.tgz"
+        status=0
+        oss machine exec "$id" -- bash -c 'set -e
             rm -f /etc/apt/apt.conf.d/docker-clean
             apt-get update -qq >/dev/null
             DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends wine xvfb imagemagick libgl1-mesa-dri >/dev/null
-            exec "$1/tools/ci/windows_test.sh" "$2" "$3" "${@:4}"' \
-        windows "$ROOT" "$apps/windows" "$out/windows" "${stories[@]}" >"$out/windows.log" 2>&1 &
+            mkdir -p /w && tar -xzf /tmp/windows.tgz -C /w
+            status=0
+            /w/windows_test.sh /w/windows /w/out "$@" || status=$?
+            tar -czf /tmp/out.tgz -C /w/out .
+            exit $status' windows "${stories[@]}" || status=$?
+        oss machine download "$id" /tmp/out.tgz "$out/windows.tgz" >/dev/null && tar -xzf "$out/windows.tgz" -C "$out/windows" && rm -f "$out/windows.tgz"
+        exit $status
+    ) >"$out/windows.log" 2>&1 &
     pids+=($!) names+=(windows)
 fi
 

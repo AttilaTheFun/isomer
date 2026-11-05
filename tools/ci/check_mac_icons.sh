@@ -5,15 +5,32 @@
 # appearance, is never published. The apps are built on Linux with
 # rules_applecross, whose actool compiles an Icon Composer icon's layers and
 # appearances as Xcode does (examples/.bazelrc's apple_on_linux accepts its
-# flattened images, which aren't Xcode's); this checks what it made, on the
-# runner's Mac, which has Xcode's assetutil. The Storybook's and the
-# Playground's Mac apps both have Icon Composer icons (their artwork's
-# .icon). Copied from AttilaTheFun/reviews' tools/ci/check_mac_icons.sh.
+# flattened images, which aren't Xcode's); this checks what it made with
+# Xcode's assetutil: on a Mac, there; elsewhere (CI's Linux containers, the
+# isomer-jit runners), on a slot of OS Server's primary Mac
+# (tools/ci/mac_slot.sh), where this same script runs on the zips, sent up.
+# The Storybook's and the Playground's Mac apps both have Icon Composer
+# icons. Copied from AttilaTheFun/reviews' tools/ci/check_mac_icons.sh.
 #
 #   tools/ci/check_mac_icons.sh <dir>
 set -euo pipefail
 dir="${1:?usage: tools/ci/check_mac_icons.sh <dir>}"
 work="$(mktemp -d)"
+
+if [ "$(uname -s)" != Darwin ]; then
+    ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+    OSS="$(command -v oss)" || { echo "::error::check_mac_icons: no Mac here and no oss to lease a slot of one"; exit 1; }
+    . "$ROOT/tools/ci/mac_slot.sh"
+    trap 'status=$?; mac_slot_release; rm -rf "$work"; exit $status' EXIT
+    zips=("$dir"/*.zip)
+    [ -e "${zips[0]}" ] || { echo "::error::no zip in $dir"; exit 1; }
+    mac_slot_lease
+    mac_slot_upload "$0" ci/icons/check_mac_icons.sh
+    for zip in "${zips[@]}"; do mac_slot_upload "$zip" "ci/icons/zips/$(basename "$zip")"; done
+    mac_slot_exec /bin/bash ci/icons/check_mac_icons.sh ci/icons/zips
+    exit
+fi
+
 trap 'rm -rf "$work"' EXIT
 status=0
 zips=0
