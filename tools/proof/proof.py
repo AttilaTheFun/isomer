@@ -633,17 +633,14 @@ MAC_ARGUMENTS = ["-AppleInterfaceStyle", "Light", "-NSRequiresAquaSystemAppearan
 # A slot's app, run by `oss machine exec --gui` in the primary's console
 # session (its user's, not the slot's). Started by its binary, so that it is
 # the exec's child and ends with it (the server signals the exec's process
-# group when the client goes: nothing found by name), then made frontmost by
-# `open` of its bundle, which activates the running one: started so alone,
-# its window stayed behind, inactive (grey traffic lights, no vibrancy in
-# the sidebar), which the VM's never were.
+# group when the client goes: nothing found by name). Its binary alone, as
+# tools/ci/apple_test.sh starts it: `open` of its bundle afterwards, which
+# once brought a window that stayed behind to the front, starts a second
+# instance of an app built on Linux, without the arguments (dark, scroll
+# bars); started so, today's slots draw it frontmost and active.
 SLOT_LAUNCH = """
 app=$1; shift
-"$app/Contents/MacOS/$(basename "$app" .app)" "$@" &
-pid=$!
-sleep 2
-kill -0 "$pid" 2> /dev/null && /usr/bin/open "$app"
-wait "$pid"
+exec "$app/Contents/MacOS/$(basename "$app" .app)" "$@"
 """
 
 
