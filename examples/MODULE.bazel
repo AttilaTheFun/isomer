@@ -124,15 +124,10 @@ register_toolchains(
 # placeholder each builder's .bazelrc.user resolves (`--distdir`, or a
 # `--downloader_config` to an OS Server's /files/sha256/<hex>), and its
 # toolchains turned on by .bazelrc's apple_on_linux. A Mac builds as before.
-# The project registry's 0.0.3.a2b0558: rules_applecross's main at a2b0558
-# (its ditto_off_mac patch: imported dynamic frameworks bundled on Linux).
-bazel_dep(name = "rules_applecross", version = "0.0.3.a2b0558")
-# rules_apple, as rules_applecross's patch leaves it, asks for 0.0.3, which no
-# registry has: every request is this version.
-single_version_override(
-    module_name = "rules_applecross",
-    version = "0.0.3.a2b0558",
-)
+# The project registry's 0.0.3.382f8c3: rules_applecross's main at 382f8c3
+# (#289: an imported dynamic framework's lipo on Linux), with the preset
+# rules_apple above.
+bazel_dep(name = "rules_applecross", version = "0.0.3.382f8c3")
 apple_cross_toolchain = use_extension("@rules_applecross//toolchain:extensions.bzl", "apple_cross_toolchain")
 apple_cross_toolchain.swift(
     name = "applecross_swift",
@@ -211,35 +206,11 @@ use_repo(signing, "isomer_signing")
 
 bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "platforms", version = "1.1.0")
-# rules_apple and apple_support at rules_applecross's versions, with its
-# patches (bundling and signing on Linux; tools/patches/applecross, copies of
-# isomer's), which only a root module's overrides apply.
-bazel_dep(name = "rules_apple", version = "5.3.1", repo_name = "build_bazel_rules_apple")
-single_version_override(
-    module_name = "rules_apple",
-    patch_strip = 1,
-    patches = [
-        "//tools/patches/applecross:rules_apple_execution_platform.patch",
-        "//tools/patches/applecross:rules_apple_bundletool_path.patch",
-        "//tools/patches/applecross:rules_apple_no_absolute_tool_paths.patch",
-        "//tools/patches/applecross:rules_apple_codesign_inputs_sdk_tools.patch",
-        "//tools/patches/applecross:rules_apple_alticonstool_missing_icons.patch",
-        "//tools/patches/applecross:rules_apple_xctoolrunner_sorted_listdir.patch",
-        "//tools/patches/applecross:rules_apple_arm64_default.patch",
-        "//tools/patches/applecross:rules_apple_codesign_smartcards_off_mac.patch",
-        "//tools/patches/applecross:rules_apple_app_intents_off_mac.patch",
-        "//tools/patches/applecross:rules_apple_coreml_off_mac.patch",
-        "//tools/patches/applecross:rules_apple_ditto_off_mac.patch",
-    ],
-    version = "5.3.1",
-)
-bazel_dep(name = "apple_support", version = "2.10.1")
-single_version_override(
-    module_name = "apple_support",
-    patch_strip = 1,
-    patches = ["//tools/patches/applecross:apple_support_bazel8_xcode_properties.patch"],
-    version = "2.10.1",
-)
+# rules_apple and apple_support at rules_applecross's versions: the
+# registry's preset rules_apple 5.3.1.applecross.6 (rules_applecross's
+# patches) and the BCR's apple_support 2.11.0, as in isomer's MODULE.bazel.
+bazel_dep(name = "rules_apple", version = "5.3.1.applecross.6", repo_name = "build_bazel_rules_apple")
+bazel_dep(name = "apple_support", version = "2.11.0")
 
 # Declared after apple_support so apple_support's apple cc toolchain keeps
 # resolution priority over rules_cc's local_config_cc darwin toolchain.
