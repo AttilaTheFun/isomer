@@ -751,8 +751,10 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
   numbers bridge to it as on Apple's platforms: `json["n"] as? Int` is an
   exact cast, through `_ObjectiveCBridgeable`, which Swift's runtime honours
   off Objective-C too), JSONSerialization, ISO8601DateFormatter,
-  FileWrapper, `String(format:)`, Bundle (and `NSLocalizedString`, which
-  reads no tables yet: the value or the key), streams, NSObject and
+  FileWrapper, `String(format:)`, Bundle (its strings tables, `<language>.lproj/<table>.strings`, read by
+  `NSLocalizedString` and `localizedString(forKey:value:table:)` in the
+  host's preferred language, ISOMER_PREFERRED_LANGUAGES; on Android
+  isomer_android_app's `resources`, unpacked from the APK as Bundle.main), streams, NSObject and
   NSObjectProtocol (identity equality, no runtime), NotificationCenter's
   `post` and block observers (over swift-foundation's registrar, its
   corelibs SPI) with an OperationQueue of blocks (the main queue's on the

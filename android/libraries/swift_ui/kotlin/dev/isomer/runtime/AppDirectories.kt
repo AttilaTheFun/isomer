@@ -20,6 +20,12 @@ package dev.isomer.runtime
 //   ISOMER_BUNDLE_IDENTIFIER = the package name (Bundle.main.bundleIdentifier)
 //   ISOMER_BUNDLE_NAME, _SHORT_VERSION, _VERSION = its label, versionName and
 //     versionCode (Bundle.main.infoDictionary's CFBundle keys)
+//   ISOMER_BUNDLE_PATH = the app's bundle resources (isomer_android_app's
+//     `resources`, the APK's assets/bundle/), unpacked from the APK into
+//     <noBackupFilesDir>/bundle once an install: Bundle.main's folder, where
+//     url(forResource:) and the strings tables (<lang>.lproj) are found
+//   ISOMER_PREFERRED_LANGUAGES = the device's languages, most preferred
+//     first (BCP 47 tags, comma-separated): Bundle's preferredLocalizations
 //
 // What an app keeps (Documents, Application Support) is in the files
 // directory: it lasts until the app is uninstalled or its data cleared, and
@@ -69,11 +75,49 @@ object AppDirectories {
                 Os.setenv("ISOMER_BUNDLE_VERSION", code.toString(), true)
             } catch (_: android.content.pm.PackageManager.NameNotFoundException) {
             }
+            Os.setenv("ISOMER_PREFERRED_LANGUAGES", app.resources.configuration.locales.toLanguageTags(), true)
+            bundle(app)?.let { Os.setenv("ISOMER_BUNDLE_PATH", it.path, true) }
         } catch (error: ErrnoException) {
             android.util.Log.w("Isomer", "the app's directories are not in the environment", error)
             return
         }
         prepared = home.path
+    }
+
+    /**
+     * The APK's assets/bundle/ as a folder, unpacked once an install (its
+     * lastUpdateTime marks the copy); null when the app has none.
+     */
+    private fun bundle(app: Context): File? {
+        val assets = app.assets
+        if (assets.list("bundle").isNullOrEmpty()) return null
+        val folder = File(app.noBackupFilesDir, "bundle")
+        val marker = File(app.noBackupFilesDir, "bundle.installed")
+        val installed = try {
+            app.packageManager.getPackageInfo(app.packageName, 0).lastUpdateTime.toString()
+        } catch (_: android.content.pm.PackageManager.NameNotFoundException) {
+            ""
+        }
+        if (folder.isDirectory && marker.isFile && marker.readText() == installed) return folder
+        folder.deleteRecursively()
+        fun copy(path: String, into: File) {
+            val names = assets.list(path).orEmpty()
+            if (names.isEmpty()) {
+                into.parentFile?.mkdirs()
+                assets.open(path).use { input -> into.outputStream().use { input.copyTo(it) } }
+            } else {
+                into.mkdirs()
+                for (name in names) copy("$path/$name", File(into, name))
+            }
+        }
+        try {
+            copy("bundle", folder)
+            marker.writeText(installed)
+        } catch (error: java.io.IOException) {
+            android.util.Log.w("Isomer", "the app's bundle resources were not unpacked", error)
+            return null
+        }
+        return folder
     }
 
     /** `link` pointing at `target`, unless the app put a directory of its own there. */
