@@ -53,7 +53,9 @@ nothing under `swift_ffi/` may depend on anything outside it but Foundation,
 and so on up. A consumer pins ONE version of isomer (by version from the
 project's registry, AttilaTheFun/bazel_registry, from 0.36.0; a commit
 between releases), lists that registry before the BCR in its .bazelrc, and
-repeats the root-only overrides (flatbuffers + patches, rules_foreign_cc).
+repeats the root-only override of rules_swift (rules_applecross asks for a
+newer one). FlatBuffers is a registry version with isomer's patches since
+0.40 (25.12.19.isomer.1): no override of it, nor of rules_foreign_cc.
 
 **Versions (from 0.38).** A version is MAJOR.MINOR.BUILD; there are no
 point releases. MODULE.bazel and the Playground's apps commit MAJOR.MINOR.0
