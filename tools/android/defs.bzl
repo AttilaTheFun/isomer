@@ -204,9 +204,10 @@ def _app_assets_impl(ctx):
     rules_android packages ONE assets directory per library (`assets_dir`),
     so `isomer_android_app(assets = ..., fonts = ...)` merges the two here:
     each of `assets` (a directory such as a `flat_assets` target's, copied
-    whole, or a file, by its basename) at the root, and each of `fonts` in
+    whole, or a file, by its basename) at the root, each of `fonts` in
     `fonts/` by its basename, where the runtime looks for `Font.custom`'s
-    typefaces (HostServices.bundledTypeface).
+    typefaces (HostServices.bundledTypeface), and each of `resources` in
+    `bundle/`, which the runtime unpacks as Bundle.main (AppDirectories.kt).
     """
     out = ctx.actions.declare_directory(ctx.label.name)
     cmds = ['mkdir -p "%s/fonts"' % out.path]
@@ -217,8 +218,14 @@ def _app_assets_impl(ctx):
             cmds.append('cp "%s" "%s/%s"' % (f.path, out.path, f.basename))
     for f in ctx.files.fonts:
         cmds.append('cp "%s" "%s/fonts/%s"' % (f.path, out.path, f.basename))
+    for f in ctx.files.resources:
+        # As rules_apple lays out an Apple bundle's resources: each by its
+        # name, in its <language>.lproj folder when it is in one.
+        folder = f.dirname.rpartition("/")[2]
+        place = "bundle/%s/%s" % (folder, f.basename) if folder.endswith(".lproj") else "bundle/" + f.basename
+        cmds.append('mkdir -p "$(dirname "%s/%s")" && cp "%s" "%s/%s"' % (out.path, place, f.path, out.path, place))
     ctx.actions.run_shell(
-        inputs = ctx.files.assets + ctx.files.fonts,
+        inputs = ctx.files.assets + ctx.files.fonts + ctx.files.resources,
         outputs = [out],
         command = " && ".join(cmds),
         mnemonic = "AppAssets",
@@ -231,8 +238,9 @@ _app_assets = rule(
     attrs = {
         "assets": attr.label_list(allow_files = True),
         "fonts": attr.label_list(allow_files = [".ttf", ".otf"]),
+        "resources": attr.label_list(allow_files = True),
     },
-    doc = "An app's assets/ directory: its assets at the root, its fonts in fonts/.",
+    doc = "An app's assets/ directory: its assets at the root, its fonts in fonts/, its bundle resources in bundle/.",
 )
 
 def apk_install_run(name, apk, activity, extras = "", **kwargs):
@@ -441,6 +449,7 @@ def isomer_android_app(
         label = "Isomer",
         assets = None,
         fonts = [],
+        resources = [],
         default_renderer = "jetpackCompose",
         url_scheme = None,
         services_kt = None,
@@ -502,6 +511,14 @@ def isomer_android_app(
     finds a font by its PostScript name, full name or family name (as
     iOS's `Font.custom` does), or by its file's name (HostServices.kt's
     `bundledTypeface`).
+
+    `resources` are the app's bundle resources, the same list an
+    `ios_application`'s `resources` takes: each file by its name, in its
+    `<language>.lproj` folder when it is in one (`fr.lproj/Localizable.strings`).
+    They go in the APK's assets/bundle/, which the runtime unpacks and makes
+    Bundle.main's folder, so `Bundle.main.url(forResource:withExtension:)`,
+    `NSLocalizedString` and `localizedString(forKey:value:table:)` read them
+    (the strings tables in the device's preferred language).
 
     Declares:
       <name>          install + launch (default_renderer)
@@ -586,12 +603,13 @@ def isomer_android_app(
     if icon:
         kt_kwargs["resource_files"] = [":%s_icon" % name]
     asset_list = assets if type(assets) == "list" else ([assets] if assets else [])
-    if fonts or len(asset_list) > 1:
-        # One directory for rules_android: the assets and fonts/ merged.
+    if fonts or resources or len(asset_list) > 1:
+        # One directory for rules_android: the assets, fonts/ and bundle/ merged.
         _app_assets(
             name = name + "_assets",
             assets = asset_list,
             fonts = fonts,
+            resources = resources,
             tags = ["manual"],
         )
         kt_kwargs["assets"] = [":%s_assets" % name]
