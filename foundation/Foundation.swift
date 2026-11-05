@@ -1,6 +1,7 @@
 // Isomer's Foundation for the platforms that have no Foundation of Apple's
 // (wasm, Android, Linux, Windows): swift-foundation's FoundationEssentials,
-// built from Isomer's fork (AttilaTheFun/swift-foundation, branch `isomer`),
+// with what corelibs gives Swift code elsewhere (CharacterSet, NSString's
+// string API, String(format:) and the rest of this directory),
 // FoundationInternationalization when the app asks for it
 // (`--@isomer//foundation:internationalization`), and CoreGraphics' geometry,
 // which Apple's Foundation re-exports too. There is no corelibs layer: no

@@ -56,7 +56,7 @@ MODULES = [
         "sources": ["foundation"],
         "apple": [("Foundation", None)],
         "isomer": ["Foundation", "FoundationEssentials", "FoundationInternationalization"],
-        "isomer_where": "`foundation/` (module `Foundation`) over the swift-foundation fork's FoundationEssentials, and its FoundationInternationalization with ICU when an app builds with `--@isomer//foundation:internationalization`",
+        "isomer_where": "`foundation/` (module `Foundation`) over swift-foundation's FoundationEssentials (swift-6.3.2-RELEASE, patched), and its FoundationInternationalization with ICU when an app builds with `--@isomer//foundation:internationalization`",
     },
     {
         "name": "SwiftUI",
