@@ -102,12 +102,21 @@ runs the Storybook on Android 6.0 with: the NDK at 23, a shim for
 libswiftCore's `strtod_l`/`strtof_l` (API 26), Isomer's Kotlin calls above
 23 behind version checks, and no RELR below 28 (rules_swift#1998).
 
-- **A post in the Swift forums' Android workgroup** asking for the SDK to
-  be built at 23 (or 24). The runtime's own sources already take older
-  APIs (Stubs.cpp: `#if __ANDROID_API__ < 26`, its own `strtod_l`; on
-  main, float parsing is Swift's and calls no libc); what needs more is
-  corelibs Foundation (`posix_spawn`, `getifaddrs`, `getgrgid_r`/`getgrnam_r`
-  at 24-28) and a CI emulator at the lower API. Isomer's evidence: #92.
+- **The SDK's API level, upstream.** Every source in swift.org's Android
+  SDK already takes older Android: the runtime (`__ANDROID_API__ < 26`: its
+  own `strtod_l`; on main float parsing calls no libc), swift-foundation
+  (`<= 23`: `getgrgid`/`getgrnam` for the `_r` forms, filemanager_shims.h)
+  and swift-corelibs-foundation (`< 28`: its own `posix_spawn`,
+  CFPlatform.c). The 28 is the SDK build's (swiftlang/swift-docker,
+  swift-ci/sdks/android/scripts/build.sh: `android_api=28`,
+  `--android-api`). The ask: a PR lowering it (23 or 24) with a Swift
+  forums post (Android workgroup) on why; built so, the fallbacks are
+  compiled in and the fortify `_chk` calls (ICU, curl, libxml2) and curl's
+  `getifaddrs` go.
+- **Isomer, either way:** shims over swift.org's SDK (#92's `strtod_l`;
+  still to add: ICU's `__fread_chk`/`__fwrite_chk`, which an app with
+  `--@isomer//foundation:internationalization` would miss at 23), or an
+  Android SDK of our own built with that script at `--android-api 23`.
 - Whether Isomer supports 23 at all is the owner's call; until then #92
   stays a draft.
 
