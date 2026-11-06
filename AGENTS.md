@@ -86,7 +86,7 @@ releases, visor's, and the forks isomer carries until upstream takes their
 changes, as patched versions (rules_swift 4.1.0.isomer.3: upstream 4.1.0
 with rules_swift#1860, the worker's copy fix and tools/patches' three
 rules_swift patches, held by an override over the 4.2.2 rules_applecross
-asks for; swift-foundation 6.3.2.isomer.2: swiftlang's tag, patched). A change to a fork or to those
+asks for). A change to a fork or to those
 patches is a new entry (.isomer.4), made with the registry's
 tools/add_version.py --fork and approved there like any version. Swift
 packages are SwiftPM's, through rules_swift_package_manager, never Bazel
@@ -745,15 +745,23 @@ stubs (shared/swift_ui_core/NotYet.swift, generated: the compiler says "Not
 yet in Isomer: <group>"); implementing one means running it again (or
 deleting the stub); tools/parity/stubs_skip.txt keeps one out.
 
-- **Foundation** (//foundation, `@isomer//:foundation`): built from
-  swift-foundation's swift-6.3.2-RELEASE (the registry's 6.3.2.isomer.2:
-  the tag, its Bazel build and a few patches, MODULE.bazel says which;
-  develop against a checkout with `common
-  --override_module=swift-foundation=<path>` in an untracked .bazelrc.user).
+- **Foundation** (//foundation, `@isomer//:foundation`): built over
+  swift-foundation, a Swift package of isomer's own graph
+  (third_party/swift_packages: swift-6.3.2-RELEASE's commit, through
+  rules_swift_package_manager under an extension of isomer's, since 0.40;
+  the registry's Bazel module 6.3.2.isomer.2 before), with patches
+  (MODULE.bazel says which and why). ICU is the Swift SDK's prebuilt one, a
+  patch to its manifest linking it by name, not swift-foundation-icu built
+  from source. isomer is usually not the root module, so neither
+  inject_repo nor override_repo of its own apply: the generated
+  repositories' `@build_bazel_rules_swift` is a repository of isomer's
+  (third_party/swift_packages/rules_swift_alias.bzl), and an application
+  whose graph has swift-collections points isomer's at its own (README,
+  examples/MODULE.bazel).
   FoundationEssentials, plus what corelibs has that apps reach for, written
   in Swift here: CharacterSet, NSString's string API (searching, replacing,
   trimming, comparing, percent encoding; built in swift-foundation's
-  package, `package_name = "SwiftFoundation"`, to search with Essentials'
+  package, `package_name = "swift-foundation"`, to search with Essentials'
   own helpers), `String(format:)`, NSRange, NSRegularExpression
   (over Swift's Regex, UTF-16 ranges), NSLock/NSRecursiveLock/NSCondition,
   Thread (pthreads; one thread in wasm), FileHandle, NSNumber (Swift's
@@ -981,7 +989,7 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
   Apple's interfaces lack; so does a conformance Apple's same type lacks
   (`Hashable` on Metal's C structs, `View` on toolbar items; the marker
   protocols such as Sendable aside, whose graphs differ by tool), and so
-  do swift-foundation's own declarations (the registry's patch makes them internal).
+  do swift-foundation's own declarations (a patch makes them internal).
   `python3 tools/parity/parity.py --check` fails
   when an Apple-named module has anything of Isomer's own; `--check
   --strict` also when a declaration's types are not one of Apple's

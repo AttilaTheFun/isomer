@@ -1,0 +1,88 @@
+diff --git a/Sources/FoundationEssentials/String/BuiltInUnicodeScalarSet.swift b/Sources/FoundationEssentials/String/BuiltInUnicodeScalarSet.swift
+index 96b368cc..a0acdc7a 100644
+--- a/Sources/FoundationEssentials/String/BuiltInUnicodeScalarSet.swift
++++ b/Sources/FoundationEssentials/String/BuiltInUnicodeScalarSet.swift
+@@ -15,7 +15,7 @@ internal import _FoundationCShims
+ // Represents sets of unicode scalars of those whose bitmap data we own.
+ // whitespace, whitespaceAndNewline, and newline are not included since they're not stored with bitmaps
+ // This only contains a subset of predefined CFCharacterSet that are in use for now.
+-internal struct BuiltInUnicodeScalarSet {
++package struct BuiltInUnicodeScalarSet {
+     enum SetType {
+         case lowercaseLetter
+         case uppercaseLetter
+@@ -51,7 +51,7 @@ internal struct BuiltInUnicodeScalarSet {
+     }
+ 
+     // CFUniCharIsMemberOf
+-    func contains(_ scalar: Unicode.Scalar) -> Bool {
++    package func contains(_ scalar: Unicode.Scalar) -> Bool {
+         let planeNo = Int((scalar.value >> 16) & 0xFF)
+         let bitmp = _bitmapPtrForPlane(planeNo)
+         return _isMemberOfBitmap(scalar, bitmp)
+@@ -86,11 +86,11 @@ internal struct BuiltInUnicodeScalarSet {
+         return new
+     }
+ 
+-    static let uppercaseLetters = Self.init(type: .uppercaseLetter)
+-    static let lowercaseLetters = Self.init(type: .lowercaseLetter)
++    package static let uppercaseLetters = Self.init(type: .uppercaseLetter)
++    package static let lowercaseLetters = Self.init(type: .lowercaseLetter)
+     static let caseIgnorables = Self.init(type: .caseIgnorable)
+     static let hfsPlusDecomposables = Self.init(type: .hfsPlusDecomposable)
+     static let graphemeExtends = Self.init(type: .graphemeExtend)
+-    static let canonicalDecomposables = Self.init(type: .canonicalDecomposable)
++    package static let canonicalDecomposables = Self.init(type: .canonicalDecomposable)
+ }
+ 
+diff --git a/Sources/FoundationEssentials/String/RegexPatternCache.swift b/Sources/FoundationEssentials/String/RegexPatternCache.swift
+index 93a431e1..98910e9f 100644
+--- a/Sources/FoundationEssentials/String/RegexPatternCache.swift
++++ b/Sources/FoundationEssentials/String/RegexPatternCache.swift
+@@ -10,7 +10,7 @@
+ //
+ //===----------------------------------------------------------------------===//
+ 
+-struct RegexPatternCache: @unchecked Sendable {
++package struct RegexPatternCache: @unchecked Sendable {
+     private struct Key : Sendable, Hashable {
+         var pattern: String
+         var caseInsensitive: Bool
+@@ -18,13 +18,13 @@ struct RegexPatternCache: @unchecked Sendable {
+ 
+     private let _lock: LockedState<[Key: Regex<AnyRegexOutput>]>
+ 
+-    static let cache = RegexPatternCache()
++    package static let cache = RegexPatternCache()
+ 
+     fileprivate init() {
+         _lock = LockedState(initialState: .init())
+     }
+ 
+-    func regex(for pattern: String, caseInsensitive: Bool) throws -> Regex<AnyRegexOutput>? {
++    package func regex(for pattern: String, caseInsensitive: Bool) throws -> Regex<AnyRegexOutput>? {
+ 
+         let key = Key(pattern: pattern, caseInsensitive: caseInsensitive)
+ 
+diff --git a/Sources/FoundationEssentials/String/String+Comparison.swift b/Sources/FoundationEssentials/String/String+Comparison.swift
+index 2520f2c8..30109bc8 100644
+--- a/Sources/FoundationEssentials/String/String+Comparison.swift
++++ b/Sources/FoundationEssentials/String/String+Comparison.swift
+@@ -599,7 +599,7 @@ extension Substring {
+         return unicodeScalars._rangeOfCharacter(anchored: options.contains(.anchored), backwards: options.contains(.backwards), matchingPredicate: set.contains)
+     }
+ 
+-    func _range(of strToFind: Substring, options: String.CompareOptions) throws -> Range<Index>? {
++    package func _range(of strToFind: Substring, options: String.CompareOptions) throws -> Range<Index>? {
+         #if !NO_REGEX
+         if options.contains(.regularExpression) {
+             guard let regex = try RegexPatternCache.cache.regex(for: String(strToFind), caseInsensitive: options.contains(.caseInsensitive)) else {
+@@ -684,7 +684,7 @@ extension Substring.UnicodeScalarView {
+         return ComparisonResult(stringIndex: idx1, idx2: idx2, endIndex1: endIndex, endIndex2: other.endIndex)
+     }
+ 
+-    func _rangeOfCharacter(anchored: Bool, backwards: Bool, matchingPredicate predicate: (Unicode.Scalar) -> Bool) -> Range<Index>? {
++    package func _rangeOfCharacter(anchored: Bool, backwards: Bool, matchingPredicate predicate: (Unicode.Scalar) -> Bool) -> Range<Index>? {
+         guard !isEmpty else { return nil }
+ 
+         let fromLoc: String.Index

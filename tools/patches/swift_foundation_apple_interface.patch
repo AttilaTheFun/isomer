@@ -1,0 +1,194 @@
+diff --git a/Sources/FoundationEssentials/Data/Data.swift b/Sources/FoundationEssentials/Data/Data.swift
+index 0e9a2689..a655cac8 100644
+--- a/Sources/FoundationEssentials/Data/Data.swift
++++ b/Sources/FoundationEssentials/Data/Data.swift
+@@ -2344,8 +2344,13 @@ public struct Data : Equatable, Hashable, RandomAccessCollection, MutableCollect
+     }
+ 
+     @inlinable // This is @inlinable as a generic, trivially forwarding function.
+-    public mutating func withUnsafeMutableBytes<ResultType>(_ body: (UnsafeMutableRawBufferPointer) throws -> ResultType) rethrows -> ResultType {
+-        return try _representation.withUnsafeMutableBytes(body)
++    public mutating func withUnsafeMutableBytes<ResultType, E: Error>(_ body: (UnsafeMutableRawBufferPointer) throws(E) -> ResultType) throws(E) -> ResultType {
++        // Isomer: typed throws, as Apple's Foundation declares it.
++        do {
++            return try _representation.withUnsafeMutableBytes(body)
++        } catch {
++            throw error as! E
++        }
+     }
+ 
+     // MARK: -
+@@ -2443,8 +2448,9 @@ public struct Data : Equatable, Hashable, RandomAccessCollection, MutableCollect
+         _append(buffer)
+     }
+ 
+-    @inlinable // This is @inlinable as trivially forwarding.
+-    public mutating func append(contentsOf bytes: [UInt8]) {
++    // Isomer: not public, as in Apple's Foundation (its generic Sequence one is).
++    @inlinable @usableFromInline // This is @inlinable as trivially forwarding.
++    internal mutating func append(contentsOf bytes: [UInt8]) {
+         bytes.withUnsafeBufferPointer { (buffer: UnsafeBufferPointer<UInt8>) -> Void in
+             _append(buffer)
+         }
+@@ -2524,8 +2530,9 @@ public struct Data : Equatable, Hashable, RandomAccessCollection, MutableCollect
+     /// - precondition: The bounds of `subrange` must be valid indices of the collection.
+     /// - parameter subrange: The range in the data to replace. If `subrange.lowerBound == data.count && subrange.count == 0` then this operation is an append.
+     /// - parameter data: The replacement data.
+-    @inlinable // This is @inlinable as trivially forwarding.
+-    public mutating func replaceSubrange(_ subrange: Range<Index>, with data: Data) {
++    // Isomer: not public, as in Apple's Foundation (its generic Collection one is).
++    @inlinable @usableFromInline // This is @inlinable as trivially forwarding.
++    internal mutating func replaceSubrange(_ subrange: Range<Index>, with data: Data) {
+         data.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) in
+             _representation.replaceSubrange(subrange, with: buffer.baseAddress, count: buffer.count)
+         }
+diff --git a/Sources/FoundationEssentials/Decimal/Decimal.swift b/Sources/FoundationEssentials/Decimal/Decimal.swift
+index aa4771dd..3c0b0315 100644
+--- a/Sources/FoundationEssentials/Decimal/Decimal.swift
++++ b/Sources/FoundationEssentials/Decimal/Decimal.swift
+@@ -22,8 +22,9 @@ import ucrt
+ 
+ @available(macOS 10.10, iOS 8.0, watchOS 2.0, tvOS 9.0, *)
+ public struct Decimal: Sendable {
+-    @_spi(SwiftCorelibsFoundation)
+-    public typealias Mantissa = (UInt16, UInt16, UInt16, UInt16, UInt16, UInt16, UInt16, UInt16)
++    // Isomer: internal (Apple's Decimal has no Mantissa; its initializer
++    // below spells the tuple out, as Apple's does).
++    internal typealias Mantissa = (UInt16, UInt16, UInt16, UInt16, UInt16, UInt16, UInt16, UInt16)
+ 
+     internal struct Storage: Sendable {
+         var exponent: Int8
+@@ -128,7 +129,7 @@ public struct Decimal: Sendable {
+         _isNegative: UInt32 = 0,
+         _isCompact: UInt32,
+         _reserved: UInt32 = 0,
+-        _mantissa: Mantissa
++        _mantissa: (UInt16, UInt16, UInt16, UInt16, UInt16, UInt16, UInt16, UInt16)
+     ) {
+         let length: UInt8 = (UInt8(truncatingIfNeeded: _length) & 0xF) << 4
+         let isNegative: UInt8 = UInt8(truncatingIfNeeded: _isNegative & 0x1) == 0 ? 0 : 0b00001000
+@@ -142,8 +143,8 @@ public struct Decimal: Sendable {
+         )
+     }
+ 
+-    @_spi(SwiftCorelibsFoundation)
+-    public init(mantissa: UInt64, exponent: Int16, isNegative: Bool) {
++    // Isomer: internal, as the other declarations Apple's Decimal lacks.
++    internal init(mantissa: UInt64, exponent: Int16, isNegative: Bool) {
+         var d = Decimal(mantissa)
+         d._exponent += Int32(exponent)
+         d._isNegative = isNegative ? 1 : 0
+@@ -185,8 +186,8 @@ extension Decimal {
+ extension Decimal {
+ #if FOUNDATION_FRAMEWORK
+ #else
+-    @_spi(SwiftCorelibsFoundation)
+-    public func toString(with locale: Locale? = nil) -> String {
++    // Isomer: internal (not in Apple's Decimal).
++    internal func toString(with locale: Locale? = nil) -> String {
+         let separator: String
+         if let locale = locale,
+            let localizedSeparator = locale.decimalSeparator {
+@@ -197,8 +198,8 @@ extension Decimal {
+         return _toString(withDecimalSeparator: separator)
+     }
+     
+-    @_spi(SwiftCorelibsFoundation)
+-    public static func decimal(
++    // Isomer: internal (not in Apple's Decimal).
++    internal static func decimal(
+         from stringView: String.UTF8View,
+         decimalSeparator: String.UTF8View,
+         matchEntireString: Bool
+diff --git a/Sources/FoundationEssentials/Error/CocoaError.swift b/Sources/FoundationEssentials/Error/CocoaError.swift
+index 08a1baeb..4d7fdfd2 100644
+--- a/Sources/FoundationEssentials/Error/CocoaError.swift
++++ b/Sources/FoundationEssentials/Error/CocoaError.swift
+@@ -174,8 +174,12 @@ extension CocoaError {
+         return NSError(domain: NSCocoaErrorDomain, code: code.rawValue, userInfo: info)
+     }
+ #else
+-    public static func error(_ code: CocoaError.Code, userInfo: [String : AnyHashable]? = nil, url: URL? = nil) -> Error {
+-        var info: [String : AnyHashable] = userInfo ?? [:]
++    // Isomer: Apple's signature; what is kept are the string keys' hashable values.
++    public static func error(_ code: CocoaError.Code, userInfo: [AnyHashable : Any]? = nil, url: URL? = nil) -> Error {
++        var info: [String : AnyHashable] = [:]
++        for (key, value) in userInfo ?? [:] {
++            if let key = key.base as? String, let value = value as? AnyHashable { info[key] = value }
++        }
+         if let url = url {
+             info[NSURLErrorKey] = url
+         }
+diff --git a/Sources/FoundationEssentials/FileManager/SwiftFileManager.swift b/Sources/FoundationEssentials/FileManager/SwiftFileManager.swift
+index 263b2c76..72c8b3a9 100644
+--- a/Sources/FoundationEssentials/FileManager/SwiftFileManager.swift
++++ b/Sources/FoundationEssentials/FileManager/SwiftFileManager.swift
+@@ -18,7 +18,8 @@ public struct FileAttributeType : Hashable, RawRepresentable, Sendable {
+         self.rawValue = rawValue
+     }
+     
+-    public init(_ rawValue: String) {
++    // Isomer: internal (Apple's FileAttributeType has init(rawValue:) only).
++    internal init(_ rawValue: String) {
+         self.rawValue = rawValue
+     }
+     
+@@ -80,7 +81,8 @@ public struct FileProtectionType : RawRepresentable, Sendable {
+     public static let complete = Self(rawValue: "NSFileProtectionComplete")
+     public static let completeUnlessOpen = Self(rawValue: "NSFileProtectionCompleteUnlessOpen")
+     public static let completeUntilFirstUserAuthentication = Self(rawValue: "NSFileProtectionCompleteUntilFirstUserAuthentication")
+-    public static let inactive = Self(rawValue: "NSFileProtectionCompleteWhenUserInactive")
++    // Isomer: internal (not one of Apple's FileProtectionType values).
++    internal static let inactive = Self(rawValue: "NSFileProtectionCompleteWhenUserInactive")
+ }
+ 
+ extension FileManager {
+@@ -296,7 +298,9 @@ open class FileManager : @unchecked Sendable {
+         _impl.fileExists(atPath: path)
+     }
+ 
+-    open func fileExists(atPath path: String, isDirectory: inout Bool) -> Bool {
++    // Isomer: not public. Apple's takes an Objective-C `ObjCBool`; ask
++    // attributesOfItem(atPath:)[.type] instead.
++    internal func fileExists(atPath path: String, isDirectory: inout Bool) -> Bool {
+         _impl.fileExists(atPath: path, isDirectory: &isDirectory)
+     }
+ 
+@@ -332,7 +336,8 @@ open class FileManager : @unchecked Sendable {
+         _impl.string(withFileSystemRepresentation: str, length: len)
+     }
+     
+-    open func withFileSystemRepresentation<R>(for path: String, _ body: (UnsafePointer<CChar>?) throws -> R) rethrows -> R {
++    // Isomer: internal (Apple's FileManager has fileSystemRepresentation(withPath:) instead).
++    internal func withFileSystemRepresentation<R>(for path: String, _ body: (UnsafePointer<CChar>?) throws -> R) rethrows -> R {
+         try path.withFileSystemRepresentation(body)
+     }
+ 
+diff --git a/Sources/FoundationEssentials/ProcessInfo/ProcessInfo+API.swift b/Sources/FoundationEssentials/ProcessInfo/ProcessInfo+API.swift
+index ac6765e2..d7d004bd 100644
+--- a/Sources/FoundationEssentials/ProcessInfo/ProcessInfo+API.swift
++++ b/Sources/FoundationEssentials/ProcessInfo/ProcessInfo+API.swift
+@@ -80,7 +80,8 @@ extension ProcessInfo {
+     }
+ }
+ 
+-public struct OperatingSystemVersion: Hashable, Codable, Sendable {
++// Isomer: Apple's is a C struct, neither Hashable nor Codable.
++public struct OperatingSystemVersion: Sendable {
+     public let majorVersion: Int
+     public let minorVersion: Int
+     public let patchVersion: Int
+diff --git a/Sources/FoundationEssentials/String/StringProtocol+Stub.swift b/Sources/FoundationEssentials/String/StringProtocol+Stub.swift
+index 8ff01d07..e759b2ec 100644
+--- a/Sources/FoundationEssentials/String/StringProtocol+Stub.swift
++++ b/Sources/FoundationEssentials/String/StringProtocol+Stub.swift
+@@ -15,7 +15,8 @@
+ extension StringProtocol {
+     /// Compares the string using the specified options and
+     /// returns the lexical ordering for the range.
+-    package func compare<T : StringProtocol>(_ aString: T, options mask: String.CompareOptions = [], range: Range<Index>? = nil) -> ComparisonResult {
++    // Isomer: public, with Apple's signature (the locale is not used).
++    public func compare<T : StringProtocol>(_ aString: T, options mask: String.CompareOptions = [], range: Range<Index>? = nil, locale: Locale? = nil) -> ComparisonResult {
+         // TODO: This method is modified from `public func compare<T : StringProtocol>(_ aString: T, options mask: String.CompareOptions = [], range: Range<Index>? = nil, locale: Locale? = nil) -> ComparisonResult`. Move that method here once `Locale` can be staged in `FoundationEssentials`.
+         var substr = Substring(self)
+         if let range {

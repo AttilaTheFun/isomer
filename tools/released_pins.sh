@@ -1,7 +1,8 @@
 #!/bin/sh
 # Whether every dependency is pinned to a released version: a SwiftPM
-# package by version (exact:, from:, a range), not a revision, a branch or a
-# path; a Bazel module from a registry (the project's, then the BCR), not a
+# package by version (exact:, from:, a range), or by a release tag's commit
+# where the tag isn't a version (`revision:` with a `// tag: <tag>` comment),
+# not another revision, a branch or a path; a Bazel module from a registry (the project's, then the BCR), not a
 # git or archive override, and not a local one outside this repository.
 # The examples and the Playground are modules of their own over this
 # checkout (`local_path_override(path = "..")`): an override that stays
@@ -15,10 +16,25 @@ cd "$(dirname "$0")/.." || exit 1
 root=$(pwd -P)
 status=0
 for manifest in $(git ls-files 'Package.swift' '*/Package.swift'); do
-  if grep -n -E '(revision|branch):[[:space:]]*"|\.package\([[:space:]]*path:' "$manifest"; then
-    echo "$manifest: a package pinned to a revision, a branch or a path, not a released version" >&2
+  if grep -n -E 'branch:[[:space:]]*"|\.package\([[:space:]]*path:' "$manifest"; then
+    echo "$manifest: a package pinned to a branch or a path, not a released version" >&2
     status=1
   fi
+  # A revision is a release only as a tag's commit: one whose version
+  # SwiftPM can't read (swift-foundation's swift-6.3.2-RELEASE), named in a
+  # `// tag: <tag>` comment on its line, and checked against the tag.
+  grep -n -E 'revision:[[:space:]]*"' "$manifest" | while IFS= read -r line; do
+    url=$(printf '%s\n' "$line" | sed -n 's/.*url:[[:space:]]*"\([^"]*\)".*/\1/p')
+    revision=$(printf '%s\n' "$line" | sed -n 's/.*revision:[[:space:]]*"\([0-9a-f]*\)".*/\1/p')
+    tag=$(printf '%s\n' "$line" | sed -n 's|.*// tag: *\([^ ]*\).*|\1|p')
+    tagged=""
+    [ -n "$tag" ] && tagged=$(git ls-remote "$url" "refs/tags/$tag" "refs/tags/$tag^{}" | tail -1 | cut -f1)
+    if [ -z "$tag" ] || [ "$tagged" != "$revision" ]; then
+      echo "$manifest:$line" >&2
+      echo "$manifest: a package pinned to a revision that isn't a named release tag's commit" >&2
+      exit 1
+    fi
+  done || status=1
 done
 for module in $(git ls-files 'MODULE.bazel' '*/MODULE.bazel'); do
   if grep -n -E '^[[:space:]]*(git_override|archive_override)\(' "$module"; then

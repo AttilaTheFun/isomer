@@ -103,23 +103,54 @@ single_version_override(
 bazel_dep(name = "swift-syntax", version = "603.0.2")
 
 # --- Foundation (non-Apple platforms) -----------------------------------------
-# Isomer's Foundation is built from swift-foundation's swift-6.3.2-RELEASE, a
-# Bazel module of its own; //foundation assembles the `Foundation` module from
-# FoundationEssentials (and FoundationInternationalization when an app asks
-# for it), adding what corelibs gives Swift code elsewhere (CharacterSet,
-# NSString's string API, String(format:) and the rest of foundation/). Apple
-# platforms use Apple's Foundation.
+# Isomer's Foundation is built over swift-foundation's FoundationEssentials
+# (and FoundationInternationalization when an app asks for it), a Swift
+# package through rules_swift_package_manager (isomer's graph:
+# third_party/swift_packages, swift-6.3.2-RELEASE's commit and the
+# swift-foundation-icu and swift-syntax of that release). //foundation
+# assembles the `Foundation` module, adding what corelibs gives Swift code
+# elsewhere (CharacterSet, NSString's string API, String(format:) and the rest
+# of foundation/). Apple platforms use Apple's Foundation.
 #
-# From this project's registry, as rules_swift is: 6.3.2.isomer.2 is
-# swiftlang's tag with patches: the Bazel build (its MODULE.bazel and BUILD
-# files), swift-foundation#2409 (merged upstream), Android's fts_open, Apple's
-# signatures where swift-foundation's differ and its extra declarations made
-# internal, and `package` on the Essentials helpers //foundation searches
-# strings with (it is built in swift-foundation's package for that). A change
-# is a new entry (6.3.2.isomer.3, tools/add_version.py --fork). Developing
-# against a checkout: `common --override_module=swift-foundation=<path>` in an
-# untracked .bazelrc.user.
-bazel_dep(name = "swift-foundation", version = "6.3.2.isomer.2")
+# The patches: swift-foundation#2409 (merged upstream; in its next release),
+# Android's fts_open (the Android SDK's apinotes would make it unneeded, but
+# rules_swift compiles with the static resource directory, which has none),
+# Apple's signatures where swift-foundation's differ and its extra
+# declarations made internal, and `package` on the Essentials helpers
+# //foundation searches strings with (it is built in swift-foundation's
+# package for that).
+bazel_dep(name = "rules_swift_package_manager", version = "1.25.0")
+
+# The generated package repositories load these by their apparent names,
+# which they take from the module that owns their extension: this one.
+bazel_dep(name = "rules_license", version = "1.0.0")
+
+swift_deps = use_extension("//third_party/swift_packages:extensions.bzl", "swift_deps")
+swift_deps.from_package(
+    resolved = "//third_party/swift_packages:Package.resolved",
+    swift = "//third_party/swift_packages:Package.swift",
+)
+swift_deps.configure_package(
+    name = "swift-foundation",
+    patch_args = ["-p1"],
+    patches = [
+        "//tools/patches:swift_foundation_create_directory_root.patch",
+        "//tools/patches:swift_foundation_android_fts.patch",
+        "//tools/patches:swift_foundation_apple_interface.patch",
+        "//tools/patches:swift_foundation_package_helpers.patch",
+        "//tools/patches:swift_foundation_wasi_swift_settings.patch",
+        "//tools/patches:swift_foundation_sdk_icu.patch",
+    ],
+)
+use_repo(swift_deps, "swiftpkg_swift_foundation")
+
+# The generated package repositories load rules_swift by its old apparent
+# name, which they see among this module's; inject_repo would only apply
+# with isomer the root module, so it is a repository of its own re-exporting
+# rules_swift's rules (third_party/swift_packages/rules_swift_alias.bzl).
+rules_swift_alias = use_repo_rule("//third_party/swift_packages:rules_swift_alias.bzl", "rules_swift_alias")
+
+rules_swift_alias(name = "build_bazel_rules_swift")
 
 # CLI parsing for the analyzer / generator tools.
 bazel_dep(name = "swift_argument_parser", version = "1.7.0")

@@ -1,0 +1,13 @@
+diff --git a/Sources/FoundationEssentials/FileManager/FileManager+Directories.swift b/Sources/FoundationEssentials/FileManager/FileManager+Directories.swift
+index b03a6b0a..d9379e32 100644
+--- a/Sources/FoundationEssentials/FileManager/FileManager+Directories.swift
++++ b/Sources/FoundationEssentials/FileManager/FileManager+Directories.swift
+@@ -457,7 +457,7 @@ extension _FileManagerImpl {
+                     return
+                 }
+                 let parent = path.deletingLastPathComponent()
+-                if !parent.isEmpty {
++                if !parent.isEmpty && parent != path {
+                     try _create(path: parent, leafFile: false)
+                 }
+                 try fileManager.withFileSystemRepresentation(for: path) { pathFsRep in

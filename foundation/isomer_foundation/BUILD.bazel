@@ -34,7 +34,7 @@ swift_library(
     }),
     srcs = glob(["*.swift"]),
     module_name = "IsomerFoundation",
-    deps = ["@swift-foundation//:FoundationEssentials"],
+    deps = ["@swiftpkg_swift_foundation//:FoundationEssentials"],
 )
 
 # What a host outside //foundation depends on (through

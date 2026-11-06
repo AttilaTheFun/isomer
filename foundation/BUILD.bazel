@@ -27,7 +27,7 @@ swift_library(
     # swift-foundation's package: the string API here (StringProtocol+NSString.swift)
     # searches with Essentials' own `package` helpers. Nothing here is
     # Isomer's `package` plumbing.
-    package_name = "SwiftFoundation",
+    package_name = "swift-foundation",
     # Apple platforms have the real one; this one would shadow it.
     target_compatible_with = select({
         "@platforms//os:macos": ["@platforms//:incompatible"],
@@ -48,7 +48,7 @@ swift_library(
         # What hosts install beneath Foundation (URLSession's transports,
         # UserDefaults' store), read through `internal import`.
         "//foundation/isomer_foundation",
-        "@swift-foundation//:FoundationEssentials",
+        "@swiftpkg_swift_foundation//:FoundationEssentials",
     ] + select({
         # Dispatch's NSEC_PER_SEC family, which these platforms lack.
         "@platforms//os:android": ["//foundation/dispatch_time"],
@@ -59,7 +59,7 @@ swift_library(
         "@platforms//os:wasi": ["//foundation/wasi_thread_identity"],
         "//conditions:default": [],
     }) + select({
-        ":with_internationalization": ["@swift-foundation//:FoundationInternationalization"],
+        ":with_internationalization": ["@swiftpkg_swift_foundation//:FoundationInternationalization"],
         "//conditions:default": [],
     }),
 )
