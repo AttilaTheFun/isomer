@@ -117,8 +117,8 @@ has it.
   - #1988 (draft): `swift.windows_sdk`, Windows built on Linux with the
     builder's own SDKs (Isomer's tools/windows, upstream's
     tools/windows_sdk), which tools/windows then gives way to.
-- **swift-foundation** (the registry's 6.3.2.isomer.2: swiftlang's
-  swift-6.3.2-RELEASE and patches; no fork since 0.40):
+- **swift-foundation** (a Swift package through rules_swift_package_manager
+  at swift-6.3.2-RELEASE's commit, with patches; no fork since 0.40):
   - swiftlang/swift-foundation#2409 (merged): `createDirectory(withIntermediateDirectories:)`
     stops at "/" (WASI); patched in until a release has it;
   - Android's `fts_open` workaround isn't needed upstream: the Android Swift
@@ -128,9 +128,13 @@ has it.
   - CharacterSet, NSString's string API and `String(format:)` are in
     //foundation; upstream's own CharacterSet (#2314) arrives with the
     next major release, and ours then gives way;
-  - Isomer's own, with no upstream form: the Bazel build, Apple's signatures
-    and swift-foundation's extra declarations made internal, `package` on
-    the string helpers //foundation uses.
+  - the manifest's wasi-libc emulation defines for Swift targets (their
+    Clang importer needs them; upstream sets them for C targets only, so a
+    SwiftPM build for WASI fails on mmap): could go upstream;
+  - Isomer's own, with no upstream form: ICU linked from the Swift SDK
+    (not swift-foundation-icu from source), Apple's signatures and
+    swift-foundation's extra declarations made internal, `package` on the
+    string helpers //foundation uses.
 - **WasmKit** (AttilaTheFun's fork, and two patches): swiftwasm/WasmKit #513
   (iOS guard pages), #514 (Android's software bounds checks), #515 (MSVC's C),
   #516 (constant-pool reservations), #517 (internal calls off the native

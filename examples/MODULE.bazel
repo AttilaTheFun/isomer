@@ -350,9 +350,16 @@ use_repo(
     "swiftpkg_grpc_swift_nio_transport",
     "swiftpkg_grpc_swift_protobuf",
     "swiftpkg_open_router_cli",
+    "swiftpkg_swift_collections",
     "swiftpkg_swift_protobuf",
     "swiftpkg_swift_sql",
 )
+
+# isomer's own graph (swift-foundation, under its extension) shares
+# swift-collections with this one (SwiftNIO's): one copy in an app, this
+# graph's, as any application on Isomer with such a package does.
+isomer_swift_deps = use_extension("@isomer//third_party/swift_packages:extensions.bzl", "swift_deps")
+override_repo(isomer_swift_deps, swiftpkg_swift_collections = "swiftpkg_swift_collections")
 
 inject_repo(
     swift_deps,

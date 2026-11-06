@@ -1,0 +1,22 @@
+--- a/Package.swift
++++ b/Package.swift
+@@ -185,7 +185,6 @@
+             dependencies: [
+                 .target(name: "FoundationEssentials"),
+                 .target(name: "_FoundationCShims"),
+-                .product(name: "_FoundationICU", package: "swift-foundation-icu")
+             ],
+             exclude: [
+                 "String/CMakeLists.txt",
+@@ -200,7 +199,10 @@
+             cSettings: wasiLibcCSettings,
+             swiftSettings: [
+                 .enableExperimentalFeature("AccessLevelOnImport")
+-            ] + availabilityMacros + featureSettings + wasiLibcSwiftSettings
++            ] + availabilityMacros + featureSettings + wasiLibcSwiftSettings,
++            linkerSettings: [
++                .linkedLibrary("_FoundationICU"),
++            ]
+         ),
+         
+         .testTarget(

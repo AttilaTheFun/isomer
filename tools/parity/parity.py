@@ -822,15 +822,14 @@ def compare(apple, isomer, apple_elsewhere=()):
     return implemented, missing, set_aside, additions, partial, retyped
 
 
-# Where an addition comes from: swift-foundation as upstream has it (Isomer
-# builds the fork's sources; a file of Isomer's there has "Isomer" in its
-# name), or Isomer.
+# Where an addition comes from: swift-foundation as upstream has it (its
+# package's repository, rules_swift_package_manager's), or Isomer.
 def from_upstream(symbol, isomer_by_path):
     location = (symbol.get("location") or {}).get("uri", "")
     if not location:
         parent = isomer_by_path.get(tuple(symbol["pathComponents"][:-1]))
         location = (parent.get("location") or {}).get("uri", "") if parent else ""
-    return "/swift-foundation+/" in location and "Isomer" not in os.path.basename(location)
+    return "swiftpkg_swift_foundation/" in location
 
 
 _MODIFIERS = r"(?:(?:final|static|class|override|mutating|nonisolated(?:\(unsafe\))?|indirect|required|convenience)\s+)*"

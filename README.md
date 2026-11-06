@@ -102,7 +102,7 @@ It was `examples/*/playground_*` here until 0.15, then a repository of its
 own until 0.35, then a module of its own in `playground/` until 0.39.
 
 **Foundation and CoreGraphics.** On wasm and Android, `import Foundation`
-is Isomer's: swift-foundation's FoundationEssentials, built from its
+is Isomer's: swift-foundation's FoundationEssentials, a Swift package at its
 swift-6.3.2-RELEASE with a few patches (MODULE.bazel lists them), with no
 swift-corelibs-foundation layer (no CoreFoundation; of what corelibs gives
 Swift code only what apps reach for, written in Swift: `CharacterSet`,
@@ -669,8 +669,18 @@ and add isomer as a `bazel_dep` by its release's version (0.36.0 on; a
 bazel_dep(name = "isomer", version = "0.36.1")
 ```
  The patched
-rules_swift and swift-foundation isomer needs come from that registry by version,
-patches and all, FlatBuffers among them (25.12.19.isomer.1, since 0.40).
+rules_swift isomer needs comes from that registry by version, patches and
+all, FlatBuffers too (25.12.19.isomer.1, since 0.40). swift-foundation is a
+Swift package of isomer's own graph (third_party/swift_packages, through
+rules_swift_package_manager, since 0.40); if your SwiftPM graph has
+swift-collections too (SwiftNIO's, say), point isomer's at yours, so an app
+links one:
+
+```starlark
+isomer_swift_deps = use_extension("@isomer//third_party/swift_packages:extensions.bzl", "swift_deps")
+override_repo(isomer_swift_deps, swiftpkg_swift_collections = "swiftpkg_swift_collections")
+```
+
 Because bzlmod honours `single_version_override` **only from the root
 module**, your MODULE.bazel must still repeat isomer's override of
 rules_swift (to its registry version, over the newer one rules_applecross
