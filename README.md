@@ -683,7 +683,12 @@ override_repo(isomer_swift_deps, swiftpkg_swift_collections = "swiftpkg_swift_co
 
 Nothing of isomer's needs an override in your MODULE.bazel since 0.40 (its
 rules_swift, 4.2.2.isomer.1, sorts above the version rules_applecross asks
-for); you still register the toolchains. That is the whole list: the bridge generator, the GPU layer and the map
+for); you still register the toolchains, and only those of the platforms
+you build: an app for iOS, the Mac and Android declares the host toolchain
+and `swift.android_sdk()` and registers the Android Swift toolchains, with
+no wasm SDK, wasm toolchains, Windows SDK or rules_swift_package_manager
+Windows patch (0.40: isomer's targets for those platforms are only
+analyzed when built). That is the whole list: the bridge generator, the GPU layer and the map
 renderer are all part of this one module (`@isomer//swift_ffi/...`,
 `@isomer//swift_gpu/...`, `@isomer//swift_map/...`), so one commit pins all of
 them. SQLite (swift_sql, a Swift package: list it in the Package.swift
