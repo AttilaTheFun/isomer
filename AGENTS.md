@@ -283,7 +283,16 @@ uploaded as the `proof` artifact Reviews reads (proof.json, screens/,
 before/, diffs/; 90 days). What a platform draws differently from run to run is held still
 at its source (proof.py: the status bars, light appearance, window crops,
 the Mac's caret); only what can't be is listed, with why, in
-tools/ci/proof_ignore.txt. A release is approved by publishing its tag. The Playground's staged compilers reach CI from OS
+tools/ci/proof_ignore.txt. A release is approved by publishing its tag
+(a GitHub release on a main commit whose proof is in): the Build workflow's
+`release` job then promotes that commit's iPhone and Mac Alphas to
+production on Applications Server (tools/ci/promote_from_ci.sh: nothing
+Apple rebuilt, since 0.40), builds and publishes Android's for production,
+and attaches the release's assets (tools/ci/release_assets.sh):
+proof.tar.gz (the commit's proof, which the next release's proof takes as
+its baseline before any artifact), the Mac apps' disk images, the Android
+apps and the iPhone apps for the simulator, beside isomer-site.tar.gz,
+attached to the draft for pages.yml. The Playground's staged compilers reach CI from OS
 Server's files (proof.sh names their SHA-256s): after staging new ones,
 `oss files add` their archives and change those.
 
