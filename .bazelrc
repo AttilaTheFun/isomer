@@ -3,7 +3,7 @@
 common --enable_bzlmod
 
 # Modules come from this project's registry first (Bazel modules by released
-# version: the rules_swift and swift-foundation forks Isomer needs, and its own
+# version: the patched rules_swift and FlatBuffers Isomer needs, and its own
 # releases), then the Bazel Central Registry. A consumer lists both too.
 common --registry=https://raw.githubusercontent.com/AttilaTheFun/bazel_registry/main
 common --registry=https://bcr.bazel.build

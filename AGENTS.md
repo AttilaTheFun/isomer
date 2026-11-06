@@ -52,9 +52,9 @@ Metal < swift_gpu < swift_map < the SwiftUI libraries < the Isomer module;
 nothing under `swift_ffi/` may depend on anything outside it but Foundation,
 and so on up. A consumer pins ONE version of isomer (by version from the
 project's registry, AttilaTheFun/bazel_registry, from 0.36.0; a commit
-between releases), lists that registry before the BCR in its .bazelrc, and
-repeats the root-only override of rules_swift (rules_applecross asks for a
-newer one). FlatBuffers is a registry version with isomer's patches since
+between releases) and lists that registry before the BCR in its .bazelrc:
+no override of isomer's dependencies since 0.40 (rules_swift 4.2.2.isomer.1
+sorts above the 4.2.2 rules_applecross asks for). FlatBuffers is a registry version with isomer's patches since
 0.40 (25.12.19.isomer.1): no override of it, nor of rules_foreign_cc.
 
 **Versions (from 0.38).** A version is MAJOR.MINOR.BUILD; there are no
@@ -83,11 +83,10 @@ minor (MAJOR.MINOR.0) before the release's commit.
 by version at a release (a commit is fine on a branch, or on main between
 releases). Bazel modules come from bazel_registry, before the BCR: isomer's
 releases, visor's, and the forks isomer carries until upstream takes their
-changes, as patched versions (rules_swift 4.1.0.isomer.3: upstream 4.1.0
-with rules_swift#1860, the worker's copy fix and tools/patches' three
-rules_swift patches, held by an override over the 4.2.2 rules_applecross
-asks for). A change to a fork or to those
-patches is a new entry (.isomer.4), made with the registry's
+changes, as patched versions (rules_swift 4.2.2.isomer.1: upstream 4.2.2
+with rules_swift#1989, #1860, #1990 and #1995, each a patch taken from the
+PR's head). A change to a fork or to those
+patches is a new entry (.isomer.2), made with the registry's
 tools/add_version.py --fork and approved there like any version. Swift
 packages are SwiftPM's, through rules_swift_package_manager, never Bazel
 modules. tools/released_pins.sh says whether every pin is a released
@@ -163,8 +162,8 @@ a repository of its own):
   resource directory, so clang found `<stdarg.h>`/`<stddef.h>` in the host
   toolchain by an absolute path that Bazel's inclusion check rejects; C
   compiled for wasm had to avoid them (-nobuiltininc and shims, a
-  hand-declared pthread_self). tools/patches/rules_swift_wasm_clang_resource_dir.patch
-  (0.34; in the registry's rules_swift 3.6.1.isomer.1 since 0.36) gives
+  hand-declared pthread_self). rules_swift#1989 (a patch of isomer's from
+  0.34, merged upstream after 4.2.2; in the registry's rules_swift) gives
   compiles the Swift SDK's clang resource directory, as links already had:
   the headers come from the SDK, among the action's inputs. A package's C
   (swift_sql's amalgamation, through rules_swift_package_manager) then
@@ -381,10 +380,10 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   `include()` in MODULE.bazel, which Bazel 8 consumers choke on
   ("include() ... can only be used in the root module"). Upstream will bump
   their minimum eventually; it has not been raised with them.
-- **rules_swift 4.1.0.isomer.3** from the registry, held by a
-  `single_version_override` in each root (isomer's, the examples'): without
-  it, MVS takes rules_applecross's 4.2.2 and loses the fork. A consumer that
-  builds Apple targets with rules_applecross repeats it (Visor does).
+- **rules_swift 4.2.2.isomer.1** from the registry: upstream 4.2.2 and four
+  pull requests (MODULE.bazel). It sorts above the 4.2.2 rules_applecross
+  asks for, so MVS keeps it with no override in any root (until 0.40 the
+  fork was 4.1.0.isomer.N, held by an override every consumer repeated).
 - **The Apple targets build on Linux too** (rules_applecross, 2026-10-26;
   the project registry's 0.0.3.382f8c3, its main at 382f8c3, until it has a
   release in the BCR): Xcode 27.0's SDKs from an SDK archive, the Swift
@@ -591,8 +590,8 @@ how Isomer runs it.
   checks built for wasm run under it (//foundation/tests, the Metal
   translator's, the examples' //tests/sqlite_wasi).
 - **The threads SDK beside the stock one.** rules_swift takes one
-  `swift.wasm_sdk`; tools/patches/rules_swift_wasm_threads_beside.patch
-  (in the registry's rules_swift 3.6.1.isomer.1 since 0.36) takes two, the
+  `swift.wasm_sdk`; rules_swift#1990 (on #1860; in the registry's
+  rules_swift) takes two, the
   threads one's toolchains requiring
   `@rules_swift//swift/toolchains/wasm:threaded`. A reactor transitioned to
   `@isomer//swift_ffi/rules:wasm32-wasip1-threads` builds with
