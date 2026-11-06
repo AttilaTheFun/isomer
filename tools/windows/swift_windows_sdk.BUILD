@@ -67,6 +67,12 @@ swift_tools(
             _KITS,
             "-windows-sdk-version",
             "{sdk_version}",
+            # What the compiler adds with ucrt's module map mapped in: its
+            # C headers and clang's builtin ones in one module (defs.bzl).
+            "-Xcc",
+            "-Xclang",
+            "-Xcc",
+            "-fbuiltin-headers-in-system-modules",
         ],
         # rules_swift puts XCTest's DLLs on a Windows test's Path, which it
         # takes from here (a host's; on Linux nothing reads it).
