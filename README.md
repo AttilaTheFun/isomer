@@ -771,7 +771,7 @@ apps stay at 28; an app that must reach older phones sets:
 - `isomer_android_app(..., min_sdk_version = 23)` (or its own manifest's
   minSdkVersion).
 
-Nothing else: the registry's rules_swift (rules_swift#1998) links Android
+Nothing else: the registry's rules_swift (rules_swift#2000) links Android
 libraries below API 28 without RELR relocations, which Android's loader
 reads only from 28, and fails an Android target below the Swift SDK's own
 minimum; Isomer's Android runtime calls newer APIs only behind version

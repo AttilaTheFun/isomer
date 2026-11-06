@@ -84,7 +84,7 @@ by version at a release (a commit is fine on a branch, or on main between
 releases). Bazel modules come from bazel_registry, before the BCR: isomer's
 releases, visor's, and the forks isomer carries until upstream takes their
 changes, as patched versions (rules_swift 4.2.2.isomer.3: upstream 4.2.2
-with rules_swift#1989, #1860, #1990, #1995, #1985 and #1998, each a patch
+with rules_swift#1989, #1860, #1990, #1995, #1985 and #2000, each a patch
 taken from the PR's head). A change to a fork or to those
 patches is a new entry (.isomer.4), made with the registry's
 tools/add_version.py --fork and approved there like any version. Swift

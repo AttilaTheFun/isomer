@@ -50,7 +50,7 @@ bazel_dep(name = "platforms", version = "1.1.0")
 #     from the paired toolchain, swiftCxx and swiftCxxStdlib linked from
 #     beside the shared runtime, -lc++ the static libc++).
 #   * #1985 (merged after 4.2.2): swift.org's release metadata through 6.4.2;
-#   * #1998: Android targets down to the Swift SDK's own minimum (6.4's: API
+#   * #2000: Android targets down to the Swift SDK's own minimum (6.4's: API
 #     23), without RELR relocations below 28.
 # It sorts above the 4.2.2 rules_applecross asks for, so no override holds
 # it, here or in a consumer. A change is a new entry (4.2.2.isomer.4) made

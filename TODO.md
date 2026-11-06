@@ -100,7 +100,7 @@ Swift's Android SDK (swift.org's) is built at API 28, its supported
 minimum; an app embedding Isomer may need less (minSdk 23). Draft isomer#92
 runs the Storybook on Android 6.0 with: the NDK at 23, a shim for
 libswiftCore's `strtod_l`/`strtof_l` (API 26), Isomer's Kotlin calls above
-23 behind version checks, and no RELR below 28 (rules_swift#1998).
+23 behind version checks, and no RELR below 28 (rules_swift#2000).
 
 - **The SDK's API level, upstream.** Every source in swift.org's Android
   SDK already takes older Android: the runtime (`__ANDROID_API__ < 26`: its
@@ -139,7 +139,7 @@ has it.
     C compiles;
   - #1995 (open): Swift/C++ interop on Android;
   - #1985 (merged after 4.2.2): swift.org's release metadata through 6.4.2;
-  - #1998 (open): Android down to the Swift SDK's own minimum (6.4's: 23),
+  - #2000 (open): Android down to the Swift SDK's own minimum (6.4's: 23),
     no RELR below 28;
   - #1988 (draft): `swift.windows_sdk`, Windows built on Linux with the
     builder's own SDKs (Isomer's tools/windows, upstream's
