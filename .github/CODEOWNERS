@@ -1,6 +1,7 @@
 # Pull requests that touch these paths need the code owner's review: CI,
-# what publishes, stamps, signs or notarizes builds, the agents' rules and
-# the license. Anything else may be merged by an agent once CI is green and
+# what publishes, stamps, signs or notarizes builds, and the license. The
+# agents' AGENTS.md and CLAUDE.md are context, not a boundary: an agent
+# edits them as any other file (what must hold is checked by CI). Anything else may be merged by an agent once CI is green and
 # the branch is up to date with main.
 
 # CI: its workflows, and this file.
@@ -18,7 +19,5 @@
 # The compilers the published Playground carries, by SHA-256.
 /tools/ci/stage_playground_compilers.sh @AttilaTheFun
 
-# The agents' rules, anywhere in the tree, and the license.
-AGENTS.md @AttilaTheFun
-CLAUDE.md @AttilaTheFun
+# The license.
 LICENSE @AttilaTheFun
