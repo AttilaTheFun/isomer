@@ -8,10 +8,10 @@
 //
 // Declared only by Swift 6.4 and later. Apple's expansion of a private
 // `@State` adds a private property with an init accessor, which before 6.4
-// made the view's memberwise initializer private (`Foo(x: 1)` inaccessible):
-// with the swift.org 6.3.2 toolchain (wasm, Android, Linux, Windows) `@State`
-// is the property wrapper alone until Isomer's toolchain is 6.4; Apple
-// platforms' builds, with Xcode's 6.4, have the macros.
+// made the view's memberwise initializer private (`Foo(x: 1)` inaccessible).
+// Every platform's build has them since 0.41 (swift.org's 6.4.2 off Apple,
+// Xcode's 6.4 on it); until then wasm, Android, Linux and Windows built with
+// 6.3.2, where `@State` was the property wrapper alone.
 //
 // ISOMER_NO_SWIFTUI_MACROS leaves them out too, from the SwiftUI the
 // Playground's compilers build against (wasm/libraries/hot_swift_ui): in a

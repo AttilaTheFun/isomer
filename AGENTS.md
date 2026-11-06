@@ -740,9 +740,9 @@ Apple's). Every library compiling the core lists the plugin
 (swift_ui_macros/defs.bzl); a core under another module name needs
 `-module-alias SwiftUI=<name>` in the modules that use `@State` against it.
 Declared only under Swift 6.4 (`#if compiler(>=6.4)`: Apple's expansion
-makes a memberwise initializer private before 6.4), so today on Apple
-platforms only; never in hot_swift_ui (the Playground's compilers run no
-plugin). docs/swiftui_macros.md.
+makes a memberwise initializer private before 6.4): on every platform since
+0.41's move to 6.4.2 (Apple's alone before); never in hot_swift_ui (the
+Playground's compilers run no plugin). docs/swiftui_macros.md.
 
 ## Apple's frameworks off Apple (0.31)
 
