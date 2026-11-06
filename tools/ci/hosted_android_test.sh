@@ -51,11 +51,17 @@ for _ in $(seq 1 300); do
 done
 [ -n "$booted" ] || { echo "hosted_android_test.sh: the emulator didn't boot" >&2; exit 1; }
 
-# The status bar held still (~/Developer/AGENTS.md's sequence), twice: just
-# after boot SystemUI may still be settling.
+# The status bar held still (~/Developer/AGENTS.md's sequence), once
+# SystemUI runs and has settled (boot_completed comes well before it takes
+# demo commands), three times a few seconds apart.
+for _ in $(seq 1 60); do
+    [ -n "$("$adb" shell pidof com.android.systemui 2> /dev/null | tr -d '\r')" ] && break
+    sleep 2
+done
+sleep 20
 "$adb" shell settings put global sysui_demo_allowed 1
-demo() { "$adb" shell am broadcast -a com.android.systemui.demo -e command "$@" > /dev/null; }
-for _ in 1 2; do
+demo() { "$adb" shell am broadcast -a com.android.systemui.demo -e command "$@"; }
+for _ in 1 2 3; do
     demo exit
     demo enter
     demo clock -e hhmm 0941
@@ -64,7 +70,7 @@ for _ in 1 2; do
     demo network -e mobile hide
     demo network -e nosim hide
     demo notifications -e visible false
-    sleep 3
+    sleep 5
 done
 
 serial="$("$adb" devices | awk 'NR > 1 && $2 == "device" { print $1; exit }')"
