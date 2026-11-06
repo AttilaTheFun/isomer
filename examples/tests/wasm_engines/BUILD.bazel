@@ -12,9 +12,7 @@ swift_test(
     data = [
         "//wasm/example_full_feature:example_full.wasm",
         "//wasm/network_probe_feature:network_probe.wasm",
-        "//wasm/network_probe_feature:network_probe_threads.wasm",
         "//wasm/tap_counter_feature:tap_counter_release.wasm",
-        "//wasm/tap_counter_feature:tap_counter_threads_release.wasm",
     ],
     linkopts = [
         "-Wl,-rpath,/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",  # keep
