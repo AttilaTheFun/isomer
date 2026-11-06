@@ -74,4 +74,15 @@ for _ in 1 2 3; do
 done
 
 serial="$("$adb" devices | awk 'NR > 1 && $2 == "device" { print $1; exit }')"
-exec "$ROOT/tools/ci/android_test.sh" "$adb" "$serial" "$apk" "$out" "${stories[@]}"
+# The install on its own, bounded, with the phone's log when it fails.
+if ! timeout 600 "$adb" -s "$serial" install -r "$apk"; then
+    "$adb" -s "$serial" logcat -d > "$out/logcat-install.txt" 2>&1 || true
+    tail -150 "$out/logcat-install.txt"
+    echo "hosted_android_test.sh: the install failed or took over 10 minutes" >&2
+    exit 1
+fi
+status=0
+timeout 1800 "$ROOT/tools/ci/android_test.sh" "$adb" "$serial" "$apk" "$out" "${stories[@]}" || status=$?
+"$adb" -s "$serial" logcat -d > "$out/logcat.txt" 2>&1 || true
+[ $status -eq 0 ] || grep -E "FATAL|AndroidRuntime|libc  |DEBUG   " "$out/logcat.txt" | tail -80
+exit $status
