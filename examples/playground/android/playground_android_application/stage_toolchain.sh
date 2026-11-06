@@ -19,7 +19,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 TC="${ISO_IOS_TOOLCHAIN:-$HOME/Developer/ios-toolchain}"
-NDK="${ISO_NDK:-$(ls -d ~/Library/Caches/bazel/_bazel_*/*/external/hermetic_android_toolchains++android+androidndk_darwin 2>/dev/null | head -1)}"
+NDK="${ISO_NDK:-$(grep -l "Pkg.Revision = 30\." ~/Library/Caches/bazel/_bazel_*/*/external/hermetic_android_toolchains++android+androidndk_darwin/source.properties 2>/dev/null | head -1 | xargs dirname 2>/dev/null)}"
 STRIP="$NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-strip"
 SLICE=""
 while [ $# -gt 0 ]; do
@@ -52,7 +52,7 @@ done
 for lib in "$TC"/build/android-swift/lib/swift/host/*.so "$TC"/build/android-swift/lib/swift/host/plugins/*.so; do
     "$STRIP" -o "$OUT/native/$(basename "$lib")" "$lib"
 done
-for lib in libswiftCore libswift_Concurrency libswift_Builtin_float libswift_math libdispatch libswiftAndroid libBlocksRuntime; do
+for lib in libswiftCore libswift_Concurrency libswift_Builtin_float libswift_math libswift_StringProcessing libswift_RegexParser libdispatch libswiftAndroid libBlocksRuntime; do
     cp "$TC/android-swift-resources/android/$lib.so" "$OUT/native/"
 done
 cp "$NDK/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" "$OUT/native/"

@@ -68,6 +68,14 @@ if [ ! -f android-uuid/lib/libuuid.a ]; then
     "$PREBUILT/bin/aarch64-linux-android$API-clang" -O2 -fPIC -Iandroid-uuid/include -c android-uuid/uuid.c -o android-uuid/uuid.o
     "$PREBUILT/bin/llvm-ar" rcs android-uuid/lib/libuuid.a android-uuid/uuid.o
 fi
+# voidify.o (below) is on every link, the configure's link tests too, but
+# is compiled against this build's generated headers after the configure:
+# an empty object stands in until then.
+if [ ! -f android-voidify/voidify.o ]; then
+    echo > android-voidify/empty.c
+    "$PREBUILT/bin/aarch64-linux-android$API-clang" -c android-voidify/empty.c -o android-voidify/voidify.o
+    rm android-voidify/empty.c
+fi
 mkdir -p build/android-swift
 cmake -S swift -B build/android-swift -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
@@ -121,7 +129,9 @@ cp "$SWIFT_RESOURCES/android/aarch64/swiftrt.o" build/android-swift/lib/swift/an
 # libc++'s std::__voidify instantiations the Swift-written modules reference
 # (android-voidify/voidify.cpp), linked into swift-frontend. With exceptions
 # on: the references carry libc++'s `ne` ABI tag, -fno-exceptions gives `nn`.
-"$PREBUILT/bin/aarch64-linux-android$API-clang++" -std=c++17 -O2 -fPIC -fno-rtti \
+# Without LLVM's ABI-check reference: a later configure's link tests link
+# the object this run leaves, with no LLVMSupport on the line.
+"$PREBUILT/bin/aarch64-linux-android$API-clang++" -std=c++17 -O2 -fPIC -fno-rtti -DLLVM_DISABLE_ABI_BREAKING_CHECKS_ENFORCED=1 \
     -Iswift/include -Ibuild/android-swift/include -Illvm-project/llvm/include -Ibuild/android-llvm/include \
     -Illvm-project/clang/include -Ibuild/android-llvm/tools/clang/include \
     -c android-voidify/voidify.cpp -o android-voidify/voidify.o
