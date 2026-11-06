@@ -459,6 +459,7 @@ def isomer_android_app(
         uses_cleartext_traffic = False,
         version_name = None,
         version_code = None,
+        min_sdk_version = 28,
         extra_binary_deps = [],
         extra_application = "",
         icon = None,
@@ -492,6 +493,9 @@ def isomer_android_app(
     and `version_code` (an integer that only grows) are the manifest's
     android:versionName / android:versionCode, what the system's app info
     shows and what an update is ordered by; left out, the APK has neither.
+    `min_sdk_version` is the manifest's minSdkVersion (28, the Swift SDK's
+    supported minimum; lower takes what README's "Android below API 28"
+    says, the NDK's api_level and a rules_swift patch among it).
     `extra_binary_deps` are further android_binary deps: a native library
     the app's Kotlin loads (//android/libraries/wasm_view:engine_native,
     WasmKit for WasmView). `extra_application` is manifest XML placed
@@ -594,6 +598,7 @@ def isomer_android_app(
             "{EXTRA_PERMISSIONS}": extra_permissions,
             "{APPLICATION_ATTRS}": application_attrs,
             "{VERSION_ATTRS}": version_attrs,
+            "{MIN_SDK}": str(min_sdk_version),
             "{EXTRA_APPLICATION}": extra_application,
         },
         template = Label("//tools/android:manifest.xml.tpl"),

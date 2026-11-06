@@ -75,7 +75,13 @@ object AppDirectories {
                 Os.setenv("ISOMER_BUNDLE_VERSION", code.toString(), true)
             } catch (_: android.content.pm.PackageManager.NameNotFoundException) {
             }
-            Os.setenv("ISOMER_PREFERRED_LANGUAGES", app.resources.configuration.locales.toLanguageTags(), true)
+            // The language list is API 24; before it, the one locale.
+            val languages = if (android.os.Build.VERSION.SDK_INT >= 24) {
+                app.resources.configuration.locales.toLanguageTags()
+            } else {
+                @Suppress("DEPRECATION") app.resources.configuration.locale.toLanguageTag()
+            }
+            Os.setenv("ISOMER_PREFERRED_LANGUAGES", languages, true)
             bundle(app)?.let { Os.setenv("ISOMER_BUNDLE_PATH", it.path, true) }
         } catch (error: ErrnoException) {
             android.util.Log.w("Isomer", "the app's directories are not in the environment", error)

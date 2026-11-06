@@ -73,14 +73,15 @@ with the Windows x64 Electron runtime — copy the zip to a 64-bit Windows machi
 unzip, and run `Isomer.exe`.
 
 
-### Modules: `SwiftUI`, `SwiftUIExtensions`, `IsomerBridge`
+### Modules: `SwiftUI` and `Isomer`
 
 The reimplementation's `SwiftUI` module carries **only Apple's SwiftUI API
 surface**, so a SwiftPM package written for Apple compiles unchanged on
-wasm, Android, Linux and Windows. What Isomer adds beyond it lives in
-`SwiftUIExtensions` (`Platform.current`, the platform-command modifiers,
-`WebView`, the JSON helpers) — import it explicitly; `IsomerBridge`
-re-exports it, so app code that already imports the bridge needs no change.
+wasm, Android, Linux and Windows. What Isomer adds beyond it lives in the
+`Isomer` module (`Platform.current`, the platform-command modifiers,
+`WebView`, `Map`, the JSON helpers): `import Isomer`, on every platform.
+(Its names before 0.31, `SwiftUIExtensions` and `IsomerBridge`, were
+re-exports of it until 0.40.)
 `@isomer//:swift_ui` is one label that resolves to the platform's
 `SwiftUI` library (nothing on Apple, where the system SwiftUI is implicit)
 for a package's generated target (rules_swift_package_manager `target_deps`).
@@ -758,6 +759,41 @@ code doing cryptography depends on the WASI shim's `random_get`, which is the
 platform CSPRNG (`crypto.getRandomValues`) — available in every browser and
 Node ≥ 19; environments without it fail loudly rather than degrade. The shim
 is also overridable per call: `boot({ wasi: { clock_time_get, ... } })`.
+
+### Android below API 28
+
+Swift's Android SDK (swift.org's) supports API 28 and later, and so do
+isomer's examples. An app that must reach older phones (minSdk 23) can
+embed Isomer there, at its own risk (Isomer's Storybook runs on Android
+6.0; swift.org doesn't test below 28):
+
+- its NDK at that level: `android.ndk(api_level = 23, ...)` in its
+  MODULE.bazel (hermetic_android_toolchains), and `isomer_android_app(...,
+  min_sdk_version = 23)` (or its own manifest);
+- rules_swift with isomer's patch, which links Android libraries below API
+  28 without RELR relocations (Android's loader reads those from 28: a
+  library linked with them crashes loading). rules_swift itself refuses
+  targets below 28 (rules_swift#1998), so this is a patch of isomer's,
+  over the registry's version. An override's patches must be the root
+  module's own files: copy isomer's tools/patches/rules_swift_android_below_28.patch
+  into your repository (it is for the rules_swift version isomer's
+  release asks for):
+
+  ```starlark
+  single_version_override(
+      module_name = "rules_swift",
+      patch_strip = 1,
+      patches = ["//third_party:rules_swift_android_below_28.patch"],
+  )
+  ```
+
+What else the SDK's prebuilt libraries need of an older Android, isomer
+supplies (android/libraries/libc_compat: `strtod_l` and `strtof_l` for the
+Swift runtime below 26, `__fread_chk` and `__fwrite_chk` for ICU below 24),
+and its Android runtime calls newer APIs only behind version checks.
+Not below 26: Swift's C++ interop (libc++'s `std` module and bionic's
+older headers clash). Upstream: the SDK's sources already take older
+Android; building it lower is the ask (TODO.md).
 
 ## Requirements
 

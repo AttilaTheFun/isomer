@@ -89,7 +89,8 @@ object HostServices {
                     maxOf(1, (bitmap.width * scale).toInt()), maxOf(1, (bitmap.height * scale).toInt()), true)
             }
             if (transform) {
-                val orientation = try {
+                // EXIF read from memory is API 24; before it, taken as is.
+                val orientation = if (android.os.Build.VERSION.SDK_INT < 24) android.media.ExifInterface.ORIENTATION_NORMAL else try {
                     android.media.ExifInterface(java.io.ByteArrayInputStream(bytes))
                         .getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION, android.media.ExifInterface.ORIENTATION_NORMAL)
                 } catch (_: Exception) { android.media.ExifInterface.ORIENTATION_NORMAL }
@@ -354,11 +355,16 @@ object HostServices {
 
     /** `family` is `Font.custom`'s name: the app's bundled typeface by
      *  that name (else the system's), the system's default without one. */
+    /** `base` at `weight` (1–1000): any weight from API 28, bold or not before it. */
+    fun weighted(base: android.graphics.Typeface, weight: Int): android.graphics.Typeface =
+        if (android.os.Build.VERSION.SDK_INT >= 28) android.graphics.Typeface.create(base, weight.coerceIn(1, 1000), false)
+        else android.graphics.Typeface.create(base, if (weight >= 600) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+
     fun configurePaint(paint: android.graphics.Paint, sizePoints: Float, weight: Int, family: String? = null) {
         paint.textSize = sizePoints * density
         val base = if (family.isNullOrEmpty()) android.graphics.Typeface.DEFAULT
             else bundledTypeface(family) ?: android.graphics.Typeface.create(family, android.graphics.Typeface.NORMAL)
-        paint.typeface = android.graphics.Typeface.create(base, weight, false)
+        paint.typeface = weighted(base, weight)
     }
 
     /** Measure wrapped text; returns {width, height} in logical points.

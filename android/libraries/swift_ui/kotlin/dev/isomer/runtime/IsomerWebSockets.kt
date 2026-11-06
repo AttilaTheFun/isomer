@@ -221,7 +221,10 @@ object IsomerWebSockets {
             val port = if (uri.port > 0) uri.port else if (secure) 443 else 80
             // The app's network security policy, as HttpURLConnection keeps it
             // for http (and Apple's App Transport Security for ws).
-            if (!secure && !NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted(bare)) {
+            // (Per host from API 24; before it, the app's one setting.)
+            val cleartext = if (android.os.Build.VERSION.SDK_INT >= 24) NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted(bare)
+                else NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted
+            if (!secure && !cleartext) {
                 throw NetworkHostException(
                     "unknown", "CLEARTEXT communication to $bare not permitted by network security policy")
             }
