@@ -1,0 +1,36 @@
+diff --git a/swift/toolchains/swift_toolchain.bzl b/swift/toolchains/swift_toolchain.bzl
+index 071b2781..fa5a5b06 100644
+--- a/swift/toolchains/swift_toolchain.bzl
++++ b/swift/toolchains/swift_toolchain.bzl
+@@ -635,6 +635,22 @@ def _c_compile_args(ctx, cc_toolchain):
+         variables = compile_variables,
+     )
+ 
++def _android_linkopts(linkopts, target_system_name):
++    """Drops RELR relocation packing below API 28, whose loader ignores it."""
++    api = ""
++    for char in target_system_name.elems():
++        api = api + char if char.isdigit() else ""
++    if not api or int(api) >= 28:
++        return linkopts
++    result = []
++    for opt in linkopts:
++        if opt == "-Wl,--use-android-relr-tags":
++            continue
++        if opt == "-Wl,--pack-dyn-relocs=android+relr":
++            opt = "-Wl,--pack-dyn-relocs=android"
++        result.append(opt)
++    return result
++
+ def _android_target_system_name(ctx, cc_toolchain):
+     """Returns the Android target system name from the C compiler arguments."""
+     target_arg_prefix = "--target="
+@@ -726,7 +742,7 @@ def _swift_toolchain_impl(ctx):
+             fail("Android toolchain requires a sysroot to be set, either via the `sdkroot` attribute or by using a CC toolchain that provides one.")
+         swift_linkopts_cc_info = _swift_sdk_linkopts_cc_info(
+             ctx.label,
+-            ["--sysroot={}".format(sdkroot)] + ctx.attr.linkopts,
++            ["--sysroot={}".format(sdkroot)] + _android_linkopts(ctx.attr.linkopts, target_system_name),
+             ctx.files.linker_inputs,
+         )
+     elif ctx.attr.os == "wasi":
