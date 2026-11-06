@@ -3,7 +3,7 @@
 #if defined(_REENTRANT)
 // Declared here, not through <pthread.h>: that reaches <stddef.h> in the
 // compiler's builtin headers, which the wasm cc toolchain does not
-// allow-list (before tools/patches/rules_swift_wasm_clang_resource_dir.patch;
+// allow-list (before rules_swift#1989;
 // declared by hand since). wasi-libc's pthread_t is a
 // pointer and pthread_equal compares it.
 extern void *pthread_self(void);
