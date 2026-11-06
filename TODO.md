@@ -94,6 +94,23 @@ container with its own KVM, the iPhone and the Mac on slots. Left:
   Ubuntu 26.04, so Windows runs in a container of its own. An image of
   Isomer's (or these in Visor's) would save both.
 
+## Android below API 28 (2026-11-06)
+
+Swift's Android SDK (swift.org's) is built at API 28, its supported
+minimum; an app embedding Isomer may need less (minSdk 23). Draft isomer#92
+runs the Storybook on Android 6.0 with: the NDK at 23, a shim for
+libswiftCore's `strtod_l`/`strtof_l` (API 26), Isomer's Kotlin calls above
+23 behind version checks, and no RELR below 28 (rules_swift#1998).
+
+- **A post in the Swift forums' Android workgroup** asking for the SDK to
+  be built at 23 (or 24). The runtime's own sources already take older
+  APIs (Stubs.cpp: `#if __ANDROID_API__ < 26`, its own `strtod_l`; on
+  main, float parsing is Swift's and calls no libc); what needs more is
+  corelibs Foundation (`posix_spawn`, `getifaddrs`, `getgrgid_r`/`getgrnam_r`
+  at 24-28) and a CI emulator at the lower API. Isomer's evidence: #92.
+- Whether Isomer supports 23 at all is the owner's call; until then #92
+  stays a draft.
+
 ## Upstream releases, no forks
 
 The goal: every dependency at an upstream tagged release (a BCR version, a
