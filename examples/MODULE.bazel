@@ -432,7 +432,7 @@ chrome_archive(
 
 # Swift for Windows built on Linux (@isomer//tools/windows): the host's Swift
 # (arm64 Linux: OS Server's containers) with the Windows Swift SDK, out of
-# swift.org's 6.3.2 Windows installer (tools/windows/make_swift_sdk.sh), and
+# swift.org's 6.4.2 Windows installer (tools/windows/make_swift_sdk.sh), and
 # Microsoft's SDK and MSVC libraries (make_msvc_sysroot.ps1 and .sh), which
 # may be used but not redistributed: both by placeholders a builder's
 # .bazelrc.user resolves (tools/ci/container_build.sh: OS Server's files, by
@@ -443,9 +443,9 @@ swift_windows_sdk(
     name = "swift_windows_sdk",
     msvc_sysroot_sha256 = "c800e77cf79ed0174c8a76c9d321f7949524a847d5b70f3cf02b26da6e3f4382",
     msvc_sysroot_url = "https://windows-sdks.invalid/sha256/c800e77cf79ed0174c8a76c9d321f7949524a847d5b70f3cf02b26da6e3f4382",
-    swift_sdk_sha256 = "a7a641d618533c7402a094f1ee23e611ccc3b765d8e8a48f837efdc635a3bf35",
-    swift_sdk_url = "https://windows-sdks.invalid/sha256/a7a641d618533c7402a094f1ee23e611ccc3b765d8e8a48f837efdc635a3bf35",
+    swift_sdk_sha256 = "e713ff8fba11ab9b93d3e0e0f06ea543b14e01272317ffadf5c4694a6ef25340",
+    swift_sdk_url = "https://windows-sdks.invalid/sha256/e713ff8fba11ab9b93d3e0e0f06ea543b14e01272317ffadf5c4694a6ef25340",
     swift_toolchain_repo = "swift_toolchain_ubuntu24.04-aarch64",
-    swift_version = "6.3.2",
+    swift_version = "6.4.2",
     swiftc = "@swift_toolchain_ubuntu24.04-aarch64//:usr/bin/swiftc",
 )

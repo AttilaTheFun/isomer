@@ -18,9 +18,11 @@ it resolves the Apple SDK archive's.
 `make_swift_sdk.sh <swift.org's Windows installer> <out.tar.gz>`, on Linux
 with 7-Zip and msitools (`apt install 7zip msitools`): the installer's
 Windows.platform (the SDK, XCTest and Testing) and the Swift runtime's DLLs
-for arm64 and x64, which an app ships beside its .exe. Apache-licensed, as
-Swift is. Its release must be the host toolchain's (swift-6.3.2-RELEASE's
-`windows10-arm64.exe` for 6.3.2).
+(arm64 and x64 from 6.3's single runtime MSI; arm64 alone from 6.4's arm64
+installer, whose runtime is an MSI per architecture), which an app ships
+beside its .exe. Apache-licensed, as Swift is. Its release must be the host
+toolchain's (swift-6.4.2-RELEASE's `windows10-arm64.exe` for 6.4.2; its
+installer's payloads span several attached cabinets, all read).
 
 ## Microsoft's half
 
