@@ -30,7 +30,10 @@
 # put in .ci/platforms for tools/ci/platform_tests.sh: the iPhone's and the
 # Mac's (slots of OS Server's primary macOS VM), Android's (an emulator) and
 # Windows' (built here for Windows on Arm, --config=windows_on_linux; run
-# under Wine only by hand). Any build or test failing fails the run.
+# under Wine only by hand). With ISOMER_ANDROID_X86_64 set (a public
+# repository's CI) the Android test APK is also built for x86_64, in
+# .ci/platforms/android-x86_64, for the emulator on GitHub's Ubuntu runner.
+# Any build or test failing fails the run.
 #
 # package (the publishing jobs', as AttilaTheFun/reviews' container_build.sh
 # has it): Bazel's tree is the container's (a volume), so what CI publishes
@@ -176,9 +179,24 @@ done
 cp "$(bazel info "${flags[@]}" output_base)"/external/+swift_windows_sdk_repository+swift_windows_sdk/swift-windows-sdk/runtime/aarch64/*.dll \
     "$platforms/windows/" 2>/dev/null
 cp -R "$root/examples/storybook/assets" "$platforms/windows/assets"
+# The Android test APK for x86_64 too (ISOMER_ANDROID_X86_64), for the
+# x86_64 emulator on the GitHub runner (tools/ci/hosted_android_test.sh).
+built_x86=0
+if [ -n "${ISOMER_ANDROID_X86_64:-}" ]; then
+    x86=(--android_platforms=@rules_android//:x86_64)
+    android=//android/storybook_android_application:storybook_android_application_apk
+    if bazel build "${flags[@]}" "${x86[@]}" "$android"; then
+        mkdir -p "$platforms/android-x86_64"
+        for f in $(files "${x86[@]}" "$android"); do
+            case "$f" in *_unsigned.apk) ;; *.apk) cp "$exec_root/$f" "$platforms/android-x86_64/storybook.apk" ;; esac
+        done
+    else
+        built_x86=1
+    fi
+fi
 chmod -R a+rwX "$platforms"
 ls -l "$platforms"
-for result in $built $built_windows $built_tests $tested_here $built_gl $checked; do [ "$result" -ne 0 ] && exit "$result"; done
+for result in $built $built_windows $built_tests $tested_here $built_gl $checked $built_x86; do [ "$result" -ne 0 ] && exit "$result"; done
 exit 0
 '
 
