@@ -497,7 +497,7 @@ android.sdk(
     version = "35",
 )
 android.ndk(
-    api_level = 28,
+    api_level = 23,
     version = "r27c",
 )
 

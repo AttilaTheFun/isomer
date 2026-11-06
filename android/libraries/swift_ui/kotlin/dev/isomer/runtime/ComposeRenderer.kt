@@ -2155,9 +2155,14 @@ private fun IsoHostView(n: JSONObject, m: Modifier) {
             val iso = n.optString("v")
             TextButton(onClick = { open = true }, modifier = m) { Text(iso.ifEmpty { "Pick a date" }) }
             if (open) {
+                // yyyy-MM-dd at midnight UTC, with java.text and java.util
+                // (java.time is API 26).
+                val utcDay = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).apply {
+                    timeZone = java.util.TimeZone.getTimeZone("UTC")
+                    isLenient = false
+                }
                 val initial = try {
-                    java.time.LocalDate.parse(iso)
-                        .atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+                    utcDay.parse(iso)?.time
                 } catch (_: Exception) {
                     null
                 }
@@ -2168,9 +2173,7 @@ private fun IsoHostView(n: JSONObject, m: Modifier) {
                         TextButton(onClick = {
                             open = false
                             state.selectedDateMillis?.let { millis ->
-                                val date = java.time.Instant.ofEpochMilli(millis)
-                                    .atZone(java.time.ZoneOffset.UTC).toLocalDate()
-                                sendEvent(edit, date.toString())
+                                sendEvent(edit, utcDay.format(java.util.Date(millis)))
                             }
                         }) { Text("OK") }
                     },

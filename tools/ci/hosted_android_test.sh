@@ -27,7 +27,7 @@ sudo udevadm trigger --name-match=kvm
 
 # `yes` ends by SIGPIPE when sdkmanager stops reading, which pipefail
 # would take for a failure.
-image="system-images;android-34;default;x86_64"
+image="system-images;android-${ISOMER_ANDROID_TEST_API:-34};default;x86_64"
 { yes || true; } | "$sdk/cmdline-tools/latest/bin/sdkmanager" --install emulator platform-tools "$image" > /dev/null
 # The AVD where both avdmanager and the emulator look (the runner's own
 # defaults differ).
