@@ -9,12 +9,12 @@ missing/<Module>.md lists each module's missing declarations one by one, with Ap
 | Module | Counted | Implemented | Excluded | Not yet | Unclassified | Missing, listed |
 |---|---|---|---|---|---|---|
 | [CoreGraphics](CoreGraphics.md) | 1357 | 425 (31%) | 627 | 303 | 2 | [missing/CoreGraphics.md](missing/CoreGraphics.md) |
-| [Foundation](Foundation.md) | 12079 | 4915 (41%) | 3557 | 3607 | 0 | [missing/Foundation.md](missing/Foundation.md) |
-| [SwiftUI](SwiftUI.md) | 7924 | 2078 (26%) | 530 | 5316 | 0 | [missing/SwiftUI.md](missing/SwiftUI.md) |
+| [Foundation](Foundation.md) | 12079 | 5044 (42%) | 3557 | 3478 | 0 | [missing/Foundation.md](missing/Foundation.md) |
+| [SwiftUI](SwiftUI.md) | 7924 | 2082 (26%) | 530 | 5312 | 0 | [missing/SwiftUI.md](missing/SwiftUI.md) |
 | [Metal](Metal.md) | 3580 | 860 (24%) | 1156 | 1563 | 1 | [missing/Metal.md](missing/Metal.md) |
 | [CoreTransferable](CoreTransferable.md) | 83 | 1 (1%) | 2 | 80 | 0 | [missing/CoreTransferable.md](missing/CoreTransferable.md) |
 | [UniformTypeIdentifiers](UniformTypeIdentifiers.md) | 229 | 32 (14%) | 8 | 189 | 0 | [missing/UniformTypeIdentifiers.md](missing/UniformTypeIdentifiers.md) |
 | [PhotosUI](PhotosUI.md) | 246 | 26 (11%) | 126 | 94 | 0 | [missing/PhotosUI.md](missing/PhotosUI.md) |
 | [ImageIO](ImageIO.md) | 869 | 15 (2%) | 0 | 854 | 0 | [missing/ImageIO.md](missing/ImageIO.md) |
-| [Observation](Observation.md) | 60 | 25 (42%) | 0 | 35 | 0 | [missing/Observation.md](missing/Observation.md) |
+| [Observation](Observation.md) | 60 | 55 (92%) | 0 | 5 | 0 | [missing/Observation.md](missing/Observation.md) |
 | [Synchronization](Synchronization.md) | 325 | 316 (97%) | 0 | 9 | 0 | [missing/Synchronization.md](missing/Synchronization.md) |
