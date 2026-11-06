@@ -2980,7 +2980,7 @@ private fun textFontFamily(params: JSONObject?, weight: Int = 400): FontFamily? 
     if (family.isNotEmpty()) return namedFontFamilies.getOrPut("$family|$weight") {
         val base = HostServices.bundledTypeface(family)
             ?: android.graphics.Typeface.create(family, android.graphics.Typeface.NORMAL)
-        FontFamily(android.graphics.Typeface.create(base, weight.coerceIn(1, 1000), false))
+        FontFamily(HostServices.weighted(base, weight))
     }
     return when {
         params?.optString("mono") == "1" -> FontFamily.Monospace
