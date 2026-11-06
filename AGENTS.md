@@ -476,7 +476,8 @@ tier 2 is Linux and Windows. Building an iOS app for Android is Isomer's
 headline, and the project's other apps (Visor, Reviews) ship iOS, the Mac
 and Android, Android through Isomer. CI runs and pictures tier 1 on every
 change: the iPhone and the Mac on slots of OS Server's primary, Android on
-an emulator lease, the web in headless Chrome. It builds tier 2 on every
+GitHub's Ubuntu runner (an OS Server emulator lease in a private copy), the
+web in headless Chrome. It builds tier 2 on every
 change, but runs it only by hand for now (until the build machine has the
 room): Linux in a container under Xvfb, Windows under Wine in a container
 or on an oss Windows VM, never on this Mac's own screen. Tier 2's pictures
@@ -500,7 +501,11 @@ may differ from real hardware (Wine's fonts), which is acceptable.
     Microsoft's libraries beside the host's Swift, README there), run under
     arm64 Wine 10 in an Ubuntu 26.04 container (tools/ci/windows_test.sh;
     Wine's own fonts and DirectWrite: a check, never the proof's pixels);
-  - Android: an emulator leased from OS Server (`oss machine lease
+  - Android (2026-11-06): on GitHub's own Ubuntu runner, the primary for
+    this public repository (the workflow's `android` job: an x86_64
+    emulator on the runner's KVM, the x86_64 test APK built in the
+    container, tools/ci/hosted_android_test.sh); in a private copy, and as
+    the fallback, an emulator leased from OS Server (`oss machine lease
     android`), on its Mac's own hypervisor, through `oss machine adb` and
     `screenshot` (tools/ci/android_test.sh). A Cuttlefish phone in a
     container with its own KVM (`--virtualization`, OS Server's API 22;
