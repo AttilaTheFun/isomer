@@ -14,7 +14,7 @@
 #
 # Sources: the swift worktree's lib/Macros (the macros the iOS and Android
 # Playgrounds load as libraries) over the swift-syntax worktree, both at
-# swift-6.3.2-RELEASE; the swift.org 6.3.2 toolchain and the SwiftWasm SDK
+# swift-6.4.2-RELEASE; the swift.org toolchain of that release and the wasm SDK
 # that compiles user code (env.sh).
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -54,7 +54,7 @@ SWIFT
 BUNDLE="$(dirname "$(dirname "$ISO_WASM_SDK")")"
 ln -sfn "$BUNDLE" "$WORK/sdks/$(basename "$BUNDLE")"
 "$ISO_BASE_TC/swift" build --package-path "$PKG" -c release \
-    --swift-sdks-path "$WORK/sdks" --swift-sdk swift-6.3.2-RELEASE_wasm \
+    --swift-sdks-path "$WORK/sdks" --swift-sdk swift-$ISO_SWIFT_RELEASE-RELEASE_wasm \
     --product MacroPlugins
 rm -f "$WORK"/*.wasm
 cp "$PKG/.build/wasm32-unknown-wasip1/release/MacroPlugins.wasm" "$WORK/MacroPlugins.wasm"

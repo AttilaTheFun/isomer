@@ -1,7 +1,7 @@
 #!/bin/bash
 # Phase C2: swift-frontend for iOS arm64 — host tools only, cross-compiled
 # against the Phase B iOS LLVM/clang build. The compiler's own Swift sources
-# (ASTGen etc.) compile with the 6.3.2-RELEASE base toolchain targeting iOS
+# (ASTGen etc.) compile with the base toolchain targeting iOS
 # (BOOTSTRAPPING_MODE=CROSSCOMPILE). No stdlib, no overlays — the wasm
 # stdlib the DEVICE app targets ships as data (the SwiftWasm artifactbundle).
 set -euo pipefail
@@ -21,7 +21,26 @@ else
     HOST_VARIANT="iphoneos"
     HOST_VARIANT_SDK="IOS"
 fi
-BASE_TC=~/Developer/swiftwasm-source/build/Packaging/base-toolchain/swift-6.3.2-RELEASE/usr/bin
+# The base toolchain: swift.org's macOS toolchain of the same release as
+# the sources (the one rules_swift registered for this Mac's builds, in
+# Bazel's output base), unless ISO_BASE_TC names another's usr/bin.
+SWIFT_RELEASE=6.4.2
+BASE_TC="${ISO_BASE_TC:-}"
+if [ -z "$BASE_TC" ]; then
+  for version in ~/Library/Caches/bazel/_bazel_*/*/external/rules_swift++swift+swift_toolchain_xcode/.swift-version; do
+    [ "$(cat "$version" 2>/dev/null)" = "$SWIFT_RELEASE" ] && { BASE_TC="$(dirname "$version")/usr/bin"; break; }
+  done
+fi
+[ -x "$BASE_TC/swiftc" ] || { echo "no base toolchain at $BASE_TC (set ISO_BASE_TC)" >&2; exit 1; }
+# Xcode's swiftc (it reads the iOS SDK's swiftinterfaces) through a symlink
+# beside an (almost) empty resource dir: CROSSCOMPILE-WITH-HOSTLIBS hands
+# SwiftCompilerSources `<swiftc's bin>/../bootstrapping0/lib/swift`, which
+# needs only the clang builtin headers. With swift-syntax on, the build
+# takes CMAKE_Swift_COMPILER for those sources, so both name the shim.
+XCODE_SWIFTC="$(xcrun -f swiftc)"
+mkdir -p xcode-shim/bin xcode-shim/bootstrapping0/lib/swift
+ln -sfn "$XCODE_SWIFTC" xcode-shim/bin/swiftc
+ln -sfn "$(ls -d "$(dirname "$XCODE_SWIFTC")"/../lib/clang/* | sort -V | head -1)" xcode-shim/bootstrapping0/lib/swift/clang
 mkdir -p build/$SUFFIX-swift
 cmake -S swift -B build/$SUFFIX-swift -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
@@ -31,7 +50,7 @@ cmake -S swift -B build/$SUFFIX-swift -G Ninja \
     -DCMAKE_OSX_ARCHITECTURES=arm64 \
     -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0 \
     -DCMAKE_MACOSX_BUNDLE=OFF \
-    -DCMAKE_Swift_COMPILER="$(xcrun -f swiftc)" \
+    -DCMAKE_Swift_COMPILER="$PWD/xcode-shim/bin/swiftc" \
     -DCMAKE_Swift_FLAGS="-target $TRIPLE" \
     -DUUID_INCLUDE_DIR="$SDK/usr/include" \
     -DUUID_LIBRARY="$SDK/usr/lib/libSystem.tbd" \
@@ -58,9 +77,13 @@ cmake -S swift -B build/$SUFFIX-swift -G Ninja \
     -DSWIFT_PATH_TO_CMARK_SOURCE="$PWD/cmark" \
     -DSWIFT_PATH_TO_CMARK_BUILD="$PWD/build/$SUFFIX-cmark" \
     -DSWIFT_PATH_TO_SWIFT_SYNTAX_SOURCE="$PWD/swift-syntax" \
+    -DSWIFT_BUILD_SWIFT_SYNTAX=TRUE \
+    -DSWIFT_PATH_TO_STRING_PROCESSING_SOURCE="$PWD/swift-experimental-string-processing" \
     -DBOOTSTRAPPING_MODE=CROSSCOMPILE-WITH-HOSTLIBS \
     -DSWIFT_EXEC_FOR_SWIFT_MODULES="$PWD/xcode-shim/bin/swiftc" \
     -DSWIFT_ENABLE_DISPATCH=OFF \
     -DSWIFT_USE_LINKER=""
-"$NINJA" -C build/$SUFFIX-swift swift-frontend
+# The frontend, and what the staging ships beside it for macros: the
+# in-process plugin server and the prebuilt macro plugins.
+"$NINJA" -C build/$SUFFIX-swift swift-frontend SwiftInProcPluginServer ObservationMacros SwiftMacros
 echo "PHASE C2 OK"

@@ -6,7 +6,7 @@ Areas are ordered planned, then maybe, then the rest, larger first; within an ar
 
 | Area | Missing | Intent |
 |---|---|---|
-| [Newer than the Swift 6.3.2 toolchain](#newer-than-the-swift-632-toolchain-35) | 35 | arrives when Isomer moves to the next Swift release |
+| [Newer than the Swift 6.4.2 toolchain](#newer-than-the-swift-642-toolchain-35) | 35 | arrives when Isomer moves to the next Swift release |
 | Total | 35 | |
 
 Most missing by type (all areas):
@@ -15,9 +15,9 @@ Most missing by type (all areas):
 
 (* the type itself is missing.)
 
-## Newer than the Swift 6.3.2 toolchain (35)
+## Newer than the Swift 6.4.2 toolchain (35)
 
-Why: Apple's SDK carries a newer Observation (observation options and tracking tokens, continuous observation) than Swift 6.3.2's.
+Why: Apple's SDK carries a newer Observation (observation options and tracking tokens, continuous observation) than Swift 6.4.2's.
 
 Intent: arrives when Isomer moves to the next Swift release.
 

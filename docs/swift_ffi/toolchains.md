@@ -22,10 +22,13 @@ doc.
   apple_support's cc toolchain resolution priority over rules_cc's
   `local_config_cc` darwin toolchain, which lacks `CC_TARGET_TRIPLE` and
   breaks the Xcode Swift toolchain ("Invalid target triple: local").
-- **swift-syntax 603.0.2** (BCR) — matches the swift.org 6.3.2 frontend's
-  compiler-plugin protocol (602 had plugin-protocol issues).
+- **swift-syntax 603.0.2** (BCR) — the macro plugin's and the analyzer's;
+  chosen for the swift.org 6.3.2 frontend's compiler-plugin protocol (602
+  had plugin-protocol issues), and kept with 6.4.2 (swift-foundation's
+  own swift-syntax, in third_party/swift_packages, is a release/6.4.x
+  commit).
   swift_argument_parser 1.7.0 for the analyzer/generator CLIs.
-- **Android**: hermetic_android_toolchains 0.1.1 (NDK r27c, API 28 →
+- **Android**: hermetic_android_toolchains 0.5.0 (NDK r30, API 28 →
   `@androidndk`; SDK 35 → `@androidsdk`), rules_android 0.7.3,
   rules_kotlin 2.2.2, rules_jvm_external 7.0. The Swift Android toolchain
   links through `@androidndk//:all` with libc++ static, so an APK ships only

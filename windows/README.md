@@ -36,7 +36,7 @@ for how the wasm cell works.
 Both cells are **built on a Windows host** (Swift can't be cross-compiled *to*
 Windows — see the [main README](../README.md#native-windows-target)):
 
-- The **Swift for Windows** toolchain (swift.org 6.3.2). The installer adds the
+- The **Swift for Windows** toolchain (swift.org 6.4.2). The installer adds the
   toolchain + runtime dirs to your `PATH`; the build relies on that (see
   [Toolchain PATH](#toolchain-path-note) below).
 - **Visual Studio Build Tools** (MSVC + the Windows 10/11 SDK).

@@ -104,7 +104,7 @@ own until 0.35, then a module of its own in `playground/` until 0.39.
 
 **Foundation and CoreGraphics.** On wasm and Android, `import Foundation`
 is Isomer's: swift-foundation's FoundationEssentials, a Swift package at its
-swift-6.3.2-RELEASE with a few patches (MODULE.bazel lists them), with no
+swift-6.4.2-RELEASE with a few patches (MODULE.bazel lists them), with no
 swift-corelibs-foundation layer (no CoreFoundation; of what corelibs gives
 Swift code only what apps reach for, written in Swift: `CharacterSet`,
 `NSString`'s string API, `String(format:)`, `NSRange`, `NSRegularExpression`, the locks, `Thread`, `FileHandle`,
@@ -791,9 +791,9 @@ bionic's older headers clash).
   target](#native-linux-target)) — the swift.org toolchain itself is fetched by
   Bazel.
 * Everything else is hermetic and pinned by sha256, fetched on first build:
-  * swift.org **Swift 6.3.2** toolchain (`.pkg`, extracted with `pkgutil`)
+  * swift.org **Swift 6.4.2** toolchain (`.pkg`, extracted with `pkgutil`)
   * official **WebAssembly** and **Android** Swift SDK artifact bundles
-  * Android **NDK r27c**, **build-tools 35**, platform **android-35** jar,
+  * Android **NDK r30**, **build-tools 35**, platform **android-35** jar,
     **platform-tools** (adb), **emulator** + ATD arm64 system image
   * **Temurin JDK 21**, **Kotlin 2.1.20** compiler, **Electron v42**
   * hermetic **Python** (rules_python) for the dev web server

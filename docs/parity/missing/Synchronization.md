@@ -6,7 +6,7 @@ Areas are ordered planned, then maybe, then the rest, larger first; within an ar
 
 | Area | Missing | Intent |
 |---|---|---|
-| [Newer than the Swift 6.3.2 toolchain, or not on WebAssembly](#newer-than-the-swift-632-toolchain-or-not-on-webassembly-9) | 9 | arrives when Isomer moves to the next Swift release |
+| [Newer than the Swift 6.4.2 toolchain, or not on WebAssembly](#newer-than-the-swift-642-toolchain-or-not-on-webassembly-9) | 9 | arrives when Isomer moves to the next Swift release |
 | Total | 9 | |
 
 After the areas, what Isomer's types lack beyond declarations: overloads with other parameter types 18.
@@ -17,9 +17,9 @@ Most missing by type (all areas):
 
 (* the type itself is missing.)
 
-## Newer than the Swift 6.3.2 toolchain, or not on WebAssembly (9)
+## Newer than the Swift 6.4.2 toolchain, or not on WebAssembly (9)
 
-Why: Apple's SDK carries a newer Synchronization than Swift 6.3.2's; the wasm SDK's leaves out what single-threaded WebAssembly cannot do.
+Why: Apple's SDK carries a newer Synchronization than Swift 6.4.2's; the wasm SDK's leaves out what single-threaded WebAssembly cannot do.
 
 Intent: arrives when Isomer moves to the next Swift release.
 

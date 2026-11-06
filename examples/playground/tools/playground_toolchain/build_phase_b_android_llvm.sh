@@ -8,7 +8,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 NINJA=~/Developer/swiftwasm-source/ninja/ninja
 [ -x "$NINJA" ] || NINJA=$(command -v ninja)
-NDK="${ISO_NDK:-$(ls -d ~/Library/Caches/bazel/_bazel_*/*/external/hermetic_android_toolchains++android+androidndk_darwin 2>/dev/null | head -1)}"
+NDK="${ISO_NDK:-$(grep -l "Pkg.Revision = 30\." ~/Library/Caches/bazel/_bazel_*/*/external/hermetic_android_toolchains++android+androidndk_darwin/source.properties 2>/dev/null | head -1 | xargs dirname 2>/dev/null)}"
 [ -d "$NDK/build/cmake" ] || { echo "no NDK at $NDK (set ISO_NDK)" >&2; exit 1; }
 API="${ISO_ANDROID_API:-28}"
 SUFFIX="android"

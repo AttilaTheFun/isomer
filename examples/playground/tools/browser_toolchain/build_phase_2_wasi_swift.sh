@@ -1,7 +1,7 @@
 #!/bin/bash
 # Phase 2: swift-frontend, HOST = wasm32-wasip1, against the Phase 1 LLVM/clang
 # libraries. The compiler's own Swift sources (SwiftCompilerSources; swift-syntax
-# when enabled) are compiled by the swift.org 6.3.2 host swiftc TARGETING wasm
+# when enabled) are compiled by the swift.org host swiftc TARGETING wasm
 # against the SwiftWasm SDK (BOOTSTRAPPING_MODE=CROSSCOMPILE), and the frontend
 # links the SDK's static Swift runtime — the copy INSIDE the compiler, distinct
 # from the archives it links user code against (same bits, different role).

@@ -21,7 +21,7 @@ for manifest in $(git ls-files 'Package.swift' '*/Package.swift'); do
     status=1
   fi
   # A revision is a release only as a tag's commit: one whose version
-  # SwiftPM can't read (swift-foundation's swift-6.3.2-RELEASE), named in a
+  # SwiftPM can't read (swift-foundation's swift-6.4.2-RELEASE), named in a
   # `// tag: <tag>` comment on its line, and checked against the tag.
   grep -n -E 'revision:[[:space:]]*"' "$manifest" | while IFS= read -r line; do
     url=$(printf '%s\n' "$line" | sed -n 's/.*url:[[:space:]]*"\([^"]*\)".*/\1/p')

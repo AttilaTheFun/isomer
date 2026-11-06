@@ -12,8 +12,9 @@ What differs from the toolchain's:
 - `ThreadLocal.swift` is Isomer's: pthread thread-local storage in place of
   ThreadLocal.cpp, which reads the runtime's private headers.
 - `Observations.swift` (the asynchronous sequence of changes, Swift 6.2)
-  and `ContinuousObservation.swift` (Swift 6.4's) are left out: their
-  iterators need the iOS 18 concurrency runtime.
+  is left out: its iterator needs the iOS 18 concurrency runtime.
+  `ContinuousObservation.swift` (Swift 6.4's) is in, at its own
+  `SwiftStdlib 6.4` availability: iOS 18 and macOS 15 (BUILD.bazel).
 - The `SwiftStdlib` availability names are defined as iOS 13 and macOS
   10.15, so nothing in it is newer than the app.
 

@@ -97,7 +97,7 @@ bazel_dep(name = "swift-syntax", version = "603.0.2")
 # Isomer's Foundation is built over swift-foundation's FoundationEssentials
 # (and FoundationInternationalization when an app asks for it), a Swift
 # package through rules_swift_package_manager (isomer's graph:
-# third_party/swift_packages, swift-6.3.2-RELEASE's commit and the
+# third_party/swift_packages, swift-6.4.2-RELEASE's commit and the
 # swift-foundation-icu and swift-syntax of that release). //foundation
 # assembles the `Foundation` module, adding what corelibs gives Swift code
 # elsewhere (CharacterSet, NSString's string API, String(format:) and the rest
@@ -351,7 +351,7 @@ python.toolchain(
 )
 
 # Swift-SDK cross-compilation to WebAssembly and Android, provided by the
-# overridden rules_swift (above). Downloads the swift.org 6.3.2 host toolchain
+# overridden rules_swift (above). Downloads the swift.org 6.4.2 host toolchain
 # and the matching WebAssembly / Android Swift SDK artifact bundles; the Apple
 # build is unaffected (it uses the system Xcode toolchain).
 #
@@ -426,7 +426,7 @@ register_toolchains(
 # The Apple targets built on Linux (a container, a VM): rules_applecross (its
 # clean-room actool, ibtool, codesign and swift-stdlib-tool, LLD), the Swift
 # that built Xcode 27.0's SDKs (6.4.0: the Apple targets only; the others
-# keep 6.3.2 above), and Xcode 27.0's SDKs, pinned by version and SHA-256. A
+# are on 6.4.2 above), and Xcode 27.0's SDKs, pinned by version and SHA-256. A
 # Mac reads its own Xcode (local_xcode); elsewhere the SDK archive is fetched
 # by its name below, a placeholder: each builder's .bazelrc.user says where
 # it is, with `--distdir=<folder holding apple-sdks-27.0.tar.gz>` or a

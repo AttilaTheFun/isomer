@@ -4254,7 +4254,7 @@ Intent: maybe (with a Combine subset).
 
 ## Newer than Isomer's swift-foundation (111)
 
-Why: Introduced in iOS 27: newer than the swift-6.3.2-RELEASE swift-foundation Isomer's Foundation is built from.
+Why: Introduced in iOS 27: newer than the swift-6.4.2-RELEASE swift-foundation Isomer's Foundation is built from.
 
 Intent: arrives when Isomer moves to the next Swift release.
 

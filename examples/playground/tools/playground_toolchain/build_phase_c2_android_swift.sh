@@ -1,7 +1,7 @@
 #!/bin/bash
 # Phase C2 for Android: swift-frontend for Android arm64 — host tools only,
 # cross-compiled against the Phase B Android LLVM/clang build with the NDK.
-# The compiler's own Swift sources compile with the 6.3.2-RELEASE base
+# The compiler's own Swift sources compile with the base
 # toolchain targeting Android (BOOTSTRAPPING_MODE=CROSSCOMPILE-WITH-HOSTLIBS:
 # the Android Swift SDK bundle's runtime is the host runtime, the same
 # libswiftCore.so the app ships). No stdlib, no overlays — the wasm stdlib the
@@ -10,12 +10,22 @@ set -euo pipefail
 cd "$(dirname "$0")"
 NINJA=~/Developer/swiftwasm-source/ninja/ninja
 [ -x "$NINJA" ] || NINJA=$(command -v ninja)
-NDK="${ISO_NDK:-$(ls -d ~/Library/Caches/bazel/_bazel_*/*/external/hermetic_android_toolchains++android+androidndk_darwin 2>/dev/null | head -1)}"
+NDK="${ISO_NDK:-$(grep -l "Pkg.Revision = 30\." ~/Library/Caches/bazel/_bazel_*/*/external/hermetic_android_toolchains++android+androidndk_darwin/source.properties 2>/dev/null | head -1 | xargs dirname 2>/dev/null)}"
 API="${ISO_ANDROID_API:-28}"
 TRIPLE="aarch64-unknown-linux-android$API"
-BASE_TC=~/Developer/swiftwasm-source/build/Packaging/base-toolchain/swift-6.3.2-RELEASE/usr/bin
+# The base toolchain: swift.org's macOS toolchain of the same release as
+# the sources (the one rules_swift registered for this Mac's builds, in
+# Bazel's output base), unless ISO_BASE_TC names another's usr/bin.
+SWIFT_RELEASE=6.4.2
+BASE_TC="${ISO_BASE_TC:-}"
+if [ -z "$BASE_TC" ]; then
+  for version in ~/Library/Caches/bazel/_bazel_*/*/external/rules_swift++swift+swift_toolchain_xcode/.swift-version; do
+    [ "$(cat "$version" 2>/dev/null)" = "$SWIFT_RELEASE" ] && { BASE_TC="$(dirname "$version")/usr/bin"; break; }
+  done
+fi
+[ -x "$BASE_TC/swiftc" ] || { echo "no base toolchain at $BASE_TC (set ISO_BASE_TC)" >&2; exit 1; }
 # The Android Swift SDK bundle Bazel fetched (rules_swift's swift extension).
-ANDROID_SDK="${ISO_ANDROID_SWIFT_SDK:-$(ls -d ~/Library/Caches/bazel/_bazel_*/*/external/rules_swift++swift+swift_toolchain_android_sdk_xcode/swift-6.3.2-RELEASE_android.artifactbundle 2>/dev/null | head -1)}"
+ANDROID_SDK="${ISO_ANDROID_SWIFT_SDK:-$(ls -d ~/Library/Caches/bazel/_bazel_*/*/external/rules_swift++swift+swift_toolchain_android_sdk_xcode/swift-6.4.2-RELEASE_android.artifactbundle 2>/dev/null | head -1)}"
 SWIFT_RESOURCES="$ANDROID_SDK/swift-android/swift-resources/usr/lib/swift-aarch64"
 [ -d "$SWIFT_RESOURCES/android" ] || { echo "no Android Swift SDK at $ANDROID_SDK" >&2; exit 1; }
 PREBUILT="$NDK/toolchains/llvm/prebuilt/darwin-x86_64"
@@ -115,5 +125,7 @@ cp "$SWIFT_RESOURCES/android/aarch64/swiftrt.o" build/android-swift/lib/swift/an
     -Iswift/include -Ibuild/android-swift/include -Illvm-project/llvm/include -Ibuild/android-llvm/include \
     -Illvm-project/clang/include -Ibuild/android-llvm/tools/clang/include \
     -c android-voidify/voidify.cpp -o android-voidify/voidify.o
-"$NINJA" -C build/android-swift swift-frontend
+# The frontend, and what the staging ships beside it for macros: the
+# in-process plugin server and the prebuilt macro plugins.
+"$NINJA" -C build/android-swift swift-frontend SwiftInProcPluginServer ObservationMacros SwiftMacros
 echo "PHASE C2 OK"

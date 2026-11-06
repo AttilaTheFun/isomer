@@ -80,7 +80,7 @@ test --test_output=errors
 
 # Run Swift compiles unsandboxed. The swift_ffi macro plugin is built (exec
 # config) by the Xcode `swiftlang` Swift toolchain, but the wasm / Android
-# cross-compiles are driven by the swift.org 6.3.2 frontend. When that frontend
+# cross-compiles are driven by the swift.org 6.4.2 frontend. When that frontend
 # loads the plugin inside a sandbox, the plugin can't reach the Swift runtime
 # dylibs it was linked against, so macro expansion fails with "produced
 # malformed response". (The Apple build requires a local Xcode anyway.)

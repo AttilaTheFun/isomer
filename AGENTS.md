@@ -396,9 +396,9 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
 - **The Apple targets build on Linux too** (rules_applecross, 2026-10-26;
   the project registry's 0.0.3.382f8c3, its main at 382f8c3, until it has a
   release in the BCR): Xcode 27.0's SDKs from an SDK archive, the Swift
-  that built them (6.4.0) for the Apple targets alone (the rest keeps
-  6.3.2), its clean-room actool, ibtool and codesign, and its ported tools
-  from its main (tools/applecross/ported_tools.sha256: their codesign signs
+  that built them (6.4.0) for the Apple targets alone (the rest is on
+  swift.org's 6.4.2), its clean-room actool, ibtool and codesign, and its
+  ported tools from its main (tools/applecross/ported_tools.sha256: their codesign signs
   a Mac app's nested code). rules_apple is the registry's preset 5.3.1.applecross.6
   (rules_apple 5.3.1 with rules_applecross's patches, asking for that
   rules_applecross, which asks for it back), apple_support the BCR's
@@ -422,11 +422,11 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   Swift compiles fail with "Invalid target triple: local".
 - **Android C/C++** comes from `hermetic_android_toolchains` (keith's):
   `@androidndk//:all` supplies the cc toolchains the Swift Android toolchain
-  links through (NDK r27c, API 28); `@androidsdk` (SDK 35 / build-tools
+  links through (NDK r30, API 28); `@androidsdk` (SDK 35 / build-tools
   35.0.0) feeds rules_android via `override_repo(rules_android_sdk, androidsdk)`.
   libc++ is linked **statically** (upstream's merged choice); there is no
   `select_android_runtime_lib` anymore and no libc++_shared.so in the APK.
-- **Swift toolchain**: swift.org 6.3.2 host toolchain + matching wasm/Android
+- **Swift toolchain**: swift.org 6.4.2 host toolchain + matching wasm/Android
   Swift SDK bundles, via rules_swift's `swift` extension. Toolchain versions
   must match the SDK bundle versions exactly.
 - The wasm/android targets are plain `swift_library`/`swift_binary`
@@ -598,14 +598,17 @@ how Isomer runs it.
   code, and WASI Threads for a module that imports a shared memory. The
   checks built for wasm run under it (//foundation/tests, the Metal
   translator's, the examples' //tests/sqlite_wasi).
-- **The threads SDK beside the stock one.** rules_swift takes one
-  `swift.wasm_sdk`; rules_swift#1990 (on #1860; in the registry's
-  rules_swift) takes two, the
+- **The threads SDK beside the stock one (none until Swift 6.5).**
+  rules_swift takes one `swift.wasm_sdk`; rules_swift#1990 (on #1860; in
+  the registry's rules_swift) takes two, the
   threads one's toolchains requiring
   `@rules_swift//swift/toolchains/wasm:threaded`. A reactor transitioned to
-  `@isomer//swift_ffi/rules:wasm32-wasip1-threads` builds with
+  `@isomer//swift_ffi/rules:wasm32-wasip1-threads` built with
   AttilaTheFun/swift's threads-sdk-6.3.2-1 (#92018 and the
-  platform-executors thread pool); everything else stays single-threaded.
+  platform-executors thread pool) until 0.41. #92018 reaches a release in
+  Swift 6.5, so since the move to 6.4.2 no threads SDK is registered
+  (MODULE.bazel): the threaded reactors aren't built and their tests are
+  set aside until then (TODO.md); everything else stays single-threaded.
   A threaded reactor links its memory imported, exported and shared with a
   maximum (`--import-memory --export-memory --shared-memory
   --max-memory=…`); examples' tap_counter_threads_release.wasm and
@@ -664,7 +667,7 @@ iOS 18 since 0.38, WasmView linking WasmKit: the example is.) What the feature's
 - **Observation and Synchronization are Isomer's** (since 2026-10-14),
   so a feature runs below Apple's iOS 17 and 18: //apple/libraries/
   compiled_observation is the toolchain's own open-source Observation
-  (swift-6.3.2-RELEASE sources; its README says what differs: a pthread
+  (swift-6.4.2-RELEASE sources; its README says what differs: a pthread
   thread-local, no `Observations`), compiled_synchronization a `Mutex` of
   Isomer's (all the feature libraries use of it). The mapping renames both,
   so `import Observation` and Apple's Foundation's `@_exported import
@@ -760,7 +763,7 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
 
 - **Foundation** (//foundation, `@isomer//:foundation`): built over
   swift-foundation, a Swift package of isomer's own graph
-  (third_party/swift_packages: swift-6.3.2-RELEASE's commit, through
+  (third_party/swift_packages: swift-6.4.2-RELEASE's commit, through
   rules_swift_package_manager under an extension of isomer's, since 0.40;
   the registry's Bazel module 6.3.2.isomer.2 before), with patches
   (MODULE.bazel says which and why). ICU is the Swift SDK's prebuilt one, a
