@@ -94,6 +94,32 @@ container with its own KVM, the iPhone and the Mac on slots. Left:
   Ubuntu 26.04, so Windows runs in a container of its own. An image of
   Isomer's (or these in Visor's) would save both.
 
+## Android below API 28 (2026-11-06)
+
+Swift's Android SDK (swift.org's) is built at API 28, its supported
+minimum; an app embedding Isomer may need less (minSdk 23). Draft isomer#92
+runs the Storybook on Android 6.0 with: the NDK at 23, a shim for
+libswiftCore's `strtod_l`/`strtof_l` (API 26), Isomer's Kotlin calls above
+23 behind version checks, and no RELR below 28 (rules_swift#1998).
+
+- **The SDK's API level, upstream.** Every source in swift.org's Android
+  SDK already takes older Android: the runtime (`__ANDROID_API__ < 26`: its
+  own `strtod_l`; on main float parsing calls no libc), swift-foundation
+  (`<= 23`: `getgrgid`/`getgrnam` for the `_r` forms, filemanager_shims.h)
+  and swift-corelibs-foundation (`< 28`: its own `posix_spawn`,
+  CFPlatform.c). The 28 is the SDK build's (swiftlang/swift-docker,
+  swift-ci/sdks/android/scripts/build.sh: `android_api=28`,
+  `--android-api`). The ask: a PR lowering it (23 or 24) with a Swift
+  forums post (Android workgroup) on why; built so, the fallbacks are
+  compiled in and the fortify `_chk` calls (ICU, curl, libxml2) and curl's
+  `getifaddrs` go.
+- **Isomer, either way:** shims over swift.org's SDK (#92's `strtod_l`;
+  still to add: ICU's `__fread_chk`/`__fwrite_chk`, which an app with
+  `--@isomer//foundation:internationalization` would miss at 23), or an
+  Android SDK of our own built with that script at `--android-api 23`.
+- Whether Isomer supports 23 at all is the owner's call; until then #92
+  stays a draft.
+
 ## Upstream releases, no forks
 
 The goal: every dependency at an upstream tagged release (a BCR version, a
