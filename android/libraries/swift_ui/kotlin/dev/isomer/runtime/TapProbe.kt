@@ -27,7 +27,7 @@ object TapProbe {
             if (sectionOpen && updatedSinceTap) {
                 val ms = android.os.SystemClock.uptimeMillis() - tapUpAt
                 android.util.Log.i("Isomer", "[native-tap] ${ms}ms")
-                android.os.Trace.endAsyncSection("iso-tap", 0)
+                if (android.os.Build.VERSION.SDK_INT >= 29) android.os.Trace.endAsyncSection("iso-tap", 0)
                 sectionOpen = false
                 updatedSinceTap = false
             }
@@ -49,7 +49,7 @@ object TapProbe {
                 if (dx * dx + dy * dy <= slop.toFloat() * slop && heldMs < 300) {
                     tapUpAt = android.os.SystemClock.uptimeMillis()
                     updatedSinceTap = false
-                    android.os.Trace.beginAsyncSection("iso-tap", 0)
+                    if (android.os.Build.VERSION.SDK_INT >= 29) android.os.Trace.beginAsyncSection("iso-tap", 0)
                     sectionOpen = true
                 }
             }

@@ -4,7 +4,7 @@
     package="{PACKAGE}"{VERSION_ATTRS}>
 
     <uses-sdk
-        android:minSdkVersion="28"
+        android:minSdkVersion="{MIN_SDK}"
         android:targetSdkVersion="34" />
 
     <uses-permission android:name="android.permission.INTERNET" />
