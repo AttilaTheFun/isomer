@@ -281,8 +281,8 @@ and compared with the release before it). A release is cut only from a
 main commit whose proof is in by tools/ci/proof_compare.swift, and
 uploaded as the `proof` artifact Reviews reads (proof.json, screens/,
 before/, diffs/; 90 days). What a platform draws differently from run to run is held still
-at its source (proof.py: the status bars, light appearance, window crops,
-the Mac's caret); only what can't be is listed, with why, in
+at its source (proof.py: the iPhone's status bar, Android's cropped off,
+light appearance, window crops, the Mac's caret); only what can't be is listed, with why, in
 tools/ci/proof_ignore.txt. A release is approved by publishing its tag
 (a GitHub release on a main commit whose proof is in): the Build workflow's
 `release` job then promotes that commit's iPhone and Mac Alphas to

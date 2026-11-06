@@ -30,8 +30,9 @@ iso://story/<id>): a second or two a story where a launch each took five
 to fourteen. A story that doesn't open so is launched to on its own.
 
 What changes between runs without the apps changing is held still or left
-out: the iPhone's and Android's status bars (oss's simctl override from an
-ios lease's start, SystemUI's demo mode: 9:41), and on the desktops
+out: the iPhone's status bar (oss's simctl override from an ios lease's
+start: 9:41), Android's cropped off (its demo mode held it still one run
+and not the next), and on the desktops
 everything but the app's window (a Mac's and Windows' screenshots are
 cropped to the app's frontmost window (a Mac slot's by OS Server), a Mac's
 rounded corners cut away, Linux's below GNOME's top bar and right of its
@@ -834,24 +835,27 @@ def android(review, story_list, builds):
             # adb shell joins its arguments into one line for the device's sh.
             sh(adb + ["shell", "am", "start", "-n", f"{bundle}/.MainActivity", *map(shlex.quote, arguments)])
             time.sleep(wait)
-            oss_shot(env, path)
+            shot(path)
 
-        # The status bar held still (SystemUI's demo mode), as every snapshot
-        # holds it (~/Developer/AGENTS.md): 9:41, Wi-Fi, a full battery, no
-        # cellular network (shown, the emulator drew it differently from run
-        # to run), no notifications. Twice, a few seconds apart: SystemUI may
-        # still be settling after boot.
         # Light, as every platform's shots are.
         sh(adb + ["shell", "cmd", "uimode", "night", "no"], check=False)
-        sh(adb + ["shell", "settings", "put", "global", "sysui_demo_allowed", "1"], check=False)
-        for attempt in range(2):
-            if attempt:
-                time.sleep(4)
-            for command in (["exit"], ["enter"], ["clock", "-e", "hhmm", "0941"], ["battery", "-e", "level", "100", "-e", "plugged", "false"],
-                            ["network", "-e", "wifi", "show", "-e", "level", "4", "-e", "fully", "true"],
-                            ["network", "-e", "mobile", "hide"], ["network", "-e", "nosim", "hide"],
-                            ["notifications", "-e", "visible", "false"]):
-                sh(adb + ["shell", "am", "broadcast", "-a", "com.android.systemui.demo", "-e", "command", *command], check=False)
+        # The status bar is cropped off every picture, as the desktops' shots
+        # are cropped to the app's window: SystemUI's demo mode held it still
+        # one run and not the next (the cellular icon drawn two ways, then the
+        # Wi-Fi icon gone, then no status bar at all, on one emulator image),
+        # and every such run changed every Android picture. Its height is
+        # the phone's own (the statusBars inset: 63 px on the 420 dpi phone).
+        windows = sh(adb + ["shell", "dumpsys", "window"], check=False).stdout
+        inset = re.search(r"type=statusBars frame=\[0,0\]\[\d+,(\d+)\]", windows)
+        if not inset:
+            raise SystemExit("proof: no status bar inset in the Android lease's dumpsys window")
+        status_bar = int(inset.group(1))
+
+        def shot(path):
+            oss_shot(env, path)
+            from PIL import Image
+            image = Image.open(path)
+            image.crop((0, status_bar, image.width, image.height)).save(path)
         # The first launch after an install shows the splash a while longer.
         for app in APPS:
             launcher(app, {}, 8, os.path.join(tempfile.mkdtemp(), "warm.png"))
@@ -862,7 +866,7 @@ def android(review, story_list, builds):
         switcher = Switcher(start=lambda path: launcher("storybook", {}, 6, path),
                             request=lambda story: sh(adb + ["shell", "am", "start", "-a", "android.intent.action.VIEW",
                                                             "-d", shlex.quote(f"iso://story/{story}"), bundle]),
-                            shoot=lambda path: oss_shot(env, path), settle=1.5)
+                            shoot=shot, settle=1.5)
         shoot_apps(review, "android", "Android phone (emulator)", "portrait", launcher, story_list,
                    {"open": 6, "story": 5, "run": 30}, switcher)
         for app in APPS.values():

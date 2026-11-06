@@ -35,15 +35,15 @@ iOS 26's glass restart button over 2048, in tools/ci/proof_ignore.txt.
 
 - **Reviews' Publish waits for the proof** of the release's commit (a
   change in Reviews).
-- **The full set's live stories don't hold still yet**:
-  `controls.progress` (an indeterminate spinner), `isomer.webview` (a live
-  page), `isomer.video` (a remote video), `isomer.map` (OpenStreetMap
-  tiles), `images.async` (a remote image). They need bundled content and
-  paused animations under the proof, or listed regions; two full runs
-  compared would say which really move. The full set runs only by hand.
+- **The full set's live stories:** `controls.progress`'s spinner and
+  `isomer.map`'s tiles are regions in proof_ignore.txt (2026-11-06);
+  `isomer.webview` shows its own page (#80). Still to hold still at the
+  source: the map's tiles (tiles served to the story under the proof, so
+  its markers count again), `isomer.video` (a remote video) and
+  `images.async` (a remote image). After each release, compare its proof
+  with the release before AND a second run of the same commit: whatever
+  moves without the app changing gets fixed before the next.
 - **The Pokédex reads PokéAPI live.** Its pictures have held still so far.
-- **Proofs last 90 days** (artifacts): a commit's proof could be attached
-  to its release so a later one still has it.
 - **Actions write for the Claude app**, so agents can start a full proof or
   rerun a failed job.
 - **oss**: `oss machine ssh` printed a lease's JSON, passwords included,
