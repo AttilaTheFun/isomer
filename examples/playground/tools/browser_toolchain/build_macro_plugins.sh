@@ -57,5 +57,8 @@ ln -sfn "$BUNDLE" "$WORK/sdks/$(basename "$BUNDLE")"
     --swift-sdks-path "$WORK/sdks" --swift-sdk swift-$ISO_SWIFT_RELEASE-RELEASE_wasm \
     --product MacroPlugins
 rm -f "$WORK"/*.wasm
-cp "$PKG/.build/wasm32-unknown-wasip1/release/MacroPlugins.wasm" "$WORK/MacroPlugins.wasm"
+# Where SwiftPM put it (Swift Build, 6.4's default, has its own layout).
+BIN="$("$ISO_BASE_TC/swift" build --package-path "$PKG" -c release \
+    --swift-sdks-path "$WORK/sdks" --swift-sdk swift-$ISO_SWIFT_RELEASE-RELEASE_wasm --show-bin-path)"
+cp "$BIN/MacroPlugins.wasm" "$WORK/MacroPlugins.wasm"
 ls -la "$WORK"/*.wasm

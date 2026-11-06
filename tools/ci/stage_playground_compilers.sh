@@ -19,10 +19,16 @@
 #                  as a Mac app built on Linux must
 #   android        android/playground_android_application/toolchain/: the
 #                  compiler the APK carries
+#   web            web/playground_web_application/staged_toolchain/: the
+#                  browser's compiler, as stage_bundle.sh writes it
+#                  (manifest.json, bundle.bin.gz, the gzipped binaries), which
+#                  package_site.sh --toolchain-from takes; its compiler,
+#                  linker and macro plugins are reused, the rest staged fresh
 #
 #   tools/ci/stage_playground_compilers.sh <name>…
 #
-# The proof stages the simulator's and Android's (tools/ci/proof.sh); the
+# The proof stages the simulator's, Android's, the Mac's and the browser's
+# (tools/ci/proof.sh); the
 # publishing jobs the device's, the Mac's and Android's. A folder already
 # staged from the same archive is kept; one staged by hand (a checkout of an
 # agent's: no .sha256 in it, nor, for the iPhone's, in either platform's
@@ -30,13 +36,14 @@
 # that has the files.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-IOS_SIMULATOR_TOOLCHAIN=4e23b747153a2f3b75fa91a0f9ca14bcd5a58d68af71c8d9be14ceea47386f05
-IOS_DEVICE_TOOLCHAIN=dc86db6749b40e97b5bd2f249a446edda2f38d2052ad6bdb897b9fe127a1ef72
-MACOS_TOOLCHAIN=64fcf4e249214e8249ba0e6651caed6f711f93872e9e3189c464cd2320b13cc1
-ANDROID_TOOLCHAIN=0b52a5d3322042317f661ab762cf3b123af5e2ce52cf192c95de31e9779f52c8
+IOS_SIMULATOR_TOOLCHAIN=1eb52eb470019b2ac3066a93955e562afe19d295e4b30585c73cd5892c048c4d
+IOS_DEVICE_TOOLCHAIN=d864eaa5b9f259305bf19adc6a3584093c847df896624bb09bb7a9a1d84c1157
+MACOS_TOOLCHAIN=7141924e3dfcfbacf63751f2327f256a2d35050e13979665c8612f297629a54a
+ANDROID_TOOLCHAIN=c8feabf8c6f379f4da714b9d1ed7915bfdc2cf9d02c90465bafb05278581f8b4
+WEB_TOOLCHAIN=70d0bc49c7cb2cbb9b8aa93370a6154b0343ab84d02bdfbc38e8e2292c3e8b38
 playground="$ROOT/examples/playground"
 
-[ $# -gt 0 ] || { echo "usage: tools/ci/stage_playground_compilers.sh ios-simulator|ios-device|macos|android…" >&2; exit 2; }
+[ $# -gt 0 ] || { echo "usage: tools/ci/stage_playground_compilers.sh ios-simulator|ios-device|macos|android|web…" >&2; exit 2; }
 work="$(mktemp -d "${RUNNER_TEMP:-/tmp}/playground-compilers.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 
@@ -70,7 +77,10 @@ for name in "$@"; do
         android)
             stage "$ANDROID_TOOLCHAIN" "$playground/android/playground_android_application/toolchain" \
                 "$playground/android/playground_android_application" ;;
-        *) echo "stage_playground_compilers: no compiler named $name (ios-simulator, ios-device, macos, android)" >&2; exit 2 ;;
+        web)
+            stage "$WEB_TOOLCHAIN" "$playground/web/playground_web_application/staged_toolchain" \
+                "$playground/web/playground_web_application" ;;
+        *) echo "stage_playground_compilers: no compiler named $name (ios-simulator, ios-device, macos, android, web)" >&2; exit 2 ;;
     esac
     echo "stage_playground_compilers: $name staged"
 done
