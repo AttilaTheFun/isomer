@@ -34,9 +34,12 @@
 #   before merging, and how a pull request's build reaches a phone. The
 #   server takes it as an AdHoc build. No proof then: a run by hand is the
 #   proof or the AdHoc build, not both;
-# - release: the same with --config=prod for a push to a release branch
-#   (release-MAJOR-MINOR, cut from a main commit), which the server takes as
-#   production.
+# - release: when the owner publishes a GitHub release (a v* tag on a main
+#   commit with its proof): the iPhone's and the Mac's Alphas of that commit
+#   promoted to production by the server (nothing Apple rebuilt), Android's
+#   built with --config=prod and published, and the release given its
+#   assets: the proof, the Mac apps' disk images, the Android apps and the
+#   iPhone apps for the simulator.
 # No signing key, notary key or password here: the publishing jobs' OIDC
 # token says where their builds came from, and which commit's version they
 # are given (AttilaTheFun/applications' docs/CI.md).
@@ -47,9 +50,8 @@
 name: Build
 on:
   push:
-    # main's commits, and the owner's releases: a release-MAJOR-MINOR branch,
-    # cut from a main commit.
-    branches: [main, 'release-*']
+    # main's commits (a release is a published GitHub release, below).
+    branches: [main]
   pull_request:
   release:
     types: [published]
@@ -298,49 +300,74 @@ jobs:
           APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
         run: tools/ci/publish_from_ci.sh --notes-file "$RUNNER_TEMP/notes.md" .ci/packages/*.zip .ci/packages/*.ipa .ci/packages/*.apk
 
-  # Production, from a push to a release branch (release-MAJOR-MINOR) the
-  # owner cut from a main commit: the server takes the token's ref
-  # (refs/heads/release-*) as production.
-  #
-  # A gap, as in reviews': Production should be the commit's Alpha promoted
-  # (its BuildVariant rewritten to Production and signed again), not built
-  # again (Logan, 2026-11-02). Until the server promotes, this builds the
-  # release's commit again with --config=prod, as reviews' release job does.
+  # A release: when the owner publishes a GitHub release (its v0.40.N tag on
+  # a main commit, whose proof is in). Nothing Apple is rebuilt: the
+  # iPhone's and the Mac's Alphas main's CI published of that commit (the
+  # builds the owner tested) are promoted by Applications Server, stamped
+  # Production and signed again (tools/ci/promote_from_ci.sh). Android's
+  # are built for production and published, the server signing none. The
+  # release then carries its proof, the Mac apps' disk images, the Android
+  # apps and the iPhone apps for the simulator (tools/ci/release_assets.sh).
   release:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release-')
+    if: github.event_name == 'release'
     runs-on: [self-hosted, isomer-jit]
     timeout-minutes: 120
     permissions:
-      contents: read
+      # The release's assets.
+      contents: write
+      # Its commit's proof artifact.
+      actions: read
+      # The OIDC token Applications Server checks: a v* tag's, by a releaser.
       id-token: write
     steps:
-      # The release branch's commit, with main's history beside it.
+      # The tag's commit, with main's history beside it.
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      # A release is a main commit: a branch whose commit isn't on main
-      # stops here.
+      # A release is a main commit: a tag whose commit isn't on main stops here.
       - name: The release is a main commit
         run: git merge-base --is-ancestor HEAD origin/main || { echo "::error::$GITHUB_REF_NAME's commit is not on main"; exit 1; }
-      # From the same line as the Alphas: the release's commit is main's, so
-      # the release is given the version main's Alpha of it was.
+      # No release without its proof: found first, before anything is promoted.
+      - name: Its proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: tools/ci/release_assets.sh proof "$GITHUB_REF_NAME" .ci/release
+      # Untrusted text reaches the shell through env, never ${{ }} in run.
+      - name: Notes
+        env:
+          BODY: ${{ github.event.release.body }}
+        run: printf '%s\n' "$BODY" > "$RUNNER_TEMP/notes.md"
+      - name: The iPhone's and the Mac's, promoted
+        env:
+          APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
+        run: tools/ci/promote_from_ci.sh --notes-file "$RUNNER_TEMP/notes.md" --dmg-dir .ci/release
+      # Android's and the simulator's builds: the version main's Alpha of
+      # the commit was (the server's answer for the token's commit).
       - name: Version
         env:
           APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
         run: tools/ci/stamp_apps.sh
       - name: The Playground's compilers
-        run: tools/ci/stage_playground_compilers.sh ios-device macos android
-      - name: Build
+        run: tools/ci/stage_playground_compilers.sh ios-simulator android
+      - name: Android's, for production
         env:
           ISOMER_CI_VOLUME: isomer-ci-publish
-        run: exec tools/ci/container_build.sh package .ci/packages --config=prod $PUBLISHED_APPS
-      - name: The icons' dark appearance
-        run: tools/ci/check_mac_icons.sh .ci/packages
-      - name: Notes
-        env:
-          BODY: ${{ github.event.head_commit.message }}
-        run: printf '%s\n' "$BODY" > "$RUNNER_TEMP/notes.md"
-      - name: Publish
+        run: >-
+          tools/ci/container_build.sh package .ci/android --config=prod --compilation_mode=opt
+          //android/storybook_android_application:storybook_android_application_apk
+          //playground/android/playground_android_application:playground_android_application_apk
+      - name: Android's, published
         env:
           APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
-        run: tools/ci/publish_from_ci.sh --notes-file "$RUNNER_TEMP/notes.md" .ci/packages/*.zip .ci/packages/*.ipa .ci/packages/*.apk
+        run: tools/ci/publish_from_ci.sh --notes-file "$RUNNER_TEMP/notes.md" .ci/android/*.apk
+      - name: The iPhone's, for the simulator
+        env:
+          ISOMER_CI_VOLUME: isomer-ci-publish
+        run: >-
+          tools/ci/container_build.sh package .ci/simulator --compilation_mode=opt --ios_multi_cpus=sim_arm64
+          //apple/storybook_ios_application:storybook_ios_sim_application
+          //playground/apple/playground_ios_application:playground_ios_sim_application
+      - name: The release's assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: tools/ci/release_assets.sh upload "$GITHUB_REF_NAME" .ci/release .ci/android .ci/simulator

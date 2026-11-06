@@ -4,9 +4,9 @@
 # in development; a release may not, and Reviews holds a release until its
 # commit's `pins` check passes.
 #
-# On isomer's self-hosted runner (a Mac that runs OS Server, as build.yml's):
-# the script is sh, git, grep and awk, which the Mac has, so it runs there
-# and leases nothing.
+# The script is sh, git, grep and awk: on GitHub's own runner for this
+# public repository, on OS Server's single-use Linux containers for a
+# private copy.
 name: Pins
 on:
   push:
@@ -16,7 +16,7 @@ permissions:
   contents: read
 jobs:
   pins:
-    runs-on: [self-hosted, isomer-containers]
+    runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted", "isomer-jit"]') || 'ubuntu-24.04' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5

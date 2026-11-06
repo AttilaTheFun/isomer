@@ -11,12 +11,11 @@
 # compiler, and building it needs the compiler built by
 # examples/playground/tools/browser_toolchain, which no runner has.
 #
-# On isomer's self-hosted runner (a Mac that runs OS Server, as build.yml's),
-# with nothing of the Mac's but its own curl and tar: the asset comes from
-# the release's public download URL (no gh), and the Pages artifact is made
-# here rather than by upload-pages-artifact, whose macOS step runs GNU tar
-# (gtar), which a runner may not count on. The site is already dereferenced
-# (package_site.sh), so the system's tar archives it as is.
+# On GitHub's own runner for this public repository (OS Server's single-use
+# Linux containers for a private copy), with curl and tar alone: the asset comes from the
+# release's public download URL (no gh), and the Pages artifact is made
+# here, the plain tar upload-pages-artifact would make. The site is already
+# dereferenced (package_site.sh), so tar archives it as is.
 #
 # Runs when a release is published (attach the asset to the draft before
 # publishing it), or by hand for any release that carries one:
@@ -45,7 +44,7 @@ concurrency:
   group: pages
 jobs:
   deploy:
-    runs-on: [self-hosted, isomer-containers]
+    runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted", "isomer-jit"]') || 'ubuntu-24.04' }}
     timeout-minutes: 30
     environment:
       name: github-pages
@@ -67,12 +66,16 @@ jobs:
           test -f site/index.html && test -f site/playground/toolchain/manifest.json
       # What upload-pages-artifact makes: the site as one plain tar,
       # artifact.tar, in an artifact named github-pages, which deploy-pages
-      # takes. COPYFILE_DISABLE and --no-mac-metadata keep the Mac's
-      # extended attributes (`._` files) out of it.
+      # takes. On a Mac (run by hand there), COPYFILE_DISABLE and
+      # --no-mac-metadata keep its extended attributes (`._` files) out.
       - name: Archive the site
         run: |
-          COPYFILE_DISABLE=1 tar --no-mac-metadata -cf "$RUNNER_TEMP/artifact.tar" \
-            -C "$RUNNER_TEMP/site" --exclude=.git --exclude=.github .
+          if tar --version 2> /dev/null | grep -q GNU; then
+            tar -cf "$RUNNER_TEMP/artifact.tar" -C "$RUNNER_TEMP/site" --exclude=.git --exclude=.github .
+          else
+            COPYFILE_DISABLE=1 tar --no-mac-metadata -cf "$RUNNER_TEMP/artifact.tar" \
+              -C "$RUNNER_TEMP/site" --exclude=.git --exclude=.github .
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: github-pages
