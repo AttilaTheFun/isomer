@@ -683,7 +683,7 @@ override_repo(isomer_swift_deps, swiftpkg_swift_collections = "swiftpkg_swift_co
 ```
 
 Nothing of isomer's needs an override in your MODULE.bazel since 0.40 (its
-rules_swift, 4.2.2.isomer.1, sorts above the version rules_applecross asks
+rules_swift, 4.2.2.isomer.3, sorts above the version rules_applecross asks
 for); you still register the toolchains, and only those of the platforms
 you build: an app for iOS, the Mac and Android declares the host toolchain
 and `swift.android_sdk()` and registers the Android Swift toolchains, with
@@ -762,38 +762,21 @@ is also overridable per call: `boot({ wasi: { clock_time_get, ... } })`.
 
 ### Android below API 28
 
-Swift's Android SDK (swift.org's) supports API 28 and later, and so do
-isomer's examples. An app that must reach older phones (minSdk 23) can
-embed Isomer there, at its own risk (Isomer's Storybook runs on Android
-6.0; swift.org doesn't test below 28):
+Swift's Android SDK supports API 23 and later since Swift 6.4 (swift.org
+builds it at 23, with NDK r30), and so does Isomer since 0.41. Isomer's own
+apps stay at 28; an app that must reach older phones sets:
 
 - its NDK at that level: `android.ndk(api_level = 23, ...)` in its
-  MODULE.bazel (hermetic_android_toolchains), and `isomer_android_app(...,
-  min_sdk_version = 23)` (or its own manifest);
-- rules_swift with isomer's patch, which links Android libraries below API
-  28 without RELR relocations (Android's loader reads those from 28: a
-  library linked with them crashes loading). rules_swift itself refuses
-  targets below 28 (rules_swift#1998), so this is a patch of isomer's,
-  over the registry's version. An override's patches must be the root
-  module's own files: copy isomer's tools/patches/rules_swift_android_below_28.patch
-  into your repository (it is for the rules_swift version isomer's
-  release asks for):
+  MODULE.bazel (hermetic_android_toolchains);
+- `isomer_android_app(..., min_sdk_version = 23)` (or its own manifest's
+  minSdkVersion).
 
-  ```starlark
-  single_version_override(
-      module_name = "rules_swift",
-      patch_strip = 1,
-      patches = ["//third_party:rules_swift_android_below_28.patch"],
-  )
-  ```
-
-What else the SDK's prebuilt libraries need of an older Android, isomer
-supplies (android/libraries/libc_compat: `strtod_l` and `strtof_l` for the
-Swift runtime below 26, `__fread_chk` and `__fwrite_chk` for ICU below 24),
-and its Android runtime calls newer APIs only behind version checks.
-Not below 26: Swift's C++ interop (libc++'s `std` module and bionic's
-older headers clash). Upstream: the SDK's sources already take older
-Android; building it lower is the ask (TODO.md).
+Nothing else: the registry's rules_swift (rules_swift#1998) links Android
+libraries below API 28 without RELR relocations, which Android's loader
+reads only from 28, and fails an Android target below the Swift SDK's own
+minimum; Isomer's Android runtime calls newer APIs only behind version
+checks. Not below 26: Swift's C++ interop (libc++'s `std` module and
+bionic's older headers clash).
 
 ## Requirements
 

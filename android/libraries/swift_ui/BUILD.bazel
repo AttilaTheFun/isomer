@@ -53,7 +53,6 @@ swift_library(
         "//swift_gpu/android:swift_gpu",
         "//frameworks/core_transferable",
         "//frameworks/uniform_type_identifiers",
-        "//android/libraries/libc_compat",
     ] + ["//:foundation"] + [
         # `Map` engine injection point: defaults to an empty stub; a consumer
         # with its own swift_map dep points the flag at the real engine to

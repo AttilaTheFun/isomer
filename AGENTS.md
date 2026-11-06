@@ -53,7 +53,7 @@ nothing under `swift_ffi/` may depend on anything outside it but Foundation,
 and so on up. A consumer pins ONE version of isomer (by version from the
 project's registry, AttilaTheFun/bazel_registry, from 0.36.0; a commit
 between releases) and lists that registry before the BCR in its .bazelrc:
-no override of isomer's dependencies since 0.40 (rules_swift 4.2.2.isomer.1
+no override of isomer's dependencies since 0.40 (rules_swift 4.2.2.isomer.3
 sorts above the 4.2.2 rules_applecross asks for). FlatBuffers is a registry version with isomer's patches since
 0.40 (25.12.19.isomer.1): no override of it, nor of rules_foreign_cc.
 
@@ -83,10 +83,10 @@ minor (MAJOR.MINOR.0) before the release's commit.
 by version at a release (a commit is fine on a branch, or on main between
 releases). Bazel modules come from bazel_registry, before the BCR: isomer's
 releases, visor's, and the forks isomer carries until upstream takes their
-changes, as patched versions (rules_swift 4.2.2.isomer.1: upstream 4.2.2
-with rules_swift#1989, #1860, #1990 and #1995, each a patch taken from the
-PR's head). A change to a fork or to those
-patches is a new entry (.isomer.2), made with the registry's
+changes, as patched versions (rules_swift 4.2.2.isomer.3: upstream 4.2.2
+with rules_swift#1989, #1860, #1990, #1995, #1985 and #1998, each a patch
+taken from the PR's head). A change to a fork or to those
+patches is a new entry (.isomer.4), made with the registry's
 tools/add_version.py --fork and approved there like any version. Swift
 packages are SwiftPM's, through rules_swift_package_manager, never Bazel
 modules. tools/released_pins.sh says whether every pin is a released
@@ -389,7 +389,7 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   `include()` in MODULE.bazel, which Bazel 8 consumers choke on
   ("include() ... can only be used in the root module"). Upstream will bump
   their minimum eventually; it has not been raised with them.
-- **rules_swift 4.2.2.isomer.1** from the registry: upstream 4.2.2 and four
+- **rules_swift 4.2.2.isomer.3** from the registry: upstream 4.2.2 and six
   pull requests (MODULE.bazel). It sorts above the 4.2.2 rules_applecross
   asks for, so MVS keeps it with no override in any root (until 0.40 the
   fork was 4.1.0.isomer.N, held by an override every consumer repeated).

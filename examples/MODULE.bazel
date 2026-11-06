@@ -40,9 +40,9 @@ local_path_override(
 # --- What isomer needs from its consumer -------------------------------
 
 # rules_swift: isomer's patched version comes from the project's registry
-# (.bazelrc lists it before the BCR), patches and all: 4.2.2.isomer.1, which
+# (.bazelrc lists it before the BCR), patches and all: 4.2.2.isomer.3, which
 # sorts above the 4.2.2 rules_applecross asks for, so it needs no override.
-bazel_dep(name = "rules_swift", version = "4.2.2.isomer.2")
+bazel_dep(name = "rules_swift", version = "4.2.2.isomer.3")
 
 # swift_ffi, swift_gpu and swift_map are part of the isomer module
 # (`@isomer//swift_ffi/...`, `@isomer//swift_gpu/...`, `@isomer//swift_map/...`):

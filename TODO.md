@@ -129,7 +129,7 @@ project's own modules. Every change we carry has an upstream PR now
 (2026-11-04, drafts unless noted); each patch or fork goes when a release
 has it.
 
-- **rules_swift** (the registry's 4.2.2.isomer.1: upstream 4.2.2 and a
+- **rules_swift** (the registry's 4.2.2.isomer.3: upstream 4.2.2 and a
   patch per PR, from its head):
   - bazelbuild/rules_swift#1860 (open): the metadata-driven wasm SDK and its
     wasip1-threads variant;
@@ -138,6 +138,9 @@ has it.
   - #1989 (merged after 4.2.2): the wasm SDK's clang resource directory for
     C compiles;
   - #1995 (open): Swift/C++ interop on Android;
+  - #1985 (merged after 4.2.2): swift.org's release metadata through 6.4.2;
+  - #1998 (open): Android down to the Swift SDK's own minimum (6.4's: 23),
+    no RELR below 28;
   - #1988 (draft): `swift.windows_sdk`, Windows built on Linux with the
     builder's own SDKs (Isomer's tools/windows, upstream's
     tools/windows_sdk), which tools/windows then gives way to.
