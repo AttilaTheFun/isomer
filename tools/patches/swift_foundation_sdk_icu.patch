@@ -1,6 +1,6 @@
 --- a/Package.swift
 +++ b/Package.swift
-@@ -185,7 +185,6 @@
+@@ -190,7 +190,6 @@
              dependencies: [
                  .target(name: "FoundationEssentials"),
                  .target(name: "_FoundationCShims"),
@@ -8,10 +8,10 @@
              ],
              exclude: [
                  "String/CMakeLists.txt",
-@@ -200,7 +199,10 @@
-             cSettings: wasiLibcCSettings,
+@@ -206,7 +205,10 @@
              swiftSettings: [
-                 .enableExperimentalFeature("AccessLevelOnImport")
+                 .enableExperimentalFeature("AccessLevelOnImport"),
+                 .enableExperimentalFeature("Lifetimes"),
 -            ] + availabilityMacros + featureSettings + wasiLibcSwiftSettings
 +            ] + availabilityMacros + featureSettings + wasiLibcSwiftSettings,
 +            linkerSettings: [

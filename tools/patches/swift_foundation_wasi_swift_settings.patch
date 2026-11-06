@@ -1,6 +1,6 @@
 --- a/Package.swift
 +++ b/Package.swift
-@@ -84,6 +84,14 @@
+@@ -84,6 +84,15 @@
      .define("_WASI_EMULATED_MMAN", .when(platforms: [.wasi])),
  ]
  
@@ -9,16 +9,17 @@
 +        "-Xcc", "-D_WASI_EMULATED_GETPID",
 +        "-Xcc", "-D_WASI_EMULATED_SIGNAL",
 +        "-Xcc", "-D_WASI_EMULATED_MMAN",
++        "-Xcc", "-D_GNU_SOURCE",
 +    ], .when(platforms: [.wasi])),
 +]
 +
  let testOnlySwiftSettings: [SwiftSetting] = [
      .define("FOUNDATION_EXIT_TESTS", .when(platforms: [.macOS, .linux, .openbsd, .windows]))
  ]
-@@ -152,9 +160,11 @@
-             .enableExperimentalFeature("AllowUnsafeAttribute"),
+@@ -154,9 +163,11 @@
              .enableExperimentalFeature("BuiltinModule"),
-             .enableExperimentalFeature("AccessLevelOnImport")
+             .enableExperimentalFeature("AccessLevelOnImport"),
+             .define("DATA_LEGACY_ABI", .when(platforms: [.macOS, .iOS, .tvOS, .watchOS, .visionOS]))
 -          ] + availabilityMacros + featureSettings,
 +          ] + availabilityMacros + featureSettings + wasiLibcSwiftSettings,
            linkerSettings: [
@@ -28,10 +29,10 @@
            ]
          ),
          .testTarget(
-@@ -190,7 +200,7 @@
-             cSettings: wasiLibcCSettings,
+@@ -195,7 +206,7 @@
              swiftSettings: [
-                 .enableExperimentalFeature("AccessLevelOnImport")
+                 .enableExperimentalFeature("AccessLevelOnImport"),
+                 .enableExperimentalFeature("Lifetimes"),
 -            ] + availabilityMacros + featureSettings
 +            ] + availabilityMacros + featureSettings + wasiLibcSwiftSettings
          ),

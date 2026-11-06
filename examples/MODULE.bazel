@@ -42,7 +42,7 @@ local_path_override(
 # rules_swift: isomer's patched version comes from the project's registry
 # (.bazelrc lists it before the BCR), patches and all: 4.2.2.isomer.1, which
 # sorts above the 4.2.2 rules_applecross asks for, so it needs no override.
-bazel_dep(name = "rules_swift", version = "4.2.2.isomer.1")
+bazel_dep(name = "rules_swift", version = "4.2.2.isomer.2")
 
 # swift_ffi, swift_gpu and swift_map are part of the isomer module
 # (`@isomer//swift_ffi/...`, `@isomer//swift_gpu/...`, `@isomer//swift_map/...`):
@@ -67,20 +67,13 @@ bazel_dep(name = "flatbuffers", version = "25.12.19.isomer.1")
 swift = use_extension("@rules_swift//swift:extensions.bzl", "swift")
 swift.toolchain(
     name = "swift_toolchain",
-    swift_version = "6.3.2",
+    swift_version = "6.4.2",
 )
 swift.wasm_sdk()
-# The wasi-threads SDK beside it (wasm32-unknown-wasip1-threads; Swift's
-# concurrency on a thread pool of guest threads): what a reactor built for
-# `@isomer//swift_ffi/rules:wasm32-wasip1-threads` compiles with. swift.org
-# publishes none; this is AttilaTheFun/swift's build of 6.3.2 (branch
-# threads-sdk-6.3.2), the toolchain's own sources with swiftlang/swift#92018
-# and the thread-pool executor of swift-platform-executors#30.
-swift.wasm_sdk(
-    sha256 = "dda937f5f31d69ebf8609b430f3818020f5f3e683a72dd91d0875d8c814e0c48",
-    threads = True,
-    url = "https://github.com/AttilaTheFun/swift/releases/download/threads-sdk-6.3.2-1/swift-6.3.2-RELEASE_wasm-threads.artifactbundle.tar.gz",
-)
+# No wasi-threads SDK beside it since 0.41: Isomer's was a build of
+# Swift 6.3.2 with swiftlang/swift#92018, which reaches a release in 6.5;
+# reactors built for `@isomer//swift_ffi/rules:wasm32-wasip1-threads` wait
+# for it (TODO.md).
 swift.android_sdk()
 use_repo(
     swift,
@@ -92,8 +85,6 @@ use_repo(
 register_toolchains(
     "@swift_toolchain//:cc_toolchain_wasm32_xcode",
     "@swift_toolchain//:swift_toolchain_wasm32_xcode",
-    "@swift_toolchain//:cc_toolchain_wasm32_threads_xcode",
-    "@swift_toolchain//:swift_toolchain_wasm32_threads_xcode",
     "@swift_toolchain//:swift_toolchain_android_aarch64_xcode",
     "@swift_toolchain//:swift_toolchain_android_x86_64_xcode",
 )
@@ -154,7 +145,7 @@ register_toolchains(
 
 # The hermetic Android NDK/SDK (the extension requires root-module tags even
 # for Apple-only builds; accept the licenses in .bazelrc).
-bazel_dep(name = "hermetic_android_toolchains", version = "0.1.1")
+bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0")
 # Any Linux takes Google's x86_64 SDK and NDK tools: an arm64 Linux (a
 # container on a Mac) runs them under Rosetta, with x86_64 glibc beside its
 # own. (Only a root module's overrides apply.)
@@ -163,14 +154,16 @@ single_version_override(
     patch_strip = 1,
     patches = ["//tools/patches:hermetic_android_toolchains_linux_any_cpu.patch"],
 )
-android = use_extension("@hermetic_android_toolchains//:extensions.bzl", "android")
+# A dev dependency (hermetic_android_toolchains 0.5.0 reports its repositories
+# so; it reads the root module's tags alone): each root declares its own.
+android = use_extension("@hermetic_android_toolchains//:extensions.bzl", "android", dev_dependency = True)
 android.sdk(
     build_tools_version = "35.0.0",
     version = "35",
 )
 android.ndk(
     api_level = 28,
-    version = "r27c",
+    version = "r30",
 )
 use_repo(android, "androidndk", "androidsdk")
 
@@ -180,12 +173,14 @@ bazel_dep(name = "rules_android", version = "0.7.3")
 rules_android_sdk = use_extension(
     "@rules_android//rules/android_sdk_repository:rule.bzl",
     "android_sdk_repository_extension",
+    dev_dependency = True,
 )
 override_repo(rules_android_sdk, "androidsdk")
 
 register_toolchains(
     "@androidndk//:all",
     "@androidsdk//:all",
+    dev_dependency = True,
 )
 
 # --- Signing -------------------------------------------------------------------
