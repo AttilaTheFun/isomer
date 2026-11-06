@@ -115,8 +115,9 @@ has it.
   - #1988 (draft): `swift.windows_sdk`, Windows built on Linux with the
     builder's own SDKs (Isomer's tools/windows, upstream's
     tools/windows_sdk), which tools/windows then gives way to.
-  - explicit modules (`swift.emit_c_module` + `swift.use_c_modules`), raised
-    as issues by the Upstream session (2026-11-06): on the non-Xcode
+  - explicit modules (`swift.emit_c_module` + `swift.use_c_modules`):
+    bazelbuild/rules_swift#1909 (the non-Xcode toolchains; our Android and
+    wasm findings added) and #1997 (C++ on Apple). On the non-Xcode
     toolchains (Linux, Android, wasm) no C module is precompiled and no
     system module (SwiftShims, the libc module) supplied, though implicit
     module maps are turned off ("no such module", "missing required module
