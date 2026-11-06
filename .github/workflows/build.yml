@@ -162,6 +162,8 @@ jobs:
           name: android-test-apk
           path: .ci/android
       - name: The Android Storybook's tests
+        env:
+          ISOMER_ANDROID_TEST_API: "23"
         run: exec tools/ci/hosted_android_test.sh .ci/android/storybook.apk .ci/platform-tests/android
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}

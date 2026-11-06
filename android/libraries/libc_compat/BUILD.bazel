@@ -1,0 +1,12 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+# What the Swift Android SDK's runtime (built at API 28) needs of bionic
+# that an older API level lacks: linked into every Android Swift binary of
+# Isomer's, empty at API 26 and above.
+cc_library(
+    name = "libc_compat",
+    srcs = ["strto_l.c"],
+    alwayslink = True,
+    target_compatible_with = ["@platforms//os:android"],
+    visibility = ["//visibility:public"],
+)

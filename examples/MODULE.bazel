@@ -43,6 +43,12 @@ local_path_override(
 # (.bazelrc lists it before the BCR), patches and all: 4.2.2.isomer.1, which
 # sorts above the 4.2.2 rules_applecross asks for, so it needs no override.
 bazel_dep(name = "rules_swift", version = "4.2.2.isomer.1")
+# Spike: no RELR below API 28 (its loader ignores it), until rules_swift has it.
+single_version_override(
+    module_name = "rules_swift",
+    patch_strip = 1,
+    patches = ["//tools/patches:rules_swift_android_relr_api.patch"],
+)
 
 # swift_ffi, swift_gpu and swift_map are part of the isomer module
 # (`@isomer//swift_ffi/...`, `@isomer//swift_gpu/...`, `@isomer//swift_map/...`):
@@ -169,7 +175,7 @@ android.sdk(
     version = "35",
 )
 android.ndk(
-    api_level = 28,
+    api_level = 23,
     version = "r27c",
 )
 use_repo(android, "androidndk", "androidsdk")

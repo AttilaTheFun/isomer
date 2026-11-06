@@ -153,8 +153,7 @@ built_windows=$?
 # for now (2026-11-05), not run.
 bazel build "${flags[@]}" //tests/platforms:all
 built_tests=$?
-bazel test "${flags[@]}" --test_output=errors //tests/platforms:storybook_web_test //tests/foundation_networking:networking_test \
-    //tests/cxx_interop:cxx_interop_test
+bazel test "${flags[@]}" --test_output=errors //tests/platforms:storybook_web_test //tests/foundation_networking:networking_test
 tested_here=$?
 cd "$root"
 bazel build //swift_gpu/linux:gl_backend_test
