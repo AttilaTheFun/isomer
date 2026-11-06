@@ -29,8 +29,12 @@ sudo udevadm trigger --name-match=kvm
 # would take for a failure.
 image="system-images;android-34;default;x86_64"
 { yes || true; } | "$sdk/cmdline-tools/latest/bin/sdkmanager" --install emulator platform-tools "$image" > /dev/null
+# The AVD where both avdmanager and the emulator look (the runner's own
+# defaults differ).
+export ANDROID_AVD_HOME="$HOME/.android/avd"
+mkdir -p "$ANDROID_AVD_HOME"
 echo no | "$sdk/cmdline-tools/latest/bin/avdmanager" create avd --force -n isomer -k "$image" > /dev/null
-config="$HOME/.android/avd/isomer.avd/config.ini"
+config="$ANDROID_AVD_HOME/isomer.avd/config.ini"
 sed -i -E '/^(hw\.lcd\.(width|height|density)|hw\.keyboard|hw\.mainKeys) *=/d' "$config"
 printf '%s\n' hw.lcd.width=1080 hw.lcd.height=1920 hw.lcd.density=420 hw.keyboard=yes hw.mainKeys=no >> "$config"
 
