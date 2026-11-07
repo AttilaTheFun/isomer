@@ -10,7 +10,7 @@ missing/<Module>.md lists each module's missing declarations one by one, with Ap
 |---|---|---|---|---|---|---|
 | [CoreGraphics](CoreGraphics.md) | 1357 | 425 (31%) | 627 | 303 | 2 | [missing/CoreGraphics.md](missing/CoreGraphics.md) |
 | [Foundation](Foundation.md) | 12079 | 5056 (42%) | 3555 | 3468 | 0 | [missing/Foundation.md](missing/Foundation.md) |
-| [SwiftUI](SwiftUI.md) | 7924 | 2107 (27%) | 511 | 5306 | 0 | [missing/SwiftUI.md](missing/SwiftUI.md) |
+| [SwiftUI](SwiftUI.md) | 7924 | 2259 (29%) | 511 | 5154 | 0 | [missing/SwiftUI.md](missing/SwiftUI.md) |
 | [Metal](Metal.md) | 3580 | 860 (24%) | 1156 | 1563 | 1 | [missing/Metal.md](missing/Metal.md) |
 | [CoreTransferable](CoreTransferable.md) | 83 | 1 (1%) | 2 | 80 | 0 | [missing/CoreTransferable.md](missing/CoreTransferable.md) |
 | [Combine](Combine.md) | 1249 | 1249 (100%) | 0 | 0 | 0 | none |

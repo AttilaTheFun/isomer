@@ -1,12 +1,37 @@
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
 package(default_visibility = ["//visibility:public"])
 
 exports_files([
+    "aar_manifest.xml.tpl",
     "debug.keystore",
     "defs.bzl",
     "extensions.bzl",
     "main_activity.kt.tpl",
     "manifest.xml.tpl",
 ])
+
+# An app's Swift linked against Isomer's shared platform library
+# (libisomer_platform.so: the Swift runtime, Foundation and Isomer), which
+# the app ships beside it, rather than whole (defs.bzl's
+# isomer_android_library; README, "One platform library for several apps").
+bool_flag(
+    name = "shared_platform",
+    build_setting_default = False,
+)
+
+config_setting(
+    name = "shared_platform_on",
+    flag_values = {":shared_platform": "True"},
+)
+
+# isomer_android_aar's assembly (defs.bzl): the classes, the libraries, the
+# manifest and the consumer rules zipped as an AAR.
+sh_binary(
+    name = "assemble_aar",
+    srcs = ["assemble_aar.sh"],
+)
 
 # Public aliases for the Maven artifacts example/consumer BENCH harnesses use
 # directly (the app macros reach @rules_android_maven internally). The maven

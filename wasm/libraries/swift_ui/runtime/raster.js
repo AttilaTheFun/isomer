@@ -122,6 +122,31 @@ export function createRasterHost({ scale = 1, invalidate = () => {} } = {}) {
     return out;
   }
 
+  // The gradient over the whole canvas: an elliptical one (a radial one
+  // with "ell", its radii fractions of the bounds) drawn as a circle in a
+  // space squashed to the bounds' proportions.
+  function fillGradient(ctx, spec, w, h) {
+    const ell = spec.kind === "radial" && Array.isArray(spec.ell) ? spec.ell : null;
+    if (!ell || w <= 0 || h <= 0) {
+      applyGradient(ctx, spec, w, h);
+      ctx.fillRect(0, 0, w, h);
+      return;
+    }
+    const center = spec.c ?? [0.5, 0.5];
+    const cx = center[0] * w, cy = center[1] * h, squash = h / w;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(1, squash);
+    const gradient = ctx.createRadialGradient(0, 0, Math.max(ell[0] * w, 0), 0, 0, Math.max(ell[1] * w, 0.01));
+    for (const stop of spec.stops ?? []) {
+      const [r, g, b, a] = stop.c;
+      gradient.addColorStop(Math.min(1, Math.max(0, stop.l ?? 0)), cssColor(r, g, b, a));
+    }
+    ctx.fillStyle = gradient;
+    ctx.fillRect(-cx, -cy / squash, w, h / squash);
+    ctx.restore();
+  }
+
   function applyGradient(ctx, spec, w, h) {
     // The runtime's schema (shared/swift_ui_core/Paint.swift):
     // {kind: "solid"|"linear"|"radial"|"angular", stops: [{c: [r,g,b,a], l}],
@@ -190,8 +215,7 @@ export function createRasterHost({ scale = 1, invalidate = () => {} } = {}) {
           ctx.beginPath();
           ctx.roundRect(0, 0, w, h, radius);
           ctx.clip();
-          applyGradient(ctx, spec.gradient, w, h);
-          ctx.fillRect(0, 0, w, h);
+          fillGradient(ctx, spec.gradient, w, h);
         });
       }
       if (spec.kind === "shadow") {

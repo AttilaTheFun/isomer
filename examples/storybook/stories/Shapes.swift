@@ -30,6 +30,10 @@ extension StoryCatalog {
             summary: "The same gradients written as shape styles, .linearGradient(…), .radialGradient(…) and .conicGradient(…), where a fill or foreground style takes them, from stops as well as colours."
         ) { GradientStylesStory() },
         Story(
+            "shapes.elliptical", "Elliptical gradients",
+            summary: "A radial gradient stretched to its shape's bounds (EllipticalGradient, its radii fractions of them), and a colour's own gradient (Color.gradient), a fill lighter at the top."
+        ) { EllipticalGradientsStory() },
+        Story(
             "shapes.rotation", "Rotated shapes",
             summary: "A shape turned about its centre or a corner with rotation(_:anchor:): still a shape, so it fills and strokes like any other."
         ) { RotatedShapesStory() },
@@ -188,6 +192,35 @@ struct GradientStylesStory: View {
             Circle()
                 .fill(.conicGradient(colors: [.orange, .yellow, .orange], center: .center))
                 .frame(width: 80, height: 80)
+        }
+    }
+}
+// end story
+
+// story: shapes.elliptical
+struct EllipticalGradientsStory: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 12) {
+                Rectangle()
+                    .fill(EllipticalGradient(colors: [.yellow, .orange, .red]))
+                    .frame(width: 140, height: 70)
+                Capsule()
+                    .fill(.ellipticalGradient(colors: [.white, .blue], center: .center,
+                                              startRadiusFraction: 0.1, endRadiusFraction: 0.6))
+                    .frame(width: 120, height: 50)
+            }
+            HStack(spacing: 12) {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.green.gradient)
+                    .frame(width: 90, height: 60)
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.purple.gradient)
+                    .frame(width: 90, height: 60)
+                Circle()
+                    .fill(.linearGradient(Color.pink.gradient, startPoint: .leading, endPoint: .trailing))
+                    .frame(width: 60, height: 60)
+            }
         }
     }
 }

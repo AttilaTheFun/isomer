@@ -165,6 +165,12 @@ final class GeneratorTests: XCTestCase {
             javaPackage: "dev.example.greeter", javaClass: "Greeter", libraryName: "greeter")
         XCTAssertTrue(kotlin.contains("package dev.example.greeter"))
         XCTAssertTrue(kotlin.contains("swiftffi.NativeLibraries.load(\"greeter\")"))
+        // A library linked against a shared platform loads it first.
+        let shared = try Generator(module: module).artifact(
+            kind: .kotlin, moduleName: "Greeter", javaPackage: "dev.example.greeter",
+            javaClass: "Greeter", libraryName: "greeter", preloadLibraries: ["platform"])
+        XCTAssertTrue(shared.contains(
+            "swiftffi.NativeLibraries.load(\"platform\")\n    swiftffi.NativeLibraries.load(\"greeter\")"))
         XCTAssertTrue(kotlin.contains("Counter"))
         // One ordinal-dispatch external per interface.
         XCTAssertTrue(kotlin.contains("external fun counterInvokeRaw(handle: Long, ordinal: Int, args: ByteArray): ByteArray"))

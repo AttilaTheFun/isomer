@@ -433,11 +433,20 @@ object HostServices {
             }
             "radial" -> {
                 val c = spec.getJSONArray("c")
-                android.graphics.RadialGradient(
-                    c.getDouble(0).toFloat() * w, c.getDouble(1).toFloat() * h,
-                    maxOf(spec.getDouble("er").toFloat(), 0.01f),
-                    colors, locs, android.graphics.Shader.TileMode.CLAMP,
-                )
+                val cx = c.getDouble(0).toFloat() * w
+                val cy = c.getDouble(1).toFloat() * h
+                // Elliptical ("ell": its radii fractions of the bounds): a
+                // circle as wide as the bounds' radius, squashed to their
+                // proportions. Android's starts at the center, so the stops
+                // move out by the start radius's share.
+                val ell = spec.optJSONArray("ell")
+                val start = if (ell != null) ell.getDouble(0).toFloat() * w else spec.optDouble("sr", 0.0).toFloat()
+                val end = maxOf(if (ell != null) ell.getDouble(1).toFloat() * w else spec.getDouble("er").toFloat(), 0.01f)
+                val inner = (start / end).coerceIn(0f, 1f)
+                val moved = FloatArray(locs.size) { inner + locs[it] * (1 - inner) }
+                android.graphics.RadialGradient(cx, cy, end, colors, moved, android.graphics.Shader.TileMode.CLAMP).apply {
+                    if (ell != null && w > 0f) setLocalMatrix(android.graphics.Matrix().apply { setScale(1f, h / w, cx, cy) })
+                }
             }
             "angular" -> {
                 val c = spec.getJSONArray("c")

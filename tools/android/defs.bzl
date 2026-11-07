@@ -9,6 +9,7 @@ load("@bazel_skylib//rules:expand_template.bzl", "expand_template")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load("@rules_android//rules:rules.bzl", "android_binary")
 load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_java//java/common:java_info.bzl", "JavaInfo")
 load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 load("//swift_ffi/rules:kt_swift_library.bzl", "kt_swift_library")
@@ -325,6 +326,18 @@ def apk_install_run(name, apk, activity, extras = "", **kwargs):
 
 # --- Isomer adoption-level macros (docs/adoption_levels.md) ----------
 
+# Isomer's shared platform library (//android/libraries/swift_ui:isomer_platform):
+# with --@isomer//tools/android:shared_platform an app's library links
+# against it, and the app ships it, instead of holding its own copy of the
+# Swift runtime, Foundation and Isomer (README, "One platform library for
+# several apps").
+_SHARED_PLATFORM = Label("//android/libraries/swift_ui:isomer_platform")
+
+_SHARED_PLATFORM_LIBRARIES = select({
+    Label("//tools/android:shared_platform_on"): [Label("//android/libraries/swift_ui:libisomer_platform.so")],
+    "//conditions:default": [],
+})
+
 def isomer_android_library(name, swift_library, extra_kotlin_srcs = [], extra_deps = [], visibility = None):
     """Level 3 building block: the app's Swift + the Isomer Android
     runtime, packaged for embedding in an existing app.
@@ -350,10 +363,13 @@ def isomer_android_library(name, swift_library, extra_kotlin_srcs = [], extra_de
         java_package = "dev.isomer.runtime",
         module_name = "SwiftUI",
         swift = swift_library,
+        link_deps = [Label("//android/libraries/swift_ui:application_entry")],
+        shared_platform = _SHARED_PLATFORM,
+        shared_platform_when = Label("//tools/android:shared_platform_on"),
     )
     cc_library(
         name = name + "_native",
-        srcs = [":lib%s_bindings.so" % name],
+        srcs = [":lib%s_bindings.so" % name] + _SHARED_PLATFORM_LIBRARIES,
         tags = ["manual"],
         visibility = visibility,
     )
@@ -654,5 +670,145 @@ def isomer_android_app(
         name = name,
         activity = "%s/.MainActivity" % package,
         apk = ":%s_apk.apk" % name,
+        visibility = visibility,
+    )
+
+# MARK: - An Isomer app as an Android library (AAR)
+
+def _isomer_aar_impl(ctx):
+    # The app's own classes and Isomer's: every runtime jar of the library
+    # but what the host app supplies (AndroidX, Compose and Kotlin, from
+    # Maven or rules_kotlin), which it would otherwise get twice.
+    def supplied_by_host(jar):
+        repo = jar.owner.workspace_name if jar.owner else ""
+        return "maven" in repo or "kotlin" in repo or repo.startswith("rules_android")
+    jars = [
+        jar
+        for jar in ctx.attr.lib[JavaInfo].transitive_runtime_jars.to_list()
+        if not supplied_by_host(jar)
+    ]
+    out = ctx.actions.declare_file(ctx.label.name + ".aar")
+    args = ctx.actions.args()
+    args.add(ctx.executable._zipper)
+    args.add(out)
+    args.add(ctx.file.manifest)
+    args.add(ctx.file.proguard)
+    args.add(ctx.attr.abi)
+    args.add("--jars")
+    args.add_all(jars)
+    args.add("--libs")
+    args.add_all(ctx.files.native_libs)
+    ctx.actions.run(
+        executable = ctx.executable._assemble,
+        arguments = [args],
+        inputs = jars + ctx.files.native_libs + [ctx.file.manifest, ctx.file.proguard],
+        tools = [ctx.executable._zipper],
+        outputs = [out],
+        mnemonic = "IsomerAar",
+        progress_message = "Assembling %{label}'s AAR",
+    )
+    return [DefaultInfo(files = depset([out]))]
+
+_isomer_aar = rule(
+    implementation = _isomer_aar_impl,
+    attrs = {
+        "abi": attr.string(default = "arm64-v8a"),
+        "lib": attr.label(providers = [JavaInfo], mandatory = True),
+        "manifest": attr.label(allow_single_file = True, mandatory = True),
+        "native_libs": attr.label_list(allow_files = [".so"]),
+        "proguard": attr.label(allow_single_file = True, mandatory = True),
+        "_assemble": attr.label(default = Label("//tools/android:assemble_aar"), executable = True, cfg = "exec"),
+        "_zipper": attr.label(default = Label("@bazel_tools//tools/zip:zipper"), executable = True, cfg = "exec"),
+    },
+)
+
+def isomer_android_aar(
+        name,
+        swift_library,
+        package,
+        process = None,
+        min_sdk_version = 28,
+        services_kt = None,
+        services_installer = None,
+        services_deps = [],
+        visibility = None):
+    """An Isomer app as an Android library (`<name>.aar`), for a host app to
+    embed: the same app `isomer_android_app` makes an APK of, its entry
+    `MainActivity` declared in the library's manifest (not exported, no
+    launcher entry), started by the host with an explicit intent. Isomer's
+    own embedding entries come with it (`IsomerFragment`, the `Isomer()`
+    composable, `IsomerView`, dev.isomer.runtime).
+
+    The AAR holds:
+      classes.jar      the app's, Isomer's and the generated bindings'
+                       classes (dev.isomer.**, swiftffi.**, the app's
+                       package), no R classes; AndroidX, Compose and Kotlin
+                       are the host's dependencies, not bundled (README
+                       says which Compose the runtime is built against)
+      jni/arm64-v8a/   the app's Swift (`lib<name>_runtime_bindings.so`)
+      AndroidManifest.xml, proguard.txt (the consumer keeps), R.txt (empty)
+
+    `process` runs the activity in a process of its own (":isomer", or a
+    full name); no Application subclass is needed. The services arguments
+    are `isomer_android_app`'s.
+    """
+    isomer_android_library(
+        name = name + "_runtime",
+        swift_library = swift_library,
+        extra_kotlin_srcs = (services_kt if type(services_kt) == "list" else [services_kt]) if services_kt else [],
+        extra_deps = services_deps,
+    )
+    expand_template(
+        name = name + "_main_activity",
+        out = "generated/%s/MainActivity.kt" % name,
+        substitutions = {
+            "{PACKAGE}": package,
+            "{DEFAULT_RENDERER}": "jetpackCompose",
+            "{INSTALL_SERVICES}": services_installer or "",
+        },
+        template = Label("//tools/android:main_activity.kt.tpl"),
+    )
+    expand_template(
+        name = name + "_manifest",
+        out = "generated/%s/AndroidManifest.xml" % name,
+        substitutions = {
+            "{PACKAGE}": package,
+            "{MIN_SDK}": str(min_sdk_version),
+            "{PROCESS_ATTR}": ('\n            android:process="%s"' % process) if process else "",
+            "{PROCESS_NOTE}": (" It runs in its own process, %s." % process) if process else "",
+        },
+        template = Label("//tools/android:aar_manifest.xml.tpl"),
+    )
+    write_file(
+        name = name + "_proguard",
+        out = "generated/%s/proguard.txt" % name,
+        content = [
+            "# The consumer rules of an Isomer app (isomer_android_aar): JNI",
+            "# looks Isomer's and the bindings' classes up by name.",
+            "-keep class dev.isomer.** { *; }",
+            "-keep class swiftffi.** { *; }",
+            "-keep class %s.** { *; }" % package,
+            "",
+        ],
+    )
+    kt_android_library(
+        name = name + "_lib",
+        srcs = [":%s_main_activity" % name],
+        custom_package = package,
+        manifest = ":%s_manifest" % name,
+        plugins = [Label("//android/libraries/swift_ui:compose_compiler_plugin")],
+        tags = ["manual"],
+        deps = [
+            ":%s_runtime" % name,
+            Label("@rules_android_maven//:androidx_activity_activity_compose"),
+            Label("@rules_android_maven//:androidx_compose_runtime_runtime"),
+        ],
+    )
+    _isomer_aar(
+        name = name,
+        lib = ":%s_lib" % name,
+        manifest = ":%s_manifest" % name,
+        native_libs = [":lib%s_runtime_bindings.so" % name] + _SHARED_PLATFORM_LIBRARIES,
+        proguard = ":%s_proguard" % name,
         visibility = visibility,
     )

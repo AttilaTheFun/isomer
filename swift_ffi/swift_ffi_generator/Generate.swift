@@ -28,6 +28,9 @@ struct Generate: ParsableCommand {
     @Option(help: "Native library name the kotlin kind loads (swiftffi.NativeLibraries.load, System.loadLibrary unless the host installs a loader).")
     var libraryName: String = "native"
 
+    @Option(help: "A native library the kotlin kind loads before its own (repeatable): the shared library it links against (kt_swift_library's platform).")
+    var preloadLibrary: [String] = []
+
     @Option(help: "The generated C header's file name (jni-adapter / cpp includes).")
     var headerName: String = ""
 
@@ -50,6 +53,7 @@ struct Generate: ParsableCommand {
             javaPackage: javaPackage,
             javaClass: javaClass,
             libraryName: libraryName,
+            preloadLibraries: preloadLibrary,
             headerName: headerName
         )
         try contents.write(toFile: output, atomically: true, encoding: .utf8)

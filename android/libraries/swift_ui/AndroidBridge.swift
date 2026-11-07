@@ -91,12 +91,10 @@ package enum _AndroidBridgeCalls {
 // MARK: - Exports (Kotlin -> Swift)
 
 // The app's synthesized @main entry point, run once to install the App into
-// the Runtime.
-@_extern(c, "main")
-func _application_main(
-    _ argc: Int32,
-    _ argv: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> Int32
+// the Runtime: called through application_main.c, which finds it in this
+// library or as the app's library registered it.
+@_extern(c, "iso_android_run_main")
+func _application_main() -> Int32
 
 #if canImport(SwiftGPU)
 /// The SwiftGPU surface for Android: swift_gpu's GLES device, driven on
@@ -309,7 +307,7 @@ package func nativeStart(host: any AndroidHost, renderer: String, width: Double,
         }
         _ImageIOHost.release = { source in androidHost?.registerImage(source: source, bytes: []) }
         if Runtime.shared.host == nil {
-            _ = _application_main(0, nil)
+            _ = _application_main()
         }
         androidLog("nativeStart \(renderer) \(width)x\(height)")
         if renderer == "jetpackCompose" {

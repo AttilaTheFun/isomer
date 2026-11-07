@@ -949,3 +949,32 @@ func checkGesturePriorities(_ mock: MockRenderer) {
     expect(drags == 1, "a high-priority gesture recognizes and a disabled simultaneous one doesn't (\(drags) drag handlers)")
     expect(AccessibilityActionKind(named: Text("Archive")) != .default, "a named action kind is its own")
 }
+
+/// An elliptical gradient travels as a radial one with its radii fractions
+/// ("ell"), and the desktop hosts' decoder keeps them; `Color.gradient`
+/// fills top to bottom, lighter at the top.
+struct EllipticalScreen: View {
+    var body: some View {
+        VStack {
+            Rectangle().fill(.ellipticalGradient(colors: [.white, .blue], startRadiusFraction: 0.1, endRadiusFraction: 0.6))
+                .frame(width: 100, height: 50)
+            Rectangle().fill(Color.green.gradient).frame(width: 100, height: 50)
+        }
+    }
+}
+
+@MainActor
+func checkEllipticalGradient(_ mock: MockRenderer) {
+    Runtime.shared.installRootView { EllipticalScreen() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    let gradients = flatNodes(lastFlatTree(mock)) { $0.gradient != nil }.compactMap(\.gradient)
+    expect(gradients.contains { $0.contains("\"kind\":\"radial\"") && $0.contains("\"ell\":[0.1,0.6]") },
+           "an elliptical gradient's fractions travel (\(gradients))")
+    expect(gradients.contains { $0.contains("\"kind\":\"linear\"") && $0.contains("\"p0\":[0.5,0]") },
+           "Color.gradient fills top to bottom (\(gradients))")
+    let decoded = FlatTreeDecoder { _, _ in }.decode(bytes: FlatTreeEncoder().encode(root: mock.lastTree!))
+    var buffer = ByteBuffer(bytes: FlatTreeEncoder().encode(root: decoded))
+    let again = getRoot(byteBuffer: &buffer) as IsoFlat_Node
+    let kept = flatNodes(again) { $0.gradient?.contains("\"ell\":[0.1,0.6]") == true }
+    expect(!kept.isEmpty, "and the decoder keeps them")
+}

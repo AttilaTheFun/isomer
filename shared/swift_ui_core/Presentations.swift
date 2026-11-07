@@ -177,6 +177,7 @@ extension View {
     /// `.alert(_:isPresented:presenting:actions:message:)`: an alert about
     /// `data` (its actions and message made from it), shown while
     /// presented and there is data.
+    @_disfavoredOverload
     nonisolated public func alert<Actions: View, Message: View, T, S: StringProtocol>(
         _ title: S,
         isPresented: Binding<Bool>,
@@ -193,6 +194,7 @@ extension View {
         )
     }
 
+    @_disfavoredOverload
     nonisolated public func alert<Actions: View, T, S: StringProtocol>(
         _ title: S,
         isPresented: Binding<Bool>,
@@ -208,6 +210,7 @@ extension View {
     }
 
     /// `.confirmationDialog(_:isPresented:titleVisibility:presenting:actions:)`.
+    @_disfavoredOverload
     nonisolated public func confirmationDialog<Actions: View, T, S: StringProtocol>(
         _ title: S,
         isPresented: Binding<Bool>,
@@ -227,6 +230,7 @@ extension View {
     /// `.confirmationDialog(_:isPresented:titleVisibility:presenting:actions:message:)`:
     /// a dialog about `data`, its actions and message made from it, shown
     /// while presented and there is data.
+    @_disfavoredOverload
     nonisolated public func confirmationDialog<S, A, M, T>(
         _ title: S,
         isPresented: Binding<Bool>,
@@ -253,6 +257,7 @@ extension View {
 
     /// `.confirmationDialog(_:item:titleVisibility:actions:)`: a dialog about
     /// the item, shown while it is non-nil; dismissing it sets it nil.
+    @_disfavoredOverload
     nonisolated public func confirmationDialog<S, A, T>(
         _ title: S,
         item data: Binding<T?>,
@@ -271,6 +276,7 @@ extension View {
         _confirmationDialog(title.content, item: data, titleVisibility: titleVisibility, actions: actions, message: { _ in "" })
     }
 
+    @_disfavoredOverload
     nonisolated public func confirmationDialog<S, A, M, T>(
         _ title: S,
         item data: Binding<T?>,
@@ -322,6 +328,7 @@ extension View {
     /// `.confirmationDialog`: an alert-shaped panel (title, optional
     /// message, the action buttons) — the reimplementation has one modal
     /// dialog shape; `titleVisibility` is accepted for parity.
+    @_disfavoredOverload
     nonisolated public func confirmationDialog<Actions: View, S: StringProtocol>(
         _ title: S,
         isPresented: Binding<Bool>,
@@ -337,6 +344,7 @@ extension View {
         )
     }
 
+    @_disfavoredOverload
     nonisolated public func confirmationDialog<Actions: View, Message: View, S: StringProtocol>(
         _ title: S,
         isPresented: Binding<Bool>,
@@ -427,6 +435,7 @@ extension View {
         )
     }
 
+    @_disfavoredOverload
     nonisolated public func alert<Actions: View, Message: View, S: StringProtocol>(
         _ title: S,
         isPresented: Binding<Bool>,
@@ -444,6 +453,7 @@ extension View {
         )
     }
 
+    @_disfavoredOverload
     nonisolated public func alert<Actions: View, S: StringProtocol>(
         _ title: S,
         isPresented: Binding<Bool>,

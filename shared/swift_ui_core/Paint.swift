@@ -41,8 +41,8 @@ public struct Angle: Equatable, Sendable {
     public static let zero = Angle(radians: 0)
 }
 
-public struct Gradient: Equatable, Sendable {
-    public struct Stop: Equatable, Sendable {
+public struct Gradient: Hashable, Sendable {
+    public struct Stop: Hashable, Sendable {
         public var color: Color
         public var location: CGFloat
 
@@ -89,6 +89,8 @@ struct GradientPaint: Equatable, Sendable {
         case linear(start: UnitPoint, end: UnitPoint)
         case radial(center: UnitPoint, startRadius: CGFloat, endRadius: CGFloat)
         case angular(center: UnitPoint, startAngle: Angle, endAngle: Angle)
+        /// A radial gradient stretched to the bounds: radii fractions of them.
+        case elliptical(center: UnitPoint, startFraction: CGFloat, endFraction: CGFloat)
     }
 
     public var kind: Kind
@@ -289,6 +291,120 @@ extension RadialGradient: _PrimitiveView {
     }
 }
 
+/// A radial gradient stretched to its shape's bounds, as Apple's: its radii
+/// fractions of them on each axis (0.5, the ellipse the bounds hold).
+public struct EllipticalGradient: PaintStyle {
+    let gradient: Gradient
+    let center: UnitPoint
+    let startRadiusFraction: CGFloat
+    let endRadiusFraction: CGFloat
+
+    public init(gradient: Gradient, center: UnitPoint = .center, startRadiusFraction: CGFloat = 0, endRadiusFraction: CGFloat = 0.5) {
+        self.gradient = gradient
+        self.center = center
+        self.startRadiusFraction = startRadiusFraction
+        self.endRadiusFraction = endRadiusFraction
+    }
+
+    public init(colors: [Color], center: UnitPoint = .center, startRadiusFraction: CGFloat = 0, endRadiusFraction: CGFloat = 0.5) {
+        self.init(gradient: Gradient(colors: colors), center: center,
+                  startRadiusFraction: startRadiusFraction, endRadiusFraction: endRadiusFraction)
+    }
+
+    public init(stops: [Gradient.Stop], center: UnitPoint = .center, startRadiusFraction: CGFloat = 0, endRadiusFraction: CGFloat = 0.5) {
+        self.init(gradient: Gradient(stops: stops), center: center,
+                  startRadiusFraction: startRadiusFraction, endRadiusFraction: endRadiusFraction)
+    }
+
+    func resolvePaint() -> GradientPaint {
+        GradientPaint(
+            kind: .elliptical(center: center, startFraction: startRadiusFraction, endFraction: endRadiusFraction),
+            stops: gradient.stops
+        )
+    }
+
+    public typealias Body = Never
+}
+
+extension EllipticalGradient: _PrimitiveView {
+    func makeNode(_ ctx: inout BuildContext) -> RenderNode {
+        gradientNode(resolvePaint(), ctx: ctx)
+    }
+}
+
+extension ShapeStyle where Self == EllipticalGradient {
+    public static func ellipticalGradient(_ gradient: Gradient, center: UnitPoint = .center, startRadiusFraction: CGFloat = 0,
+                                          endRadiusFraction: CGFloat = 0.5) -> EllipticalGradient {
+        EllipticalGradient(gradient: gradient, center: center, startRadiusFraction: startRadiusFraction,
+                           endRadiusFraction: endRadiusFraction)
+    }
+
+    public static func ellipticalGradient(colors: [Color], center: UnitPoint = .center, startRadiusFraction: CGFloat = 0,
+                                          endRadiusFraction: CGFloat = 0.5) -> EllipticalGradient {
+        EllipticalGradient(colors: colors, center: center, startRadiusFraction: startRadiusFraction,
+                           endRadiusFraction: endRadiusFraction)
+    }
+
+    public static func ellipticalGradient(stops: [Gradient.Stop], center: UnitPoint = .center, startRadiusFraction: CGFloat = 0,
+                                          endRadiusFraction: CGFloat = 0.5) -> EllipticalGradient {
+        EllipticalGradient(stops: stops, center: center, startRadiusFraction: startRadiusFraction,
+                           endRadiusFraction: endRadiusFraction)
+    }
+
+    public static func ellipticalGradient(_ gradient: AnyGradient, center: UnitPoint = .center, startRadiusFraction: CGFloat = 0,
+                                          endRadiusFraction: CGFloat = 0.5) -> some ShapeStyle {
+        EllipticalGradient(gradient: gradient.gradient, center: center, startRadiusFraction: startRadiusFraction,
+                           endRadiusFraction: endRadiusFraction)
+    }
+}
+
+/// A gradient as a style of its own (`Color.gradient`, `AnyGradient(_:)`):
+/// filled top to bottom, or given a shape by the gradient styles' forms
+/// that take one, as Apple's.
+public struct AnyGradient: Hashable, PaintStyle, Sendable {
+    let gradient: Gradient
+
+    public init(_ gradient: Gradient) {
+        self.gradient = gradient
+    }
+
+    func resolvePaint() -> GradientPaint {
+        GradientPaint(kind: .linear(start: .top, end: .bottom), stops: gradient.stops)
+    }
+}
+
+extension Color {
+    /// A gradient of the colour, lighter at the top: the system's own
+    /// shading of a fill, as Apple's (whose exact mix is its own).
+    public var gradient: AnyGradient {
+        AnyGradient(Gradient(colors: [mix(with: .white, by: 0.2), self]))
+    }
+}
+
+extension ShapeStyle where Self == LinearGradient {
+    public static func linearGradient(_ gradient: AnyGradient, startPoint: UnitPoint, endPoint: UnitPoint) -> some ShapeStyle {
+        LinearGradient(gradient: gradient.gradient, startPoint: startPoint, endPoint: endPoint)
+    }
+}
+
+extension ShapeStyle where Self == RadialGradient {
+    public static func radialGradient(_ gradient: AnyGradient, center: UnitPoint = .center, startRadius: CGFloat = 0,
+                                      endRadius: CGFloat) -> some ShapeStyle {
+        RadialGradient(gradient: gradient.gradient, center: center, startRadius: startRadius, endRadius: endRadius)
+    }
+}
+
+extension ShapeStyle where Self == AngularGradient {
+    public static func angularGradient(_ gradient: AnyGradient, center: UnitPoint = .center, startAngle: Angle,
+                                       endAngle: Angle) -> some ShapeStyle {
+        AngularGradient(gradient: gradient.gradient, center: center, startAngle: startAngle, endAngle: endAngle)
+    }
+
+    public static func conicGradient(_ gradient: AnyGradient, center: UnitPoint = .center, angle: Angle = .zero) -> some ShapeStyle {
+        AngularGradient(gradient: gradient.gradient, center: center, angle: angle)
+    }
+}
+
 extension AngularGradient: _PrimitiveView {
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         gradientNode(resolvePaint(), ctx: ctx)
@@ -318,6 +434,12 @@ extension GradientPaint {
             fields.append("\"c\":[\(num(center.x)),\(num(center.y))]")
             fields.append("\"sr\":\(num(startRadius))")
             fields.append("\"er\":\(num(endRadius))")
+        case .elliptical(let center, let startFraction, let endFraction):
+            // A radial gradient whose radii are fractions of the bounds
+            // ("ell": start, end), which the hosts stretch to an ellipse.
+            fields.append("\"kind\":\"radial\"")
+            fields.append("\"c\":[\(num(center.x)),\(num(center.y))]")
+            fields.append("\"ell\":[\(num(startFraction)),\(num(endFraction))]")
         case .angular(let center, let startAngle, let endAngle):
             fields.append("\"kind\":\"angular\"")
             fields.append("\"c\":[\(num(center.x)),\(num(center.y))]")

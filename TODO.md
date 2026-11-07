@@ -116,6 +116,17 @@ Isomer's Kotlin calls above 23 are behind version checks (#96).
   so CI tests at 28+; draft isomer#92 ran the Storybook on Android 6.0.
 - Later: 32-bit ARM (armeabi-v7a), if an app needs it.
 
+## SwiftUI's next gaps (after 0.42's)
+
+- `List`/`ForEach(_:editActions:)` over a binding (iOS 16): needs Apple's
+  `IndexedIdentifierCollection` and `EditableCollectionContent` for the
+  initializers' `Content ==` constraints to stay a strict subset; built on
+  0.42's `onDelete`/`onMove` editing (ListEditing.swift).
+- `AnyGradient.colorSpace(_:)` (needs `Gradient.ColorSpace` on gradients)
+  and `GraphicsContext.Shading`'s gradients.
+- Compose draws an elliptical gradient as its radial one (centred, to the
+  far edge), as it draws every radial gradient: a brush sized to the node.
+
 ## Upstream releases, no forks
 
 The goal: every dependency at an upstream tagged release (a BCR version, a
