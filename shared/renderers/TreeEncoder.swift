@@ -1236,6 +1236,9 @@ package final class FlatTreeEncoder {
                 ("lpDist", formatNumber(Double(press.maximumDistance))),
             ]
         }
+        if node.layoutPriority != 0 {
+            out.params = (out.params ?? []) + [("layoutPriority", formatNumber(node.layoutPriority))]
+        }
         if node.ignoresSafeArea {
             out.params = (out.params ?? []) + [("safeArea", "ignore")]
         }

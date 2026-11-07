@@ -477,6 +477,9 @@ package final class RenderNode {
     var lineSpacing: Double?
     /// `.tracking` / `.kerning` for text: points added between characters.
     var tracking: Double?
+    /// `.layoutPriority(_:)`: how early the view is offered its row's room
+    /// (param "layoutPriority"; 0, everyone's, is left out).
+    var layoutPriority: Double = 0
     /// A long press (`LongPressGesture`, `onLongPressGesture`): param
     /// "longPress", its handler's id (TreeEncoder.swift).
     var longPress: LongPressSpec?

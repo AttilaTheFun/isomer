@@ -692,18 +692,24 @@ private fun IsoHStack(n: UNode, m: Modifier, bw: Boolean, bh: Boolean) {
         val spacers = (0 until count).filter { greedy[it] && children[it].json.optString("k") == "spacer" }
         val held = if (bounded) spacers.sumOf { children[it].json.optDouble("min", 0.0).dp.roundToPx() }.coerceAtMost(remaining) else 0
         remaining -= held
-        // Fixed and wrapping children, least flexible first.
-        val flexible = (0 until count).filter { !greedy[it] }.sortedBy { i ->
-            val mm = measurables[i]
-            mm.maxIntrinsicWidth(childHeight) - mm.minIntrinsicWidth(childHeight)
-        }
-        var left = flexible.size
-        for (i in flexible) {
-            val proposal = if (bounded) remaining / left else Int.MAX_VALUE
+        // Fixed and wrapping children: the higher `.layoutPriority` first
+        // (offered what the lower ones' minimums leave), and within one
+        // priority the least flexible first.
+        val priority = children.map { it.json.optJSONObject("params")?.optString("layoutPriority")?.toDoubleOrNull() ?: 0.0 }
+        val flexible = (0 until count).filter { !greedy[it] }.sortedWith(
+            compareByDescending<Int> { priority[it] }.thenBy { i ->
+                val mm = measurables[i]
+                mm.maxIntrinsicWidth(childHeight) - mm.minIntrinsicWidth(childHeight)
+            })
+        val minimum = (0 until count).map { if (greedy[it]) 0 else measurables[it].minIntrinsicWidth(childHeight) }
+        for ((at, i) in flexible.withIndex()) {
+            val later = flexible.drop(at + 1)
+            val reserved = later.filter { priority[it] < priority[i] }.sumOf { minimum[it] }
+            val peers = 1 + later.count { priority[it] == priority[i] }
+            val proposal = if (bounded) ((remaining - reserved).coerceAtLeast(0) / peers) else Int.MAX_VALUE
             val pl = measurables[i].measure(Constraints(0, if (bounded) proposal.coerceAtLeast(0) else Constraints.Infinity, 0, childHeight))
             placeables[i] = pl
             if (bounded) remaining = (remaining - pl.width).coerceAtLeast(0)
-            left -= 1
         }
         // Greedy children share what is left, spacers last: as in SwiftUI a
         // spacer yields to any other greedy child, keeping only its minimum

@@ -153,11 +153,6 @@ extension Alignment {
     public static var trailingLastTextBaseline: Alignment { fatalError() }
 }
 
-extension View {
-    @available(*, unavailable, message: "Not yet in Isomer: Layout (docs/parity/SwiftUI.md)")
-    public nonisolated func layoutPriority(_ value: Double) -> some View { self }
-}
-
 extension ShapeStyle where Self == HierarchicalShapeStyle {
     @available(*, unavailable, message: "Not yet in Isomer: Styles (docs/parity/SwiftUI.md)")
     public static var quinary: HierarchicalShapeStyle { fatalError() }

@@ -3885,6 +3885,11 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
         return h("div", props, kids);
       }
       case "text": {
+        // `.layoutPriority`: a higher one keeps its room, a lower one gives
+        // its room up first.
+        const priority = Number((n.params || {}).layoutPriority || 0);
+        if (priority > 0) s.flexShrink = 0;
+        else if (priority < 0) s.flexShrink = 1 + Math.min(1000, -priority * 10);
         s.fontSize = textSize(n);
         s.fontWeight = textWeight(n);
         s.color = rgba(n.color);

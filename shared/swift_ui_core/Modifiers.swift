@@ -798,6 +798,16 @@ extension View {
         }
     }
 
+    /// `.layoutPriority(_:)`: in a stack short of room, views of a higher
+    /// priority are offered it first (those of lower priority keep only
+    /// their minimum, and truncate); 0 by default.
+    nonisolated public func layoutPriority(_ value: Double) -> some View {
+        _ModifiedView(child: self, descend: "priority", pure: true) { inner, _ in
+            inner.layoutPriority = value
+            return inner
+        }
+    }
+
     // MARK: Interaction
 
     nonisolated public func onTapGesture(count: Int = 1, perform action: @escaping () -> Void) -> some View {

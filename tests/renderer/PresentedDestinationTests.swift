@@ -201,3 +201,15 @@ func checkGestures(_ mock: MockRenderer) {
     expect(gestureLog.contains("long") && gestureLog.contains("held"), "both presses ran their action (\(gestureLog))")
     expect(gestureLog.contains("pressing true") && gestureLog.contains("pressing false"), "onPressingChanged saw down and up (\(gestureLog))")
 }
+
+// layoutPriority reaches the host, which lays the row out by it.
+@MainActor
+func checkLayoutPriority(_ mock: MockRenderer) {
+    Runtime.shared.installRootView { HStack { Text("first").layoutPriority(1); Text("second") } }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 760)
+    Runtime.shared.setNeedsRender()
+    Runtime.shared.renderFrame()
+    var buffer = ByteBuffer(bytes: FlatTreeEncoder().encode(root: mock.lastTree!))
+    let root = getRoot(byteBuffer: &buffer) as IsoFlat_Node
+    expect(allParams(root, key: "layoutPriority") == ["1"], "layoutPriority reaches the host (\(allParams(root, key: "layoutPriority")))")
+}
