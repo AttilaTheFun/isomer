@@ -9,6 +9,12 @@
 # named in the repository.
 #
 #   tools/ci/container_build.sh [<bazel build args>…]   # default: every platform's Storybook
+#   tools/ci/container_build.sh all   # everything the checks build, built,
+#                                     # and nothing run or copied: the
+#                                     # automated CI's (a pull request's
+#                                     # container, main's populate, the Bazel
+#                                     # cache's one writer: OS Server grants
+#                                     # that job the write)
 #   tools/ci/container_build.sh package <dir> <bazel build args>…
 #                                     # the build, then the targets' packages
 #                                     # (.ipa, a Mac app's .zip, the signed
@@ -92,8 +98,9 @@ if [ "${1:-}" = package ]; then
     chmod 775 "$out"
     mode=package
     shift 2
-elif [ $# -eq 0 ]; then
+elif [ $# -eq 0 ] || [ "$*" = all ]; then
     mode=checks
+    [ "$*" != all ] || mode=all
     set -- --ios_multi_cpus=sim_arm64 \
         //apple/storybook_ios_application:storybook_ios_sim_application \
         //apple/storybook_macos_application:storybook_macos_application \
@@ -131,12 +138,14 @@ if [ "$mode" = package ]; then
     ls -l "$out"
     exit 0
 fi
-[ "$mode" = checks ] || exit $built
+[ "$mode" = checks ] || [ "$mode" = all ] || exit $built
 start=$SECONDS
+# all: the tests built, not run.
+run_tests() { if [ "$mode" = all ]; then bazel build "$@"; else bazel test "$@"; fi; }
 # What the tests here need beyond the image: Xvfb, Mesa'"'"'s drivers, and the
 # libraries Chrome for Testing loads.
 root_do() { if [ "$(id -u)" = 0 ]; then "$@"; else sudo "$@"; fi; }
-if ! command -v Xvfb >/dev/null || [ ! -e /usr/lib/aarch64-linux-gnu/libnss3.so ]; then
+if [ "$mode" = checks ] && ! command -v Xvfb >/dev/null || [ ! -e /usr/lib/aarch64-linux-gnu/libnss3.so ]; then
     root_do env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends xvfb libnss3 \
         libgl1-mesa-dri libegl-mesa0 libasound2t64 libxkbcommon0 libxcomposite1 libxdamage1 \
         libxrandr2 libpango-1.0-0 libcairo2 libcups2t64 libdrm2 fonts-dejavu-core >/dev/null ||
@@ -153,16 +162,25 @@ built_windows=$?
 # for now (2026-11-05), not run.
 bazel build "${flags[@]}" //tests/platforms:all
 built_tests=$?
-bazel test "${flags[@]}" --test_output=errors //tests/platforms:storybook_web_test //tests/foundation_networking:networking_test \
+run_tests "${flags[@]}" --test_output=errors //tests/platforms:storybook_web_test //tests/foundation_networking:networking_test \
     //tests/cxx_interop:cxx_interop_test
 tested_here=$?
 cd "$root"
 bazel build //swift_gpu/linux:gl_backend_test
 built_gl=$?
-bazel test --test_output=errors //tests/renderer:mock_renderer_test //tests/snapshot:snapshot_test
+run_tests --test_output=errors //tests/renderer:mock_renderer_test //tests/snapshot:snapshot_test
 checked=$?
 echo "container_build.sh: the tests took $((SECONDS - start)) s"
 
+# all: the x86_64 APK built too, and done.
+if [ "$mode" = all ]; then
+    cd "$root/examples"
+    built_x86=0
+    [ -z "${ISOMER_ANDROID_X86_64:-}" ] || bazel build "${flags[@]}" --android_platforms=@rules_android//:x86_64 \
+        //android/storybook_android_application:storybook_android_application_apk || built_x86=1
+    for result in $built $built_windows $built_tests $tested_here $built_gl $checked $built_x86; do [ "$result" -ne 0 ] && exit "$result"; done
+    exit 0
+fi
 # The apps tested elsewhere, for tools/ci/platform_tests.sh.
 cd "$root/examples"
 platforms="$root/.ci/platforms"

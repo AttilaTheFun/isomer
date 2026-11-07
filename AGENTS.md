@@ -278,12 +278,23 @@ Storybook on an emulator under Ubuntu's KVM (tools/ci/hosted_android_emulator.sh
 shaped as OS Server's phones: API 35, 1080×2400, 420 dpi, gesture
 navigation) and the web in Ubuntu's Chrome (the `proof-shoot` jobs), then
 compared in the container (`proof-compare`); a private copy pictures
-everything on OS Server's leases as above. It runs only by hand (since
-2026-11-01, for CI's time): an agent runs the Build workflow on main to
-propose a release, the full set (every story; `quick` the core set: a
-story from each area and the Playground's projects), each picture
-compared with the previous release's (never the change's own). Pull
-requests and main's commits get the build and the checks alone. To bisect
+everything on OS Server's leases as above. CI follows the owner's policy
+for protected repositories (AttilaTheFun/reviews' docs/CI_POLICY.md,
+2026-11-07; build.yml's header). Automated CI builds every target on Linux
+and runs no tests: a pull request gets `container` (every target built in
+one container, reading the Bazel cache, leasing nothing; the required
+check), each commit on main `populate` (the same build, the cache's only
+writer). Tests and the proof run only by hand: `run: verify` (the core's
+and the web's tests in the build container, the iPhone's and the Mac's on
+OS Server's leases, Android's on GitHub's Ubuntu runner, and the proof),
+`run: prerelease` (Alphas
+and a draft marked pre-release), `run: release` (verify and the proof, then
+the Alphas and the draft proposed for release, tools/ci/draft_release.sh).
+Drafts are CI's; an agent proposes by running the workflow on main, never
+by making a draft or a tag. The proof is the full set by default (every
+story; `quick` the core set: a story from each area and the Playground's
+projects), each picture compared with the previous release's (never the
+change's own). To bisect
 a regression, prove earlier commits after the fact: push a branch at the
 commit and run the workflow on that branch (its proof is found by commit,
 and compared with the release before it). A release is cut only from a
@@ -292,9 +303,9 @@ uploaded as the `proof` artifact Reviews reads (proof.json, screens/,
 before/, diffs/; 90 days). What a platform draws differently from run to run is held still
 at its source (proof.py: the iPhone's status bar, Android's cropped off,
 light appearance, window crops, the Mac's caret); only what can't be is listed, with why, in
-tools/ci/proof_ignore.txt. A release is approved by publishing its tag
-(a GitHub release on a main commit whose proof is in): the Build workflow's
-`release` job then promotes that commit's iPhone and Mac Alphas to
+tools/ci/proof_ignore.txt. A release is approved by publishing its draft
+in Reviews (which makes its tag): the Build workflow's `release` job checks
+that its commit is main's and was verified (tools/ci/verified.sh), then promotes that commit's iPhone and Mac Alphas to
 production on Applications Server (tools/ci/promote_from_ci.sh: nothing
 Apple rebuilt, since 0.40), builds and publishes Android's for production,
 and attaches the release's assets (tools/ci/release_assets.sh):

@@ -2,7 +2,7 @@
 # Stamps a GitHub Actions job's builds with their version before they are
 # built: MAJOR.MINOR.BUILD, the next of the line the repository commits
 # (MAJOR.MINOR.0), from Applications Server, which gives every build of one
-# commit the same (AttilaTheFun/applications' docs/CI.md, "Versions"). The
+# commit the same (the private AttilaTheFun/applications' docs/CI.md, "Versions"). The
 # job asks with its OIDC token, as publish_from_ci.sh publishes
 # (connect_from_ci.sh, beside both: a repository copies it with them), and
 # the server takes the commit from the token (its `sha`), never from the
