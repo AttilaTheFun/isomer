@@ -805,6 +805,7 @@ package final class FlatTreeEncoder {
             out.kind = .progress
             out.num = value
             if let size = node.controlSize { out.params = [("size", size)] }
+            if let style = node.progressStyle { out.params = (out.params ?? []) + [("pstyle", style)] }
         case .geometryReader:
             out.kind = .box // unreachable (handled above); box keeps layout sane
         }

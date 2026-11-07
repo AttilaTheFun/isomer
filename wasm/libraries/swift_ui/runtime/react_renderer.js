@@ -107,6 +107,11 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
     style.id = "iso-react-style";
     style.textContent =
       "@keyframes iso-spin{to{transform:rotate(1turn)}}" +
+      // `.progressViewStyle(.linear)` with no value: a third of the bar
+      // sliding across its track.
+      "@keyframes iso-slide{from{left:-34%}to{left:100%}}" +
+      ".iso-indeterminate{position:absolute;top:0;bottom:0;width:34%;border-radius:2px;" +
+      "background:var(--iso-tint,#0a84ff);animation:iso-slide 1.2s ease-in-out infinite}" +
       // The spinner in the text's own colour, as iOS draws it in the
       // secondary label's: a faint track and a stronger head, so it reads on
       // a dark page and turns white on a selected row (a fixed mid-grey was
@@ -4055,6 +4060,27 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
         s.alignSelf = "stretch";
         return h("input", props);
       case "progress":
+        // `.progressViewStyle(.linear)` with no value: an indeterminate bar.
+        if (n.v == null && (n.params || {}).pstyle === "linear") {
+          props.role = "progressbar";
+          Object.assign(s, { alignSelf: "stretch", flex: "none", height: 4, borderRadius: 2, overflow: "hidden",
+                             position: "relative", background: "rgba(120,120,128,0.24)" });
+          return h("div", props, h("div", { className: "iso-indeterminate" }));
+        }
+        // `.progressViewStyle(.circular)` with a value: a ring filled to it.
+        if (n.v != null && (n.params || {}).pstyle === "circular") {
+          const fraction = Math.min(1, Math.max(0, Number(n.v) || 0));
+          props.role = "progressbar";
+          props["aria-valuemin"] = 0;
+          props["aria-valuemax"] = 1;
+          props["aria-valuenow"] = fraction;
+          Object.assign(s, { width: 22, height: 22, flex: "none" });
+          const ring = 2 * Math.PI * 9;
+          return h("svg", { ...props, viewBox: "0 0 22 22" },
+            h("circle", { cx: 11, cy: 11, r: 9, fill: "none", stroke: "rgba(120,120,128,0.3)", strokeWidth: 2.5 }),
+            h("circle", { cx: 11, cy: 11, r: 9, fill: "none", stroke: "var(--iso-tint, #0a84ff)", strokeWidth: 2.5,
+                          strokeDasharray: `${fraction * ring} ${ring}`, transform: "rotate(-90 11 11)", strokeLinecap: "round" }));
+        }
         if (n.v == null) {
           props.className = ((props.className || "") + " iso-spinner").trim();
           // `.controlSize`: the small spinner is 16px (Apple's), mini 12.

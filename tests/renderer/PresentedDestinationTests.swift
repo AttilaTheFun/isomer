@@ -3,8 +3,10 @@
 // item replaces the screen, and the app clearing the binding while the
 // screen shows takes it off (its declaring screen unbuilt then).
 
+import FlatBuffers
 import Foundation
 import SwiftUI  // IsomerCore, aliased (BUILD.bazel)
+import IsomerSwiftUI
 
 nonisolated(unsafe) var presentedShowSettings = false
 nonisolated(unsafe) var presentedItem: Int?
@@ -110,4 +112,34 @@ func checkItemDialogs(_ mock: MockRenderer) {
     Runtime.shared.setNeedsRender()
     Runtime.shared.renderFrame()
     expect(!findTextInTree(mock.lastTree!, "Delete Ada"), "the item nil again takes the dialog away")
+}
+
+// progressViewStyle: a built-in style reaches the host by kind; an app's
+// style makes the view from the configuration.
+
+struct PercentStyle: ProgressViewStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Text("done \(Int((configuration.fractionCompleted ?? 0) * 100))%")
+    }
+}
+
+struct ProgressStyleScreen: View {
+    var body: some View {
+        VStack {
+            ProgressView(value: 0.5).progressViewStyle(.circular)
+            ProgressView(value: 0.25).progressViewStyle(PercentStyle())
+        }
+    }
+}
+
+@MainActor
+func checkProgressViewStyle(_ mock: MockRenderer) {
+    Runtime.shared.installRootView { ProgressStyleScreen() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 760)
+    Runtime.shared.setNeedsRender()
+    Runtime.shared.renderFrame()
+    expect(findTextInTree(mock.lastTree!, "done 25%"), "an app's ProgressViewStyle makes the view")
+    var buffer = ByteBuffer(bytes: FlatTreeEncoder().encode(root: mock.lastTree!))
+    let root = getRoot(byteBuffer: &buffer) as IsoFlat_Node
+    expect(allParams(root, key: "pstyle") == ["circular"], "a built-in style reaches the host by kind (\(allParams(root, key: "pstyle")))")
 }

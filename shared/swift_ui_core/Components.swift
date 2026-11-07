@@ -8,6 +8,9 @@ public struct ProgressView<Label: View> {
     let value: Double?
     let label: Label
     let hasLabel: Bool
+    /// Made from a style's configuration (`ProgressView(configuration)`):
+    /// drawn as Isomer's, whatever style is in scope.
+    var fromConfiguration = false
 
     public typealias Body = Never
     public var body: Never { fatalError("primitive view") }
@@ -58,7 +61,23 @@ extension ProgressView {
 extension ProgressView: _PrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
+        let style = ctx.env[_ProgressViewStyleKey.self]
+        // An app's style makes the whole view, from the progress's parts;
+        // the style isn't in scope inside it (its own ProgressViews are
+        // Isomer's).
+        if !fromConfiguration, let custom = style?.custom {
+            let configuration = ProgressViewStyleConfiguration(
+                fractionCompleted: value,
+                label: hasLabel ? ProgressViewStyleConfiguration.Label(content: AnyView(label)) : nil,
+                currentValueLabel: nil)
+            var sub = ctx.descend("pcustom")
+            sub.env[_ProgressViewStyleKey.self] = nil
+            return buildNode(view: custom(configuration), ctx: &sub)
+        }
         let bar = RenderNode(kind: .progress(value))
+        // `.progressViewStyle(.linear)` / `(.circular)`: the host's indicator
+        // of that kind (param "pstyle").
+        if let kind = style?.kind, !kind.isEmpty { bar.progressStyle = kind }
         // `.tint` in scope colors the bar's fill (SwiftUI's).
         bar.tint = ctx.env.tint
         // `.opacity` reaches leaves through the environment; a spinner kept

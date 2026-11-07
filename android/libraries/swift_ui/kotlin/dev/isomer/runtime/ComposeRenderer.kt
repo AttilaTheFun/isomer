@@ -1067,11 +1067,23 @@ fun IsoNode(
         "progress" -> if (j.has("v")) {
             // `.tint`: the bar's fill (Material's track and shape otherwise).
             val tint = hexColorOf(j.optJSONObject("params")?.optString("tint") ?: "")
-            LinearProgressIndicator(
-                progress = { j.optDouble("v", 0.0).toFloat() },
-                modifier = m.fillMaxWidth(),
-                color = tint ?: ProgressIndicatorDefaults.linearColor,
-            )
+            // `.progressViewStyle(.circular)` with a value: a ring filled to it.
+            if (j.optJSONObject("params")?.optString("pstyle") == "circular") {
+                CircularProgressIndicator(
+                    progress = { j.optDouble("v", 0.0).toFloat() },
+                    modifier = m.size(28.dp),
+                    color = tint ?: ProgressIndicatorDefaults.circularColor,
+                )
+            } else {
+                LinearProgressIndicator(
+                    progress = { j.optDouble("v", 0.0).toFloat() },
+                    modifier = m.fillMaxWidth(),
+                    color = tint ?: ProgressIndicatorDefaults.linearColor,
+                )
+            }
+        } else if (j.optJSONObject("params")?.optString("pstyle") == "linear") {
+            // `.progressViewStyle(.linear)` without a value: an indeterminate bar.
+            LinearProgressIndicator(m.fillMaxWidth().graphicsLayer())
         } else {
             // Its own layer: the spinner redraws every frame, and without
             // one each frame re-records everything that shares its layer (a

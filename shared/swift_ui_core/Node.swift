@@ -477,6 +477,9 @@ package final class RenderNode {
     var lineSpacing: Double?
     /// `.tracking` / `.kerning` for text: points added between characters.
     var tracking: Double?
+    /// `.progressViewStyle(.linear)` / `(.circular)`: the progress
+    /// indicator's kind (param "pstyle"); nil, the platform's choice.
+    var progressStyle: String?
     /// `.id(_:)`: the scroll target name a `ScrollViewProxy.scrollTo` uses.
     var scrollTarget: String?
     var sliderFraction: Double = 0

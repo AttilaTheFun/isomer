@@ -38,6 +38,10 @@ extension StoryCatalog {
             "controls.progress", "ProgressView",
             summary: "Work under way: a spinner when its length is unknown, a bar when it is."
         ) { ProgressStory() },
+        Story(
+            "controls.progressstyle", "ProgressViewStyle",
+            summary: "How ProgressViews draw: .circular as a ring filled to the value, .linear as a bar, or an app's own ProgressViewStyle made from the fraction and the label."
+        ) { ProgressStyleStory() },
     ])
 }
 
@@ -201,6 +205,32 @@ struct ProgressStory: View {
             ProgressView(value: 0.4)
             ProgressView("Uploading", value: done, total: 10)
             Stepper("Done: \(Int(done)) of 10", value: $done, in: 0 ... 10)
+        }
+    }
+}
+// end story
+
+// story: controls.progressstyle
+struct BatteryProgressStyle: ProgressViewStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        let fraction = configuration.fractionCompleted ?? 0
+        HStack(spacing: 8) {
+            configuration.label
+            Text("\(Int(fraction * 100))%").monospacedDigit()
+            Capsule().fill(.green).frame(width: 60 * fraction, height: 10)
+        }
+    }
+}
+
+struct ProgressStyleStory: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            ProgressView(value: 0.6)
+                .progressViewStyle(.circular)
+            ProgressView(value: 0.3)
+                .progressViewStyle(.linear)
+            ProgressView("Charging", value: 0.75)
+                .progressViewStyle(BatteryProgressStyle())
         }
     }
 }
