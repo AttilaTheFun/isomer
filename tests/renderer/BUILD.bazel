@@ -12,6 +12,7 @@ swift_binary(
         "MockHost.swift",
         "MockRendererTests.swift",
         "ObservableObjectTests.swift",
+        "PresentedDestinationTests.swift",
     ],
     # SwiftUI's macros expand to `SwiftUI.State` and the like: the core is
     # IsomerCore here, so the name is aliased to it, as in the core itself.

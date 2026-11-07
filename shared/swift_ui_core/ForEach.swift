@@ -165,11 +165,14 @@ extension _DeletableRows: _IndexedRows {
         let rows = indexed.indexedRows()
         guard let action else { return rows }
         return _ForEachRows(count: rows.count, id: rows.id, view: { offset in
-            AnyView(rows.view(offset)).swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                Button(role: .destructive) { action(IndexSet(integer: offset)) } label: {
-                    Label("Delete", systemImage: "trash")
+            // A swipe deletes it; while editing (ListEditing.swift), a red
+            // minus before it does.
+            _DeletableEditingRow(content: AnyView(rows.view(offset)), delete: { action(IndexSet(integer: offset)) })
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    Button(role: .destructive) { action(IndexSet(integer: offset)) } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
                 }
-            }
         })
     }
 }

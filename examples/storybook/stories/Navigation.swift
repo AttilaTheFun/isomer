@@ -9,6 +9,10 @@ extension StoryCatalog {
             summary: "Rows that push a screen onto the page's NavigationStack: by value, the destination chosen by the value's type, or with the destination written in place. Back returns."
         ) { NavigationLinksStory() },
         Story(
+            "navigation.presented", "Presented destinations",
+            summary: "A screen pushed by state rather than a link: navigationDestination(isPresented:) while a Bool is true, navigationDestination(item:) while an optional has a value. Back sets them false or nil again."
+        ) { PresentedDestinationsStory() },
+        Story(
             "navigation.toolbar", "Toolbar",
             summary: "Buttons in the navigation bar, placed by role. These two join this page's bar while the story is open."
         ) { ToolbarStory() },
@@ -49,6 +53,33 @@ struct NavigationLinksStory: View {
                 Text("\(planet.moons) moons").foregroundColor(.secondary)
             }
             .navigationTitle(planet.name)
+        }
+    }
+}
+// end story
+
+// story: navigation.presented
+struct PresentedDestinationsStory: View {
+    @State private var showsAbout = false
+    @State private var selectedMoon: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Button("About this page") { showsAbout = true }
+            ForEach(["Phobos", "Deimos"], id: \.self) { moon in
+                Button("Open \(moon)") { selectedMoon = moon }
+            }
+            Text(selectedMoon.map { "Showing \($0)" } ?? "No moon open")
+                .foregroundStyle(.secondary)
+        }
+        .navigationDestination(isPresented: $showsAbout) {
+            Text("Pushed while showsAbout is true.")
+                .padding()
+                .navigationTitle("About")
+        }
+        .navigationDestination(item: $selectedMoon) { moon in
+            Text(moon).font(.largeTitle)
+                .navigationTitle(moon)
         }
     }
 }

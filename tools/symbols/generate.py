@@ -79,7 +79,7 @@ MAP = {
     "sparkles.rectangle.stack": "sparkles", "archivebox": "archive", "swift": "bird", "phone.down": "phone-off",
     "app.dashed": "square-dashed", "play.circle": "circle-play", "checkmark.seal.fill": "badge-check",
     "shippingbox.fill": "package", "stop.fill": "square", "hand.raised.fill": "hand", "exclamationmark.triangle.fill": "triangle-alert",
-    "xmark.circle.fill": "circle-x", "plus.circle.fill": "circle-plus", "ellipsis.circle.fill": "circle-ellipsis", "cloud.fill": "cloud", "play.fill": "play",
+    "xmark.circle.fill": "circle-x", "plus.circle.fill": "circle-plus", "minus.circle.fill": "circle-minus", "ellipsis.circle.fill": "circle-ellipsis", "cloud.fill": "cloud", "play.fill": "play",
     "phone.fill": "phone", "phone.down.fill": "phone-off", "square.and.arrow.up.fill": "share",
     "arrow.up.forward.square": "square-arrow-up-right", "arrow.down.backward.square": "square-arrow-down-left",
     "arrow.up.right.square": "square-arrow-up-right", "arrow.down.left.square": "square-arrow-down-left",

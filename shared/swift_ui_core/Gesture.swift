@@ -116,10 +116,20 @@ struct GestureParts {
     var drag: DragGesture?
     var magnifyChanged: ((CGFloat) -> Void)?
     var magnifyEnded: ((CGFloat) -> Void)?
+    /// A tap (`TapGesture`): how many, and what it does.
+    var tap: (count: Int, action: () -> Void)?
+    /// A long press (`LongPressGesture`).
+    var longPress: LongPressSpec?
+    /// Run when the interaction ends, completed or not (a `@GestureState`
+    /// going back to its initial value).
+    var finished: (() -> Void)?
 
     /// Both gestures' handlers; each kind runs every handler given for it.
     func merged(with other: GestureParts) -> GestureParts {
         var out = self
+        out.tap = other.tap ?? tap
+        out.longPress = other.longPress ?? longPress
+        out.finished = Self.both(finished, other.finished)
         if let theirs = other.drag {
             if let ours = drag {
                 var both = ours
@@ -140,6 +150,24 @@ struct GestureParts {
         guard let b else { return a }
         return { a($0); b($0) }
     }
+}
+
+extension GestureParts {
+    private static func both(_ a: (() -> Void)?, _ b: (() -> Void)?) -> (() -> Void)? {
+        guard let a else { return b }
+        guard let b else { return a }
+        return { a(); b() }
+    }
+}
+
+/// A long press, as a node carries it to the host (param "longPress"): the
+/// host reports the press going down and up ("press:1", "press:0") and,
+/// held for `minimumDuration` within `maximumDistance`, "fire".
+struct LongPressSpec {
+    var minimumDuration: Double
+    var maximumDistance: CGFloat
+    var pressing: ((Bool) -> Void)?
+    var perform: (() -> Void)?
 }
 
 public struct DragGesture {
@@ -378,6 +406,12 @@ extension _GestureModifier: _PrimitiveView {
         box.dragGesture = parts.drag
         box.magnifyChanged = parts.magnifyChanged
         box.magnifyEnded = parts.magnifyEnded
+        if let tap = parts.tap, ctx.env.isEnabled {
+            box.tapAction = tap.action
+            box.tapCount = max(1, tap.count)
+        }
+        box.longPress = parts.longPress
+        box.gestureFinished = parts.finished
         return box
     }
 }

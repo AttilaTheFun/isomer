@@ -19,6 +19,10 @@ extension StoryCatalog {
             summary: "Underline and strikethrough, colored text, and styled Text interpolated into a string: one run that wraps as one paragraph."
         ) { TextDecorationStory() },
         Story(
+            "text.tracking", "Tracking and kerning",
+            summary: "Space added between characters, or taken away with a negative value: on one Text, or on a view, where it reaches every Text inside."
+        ) { TextTrackingStory() },
+        Story(
             "text.markdown", "Markdown",
             summary: "A string literal is a LocalizedStringKey, read as Markdown: bold, italic, code and links. Text(verbatim:) shows the characters as they are."
         ) { TextMarkdownStory() },
@@ -97,6 +101,23 @@ struct TextDecorationStory: View {
             Text("Secondary text").foregroundColor(.secondary)
             Text("A \(Text("bold").bold()) word and an \(Text("orange").foregroundColor(.orange)) one, interpolated into one paragraph that wraps as prose does.")
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+// end story
+
+// story: text.tracking
+struct TextTrackingStory: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Tight headline").font(.title2).tracking(-1)
+            Text("Normal spacing").font(.title2)
+            Text("WIDE CAPS").font(.headline).kerning(4)
+            VStack(alignment: .leading) {
+                Text("Every line in here")
+                Text("is spaced out by 2 points")
+            }
+            .tracking(2)
         }
     }
 }

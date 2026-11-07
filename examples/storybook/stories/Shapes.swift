@@ -26,6 +26,14 @@ extension StoryCatalog {
             summary: "Colors blended along a line, out from a point, and around a centre."
         ) { GradientsStory() },
         Story(
+            "shapes.gradientstyles", "Gradients as styles",
+            summary: "The same gradients written as shape styles, .linearGradient(…), .radialGradient(…) and .conicGradient(…), where a fill or foreground style takes them, from stops as well as colours."
+        ) { GradientStylesStory() },
+        Story(
+            "shapes.rotation", "Rotated shapes",
+            summary: "A shape turned about its centre or a corner with rotation(_:anchor:): still a shape, so it fills and strokes like any other."
+        ) { RotatedShapesStory() },
+        Story(
             "shapes.colors", "Colors",
             summary: "The system colors, which adapt to light and dark appearance, and colors of your own."
         ) { ColorsStory() },
@@ -162,6 +170,47 @@ struct GradientsStory: View {
                 .fill(AngularGradient(colors: [.red, .yellow, .green, .blue, .purple, .red], center: .center))
                 .frame(width: 90, height: 90)
         }
+    }
+}
+// end story
+
+// story: shapes.gradientstyles
+struct GradientStylesStory: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            Capsule()
+                .fill(.linearGradient(stops: [.init(color: .teal, location: 0), .init(color: .indigo, location: 0.8)],
+                                      startPoint: .leading, endPoint: .trailing))
+                .frame(width: 90, height: 44)
+            Circle()
+                .fill(.radialGradient(colors: [.white, .pink], center: .center, startRadius: 2, endRadius: 40))
+                .frame(width: 80, height: 80)
+            Circle()
+                .fill(.conicGradient(colors: [.orange, .yellow, .orange], center: .center))
+                .frame(width: 80, height: 80)
+        }
+    }
+}
+// end story
+
+// story: shapes.rotation
+struct RotatedShapesStory: View {
+    var body: some View {
+        HStack(spacing: 24) {
+            Rectangle()
+                .rotation(.degrees(45))
+                .fill(.orange)
+                .frame(width: 60, height: 60)
+            RoundedRectangle(cornerRadius: 8)
+                .rotation(.degrees(20), anchor: .bottomLeading)
+                .stroke(.blue, lineWidth: 3)
+                .frame(width: 80, height: 50)
+            Capsule()
+                .rotation(.degrees(-30))
+                .fill(.green)
+                .frame(width: 80, height: 30)
+        }
+        .padding(20)
     }
 }
 // end story

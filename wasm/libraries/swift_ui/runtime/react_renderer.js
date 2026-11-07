@@ -107,6 +107,11 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
     style.id = "iso-react-style";
     style.textContent =
       "@keyframes iso-spin{to{transform:rotate(1turn)}}" +
+      // `.progressViewStyle(.linear)` with no value: a third of the bar
+      // sliding across its track.
+      "@keyframes iso-slide{from{left:-34%}to{left:100%}}" +
+      ".iso-indeterminate{position:absolute;top:0;bottom:0;width:34%;border-radius:2px;" +
+      "background:var(--iso-tint,#0a84ff);animation:iso-slide 1.2s ease-in-out infinite}" +
       // The spinner in the text's own colour, as iOS draws it in the
       // secondary label's: a faint track and a stronger head, so it reads on
       // a dark page and turns white on a selected row (a fixed mid-grey was
@@ -411,7 +416,50 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
     if (p.a11yChildren === "ignore" && p.a11yLabel !== undefined) props.role = props.role || "img";
     // `.id(_:)`: what a ScrollViewProxy's scrollTo finds.
     if (p.vid !== undefined) props["data-vid"] = p.vid;
+    // `.matchedGeometryEffect`: the element follows its key (see matchedRef).
+    if (p.match !== undefined) {
+      const key = p.match, props_ = p.matchProps;
+      props.ref = (el) => matchedRef(key, el, props_);
+    }
     return props;
+  }
+
+  // `.matchedGeometryEffect` by FLIP: each key's element and its last frame.
+  // An element that mounts with a key another element had (the other gone,
+  // or going, in the same change) starts at that element's frame and moves
+  // to its own; "matchProps" 1 moves without resizing, 2 resizes in place.
+  const matchedElements = new Map();
+  const matchedFrames = new Map();
+  function matchedRef(key, el, properties) {
+    if (!el) {
+      const current = matchedElements.get(key);
+      if (current && current.isConnected) matchedFrames.set(key, current.getBoundingClientRect());
+      return;
+    }
+    const previous = matchedElements.get(key);
+    const from = previous && previous !== el
+      ? (previous.isConnected ? previous.getBoundingClientRect() : matchedFrames.get(key))
+      : null;
+    matchedElements.set(key, el);
+    if (from && !el.__isoMatched) {
+      const to = el.getBoundingClientRect();
+      const moves = properties !== "2", resizes = properties !== "1";
+      const dx = moves ? from.left - to.left : 0, dy = moves ? from.top - to.top : 0;
+      const sx = resizes && to.width ? from.width / to.width : 1, sy = resizes && to.height ? from.height / to.height : 1;
+      if (dx || dy || sx !== 1 || sy !== 1) {
+        el.style.transformOrigin = "top left";
+        el.style.transition = "none";
+        el.style.transform = `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`;
+        el.getBoundingClientRect();
+        requestAnimationFrame(() => {
+          el.style.transition = "transform 0.35s ease-in-out";
+          el.style.transform = "";
+          el.addEventListener("transitionend", () => { el.style.transition = ""; el.style.transformOrigin = ""; }, { once: true });
+        });
+      }
+    }
+    el.__isoMatched = true;
+    requestAnimationFrame(() => { if (el.isConnected) matchedFrames.set(key, el.getBoundingClientRect()); });
   }
 
   // Node kinds that take input on their own, without a tap/drag/edit field.
@@ -594,6 +642,42 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
           st.wheelEnd = setTimeout(() => { sendEvent(magnify, `ended:${st.zoom}`); el.__isoGesture = null; }, 150);
         };
       }
+    }
+    // A long press (`LongPressGesture`, `onLongPressGesture`): "press:1" as
+    // the pointer goes down, "fire" once it has been held `lpMin` seconds
+    // without moving `lpDist` away, "press:0" when it lifts or strays. The
+    // view's other pointer handlers (a drag's) still run.
+    const longPress = (n.params || {}).longPress;
+    if (longPress) {
+      const minMs = Number((n.params || {}).lpMin ?? 0.5) * 1000;
+      const maxDistance = Number((n.params || {}).lpDist ?? 10);
+      const chain = (name, handler) => {
+        const before = props[name];
+        props[name] = (e) => { handler(e); if (before) before(e); };
+      };
+      const finish = (el) => {
+        const st = el.__isoLongPress;
+        if (!st) return;
+        clearTimeout(st.timer);
+        el.__isoLongPress = null;
+        sendEvent(longPress, "press:0");
+      };
+      chain("onPointerDown", (e) => {
+        const el = e.currentTarget;
+        if (el.__isoLongPress) return;
+        sendEvent(longPress, "press:1");
+        el.__isoLongPress = { x: e.clientX, y: e.clientY, timer: setTimeout(() => sendEvent(longPress, "fire"), minMs) };
+      });
+      chain("onPointerMove", (e) => {
+        const st = e.currentTarget.__isoLongPress;
+        if (st && Math.hypot(e.clientX - st.x, e.clientY - st.y) > maxDistance) finish(e.currentTarget);
+      });
+      chain("onPointerUp", (e) => finish(e.currentTarget));
+      chain("onPointerCancel", (e) => finish(e.currentTarget));
+      chain("onPointerLeave", (e) => finish(e.currentTarget));
+      // The system's own long-press menu would take the press over.
+      props.onContextMenu = (e) => e.preventDefault();
+      props.style = { ...(props.style || {}), WebkitTouchCallout: "none", userSelect: "none" };
     }
     // `.dropDestination`: files dragged over and dropped on the view.
     const drop = (n.params || {}).drop;
@@ -3844,6 +3928,11 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
         return h("div", props, kids);
       }
       case "text": {
+        // `.layoutPriority`: a higher one keeps its room, a lower one gives
+        // its room up first.
+        const priority = Number((n.params || {}).layoutPriority || 0);
+        if (priority > 0) s.flexShrink = 0;
+        else if (priority < 0) s.flexShrink = 1 + Math.min(1000, -priority * 10);
         s.fontSize = textSize(n);
         s.fontWeight = textWeight(n);
         s.color = rgba(n.color);
@@ -3860,6 +3949,8 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
         synthesizeBold(s, (n.params || {}).family, s.fontWeight, s.fontSize);
         // `.monospacedDigit()`: tabular figures.
         if ((n.params || {}).tnum === "1") s.fontVariantNumeric = "tabular-nums";
+        // `.tracking` / `.kerning`: points (CSS pixels) between characters.
+        if ((n.params || {}).tracking) s.letterSpacing = `${Number(n.params.tracking)}px`;
         // `.multilineTextAlignment` reaches the text itself.
         if (n.alignH === "center") s.textAlign = "center";
         else if (n.alignH === "trailing") s.textAlign = "right";
@@ -4053,6 +4144,27 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
         s.alignSelf = "stretch";
         return h("input", props);
       case "progress":
+        // `.progressViewStyle(.linear)` with no value: an indeterminate bar.
+        if (n.v == null && (n.params || {}).pstyle === "linear") {
+          props.role = "progressbar";
+          Object.assign(s, { alignSelf: "stretch", flex: "none", height: 4, borderRadius: 2, overflow: "hidden",
+                             position: "relative", background: "rgba(120,120,128,0.24)" });
+          return h("div", props, h("div", { className: "iso-indeterminate" }));
+        }
+        // `.progressViewStyle(.circular)` with a value: a ring filled to it.
+        if (n.v != null && (n.params || {}).pstyle === "circular") {
+          const fraction = Math.min(1, Math.max(0, Number(n.v) || 0));
+          props.role = "progressbar";
+          props["aria-valuemin"] = 0;
+          props["aria-valuemax"] = 1;
+          props["aria-valuenow"] = fraction;
+          Object.assign(s, { width: 22, height: 22, flex: "none" });
+          const ring = 2 * Math.PI * 9;
+          return h("svg", { ...props, viewBox: "0 0 22 22" },
+            h("circle", { cx: 11, cy: 11, r: 9, fill: "none", stroke: "rgba(120,120,128,0.3)", strokeWidth: 2.5 }),
+            h("circle", { cx: 11, cy: 11, r: 9, fill: "none", stroke: "var(--iso-tint, #0a84ff)", strokeWidth: 2.5,
+                          strokeDasharray: `${fraction * ring} ${ring}`, transform: "rotate(-90 11 11)", strokeLinecap: "round" }));
+        }
         if (n.v == null) {
           props.className = ((props.className || "") + " iso-spinner").trim();
           // `.controlSize`: the small spinner is 16px (Apple's), mini 12.
