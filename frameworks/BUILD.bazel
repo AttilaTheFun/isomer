@@ -27,5 +27,12 @@ swift_library_group(
             "//frameworks/core_transferable",
             "//frameworks/uniform_type_identifiers",
         ],
+    }) + select({
+        # Combine: on wasm and Android Isomer's Foundation brings it (one
+        # configuration of it: a second, linked beside, duplicates every
+        # symbol); on Linux and Windows the toolchain's Foundation doesn't.
+        "@platforms//os:linux": ["//frameworks/combine"],
+        "@platforms//os:windows": ["//frameworks/combine"],
+        "//conditions:default": [],
     }),
 )
