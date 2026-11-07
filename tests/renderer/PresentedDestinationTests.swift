@@ -213,3 +213,72 @@ func checkLayoutPriority(_ mock: MockRenderer) {
     let root = getRoot(byteBuffer: &buffer) as IsoFlat_Node
     expect(allParams(root, key: "layoutPriority") == ["1"], "layoutPriority reaches the host (\(allParams(root, key: "layoutPriority")))")
 }
+
+// List editing: EditButton turns editing on; a deletable row's minus
+// deletes it; a movable row's handle, dragged a row down, moves it.
+
+nonisolated(unsafe) var editItems = ["Ann", "Bo", "Cy"]
+
+struct EditingScreen: View {
+    var body: some View {
+        VStack {
+            EditButton()
+            List {
+                ForEach(editItems, id: \.self) { Text($0) }
+                    .onDelete { editItems.remove(atOffsets: $0); Runtime.shared.setNeedsRender() }
+                    .onMove { editItems.move(fromOffsets: $0, toOffset: $1); Runtime.shared.setNeedsRender() }
+            }
+        }
+    }
+}
+
+/// A tree's tap or drag ids, in tree order.
+func orderedIDs(_ node: IsoFlat_Node, drag: Bool) -> [String] {
+    var out: [String] = []
+    if let id = drag ? node.drag : node.tap, !id.isEmpty { out.append(id) }
+    for child in node.ch { out += orderedIDs(child, drag: drag) }
+    return out
+}
+
+@MainActor
+func checkListEditing(_ mock: MockRenderer) {
+    editItems = ["Ann", "Bo", "Cy"]
+    Runtime.shared.installRootView { EditingScreen() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 760)
+    Runtime.shared.setNeedsRender()
+    Runtime.shared.renderFrame()
+    /// This frame's taps and drags in tree order, its handlers installed.
+    func frame() -> (taps: [String], drags: [String]) {
+        let encoder = FlatTreeEncoder()
+        var buffer = ByteBuffer(bytes: encoder.encode(root: mock.lastTree!))
+        Runtime.shared.installTreeHandlers(encoder.handlers)
+        let root = getRoot(byteBuffer: &buffer) as IsoFlat_Node
+        return (orderedIDs(root, drag: false), orderedIDs(root, drag: true))
+    }
+    expect(findTextInTree(mock.lastTree!, "Edit"), "EditButton reads Edit")
+    let before = frame()
+    expect(before.drags.isEmpty, "no move handles until editing")
+    guard let edit = before.taps.first else { return expect(false, "EditButton is a tap target") }
+    Runtime.shared.hostViewEvent(id: edit, value: "")
+    Runtime.shared.renderFrame()
+    expect(findTextInTree(mock.lastTree!, "Done"), "editing: the button reads Done")
+    let editing = frame()
+    expect(editing.drags.count == 3, "each row has a move handle while editing (\(editing.drags.count))")
+    // Ann's handle dragged one row down: Bo, Ann, Cy.
+    if let first = editing.drags.first {
+        Runtime.shared.hostViewEvent(id: first, value: "changed:0,50")
+        Runtime.shared.hostViewEvent(id: first, value: "ended:0,50")
+    }
+    Runtime.shared.renderFrame()
+    expect(editItems == ["Bo", "Ann", "Cy"], "a handle dragged a row down moved its row (\(editItems))")
+    // A minus deletes its row: the taps now are Done and the three minuses.
+    let taps = frame().taps
+    expect(taps.count == 4, "Done and a minus per row (\(taps.count))")
+    if taps.count == 4 { Runtime.shared.hostViewEvent(id: taps[3], value: "") }
+    Runtime.shared.renderFrame()
+    expect(editItems == ["Bo", "Ann"], "the last row's minus deleted it (\(editItems))")
+    // Done: editing off, no handles.
+    if let done = frame().taps.first { Runtime.shared.hostViewEvent(id: done, value: "") }
+    Runtime.shared.renderFrame()
+    expect(findTextInTree(mock.lastTree!, "Edit") && frame().drags.isEmpty, "Done ends editing")
+}
