@@ -99,7 +99,7 @@ extension Shape {
 /// A shape turned about a point (`Shape.rotation(_:anchor:)`): its path is
 /// the shape's, rotated, in the frame it is drawn in.
 @frozen
-public struct RotatedShape<Content>: Shape where Content: Shape {
+public struct RotatedShape<Content> where Content: Shape {
     public var shape: Content
     public var angle: Angle
     public var anchor: UnitPoint
@@ -111,6 +111,11 @@ public struct RotatedShape<Content>: Shape where Content: Shape {
         self.anchor = anchor
     }
 
+}
+
+// In an extension, as every view's (see `View`): the type isn't main-actor
+// isolated, so its initializer and path can be made anywhere.
+extension RotatedShape: Shape {
     nonisolated public func path(in rect: CGRect) -> Path {
         let x = rect.minX + anchor.x * rect.width, y = rect.minY + anchor.y * rect.height
         let turn = CGAffineTransform(translationX: x, y: y).rotated(by: angle.radians).translatedBy(x: -x, y: -y)

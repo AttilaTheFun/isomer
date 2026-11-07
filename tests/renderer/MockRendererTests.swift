@@ -2895,6 +2895,7 @@ struct Main {
         checkPresentedDestinations(mock)
         checkItemDialogs(mock)
         checkProgressViewStyle(mock)
+        checkGestures(mock)
         checkListSectionFooter(mock)
         checkAlignmentGuideInOverlay(mock)
         checkFloatingProbeBuilds(mock)

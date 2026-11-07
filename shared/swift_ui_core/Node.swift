@@ -477,6 +477,12 @@ package final class RenderNode {
     var lineSpacing: Double?
     /// `.tracking` / `.kerning` for text: points added between characters.
     var tracking: Double?
+    /// A long press (`LongPressGesture`, `onLongPressGesture`): param
+    /// "longPress", its handler's id (TreeEncoder.swift).
+    var longPress: LongPressSpec?
+    /// A gesture's end, completed or not (`@GestureState`'s reset): run
+    /// after the host's last report of the interaction.
+    var gestureFinished: (() -> Void)?
     /// `.progressViewStyle(.linear)` / `(.circular)`: the progress
     /// indicator's kind (param "pstyle"); nil, the platform's choice.
     var progressStyle: String?

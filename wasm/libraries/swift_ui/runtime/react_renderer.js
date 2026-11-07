@@ -600,6 +600,42 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
         };
       }
     }
+    // A long press (`LongPressGesture`, `onLongPressGesture`): "press:1" as
+    // the pointer goes down, "fire" once it has been held `lpMin` seconds
+    // without moving `lpDist` away, "press:0" when it lifts or strays. The
+    // view's other pointer handlers (a drag's) still run.
+    const longPress = (n.params || {}).longPress;
+    if (longPress) {
+      const minMs = Number((n.params || {}).lpMin ?? 0.5) * 1000;
+      const maxDistance = Number((n.params || {}).lpDist ?? 10);
+      const chain = (name, handler) => {
+        const before = props[name];
+        props[name] = (e) => { handler(e); if (before) before(e); };
+      };
+      const finish = (el) => {
+        const st = el.__isoLongPress;
+        if (!st) return;
+        clearTimeout(st.timer);
+        el.__isoLongPress = null;
+        sendEvent(longPress, "press:0");
+      };
+      chain("onPointerDown", (e) => {
+        const el = e.currentTarget;
+        if (el.__isoLongPress) return;
+        sendEvent(longPress, "press:1");
+        el.__isoLongPress = { x: e.clientX, y: e.clientY, timer: setTimeout(() => sendEvent(longPress, "fire"), minMs) };
+      });
+      chain("onPointerMove", (e) => {
+        const st = e.currentTarget.__isoLongPress;
+        if (st && Math.hypot(e.clientX - st.x, e.clientY - st.y) > maxDistance) finish(e.currentTarget);
+      });
+      chain("onPointerUp", (e) => finish(e.currentTarget));
+      chain("onPointerCancel", (e) => finish(e.currentTarget));
+      chain("onPointerLeave", (e) => finish(e.currentTarget));
+      // The system's own long-press menu would take the press over.
+      props.onContextMenu = (e) => e.preventDefault();
+      props.style = { ...(props.style || {}), WebkitTouchCallout: "none", userSelect: "none" };
+    }
     // `.dropDestination`: files dragged over and dropped on the view.
     const drop = (n.params || {}).drop;
     if (drop) {

@@ -464,6 +464,12 @@ private fun baseModifier(n: JSONObject, extra: Modifier): Modifier {
     val dragID = n.optString("drag")
     val magnifyID = n.optJSONObject("params")?.optString("magnify") ?: ""
     if (dragID.isNotEmpty() || magnifyID.isNotEmpty()) m = m.guestGestures(dragID, magnifyID)
+    // A long press: "press:1", "fire" after lpMin seconds held within
+    // lpDist, "press:0" when it lifts or strays.
+    n.optJSONObject("params")?.optString("longPress")?.takeIf { it.isNotEmpty() }?.let { id ->
+        val p = n.optJSONObject("params")!!
+        m = m.guestLongPress(id, p.optString("lpMin").toDoubleOrNull() ?: 0.5, p.optString("lpDist").toFloatOrNull() ?: 10f)
+    }
     // Accessibility: the label and value TalkBack reads, and
     // `.accessibilityElement(children:)` (merge the children into this node,
     // or replace them with its own description).
@@ -3577,6 +3583,29 @@ private fun Modifier.doubleTap(id: String): Modifier = pointerInputOverChildren(
  *  and the magnification to the pinch handler, and "ended" to both when
  *  the last finger lifts. The gesture then owns the pointers (as a SwiftUI
  *  gesture does over a scroll view it sits in). */
+/** A guest's long press, reported as the web's is (see the caller). */
+private fun Modifier.guestLongPress(id: String, minSeconds: Double, maxDistance: Float): Modifier =
+    pointerInput(id, minSeconds, maxDistance) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            sendEvent(id, "press:1")
+            val limit = maxDistance * density
+            // Within the time: lifted, or strayed (true); held: null.
+            val endedEarly = withTimeoutOrNull((minSeconds * 1000).toLong()) {
+                while (true) {
+                    val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                    if (!change.pressed || (change.position - down.position).getDistance() > limit) break
+                }
+                true
+            }
+            if (endedEarly == null) {
+                sendEvent(id, "fire")
+                while (awaitPointerEvent().changes.any { it.pressed }) {}
+            }
+            sendEvent(id, "press:0")
+        }
+    }
+
 private fun Modifier.guestGestures(dragID: String, magnifyID: String): Modifier = pointerInputOverChildren(dragID + "|" + magnifyID) {
     awaitEachGesture {
         awaitFirstDown(requireUnconsumed = false)

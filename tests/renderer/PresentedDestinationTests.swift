@@ -143,3 +143,61 @@ func checkProgressViewStyle(_ mock: MockRenderer) {
     let root = getRoot(byteBuffer: &buffer) as IsoFlat_Node
     expect(allParams(root, key: "pstyle") == ["circular"], "a built-in style reaches the host by kind (\(allParams(root, key: "pstyle")))")
 }
+
+// Gestures: TapGesture through the tap handler; LongPressGesture with
+// @GestureState (true while pressed, reset when it ends) and onEnded; and
+// onLongPressGesture's perform and pressing.
+
+nonisolated(unsafe) var gestureLog: [String] = []
+
+struct GestureScreen: View {
+    @GestureState private var pressing = false
+
+    var body: some View {
+        VStack {
+            Text("tap me").gesture(TapGesture().onEnded { gestureLog.append("tapped") })
+            Text(pressing ? "pressing" : "idle")
+                .gesture(LongPressGesture(minimumDuration: 1)
+                    .updating($pressing) { value, state, _ in state = value }
+                    .onEnded { _ in gestureLog.append("long") })
+            Text("hold").onLongPressGesture(perform: { gestureLog.append("held") },
+                                            onPressingChanged: { gestureLog.append("pressing \($0)") })
+        }
+    }
+}
+
+@MainActor
+func checkGestures(_ mock: MockRenderer) {
+    gestureLog = []
+    Runtime.shared.installRootView { GestureScreen() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 760)
+    Runtime.shared.setNeedsRender()
+    Runtime.shared.renderFrame()
+    func handlers() -> [String: (String) -> Void] {
+        let encoder = FlatTreeEncoder()
+        _ = encoder.encode(root: mock.lastTree!)
+        Runtime.shared.installTreeHandlers(encoder.handlers)
+        return encoder.handlers
+    }
+    let first = handlers()
+    let taps = first.keys.filter { $0.hasSuffix(".tap") }
+    let presses = first.keys.filter { $0.hasSuffix(".longpress") }.sorted()
+    expect(taps.count == 1, "TapGesture gives the view a tap (\(taps))")
+    expect(presses.count == 2, "both long presses reach the host (\(presses))")
+    if let tap = taps.first { Runtime.shared.hostViewEvent(id: tap, value: "") }
+    expect(gestureLog == ["tapped"], "the tap ran onEnded (\(gestureLog))")
+
+    // The LongPressGesture: pressing sets the @GestureState, the press held
+    // runs onEnded, lifting resets the state.
+    guard presses.count == 2 else { return }
+    for id in presses { Runtime.shared.hostViewEvent(id: id, value: "press:1") }
+    Runtime.shared.renderFrame()
+    expect(findTextInTree(mock.lastTree!, "pressing"), "@GestureState is true while pressed")
+    _ = handlers()
+    for id in presses { Runtime.shared.hostViewEvent(id: id, value: "fire") }
+    for id in presses { Runtime.shared.hostViewEvent(id: id, value: "press:0") }
+    Runtime.shared.renderFrame()
+    expect(findTextInTree(mock.lastTree!, "idle"), "@GestureState goes back when the press ends")
+    expect(gestureLog.contains("long") && gestureLog.contains("held"), "both presses ran their action (\(gestureLog))")
+    expect(gestureLog.contains("pressing true") && gestureLog.contains("pressing false"), "onPressingChanged saw down and up (\(gestureLog))")
+}

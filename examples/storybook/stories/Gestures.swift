@@ -20,6 +20,10 @@ extension StoryCatalog {
             "gestures.hover", "Hover",
             summary: "Whether the pointer is over a view: on the Mac, the web and Windows, and with a mouse or trackpad on iPad and Android."
         ) { HoverStory() },
+        Story(
+            "gestures.longpress", "Long press and GestureState",
+            summary: "A press held for a moment: LongPressGesture updating a @GestureState while the finger is down (back to false when it lifts), and onLongPressGesture with its pressing callback."
+        ) { LongPressStory() },
     ])
 }
 
@@ -109,6 +113,31 @@ struct HoverStory: View {
             .background(hovering ? Color.green.opacity(0.3) : Color.secondary.opacity(0.1))
             .cornerRadius(12)
             .onHover { hovering = $0 }
+    }
+}
+// end story
+
+// story: gestures.longpress
+struct LongPressStory: View {
+    @GestureState private var isPressing = false
+    @State private var completed = 0
+    @State private var held = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Circle()
+                .fill(isPressing ? Color.orange : Color.blue)
+                .frame(width: 80, height: 80)
+                .gesture(LongPressGesture(minimumDuration: 1)
+                    .updating($isPressing) { pressing, state, _ in state = pressing }
+                    .onEnded { _ in completed += 1 })
+            Text("Held for a second \(completed) times")
+            Text(held ? "Pressing" : "Press and hold")
+                .padding(10)
+                .background(held ? Color.green.opacity(0.3) : Color.gray.opacity(0.2))
+                .cornerRadius(8)
+                .onLongPressGesture(perform: { completed += 1 }, onPressingChanged: { held = $0 })
+        }
     }
 }
 // end story

@@ -1176,6 +1176,7 @@ package final class FlatTreeEncoder {
         // A drag gesture: the host tracks the pointer and reports the running
         // translation ("changed:x,y") and the release ("ended:x,y") on the
         // node's ".drag" id; the guest's DragGesture callbacks run from there.
+        let finished = node.gestureFinished
         if let gesture = node.dragGesture {
             let id = "\(handle()).drag"
             register(id, { value in
@@ -1190,7 +1191,9 @@ package final class FlatTreeEncoder {
                 let payload = DragGesture.Value(startLocation: .zero, location: CGPoint(x: x, y: y), velocity: velocity)
                 switch parts[0] {
                 case "changed": gesture.onChangedAction?(payload)
-                case "ended": gesture.onEndedAction?(payload)
+                case "ended":
+                    gesture.onEndedAction?(payload)
+                    finished?()
                 default: break
                 }
             })
@@ -1208,9 +1211,30 @@ package final class FlatTreeEncoder {
             register(id, { value in
                 let parts = value.split(separator: ":", maxSplits: 1)
                 guard parts.count == 2, let m = Double(parts[1]) else { return }
-                if parts[0] == "changed" { changed?(CGFloat(m)) } else if parts[0] == "ended" { ended?(CGFloat(m)) }
+                if parts[0] == "changed" { changed?(CGFloat(m)) } else if parts[0] == "ended" { ended?(CGFloat(m)); finished?() }
             })
             out.params = (out.params ?? []) + [("magnify", id)]
+        }
+        // A long press: the host reports "press:1" when the pointer goes
+        // down, "fire" once it has been held long enough without moving
+        // away, and "press:0" when it lifts (or the press is lost).
+        if let press = node.longPress {
+            let id = "\(handle()).longpress"
+            register(id, { value in
+                switch value {
+                case "press:1": press.pressing?(true)
+                case "fire": press.perform?()
+                case "press:0":
+                    press.pressing?(false)
+                    finished?()
+                default: break
+                }
+            })
+            out.params = (out.params ?? []) + [
+                ("longPress", id),
+                ("lpMin", formatNumber(press.minimumDuration)),
+                ("lpDist", formatNumber(Double(press.maximumDistance))),
+            ]
         }
         if node.ignoresSafeArea {
             out.params = (out.params ?? []) + [("safeArea", "ignore")]
