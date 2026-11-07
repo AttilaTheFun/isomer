@@ -16,5 +16,6 @@ out="$(cd "$2" && pwd)"
 stories=($(sed -n 's/^ *"\([a-z]*\.[a-z]*\)",$/\1/p' "$ROOT/examples/tests/platforms/stories.bzl"))
 [ ${#stories[@]} -gt 0 ] || { echo "hosted_android_test.sh: no stories" >&2; exit 1; }
 sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:?no Android SDK on this runner}}"
-serial="$("$ROOT/tools/ci/hosted_android_emulator.sh" "$out/emulator.log")"
+"$ROOT/tools/ci/hosted_android_emulator.sh" "$out/emulator.log" "$out/serial" < /dev/null > /dev/null
+serial="$(cat "$out/serial")"
 exec "$ROOT/tools/ci/android_test.sh" "$sdk/platform-tools/adb" "$serial" "$apk" "$out" "${stories[@]}"

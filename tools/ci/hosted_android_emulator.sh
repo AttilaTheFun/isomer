@@ -5,14 +5,16 @@
 # runner's Android SDK's emulator, an x86_64 Android 14 (the AOSP image)
 # shaped as the hermetic one is (1080×1920, 420 dpi), its status bar held
 # still by SystemUI's demo mode. It boots, and stays running for the rest
-# of the job; its serial is printed (everything else goes to standard error).
+# of the job; its serial is written to <serial file>. (Not printed: a
+# caller's `$(…)` would wait for the emulator and adb's server, which keep
+# the output open, to end.)
 #
-#   tools/ci/hosted_android_emulator.sh <emulator log>
+#   tools/ci/hosted_android_emulator.sh <emulator log> <serial file>
 set -euo pipefail
-log="${1:?usage: hosted_android_emulator.sh <emulator log>}"
+log="${1:?usage: hosted_android_emulator.sh <emulator log> <serial file>}"
+serial_file="${2:?usage: hosted_android_emulator.sh <emulator log> <serial file>}"
 mkdir -p "$(dirname "$log")"
 sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:?no Android SDK on this runner}}"
-exec 3>&1 1>&2
 
 # KVM for the runner's user.
 echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' |
@@ -67,4 +69,5 @@ for _ in 1 2 3; do
     sleep 5
 done
 
-"$adb" devices | awk 'NR > 1 && $2 == "device" { print $1; exit }' >&3
+"$adb" devices | awk 'NR > 1 && $2 == "device" { print $1; exit }' > "$serial_file"
+[ -s "$serial_file" ] || { echo "hosted_android_emulator.sh: no device" >&2; exit 1; }

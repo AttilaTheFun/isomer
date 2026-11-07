@@ -258,7 +258,8 @@ shoot_setup() {
             fi ;;
         android)
             export PROOF_ADB="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}/platform-tools/adb"
-            PROOF_ANDROID_SERIAL="$("$ROOT/tools/ci/hosted_android_emulator.sh" "$review/emulator.log")"
+            "$ROOT/tools/ci/hosted_android_emulator.sh" "$review/emulator.log" "$work/serial" < /dev/null
+            PROOF_ANDROID_SERIAL="$(cat "$work/serial")"
             export PROOF_ANDROID_SERIAL ;;
         web)
             CDP_CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
