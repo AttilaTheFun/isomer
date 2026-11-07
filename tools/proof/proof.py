@@ -750,7 +750,9 @@ def macos_here(review, story_list, builds):
     as the Dock opens them, each pictured by its window alone (`screencapture
     -l`: no shadow, nothing behind), with a home of the proof's own
     (CFFIXED_USER_HOME), as on a slot."""
-    work = tempfile.mkdtemp(prefix="proof-macos-")
+    # Its real path: /var/folders is /private/var/folders to a running
+    # app, which pgrep finds by its binary's path.
+    work = os.path.realpath(tempfile.mkdtemp(prefix="proof-macos-"))
     home = os.path.join(work, "home")
     os.makedirs(home)
     control = os.path.join(work, "storybook-control")
