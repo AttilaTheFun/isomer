@@ -10,7 +10,7 @@
 		<string>$(AppIdentifierPrefix)$(CFBundleIdentifier)</string>
 	</array>
 	<!-- Applications' container, where the app writes the build it is
-	     (ApplicationUpdates) -->
+	     (UpdateKit) -->
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>group.com.LoganShire.Applications</string>

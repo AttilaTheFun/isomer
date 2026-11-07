@@ -2,7 +2,7 @@ load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
 
 package(default_visibility = ["//visibility:public"])
 
-# Which of an app's builds this is (AttilaTheFun/applications'
+# Which of an app's builds this is (the private AttilaTheFun/applications'
 # docs/VARIANTS.md, whose tools/variant this is): Alpha, the default
 # (every main and pull request build), Beta (TestFlight's, for later),
 # Production (a release branch's) or AdHoc (a pull request's branch, built

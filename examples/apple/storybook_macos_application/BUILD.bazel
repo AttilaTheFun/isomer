@@ -5,7 +5,7 @@ load("//tools/variant:defs.bzl", "variant_infoplist")
 
 # The Storybook on the Mac: the Storybook's own app, which releases hand out.
 # One bundle id for every build and for the iPhone's
-# (AttilaTheFun/applications' docs/VARIANTS.md).
+# (the private AttilaTheFun/applications' docs/VARIANTS.md).
 BUNDLE_ID = "com.LoganShire.IsomerStorybook"
 
 # BuildVariant and the name under its icon (//tools/variant), as the
@@ -31,7 +31,7 @@ swift_library(
         "@isomer//apple/libraries/swift_ui",
         "@isomer//apple/libraries/swift_ui:isomer",
         # The build it is, written for Applications at launch (ExampleApp.swift).
-        "@swiftpkg_applications//:ApplicationUpdates",
+        "@swiftpkg_update_kit//:UpdateKit",
     ],
 )
 

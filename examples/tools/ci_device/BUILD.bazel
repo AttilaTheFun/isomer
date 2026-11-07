@@ -8,7 +8,7 @@ package(default_visibility = ["//visibility:public"])
 # placeholder, which allows what the apps' entitlements ask for (their own
 # app ID and keychain group, and Applications' app group). Applications
 # Server replaces both, the profile and the signature, with the bundle id's
-# own (AttilaTheFun/applications' docs/CI.md, "What the server does with
+# own (the private AttilaTheFun/applications' docs/CI.md, "What the server does with
 # each build"). A plain plist: rules_applecross's `security cms -D` off a
 # Mac reads the plist in a profile, so this builds on Linux alone, as CI
 # does. The setting refines the device's alone, so an app's select takes it

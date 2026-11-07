@@ -4,7 +4,7 @@
 // starts.
 
 import ApplePlatformServices
-import ApplicationUpdates
+import UpdateKit
 import PlatformServices
 import SwiftUI
 
@@ -25,7 +25,7 @@ struct PlaygroundApp: App {
         installPlatformImagePicker(imagePicker: NativeImagePickerService())
         installPlatformDeviceMotion(deviceMotion: NativeDeviceMotionService.shared)
         // The build it is, written for Applications at each launch; and its
-        // updates, told of while it is in front (ApplicationUpdates).
+        // updates, told of while it is in front (UpdateKit).
         AppUpdates.start()
     }
 

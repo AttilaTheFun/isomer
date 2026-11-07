@@ -215,7 +215,7 @@ build:apple_on_linux --action_env=RULES_APPLECROSS_RELAX_ACTOOL_ICON_COMPOSER=1
 # `--config=windows_on_linux --platforms=@isomer//tools/platforms:windows_arm64`.
 build:windows_on_linux --extra_toolchains=@swift_windows_sdk//:all
 
-# Which of an app's builds (AttilaTheFun/applications' docs/VARIANTS.md):
+# Which of an app's builds (the private AttilaTheFun/applications' docs/VARIANTS.md):
 # Alpha, the default (every main and pull request build), Beta (TestFlight's,
 # for later), Production, which only CI's release job builds, on a release
 # branch, or AdHoc, a pull request's branch built by hand. One bundle id,
