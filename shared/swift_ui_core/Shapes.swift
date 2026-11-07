@@ -87,6 +87,37 @@ extension Shape {
 
 }
 
+extension Shape {
+    /// `rotation(_:anchor:)`: the shape turned by `angle` about `anchor`
+    /// (its centre by default), a shape of its own (filled, stroked,
+    /// trimmed as any other).
+    nonisolated public func rotation(_ angle: Angle, anchor: UnitPoint = .center) -> RotatedShape<Self> {
+        RotatedShape(shape: self, angle: angle, anchor: anchor)
+    }
+}
+
+/// A shape turned about a point (`Shape.rotation(_:anchor:)`): its path is
+/// the shape's, rotated, in the frame it is drawn in.
+@frozen
+public struct RotatedShape<Content>: Shape where Content: Shape {
+    public var shape: Content
+    public var angle: Angle
+    public var anchor: UnitPoint
+
+    @inlinable
+    nonisolated public init(shape: Content, angle: Angle, anchor: UnitPoint = .center) {
+        self.shape = shape
+        self.angle = angle
+        self.anchor = anchor
+    }
+
+    nonisolated public func path(in rect: CGRect) -> Path {
+        let x = rect.minX + anchor.x * rect.width, y = rect.minY + anchor.y * rect.height
+        let turn = CGAffineTransform(translationX: x, y: y).rotated(by: angle.radians).translatedBy(x: -x, y: -y)
+        return shape.path(in: rect).applying(turn)
+    }
+}
+
 /// A shape that can be inset (and so stroked inside its edge).
 public protocol InsettableShape: Shape {
     associatedtype InsetShape: InsettableShape
@@ -417,6 +448,14 @@ public struct Path: Equatable, Sendable {
     public mutating func closeSubpath() { elements.append(.closeSubpath) }
     public mutating func addPath(_ path: Path, transform: CGAffineTransform = .identity) {
         for segment in path.elements { append(segment, transform) }
+    }
+
+    /// The path transformed (its whole shapes as their outlines, unless
+    /// the transform only moves them).
+    public func applying(_ transform: CGAffineTransform) -> Path {
+        var path = Path()
+        path.addPath(self, transform: transform)
+        return path
     }
 
     /// A segment, transformed: a whole shape stays one while the transform

@@ -493,11 +493,6 @@ extension Path {
     public func lineSubtraction(_ other: Path, eoFill: Bool = false) -> Path { fatalError() }
 }
 
-extension Path {
-    @available(*, unavailable, message: "Not yet in Isomer: Shapes, colors and geometry (docs/parity/SwiftUI.md)")
-    public func applying(_ transform: CGAffineTransform) -> Path { fatalError() }
-}
-
 extension RoundedRectangle {
     @available(*, unavailable, message: "Not yet in Isomer: Shapes, colors and geometry (docs/parity/SwiftUI.md)")
     public var cornerSize: CGSize { fatalError() }
