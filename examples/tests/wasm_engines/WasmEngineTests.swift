@@ -98,6 +98,9 @@ final class WasmEngineTests: XCTestCase {
     /// The threaded tap counter (wasm32-unknown-wasip1-threads: shared
     /// memory, wasi.thread-spawn) on WasmKit's WASI Threads.
     func testWasmKitRunsTheThreadedReactor() throws {
+        // No wasi-threads SDK until Swift 6.5 (swiftlang/swift#92018):
+        // the threaded reactors aren't built meanwhile (TODO.md).
+        throw XCTSkip("No wasi-threads SDK for Swift 6.4")
         guard WasmKitRuntime.canRunThreads else { throw XCTSkip("WasmKit can make no shared memory here") }
         try MainActor.assumeIsolated {
             try Self.exercise(
@@ -110,6 +113,9 @@ final class WasmEngineTests: XCTestCase {
     /// the main actor on the host's thread, the app's other tasks on the
     /// guest's own pool of threads.
     func testWasmKitThreadedNetworkingDependencyInjection() async throws {
+        // No wasi-threads SDK until Swift 6.5 (swiftlang/swift#92018):
+        // the threaded reactors aren't built meanwhile (TODO.md).
+        throw XCTSkip("No wasi-threads SDK for Swift 6.4")
         guard WasmKitRuntime.canRunThreads else { throw XCTSkip("WasmKit can make no shared memory here") }
         try await Self.exerciseNetworkingDI(
             WasmKitRuntime(), name: "WasmKit-threads",

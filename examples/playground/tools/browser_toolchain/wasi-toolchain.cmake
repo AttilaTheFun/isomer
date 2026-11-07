@@ -1,5 +1,5 @@
 # CMake toolchain file: build HOST tools for wasm32-wasip1 with the swift.org
-# 6.3.2 clang (which has the wasm backend) against the SwiftWasm SDK's WASI
+# clang (which has the wasm backend) against the SwiftWasm SDK's WASI
 # sysroot. Set ISO_WASM_SDK (the artifactbundle's wasm32-unknown-wasip1 dir)
 # and ISO_BASE_TC (the swift.org toolchain's usr/bin) in the environment.
 set(CMAKE_SYSTEM_NAME WASI)

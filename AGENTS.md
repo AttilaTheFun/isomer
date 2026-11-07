@@ -53,7 +53,7 @@ nothing under `swift_ffi/` may depend on anything outside it but Foundation,
 and so on up. A consumer pins ONE version of isomer (by version from the
 project's registry, AttilaTheFun/bazel_registry, from 0.36.0; a commit
 between releases) and lists that registry before the BCR in its .bazelrc:
-no override of isomer's dependencies since 0.40 (rules_swift 4.2.2.isomer.1
+no override of isomer's dependencies since 0.40 (rules_swift 4.2.2.isomer.3
 sorts above the 4.2.2 rules_applecross asks for). FlatBuffers is a registry version with isomer's patches since
 0.40 (25.12.19.isomer.1): no override of it, nor of rules_foreign_cc.
 
@@ -83,10 +83,10 @@ minor (MAJOR.MINOR.0) before the release's commit.
 by version at a release (a commit is fine on a branch, or on main between
 releases). Bazel modules come from bazel_registry, before the BCR: isomer's
 releases, visor's, and the forks isomer carries until upstream takes their
-changes, as patched versions (rules_swift 4.2.2.isomer.1: upstream 4.2.2
-with rules_swift#1989, #1860, #1990 and #1995, each a patch taken from the
-PR's head). A change to a fork or to those
-patches is a new entry (.isomer.2), made with the registry's
+changes, as patched versions (rules_swift 4.2.2.isomer.3: upstream 4.2.2
+with rules_swift#1989, #1860, #1990, #1995, #1985 and #2000, each a patch
+taken from the PR's head). A change to a fork or to those
+patches is a new entry (.isomer.4), made with the registry's
 tools/add_version.py --fork and approved there like any version. Swift
 packages are SwiftPM's, through rules_swift_package_manager, never Bazel
 modules. tools/released_pins.sh says whether every pin is a released
@@ -389,16 +389,16 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   `include()` in MODULE.bazel, which Bazel 8 consumers choke on
   ("include() ... can only be used in the root module"). Upstream will bump
   their minimum eventually; it has not been raised with them.
-- **rules_swift 4.2.2.isomer.1** from the registry: upstream 4.2.2 and four
+- **rules_swift 4.2.2.isomer.3** from the registry: upstream 4.2.2 and six
   pull requests (MODULE.bazel). It sorts above the 4.2.2 rules_applecross
   asks for, so MVS keeps it with no override in any root (until 0.40 the
   fork was 4.1.0.isomer.N, held by an override every consumer repeated).
 - **The Apple targets build on Linux too** (rules_applecross, 2026-10-26;
   the project registry's 0.0.3.382f8c3, its main at 382f8c3, until it has a
   release in the BCR): Xcode 27.0's SDKs from an SDK archive, the Swift
-  that built them (6.4.0) for the Apple targets alone (the rest keeps
-  6.3.2), its clean-room actool, ibtool and codesign, and its ported tools
-  from its main (tools/applecross/ported_tools.sha256: their codesign signs
+  that built them (6.4.0) for the Apple targets alone (the rest is on
+  swift.org's 6.4.2), its clean-room actool, ibtool and codesign, and its
+  ported tools from its main (tools/applecross/ported_tools.sha256: their codesign signs
   a Mac app's nested code). rules_apple is the registry's preset 5.3.1.applecross.6
   (rules_apple 5.3.1 with rules_applecross's patches, asking for that
   rules_applecross, which asks for it back), apple_support the BCR's
@@ -422,11 +422,11 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   Swift compiles fail with "Invalid target triple: local".
 - **Android C/C++** comes from `hermetic_android_toolchains` (keith's):
   `@androidndk//:all` supplies the cc toolchains the Swift Android toolchain
-  links through (NDK r27c, API 28); `@androidsdk` (SDK 35 / build-tools
+  links through (NDK r30, API 28); `@androidsdk` (SDK 35 / build-tools
   35.0.0) feeds rules_android via `override_repo(rules_android_sdk, androidsdk)`.
   libc++ is linked **statically** (upstream's merged choice); there is no
   `select_android_runtime_lib` anymore and no libc++_shared.so in the APK.
-- **Swift toolchain**: swift.org 6.3.2 host toolchain + matching wasm/Android
+- **Swift toolchain**: swift.org 6.4.2 host toolchain + matching wasm/Android
   Swift SDK bundles, via rules_swift's `swift` extension. Toolchain versions
   must match the SDK bundle versions exactly.
 - The wasm/android targets are plain `swift_library`/`swift_binary`
@@ -598,14 +598,17 @@ how Isomer runs it.
   code, and WASI Threads for a module that imports a shared memory. The
   checks built for wasm run under it (//foundation/tests, the Metal
   translator's, the examples' //tests/sqlite_wasi).
-- **The threads SDK beside the stock one.** rules_swift takes one
-  `swift.wasm_sdk`; rules_swift#1990 (on #1860; in the registry's
-  rules_swift) takes two, the
+- **The threads SDK beside the stock one (none until Swift 6.5).**
+  rules_swift takes one `swift.wasm_sdk`; rules_swift#1990 (on #1860; in
+  the registry's rules_swift) takes two, the
   threads one's toolchains requiring
   `@rules_swift//swift/toolchains/wasm:threaded`. A reactor transitioned to
-  `@isomer//swift_ffi/rules:wasm32-wasip1-threads` builds with
+  `@isomer//swift_ffi/rules:wasm32-wasip1-threads` built with
   AttilaTheFun/swift's threads-sdk-6.3.2-1 (#92018 and the
-  platform-executors thread pool); everything else stays single-threaded.
+  platform-executors thread pool) until 0.41. #92018 reaches a release in
+  Swift 6.5, so since the move to 6.4.2 no threads SDK is registered
+  (MODULE.bazel): the threaded reactors aren't built and their tests are
+  set aside until then (TODO.md); everything else stays single-threaded.
   A threaded reactor links its memory imported, exported and shared with a
   maximum (`--import-memory --export-memory --shared-memory
   --max-memory=…`); examples' tap_counter_threads_release.wasm and
@@ -664,7 +667,7 @@ iOS 18 since 0.38, WasmView linking WasmKit: the example is.) What the feature's
 - **Observation and Synchronization are Isomer's** (since 2026-10-14),
   so a feature runs below Apple's iOS 17 and 18: //apple/libraries/
   compiled_observation is the toolchain's own open-source Observation
-  (swift-6.3.2-RELEASE sources; its README says what differs: a pthread
+  (swift-6.4.2-RELEASE sources; its README says what differs: a pthread
   thread-local, no `Observations`), compiled_synchronization a `Mutex` of
   Isomer's (all the feature libraries use of it). The mapping renames both,
   so `import Observation` and Apple's Foundation's `@_exported import
@@ -740,9 +743,9 @@ Apple's). Every library compiling the core lists the plugin
 (swift_ui_macros/defs.bzl); a core under another module name needs
 `-module-alias SwiftUI=<name>` in the modules that use `@State` against it.
 Declared only under Swift 6.4 (`#if compiler(>=6.4)`: Apple's expansion
-makes a memberwise initializer private before 6.4), so today on Apple
-platforms only; never in hot_swift_ui (the Playground's compilers run no
-plugin). docs/swiftui_macros.md.
+makes a memberwise initializer private before 6.4): on every platform since
+0.41's move to 6.4.2 (Apple's alone before); never in hot_swift_ui (the
+Playground's compilers run no plugin). docs/swiftui_macros.md.
 
 ## Apple's frameworks off Apple (0.31)
 
@@ -760,7 +763,7 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
 
 - **Foundation** (//foundation, `@isomer//:foundation`): built over
   swift-foundation, a Swift package of isomer's own graph
-  (third_party/swift_packages: swift-6.3.2-RELEASE's commit, through
+  (third_party/swift_packages: swift-6.4.2-RELEASE's commit, through
   rules_swift_package_manager under an extension of isomer's, since 0.40;
   the registry's Bazel module 6.3.2.isomer.2 before), with patches
   (MODULE.bazel says which and why). ICU is the Swift SDK's prebuilt one, a

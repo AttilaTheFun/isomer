@@ -34,6 +34,7 @@ short_name() {
         lib_CompilerSwiftSyntaxBuilder) echo CSynBuilder ;;
         lib_CompilerSwiftSyntaxMacroExpansion) echo CMacroExpansion ;;
         lib_CompilerSwiftSyntaxMacros) echo CSynMacros ;;
+        lib_CompilerSwiftWarningControl) echo CWarnCtl ;;
         libSwiftBasicFormat) echo SBasFmt ;;
         libSwiftCompilerPluginMessageHandling) echo SPluginMsgHdl ;;
         libSwiftDiagnostics) echo SDiag ;;

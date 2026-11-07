@@ -19,4 +19,6 @@ examples/playground/apple/playground_ios_application/embedded_toolchain/
 examples/playground/android/playground_android_application/toolchain/
 # The Mac's compiler staged from OS Server's files (CI's; tools/ci/stage_playground_compilers.sh macos).
 examples/playground/apple/playground_macos_application/staged_toolchain/
+# The browser's compiler staged the same way (stage_playground_compilers.sh web).
+examples/playground/web/playground_web_application/staged_toolchain/
 /.ci/

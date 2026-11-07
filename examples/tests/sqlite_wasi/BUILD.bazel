@@ -37,6 +37,8 @@ transition_binary(
     name = "sqlite_file_check_wasm_threads",
     binary = ":sqlite_file_check",
     platform = "@isomer//swift_ffi/rules:wasm32-wasip1-threads",
+    # No wasi-threads SDK until Swift 6.5 (TODO.md).
+    tags = ["manual"],
 )
 
 sh_test(
@@ -56,6 +58,7 @@ sh_test(
 sh_test(
     name = "sqlite_file_threads_test",
     size = "small",
+    tags = ["manual"],
     srcs = ["@isomer//foundation/tests:run_foundation_check.sh"],
     args = [
         "$(rootpath @isomer//tools/wasm/wasi_run)",

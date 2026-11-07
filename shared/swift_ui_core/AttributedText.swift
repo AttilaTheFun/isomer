@@ -65,10 +65,10 @@ extension Text {
     @_disfavoredOverload
     public init(_ attributedContent: AttributedString) {
         #if os(Windows)
-        // Swift 6.3.2's Foundation on Windows doesn't export the descriptor
+        // Swift 6.3.2's Foundation on Windows didn't export the descriptor
         // of the attributed string's storage index (_FoundationCollections'
-        // BigString.Index), so any use of `runs` fails to link: the text,
-        // unstyled, until it does.
+        // BigString.Index), so any use of `runs` failed to link (not yet
+        // tried with 6.4.2): the text, unstyled, until it links.
         self.init(verbatim: String(attributedContent.characters))
         #else
         var content = ""

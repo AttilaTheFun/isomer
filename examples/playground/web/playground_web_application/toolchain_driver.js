@@ -584,7 +584,11 @@ export async function compileWithToolchain(toolchain, source) {
     "-target", "wasm32-unknown-wasip1", "-Xcc", "--target=wasm32-unknown-wasip1",
     "-disable-objc-interop", "-use-static-resource-dir", "-sdk", T(sdk.sysroot), "-resource-dir", T(sdk.resourceDir),
     "-I", T(sdk.modules), "-module-cache-path", "/work/module-cache",
-    "-swift-version", "5", "-Onone", "-parse-as-library", "-module-name", "UserApp", "-o", "/work/UserApp.o"];
+    "-swift-version", "5", "-Onone", "-parse-as-library", "-module-name", "UserApp", "-o", "/work/UserApp.o",
+    // Clang's working directory: the frontend gives it the process's (WASI's
+    // getcwd says "/", no preopen) unless one is named; Swift 6.4's then fails
+    // "unable to set working directory: /".
+    "-Xcc", "-working-directory", "-Xcc", "/work"];
   for (const entry of sdk.clangModules || []) {
     if (entry.modulemap) frontendArgs.push("-Xcc", "-fmodule-map-file=" + T(entry.modulemap));
     if (entry.include) frontendArgs.push("-Xcc", "-I", "-Xcc", T(entry.include));

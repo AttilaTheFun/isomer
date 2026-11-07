@@ -1,53 +1,46 @@
 diff --git a/Sources/FoundationEssentials/Data/Data.swift b/Sources/FoundationEssentials/Data/Data.swift
-index 0e9a2689..a655cac8 100644
 --- a/Sources/FoundationEssentials/Data/Data.swift
 +++ b/Sources/FoundationEssentials/Data/Data.swift
-@@ -2344,8 +2344,13 @@ public struct Data : Equatable, Hashable, RandomAccessCollection, MutableCollect
-     }
+@@ -278,9 +278,8 @@
+     ///       - span: An `OutputRawSpan` covering uninitialized memory with
+     ///         space for the specified number of bytes.
+     @available(macOS 10.14.4, iOS 12.2, watchOS 5.2, tvOS 12.2, *)
+-    @_alwaysEmitIntoClient
+-    @_spi(_) // TODO: Remove pending API surface amendment
+-    public init<E: Error>(
++    @usableFromInline
++    internal init<E: Error>(
+         rawCapacity capacity: Int,
+         initializingWith initializer: (_ span: inout OutputRawSpan) throws(E) -> Void
+     ) throws(E) {
+@@ -726,8 +725,8 @@
  
-     @inlinable // This is @inlinable as a generic, trivially forwarding function.
--    public mutating func withUnsafeMutableBytes<ResultType>(_ body: (UnsafeMutableRawBufferPointer) throws -> ResultType) rethrows -> ResultType {
--        return try _representation.withUnsafeMutableBytes(body)
-+    public mutating func withUnsafeMutableBytes<ResultType, E: Error>(_ body: (UnsafeMutableRawBufferPointer) throws(E) -> ResultType) throws(E) -> ResultType {
-+        // Isomer: typed throws, as Apple's Foundation declares it.
-+        do {
-+            return try _representation.withUnsafeMutableBytes(body)
-+        } catch {
-+            throw error as! E
-+        }
-     }
- 
-     // MARK: -
-@@ -2443,8 +2448,9 @@ public struct Data : Equatable, Hashable, RandomAccessCollection, MutableCollect
-         _append(buffer)
-     }
- 
--    @inlinable // This is @inlinable as trivially forwarding.
--    public mutating func append(contentsOf bytes: [UInt8]) {
-+    // Isomer: not public, as in Apple's Foundation (its generic Sequence one is).
-+    @inlinable @usableFromInline // This is @inlinable as trivially forwarding.
-+    internal mutating func append(contentsOf bytes: [UInt8]) {
-         bytes.withUnsafeBufferPointer { (buffer: UnsafeBufferPointer<UInt8>) -> Void in
-             _append(buffer)
-         }
-@@ -2524,8 +2530,9 @@ public struct Data : Equatable, Hashable, RandomAccessCollection, MutableCollect
-     /// - precondition: The bounds of `subrange` must be valid indices of the collection.
-     /// - parameter subrange: The range in the data to replace. If `subrange.lowerBound == data.count && subrange.count == 0` then this operation is an append.
-     /// - parameter data: The replacement data.
--    @inlinable // This is @inlinable as trivially forwarding.
--    public mutating func replaceSubrange(_ subrange: Range<Index>, with data: Data) {
-+    // Isomer: not public, as in Apple's Foundation (its generic Collection one is).
-+    @inlinable @usableFromInline // This is @inlinable as trivially forwarding.
-+    internal mutating func replaceSubrange(_ subrange: Range<Index>, with data: Data) {
-         data.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) in
+     /// Appends the bytes in the specified sequence to the end of the data.
+     @inline(__always)
+-    @_alwaysEmitIntoClient
+-    public mutating func append(contentsOf elements: some Sequence<UInt8> & ContiguousBytes) {
++    @usableFromInline
++    internal mutating func append(contentsOf elements: some Sequence<UInt8> & ContiguousBytes) {
+         // Since the sequence is already contiguous, access the underlying raw memory directly.
+         elements.withUnsafeBytes {
+             guard !$0.isEmpty else { return }
+@@ -870,8 +869,8 @@
+     ///   - subrange: The range in the data to replace.
+     ///   - newElements: The replacement bytes.
+     @inline(__always)
+-    @_alwaysEmitIntoClient
+-    public mutating func replaceSubrange(_ subrange: Range<Index>, with newElements: some Collection<UInt8> & ContiguousBytes) {
++    @usableFromInline
++    internal mutating func replaceSubrange(_ subrange: Range<Index>, with newElements: some Collection<UInt8> & ContiguousBytes) {
+         newElements.withUnsafeBytes { buffer in
              _representation.replaceSubrange(subrange, with: buffer.baseAddress, count: buffer.count)
          }
 diff --git a/Sources/FoundationEssentials/Decimal/Decimal.swift b/Sources/FoundationEssentials/Decimal/Decimal.swift
-index aa4771dd..3c0b0315 100644
+index 82a5dfa5..a1b76a50 100644
 --- a/Sources/FoundationEssentials/Decimal/Decimal.swift
 +++ b/Sources/FoundationEssentials/Decimal/Decimal.swift
-@@ -22,8 +22,9 @@ import ucrt
- 
+@@ -23,8 +23,9 @@ import ucrt
+ /// A structure representing a base-10 number.
  @available(macOS 10.10, iOS 8.0, watchOS 2.0, tvOS 9.0, *)
  public struct Decimal: Sendable {
 -    @_spi(SwiftCorelibsFoundation)
@@ -58,7 +51,15 @@ index aa4771dd..3c0b0315 100644
  
      internal struct Storage: Sendable {
          var exponent: Int8
-@@ -128,7 +129,7 @@ public struct Decimal: Sendable {
+@@ -122,14 +123,14 @@ public struct Decimal: Sendable {
+         }
+     }
+ 
+-    @_spi(SwiftCorelibsFoundation)
++    // Isomer: public, as Apple's is.
+     public init(
+         _exponent: Int32 = 0,
+         _length: UInt32,
          _isNegative: UInt32 = 0,
          _isCompact: UInt32,
          _reserved: UInt32 = 0,
@@ -67,7 +68,7 @@ index aa4771dd..3c0b0315 100644
      ) {
          let length: UInt8 = (UInt8(truncatingIfNeeded: _length) & 0xF) << 4
          let isNegative: UInt8 = UInt8(truncatingIfNeeded: _isNegative & 0x1) == 0 ? 0 : 0b00001000
-@@ -142,8 +143,8 @@ public struct Decimal: Sendable {
+@@ -143,8 +144,8 @@ public struct Decimal: Sendable {
          )
      }
  
@@ -78,7 +79,7 @@ index aa4771dd..3c0b0315 100644
          var d = Decimal(mantissa)
          d._exponent += Int32(exponent)
          d._isNegative = isNegative ? 1 : 0
-@@ -185,8 +186,8 @@ extension Decimal {
+@@ -189,8 +190,8 @@ extension Decimal {
  extension Decimal {
  #if FOUNDATION_FRAMEWORK
  #else
@@ -89,7 +90,7 @@ index aa4771dd..3c0b0315 100644
          let separator: String
          if let locale = locale,
             let localizedSeparator = locale.decimalSeparator {
-@@ -197,8 +198,8 @@ extension Decimal {
+@@ -201,8 +202,8 @@ extension Decimal {
          return _toString(withDecimalSeparator: separator)
      }
      
@@ -101,7 +102,7 @@ index aa4771dd..3c0b0315 100644
          decimalSeparator: String.UTF8View,
          matchEntireString: Bool
 diff --git a/Sources/FoundationEssentials/Error/CocoaError.swift b/Sources/FoundationEssentials/Error/CocoaError.swift
-index 08a1baeb..4d7fdfd2 100644
+index 71eae6b5..ae5d2f56 100644
 --- a/Sources/FoundationEssentials/Error/CocoaError.swift
 +++ b/Sources/FoundationEssentials/Error/CocoaError.swift
 @@ -174,8 +174,12 @@ extension CocoaError {
@@ -120,22 +121,22 @@ index 08a1baeb..4d7fdfd2 100644
              info[NSURLErrorKey] = url
          }
 diff --git a/Sources/FoundationEssentials/FileManager/SwiftFileManager.swift b/Sources/FoundationEssentials/FileManager/SwiftFileManager.swift
-index 263b2c76..72c8b3a9 100644
+index 0bac0fe9..8d4d24fc 100644
 --- a/Sources/FoundationEssentials/FileManager/SwiftFileManager.swift
 +++ b/Sources/FoundationEssentials/FileManager/SwiftFileManager.swift
-@@ -18,7 +18,8 @@ public struct FileAttributeType : Hashable, RawRepresentable, Sendable {
+@@ -26,7 +26,8 @@ public struct FileAttributeType : Hashable, RawRepresentable, Sendable {
          self.rawValue = rawValue
      }
-     
+ 
 -    public init(_ rawValue: String) {
 +    // Isomer: internal (Apple's FileAttributeType has init(rawValue:) only).
 +    internal init(_ rawValue: String) {
          self.rawValue = rawValue
      }
-     
-@@ -80,7 +81,8 @@ public struct FileProtectionType : RawRepresentable, Sendable {
-     public static let complete = Self(rawValue: "NSFileProtectionComplete")
-     public static let completeUnlessOpen = Self(rawValue: "NSFileProtectionCompleteUnlessOpen")
+ 
+@@ -136,7 +137,8 @@ public struct FileProtectionType : RawRepresentable, Sendable {
+     /// The file is stored in an encrypted format on disk and cannot be
+     /// accessed until after the device has booted.
      public static let completeUntilFirstUserAuthentication = Self(rawValue: "NSFileProtectionCompleteUntilFirstUserAuthentication")
 -    public static let inactive = Self(rawValue: "NSFileProtectionCompleteWhenUserInactive")
 +    // Isomer: internal (not one of Apple's FileProtectionType values).
@@ -143,7 +144,7 @@ index 263b2c76..72c8b3a9 100644
  }
  
  extension FileManager {
-@@ -296,7 +298,9 @@ open class FileManager : @unchecked Sendable {
+@@ -361,7 +363,9 @@ open class FileManager : @unchecked Sendable {
          _impl.fileExists(atPath: path)
      }
  
@@ -154,7 +155,7 @@ index 263b2c76..72c8b3a9 100644
          _impl.fileExists(atPath: path, isDirectory: &isDirectory)
      }
  
-@@ -332,7 +336,8 @@ open class FileManager : @unchecked Sendable {
+@@ -397,7 +401,8 @@ open class FileManager : @unchecked Sendable {
          _impl.string(withFileSystemRepresentation: str, length: len)
      }
      
@@ -165,21 +166,21 @@ index 263b2c76..72c8b3a9 100644
      }
  
 diff --git a/Sources/FoundationEssentials/ProcessInfo/ProcessInfo+API.swift b/Sources/FoundationEssentials/ProcessInfo/ProcessInfo+API.swift
-index ac6765e2..d7d004bd 100644
+index 4adf89bc..0d9c4982 100644
 --- a/Sources/FoundationEssentials/ProcessInfo/ProcessInfo+API.swift
 +++ b/Sources/FoundationEssentials/ProcessInfo/ProcessInfo+API.swift
-@@ -80,7 +80,8 @@ extension ProcessInfo {
-     }
- }
- 
+@@ -115,7 +115,8 @@ extension ProcessInfo {
+ /// A structure that contains version information about the currently executing operating system, including major, minor, and patch version numbers.
+ ///
+ /// Use the ``ProcessInfo`` property ``ProcessInfo/operatingSystemVersion`` to fetch an instance of this type. You can also pass this type to ``ProcessInfo/isOperatingSystemAtLeast(_:)`` to determine whether the current operating system version is the same or later than the given value.
 -public struct OperatingSystemVersion: Hashable, Codable, Sendable {
 +// Isomer: Apple's is a C struct, neither Hashable nor Codable.
 +public struct OperatingSystemVersion: Sendable {
+     /// The major release number, such as 10 in version 10.9.3.
      public let majorVersion: Int
-     public let minorVersion: Int
-     public let patchVersion: Int
+     /// The minor release number, such as 9 in version 10.9.3.
 diff --git a/Sources/FoundationEssentials/String/StringProtocol+Stub.swift b/Sources/FoundationEssentials/String/StringProtocol+Stub.swift
-index 8ff01d07..e759b2ec 100644
+index 87816f03..04f2ed18 100644
 --- a/Sources/FoundationEssentials/String/StringProtocol+Stub.swift
 +++ b/Sources/FoundationEssentials/String/StringProtocol+Stub.swift
 @@ -15,7 +15,8 @@
@@ -189,6 +190,6 @@ index 8ff01d07..e759b2ec 100644
 -    package func compare<T : StringProtocol>(_ aString: T, options mask: String.CompareOptions = [], range: Range<Index>? = nil) -> ComparisonResult {
 +    // Isomer: public, with Apple's signature (the locale is not used).
 +    public func compare<T : StringProtocol>(_ aString: T, options mask: String.CompareOptions = [], range: Range<Index>? = nil, locale: Locale? = nil) -> ComparisonResult {
-         // TODO: This method is modified from `public func compare<T : StringProtocol>(_ aString: T, options mask: String.CompareOptions = [], range: Range<Index>? = nil, locale: Locale? = nil) -> ComparisonResult`. Move that method here once `Locale` can be staged in `FoundationEssentials`.
          var substr = Substring(self)
          if let range {
+             substr = substr[range]

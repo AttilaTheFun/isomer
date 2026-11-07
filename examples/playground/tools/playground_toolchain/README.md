@@ -4,10 +4,11 @@ Cross-compiles swift-frontend + lld for iOS (device AND simulator) as static
 libraries — the embedded compiler the Playground app links
 (`apple/playground_ios_application`, docs/playground.md). Run the
 phases from a workspace directory holding `swift` + `llvm-project` +
-`swift-syntax` + `cmark` worktrees at `swift-6.3.2-RELEASE` (the tag MUST
+`swift-syntax` + `cmark` worktrees at `swift-6.4.2-RELEASE` (the tag MUST
 match the SwiftWasm SDK release for swiftmodule compatibility):
 
     ./build_phase_a_tablegens.sh                      # host llvm/clang-tblgen
+    ./build_phase_a2_native_helpers.sh                # host helpers + native-tools/
     ISO_PLATFORM=iphoneos        ./build_phase_b_ios_llvm.sh   # LLVM+clang+lld
     ISO_PLATFORM=iphoneos        ./build_phase_c1_cmark.sh
     ISO_PLATFORM=iphoneos        ./build_phase_c2_swift.sh     # swift-frontend
@@ -70,6 +71,7 @@ Android Swift SDK bundle rules_swift fetched — nothing in Bazel's cache is
 modified; what they lack is assembled beside the workspace:
 
     ./build_phase_a_tablegens.sh          # once, shared with iOS
+    ./build_phase_a2_native_helpers.sh    # once, shared with iOS
     ./build_phase_b_android_llvm.sh       # LLVM + clang + lld, static, WebAssembly backend
     ./build_phase_c1_android_cmark.sh
     ./build_phase_c2_android_swift.sh     # swift-frontend (an executable: Android may run one)
@@ -89,7 +91,7 @@ What the Android host build needed (all in build_phase_c2_android_swift.sh):
   NDK's clang builtin headers (an `-isystem` instead breaks libc++'s wrapper
   headers).
 - The compiler's own Swift sources compile with `android-shim/bin/swiftc`
-  (the base 6.3.2 swiftc plus `-sdk`, `-resource-dir`, `-tools-directory`);
+  (the base 6.4.2 swiftc plus `-sdk`, `-resource-dir`, `-tools-directory`);
   it is CMAKE_Swift_COMPILER, since the SwiftCompilerSources invocations
   carry only `-target`. They include `swift/shims/*.h` through
   `<swiftc>/../lib`, so `android-shim/lib/swift` links to the resources.

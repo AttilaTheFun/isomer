@@ -49,10 +49,11 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
   Windows): `pickerStyle(.inline)` lays its choices out as rows on the web
   and Android since 0.39 (#26), not yet in the self-drawing renderer
   (the 0.39.1 proof's `controls.inline` on both).
-- **Windows' Swift 6.3.2 can't link `AttributedString.runs`** (its
-  Foundation doesn't export the descriptor of _FoundationCollections'
-  `BigString.Index`, on ARM64 and x64 alike), so there `Text(AttributedString)`
-  shows its text unstyled (shared/swift_ui_core/AttributedText.swift).
+- **`AttributedString.runs` didn't link on Windows** (Swift 6.3.2's
+  Foundation didn't export the descriptor of _FoundationCollections'
+  `BigString.Index`, on ARM64 and x64 alike; not yet tried with 6.4.2), so
+  there `Text(AttributedString)` shows its text unstyled
+  (shared/swift_ui_core/AttributedText.swift).
 - **Windows' hosts draw every frame** (the compiled app's loop and the
   wasm cell's, paced by Present; Linux's draw on demand), so an idle
   window costs about a core under a VM's software D3D (WARP).

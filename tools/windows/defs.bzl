@@ -63,6 +63,33 @@ def _swift_windows_sdk_impl(rctx):
     rctx.symlink(usr.get_child("lib", "swift", "clang"), "resource/clang")
     rctx.symlink(usr.get_child("lib", "swift", "shims"), "resource/shims")
 
+    # The Windows module maps (and vcruntime's API notes) in place, in the
+    # Windows SDK's and MSVC's include directories, rather than in the Swift
+    # SDK's usr/share: from there the Swift compiler maps them in through a
+    # file-system overlay of its own, which Swift 6.4.2 can't find under a
+    # relative -resource-dir ("virtual filesystem overlay file
+    # '<clang-system-vfs-overlay>' not found"; swiftlang/swift#92879, in
+    # 6.4.x after 6.4.2). The copts below add what mapping ucrt's implied
+    # (-fbuiltin-headers-in-system-modules).
+    share = sdk + "/usr/share/"
+    kits = "winsysroot/Windows Kits/10/Include/" + versions["sdk"] + "/"
+    msvc_include = "winsysroot/VC/Tools/MSVC/" + versions["msvc"] + "/include/"
+    for name, destination in [
+        ("winsdk_um.modulemap", kits + "um/module.modulemap"),
+        ("winsdk_shared.modulemap", kits + "shared/module.modulemap"),
+        ("ucrt.modulemap", kits + "ucrt/module.modulemap"),
+        ("vcruntime.modulemap", msvc_include + "module.modulemap"),
+        ("vcruntime.apinotes", msvc_include + "vcruntime.apinotes"),
+    ]:
+        if rctx.path(share + name).exists:
+            rctx.file(destination, rctx.read(share + name), executable = False)
+            rctx.delete(share + name)
+    # Headers the vcruntime module map names that an older MSVC lacks (the
+    # compiler would inject them empty, through the same overlay).
+    for header in ["__msvc_bit_utils.hpp", "__msvc_string_view.hpp"]:
+        if not rctx.path(msvc_include + header).exists:
+            rctx.file(msvc_include + header, "", executable = False)
+
     # The host's LLVM tools as MSVC's: clang-cl, lld-link, and llvm-ar as
     # llvm-lib (it takes lib.exe's command line under that name).
     for tool, name in [("clang-cl", "clang-cl"), ("lld-link", "lld-link"), ("llvm-ar", "llvm-lib")]:

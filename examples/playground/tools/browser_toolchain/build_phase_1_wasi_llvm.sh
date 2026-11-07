@@ -48,6 +48,8 @@ cmake -S llvm-project/llvm -B build/wasi-llvm -G Ninja \
     -DCLANG_ENABLE_STATIC_ANALYZER=OFF \
     -DCLANG_TOOL_C_INDEX_TEST_BUILD=OFF
 "$NINJA" -C build/wasi-llvm -j"$JOBS" lld
-# The libraries swift-frontend links (clang*, LLVM*): everything else.
-"$NINJA" -C build/wasi-llvm -j"$JOBS"
+# The libraries swift-frontend links (clang*, LLVM*): every archive but the
+# clang Interpreter's (its remote JIT needs sockets, <netdb.h>, which WASI
+# hasn't; nothing of the frontend's links it).
+"$NINJA" -C build/wasi-llvm -j"$JOBS" $("$NINJA" -C build/wasi-llvm -t targets all | sed -n 's/^\(lib\/lib[^:]*\.a\): .*/\1/p' | grep -v Interpreter)
 echo "PHASE 1 (lld) OK"; ls -la build/wasi-llvm/bin/

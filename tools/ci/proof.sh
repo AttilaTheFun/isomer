@@ -48,9 +48,8 @@
 # there), or on a Mac with its Xcode and Chrome when run by hand there.
 # Linux's (when PROOF_PLATFORMS names it) are packaged in a container leased
 # from OS Server; Windows' are built on its VM. The Playground's compilers that Bazel doesn't make:
-# the iPhone simulator's and Android's staged ones from OS Server's files
-# (tools/ci/stage_playground_compilers.sh), and the in-browser one from the
-# latest release's site.
+# the iPhone simulator's, Android's, the Mac's and the browser's, staged
+# from OS Server's files (tools/ci/stage_playground_compilers.sh).
 #
 #   PROOF_REF           the ref the proof is of (default: GITHUB_REF, else the branch)
 #   PROOF_PYTHON        the python3 that runs proof.py, with Pillow, which crops
@@ -189,13 +188,9 @@ python="${PROOF_PYTHON:-python3}"
 echo "::group::The Playground's compilers"
 # The staged compilers from OS Server's files, unpacked where the apps'
 # BUILD files find them (the checkout's gitignored folders).
-"$ROOT/tools/ci/stage_playground_compilers.sh" ios-simulator android macos
-# The browser's: the latest release's site's.
-mkdir -p "$work/site"
-gh release download --repo "$repo" --pattern isomer-site.tar.gz --dir "$work/site"
-tar -xzf "$work/site/isomer-site.tar.gz" -C "$work/site"
-web_toolchain="$(find "$work/site" -type d -path '*/playground/toolchain' | head -1)"
-[ -n "$web_toolchain" ] || { echo "::error::the latest release's site has no playground/toolchain"; exit 1; }
+"$ROOT/tools/ci/stage_playground_compilers.sh" ios-simulator android macos web
+web_toolchain="$ROOT/examples/playground/web/playground_web_application/staged_toolchain"
+[ -f "$web_toolchain/manifest.json" ] || { echo "::error::no browser compiler staged at $web_toolchain"; exit 1; }
 echo "::endgroup::"
 phase "compilers staged"
 

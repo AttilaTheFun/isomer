@@ -96,29 +96,18 @@ container with its own KVM, the iPhone and the Mac on slots. Left:
 
 ## Android below API 28 (2026-11-06)
 
-Swift's Android SDK (swift.org's) is built at API 28, its supported
-minimum; an app embedding Isomer may need less (minSdk 23). Draft isomer#92
-runs the Storybook on Android 6.0 with: the NDK at 23, a shim for
-libswiftCore's `strtod_l`/`strtof_l` (API 26), Isomer's Kotlin calls above
-23 behind version checks, and no RELR below 28 (rules_swift#1998).
+Done with Swift 6.4 (0.41): swift.org's 6.4 Android SDK is built at API 23
+with NDK r30, so its own fallbacks are compiled in (the runtime's
+`strtod_l`, swift-foundation's `getgrgid`/`getgrnam`, corelibs'
+`posix_spawn`) and no shim of Isomer's is needed. An app sets
+`android.ndk(api_level = 23)` and `isomer_android_app(min_sdk_version = 23)`
+(README, "Android below API 28"); rules_swift#2000 (in the registry's
+4.2.2.isomer.3) reads the SDK's minimum and leaves out RELR below 28.
+Isomer's Kotlin calls above 23 are behind version checks (#96).
 
-- **The SDK's API level, upstream.** Every source in swift.org's Android
-  SDK already takes older Android: the runtime (`__ANDROID_API__ < 26`: its
-  own `strtod_l`; on main float parsing calls no libc), swift-foundation
-  (`<= 23`: `getgrgid`/`getgrnam` for the `_r` forms, filemanager_shims.h)
-  and swift-corelibs-foundation (`< 28`: its own `posix_spawn`,
-  CFPlatform.c). The 28 is the SDK build's (swiftlang/swift-docker,
-  swift-ci/sdks/android/scripts/build.sh: `android_api=28`,
-  `--android-api`). The ask: a PR lowering it (23 or 24) with a Swift
-  forums post (Android workgroup) on why; built so, the fallbacks are
-  compiled in and the fortify `_chk` calls (ICU, curl, libxml2) and curl's
-  `getifaddrs` go.
-- **Isomer, either way:** shims over swift.org's SDK (#92's `strtod_l`;
-  still to add: ICU's `__fread_chk`/`__fwrite_chk`, which an app with
-  `--@isomer//foundation:internationalization` would miss at 23), or an
-  Android SDK of our own built with that script at `--android-api 23`.
-- Whether Isomer supports 23 at all is the owner's call; until then #92
-  stays a draft.
+- Open: OS Server's api23 emulator config doesn't boot yet (Shireworks),
+  so CI tests at 28+; draft isomer#92 ran the Storybook on Android 6.0.
+- Later: 32-bit ARM (armeabi-v7a), if an app needs it.
 
 ## Upstream releases, no forks
 
@@ -129,7 +118,7 @@ project's own modules. Every change we carry has an upstream PR now
 (2026-11-04, drafts unless noted); each patch or fork goes when a release
 has it.
 
-- **rules_swift** (the registry's 4.2.2.isomer.1: upstream 4.2.2 and a
+- **rules_swift** (the registry's 4.2.2.isomer.3: upstream 4.2.2 and a
   patch per PR, from its head):
   - bazelbuild/rules_swift#1860 (open): the metadata-driven wasm SDK and its
     wasip1-threads variant;
@@ -138,6 +127,9 @@ has it.
   - #1989 (merged after 4.2.2): the wasm SDK's clang resource directory for
     C compiles;
   - #1995 (open): Swift/C++ interop on Android;
+  - #1985 (merged after 4.2.2): swift.org's release metadata through 6.4.2;
+  - #2000 (open): Android down to the Swift SDK's own minimum (6.4's: 23),
+    no RELR below 28;
   - #1988 (draft): `swift.windows_sdk`, Windows built on Linux with the
     builder's own SDKs (Isomer's tools/windows, upstream's
     tools/windows_sdk), which tools/windows then gives way to.
@@ -152,13 +144,9 @@ has it.
     Nothing in Isomer to change: an app that needs explicit modules waits
     for those.
 - **swift-foundation** (a Swift package through rules_swift_package_manager
-  at swift-6.3.2-RELEASE's commit, with patches; no fork since 0.40):
+  at swift-6.4.2-RELEASE's commit, with patches; no fork since 0.40):
   - swiftlang/swift-foundation#2409 (merged): `createDirectory(withIntermediateDirectories:)`
     stops at "/" (WASI); patched in until a release has it;
-  - Android's `fts_open` workaround isn't needed upstream: the Android Swift
-    SDK's apinotes fix it, but rules_swift's Android toolchain compiles with
-    the static resource directory, which has none (`swift-<arch>/apinotes`
-    only): a rules_swift change to load them, then the patch goes;
   - CharacterSet, NSString's string API and `String(format:)` are in
     //foundation; upstream's own CharacterSet (#2314) arrives with the
     next major release, and ours then gives way;
@@ -250,19 +238,19 @@ Electron's own Node, part of the Electron app rather than the build.
 
 ## Hermetic builds (tabled)
 
-- **Swift 6.4.0 everywhere.** Isomer pins Swift 6.3.2 for its host, wasm
-  and Android toolchains. Moving all of them to 6.4.0 (the Swift that built
-  Xcode 27.0's SDKs) means:
-  - rules_swift 4.x, with the two patches in tools/patches ported (a new
-    registry version);
-  - rules_apple 5.x and apple_support 2.10, with rules_applecross's patches;
-  - the swift-foundation fork on 6.4.0;
-  - the wasi-threads SDK for 6.4;
-  - swift-syntax 604;
-  - the Playground's on-device compilers.
-
-  rules_applecross alone doesn't need it: it brings swift.org's 6.4.0 for
-  the Apple targets only, beside 6.3.2.
+- **Swift 6.4 everywhere (done in 0.41).** The host, wasm, Android and
+  Windows toolchains moved from 6.3.2 to swift.org's 6.4.2: rules_swift
+  4.2.2.isomer.3, NDK r30, swift-foundation at swift-6.4.2-RELEASE's
+  commit (no fork since 0.40), compiled features' Observation from 6.4.2's
+  sources, SwiftUI's macros on every platform, and the Playground's
+  on-device compilers' build scripts at swift-6.4.2-RELEASE. rules_apple
+  and apple_support had moved in 0.40. rules_applecross still brings
+  swift.org's 6.4.0 (the Swift that built Xcode 27.0's SDKs) for the Apple
+  targets alone. Left from it:
+  - the wasi-threads SDK: none until Swift 6.5, the first release with
+    swiftlang/swift#92018; the threaded reactors and their tests wait;
+  - swift-syntax is still 603.0.2 (BCR) for swift_ffi's plugin and
+    analyzer.
 - **Building on a Mac without Xcode.**
   - rules_applecross stages the SDKs from the SDK archive on a Mac with no
     Xcode (its #213).

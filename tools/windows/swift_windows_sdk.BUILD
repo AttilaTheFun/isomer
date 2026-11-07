@@ -31,11 +31,13 @@ filegroup(
     srcs = glob(["winsysroot/**"]),
 )
 
-# What an app needs beside its .exe: the Swift runtime's DLLs.
+# What an app needs beside its .exe: the Swift runtime's DLLs. An
+# architecture's may be missing (6.4's arm64 installer carries arm64's
+# alone): its group is then empty.
 [
     filegroup(
         name = "runtime_" + cpu,
-        srcs = glob(["swift-windows-sdk/runtime/" + cpu + "/*.dll"]),
+        srcs = glob(["swift-windows-sdk/runtime/" + cpu + "/*.dll"], allow_empty = True),
     )
     for cpu in _ARCHS
 ]
@@ -65,6 +67,12 @@ swift_tools(
             _KITS,
             "-windows-sdk-version",
             "{sdk_version}",
+            # What the compiler adds with ucrt's module map mapped in: its
+            # C headers and clang's builtin ones in one module (defs.bzl).
+            "-Xcc",
+            "-Xclang",
+            "-Xcc",
+            "-fbuiltin-headers-in-system-modules",
         ],
         # rules_swift puts XCTest's DLLs on a Windows test's Path, which it
         # takes from here (a host's; on Linux nothing reads it).

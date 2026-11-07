@@ -43,15 +43,15 @@ Not implemented:
 The macros are declared only by **Swift 6.4 and later**:
 `#if compiler(>=6.4)`.
 - **Why:** Apple's expansion gives a private `@State` a private property
-  with an init accessor. Swift 6.3.2 then makes the view's memberwise
-  initializer private, so `Foo(x: 1)` becomes inaccessible. Swift 6.4 does
+  with an init accessor. Swift 6.3.2 then made the view's memberwise
+  initializer private, so `Foo(x: 1)` became inaccessible. Swift 6.4 does
   not.
 - **Apple platforms:** builds use Xcode's 6.4, so they have the macros.
   That includes the apps compiled against Isomer
   (`storybook_isomer_ios_application`) and the hosted cores.
 - **Other platforms:** wasm, Android, Linux and Windows build with
-  swift.org 6.3.2. There `@State` is the property wrapper alone until
-  Isomer's toolchain is 6.4.
+  swift.org 6.4.2 since 0.41, so they have the macros too. Until then they
+  built with 6.3.2, where `@State` was the property wrapper alone.
 
 `wasm/libraries/hot_swift_ui` never declares them
 (`-DISOMER_NO_SWIFTUI_MACROS`). It is the SwiftUI the Playground's compilers

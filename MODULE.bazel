@@ -27,7 +27,7 @@ toolchains (see the `swift` extension below); the wasm/android targets are plain
 
 module(
     name = "isomer",
-    version = "0.40.0",
+    version = "0.41.0",
 )
 
 bazel_dep(name = "bazel_skylib", version = "1.9.0")
@@ -35,8 +35,8 @@ bazel_dep(name = "platforms", version = "1.1.0")
 
 # Apple platform (uses the locally installed Xcode, as all Bazel apple builds do).
 # rules_swift from this project's registry (AttilaTheFun/bazel_registry,
-# listed before the BCR in .bazelrc): 4.2.2.isomer.1 is upstream's 4.2.2 with
-# four rules_swift pull requests until a release has them, each a patch in
+# listed before the BCR in .bazelrc): 4.2.2.isomer.3 is upstream's 4.2.2 with
+# six rules_swift pull requests until a release has them, each a patch in
 # the registry entry, taken from the PR's head:
 #   * #1989 (merged after 4.2.2): C compiled for wasm gets the Swift SDK's
 #     clang resource directory, so <stdarg.h> and <stddef.h> come from the
@@ -49,11 +49,14 @@ bazel_dep(name = "platforms", version = "1.1.0")
 #   * #1995: Swift/C++ interop on Android (the SDK's clang headers copied
 #     from the paired toolchain, swiftCxx and swiftCxxStdlib linked from
 #     beside the shared runtime, -lc++ the static libc++).
+#   * #1985 (merged after 4.2.2): swift.org's release metadata through 6.4.2;
+#   * #2000: Android targets down to the Swift SDK's own minimum (6.4's: API
+#     23), without RELR relocations below 28.
 # It sorts above the 4.2.2 rules_applecross asks for, so no override holds
-# it, here or in a consumer. A change is a new entry (4.2.2.isomer.2) made
+# it, here or in a consumer. A change is a new entry (4.2.2.isomer.4) made
 # with the registry's tools/add_version.py --fork; back to a plain BCR
 # version at the release that has them all.
-bazel_dep(name = "rules_swift", version = "4.2.2.isomer.1")
+bazel_dep(name = "rules_swift", version = "4.2.2.isomer.3")
 # rules_apple and apple_support at rules_applecross's versions, from this
 # project's registry: rules_apple 5.3.1.applecross.6 is rules_apple 5.3.1
 # with rules_applecross's patches (bundling and signing on Linux), asking
@@ -71,7 +74,7 @@ bazel_dep(name = "rules_cc", version = "0.2.18")
 # Hermetic Android NDK for the Swift Android cross-compile toolchain. rules_swift
 # consumes the stock @androidndk (only targets it already exposes), so no
 # override is needed here.
-bazel_dep(name = "hermetic_android_toolchains", version = "0.1.1")
+bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0")
 # Any Linux takes Google's x86_64 SDK and NDK tools: an arm64 Linux (a
 # container on a Mac) runs them under Rosetta, with x86_64 glibc beside its
 # own. (Only a root module's overrides apply.)
@@ -94,7 +97,7 @@ bazel_dep(name = "swift-syntax", version = "603.0.2")
 # Isomer's Foundation is built over swift-foundation's FoundationEssentials
 # (and FoundationInternationalization when an app asks for it), a Swift
 # package through rules_swift_package_manager (isomer's graph:
-# third_party/swift_packages, swift-6.3.2-RELEASE's commit and the
+# third_party/swift_packages, swift-6.4.2-RELEASE's commit and the
 # swift-foundation-icu and swift-syntax of that release). //foundation
 # assembles the `Foundation` module, adding what corelibs gives Swift code
 # elsewhere (CharacterSet, NSString's string API, String(format:) and the rest
@@ -123,7 +126,6 @@ swift_deps.configure_package(
     patch_args = ["-p1"],
     patches = [
         "//tools/patches:swift_foundation_create_directory_root.patch",
-        "//tools/patches:swift_foundation_android_fts.patch",
         "//tools/patches:swift_foundation_apple_interface.patch",
         "//tools/patches:swift_foundation_package_helpers.patch",
         "//tools/patches:swift_foundation_wasi_swift_settings.patch",
@@ -349,7 +351,7 @@ python.toolchain(
 )
 
 # Swift-SDK cross-compilation to WebAssembly and Android, provided by the
-# overridden rules_swift (above). Downloads the swift.org 6.3.2 host toolchain
+# overridden rules_swift (above). Downloads the swift.org 6.4.2 host toolchain
 # and the matching WebAssembly / Android Swift SDK artifact bundles; the Apple
 # build is unaffected (it uses the system Xcode toolchain).
 #
@@ -363,20 +365,13 @@ python.toolchain(
 swift = use_extension("@rules_swift//swift:extensions.bzl", "swift", dev_dependency = True)
 swift.toolchain(
     name = "swift_toolchain",
-    swift_version = "6.3.2",
+    swift_version = "6.4.2",
 )
 swift.wasm_sdk()
-# The wasi-threads SDK beside it (wasm32-unknown-wasip1-threads; Swift's
-# concurrency on a thread pool of guest threads): what a reactor built for
-# `@isomer//swift_ffi/rules:wasm32-wasip1-threads` compiles with. swift.org
-# publishes none; this is AttilaTheFun/swift's build of 6.3.2 (branch
-# threads-sdk-6.3.2), the toolchain's own sources with swiftlang/swift#92018
-# and the thread-pool executor of swift-platform-executors#30.
-swift.wasm_sdk(
-    sha256 = "dda937f5f31d69ebf8609b430f3818020f5f3e683a72dd91d0875d8c814e0c48",
-    threads = True,
-    url = "https://github.com/AttilaTheFun/swift/releases/download/threads-sdk-6.3.2-1/swift-6.3.2-RELEASE_wasm-threads.artifactbundle.tar.gz",
-)
+# No wasi-threads SDK beside it since 0.41: Isomer's was a build of
+# Swift 6.3.2 with swiftlang/swift#92018, which reaches a release in 6.5;
+# reactors built for `@isomer//swift_ffi/rules:wasm32-wasip1-threads` wait
+# for it (TODO.md).
 swift.android_sdk()
 use_repo(
     swift,
@@ -393,8 +388,6 @@ use_repo(
 register_toolchains(
     "@swift_toolchain//:cc_toolchain_wasm32_xcode",
     "@swift_toolchain//:swift_toolchain_wasm32_xcode",
-    "@swift_toolchain//:cc_toolchain_wasm32_threads_xcode",
-    "@swift_toolchain//:swift_toolchain_wasm32_threads_xcode",
     # SPIKE: android C/C++ + linking now go through @androidndk//:all (registered
     # below); only the Swift toolchain comes from rules_swift.
     "@swift_toolchain//:swift_toolchain_android_aarch64_xcode",
@@ -433,7 +426,7 @@ register_toolchains(
 # The Apple targets built on Linux (a container, a VM): rules_applecross (its
 # clean-room actool, ibtool, codesign and swift-stdlib-tool, LLD), the Swift
 # that built Xcode 27.0's SDKs (6.4.0: the Apple targets only; the others
-# keep 6.3.2 above), and Xcode 27.0's SDKs, pinned by version and SHA-256. A
+# are on 6.4.2 above), and Xcode 27.0's SDKs, pinned by version and SHA-256. A
 # Mac reads its own Xcode (local_xcode); elsewhere the SDK archive is fetched
 # by its name below, a placeholder: each builder's .bazelrc.user says where
 # it is, with `--distdir=<folder holding apple-sdks-27.0.tar.gz>` or a
@@ -491,14 +484,16 @@ register_toolchains(
 # through these and reads the sysroot from them. The extension also requires an
 # android.sdk tag, but isomer packages its APK with its own `android_tools`
 # (below), so @androidsdk is never fetched.
-android = use_extension("@hermetic_android_toolchains//:extensions.bzl", "android")
+# A dev dependency (hermetic_android_toolchains 0.5.0 reports its repositories
+# so; it reads the root module's tags alone): each root declares its own.
+android = use_extension("@hermetic_android_toolchains//:extensions.bzl", "android", dev_dependency = True)
 android.sdk(
     build_tools_version = "35.0.0",
     version = "35",
 )
 android.ndk(
     api_level = 28,
-    version = "r27c",
+    version = "r30",
 )
 
 # @androidndk supplies the Swift→Android C/C++ cc toolchains; @androidsdk is the
@@ -509,6 +504,7 @@ use_repo(android, "androidndk", "androidsdk")
 rules_android_sdk = use_extension(
     "@rules_android//rules/android_sdk_repository:rule.bzl",
     "android_sdk_repository_extension",
+    dev_dependency = True,
 )
 override_repo(rules_android_sdk, "androidsdk")
 
@@ -517,6 +513,7 @@ override_repo(rules_android_sdk, "androidsdk")
 register_toolchains(
     "@androidndk//:all",
     "@androidsdk//:all",
+    dev_dependency = True,
 )
 
 # Hermetic Electron for the desktop wrapper around the wasm app (and the

@@ -1,27 +1,27 @@
 diff --git a/Sources/FoundationEssentials/String/BuiltInUnicodeScalarSet.swift b/Sources/FoundationEssentials/String/BuiltInUnicodeScalarSet.swift
-index 96b368cc..a0acdc7a 100644
+index 18b3bb60..72813e57 100644
 --- a/Sources/FoundationEssentials/String/BuiltInUnicodeScalarSet.swift
 +++ b/Sources/FoundationEssentials/String/BuiltInUnicodeScalarSet.swift
-@@ -15,7 +15,7 @@ internal import _FoundationCShims
+@@ -25,7 +25,7 @@ internal import _FoundationCollections
  // Represents sets of unicode scalars of those whose bitmap data we own.
  // whitespace, whitespaceAndNewline, and newline are not included since they're not stored with bitmaps
  // This only contains a subset of predefined CFCharacterSet that are in use for now.
 -internal struct BuiltInUnicodeScalarSet {
 +package struct BuiltInUnicodeScalarSet {
      enum SetType {
-         case lowercaseLetter
-         case uppercaseLetter
-@@ -51,7 +51,7 @@ internal struct BuiltInUnicodeScalarSet {
+         case control
+         case whitespace
+@@ -216,7 +216,7 @@ internal struct BuiltInUnicodeScalarSet {
      }
- 
+     
      // CFUniCharIsMemberOf
--    func contains(_ scalar: Unicode.Scalar) -> Bool {
+-    internal func contains(_ scalar: Unicode.Scalar) -> Bool {
 +    package func contains(_ scalar: Unicode.Scalar) -> Bool {
-         let planeNo = Int((scalar.value >> 16) & 0xFF)
-         let bitmp = _bitmapPtrForPlane(planeNo)
-         return _isMemberOfBitmap(scalar, bitmp)
-@@ -86,11 +86,11 @@ internal struct BuiltInUnicodeScalarSet {
-         return new
+         switch charset {
+         case .whitespace:
+             return isWhitespace(scalar)
+@@ -445,12 +445,12 @@ internal struct BuiltInUnicodeScalarSet {
+         return ((scalar.value >= 0x000A && scalar.value <= 0x000D) || (scalar.value == 0x0085) || (scalar.value == 0x2028) || (scalar.value == 0x2029))
      }
  
 -    static let uppercaseLetters = Self.init(type: .uppercaseLetter)
@@ -35,28 +35,29 @@ index 96b368cc..a0acdc7a 100644
 +    package static let canonicalDecomposables = Self.init(type: .canonicalDecomposable)
  }
  
+ #if !FOUNDATION_FRAMEWORK
 diff --git a/Sources/FoundationEssentials/String/RegexPatternCache.swift b/Sources/FoundationEssentials/String/RegexPatternCache.swift
-index 93a431e1..98910e9f 100644
+index 9c8be6e8..e8e63da0 100644
 --- a/Sources/FoundationEssentials/String/RegexPatternCache.swift
 +++ b/Sources/FoundationEssentials/String/RegexPatternCache.swift
-@@ -10,7 +10,7 @@
- //
- //===----------------------------------------------------------------------===//
+@@ -12,7 +12,7 @@
  
--struct RegexPatternCache: @unchecked Sendable {
-+package struct RegexPatternCache: @unchecked Sendable {
+ internal import Synchronization
+ 
+-struct RegexPatternCache: Sendable, ~Copyable {
++package struct RegexPatternCache: Sendable, ~Copyable {
      private struct Key : Sendable, Hashable {
          var pattern: String
          var caseInsensitive: Bool
-@@ -18,13 +18,13 @@ struct RegexPatternCache: @unchecked Sendable {
+@@ -20,13 +20,13 @@ struct RegexPatternCache: Sendable, ~Copyable {
  
-     private let _lock: LockedState<[Key: Regex<AnyRegexOutput>]>
+     private let _lock: Mutex<[Key: Regex<AnyRegexOutput>]>
  
 -    static let cache = RegexPatternCache()
 +    package static let cache = RegexPatternCache()
  
      fileprivate init() {
-         _lock = LockedState(initialState: .init())
+         _lock = Mutex(.init())
      }
  
 -    func regex(for pattern: String, caseInsensitive: Bool) throws -> Regex<AnyRegexOutput>? {
