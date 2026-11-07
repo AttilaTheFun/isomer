@@ -170,6 +170,13 @@ def crop(path, box):
 CORNER_RADIUS = 16
 
 
+def flat(path):
+    """Whether a capture is one colour throughout (a window that came back
+    unpainted)."""
+    from PIL import Image
+    return all(low == high for low, high in Image.open(path).convert("RGB").getextrema())
+
+
 def cut_corners(path):
     """A Mac window's shot without what isn't the window's: its outer pixel
     and the curve of its corners, where its edge blends with its shadow and
@@ -713,7 +720,15 @@ def macos_slot(review, story_list, builds):
         logs = tempfile.mkdtemp(prefix="proof-macos-")
 
         def shoot(path, app="storybook"):
-            sh(["oss", "machine", "screenshot", slot, path, f"--window={APPS[app]['bundle']}"])
+            # A window's capture can come back all black, between two good
+            # ones (0.41.0's full proof, layout.grid): a flat picture is
+            # taken again.
+            for attempt in range(3):
+                sh(["oss", "machine", "screenshot", slot, path, f"--window={APPS[app]['bundle']}"])
+                if not flat(path):
+                    break
+                log(f"macos {os.path.basename(path)}: a flat capture (try {attempt + 1} of 3)")
+                time.sleep(2)
             cut_corners(path)
 
         def launcher(app, environment, wait, path):
