@@ -4,7 +4,7 @@
 # where the builds came from with its OIDC token, which the server checks
 # against GitHub's keys and its own settings (its repository's bundle ids;
 # a release's tag, published by a releaser, for production) before it
-# signs and publishes them (AttilaTheFun/applications' docs/CI.md). Any
+# signs and publishes them (the private AttilaTheFun/applications' docs/CI.md). Any
 # repository's workflow copies this file and connect_from_ci.sh beside it
 # (the token and the server, which next_version.sh takes too); it needs
 # bash, curl and openssl, on a Mac or Linux. Copied from

@@ -1,6 +1,6 @@
 # Sourced by tools/ci/publish_from_ci.sh and tools/ci/next_version.sh: a
 # GitHub Actions job's way to Applications Server, with its OIDC token in
-# place of a password (AttilaTheFun/applications' docs/CI.md). A repository
+# place of a password (the private AttilaTheFun/applications' docs/CI.md). A repository
 # that copies either script copies this file beside it. bash (3.2 or
 # later), curl and openssl, on a Mac or Linux. Copied from
 # AttilaTheFun/reviews' tools/ci/connect_from_ci.sh.

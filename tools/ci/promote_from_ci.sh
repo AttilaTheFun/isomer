@@ -1,5 +1,5 @@
 #!/bin/bash
-# AttilaTheFun/applications' tools/ci/promote_from_ci.sh.
+# the private AttilaTheFun/applications' tools/ci/promote_from_ci.sh.
 # Makes a release production by promotion: asks Applications Server to
 # promote the Alphas main's CI published of the release's commit (the
 # builds the owner tested), which it copies, stamps Production (their
