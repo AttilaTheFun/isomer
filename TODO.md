@@ -35,15 +35,22 @@ iOS 26's glass restart button over 2048, in tools/ci/proof_ignore.txt.
 
 - **Reviews' Publish waits for the proof** of the release's commit (a
   change in Reviews).
-- **The full set's live stories don't hold still yet**:
-  `controls.progress` (an indeterminate spinner), `isomer.webview` (a live
-  page), `isomer.video` (a remote video), `isomer.map` (OpenStreetMap
-  tiles), `images.async` (a remote image). They need bundled content and
-  paused animations under the proof, or listed regions; two full runs
-  compared would say which really move. The full set runs only by hand.
+- **The full set's live stories:** `controls.progress`'s spinner and
+  `isomer.map`'s tiles are regions in proof_ignore.txt (2026-11-06);
+  `isomer.webview` shows its own page (#80). Still to hold still at the
+  source: the map's tiles (tiles served to the story under the proof, so
+  its markers count again), `isomer.video` (a remote video) and
+  `images.async` (a remote image). After each release, compare its proof
+  with the release before AND a second run of the same commit: whatever
+  moves without the app changing gets fixed before the next.
 - **The Pokédex reads PokéAPI live.** Its pictures have held still so far.
-- **Proofs last 90 days** (artifacts): a commit's proof could be attached
-  to its release so a later one still has it.
+- **Android's 2048, 1 px higher at 0.41 (Swift 6.4.2).** In both proofs of
+  a6ceeb16 (quick and full), its content sits 1 px above v0.40.1's; the
+  web's and the iPhone's 2048 (the same project, compiled for wasm too)
+  are pixel-identical. Android runs the Playground's wasm under WasmKit
+  built by the Android Swift 6.4.2 toolchain, and its host measures with
+  Compose: find which number moved (a float conversion in the engine, or
+  a host measurement) before it hides a real change.
 - **Actions write for the Claude app**, so agents can start a full proof or
   rerun a failed job.
 - **oss**: `oss machine ssh` printed a lease's JSON, passwords included,
@@ -128,8 +135,11 @@ has it.
     C compiles;
   - #1995 (open): Swift/C++ interop on Android;
   - #1985 (merged after 4.2.2): swift.org's release metadata through 6.4.2;
-  - #2000 (open): Android down to the Swift SDK's own minimum (6.4's: 23),
-    no RELR below 28;
+  - #2000 (open, rebased over #1998 at ab75b825): Android down to the
+    Swift SDK's own minimum (6.4's: 23), no RELR below 28. Upstream main
+    has #1998 (merged 2026-11-06, b7e99a5b), which fails below API 28: a
+    rules_swift release with #1998 and not #2000 needs the registry's patch
+    to remove `_check_android_api` and its call too (#2000's head does);
   - #1988 (draft): `swift.windows_sdk`, Windows built on Linux with the
     builder's own SDKs (Isomer's tools/windows, upstream's
     tools/windows_sdk), which tools/windows then gives way to.
