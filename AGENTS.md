@@ -268,8 +268,17 @@ download and screenshot alone, OS Server's API 20; PROOF_IOS=local simctl on
 the server's Mac). CI makes it, and
 only CI's counts (the Build workflow's `proof` job, tools/ci/proof.sh, in
 CI's own Linux container after the build: the apps built there, the Apple
-ones with rules_applecross, and the web pictured in Chrome for Testing
-there). It runs only by hand (since
+ones with rules_applecross). Since 0.42 a public repository's proof is
+pictured on GitHub's own machines, in stages (proof.sh --stage
+build|shoot|compare, proof.py --build-to/--from/--here): built in the
+container, which also pictures the Android Playground on an OS Server
+emulator (its on-device compiler is arm64's alone), then the iPhone (a
+simulator made for the run) and the Mac on `xcode-27` runners, the Android
+Storybook on an emulator under Ubuntu's KVM (tools/ci/hosted_android_emulator.sh,
+shaped as OS Server's phones: API 35, 1080×2400, 420 dpi, gesture
+navigation) and the web in Ubuntu's Chrome (the `proof-shoot` jobs), then
+compared in the container (`proof-compare`); a private copy pictures
+everything on OS Server's leases as above. It runs only by hand (since
 2026-11-01, for CI's time): an agent runs the Build workflow on main to
 propose a release, the full set (every story; `quick` the core set: a
 story from each area and the Playground's projects), each picture
