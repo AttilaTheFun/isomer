@@ -331,7 +331,7 @@ swift_library(
         "@swiftpkg_agent_ui//:AgentUI",
         # The build it is, written for Applications at launch
         # (apple/host/PlaygroundApp.swift).
-        "@swiftpkg_applications//:ApplicationUpdates",
+        "@swiftpkg_update_kit//:UpdateKit",
     ] + select({
         ":embedded_toolchain_enabled": [":embedded_toolchain_libs"],
         "//conditions:default": [],

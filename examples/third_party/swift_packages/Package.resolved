@@ -10,12 +10,12 @@
       }
     },
     {
-      "identity" : "applications",
+      "identity" : "update_kit",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/AttilaTheFun/applications.git",
+      "location" : "https://github.com/AttilaTheFun/update_kit.git",
       "state" : {
-        "revision" : "b0cdd2d70208193b70a1b89f2d13b8cf612f68f7",
-        "version" : "0.10.45"
+        "revision" : "eaa240496a742e2d132978da739c65a55816bf59",
+        "version" : "0.11.0"
       }
     },
     {

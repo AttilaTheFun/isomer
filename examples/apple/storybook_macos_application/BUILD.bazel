@@ -31,7 +31,7 @@ swift_library(
         "@isomer//apple/libraries/swift_ui",
         "@isomer//apple/libraries/swift_ui:isomer",
         # The build it is, written for Applications at launch (ExampleApp.swift).
-        "@swiftpkg_applications//:ApplicationUpdates",
+        "@swiftpkg_update_kit//:UpdateKit",
     ],
 )
 

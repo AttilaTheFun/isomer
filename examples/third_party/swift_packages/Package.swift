@@ -26,9 +26,10 @@ let package = Package(
         // tools), the library behind the openrouter CLI; shared with
         // Visor. The Playground's own OpenRouter loop is to move onto it.
         .package(url: "https://github.com/AttilaTheFun/open_router_cli.git", exact: "0.5.0"),
-        // ApplicationUpdates: the Storybook's and the Playground's iPhone
-        // and Mac apps write the build they are (version and BuildVariant)
-        // for Applications at each launch, and are told of newer ones.
-        .package(url: "https://github.com/AttilaTheFun/applications.git", exact: "0.10.45"),
+        // UpdateKit: the Storybook's and the Playground's iPhone and Mac
+        // apps write the build they are (version and BuildVariant) for
+        // Applications at each launch, and are told of newer ones.
+        // (ApplicationUpdates in AttilaTheFun/applications until 0.10.45.)
+        .package(url: "https://github.com/AttilaTheFun/update_kit.git", exact: "0.11.0"),
     ]
 )
