@@ -124,6 +124,10 @@ Isomer's Kotlin calls above 23 are behind version checks (#96).
   0.42's `onDelete`/`onMove` editing (ListEditing.swift).
 - `AnyGradient.colorSpace(_:)` (needs `Gradient.ColorSpace` on gradients)
   and `GraphicsContext.Shading`'s gradients.
+- Compose's DatePicker (next version): its label is the ISO date
+  (`2026-11-01`), not the locale's, and it has no time: `displayedComponents`
+  with `.hourAndMinute` shows a date. A localized label (java.text below
+  API 26) and Material 3's TimePicker for the time.
 - Compose draws an elliptical gradient as its radial one (centred, to the
   far edge), as it draws every radial gradient: a brush sized to the node.
 
