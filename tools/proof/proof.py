@@ -746,7 +746,7 @@ function run(argv) {
 
 def macos_here(review, story_list, builds):
     """--here: this Mac's own screen (GitHub's `xcode-27` runner, its screen
-    made 1920 by 1080 by tools/ci/proof.sh): the apps unzipped here, opened
+    made OS Server's slots' 1920 by 1200 by tools/ci/proof.sh): the apps unzipped here, opened
     as the Dock opens them, each pictured by its window alone (`screencapture
     -l`: no shadow, nothing behind), with a home of the proof's own
     (CFFIXED_USER_HOME), as on a slot."""

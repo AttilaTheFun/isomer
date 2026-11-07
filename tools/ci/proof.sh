@@ -236,8 +236,8 @@ build() {
 
 # --stage shoot, before anything else: what the platform's machine needs.
 # GitHub's runners: Python's own (Pillow in a venv of the run's), Xcode
-# 27.2 for the simulator, the Mac's screen made 1920 by 1080 (its own is
-# 1024 by 768), an emulator booted on the Ubuntu runner's KVM, its Chrome.
+# 27.2 for the simulator, the Mac's screen made OS Server's slots' (its own
+# is 1024 by 768), an emulator booted on the Ubuntu runner's KVM, its Chrome.
 shoot_setup() {
     echo "::group::This machine, for $platform's pictures"
     python3 -m venv "$work/venv"
@@ -253,9 +253,14 @@ shoot_setup() {
             brew install displayplacer > /dev/null 2>&1 || true
             local screen
             screen="$(displayplacer list 2> /dev/null | sed -n 's/^Persistent screen id: //p' | head -1 || true)"
-            if [ -z "$screen" ] || ! displayplacer "id:$screen res:1920x1080 scaling:off origin:(0,0) degree:0" > /dev/null 2>&1; then
+            # OS Server's mac slots' screen (1920 by 1200 at 1x), so the
+            # apps open their windows at the sizes they open there; else
+            # the nearest the runner's display has.
+            if [ -z "$screen" ] || ! { displayplacer "id:$screen res:1920x1200 scaling:off origin:(0,0) degree:0" > /dev/null 2>&1 ||
+                displayplacer "id:$screen res:1920x1080 scaling:off origin:(0,0) degree:0" > /dev/null 2>&1; }; then
                 echo "::warning::the runner's screen stayed as it was (displayplacer)"
-            fi ;;
+            fi
+            osascript -l JavaScript -e 'ObjC.import("AppKit"); const f = $.NSScreen.mainScreen.frame; `screen ${f.size.width}x${f.size.height}`' ;;
         android)
             export PROOF_ADB="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}/platform-tools/adb"
             "$ROOT/tools/ci/hosted_android_emulator.sh" "$review/emulator.log" "$work/serial" < /dev/null

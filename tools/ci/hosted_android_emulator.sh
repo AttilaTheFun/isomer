@@ -2,8 +2,10 @@
 # An Android phone on GitHub's own Ubuntu runner (x86_64, with KVM: free for
 # a public repository), for the Android Storybook's tests
 # (tools/ci/hosted_android_test.sh) and pictures (tools/ci/proof.sh): the
-# runner's Android SDK's emulator, an x86_64 Android 14 (the AOSP image)
-# shaped as the hermetic one is (1080×1920, 420 dpi), its status bar held
+# runner's Android SDK's emulator, an x86_64 Android 15 (the AOSP image)
+# shaped as OS Server's android leases are (1080×2400, 420 dpi), so its
+# pictures and theirs compare (the proof's Android Playground is taken on
+# one), its status bar held
 # still by SystemUI's demo mode. It boots, and stays running for the rest
 # of the job; its serial is written to <serial file>. (Not printed: a
 # caller's `$(…)` would wait for the emulator and adb's server, which keep
@@ -24,7 +26,7 @@ sudo udevadm trigger --name-match=kvm
 
 # `yes` ends by SIGPIPE when sdkmanager stops reading, which pipefail
 # would take for a failure.
-image="system-images;android-34;default;x86_64"
+image="system-images;android-35;default;x86_64"
 { yes || true; } | "$sdk/cmdline-tools/latest/bin/sdkmanager" --install emulator platform-tools "$image" > /dev/null
 # The AVD where both avdmanager and the emulator look (the runner's own
 # defaults differ).
@@ -33,7 +35,7 @@ mkdir -p "$ANDROID_AVD_HOME"
 echo no | "$sdk/cmdline-tools/latest/bin/avdmanager" create avd --force -n isomer -k "$image" > /dev/null
 config="$ANDROID_AVD_HOME/isomer.avd/config.ini"
 sed -i -E '/^(hw\.lcd\.(width|height|density)|hw\.keyboard|hw\.mainKeys) *=/d' "$config"
-printf '%s\n' hw.lcd.width=1080 hw.lcd.height=1920 hw.lcd.density=420 hw.keyboard=yes hw.mainKeys=no >> "$config"
+printf '%s\n' hw.lcd.width=1080 hw.lcd.height=2400 hw.lcd.density=420 hw.keyboard=yes hw.mainKeys=no >> "$config"
 
 adb="$sdk/platform-tools/adb"
 # Its own session, so it outlives this script (the job's end ends it).
