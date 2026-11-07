@@ -3860,6 +3860,8 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
         synthesizeBold(s, (n.params || {}).family, s.fontWeight, s.fontSize);
         // `.monospacedDigit()`: tabular figures.
         if ((n.params || {}).tnum === "1") s.fontVariantNumeric = "tabular-nums";
+        // `.tracking` / `.kerning`: points (CSS pixels) between characters.
+        if ((n.params || {}).tracking) s.letterSpacing = `${Number(n.params.tracking)}px`;
         // `.multilineTextAlignment` reaches the text itself.
         if (n.alignH === "center") s.textAlign = "center";
         else if (n.alignH === "trailing") s.textAlign = "right";

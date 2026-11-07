@@ -68,6 +68,8 @@ public struct Text {
 
     /// The SF Symbol this text stands for, when it is one on its own.
     var symbolName: String?
+    /// `.tracking` / `.kerning` on this text (the environment's otherwise).
+    var explicitTracking: Double?
 
     public typealias Body = Never
 
@@ -110,6 +112,20 @@ public struct Text {
         var copy = self
         copy.isMonospaced = active
         return copy
+    }
+
+    /// `.tracking(_:)`: points added between the characters (negative
+    /// tightens). Apple's tracking also keeps ligatures apart; `.kerning`
+    /// adjusts the pairs' spacing. Isomer's hosts space every character
+    /// evenly for both (CSS letter-spacing, Compose letterSpacing).
+    public func tracking(_ tracking: CGFloat) -> Text {
+        var copy = self
+        copy.explicitTracking = Double(tracking)
+        return copy
+    }
+
+    public func kerning(_ kerning: CGFloat) -> Text {
+        tracking(kerning)
     }
 
     /// Digits of one width (tabular figures).
@@ -159,6 +175,7 @@ extension Text: _PrimitiveView {
         node.minimumScaleFactor = ctx.env.minimumScaleFactor
         node.textCase = ctx.env.textCase
         node.lineSpacing = ctx.env.lineSpacing
+        node.tracking = explicitTracking ?? ctx.env.tracking
         var font = explicitFont ?? ctx.env.font
         if let weight = explicitWeight {
             font = font.weight(weight)

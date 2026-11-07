@@ -641,6 +641,8 @@ package final class FlatTreeEncoder {
             if let scale = node.minimumScaleFactor { out.params = (out.params ?? []) + [("minScale", String(scale))] }
             if let textCase = node.textCase { out.params = (out.params ?? []) + [("textCase", textCase)] }
             if let spacing = node.lineSpacing, spacing > 0 { out.params = (out.params ?? []) + [("lineSpacing", formatNumber(spacing))] }
+            // `.tracking` / `.kerning`: points between characters.
+            if let tracking = node.tracking, tracking != 0 { out.params = (out.params ?? []) + [("tracking", formatNumber(tracking))] }
         case .shape(let shapeKind, _, _):
             out.kind = .shape
             (out.shape, shapeRadius) = flatShape(shapeKind)

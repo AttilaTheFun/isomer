@@ -241,6 +241,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.viewinterop.AndroidView
 import org.json.JSONArray
 import org.json.JSONObject
@@ -995,6 +996,9 @@ fun IsoNode(
                     fontFamily = textFontFamily(params, j.optInt("weight", 400)),
                     // `.monospacedDigit()`: tabular figures.
                     fontFeatureSettings = if (params?.optString("tnum") == "1") "tnum" else null,
+                    // `.tracking` / `.kerning`: points between characters (sp,
+                    // as the font's size).
+                    letterSpacing = params?.optString("tracking")?.toFloatOrNull()?.sp ?: TextUnit.Unspecified,
                 )
                 val shrink: (TextLayoutResult) -> Unit = { layout ->
                     val width = layout.layoutInput.constraints.maxWidth
