@@ -182,7 +182,9 @@ has it.
 - **rules_swift_package_manager**: cgrindel/rules_swift_package_manager#2621
   (draft): Windows hosts.
 - **hermetic_android_toolchains**: keith/hermetic_android_toolchains#110
-  (draft): Linux hosts of any CPU.
+  (draft): Linux hosts of any CPU. Carried as the registry's
+  0.5.0.isomer.1 (bazel_registry#42) since 0.42, so consumers need no
+  override; the entry goes when a release has #110.
 - **rules_apple** (rules_applecross's patches): bazelbuild/rules_apple #3114
   to #3124 (drafts, tracked in apple-cross-toolchain/rules_applecross#273);
   three workarounds stay in rules_applecross until upstream fixes exist.

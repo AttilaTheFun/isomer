@@ -41,7 +41,7 @@ the Playground:
 | `.` | `isomer` | everything below |
 | `swift_ffi/` | (isomer) | the Swift <-> Kotlin/TypeScript/C bridge generator: macros, analyzer, generator, rules, runtimes. Labels `//swift_ffi/...` (`@isomer//swift_ffi/...` from outside). Its own examples are `swift_ffi/examples`; docs in `docs/swift_ffi/`. Every BUILD file under it carries `package(features = [swift.enable_v6, treat_warnings_as_errors, ...])` — what its REPO.bazel said when it was a repo; keep that on new packages there |
 | `core_graphics/`, `foundation/` | (isomer) | Isomer's `CoreGraphics` and `Foundation` for the platforms without Apple's (see "Apple's frameworks off Apple") |
-| `frameworks/` | (isomer) | the other Apple frameworks SwiftUI's interface names, off Apple: `CoreTransferable`, `UniformTypeIdentifiers`, `PhotosUI`, `OSLog` (`Logger`: logcat on Android, standard error elsewhere; `@isomer//:os_log`, and in each platform's SDK group). Not Combine, UIKit or Dispatch (see "Apple's frameworks off Apple") |
+| `frameworks/` | (isomer) | the other Apple frameworks SwiftUI's interface names, off Apple: `CoreTransferable`, `UniformTypeIdentifiers`, `PhotosUI`, `OSLog` (`Logger`: logcat on Android, standard error elsewhere; `@isomer//:os_log`, and in each platform's SDK group), `Combine` (since 0.42: Isomer's own, beneath Foundation). Not UIKit or Dispatch (see "Apple's frameworks off Apple") |
 | `metal/` | (isomer) | Isomer's `Metal` (`//metal/metal`), IsomerMetal (`//metal/isomer_metal`: the MSL→WGSL translator, the backend interface), the web backend (`//metal/web`, `//metal/runtime`) |
 | `swift_gpu/` | (isomer) | the GPU abstraction (`//swift_gpu/{core,metal,apple,android,wasm,linux,windows}`) |
 | `swift_map/` | (isomer) | the OpenStreetMap renderer (`//swift_map/swift_map/{core,renderer}`, platform libraries under `//swift_map/<platform>/libraries/...`, its example apps and their small tools) |
@@ -1033,15 +1033,23 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
   - What Apple's SwiftUI brings along from other frameworks comes from
     //frameworks: CoreTransferable (re-exported, as Apple's is);
     UniformTypeIdentifiers and PhotosUI are imported by name, as on Apple
-    platforms. **No Combine, UIKit or Dispatch** (2026-10-12: "I
-    really don't want any of the Combine or UIKit apis if we can avoid
-    them for the same reason I don't want any Objective-C stuff: these
-    exist primarily for backwards compatibility and the future is Swift,
-    SwiftUI and SwiftConcurrency"). Models are `@Observable` (Observation)
-    held in `@State`, passed down with `.environment(_:)` and read with
-    `@Environment(Model.self)` or `@Bindable`; no `ObservableObject`,
-    `@StateObject`, `@ObservedObject`, `@EnvironmentObject` or `onReceive`.
-    Delays and the main actor are Swift Concurrency (`Task`,
+    platforms. **No UIKit or Dispatch** (2026-10-12: "I really don't
+    want any of the Combine or UIKit apis if we can avoid them for the
+    same reason I don't want any Objective-C stuff: these exist primarily
+    for backwards compatibility and the future is Swift, SwiftUI and
+    SwiftConcurrency"). **Combine is in since 0.42** (2026-11-07: "before i
+    was trying to avoid combine but i think that will be hard for us. we
+    should just implement support for at least the parts swiftui relies
+    upon on earlier versions, referring to open combine implementations but
+    making our own not depending on them so it is source compatible"):
+    `frameworks/combine` is Isomer's own `Combine` (an Apple-named strict
+    subset, beneath Foundation, which names `ObservableObject` and
+    `Published` from it as Apple's does), and SwiftUI has `@StateObject`,
+    `@ObservedObject`, `@EnvironmentObject`, `environmentObject(_:)` and
+    `onReceive` (shared/swift_ui_core/ObservableObject.swift). New code's
+    models are still `@Observable` (Observation) held in `@State`, passed
+    down with `.environment(_:)` and read with `@Environment(Model.self)` or
+    `@Bindable`; Isomer's own code and examples use those. Delays and the main actor are Swift Concurrency (`Task`,
     `Task.sleep(for:)`, `@MainActor`), not `DispatchQueue.main`. The
     pasteboard is the Isomer module's `Clipboard.string` (UIPasteboard/
     NSPasteboard on Apple platforms, the host's elsewhere); `Color(uiColor:)`

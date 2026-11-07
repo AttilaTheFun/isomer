@@ -195,6 +195,7 @@ swift_library(
     target_compatible_with = ["@platforms//os:linux"],
     deps = [
         ":swift_ui",
+        "//frameworks/combine",
         "//frameworks/core_transferable",
         "//frameworks/uniform_type_identifiers",
     ],

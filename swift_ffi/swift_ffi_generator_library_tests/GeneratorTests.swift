@@ -164,7 +164,7 @@ final class GeneratorTests: XCTestCase {
             kind: .kotlin, moduleName: "Greeter",
             javaPackage: "dev.example.greeter", javaClass: "Greeter", libraryName: "greeter")
         XCTAssertTrue(kotlin.contains("package dev.example.greeter"))
-        XCTAssertTrue(kotlin.contains("System.loadLibrary(\"greeter\")"))
+        XCTAssertTrue(kotlin.contains("swiftffi.NativeLibraries.load(\"greeter\")"))
         XCTAssertTrue(kotlin.contains("Counter"))
         // One ordinal-dispatch external per interface.
         XCTAssertTrue(kotlin.contains("external fun counterInvokeRaw(handle: Long, ordinal: Int, args: ByteArray): ByteArray"))

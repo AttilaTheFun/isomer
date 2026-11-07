@@ -244,6 +244,13 @@ package final class RenderNode {
     var accessibilityHidden = false
     /// `.accessibilityElement(children:)`: "combine", "ignore" or "contain".
     var accessibilityChildren: String?
+    /// `.accessibilityAdjustableAction`: called with "increment" or
+    /// "decrement" when assistive tech adjusts the view (a host's custom
+    /// actions; param "a11yAdjust", the handler's id).
+    var accessibilityAdjust: ((AccessibilityAdjustmentDirection) -> Void)?
+    /// `.accessibilityAction(named:)` and the kinds a host can offer: each
+    /// one's name and handler (param "a11yActions": "<id>\t<name>" lines).
+    var accessibilityActions: [(name: String, handler: () -> Void)] = []
 
     // Resolved text attributes.
     var font: Font = .body
@@ -587,6 +594,7 @@ final class _EnvironmentStorage {
     var refresh: RefreshAction?
     var custom: [ObjectIdentifier: Any] = [:]
     var objects: [ObjectIdentifier: AnyObject] = [:]
+    var environmentObjects: [ObjectIdentifier: AnyObject] = [:]
     var tabIconSize: CGFloat?
 
     init() {}
@@ -639,6 +647,7 @@ final class _EnvironmentStorage {
         refresh = other.refresh
         custom = other.custom
         objects = other.objects
+        environmentObjects = other.environmentObjects
         tabIconSize = other.tabIconSize
     }
 }
@@ -917,6 +926,13 @@ public struct EnvironmentValues {
     var objects: [ObjectIdentifier: AnyObject] {
         get { _storage.objects }
         set { _makeUnique(); _storage.objects = newValue }
+    }
+    /// `ObservableObject`s put in the environment with
+    /// `.environmentObject(_:)`, keyed by their type: `@EnvironmentObject`'s,
+    /// apart from the `@Observable` models above, as Apple keeps them.
+    var environmentObjects: [ObjectIdentifier: AnyObject] {
+        get { _storage.environmentObjects }
+        set { _makeUnique(); _storage.environmentObjects = newValue }
     }
     /// Set while building a `TabView`'s tab-bar labels so bare `Image`s render
     /// at an icon size (the app uses unsized `Image` in `.tabItem`, the native

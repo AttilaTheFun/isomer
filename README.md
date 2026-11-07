@@ -395,7 +395,7 @@ in portable shared code.
 | `App` / `Scene` / `WindowGroup`, `@main` | ✅ | ✅ | ✅ | ✅ | ✅ | On **Windows**/**Linux** the app owns `main` and runs its own window + render loop |
 | `View` / `ViewBuilder` / `Group` / `AnyView` | ✅ | ✅ | ✅ | ✅ | ✅ | |
 | `@State`, `Binding` | ✅ | ✅ | ✅ | ✅ | ✅ | |
-| `ObservableObject` / `@Published` / `@StateObject` / `@ObservedObject` | ✅ | ✅ | ✅ | ✅ | ✅ | Mirror-based reflection wires the wrappers before `body` runs |
+| `ObservableObject` / `@Published` / `@StateObject` / `@ObservedObject` / `onReceive` | ✅ | ✅ | ✅ | ✅ | ✅ | Since 0.42. Off Apple, Combine is Isomer's own (`frameworks/combine`). `ObservableObject` and `Published` are named from Foundation, as on Apple platforms. On Linux and Windows, whose Foundation is the toolchain's, code imports `Combine` for them. The wrappers subscribe to `objectWillChange` before `body` runs. |
 | `@Environment` / `@EnvironmentObject` | ✅ | ✅ | ✅ | ✅ | ✅ | Custom `EnvironmentKey`s supported |
 | `@Environment(\.dismiss)` | ✅ | ✅ | ✅ | ✅ | ✅ | Injected into a presentation's content; closes the enclosing `sheet`/`popover`/`alert` |
 | `NavigationStack` / `NavigationLink` / `.navigationTitle` | ✅ | ✅ | ✅ | ✅ | ✅ | **Nav bar is a native host widget** on Android/Web (HTML bar / `LinearLayout`), positioned per-frame so it works per-column in a split view; on **Windows**/**Linux** the bar (back button + title) is drawn into the display list |
@@ -707,6 +707,31 @@ themselves an external consumer (a standalone module over
 license acceptance, `--strategy=SwiftCompile=local`, …) and
 `.bazelversion` for the Bazel release.
 
+### Upgrading isomer
+
+Each release's notes have an Upgrading section; two things are easy to miss:
+
+- **Apple apps bundle through rules_applecross (since 0.40).** The
+  registry's rules_apple (5.3.1.applecross.6) bundles through
+  `@rules_applecross//toolchain:apple_bundling_toolchain_type`, and
+  rules_applecross registers its toolchains only as a dev dependency. A root
+  that builds iOS or Mac apps depends on rules_applecross and registers the
+  bundling toolchain itself, or every app fails with "No matching toolchains
+  found for …apple_bundling_toolchain_type":
+
+  ```starlark
+  bazel_dep(name = "rules_applecross", version = "0.0.3.382f8c3")
+  register_toolchains("@rules_applecross//toolchain:apple_bundling_on_macos")
+  # Building Apple apps on Linux too: also
+  # "@rules_applecross//toolchain:apple_bundling_on_linux" (examples/MODULE.bazel).
+  ```
+- **Your own override of rules_swift wins.** A root's
+  `single_version_override` (or `git_override`) of rules_swift is kept
+  whatever version isomer asks for: bumping isomer alone silently keeps the
+  old fork. Since 0.40 isomer's rules_swift needs no override (it sorts above
+  rules_applecross's); delete yours, or move it to the version isomer's
+  release names (4.2.2.isomer.3 at 0.41).
+
 ### Swift features, Java and library evolution
 
 - **Scope Swift features to your own repository.** `build
@@ -777,6 +802,40 @@ reads only from 28, and fails an Android target below the Swift SDK's own
 minimum; Isomer's Android runtime calls newer APIs only behind version
 checks. Not below 26: Swift's C++ interop (libc++'s `std` module and
 bionic's older headers clash).
+
+### Android release size
+
+An app's Swift is one JNI library (`lib<app>_runtime_bindings.so`): the
+Swift runtime, Foundation, SwiftUI and the app, statically linked. Built
+to ship, add `--config=android_release` (.bazelrc, examples/.bazelrc):
+
+- `-c opt` and `-Osize`;
+- only the JNI entry points exported (`Java_*`, and `JNI_OnLoad` where a
+  library has one: swift_ffi/rules/jni_exports.lds, through
+  `--@isomer//swift_ffi/rules:jni_exports_only`), every other symbol local,
+  so `--gc-sections` drops the code they don't reach;
+- the symbol tables stripped (`--strip-all`), and no Swift module embedded
+  for the debugger (`swift.no_embed_debug_module`, the `.swift_ast`
+  section).
+
+The Storybook (every story of the SwiftUI API, the Isomer module, the map
+engine and FlatBuffers), measured at 0.42: 34.5 MB at `-c opt` (24,116
+exported symbols), 16.2 MB with `--config=android_release` (46, all JNI),
+in a 15.6 MB APK. Link-time optimization is not part of it yet.
+
+### Native libraries from a feature split
+
+The generated Kotlin bindings load their library through
+`swiftffi.NativeLibraries` (swift_ffi's Kotlin runtime): `System.loadLibrary`
+by default. When the Swift library ships in an on-demand Play feature
+module, which the base ClassLoader's lookup doesn't see, install a loader
+(or load it yourself and mark it loaded) before any Isomer class runs:
+
+```kotlin
+swiftffi.NativeLibraries.loader = { name -> SplitInstallHelper.loadLibrary(context, name) }
+// or, having loaded it:
+swiftffi.NativeLibraries.markLoaded("app_runtime_bindings")
+```
 
 ## Requirements
 

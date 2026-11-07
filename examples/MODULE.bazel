@@ -145,15 +145,10 @@ register_toolchains(
 
 # The hermetic Android NDK/SDK (the extension requires root-module tags even
 # for Apple-only builds; accept the licenses in .bazelrc).
-bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0")
-# Any Linux takes Google's x86_64 SDK and NDK tools: an arm64 Linux (a
-# container on a Mac) runs them under Rosetta, with x86_64 glibc beside its
-# own. (Only a root module's overrides apply.)
-single_version_override(
-    module_name = "hermetic_android_toolchains",
-    patch_strip = 1,
-    patches = ["//tools/patches:hermetic_android_toolchains_linux_any_cpu.patch"],
-)
+# The project registry's 0.5.0.isomer.1 (isomer's, with Linux hosts of any
+# CPU), which isomer asks for: no override (before 0.42 each consumer carried
+# the patch in its own).
+bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.1")
 # A dev dependency (hermetic_android_toolchains 0.5.0 reports its repositories
 # so; it reads the root module's tags alone): each root declares its own.
 android = use_extension("@hermetic_android_toolchains//:extensions.bzl", "android", dev_dependency = True)

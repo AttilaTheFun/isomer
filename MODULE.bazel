@@ -74,15 +74,13 @@ bazel_dep(name = "rules_cc", version = "0.2.18")
 # Hermetic Android NDK for the Swift Android cross-compile toolchain. rules_swift
 # consumes the stock @androidndk (only targets it already exposes), so no
 # override is needed here.
-bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0")
-# Any Linux takes Google's x86_64 SDK and NDK tools: an arm64 Linux (a
-# container on a Mac) runs them under Rosetta, with x86_64 glibc beside its
-# own. (Only a root module's overrides apply.)
-single_version_override(
-    module_name = "hermetic_android_toolchains",
-    patch_strip = 1,
-    patches = ["//tools/patches:hermetic_android_toolchains_linux_any_cpu.patch"],
-)
+# The project registry's 0.5.0.isomer.1: upstream 0.5.0 with
+# keith/hermetic_android_toolchains#110, so any Linux takes Google's x86_64
+# SDK and NDK tools (an arm64 Linux, a container on a Mac, runs them under
+# Rosetta, with x86_64 glibc beside its own). A version above 0.5.0, so MVS
+# gives it to every consumer with no override (one was root-only, and each
+# consumer carried its own copy of the patch until 0.42).
+bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.1")
 
 # --- swift_ffi (//swift_ffi/...) ---------------------------------------------
 # The idiomatic Swift <-> Kotlin/TypeScript/C bridge layer. The wasm and
