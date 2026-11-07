@@ -12,7 +12,7 @@ load(":samples.bzl", "playground_sample")
 package(default_visibility = ["//visibility:public"])
 
 # One bundle id for every build, Alpha, Beta, Production and AdHoc, and for
-# the Mac's (AttilaTheFun/applications' docs/VARIANTS.md).
+# the Mac's (the private AttilaTheFun/applications' docs/VARIANTS.md).
 BUNDLE_ID = "com.LoganShire.IsomerPlayground"
 
 # What this build of the Playground is, BuildVariant (Alpha, Beta,
