@@ -1,3 +1,4 @@
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 load("@rules_python//python:defs.bzl", "py_binary")
 load("@rules_swift//swift:swift_library.bzl", "swift_library")
 
@@ -21,7 +22,22 @@ package(
     ],
 )
 
-exports_files(glob(["*.bzl"]) + ["reactor_stub.swift"])
+exports_files(glob(["*.bzl"]) + ["jni_exports.lds", "reactor_stub.swift"])
+
+# A JNI library linked to ship (kt_swift_library.bzl): only its JNI entry
+# points exported (jni_exports.lds), everything else local, unreached code
+# dropped and the symbol tables stripped. With -c opt, `-Osize` and the
+# `swift.no_embed_debug_module` feature it is .bazelrc's
+# `--config=android_release` (README, "Android release size").
+bool_flag(
+    name = "jni_exports_only",
+    build_setting_default = False,
+)
+
+config_setting(
+    name = "jni_exports_only_on",
+    flag_values = {":jni_exports_only": "True"},
+)
 
 # A reactor's host entries, read from a link of it exporting everything
 # (swift_wasm_reactor.bzl's wasm_export_list).

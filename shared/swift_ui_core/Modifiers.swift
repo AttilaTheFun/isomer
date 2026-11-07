@@ -451,12 +451,24 @@ extension View {
     }
 
     /// `.accessibilityAction`: what assistive tech may do with the view (its
-    /// default activation, escape, a named custom action). Accepted, with
-    /// Apple's signatures; Isomer's hosts don't offer the actions to
-    /// assistive tech yet, so the handler isn't called.
+    /// default activation, escape, a named custom action). The node carries
+    /// it to the host (param "a11yActions"), which offers what its platform
+    /// has: Android a named action as a TalkBack custom action, the default
+    /// as the node's click, escape as its dismiss.
     nonisolated public func accessibilityAction(_ actionKind: AccessibilityActionKind = .default,
                                                 _ handler: @escaping () -> Void) -> ModifiedContent<Self, AccessibilityAttachmentModifier> {
-        modifier(AccessibilityAttachmentModifier { _ in })
+        let name = actionKind.name
+        return modifier(AccessibilityAttachmentModifier { $0.accessibilityActions.append((name: name, handler: handler)) })
+    }
+
+    /// `.accessibilityAdjustableAction`: assistive tech may adjust the view
+    /// (a pager, a custom slider), calling `handler` with the direction. The
+    /// node carries it to the host (param "a11yAdjust"): on Android TalkBack
+    /// offers it as "Increase" and "Decrease" actions.
+    nonisolated public func accessibilityAdjustableAction(
+        _ handler: @escaping (AccessibilityAdjustmentDirection) -> Void
+    ) -> ModifiedContent<Self, AccessibilityAttachmentModifier> {
+        modifier(AccessibilityAttachmentModifier { $0.accessibilityAdjust = handler })
     }
 
     nonisolated public func accessibilityAction(named name: Text,
@@ -1393,6 +1405,12 @@ extension Toggle: _AccessibilityRepresented {
 /// The kinds of action `accessibilityAction` names: the view's default
 /// activation, escape, the magic tap, delete, showing a menu, or a custom
 /// action by its name.
+/// Which way assistive tech adjusts a view (`accessibilityAdjustableAction`).
+public enum AccessibilityAdjustmentDirection: Sendable {
+    case increment
+    case decrement
+}
+
 public struct AccessibilityActionKind: Equatable, Sendable {
     let name: String
 

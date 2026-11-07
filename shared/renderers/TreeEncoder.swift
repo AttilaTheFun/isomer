@@ -1257,6 +1257,30 @@ package final class FlatTreeEncoder {
         if let id = node.accessibilityIdentifier { a11y.append(("a11yId", id)) }
         if node.accessibilityHidden { a11y.append(("a11yHidden", "1")) }
         if let children = node.accessibilityChildren { a11y.append(("a11yChildren", children)) }
+        // What assistive tech can do with the view: adjust it (the host calls
+        // the handler with "increment" or "decrement") and its named actions
+        // (one handler each, offered under its name).
+        if let adjust = node.accessibilityAdjust {
+            let id = "\(handle()).a11yAdjust"
+            register(id, { value in
+                switch value {
+                case "increment": adjust(.increment)
+                case "decrement": adjust(.decrement)
+                default: break
+                }
+            })
+            a11y.append(("a11yAdjust", id))
+        }
+        if !node.accessibilityActions.isEmpty {
+            var lines: [String] = []
+            for (index, action) in node.accessibilityActions.enumerated() {
+                let id = "\(handle()).a11yAction\(index)"
+                let handler = action.handler
+                register(id, { _ in handler() })
+                lines.append("\(id)\t\(action.name)")
+            }
+            a11y.append(("a11yActions", lines.joined(separator: "\n")))
+        }
         if !a11y.isEmpty { out.params = (out.params ?? []) + a11y }
         // The view a popover hangs from (hosts that present popovers
         // natively anchor it here; the others ignore it).

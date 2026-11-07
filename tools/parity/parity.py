@@ -80,6 +80,13 @@ MODULES = [
         "isomer_where": "`frameworks/core_transferable` (module `CoreTransferable`), which Isomer's SwiftUI re-exports as Apple's does",
     },
     {
+        "name": "Combine",
+        "sources": ["frameworks/combine"],
+        "apple": [("Combine", None)],
+        "isomer": ["Combine"],
+        "isomer_where": "`frameworks/combine` (module `Combine`), beneath Isomer's Foundation, which imports it as Apple's does",
+    },
+    {
         "name": "UniformTypeIdentifiers",
         "sources": ["frameworks/uniform_type_identifiers"],
         "apple": [("UniformTypeIdentifiers", None)],
@@ -188,6 +195,7 @@ def isomer_graphs():
         ["bazel", "build", "--platforms=//tools/platforms:wasm32", "--//foundation:internationalization"]
         + ["--@rules_swift//swift:copt=%s" % c for c in copts]
         + ["//wasm/libraries/swift_ui:swift_ui", "//foundation:foundation", "//metal/metal:metal",
+           "//frameworks/combine",
            "//frameworks/core_transferable", "//frameworks/uniform_type_identifiers",
            "//wasm/libraries/swift_ui:photos_ui",
            # The Isomer umbrella and the Isomer* modules beneath it: what
@@ -199,7 +207,7 @@ def isomer_graphs():
     for directory, flags, targets in (
             (ISOMER_ANDROID_DIR, ["--platforms=//tools/platforms:android_arm64", "--//foundation:internationalization"],
              ["//android/libraries/swift_ui:swift_ui", "//android/libraries/swift_ui:photos_ui",
-              "//foundation:foundation"]),
+              "//foundation:foundation", "//frameworks/combine"]),
             (ISOMER_CLI_DIR, [], ["//cli/libraries/swift_ui:swift_ui"])):
         if os.path.isdir(directory):
             shutil.rmtree(directory)
@@ -689,7 +697,8 @@ ASSOCIATED_TYPES = set()
 # Whose top-level typealiases are expanded: the frameworks compared (not
 # Objective-C's `Category`, an OpaquePointer, or Darwin's).
 TYPEALIAS_MODULES = {"SwiftUI", "SwiftUICore", "Foundation", "CoreGraphics", "CoreFoundation", "Metal",
-                     "CoreTransferable", "UniformTypeIdentifiers", "PhotosUI", "Observation", "Synchronization"}
+                     "CoreTransferable", "UniformTypeIdentifiers", "PhotosUI", "Observation", "Synchronization",
+                     "Combine"}
 # Each Apple key's signatures (`signature`), filled by apple_reach.
 APPLE_SIGNATURES = collections.defaultdict(set)
 ANY_SIGNATURE = ("*", "*")
@@ -1196,7 +1205,7 @@ def write_missing(spec, sdk_version, missing, isomer, reasons, commit, partial=(
 # CLI's SwiftUI (the core with the terminal host, on macOS).
 OTHER_BUILDS = [
     ("Android", ISOMER_ANDROID_DIR, ["SwiftUI", "PhotosUI", "Foundation", "CoreGraphics", "ImageIO",
-                                     "CoreTransferable", "UniformTypeIdentifiers"]),
+                                     "CoreTransferable", "UniformTypeIdentifiers", "Combine"]),
     ("The CLI (macOS)", ISOMER_CLI_DIR, ["SwiftUI"]),
 ]
 
@@ -1392,7 +1401,7 @@ def write_index(rows, sdk_version):
     lines = ["# What Isomer implements of Apple's frameworks", ""]
     lines.append("On Apple platforms an Isomer app uses Apple's frameworks. Elsewhere `import SwiftUI`, "
                  "`Foundation`, `CoreGraphics`, `Metal`, `CoreTransferable`, `UniformTypeIdentifiers`, "
-                 "`PhotosUI`, `ImageIO`, `Observation` and `Synchronization` are Isomer's (or, for Observation "
+                 "`PhotosUI`, `ImageIO`, `Combine`, `Observation` and `Synchronization` are Isomer's (or, for Observation "
                  "and Synchronization, the Swift toolchain's own), with Apple's names and as much of Apple's "
                  "interface as can be written in Swift. Each page says what is implemented, what is not, why, "
                  "and whether it is planned, and would list what the module has that Apple's does not: "

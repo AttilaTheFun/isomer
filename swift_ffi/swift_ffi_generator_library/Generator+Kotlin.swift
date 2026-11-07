@@ -204,7 +204,7 @@ extension Generator {
             @PublishedApi
             internal object \(className)Native {
               init {
-                System.loadLibrary("\(libraryName)")\(registrations)
+                swiftffi.NativeLibraries.load("\(libraryName)")\(registrations)
               }
 
             """

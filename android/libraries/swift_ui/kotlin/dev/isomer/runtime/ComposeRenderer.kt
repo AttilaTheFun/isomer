@@ -187,6 +187,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.dismiss
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.semantics.contentDescription
@@ -487,6 +491,34 @@ private fun baseModifier(n: JSONObject, extra: Modifier): Modifier {
                     label?.let { contentDescription = it }
                     value?.let { stateDescription = it }
                 }
+        }
+        // `.accessibilityAdjustableAction` and `.accessibilityAction`: what
+        // TalkBack may do with the node. Adjusting is offered as "Increase"
+        // and "Decrease" custom actions (Compose has no adjustable role);
+        // a named action under its name, the default action as the node's
+        // click, escape as its dismiss. Other kinds have no Android action.
+        val adjustID = p.optString("a11yAdjust")
+        val actions = p.optString("a11yActions").lines().filter { it.isNotEmpty() }.mapNotNull { line ->
+            val tab = line.indexOf('\t')
+            if (tab < 0) null else line.substring(0, tab) to line.substring(tab + 1)
+        }
+        if (adjustID.isNotEmpty() || actions.isNotEmpty()) {
+            m = m.semantics {
+                val custom = mutableListOf<CustomAccessibilityAction>()
+                if (adjustID.isNotEmpty()) {
+                    custom += CustomAccessibilityAction("Increase") { sendEvent(adjustID, "increment"); true }
+                    custom += CustomAccessibilityAction("Decrease") { sendEvent(adjustID, "decrement"); true }
+                }
+                for ((id, kind) in actions) {
+                    when {
+                        kind.startsWith("named:") ->
+                            custom += CustomAccessibilityAction(kind.removePrefix("named:")) { sendEvent(id, ""); true }
+                        kind == "default" -> onClick { sendEvent(id, ""); true }
+                        kind == "escape" -> dismiss { sendEvent(id, ""); true }
+                    }
+                }
+                if (custom.isNotEmpty()) customActions = custom
+            }
         }
         // `.accessibilityIdentifier`: a test tag, which UI Automator reads as
         // the node's resource-id (as XCUITest reads the identifier and the

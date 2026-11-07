@@ -44,6 +44,9 @@ swift_library(
     }),
     module_name = "Foundation",
     deps = [
+        # Isomer's Combine, beneath Foundation: its ObservableObject and
+        # Published named from here too (Combine.swift), as Apple's.
+        "//frameworks/combine",
         "//core_graphics",
         # What hosts install beneath Foundation (URLSession's transports,
         # UserDefaults' store), read through `internal import`.
