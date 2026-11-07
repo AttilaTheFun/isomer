@@ -335,11 +335,19 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
     if (!n.gradient) return undefined;
     try {
       const g = JSON.parse(n.gradient);
+      // A radial gradient's stops start at its start radius: CSS's start
+      // at the center, so they move out by the start's share of the end.
+      const ell = g.kind === "radial" && Array.isArray(g.ell) ? g.ell : null;
+      const inner = ell ? (ell[1] > 0 ? ell[0] / ell[1] : 0)
+        : g.kind === "radial" && g.er > 0 ? (g.sr || 0) / g.er : 0;
       const colors = (g.stops || [])
-        .map((stop) => `${rgba(stop.c)} ${Math.round((stop.l || 0) * 100)}%`)
+        .map((stop) => `${rgba(stop.c)} ${Math.round((inner + (stop.l || 0) * (1 - inner)) * 1000) / 10}%`)
         .join(",");
       if (!colors) return undefined;
-      if (g.kind === "radial") return `radial-gradient(circle, ${colors})`;
+      const at = g.c ? ` at ${g.c[0] * 100}% ${g.c[1] * 100}%` : "";
+      // Elliptical: its radii fractions of the box's width and height.
+      if (ell) return `radial-gradient(ellipse ${ell[1] * 100}% ${ell[1] * 100}%${at}, ${colors})`;
+      if (g.kind === "radial") return `radial-gradient(circle ${Math.max(g.er || 0, 0.01)}px${at}, ${colors})`;
       if (g.kind === "angular") return `conic-gradient(${colors})`;
       if (g.kind === "solid") return rgba((g.stops[0] || {}).c);
       const angle = g.p0 && g.p1

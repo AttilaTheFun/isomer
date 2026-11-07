@@ -771,7 +771,8 @@ struct AnyShapeView: View {
 
 /// Parses the runtime's gradient paint JSON (shared with
 /// HostBridge.fillGradient): {kind, stops: [{c: [r,g,b,a], l}]} with a
-/// linear one's p0/p1, a radial one's c/sr/er, an angular one's c/a0/a1.
+/// linear one's p0/p1, a radial one's c/sr/er (an elliptical one's c/ell),
+/// an angular one's c/a0/a1.
 func gradientPaint(_ json: String) -> AnyShapeStyle? {
     guard let data = json.data(using: .utf8),
           let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -790,6 +791,11 @@ func gradientPaint(_ json: String) -> AnyShapeStyle? {
     func number(_ key: String) -> CGFloat { CGFloat(object[key] as? Double ?? 0) }
     let gradient = Gradient(stops: colors)
     switch object["kind"] as? String {
+    case "radial" where (object["ell"] as? [Double])?.count == 2:
+        let fractions = object["ell"] as? [Double] ?? [0, 0.5]
+        return AnyShapeStyle(EllipticalGradient(
+            gradient: gradient, center: point("c", .center),
+            startRadiusFraction: fractions[0], endRadiusFraction: fractions[1]))
     case "radial":
         return AnyShapeStyle(RadialGradient(
             gradient: gradient, center: point("c", .center),
