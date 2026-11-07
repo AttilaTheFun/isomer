@@ -20,6 +20,10 @@ extension StoryCatalog {
             "animation.transition", "Transitions",
             summary: "How a view arrives and leaves when it is added and removed."
         ) { TransitionStory() },
+        Story(
+            "animation.matched", "Matched geometry",
+            summary: "One view in two places: matchedGeometryEffect pairs a small badge and a large card by id in a @Namespace, so toggling them with withAnimation moves the one into the other's frame; the completion runs when the move is done."
+        ) { MatchedGeometryStory() },
     ])
 }
 
@@ -112,6 +116,43 @@ struct TransitionStory: View {
                 }
             }
             .frame(height: 44)
+        }
+    }
+}
+// end story
+
+
+// story: animation.matched
+struct MatchedGeometryStory: View {
+    @Namespace private var space
+    @State private var expanded = false
+    @State private var moves = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if expanded {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.purple)
+                    .matchedGeometryEffect(id: "card", in: space)
+                    .frame(height: 140)
+            } else {
+                HStack {
+                    Spacer()
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.purple)
+                        .matchedGeometryEffect(id: "card", in: space)
+                        .frame(width: 60, height: 40)
+                }
+            }
+            Button(expanded ? "Shrink" : "Expand") {
+                withAnimation(.easeInOut(duration: 0.35)) {
+                    expanded.toggle()
+                } completion: {
+                    moves += 1
+                }
+            }
+            .buttonStyle(.bordered)
+            Text("Moves finished: \(moves)").foregroundStyle(.secondary)
         }
     }
 }

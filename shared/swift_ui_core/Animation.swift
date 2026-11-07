@@ -141,6 +141,36 @@ public func withAnimation<Result>(_ animation: Animation? = .default, _ body: ()
     return result
 }
 
+/// When `withAnimation`'s completion runs: once the animation has
+/// logically completed (its curve done), or once it is removed (here, the
+/// same moment: Isomer's animations end when their curve does).
+public struct AnimationCompletionCriteria: Hashable, Sendable {
+    let name: String
+
+    public static let logicallyComplete = AnimationCompletionCriteria(name: "logicallyComplete")
+    public static let removed = AnimationCompletionCriteria(name: "removed")
+}
+
+/// `withAnimation` with a completion: `completion` runs on the main actor
+/// once the animation is done (its delay and every cycle; never for one
+/// repeating forever), or at once without an animation.
+public func withAnimation<Result>(
+    _ animation: Animation? = .default,
+    completionCriteria: AnimationCompletionCriteria = .logicallyComplete,
+    _ body: () throws -> Result,
+    completion: @escaping () -> Void
+) rethrows -> Result {
+    let result = try withAnimation(animation, body)
+    let seconds = animation.map { $0.delay + max(0, $0.duration) * Double(max(1, $0.repeats)) } ?? 0
+    guard animation?.repeats != -1 else { return result }
+    nonisolated(unsafe) let done = completion
+    Task { @MainActor in
+        if seconds > 0 { try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000)) }
+        done()
+    }
+    return result
+}
+
 /// Per-path value interpolation. Each animatable property consults this with its
 /// current target and the animation in scope; it returns the value to display.
 final class Animator {

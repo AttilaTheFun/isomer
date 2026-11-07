@@ -416,7 +416,50 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
     if (p.a11yChildren === "ignore" && p.a11yLabel !== undefined) props.role = props.role || "img";
     // `.id(_:)`: what a ScrollViewProxy's scrollTo finds.
     if (p.vid !== undefined) props["data-vid"] = p.vid;
+    // `.matchedGeometryEffect`: the element follows its key (see matchedRef).
+    if (p.match !== undefined) {
+      const key = p.match, props_ = p.matchProps;
+      props.ref = (el) => matchedRef(key, el, props_);
+    }
     return props;
+  }
+
+  // `.matchedGeometryEffect` by FLIP: each key's element and its last frame.
+  // An element that mounts with a key another element had (the other gone,
+  // or going, in the same change) starts at that element's frame and moves
+  // to its own; "matchProps" 1 moves without resizing, 2 resizes in place.
+  const matchedElements = new Map();
+  const matchedFrames = new Map();
+  function matchedRef(key, el, properties) {
+    if (!el) {
+      const current = matchedElements.get(key);
+      if (current && current.isConnected) matchedFrames.set(key, current.getBoundingClientRect());
+      return;
+    }
+    const previous = matchedElements.get(key);
+    const from = previous && previous !== el
+      ? (previous.isConnected ? previous.getBoundingClientRect() : matchedFrames.get(key))
+      : null;
+    matchedElements.set(key, el);
+    if (from && !el.__isoMatched) {
+      const to = el.getBoundingClientRect();
+      const moves = properties !== "2", resizes = properties !== "1";
+      const dx = moves ? from.left - to.left : 0, dy = moves ? from.top - to.top : 0;
+      const sx = resizes && to.width ? from.width / to.width : 1, sy = resizes && to.height ? from.height / to.height : 1;
+      if (dx || dy || sx !== 1 || sy !== 1) {
+        el.style.transformOrigin = "top left";
+        el.style.transition = "none";
+        el.style.transform = `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`;
+        el.getBoundingClientRect();
+        requestAnimationFrame(() => {
+          el.style.transition = "transform 0.35s ease-in-out";
+          el.style.transform = "";
+          el.addEventListener("transitionend", () => { el.style.transition = ""; el.style.transformOrigin = ""; }, { once: true });
+        });
+      }
+    }
+    el.__isoMatched = true;
+    requestAnimationFrame(() => { if (el.isConnected) matchedFrames.set(key, el.getBoundingClientRect()); });
   }
 
   // Node kinds that take input on their own, without a tap/drag/edit field.

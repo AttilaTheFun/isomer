@@ -477,6 +477,10 @@ package final class RenderNode {
     var lineSpacing: Double?
     /// `.tracking` / `.kerning` for text: points added between characters.
     var tracking: Double?
+    /// `.matchedGeometryEffect`: the pairing's key, which geometry follows
+    /// (MatchedGeometryProperties' raw value) and whether this view is the
+    /// source (params "match", "matchProps", "matchSource").
+    var matchedGeometry: (key: String, properties: UInt32, isSource: Bool)?
     /// `.layoutPriority(_:)`: how early the view is offered its row's room
     /// (param "layoutPriority"; 0, everyone's, is left out).
     var layoutPriority: Double = 0

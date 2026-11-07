@@ -1236,6 +1236,13 @@ package final class FlatTreeEncoder {
                 ("lpDist", formatNumber(Double(press.maximumDistance))),
             ]
         }
+        if let matched = node.matchedGeometry {
+            out.params = (out.params ?? []) + [("match", matched.key)]
+            if matched.properties != MatchedGeometryProperties.frame.rawValue {
+                out.params = (out.params ?? []) + [("matchProps", String(matched.properties))]
+            }
+            if !matched.isSource { out.params = (out.params ?? []) + [("matchSource", "0")] }
+        }
         if node.layoutPriority != 0 {
             out.params = (out.params ?? []) + [("layoutPriority", formatNumber(node.layoutPriority))]
         }
