@@ -176,8 +176,12 @@ jobs:
     # Only when asked for by hand: never a pull request's or a push's.
     if: github.event_name == 'workflow_dispatch' && inputs.run != 'adhoc'
     # OS Server's single-use Linux containers, as the build's: the apps built
-    # in it (rules_applecross for the Apple ones), pictured on machines it
-    # leases, the web in Chrome for Testing there.
+    # in it (rules_applecross for the Apple ones). A public repository's are
+    # then pictured on GitHub's own machines (the proof-* jobs below), but
+    # the Android Playground, pictured here on an emulator leased from OS
+    # Server (its compiler is arm64's alone; GitHub's runners with KVM are
+    # x86_64). A private copy pictures everything here, on machines it
+    # leases, the web in Chrome for Testing in this container.
     runs-on: [self-hosted, isomer-jit]
     concurrency:
       group: isomer-proof-${{ github.ref }}
@@ -187,6 +191,12 @@ jobs:
       contents: read
       # The baseline: an earlier run's proof artifact.
       actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      # The branch, for a pull request's head (its run's ref is GitHub's merge).
+      PROOF_REF: ${{ github.event.pull_request && format('refs/heads/{0}', github.head_ref) || github.ref }}
+      PROOF_KIND: ${{ inputs.kind || 'full' }}
+      PROOF_BASELINE_RUN: ${{ inputs.baseline_run }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -196,15 +206,122 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - name: The apps on every platform, pictured, and the proof
-        env:
-          GH_TOKEN: ${{ github.token }}
-          # The branch, for a pull request's head (its run's ref is GitHub's merge).
-          PROOF_REF: ${{ github.event.pull_request && format('refs/heads/{0}', github.head_ref) || github.ref }}
-          PROOF_KIND: ${{ inputs.kind || 'full' }}
-          PROOF_BASELINE_RUN: ${{ inputs.baseline_run }}
+        if: github.event.repository.private
         # exec: the runner's cancel reaches the script's trap, which releases its leases.
         run: exec tools/ci/proof.sh --kind "$PROOF_KIND" --proof "$RUNNER_TEMP/proof"
       # The proof whether every picture came or not: a broken screen is what it's for.
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && github.event.repository.private }}
+        with:
+          name: proof
+          path: ${{ runner.temp }}/proof
+          retention-days: 90
+      - name: The apps built, and the Android Playground pictured
+        if: ${{ !github.event.repository.private }}
+        run: exec tools/ci/proof.sh --stage build --kind "$PROOF_KIND" --apps "$RUNNER_TEMP/proof-apps" --review "$RUNNER_TEMP/proof-review"
+      - uses: actions/upload-artifact@v4
+        if: ${{ !github.event.repository.private }}
+        with:
+          name: proof-apps-ios
+          path: ${{ runner.temp }}/proof-apps/ios
+          retention-days: 1
+      - uses: actions/upload-artifact@v4
+        if: ${{ !github.event.repository.private }}
+        with:
+          name: proof-apps-macos
+          path: ${{ runner.temp }}/proof-apps/macos
+          retention-days: 1
+      - uses: actions/upload-artifact@v4
+        if: ${{ !github.event.repository.private }}
+        with:
+          name: proof-apps-android
+          path: ${{ runner.temp }}/proof-apps/hosted/android
+          retention-days: 1
+      - uses: actions/upload-artifact@v4
+        if: ${{ !github.event.repository.private }}
+        with:
+          name: proof-apps-web
+          path: ${{ runner.temp }}/proof-apps/web
+          retention-days: 1
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && !github.event.repository.private }}
+        with:
+          name: proof-part-build
+          path: ${{ runner.temp }}/proof-review
+          retention-days: 7
+
+  # A public repository's proof, pictured on GitHub's own machines, free
+  # for one (tools/ci/proof.sh --stage shoot, tools/proof/proof.py --here):
+  # the iPhone (a simulator made for the run) and the Mac on `xcode-27`
+  # Macs, the Android Storybook on an emulator under Ubuntu's KVM, the web
+  # in Ubuntu's Chrome. Each its own part, whatever came back: a broken
+  # screen is what the proof is for.
+  proof-shoot:
+    needs: proof
+    if: ${{ !github.event.repository.private }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ios
+            runner: xcode-27
+          - platform: macos
+            runner: xcode-27
+          - platform: android
+            runner: ubuntu-24.04
+          - platform: web
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          # A quick proof's stories include those of the story files a branch touches.
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: proof-apps-${{ matrix.platform }}
+          path: ${{ runner.temp }}/apps/${{ matrix.platform == 'android' && 'hosted/android' || matrix.platform }}
+      - name: The apps pictured here
+        env:
+          PROOF_KIND: ${{ inputs.kind || 'full' }}
+        run: >-
+          exec tools/ci/proof.sh --stage shoot --platform ${{ matrix.platform }} --kind "$PROOF_KIND"
+          --apps "$RUNNER_TEMP/apps" --review "$RUNNER_TEMP/review"
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: proof-part-${{ matrix.platform }}
+          path: ${{ runner.temp }}/review
+          retention-days: 7
+
+  # The parts compared with the baseline into the `proof` artifact Reviews
+  # reads, whichever came back (a missing platform's pictures fail it).
+  proof-compare:
+    needs: [proof, proof-shoot]
+    if: ${{ !cancelled() && !github.event.repository.private && needs.proof.result == 'success' }}
+    runs-on: [self-hosted, isomer-jit]
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PROOF_REF: ${{ github.event.pull_request && format('refs/heads/{0}', github.head_ref) || github.ref }}
+      PROOF_KIND: ${{ inputs.kind || 'full' }}
+      PROOF_BASELINE_RUN: ${{ inputs.baseline_run }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: proof-part-*
+          path: ${{ runner.temp }}/parts
+      - name: The proof
+        run: exec tools/ci/proof.sh --stage compare --kind "$PROOF_KIND" --parts "$RUNNER_TEMP/parts" --proof "$RUNNER_TEMP/proof"
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
