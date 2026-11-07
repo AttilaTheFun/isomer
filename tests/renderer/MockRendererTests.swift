@@ -2892,6 +2892,7 @@ struct Main {
         checkDismissFromSheetToolbar(mock)
         checkPickerInFormRow(mock)
         checkValueNavigation(mock)
+        checkPresentedDestinations(mock)
         checkListSectionFooter(mock)
         checkAlignmentGuideInOverlay(mock)
         checkFloatingProbeBuilds(mock)
