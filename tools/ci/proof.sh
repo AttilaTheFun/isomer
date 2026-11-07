@@ -7,6 +7,24 @@
 #
 #   tools/ci/proof.sh --proof <dir> [--kind quick|full]
 #
+# Or in stages, as a public repository's CI runs it: built in CI's own
+# Linux container, pictured on GitHub's own machines (free for a public
+# repository), then compared (.github/workflows/build.yml's proof jobs):
+#
+#   --stage build --apps <dir> --review <dir>
+#       (CI's container) every app built into <apps>/<platform>/ (the
+#       Android Storybook for x86_64, in <apps>/hosted/android/, for the
+#       Ubuntu runner's emulator), and the Android Playground pictured here,
+#       on an emulator leased from OS Server, into <review>: its compiler,
+#       built into the app, is arm64's alone
+#   --stage shoot --platform ios|macos|android|web --apps <dir> --review <dir>
+#       (GitHub's runner: `xcode-27` for the iPhone and the Mac, Ubuntu for
+#       Android and the web) one platform's apps pictured on that machine
+#       (proof.py --here), into <review>
+#   --stage compare --parts <dir> --proof <dir>
+#       (CI's container) the stages' <review> folders, as subfolders of
+#       <parts>, compared with the baseline into the proof
+#
 # Run only by hand (the Build workflow's workflow_dispatch), to propose a
 # release or, after the fact, to bisect a regression. full: every story.
 # quick: both apps still built on every platform, a core set of stories
@@ -72,20 +90,49 @@ IMAGE="$(cat "$ROOT/tools/ci/agent_image")"
 # still pictures them when named: add them back here.
 PLATFORMS="${PROOF_PLATFORMS:-ios macos android web}"
 
-usage() { echo "usage: tools/ci/proof.sh --proof <dir> [--kind quick|full]" >&2; exit 2; }
+usage() {
+    cat >&2 << 'EOF2'
+usage: tools/ci/proof.sh --proof <dir> [--kind quick|full]
+       tools/ci/proof.sh --stage build --apps <dir> --review <dir> [--kind quick|full]
+       tools/ci/proof.sh --stage shoot --platform <platform> --apps <dir> --review <dir> [--kind quick|full]
+       tools/ci/proof.sh --stage compare --parts <dir> --proof <dir> [--kind quick|full]
+EOF2
+    exit 2
+}
+stage="all"
 proof=""
 kind="quick"
+apps=""
+review=""
+platform=""
+parts=""
 while [ $# -gt 0 ]; do
     case "$1" in
+        --stage) stage="${2:?--stage takes build, shoot or compare}"; shift 2 ;;
         --proof) proof="${2:?--proof takes a folder}"; shift 2 ;;
         --kind) kind="${2:?--kind takes quick or full}"; shift 2 ;;
+        --apps) apps="${2:?--apps takes a folder}"; shift 2 ;;
+        --review) review="${2:?--review takes a folder}"; shift 2 ;;
+        --platform) platform="${2:?--platform takes a platform}"; shift 2 ;;
+        --parts) parts="${2:?--parts takes a folder}"; shift 2 ;;
         *) usage ;;
     esac
 done
-[ -n "$proof" ] || usage
 case "$kind" in quick | full) ;; *) usage ;; esac
-mkdir -p "$proof"
-proof="$(cd "$proof" && pwd)"
+absolute() { mkdir -p "$1" && (cd "$1" && pwd); }
+case "$stage" in
+    all) [ -n "$proof" ] || usage ;;
+    build) [ -n "$apps" ] && [ -n "$review" ] || usage ;;
+    shoot) [ -n "$platform" ] && [ -n "$apps" ] && [ -n "$review" ] || usage ;;
+    compare) [ -n "$parts" ] && [ -n "$proof" ] || usage ;;
+    *) usage ;;
+esac
+[ -z "$proof" ] || proof="$(absolute "$proof")"
+[ -z "$apps" ] || apps="$(absolute "$apps")"
+[ -z "$review" ] || review="$(absolute "$review")"
+[ -z "$parts" ] || parts="$(absolute "$parts")"
+# Whether this stage runs a step: `stages all build && …`.
+stages() { case " $* " in *" $stage "*) return 0 ;; esac; return 1; }
 
 cd "$ROOT"
 commit="$(git rev-parse HEAD)"
@@ -131,6 +178,111 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 143' TERM INT
 
+# --- The steps the stages share or have alone (run below as the stage says)
+
+# Every picture of the review folders under the given roots, named for its
+# platform, app and screen (review-ios-storybook/navigation.links.png is
+# ios-storybook-navigation.links; the iPhone's compiled Storybook's
+# references and diffs against Apple's are its own review's, not screens),
+# then compared with the baseline into the proof.
+compare() {
+    local root folder cell picture platform app
+    mkdir -p "$work/pictures"
+    for root in "$@"; do
+        for folder in "$root"/review-*; do
+            [ -d "$folder" ] || continue
+            cell="$(basename "$folder")"
+            for picture in "$folder"/*.png; do
+                [ -e "$picture" ] || continue
+                case "$picture" in *.reference.png | *.diff.png) continue ;; esac
+                cp "$picture" "$work/pictures/${cell#review-}-$(basename "$picture")"
+            done
+        done
+    done
+    for platform in $PLATFORMS; do
+        for app in storybook playground; do
+            if ! ls "$work/pictures/$platform-$app-"*.png > /dev/null 2>&1; then
+                echo "::error::no picture of $platform's $app"
+                status=1
+            fi
+        done
+    done
+    "$work/proof_compare" "$work/pictures" "$baseline" "$proof" --commit "$commit" --ref "$ref" --kind "$kind" \
+        ${GITHUB_RUN_ID:+--run "$GITHUB_RUN_ID"} ${base_ref:+--base-ref "$base_ref"} ${base_commit:+--base-commit "$base_commit"} \
+        --ignore "$ROOT/tools/ci/proof_ignore.txt" > "$work/summary.md"
+    cat "$work/summary.md"
+    [ -z "${GITHUB_STEP_SUMMARY:-}" ] || cat "$work/summary.md" >> "$GITHUB_STEP_SUMMARY"
+    phase "done: $(ls "$proof/screens" | wc -l | tr -d ' ') pictures"
+}
+
+# --stage build: every app built for the stages that picture them
+# elsewhere, and the Android Playground pictured here (its compiler, built
+# into the app, is arm64's alone, and GitHub's runners with KVM are x86_64).
+build() {
+    echo "::group::The apps, built (tools/proof/proof.py --build-to)"
+    background "$python" -u "$ROOT/tools/proof/proof.py" ios macos web --build-to "$apps" --review "$review" \
+        --commit "$commit" --web-toolchain "$web_toolchain" || { echo "::error::the apps didn't build"; exit 1; }
+    background "$python" -u "$ROOT/tools/proof/proof.py" android --apps storybook --android-abi x86_64 \
+        --build-to "$apps/hosted" --review "$review" --commit "$commit" ||
+        { echo "::error::the Android Storybook (x86_64) didn't build"; exit 1; }
+    echo "::endgroup::"
+    phase "built"
+    echo "::group::The Android Playground, on an emulator leased from OS Server"
+    background "$python" -u "$ROOT/tools/proof/proof.py" android --apps playground --review "$review" --commit "$commit" \
+        ${quick[@]+"${quick[@]}"} || { echo "::error::the Android Playground: a build failed or a picture didn't come back"; exit 1; }
+    echo "::endgroup::"
+    phase "the Android Playground pictured"
+}
+
+# --stage shoot, before anything else: what the platform's machine needs.
+# GitHub's runners: Python's own (Pillow in a venv of the run's), Xcode
+# 27.2 for the simulator, the Mac's screen made 1920 by 1080 (its own is
+# 1024 by 768), an emulator booted on the Ubuntu runner's KVM, its Chrome.
+shoot_setup() {
+    echo "::group::This machine, for $platform's pictures"
+    python3 -m venv "$work/venv"
+    "$work/venv/bin/pip" install -q pillow
+    shoot_python="$work/venv/bin/python3"
+    case "$platform" in
+        ios)
+            if [ -z "${DEVELOPER_DIR:-}" ] && [ -d /Applications/Xcode_27.2.app ]; then
+                export DEVELOPER_DIR=/Applications/Xcode_27.2.app/Contents/Developer
+            fi
+            xcrun simctl list runtimes ;;
+        macos)
+            brew install displayplacer > /dev/null 2>&1 || true
+            local screen
+            screen="$(displayplacer list 2> /dev/null | sed -n 's/^Persistent screen id: //p' | head -1 || true)"
+            if [ -z "$screen" ] || ! displayplacer "id:$screen res:1920x1080 scaling:off origin:(0,0) degree:0" > /dev/null 2>&1; then
+                echo "::warning::the runner's screen stayed as it was (displayplacer)"
+            fi ;;
+        android)
+            export PROOF_ADB="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}/platform-tools/adb"
+            PROOF_ANDROID_SERIAL="$("$ROOT/tools/ci/hosted_android_emulator.sh" "$review/emulator.log")"
+            export PROOF_ANDROID_SERIAL ;;
+        web)
+            CDP_CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+            [ -n "$CDP_CHROME" ] || { echo "::error::no Chrome on this runner"; exit 1; }
+            export CDP_CHROME ;;
+        *) usage ;;
+    esac
+    echo "::endgroup::"
+}
+
+# --stage shoot: the platform's apps pictured on this machine.
+shoot() {
+    local from="$apps" only=()
+    # The Android Storybook alone (x86_64): its Playground was pictured in
+    # the build stage.
+    if [ "$platform" = android ]; then from="$apps/hosted"; only=(--apps storybook); fi
+    echo "::group::$platform's apps, pictured here (tools/proof/proof.py --here)"
+    background "$python" -u "$ROOT/tools/proof/proof.py" "$platform" --here --from "$from" ${only[@]+"${only[@]}"} \
+        --review "$review" --commit "$commit" ${quick[@]+"${quick[@]}"} ||
+        { echo "::error::$platform: a picture didn't come back"; exit 1; }
+    echo "::endgroup::"
+    phase "$platform pictured"
+}
+
 # The tools first: nothing leased if one doesn't build. proof.py's python
 # with Pillow: without, its desktops' pictures go uncropped (the clocks,
 # the wallpaper), which it only logs.
@@ -139,6 +291,7 @@ trap 'exit 143' TERM INT
 # (OS Server's own) it builds with the Mac's Xcode.
 inside=""
 [ "$(uname -s)" = Darwin ] || inside=1
+stages shoot && inside=""
 host="${OSS_FILES_HOST:-}"
 if [ -z "$host" ] && [ -n "${OSS_SERVERS:-}" ]; then
     # The first of the servers' addresses (a URL, or host:port).
@@ -146,11 +299,13 @@ if [ -z "$host" ] && [ -n "${OSS_SERVERS:-}" ]; then
     host="${host#*://}"
     host="${host%%[:/]*}"
 fi
-if [ -z "$host" ] && [ -z "$inside" ]; then
+if [ -z "$host" ] && [ -z "$inside" ] && ! stages shoot; then
     host="$(/Applications/Tailscale.app/Contents/MacOS/Tailscale status --json | plutil -extract Self.DNSName raw -o - -)"
     host="${host%.}"
 fi
-if [ -n "$inside" ]; then
+if stages shoot; then
+    shoot_setup
+elif [ -n "$inside" ]; then
     [ -n "$host" ] || { echo "::error::no host for OS Server's files: set OSS_FILES_HOST (or OSS_SERVERS)"; exit 1; }
     echo "::group::The container's tools"
     root_do() { if [ "$(id -u)" = 0 ]; then "$@"; else sudo "$@"; fi; }
@@ -170,21 +325,32 @@ rewrite ported-tools\.invalid/sha256/(.*) http://$host:7490/files/sha256/\$1
 rewrite windows-sdks\.invalid/sha256/(.*) http://$host:7490/files/sha256/\$1
 EOF2
     printf 'build --config=apple_on_linux\ncommon --downloader_config=%s\n' "$work/downloader.cfg" > "$ROOT/examples/.bazelrc.user"
-    # The web's pictures in Chrome for Testing (MODULE.bazel), for cdp.py.
-    case "$(uname -m)" in aarch64 | arm64) chrome=chrome_linux_arm64 ;; *) chrome=chrome_linux_x86_64 ;; esac
-    (cd "$ROOT/examples" && bazel build "@$chrome//:files" > /dev/null)
-    export CDP_CHROME="$(cd "$ROOT/examples" && echo "$(bazel info output_base)/$(bazel cquery --output=files "@$chrome//:chrome" 2> /dev/null)")"
-    [ -x "$CDP_CHROME" ] || { echo "::error::no Chrome for Testing at $CDP_CHROME"; exit 1; }
-    # A container has no user namespaces for Chrome's own sandbox.
-    export CDP_CHROME_FLAGS="--no-sandbox ${CDP_CHROME_FLAGS:-}"
+    # The web's pictures in Chrome for Testing (MODULE.bazel), for cdp.py,
+    # when they are taken here (the stages take them on GitHub's runner).
+    if stages all; then
+        case "$(uname -m)" in aarch64 | arm64) chrome=chrome_linux_arm64 ;; *) chrome=chrome_linux_x86_64 ;; esac
+        (cd "$ROOT/examples" && bazel build "@$chrome//:files" > /dev/null)
+        export CDP_CHROME="$(cd "$ROOT/examples" && echo "$(bazel info output_base)/$(bazel cquery --output=files "@$chrome//:chrome" 2> /dev/null)")"
+        [ -x "$CDP_CHROME" ] || { echo "::error::no Chrome for Testing at $CDP_CHROME"; exit 1; }
+        # A container has no user namespaces for Chrome's own sandbox.
+        export CDP_CHROME_FLAGS="--no-sandbox ${CDP_CHROME_FLAGS:-}"
+    fi
     echo "::endgroup::"
     swiftc -O -o "$work/proof_compare" "$ROOT/tools/ci/proof_compare.swift"
 else
     xcrun swiftc -O -o "$work/proof_compare" "$ROOT/tools/ci/proof_compare.swift"
 fi
-python="${PROOF_PYTHON:-python3}"
+python="${PROOF_PYTHON:-${shoot_python:-python3}}"
 "$python" -c 'import PIL' 2> /dev/null || { echo "::error::$python has no Pillow (PROOF_PYTHON names one that has)"; exit 1; }
 
+quick=()
+if [ "$kind" = quick ]; then quick=(--quick --base "origin/${GITHUB_BASE_REF:-main}"); fi
+if stages shoot; then
+    shoot
+    exit 0
+fi
+
+if stages all build; then
 echo "::group::The Playground's compilers"
 # The staged compilers from OS Server's files, unpacked where the apps'
 # BUILD files find them (the checkout's gitignored folders).
@@ -193,6 +359,12 @@ web_toolchain="$ROOT/examples/playground/web/playground_web_application/staged_t
 [ -f "$web_toolchain/manifest.json" ] || { echo "::error::no browser compiler staged at $web_toolchain"; exit 1; }
 echo "::endgroup::"
 phase "compilers staged"
+fi
+
+if stages build; then
+    build
+    exit 0
+fi
 
 echo "::group::The baseline"
 # Every kept proof: "<commit> <run> <branch>", newest run first.
@@ -268,6 +440,12 @@ elif [ "$baseline" = - ]; then
 fi
 echo "::endgroup::"
 
+if stages compare; then
+    status=0
+    compare "$parts" "$parts"/*
+    exit "$status"
+fi
+
 echo "::group::The Linux apps, packaged in a container"
 # Bazel's tree in a volume of the lease's, the checkout mounted (the
 # packages come out under .ci/, in it).
@@ -298,8 +476,6 @@ if [[ " $PLATFORMS " == *" linux "* ]]; then
 fi
 
 echo "::group::The apps on every platform (tools/proof/proof.py)"
-quick=()
-if [ "$kind" = quick ]; then quick=(--quick --base "origin/${GITHUB_BASE_REF:-main}"); fi
 status=0
 # shellcheck disable=SC2086
 background "$python" -u "$ROOT/tools/proof/proof.py" $PLATFORMS --review "$work/review" --commit "$commit" \
@@ -308,33 +484,5 @@ background "$python" -u "$ROOT/tools/proof/proof.py" $PLATFORMS --review "$work/
 echo "::endgroup::"
 phase "pictured"
 
-# Every picture, named for its platform, app and screen: review-ios-storybook/
-# navigation.links.png is ios-storybook-navigation.links (the iPhone's
-# compiled Storybook's references and diffs against Apple's are its own
-# review's, not screens).
-mkdir -p "$work/pictures"
-for folder in "$work/review"/review-*; do
-    [ -d "$folder" ] || continue
-    cell="$(basename "$folder")"
-    for picture in "$folder"/*.png; do
-        [ -e "$picture" ] || continue
-        case "$picture" in *.reference.png | *.diff.png) continue ;; esac
-        cp "$picture" "$work/pictures/${cell#review-}-$(basename "$picture")"
-    done
-done
-for platform in $PLATFORMS; do
-    for app in storybook playground; do
-        if ! ls "$work/pictures/$platform-$app-"*.png > /dev/null 2>&1; then
-            echo "::error::no picture of $platform's $app"
-            status=1
-        fi
-    done
-done
-
-"$work/proof_compare" "$work/pictures" "$baseline" "$proof" --commit "$commit" --ref "$ref" --kind "$kind" \
-    ${GITHUB_RUN_ID:+--run "$GITHUB_RUN_ID"} ${base_ref:+--base-ref "$base_ref"} ${base_commit:+--base-commit "$base_commit"} \
-    --ignore "$ROOT/tools/ci/proof_ignore.txt" > "$work/summary.md"
-cat "$work/summary.md"
-[ -z "${GITHUB_STEP_SUMMARY:-}" ] || cat "$work/summary.md" >> "$GITHUB_STEP_SUMMARY"
-phase "done: $(ls "$proof/screens" | wc -l | tr -d ' ') pictures"
+compare "$work/review"
 exit "$status"

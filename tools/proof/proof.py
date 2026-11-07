@@ -17,6 +17,15 @@ on the web, OpenGL on Linux, DirectX on Windows).
   tools/proof/proof.py [ios] [macos] [android] [web] [linux] [windows] --review <dir>
       [--commit <sha>] [--version 0.38.N] [--stories text.styles,controls.picker]
       [--quick [--base origin/main]] [--held windows=<file>] [--web-toolchain <dir>]
+      [--apps storybook,playground] [--android-abi x86_64]
+      [--build-to <dir> | --from <dir> [--here]]
+
+CI's proof builds in its Linux container and pictures on GitHub's own
+machines (tools/ci/proof.sh): --build-to keeps each platform's apps in
+<dir>/<platform>/ and stops; --from <dir> pictures those rather than
+building; --here pictures on this machine, nothing leased (an iPhone
+simulator made here, this Mac's screen, the emulator adb sees, this
+machine's Chrome).
 
 --quick is a pull request's proof: both apps still built on every platform
 (building is what catches most), a core set of stories (QUICK_STORIES) and
@@ -83,6 +92,11 @@ PLAYGROUND_SHOTS = [
 
 failures = []
 lock = threading.Lock()
+# --here: the platform is this machine (GitHub's runners, in CI's proof: an
+# iPhone simulator made here, this Mac's screen, the emulator adb sees, this
+# machine's Chrome), nothing leased. --apps: the apps pictured (default both).
+HERE = False
+CHOSEN = set(APPS)
 
 
 def log(message):
@@ -413,9 +427,12 @@ def shoot_apps(review, platform, device, orientation, launcher, story_list, wait
     `waits`: seconds after a launch: open (the app's opening screen or a
     page), story, run (a project built and running). `switcher`: the
     Storybook's stories in one launch (Switcher)."""
-    out = review.dir(f"{platform}-storybook")
-    shots = storybook_shots(out, story_list, launcher, waits, switcher)
-    review.cell(f"{platform}-storybook", "storybook", device, orientation, shots)
+    if "storybook" in CHOSEN:
+        out = review.dir(f"{platform}-storybook")
+        shots = storybook_shots(out, story_list, launcher, waits, switcher)
+        review.cell(f"{platform}-storybook", "storybook", device, orientation, shots)
+    if "playground" not in CHOSEN:
+        return
 
     out = review.dir(f"{platform}-playground")
     shots = []
@@ -564,12 +581,34 @@ class LocalSimulator:
         return control, request, shown
 
 
+def here_simulator():
+    """--here: an iPhone simulator of the run's own on this Mac (GitHub's
+    `xcode-27` runner), as OS Server's ios leases are: an iPhone 17 of the
+    newest iOS this Xcode has (PROOF_IOS_DEVICE, PROOF_IOS_RUNTIME to
+    choose), booted. Its exports, as a lease's."""
+    device = os.environ.get("PROOF_IOS_DEVICE", "iPhone 17")
+    runtimes = json.loads(sh(["xcrun", "simctl", "list", "runtimes", "-j"]).stdout)["runtimes"]
+    ios = [r for r in runtimes if r.get("platform") == "iOS" and r.get("isAvailable")
+           and any(d.get("name") == device for d in r.get("supportedDeviceTypes", []))]
+    wanted = os.environ.get("PROOF_IOS_RUNTIME")
+    if wanted:
+        ios = [r for r in ios if r["version"] == wanted]
+    if not ios:
+        raise RuntimeError(f"no iOS runtime here for {device} ({wanted or 'any'})")
+    runtime = max(ios, key=lambda r: [int(n) for n in r["version"].split(".")])
+    udid = sh(["xcrun", "simctl", "create", f"proof-{os.getpid()}", device, runtime["identifier"]]).stdout.strip()
+    sh(["xcrun", "simctl", "boot", udid])
+    sh(["xcrun", "simctl", "bootstatus", udid, "-b"])
+    log(f"made {device}, iOS {runtime['version']}: {udid}")
+    return {"OSS_ID": udid, "OSS_UDID": udid, "here": True}
+
+
 def ios(review, story_list, builds):
-    local = os.environ.get("PROOF_IOS", "oss") == "local"
+    local = HERE or os.environ.get("PROOF_IOS", "oss") == "local"
     if not local and (api := oss_api()) < 20:
         raise RuntimeError(f"the iPhone's proof needs OS Server's API 20 (an ios lease's launch environment and its "
                            f"folder's files); this server's is {api}. PROOF_IOS=local for a server whose simulators are its Mac's")
-    env = lease("ios")
+    env = here_simulator() if HERE else lease("ios")
     try:
         simulator = LocalSimulator(env["OSS_UDID"]) if local else LeasedSimulator(env["OSS_ID"])
         for app, ipa in builds.items():
@@ -602,20 +641,26 @@ def ios(review, story_list, builds):
         shoot_apps(review, "ios", "iPhone (simulator)", "portrait", launcher, story_list, waits, switcher("storybook"))
         # The Storybook compiled against Isomer's frameworks, each story
         # beside the one just shot with Apple's SwiftUI.
-        native = review.dir("ios-storybook")
-        out = review.dir("ios-storybook-isomer")
-        shots = []
-        for title, capture in storybook_shots(out, story_list, launcher, waits, switcher("storybook-isomer"), app="storybook-isomer"):
-            reference = capture.replace(".png", ".reference.png")
-            if os.path.exists(os.path.join(native, capture)):
-                shutil.copyfile(os.path.join(native, capture), os.path.join(out, reference))
-            shots.append((title, capture, reference))
-        review.compared_cell("ios-storybook-isomer", "storybook", "iPhone (simulator), Isomer's SwiftUI against Apple's",
-                             "portrait", shots)
+        if "storybook" in CHOSEN:
+            native = review.dir("ios-storybook")
+            out = review.dir("ios-storybook-isomer")
+            shots = []
+            for title, capture in storybook_shots(out, story_list, launcher, waits, switcher("storybook-isomer"),
+                                                  app="storybook-isomer"):
+                reference = capture.replace(".png", ".reference.png")
+                if os.path.exists(os.path.join(native, capture)):
+                    shutil.copyfile(os.path.join(native, capture), os.path.join(out, reference))
+                shots.append((title, capture, reference))
+            review.compared_cell("ios-storybook-isomer", "storybook", "iPhone (simulator), Isomer's SwiftUI against Apple's",
+                                 "portrait", shots)
         for app in everyone:
             simulator.terminate(app["bundle"])
     finally:
-        release(env)
+        if env.get("here"):
+            sh(["xcrun", "simctl", "shutdown", env["OSS_UDID"]], check=False)
+            sh(["xcrun", "simctl", "delete", env["OSS_UDID"]], check=False)
+        else:
+            release(env)
 
 
 # --- macOS (a slot of OS Server's primary macOS VM; PROOF_MAC=vm: a whole
@@ -667,11 +712,125 @@ while kill -0 "$pid" 2> /dev/null; do sleep 1; done
 
 def macos(review, story_list, builds):
     """On a slot of OS Server's primary macOS VM (a `mac` lease), unless
-    PROOF_MAC=vm: then a whole macOS VM of its own."""
-    if os.environ.get("PROOF_MAC", "slot") == "vm":
+    PROOF_MAC=vm: then a whole macOS VM of its own; --here this Mac."""
+    if HERE:
+        macos_here(review, story_list, builds)
+    elif os.environ.get("PROOF_MAC", "slot") == "vm":
         macos_vm(review, story_list, builds)
     else:
         macos_slot(review, story_list, builds)
+
+
+# A process's main window on this Mac's screen, from CoreGraphics' window
+# list (its owners and numbers need no permission): its number, the largest
+# of its windows at the normal level, or nothing.
+MAC_WINDOW_JS = r"""
+ObjC.import('CoreGraphics');
+function run(argv) {
+  const pid = Number(argv[0]);
+  const list = ObjC.castRefToObject($.CGWindowListCopyWindowInfo(
+    $.kCGWindowListOptionOnScreenOnly | $.kCGWindowListExcludeDesktopElements, 0));
+  let number = '', area = 0;
+  for (let i = 0; i < list.count; i++) {
+    const w = list.objectAtIndex(i);
+    if (ObjC.unwrap(w.objectForKey('kCGWindowOwnerPID')) !== pid) continue;
+    if (ObjC.unwrap(w.objectForKey('kCGWindowLayer')) !== 0) continue;
+    const b = w.objectForKey('kCGWindowBounds');
+    const a = ObjC.unwrap(b.objectForKey('Width')) * ObjC.unwrap(b.objectForKey('Height'));
+    if (a > area) { area = a; number = String(ObjC.unwrap(w.objectForKey('kCGWindowNumber'))); }
+  }
+  return number;
+}
+"""
+
+
+def macos_here(review, story_list, builds):
+    """--here: this Mac's own screen (GitHub's `xcode-27` runner, its screen
+    made 1920 by 1080 by tools/ci/proof.sh): the apps unzipped here, opened
+    as the Dock opens them, each pictured by its window alone (`screencapture
+    -l`: no shadow, nothing behind), with a home of the proof's own
+    (CFFIXED_USER_HOME), as on a slot."""
+    work = tempfile.mkdtemp(prefix="proof-macos-")
+    home = os.path.join(work, "home")
+    os.makedirs(home)
+    control = os.path.join(work, "storybook-control")
+    script = os.path.join(work, "window.js")
+    with open(script, "w") as file:
+        file.write(MAC_WINDOW_JS)
+    # No "quit unexpectedly" dialog over the next app after a crash.
+    sh(["defaults", "write", "com.apple.CrashReporter", "DialogType", "-string", "none"], check=False)
+    bundles = {}
+    for app, archive in builds.items():
+        sh(["ditto", "-x", "-k", archive, work])
+        bundles[app] = os.path.join(work, f"{APPS[app]['name']}.app")
+    running = {}
+
+    def alive(pid):
+        return subprocess.run(["kill", "-0", str(pid)], capture_output=True).returncode == 0
+
+    def stop():
+        pid = running.pop("pid", None)
+        if pid:
+            subprocess.run(["kill", str(pid)], capture_output=True)
+            if not wait_until(lambda: not alive(pid), 10):
+                subprocess.run(["kill", "-9", str(pid)], capture_output=True)
+
+    def window():
+        pid = running.get("pid")
+        return sh(["osascript", "-l", "JavaScript", script, str(pid)], check=False).stdout.strip() if pid else ""
+
+    def shoot(path, app="storybook"):
+        # A flat capture is taken again, as on a slot.
+        for attempt in range(3):
+            number = window()
+            if not number:
+                raise RuntimeError(f"no window of {APPS[app]['name']} on the screen")
+            sh(["screencapture", "-x", "-o", "-l", number, path])
+            if not flat(path):
+                break
+            log(f"macos {os.path.basename(path)}: a flat capture (try {attempt + 1} of 3)")
+            time.sleep(2)
+        cut_corners(path)
+
+    def launcher(app, environment, wait, path):
+        stop()
+        bundle = bundles[app]
+        executable = sh(["plutil", "-extract", "CFBundleExecutable", "raw", "-o", "-",
+                         os.path.join(bundle, "Contents", "Info.plist")]).stdout.strip()
+        binary = os.path.join(bundle, "Contents", "MacOS", executable)
+        command = ["open", "-n", "-a", bundle]
+        for key, value in {"CFFIXED_USER_HOME": home, **environment}.items():
+            command += ["--env", f"{key}={value}"]
+        sh(command + ["--args", *MAC_ARGUMENTS, "-AppleShowScrollBars", "WhenScrolling",
+                      "-ApplePersistenceIgnoreState", "YES"])
+
+        def started():
+            found = subprocess.run(["pgrep", "-n", "-f", f"^{binary}"], capture_output=True, text=True).stdout.strip()
+            if found:
+                running["pid"] = int(found)
+            return bool(found)
+        if not wait_until(started, 30):
+            raise RuntimeError(f"{APPS[app]['name']} didn't start")
+        if not wait_until(lambda: window() != "", 60):
+            raise RuntimeError(f"no window of {APPS[app]['name']} in a minute")
+        time.sleep(wait)
+        shoot(path, app)
+
+    def request(story):
+        with open(control, "w") as file:
+            file.write(story)
+
+    def shown():
+        path = control + ".shown"
+        return open(path).read().strip() if os.path.exists(path) else None
+    version = sh(["sw_vers", "-productVersion"]).stdout.strip()
+    try:
+        switcher = Switcher(start=lambda path: launcher("storybook", {"ISO_STORYBOOK_CONTROL": control}, 6, path),
+                            request=request, shown=shown, shoot=shoot)
+        shoot_apps(review, "macos", f"Mac (macOS {version})", "landscape", launcher, story_list,
+                   {"open": 6, "story": 4, "run": 30}, switcher)
+    finally:
+        stop()
 
 
 def macos_slot(review, story_list, builds):
@@ -826,19 +985,27 @@ def macos_vm(review, story_list, builds):
 
 # --- Android (an oss emulator lease)
 
-def build_android():
-    return {
-        "storybook": bazel_output(EXAMPLES, "//android/storybook_android_application:storybook_android_application_apk",
-                                  "-c", "opt", suffix="_apk.apk"),
-        "playground": bazel_output(EXAMPLES, "//playground/android/playground_android_application:playground_android_application_apk",
-                                   "-c", "opt", suffix="_apk.apk"),
+def build_android(abi=None):
+    """The apps --apps names, for `abi` if given (x86_64, for GitHub's
+    Ubuntu runner's emulator; the Playground's compiler is arm64's alone)."""
+    flags = ["-c", "opt"] + ([f"--android_platforms=@rules_android//:{abi}"] if abi else [])
+    targets = {
+        "storybook": "//android/storybook_android_application:storybook_android_application_apk",
+        "playground": "//playground/android/playground_android_application:playground_android_application_apk",
     }
+    return {app: bazel_output(EXAMPLES, target, *flags, suffix="_apk.apk") for app, target in targets.items() if app in CHOSEN}
 
 
 def android(review, story_list, builds):
-    env = lease("android")
+    """On an emulator leased from OS Server, or --here the one this
+    machine's adb sees (PROOF_ADB, PROOF_ANDROID_SERIAL: GitHub's Ubuntu
+    runner's, tools/ci/hosted_android_emulator.sh)."""
+    env = None if HERE else lease("android")
     try:
-        adb = ["oss", "machine", "adb", env["OSS_ID"], "--"]
+        if HERE:
+            adb = [os.environ.get("PROOF_ADB", "adb"), "-s", os.environ["PROOF_ANDROID_SERIAL"]]
+        else:
+            adb = ["oss", "machine", "adb", env["OSS_ID"], "--"]
         for app, apk in builds.items():
             sh(adb + ["install", "-r", apk])
             sh(adb + ["shell", "pm", "clear", APPS[app]["bundle"]], check=False)
@@ -864,16 +1031,20 @@ def android(review, story_list, builds):
         windows = sh(adb + ["shell", "dumpsys", "window"], check=False).stdout
         inset = re.search(r"type=statusBars frame=\[0,0\]\[\d+,(\d+)\]", windows)
         if not inset:
-            raise SystemExit("proof: no status bar inset in the Android lease's dumpsys window")
+            raise SystemExit("proof: no status bar inset in the Android phone's dumpsys window")
         status_bar = int(inset.group(1))
 
         def shot(path):
-            oss_shot(env, path)
+            if HERE:
+                with open(path, "wb") as file:
+                    subprocess.run(adb + ["exec-out", "screencap", "-p"], stdout=file, check=True)
+            else:
+                oss_shot(env, path)
             from PIL import Image
             image = Image.open(path)
             image.crop((0, status_bar, image.width, image.height)).save(path)
         # The first launch after an install shows the splash a while longer.
-        for app in APPS:
+        for app in builds:
             launcher(app, {}, 8, os.path.join(tempfile.mkdtemp(), "warm.png"))
         # The running Storybook takes iso://story/<id> (a VIEW intent to its
         # single-task activity, onOpenURL); it can't say when it has opened
@@ -909,10 +1080,9 @@ def build_web(toolchain):
 def web(review, story_list, builds):
     port = 8700 + os.getpid() % 150
     servers = {
-        "storybook": (port, subprocess.Popen([sys.executable, "-m", "http.server", str(port), "--bind", "127.0.0.1"],
-                                             cwd=builds["storybook"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)),
-        "playground": (port + 1, subprocess.Popen([sys.executable, "-m", "http.server", str(port + 1), "--bind", "127.0.0.1"],
-                                                  cwd=builds["playground"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)),
+        app: (port + offset, subprocess.Popen([sys.executable, "-m", "http.server", str(port + offset), "--bind", "127.0.0.1"],
+                                              cwd=builds[app], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+        for offset, app in enumerate(["storybook", "playground"]) if app in builds
     }
     cdp = os.path.join(ISOMER, "tools", "testing", "cdp.py")
     # Chrome's profile is the run's own: a page's stored state outlasted the
@@ -943,7 +1113,7 @@ def web(review, story_list, builds):
 
         # A fresh Chrome profile's first load compiles the reactor: warm both
         # sites up before the shots.
-        for app in APPS:
+        for app in builds:
             launcher(app, {}, 15, os.path.join(tempfile.mkdtemp(), "warm.png"))
         shoot_apps(review, "web", "Chrome (desktop width)", "landscape", launcher, story_list,
                    # A run fetches and starts the in-browser compiler first.
@@ -1222,7 +1392,33 @@ PLATFORMS = {
 }
 
 
+def keep(built, folder):
+    """--build-to: a platform's builds copied into `folder`, <app>.<ipa|zip|apk>
+    or <app>/ (a web site), for a run elsewhere to take --from."""
+    os.makedirs(folder, exist_ok=True)
+    for app, path in built.items():
+        if os.path.isdir(path):
+            shutil.copytree(path, os.path.join(folder, app), dirs_exist_ok=True)
+        else:
+            shutil.copyfile(path, os.path.join(folder, app + os.path.splitext(path)[1]))
+    log(f"kept {', '.join(sorted(built))} in {folder}")
+
+
+def kept(folder):
+    """--from: what --build-to kept in `folder`, of the apps --apps names
+    (the iPhone's Storybook on Isomer's frameworks goes with the Storybook)."""
+    built = {}
+    for entry in sorted(os.listdir(folder)):
+        app = os.path.splitext(entry)[0]
+        if app in CHOSEN or (app == "storybook-isomer" and "storybook" in CHOSEN):
+            built[app] = os.path.join(folder, entry)
+    if not built:
+        raise SystemExit(f"proof: nothing of {', '.join(sorted(CHOSEN))} in {folder}")
+    return built
+
+
 def main():
+    global HERE, CHOSEN
     parser = argparse.ArgumentParser()
     parser.add_argument("platforms", nargs="*", default=list(PLATFORMS))
     parser.add_argument("--review", required=True)
@@ -1238,7 +1434,17 @@ def main():
                         help="the Linux apps packaged already (<dir>/storybook-linux.tgz, playground-linux.tgz): CI's, from a container")
     parser.add_argument("--held", action="append", default=[], metavar="PLATFORM=FILE",
                         help="a lease you hold, its `oss machine lease --exports` output in FILE: used, not released")
+    parser.add_argument("--here", action="store_true",
+                        help="picture on this machine, nothing leased (CI's proof on GitHub's runners)")
+    parser.add_argument("--apps", default=",".join(APPS), help="the apps pictured, comma-separated (default: both)")
+    parser.add_argument("--android-abi", default=None, help="the Android apps built for this ABI (x86_64)")
+    parser.add_argument("--build-to", default=None, metavar="DIR",
+                        help="build the platforms' apps into DIR/<platform>/ and stop, for --from elsewhere")
+    parser.add_argument("--from", dest="built", default=None, metavar="DIR",
+                        help="picture the apps --build-to kept in DIR/<platform>/ rather than building them")
     args = parser.parse_args()
+    HERE = args.here
+    CHOSEN = set(args.apps.split(",")) & set(APPS)
     held.update(item.split("=", 1) for item in args.held)
     version = args.version or re.search(r'version_name = "([^"]+)"', open(os.path.join(
         PLAYGROUND, "android/playground_android_application/BUILD.bazel")).read()).group(1)
@@ -1254,7 +1460,9 @@ def main():
     builds = {}
     for name in args.platforms:
         make, _ = PLATFORMS[name]
-        if name == "web":
+        if args.built:
+            builds[name] = lambda folder=os.path.join(args.built, name): kept(folder)
+        elif name == "web":
             if not args.web_toolchain:
                 raise SystemExit("the web needs --web-toolchain (an earlier site's playground/toolchain)")
             builds[name] = lambda toolchain=os.path.abspath(args.web_toolchain): build_web(toolchain)
@@ -1264,8 +1472,12 @@ def main():
             builds[name] = make
         else:
             log(f"building {name}")
-            built = make()
+            built = make(args.android_abi) if name == "android" else make()
             builds[name] = lambda built=built: built
+    if args.build_to:
+        for name in args.platforms:
+            keep(builds[name](), os.path.join(args.build_to, name))
+        return
 
     def run(name):
         try:
