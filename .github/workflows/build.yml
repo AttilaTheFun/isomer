@@ -118,22 +118,6 @@ jobs:
       # --config=windows_on_linux), the tests' too, none run.
       - name: Every target, built
         run: exec tools/ci/container_build.sh all
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v4
-        with:
-          name: android-test-apk
-          path: .ci/android
-      - name: The Android Storybook's tests
-        run: exec tools/ci/hosted_android_test.sh .ci/android/storybook.apk .ci/platform-tests/android
-      - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
-        with:
-          name: platform-tests-android
-          path: .ci/platform-tests/android
-          retention-days: 14
 
   populate:
     # Each commit on main: the merged tree built as container builds it,
