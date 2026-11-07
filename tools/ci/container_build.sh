@@ -9,11 +9,12 @@
 # named in the repository.
 #
 #   tools/ci/container_build.sh [<bazel build args>…]   # default: every platform's Storybook
-#   tools/ci/container_build.sh populate
-#                                     # main's populate job (the Bazel cache's
-#                                     # one writer: OS Server grants that job
-#                                     # the write): everything the checks
-#                                     # build, built, and nothing run or copied
+#   tools/ci/container_build.sh all   # everything the checks build, built,
+#                                     # and nothing run or copied: the
+#                                     # automated CI's (a pull request's
+#                                     # container, main's populate, the Bazel
+#                                     # cache's one writer: OS Server grants
+#                                     # that job the write)
 #   tools/ci/container_build.sh package <dir> <bazel build args>…
 #                                     # the build, then the targets' packages
 #                                     # (.ipa, a Mac app's .zip, the signed
@@ -97,9 +98,9 @@ if [ "${1:-}" = package ]; then
     chmod 775 "$out"
     mode=package
     shift 2
-elif [ $# -eq 0 ] || [ "$*" = populate ]; then
+elif [ $# -eq 0 ] || [ "$*" = all ]; then
     mode=checks
-    [ "$*" != populate ] || mode=populate
+    [ "$*" != all ] || mode=all
     set -- --ios_multi_cpus=sim_arm64 \
         //apple/storybook_ios_application:storybook_ios_sim_application \
         //apple/storybook_macos_application:storybook_macos_application \
@@ -137,10 +138,10 @@ if [ "$mode" = package ]; then
     ls -l "$out"
     exit 0
 fi
-[ "$mode" = checks ] || [ "$mode" = populate ] || exit $built
+[ "$mode" = checks ] || [ "$mode" = all ] || exit $built
 start=$SECONDS
-# populate: the tests built, not run (what a later run then finds cached).
-run_tests() { if [ "$mode" = populate ]; then bazel build "$@"; else bazel test "$@"; fi; }
+# all: the tests built, not run.
+run_tests() { if [ "$mode" = all ]; then bazel build "$@"; else bazel test "$@"; fi; }
 # What the tests here need beyond the image: Xvfb, Mesa'"'"'s drivers, and the
 # libraries Chrome for Testing loads.
 root_do() { if [ "$(id -u)" = 0 ]; then "$@"; else sudo "$@"; fi; }
@@ -171,8 +172,8 @@ run_tests --test_output=errors //tests/renderer:mock_renderer_test //tests/snaps
 checked=$?
 echo "container_build.sh: the tests took $((SECONDS - start)) s"
 
-# populate: the x86_64 APK built too (what pull requests build), and done.
-if [ "$mode" = populate ]; then
+# all: the x86_64 APK built too, and done.
+if [ "$mode" = all ]; then
     cd "$root/examples"
     built_x86=0
     [ -z "${ISOMER_ANDROID_X86_64:-}" ] || bazel build "${flags[@]}" --android_platforms=@rules_android//:x86_64 \

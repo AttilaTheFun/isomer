@@ -1,7 +1,8 @@
 #!/bin/bash
 # Whether a commit was verified: a run of the Build workflow by hand on it
-# (`run: verify` or `run: release`) whose verify job (the Apple tests)
-# passed, and its proof: proof-compare where the proof was pictured on
+# (`run: verify` or `run: release`) whose verify job (the tests) passed, and
+# a public repository's android job (the Android tests on GitHub's runner),
+# and its proof: proof-compare where the proof was pictured on
 # GitHub's runners (a public repository), the proof job where it wasn't (a
 # private one). The release job asks it before anything is promoted
 # (AttilaTheFun/reviews' docs/CI_POLICY.md).
@@ -18,6 +19,7 @@ for run in $(gh api "repos/$repo/actions/runs?head_sha=$sha&event=workflow_dispa
         .jobs as $jobs
         | def result(name): ([$jobs[] | select(.name == name) | .conclusion][0] // "skipped");
         result("verify") == "success"
+        and (result("android") == "success" or result("android") == "skipped")
         and (result("proof-compare") == "success"
              or (result("proof-compare") == "skipped" and result("proof") == "success"))' | grep -qx true; then
         echo "$run"

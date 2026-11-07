@@ -1,23 +1,26 @@
 # Isomer's CI, by the owner's policy for protected repositories
 # (AttilaTheFun/reviews' docs/CI_POLICY.md, 2026-11-07):
 #
+# Automated CI builds every target on Linux and runs no tests (the owner,
+# 2026-11-07): tests and the proof run only by hand, to propose a release or
+# to bisect a regression.
+#
 # - container (every pull request from a branch of this repository: a
-#   self-hosted runner never runs a fork's code): every platform's Storybook
-#   built in one Linux container on OS Server's on-demand runners
-#   (tools/ci/container_build.sh: the Apple ones with rules_applecross) and
-#   the tests that run there (the core's, the web's in headless Chrome),
-#   reading OS Server's Bazel cache and never writing it, and leasing
-#   nothing. The required check. A newer push cancels its run. Beside it,
-#   android: the Android Storybook's tests on GitHub's own Ubuntu runner (an
-#   emulator on its KVM; a public repository's, free, and no OS Server
-#   capacity), from the x86_64 APK container built.
-# - populate (each commit on main): the merged tree built, nothing run or
-#   published: the one job that writes OS Server's Bazel cache (OS Server's
-#   ci.populate names it), so a later pull request's build is mostly hits.
+#   self-hosted runner never runs a fork's code): every target built in one
+#   Linux container on OS Server's on-demand runners (tools/ci/
+#   container_build.sh all: every platform's Storybook, the Apple ones with
+#   rules_applecross, and the tests' targets, none run), reading OS Server's
+#   Bazel cache and never writing it, and leasing nothing. The required
+#   check. A newer push cancels its run.
+# - populate (each commit on main): the same build of the merged tree: the
+#   one job that writes OS Server's Bazel cache (OS Server's ci.populate
+#   names it), so a later pull request's build is mostly hits.
 # - By hand (workflow_dispatch, `run:`):
-#   - verify: the tests that need a Mac or a simulator (the iPhone's and the
-#     Mac's on OS Server's leases; a private copy's Android's too:
-#     tools/ci/platform_tests.sh), and beside them the proof: the Storybook
+#   - verify: the tests: the core's and the web's in the build container,
+#     the iPhone's and the Mac's on OS Server's leases (a private copy's
+#     Android's too: tools/ci/platform_tests.sh), and a public one's
+#     Android's on GitHub's own Ubuntu runner (android: an emulator on its
+#     KVM, free); and beside them the proof: the Storybook
 #     and the Playground on every platform, built in CI's container,
 #     pictured on GitHub's own machines (a private copy's on OS Server's),
 #     each picture compared with the previous release's, uploaded as the
@@ -107,31 +110,14 @@ jobs:
     runs-on: [self-hosted, isomer-jit]
     timeout-minutes: 180
     env:
-      # A public repository's Android tests run on GitHub's own Ubuntu
-      # runner (the `android` job: free, with KVM), from an x86_64 test APK
-      # built here.
+      # The Android test APK for x86_64 too, as verify builds it.
       ISOMER_ANDROID_X86_64: ${{ !github.event.repository.private && '1' || '' }}
     steps:
       - uses: actions/checkout@v5
-      # Every platform built in the Linux container (Windows on Arm with
-      # --config=windows_on_linux), and the tests that run there: the core's,
-      # the GL backend's, the web Storybook in headless Chrome.
-      - name: Build, and the tests in the build container
-        run: exec tools/ci/container_build.sh
-      - uses: actions/upload-artifact@v4
-        if: ${{ !github.event.repository.private }}
-        with:
-          name: android-test-apk
-          path: .ci/platforms/android-x86_64
-          retention-days: 3
-
-  android:
-    # The Android Storybook's tests on GitHub's own Ubuntu runner, the
-    # emulator on its KVM (tools/ci/hosted_android_test.sh), for a public
-    # repository's pull requests; a private one runs them in verify, on OS
-    # Server.
-    needs: container
-    if: ${{ github.event_name == 'pull_request' && !github.event.repository.private }}
+      # Every target built in the Linux container (Windows on Arm with
+      # --config=windows_on_linux), the tests' too, none run.
+      - name: Every target, built
+        run: exec tools/ci/container_build.sh all
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -161,7 +147,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: The merged tree, built into the cache
-        run: exec tools/ci/container_build.sh populate
+        run: exec tools/ci/container_build.sh all
 
   verify:
     # By hand: the tests that need a Mac or a simulator, on OS Server's
@@ -173,10 +159,21 @@ jobs:
     timeout-minutes: 180
     env:
       PLATFORM_TESTS: ${{ github.event.repository.private && 'android apple' || 'apple' }}
+      # A public repository's Android tests run on GitHub's own Ubuntu
+      # runner (android, below), from an x86_64 test APK built here.
+      ISOMER_ANDROID_X86_64: ${{ !github.event.repository.private && '1' || '' }}
     steps:
       - uses: actions/checkout@v5
+      # Every platform built in the Linux container, and the tests that run
+      # there: the core's, the web Storybook in headless Chrome.
       - name: Build, and the tests in the build container
         run: exec tools/ci/container_build.sh
+      - uses: actions/upload-artifact@v4
+        if: ${{ !github.event.repository.private }}
+        with:
+          name: android-test-apk
+          path: .ci/platforms/android-x86_64
+          retention-days: 3
       # exec: the runner's cancel reaches the script, which releases its leases.
       - name: The tests on OS Server's leases
         run: exec tools/ci/platform_tests.sh .ci/platform-tests
@@ -185,6 +182,30 @@ jobs:
         with:
           name: platform-tests
           path: .ci/platform-tests
+          retention-days: 14
+
+  android:
+    # The Android Storybook's tests on GitHub's own Ubuntu runner, the
+    # emulator on its KVM (tools/ci/hosted_android_test.sh), for a public
+    # repository's verify; a private one runs them in verify itself, on an
+    # OS Server emulator.
+    needs: verify
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release') && !github.event.repository.private }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-test-apk
+          path: .ci/android
+      - name: The Android Storybook's tests
+        run: exec tools/ci/hosted_android_test.sh .ci/android/storybook.apk .ci/platform-tests/android
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: platform-tests-android
+          path: .ci/platform-tests/android
           retention-days: 14
 
   proof:
@@ -346,17 +367,19 @@ jobs:
 
   alpha:
     # A proposal, by hand on main: prerelease alone, or release once verify
-    # and the proof have passed. Its version asked of Applications Server,
+    # (and a public repository's Android tests) and the proof have passed. Its version asked of Applications Server,
     # stamped in (tools/ci/stamp_apps.sh), the apps built in a Linux
     # container (tools/ci/container_build.sh package), the Mac apps' icons
     # checked for the dark appearance, published (tools/ci/publish_from_ci.sh;
     # the server signs the Apple ones and notarizes the Mac's), the web site
     # packaged, and the draft release made (tools/ci/draft_release.sh).
-    needs: [verify, proof, proof-compare]
+    needs: [verify, android, proof, proof-compare]
     if: >-
       always() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
       (inputs.run == 'prerelease' || (inputs.run == 'release' && needs.verify.result == 'success' &&
-      (needs.proof-compare.result == 'success' || (github.event.repository.private && needs.proof.result == 'success'))))
+      (github.event.repository.private ||
+      (needs.android.result == 'success' && needs.proof-compare.result == 'success')) &&
+      (!github.event.repository.private || needs.proof.result == 'success')))
     runs-on: [self-hosted, isomer-jit]
     timeout-minutes: 180
     permissions:

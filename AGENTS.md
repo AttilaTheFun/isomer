@@ -280,12 +280,14 @@ navigation) and the web in Ubuntu's Chrome (the `proof-shoot` jobs), then
 compared in the container (`proof-compare`); a private copy pictures
 everything on OS Server's leases as above. CI follows the owner's policy
 for protected repositories (AttilaTheFun/reviews' docs/CI_POLICY.md,
-2026-11-07; build.yml's header): a pull request gets `container` (the build
-and the tests that fit in one container, reading the Bazel cache, leasing
-nothing; the required check) and, here, the Android tests on GitHub's
-runner; each commit on main gets `populate` (the build, the cache's only
-writer); and everything else is by hand: `run: verify` (the iPhone's and the
-Mac's tests on OS Server's leases, and the proof), `run: prerelease` (Alphas
+2026-11-07; build.yml's header). Automated CI builds every target on Linux
+and runs no tests: a pull request gets `container` (every target built in
+one container, reading the Bazel cache, leasing nothing; the required
+check), each commit on main `populate` (the same build, the cache's only
+writer). Tests and the proof run only by hand: `run: verify` (the core's
+and the web's tests in the build container, the iPhone's and the Mac's on
+OS Server's leases, Android's on GitHub's Ubuntu runner, and the proof),
+`run: prerelease` (Alphas
 and a draft marked pre-release), `run: release` (verify and the proof, then
 the Alphas and the draft proposed for release, tools/ci/draft_release.sh).
 Drafts are CI's; an agent proposes by running the workflow on main, never
