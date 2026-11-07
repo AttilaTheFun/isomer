@@ -70,3 +70,44 @@ func checkPresentedDestinations(_ mock: MockRenderer) {
     settle()
     expect(presentedItem == nil, "Back set the item nil (\(String(describing: presentedItem)))")
 }
+
+// confirmationDialog about an item, and about presented data with a message.
+
+nonisolated(unsafe) var dialogItem: String?
+
+struct ItemDialogScreen: View {
+    let item: Binding<String?>
+    var body: some View {
+        Text("Files")
+            .confirmationDialog("Delete?", item: item) { name in
+                Button("Delete \(name)", role: .destructive) {}
+            } message: { name in
+                Text("\(name)'s files go too.")
+            }
+            .confirmationDialog(Text("Share?"), isPresented: .constant(true), presenting: Optional("Bo")) { name in
+                Button("Share with \(name)") {}
+            } message: { name in
+                Text("\(name) sees it all.")
+            }
+    }
+}
+
+@MainActor
+func checkItemDialogs(_ mock: MockRenderer) {
+    dialogItem = nil
+    let item = Binding<String?>(get: { dialogItem }, set: { dialogItem = $0; Runtime.shared.setNeedsRender() })
+    Runtime.shared.installRootView { ItemDialogScreen(item: item) }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 760)
+    Runtime.shared.setNeedsRender()
+    Runtime.shared.renderFrame()
+    expect(!findTextInTree(mock.lastTree!, "Delete Ada"), "no item: no dialog")
+    expect(findTextInTree(mock.lastTree!, "Share with Bo"), "a dialog presenting data makes its actions from it")
+    dialogItem = "Ada"
+    Runtime.shared.setNeedsRender()
+    Runtime.shared.renderFrame()
+    expect(findTextInTree(mock.lastTree!, "Delete Ada"), "an item shows its dialog, the actions made from it")
+    dialogItem = nil
+    Runtime.shared.setNeedsRender()
+    Runtime.shared.renderFrame()
+    expect(!findTextInTree(mock.lastTree!, "Delete Ada"), "the item nil again takes the dialog away")
+}

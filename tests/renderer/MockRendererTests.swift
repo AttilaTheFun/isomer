@@ -2893,6 +2893,7 @@ struct Main {
         checkPickerInFormRow(mock)
         checkValueNavigation(mock)
         checkPresentedDestinations(mock)
+        checkItemDialogs(mock)
         checkListSectionFooter(mock)
         checkAlignmentGuideInOverlay(mock)
         checkFloatingProbeBuilds(mock)
