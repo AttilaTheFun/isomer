@@ -1,6 +1,8 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_swift//swift:swift.bzl", "swift_library")
 load("@rules_swift//swift:swift_library_group.bzl", "swift_library_group")
 load("@rules_kotlin//kotlin:core.bzl", "kt_compiler_plugin")
+load("//swift_ffi/rules:kt_swift_library.bzl", "kt_swift_platform")
 load("//swift_ui_macros:defs.bzl", "SWIFT_UI_MACROS_PLUGINS")
 
 package(default_visibility = ["//visibility:public"])
@@ -28,6 +30,23 @@ swift_library(
     deps = ["//:foundation"],
 )
 
+# How the runtime reaches the app's @main (application_main.c), and what the
+# app's own library links to register it (application_entry.c, from
+# isomer_android_library).
+cc_library(
+    name = "application_main",
+    srcs = ["application_main.c"],
+    target_compatible_with = ["@platforms//os:android"],
+    alwayslink = True,
+)
+
+cc_library(
+    name = "application_entry",
+    srcs = ["application_entry.c"],
+    target_compatible_with = ["@platforms//os:android"],
+    alwayslink = True,
+)
+
 swift_library(
     name = "swift_ui",
     package_name = "isomer",
@@ -46,6 +65,7 @@ swift_library(
     target_compatible_with = ["@platforms//os:android"],
     deps = [
         "//shared/isomer_swift_ui",
+        ":application_main",
         ":image_io",
         "//swift_ffi/swift_ffi",
         "//shared/isomer_network_host",
@@ -92,6 +112,15 @@ swift_library_group(
         "//frameworks/os_log/os",
         "//frameworks/uniform_type_identifiers",
     ],
+)
+
+# Isomer's shared platform library (libisomer_platform.so): the Swift
+# runtime, the standard library, Foundation and the SDK above, linked once,
+# for apps whose libraries link against it (isomer_android_library's
+# `shared_platform`, through --@isomer//tools/android:shared_platform).
+kt_swift_platform(
+    name = "isomer_platform",
+    deps = [":sdk"],
 )
 
 # Core native-bridging API, Android implementation.

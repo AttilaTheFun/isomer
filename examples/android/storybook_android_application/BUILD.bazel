@@ -1,5 +1,5 @@
 load("@rules_swift//swift:swift.bzl", "swift_library")
-load("@isomer//tools/android:defs.bzl", "flat_assets", "isomer_android_app")
+load("@isomer//tools/android:defs.bzl", "flat_assets", "isomer_android_aar", "isomer_android_app")
 
 # The platform services in Kotlin.
 exports_files(["AppServices.kt"])
@@ -60,4 +60,16 @@ isomer_android_app(
     version_code = 41000,
     version_name = "0.41.0",
     visibility = ["//shared/example_application:__pkg__"],
+)
+
+# The same app as an Android library (an AAR), as a host app embeds it:
+# `bazel build //android/storybook_android_application:storybook_android_aar`.
+# Its MainActivity in a process of its own, as an embedding host may want.
+isomer_android_aar(
+    name = "storybook_android_aar",
+    package = "com.LoganShire.IsomerStorybook",
+    process = ":isomer",
+    services_installer = "dev.isomer.runtime.ExampleAppServices.install()",
+    services_kt = "AppServices.kt",
+    swift_library = ":app_swift",
 )

@@ -155,6 +155,7 @@ def _ffi_generate_impl(ctx):
     args.add("--java-package", ctx.attr.java_package)
     args.add("--java-class", java_class)
     args.add("--library-name", ctx.attr.library_name)
+    args.add_all(ctx.attr.preload_libraries, before_each = "--preload-library")
     if ctx.attr.header_name:
         args.add("--header-name", ctx.attr.header_name)
 
@@ -229,6 +230,9 @@ ffi_generate = rule(
             doc = "Override for the Kotlin facade name; defaults to <Module>Bridge.",
         ),
         "library_name": attr.string(default = "native"),
+        "preload_libraries": attr.string_list(
+            doc = "Libraries the kotlin kind loads before `library_name` (the shared platform it links against).",
+        ),
         "header_name": attr.string(
             doc = "The generated C header file name the jni-adapter/cpp artifacts include.",
         ),

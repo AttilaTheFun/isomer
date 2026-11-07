@@ -51,6 +51,7 @@ public struct Generator {
         javaPackage: String = "com.example",
         javaClass: String = "Native",
         libraryName: String = "native",
+        preloadLibraries: [String] = [],
         headerName: String = ""
     ) throws -> String {
         let header = headerName.isEmpty ? "\(moduleName.lowercased()).h" : headerName
@@ -66,7 +67,8 @@ public struct Generator {
         case .ts:
             return emitTypeScript(module, moduleName: moduleName)
         case .kotlin:
-            return emitKotlin(module, package: javaPackage, className: javaClass, libraryName: libraryName)
+            return emitKotlin(module, package: javaPackage, className: javaClass, libraryName: libraryName,
+                preloadLibraries: preloadLibraries)
         case .swiftHostWasm:
             return emitSwiftHostWasm(module, moduleName: moduleName)
         case .cHostWasm:
