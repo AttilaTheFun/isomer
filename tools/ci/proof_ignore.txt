@@ -24,3 +24,9 @@ android-storybook-controls.progress 90 1196 82 82
 # tiles of its own (TODO.md), the map's frame is left out; its markers too.
 ios-storybook-isomer.map 108 2028 992 594
 macos-storybook-isomer.map 176 520 696 298
+
+# The VideoPlayer story's video: a remote video, its frame whatever has
+# loaded by the picture (a frame of it, or the player's "unavailable" sign
+# where the network is slow or shut). Its frame is left out; the controls
+# around it still count.
+ios-storybook-isomer.video 108 1313 990 556
