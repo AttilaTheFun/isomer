@@ -163,6 +163,10 @@ public struct RadialGradient: PaintStyle {
         self.init(gradient: Gradient(colors: colors), center: center, startRadius: startRadius, endRadius: endRadius)
     }
 
+    public init(stops: [Gradient.Stop], center: UnitPoint, startRadius: CGFloat, endRadius: CGFloat) {
+        self.init(gradient: Gradient(stops: stops), center: center, startRadius: startRadius, endRadius: endRadius)
+    }
+
     func resolvePaint() -> GradientPaint {
         GradientPaint(
             kind: .radial(center: center, startRadius: startRadius, endRadius: endRadius),
@@ -194,6 +198,18 @@ public struct AngularGradient: PaintStyle {
         self.init(gradient: Gradient(colors: colors), center: center, startAngle: startAngle, endAngle: endAngle)
     }
 
+    public init(stops: [Gradient.Stop], center: UnitPoint, startAngle: Angle = .zero, endAngle: Angle = Angle(degrees: 360)) {
+        self.init(gradient: Gradient(stops: stops), center: center, startAngle: startAngle, endAngle: endAngle)
+    }
+
+    public init(colors: [Color], center: UnitPoint, angle: Angle = .zero) {
+        self.init(gradient: Gradient(colors: colors), center: center, angle: angle)
+    }
+
+    public init(stops: [Gradient.Stop], center: UnitPoint, angle: Angle = .zero) {
+        self.init(gradient: Gradient(stops: stops), center: center, angle: angle)
+    }
+
     func resolvePaint() -> GradientPaint {
         GradientPaint(
             kind: .angular(center: center, startAngle: startAngle, endAngle: endAngle),
@@ -202,6 +218,62 @@ public struct AngularGradient: PaintStyle {
     }
 
     public typealias Body = Never
+}
+
+// The gradients as `ShapeStyle` shorthands (`.fill(.linearGradient(…))`,
+// `.foregroundStyle(.radialGradient(…))`), as Apple's.
+extension ShapeStyle where Self == LinearGradient {
+    public static func linearGradient(_ gradient: Gradient, startPoint: UnitPoint, endPoint: UnitPoint) -> LinearGradient {
+        LinearGradient(gradient: gradient, startPoint: startPoint, endPoint: endPoint)
+    }
+
+    public static func linearGradient(colors: [Color], startPoint: UnitPoint, endPoint: UnitPoint) -> LinearGradient {
+        LinearGradient(colors: colors, startPoint: startPoint, endPoint: endPoint)
+    }
+
+    public static func linearGradient(stops: [Gradient.Stop], startPoint: UnitPoint, endPoint: UnitPoint) -> LinearGradient {
+        LinearGradient(stops: stops, startPoint: startPoint, endPoint: endPoint)
+    }
+}
+
+extension ShapeStyle where Self == RadialGradient {
+    public static func radialGradient(_ gradient: Gradient, center: UnitPoint, startRadius: CGFloat, endRadius: CGFloat) -> RadialGradient {
+        RadialGradient(gradient: gradient, center: center, startRadius: startRadius, endRadius: endRadius)
+    }
+
+    public static func radialGradient(colors: [Color], center: UnitPoint, startRadius: CGFloat, endRadius: CGFloat) -> RadialGradient {
+        RadialGradient(colors: colors, center: center, startRadius: startRadius, endRadius: endRadius)
+    }
+
+    public static func radialGradient(stops: [Gradient.Stop], center: UnitPoint, startRadius: CGFloat, endRadius: CGFloat) -> RadialGradient {
+        RadialGradient(stops: stops, center: center, startRadius: startRadius, endRadius: endRadius)
+    }
+}
+
+extension ShapeStyle where Self == AngularGradient {
+    public static func angularGradient(_ gradient: Gradient, center: UnitPoint, startAngle: Angle, endAngle: Angle) -> AngularGradient {
+        AngularGradient(gradient: gradient, center: center, startAngle: startAngle, endAngle: endAngle)
+    }
+
+    public static func angularGradient(colors: [Color], center: UnitPoint, startAngle: Angle, endAngle: Angle) -> AngularGradient {
+        AngularGradient(colors: colors, center: center, startAngle: startAngle, endAngle: endAngle)
+    }
+
+    public static func angularGradient(stops: [Gradient.Stop], center: UnitPoint, startAngle: Angle, endAngle: Angle) -> AngularGradient {
+        AngularGradient(stops: stops, center: center, startAngle: startAngle, endAngle: endAngle)
+    }
+
+    public static func conicGradient(_ gradient: Gradient, center: UnitPoint, angle: Angle = .zero) -> AngularGradient {
+        AngularGradient(gradient: gradient, center: center, angle: angle)
+    }
+
+    public static func conicGradient(colors: [Color], center: UnitPoint, angle: Angle = .zero) -> AngularGradient {
+        AngularGradient(colors: colors, center: center, angle: angle)
+    }
+
+    public static func conicGradient(stops: [Gradient.Stop], center: UnitPoint, angle: Angle = .zero) -> AngularGradient {
+        AngularGradient(stops: stops, center: center, angle: angle)
+    }
 }
 
 // Gradients render as a `.gradient` node filling their proposed rect.
