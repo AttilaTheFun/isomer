@@ -263,7 +263,9 @@ shoot_setup() {
         web)
             CDP_CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
             [ -n "$CDP_CHROME" ] || { echo "::error::no Chrome on this runner"; exit 1; }
-            export CDP_CHROME ;;
+            # Ubuntu 24.04's AppArmor keeps Chrome's sandbox from its user
+            # namespaces.
+            export CDP_CHROME CDP_CHROME_FLAGS="--no-sandbox ${CDP_CHROME_FLAGS:-}" ;;
         *) usage ;;
     esac
     echo "::endgroup::"
