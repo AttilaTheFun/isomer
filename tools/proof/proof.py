@@ -90,6 +90,12 @@ PLAYGROUND_SHOTS = [
     ("pokedex", "The Pokédex, built here and running", {"ISO_PLAYGROUND_RUN_PROJECT": "Pokédex"}, "run"),
 ]
 
+# What every app is launched with, whatever the machine: UTC, so a story
+# showing a fixed instant (the DatePicker's) shows the same time on GitHub's
+# runners (UTC) and OS Server's Macs (US Eastern), as ~/Developer's rule for
+# pictures asks (a fixed time zone). Android and the web set theirs below.
+HELD_ENVIRONMENT = {"TZ": "UTC"}
+
 failures = []
 lock = threading.Lock()
 # --here: the platform is this machine (GitHub's runners, in CI's proof: an
@@ -628,7 +634,7 @@ def ios(review, story_list, builds):
             # "◀ <that app>" link in the status bar.
             for other in everyone:
                 simulator.terminate(other["bundle"])
-            simulator.launch(bundle, environment)
+            simulator.launch(bundle, {**HELD_ENVIRONMENT, **environment})
             time.sleep(wait)
             steady_shot(simulator.screenshot, path)
 
@@ -801,7 +807,7 @@ def macos_here(review, story_list, builds):
                          os.path.join(bundle, "Contents", "Info.plist")]).stdout.strip()
         binary = os.path.join(bundle, "Contents", "MacOS", executable)
         command = ["open", "-n", "-a", bundle]
-        for key, value in {"CFFIXED_USER_HOME": home, **environment}.items():
+        for key, value in {"CFFIXED_USER_HOME": home, **HELD_ENVIRONMENT, **environment}.items():
             command += ["--env", f"{key}={value}"]
         sh(command + ["--args", *MAC_ARGUMENTS, "-AppleShowScrollBars", "WhenScrolling",
                       "-ApplePersistenceIgnoreState", "YES"])
@@ -896,7 +902,7 @@ def macos_slot(review, story_list, builds):
         def launcher(app, environment, wait, path):
             stop()
             name = APPS[app]["name"]
-            variables = {"CFFIXED_USER_HOME": home, **environment}
+            variables = {"CFFIXED_USER_HOME": home, **HELD_ENVIRONMENT, **environment}
             command = ["oss", "machine", "exec", slot, "--gui", *(f"--env={k}={v}" for k, v in variables.items()), "--",
                        "/bin/sh", "-c", SLOT_LAUNCH, "launch", f"{apps}/{name}.app",
                        *MAC_ARGUMENTS, "-AppleShowScrollBars", "WhenScrolling", "-ApplePersistenceIgnoreState", "YES"]
@@ -966,7 +972,7 @@ def macos_vm(review, story_list, builds):
         def launcher(app, environment, wait, path):
             name = APPS[app]["name"]
             ssh(env, f"pkill -x {name}; sleep 1", check=False)
-            flags = " ".join(f"--env {k}={shlex.quote(v)}" for k, v in environment.items())
+            flags = " ".join(f"--env {k}={shlex.quote(v)}" for k, v in {**HELD_ENVIRONMENT, **environment}.items())
             ssh(env, f"sudo launchctl asuser $(id -u runner) open -n {flags} /tmp/{name}.app"
                 f" --args {shlex.join(MAC_ARGUMENTS)}")
             time.sleep(wait)
@@ -1024,6 +1030,8 @@ def android(review, story_list, builds):
 
         # Light, as every platform's shots are.
         sh(adb + ["shell", "cmd", "uimode", "night", "no"], check=False)
+        # UTC, as every platform's pictures (HELD_ENVIRONMENT).
+        sh(adb + ["shell", "cmd", "alarm", "set-timezone", "UTC"], check=False)
         # The status bar is cropped off every picture, as the desktops' shots
         # are cropped to the app's window: SystemUI's demo mode held it still
         # one run and not the next (the cellular icon drawn two ways, then the
@@ -1092,7 +1100,7 @@ def web(review, story_list, builds):
     # project the last run's 2048 shot had chosen).
     profile = tempfile.mkdtemp(prefix="proof-chrome-")
     # Light, whatever this Mac's appearance is (Chrome follows it).
-    chrome_env = dict(os.environ, CDP_PROFILE=profile, CDP_COLOR_SCHEME="light")
+    chrome_env = dict(os.environ, CDP_PROFILE=profile, CDP_COLOR_SCHEME="light", **HELD_ENVIRONMENT)
     try:
         time.sleep(1)
 
