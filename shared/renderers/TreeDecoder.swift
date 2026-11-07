@@ -424,6 +424,12 @@ package final class FlatTreeDecoder {
         switch root["kind"].string {
         case "linear":
             kind = .linear(start: point("p0", .top), end: point("p1", .bottom))
+        case "radial" where (root["ell"].array?.count ?? 0) == 2:
+            let fractions: [Double] = root["ell"].array?.map { $0.double ?? 0 } ?? [0, 0.5]
+            kind = .elliptical(
+                center: point("c", .center),
+                startFraction: CGFloat(fractions[0]),
+                endFraction: CGFloat(fractions[1]))
         case "radial":
             kind = .radial(
                 center: point("c", .center),

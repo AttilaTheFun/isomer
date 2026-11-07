@@ -114,6 +114,41 @@ func checkItemDialogs(_ mock: MockRenderer) {
     expect(!findTextInTree(mock.lastTree!, "Delete Ada"), "the item nil again takes the dialog away")
 }
 
+// An alert about an item (a literal title: the LocalizedStringKey form).
+
+nonisolated(unsafe) var alertItem: String?
+
+struct ItemAlertScreen: View {
+    let item: Binding<String?>
+    var body: some View {
+        Text("Inbox")
+            .alert("Archived", item: item) { name in
+                Button("Undo \(name)") {}
+            } message: { name in
+                Text("\(name) moved to the archive.")
+            }
+    }
+}
+
+@MainActor
+func checkItemAlerts(_ mock: MockRenderer) {
+    alertItem = nil
+    let item = Binding<String?>(get: { alertItem }, set: { alertItem = $0; Runtime.shared.setNeedsRender() })
+    Runtime.shared.installRootView { ItemAlertScreen(item: item) }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 760)
+    Runtime.shared.setNeedsRender()
+    Runtime.shared.renderFrame()
+    expect(!findTextInTree(mock.lastTree!, "Undo Mail"), "no item: no alert")
+    alertItem = "Mail"
+    Runtime.shared.setNeedsRender()
+    Runtime.shared.renderFrame()
+    expect(findTextInTree(mock.lastTree!, "Undo Mail"), "an item shows its alert, the actions made from it")
+    alertItem = nil
+    Runtime.shared.setNeedsRender()
+    Runtime.shared.renderFrame()
+    expect(!findTextInTree(mock.lastTree!, "Undo Mail"), "the item nil again takes the alert away")
+}
+
 // progressViewStyle: a built-in style reaches the host by kind; an app's
 // style makes the view from the configuration.
 

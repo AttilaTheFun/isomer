@@ -448,6 +448,9 @@ struct ParsedGradient {
   double p1[2] = {0, 1};  // default top->bottom
   double center[2] = {0.5, 0.5};
   double endRadius = 0.5;
+  // An elliptical gradient's radii, fractions of the bounds ("ell"); the
+  // end's below 0 when it isn't one.
+  double ell[2] = {0, -1};
   std::vector<GradStop> stops;
 };
 
@@ -466,6 +469,8 @@ void ParseGradient(const std::string& j, ParsedGradient& out) {
     sscanf(j.c_str() + p + 5, "%lf,%lf", &out.center[0], &out.center[1]);
   if ((p = j.find("\"er\":")) != std::string::npos)
     sscanf(j.c_str() + p + 5, "%lf", &out.endRadius);
+  if ((p = j.find("\"ell\":[")) != std::string::npos)
+    sscanf(j.c_str() + p + 7, "%lf,%lf", &out.ell[0], &out.ell[1]);
 
   // Stops live after "stops":[ ; each stop's color is the only "c":[ past it
   // (the radial/angular center "c" appears earlier).
@@ -1588,6 +1593,10 @@ bool RasterizeGradientSpec(const std::string& spec, std::vector<unsigned char>& 
                                 static_cast<float>(pg.center[1] * h));
       rp.radiusX = endRadius;
       rp.radiusY = endRadius;
+      if (pg.ell[1] >= 0) {
+        rp.radiusX = static_cast<float>(pg.ell[1] * w);
+        rp.radiusY = static_cast<float>(pg.ell[1] * h);
+      }
       ID2D1RadialGradientBrush* rb = nullptr;
       rt->CreateRadialGradientBrush(rp, collection, &rb);
       brush = rb;

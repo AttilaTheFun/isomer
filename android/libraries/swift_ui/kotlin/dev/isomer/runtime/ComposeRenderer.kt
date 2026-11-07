@@ -91,6 +91,10 @@ import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.composed
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.snapshotFlow
@@ -438,6 +442,10 @@ object MaterialGrounds {
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 private fun baseModifier(n: JSONObject, extra: Modifier): Modifier {
     var m = extra
+    // `.matchedGeometryEffect`: the node follows its key (matchedGeometry).
+    n.optJSONObject("params")?.let { p ->
+        p.optString("match").takeIf { it.isNotEmpty() }?.let { key -> m = m.matchedGeometry(key, p.optString("matchProps")) }
+    }
     // `.fixedSize`: the content at its ideal size on the fixed axes, however
     // little the parent offers.
     n.optJSONObject("params")?.optString("fixed")?.let { fixed ->
@@ -2540,6 +2548,48 @@ private fun IsoContextMenuBox(n: UNode, m: Modifier, bw: Boolean, bh: Boolean) {
 /** Calls [onLongPress] when the pointer is held still for the long-press
  *  time, and only then consumes the rest of that gesture: a tap is left
  *  unconsumed, so an enclosing clickable (a list row) still gets it. */
+// `.matchedGeometryEffect`, as the web's FLIP: each key's last bounds in
+// the window; a node that appears with a key another node had (the other
+// gone, or going, in the same change) starts at that node's bounds and moves
+// to its own. "matchProps" 1 moves without resizing, 2 resizes in place.
+private val matchedFrames = mutableMapOf<String, androidx.compose.ui.geometry.Rect>()
+
+private fun Modifier.matchedGeometry(key: String, properties: String): Modifier = composed {
+    val shift = remember(key) {
+        androidx.compose.animation.core.Animatable(Offset.Zero, Offset.VectorConverter)
+    }
+    val stretch = remember(key) {
+        androidx.compose.animation.core.Animatable(Offset(1f, 1f), Offset.VectorConverter)
+    }
+    val placed = remember(key) { booleanArrayOf(false) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    onGloballyPositioned { coordinates ->
+        val bounds = coordinates.boundsInRoot()
+        val from = matchedFrames[key]
+        if (!placed[0] && from != null && from != bounds && bounds.width > 0f && bounds.height > 0f) {
+            val moves = properties != "2"
+            val resizes = properties != "1"
+            val start = Offset(if (moves) from.left - bounds.left else 0f, if (moves) from.top - bounds.top else 0f)
+            val scale = Offset(if (resizes) from.width / bounds.width else 1f, if (resizes) from.height / bounds.height else 1f)
+            // Undispatched: at the old bounds before this frame draws.
+            scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+                shift.snapTo(start)
+                stretch.snapTo(scale)
+                launch { shift.animateTo(Offset.Zero, androidx.compose.animation.core.tween(350)) }
+                stretch.animateTo(Offset(1f, 1f), androidx.compose.animation.core.tween(350))
+            }
+        }
+        placed[0] = true
+        matchedFrames[key] = bounds
+    }.graphicsLayer {
+        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f)
+        translationX = shift.value.x
+        translationY = shift.value.y
+        scaleX = stretch.value.x
+        scaleY = stretch.value.y
+    }
+}
+
 private fun Modifier.onLongPressObserving(onLongPress: () -> Unit): Modifier = pointerInput(Unit) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
