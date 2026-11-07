@@ -106,6 +106,17 @@ extension View {
         _EnvironmentModifier(child: self, descend: "linesp") { env in env.lineSpacing = Double(spacing) }
     }
 
+    /// `.tracking(_:)` on any view: points added between the characters of
+    /// its text (a `Text`'s own wins).
+    nonisolated public func tracking(_ tracking: CGFloat) -> some View {
+        _EnvironmentModifier(child: self, descend: "tracking") { env in env.tracking = Double(tracking) }
+    }
+
+    /// `.kerning(_:)` on any view: as `tracking` here (see Text's).
+    nonisolated public func kerning(_ kerning: CGFloat) -> some View {
+        _EnvironmentModifier(child: self, descend: "kerning") { env in env.tracking = Double(kerning) }
+    }
+
     nonisolated public func truncationMode(_ mode: Text.TruncationMode) -> some View {
         _EnvironmentModifier(child: self, descend: "trunc") { env in env.truncationMode = "\(mode)" }
     }

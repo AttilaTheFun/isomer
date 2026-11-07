@@ -224,6 +224,101 @@ extension View {
         )
     }
 
+    /// `.confirmationDialog(_:isPresented:titleVisibility:presenting:actions:message:)`:
+    /// a dialog about `data`, its actions and message made from it, shown
+    /// while presented and there is data.
+    nonisolated public func confirmationDialog<S, A, M, T>(
+        _ title: S,
+        isPresented: Binding<Bool>,
+        titleVisibility: Visibility = .automatic,
+        presenting data: T?,
+        @ViewBuilder actions: @escaping (T) -> A,
+        @ViewBuilder message: (T) -> M
+    ) -> some View where S: StringProtocol, A: View, M: View {
+        _confirmationDialog(String(title), isPresented: isPresented, titleVisibility: titleVisibility,
+                            data: data, actions: actions, message: data.map { _extractText(message($0)) } ?? "")
+    }
+
+    nonisolated public func confirmationDialog<A, M, T>(
+        _ title: Text,
+        isPresented: Binding<Bool>,
+        titleVisibility: Visibility = .automatic,
+        presenting data: T?,
+        @ViewBuilder actions: @escaping (T) -> A,
+        @ViewBuilder message: (T) -> M
+    ) -> some View where A: View, M: View {
+        _confirmationDialog(title.content, isPresented: isPresented, titleVisibility: titleVisibility,
+                            data: data, actions: actions, message: data.map { _extractText(message($0)) } ?? "")
+    }
+
+    /// `.confirmationDialog(_:item:titleVisibility:actions:)`: a dialog about
+    /// the item, shown while it is non-nil; dismissing it sets it nil.
+    nonisolated public func confirmationDialog<S, A, T>(
+        _ title: S,
+        item data: Binding<T?>,
+        titleVisibility: Visibility = .automatic,
+        @ViewBuilder actions: @escaping (T) -> A
+    ) -> some View where S: StringProtocol, A: View {
+        _confirmationDialog(String(title), item: data, titleVisibility: titleVisibility, actions: actions, message: { _ in "" })
+    }
+
+    nonisolated public func confirmationDialog<A, T>(
+        _ title: Text,
+        item data: Binding<T?>,
+        titleVisibility: Visibility = .automatic,
+        @ViewBuilder actions: @escaping (T) -> A
+    ) -> some View where A: View {
+        _confirmationDialog(title.content, item: data, titleVisibility: titleVisibility, actions: actions, message: { _ in "" })
+    }
+
+    nonisolated public func confirmationDialog<S, A, M, T>(
+        _ title: S,
+        item data: Binding<T?>,
+        titleVisibility: Visibility = .automatic,
+        @ViewBuilder actions: @escaping (T) -> A,
+        @ViewBuilder message: @escaping (T) -> M
+    ) -> some View where S: StringProtocol, A: View, M: View {
+        _confirmationDialog(String(title), item: data, titleVisibility: titleVisibility, actions: actions,
+                            message: { _extractText(message($0)) })
+    }
+
+    nonisolated public func confirmationDialog<A, M, T>(
+        _ title: Text,
+        item data: Binding<T?>,
+        titleVisibility: Visibility = .automatic,
+        @ViewBuilder actions: @escaping (T) -> A,
+        @ViewBuilder message: @escaping (T) -> M
+    ) -> some View where A: View, M: View {
+        _confirmationDialog(title.content, item: data, titleVisibility: titleVisibility, actions: actions,
+                            message: { _extractText(message($0)) })
+    }
+
+    /// The dialogs about data, each shape: shown while presented and there
+    /// is data, its actions made from it.
+    nonisolated func _confirmationDialog<A: View, T>(
+        _ title: String, isPresented: Binding<Bool>, titleVisibility: Visibility, data: T?,
+        actions: @escaping (T) -> A, message: String
+    ) -> some View {
+        let shown = Binding(get: { isPresented.wrappedValue && data != nil }, set: { isPresented.wrappedValue = $0 })
+        return _PresentationModifier(
+            child: self, isPresented: shown,
+            style: .alert(title: titleVisibility == .hidden ? "" : title, message: message),
+            makeContent: { _ItemPresented(item: .constant(data), content: actions) }
+        )
+    }
+
+    nonisolated func _confirmationDialog<A: View, T>(
+        _ title: String, item: Binding<T?>, titleVisibility: Visibility,
+        actions: @escaping (T) -> A, message: (T) -> String
+    ) -> some View {
+        let text = item.wrappedValue.map(message) ?? ""
+        return _PresentationModifier(
+            child: self, isPresented: _presenting(item),
+            style: .alert(title: titleVisibility == .hidden ? "" : title, message: text),
+            makeContent: { _ItemPresented(item: item, content: actions) }
+        )
+    }
+
     /// `.confirmationDialog`: an alert-shaped panel (title, optional
     /// message, the action buttons) — the reimplementation has one modal
     /// dialog shape; `titleVisibility` is accepted for parity.

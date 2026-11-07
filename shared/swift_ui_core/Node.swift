@@ -482,6 +482,24 @@ package final class RenderNode {
     var textCase: String?
     /// `.lineSpacing` for text (points between lines).
     var lineSpacing: Double?
+    /// `.tracking` / `.kerning` for text: points added between characters.
+    var tracking: Double?
+    /// `.matchedGeometryEffect`: the pairing's key, which geometry follows
+    /// (MatchedGeometryProperties' raw value) and whether this view is the
+    /// source (params "match", "matchProps", "matchSource").
+    var matchedGeometry: (key: String, properties: UInt32, isSource: Bool)?
+    /// `.layoutPriority(_:)`: how early the view is offered its row's room
+    /// (param "layoutPriority"; 0, everyone's, is left out).
+    var layoutPriority: Double = 0
+    /// A long press (`LongPressGesture`, `onLongPressGesture`): param
+    /// "longPress", its handler's id (TreeEncoder.swift).
+    var longPress: LongPressSpec?
+    /// A gesture's end, completed or not (`@GestureState`'s reset): run
+    /// after the host's last report of the interaction.
+    var gestureFinished: (() -> Void)?
+    /// `.progressViewStyle(.linear)` / `(.circular)`: the progress
+    /// indicator's kind (param "pstyle"); nil, the platform's choice.
+    var progressStyle: String?
     /// `.id(_:)`: the scroll target name a `ScrollViewProxy.scrollTo` uses.
     var scrollTarget: String?
     var sliderFraction: Double = 0
@@ -581,6 +599,7 @@ final class _EnvironmentStorage {
     var menuIndicatorHidden = false
     var textCase: String?
     var lineSpacing: Double?
+    var tracking: Double?
     var opacity: Double = 1
     var _isEnabled: Bool = true
     var lineLimit: Int?
@@ -634,6 +653,7 @@ final class _EnvironmentStorage {
         menuIndicatorHidden = other.menuIndicatorHidden
         textCase = other.textCase
         lineSpacing = other.lineSpacing
+        tracking = other.tracking
         opacity = other.opacity
         _isEnabled = other._isEnabled
         lineLimit = other.lineLimit
@@ -835,6 +855,11 @@ public struct EnvironmentValues {
     var lineSpacing: Double? {
         get { _storage.lineSpacing }
         set { _makeUnique(); _storage.lineSpacing = newValue }
+    }
+    /// `.tracking` / `.kerning` on a view: points between its text's characters.
+    var tracking: Double? {
+        get { _storage.tracking }
+        set { _makeUnique(); _storage.tracking = newValue }
     }
     var opacity: Double {
         get { _storage.opacity }

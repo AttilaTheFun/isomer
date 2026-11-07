@@ -152,7 +152,7 @@ public struct Image {
         "message": "\u{1F4AC}", "bubble": "\u{1F4AC}", "bubble.left": "\u{1F4AC}",
         "text.bubble": "\u{1F4AC}", "quote.bubble": "\u{201C}",
         "at": "@", "number": "#", "dollarsign": "$", "percent": "%",
-        "plus.circle": "\u{2295}", "minus.circle": "\u{2296}", "xmark.circle": "\u{2297}",
+        "plus.circle": "\u{2295}", "minus.circle": "\u{2296}", "minus.circle.fill": "\u{2296}", "xmark.circle": "\u{2297}",
         "checkmark.circle": "\u{2705}", "checkmark.seal": "\u{2705}",
         "exclamationmark.triangle": "\u{26A0}\u{FE0E}", "exclamationmark.circle": "\u{2757}",
         "questionmark.circle": "\u{2753}", "info.circle": "\u{2139}\u{FE0E}",

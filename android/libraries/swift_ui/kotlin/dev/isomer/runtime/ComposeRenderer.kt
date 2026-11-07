@@ -245,6 +245,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.viewinterop.AndroidView
 import org.json.JSONArray
 import org.json.JSONObject
@@ -467,6 +468,12 @@ private fun baseModifier(n: JSONObject, extra: Modifier): Modifier {
     val dragID = n.optString("drag")
     val magnifyID = n.optJSONObject("params")?.optString("magnify") ?: ""
     if (dragID.isNotEmpty() || magnifyID.isNotEmpty()) m = m.guestGestures(dragID, magnifyID)
+    // A long press: "press:1", "fire" after lpMin seconds held within
+    // lpDist, "press:0" when it lifts or strays.
+    n.optJSONObject("params")?.optString("longPress")?.takeIf { it.isNotEmpty() }?.let { id ->
+        val p = n.optJSONObject("params")!!
+        m = m.guestLongPress(id, p.optString("lpMin").toDoubleOrNull() ?: 0.5, p.optString("lpDist").toFloatOrNull() ?: 10f)
+    }
     // Accessibility: the label and value TalkBack reads, and
     // `.accessibilityElement(children:)` (merge the children into this node,
     // or replace them with its own description).
@@ -717,18 +724,24 @@ private fun IsoHStack(n: UNode, m: Modifier, bw: Boolean, bh: Boolean) {
         val spacers = (0 until count).filter { greedy[it] && children[it].json.optString("k") == "spacer" }
         val held = if (bounded) spacers.sumOf { children[it].json.optDouble("min", 0.0).dp.roundToPx() }.coerceAtMost(remaining) else 0
         remaining -= held
-        // Fixed and wrapping children, least flexible first.
-        val flexible = (0 until count).filter { !greedy[it] }.sortedBy { i ->
-            val mm = measurables[i]
-            mm.maxIntrinsicWidth(childHeight) - mm.minIntrinsicWidth(childHeight)
-        }
-        var left = flexible.size
-        for (i in flexible) {
-            val proposal = if (bounded) remaining / left else Int.MAX_VALUE
+        // Fixed and wrapping children: the higher `.layoutPriority` first
+        // (offered what the lower ones' minimums leave), and within one
+        // priority the least flexible first.
+        val priority = children.map { it.json.optJSONObject("params")?.optString("layoutPriority")?.toDoubleOrNull() ?: 0.0 }
+        val flexible = (0 until count).filter { !greedy[it] }.sortedWith(
+            compareByDescending<Int> { priority[it] }.thenBy { i ->
+                val mm = measurables[i]
+                mm.maxIntrinsicWidth(childHeight) - mm.minIntrinsicWidth(childHeight)
+            })
+        val minimum = (0 until count).map { if (greedy[it]) 0 else measurables[it].minIntrinsicWidth(childHeight) }
+        for ((at, i) in flexible.withIndex()) {
+            val later = flexible.drop(at + 1)
+            val reserved = later.filter { priority[it] < priority[i] }.sumOf { minimum[it] }
+            val peers = 1 + later.count { priority[it] == priority[i] }
+            val proposal = if (bounded) ((remaining - reserved).coerceAtLeast(0) / peers) else Int.MAX_VALUE
             val pl = measurables[i].measure(Constraints(0, if (bounded) proposal.coerceAtLeast(0) else Constraints.Infinity, 0, childHeight))
             placeables[i] = pl
             if (bounded) remaining = (remaining - pl.width).coerceAtLeast(0)
-            left -= 1
         }
         // Greedy children share what is left, spacers last: as in SwiftUI a
         // spacer yields to any other greedy child, keeping only its minimum
@@ -1027,6 +1040,9 @@ fun IsoNode(
                     fontFamily = textFontFamily(params, j.optInt("weight", 400)),
                     // `.monospacedDigit()`: tabular figures.
                     fontFeatureSettings = if (params?.optString("tnum") == "1") "tnum" else null,
+                    // `.tracking` / `.kerning`: points between characters (sp,
+                    // as the font's size).
+                    letterSpacing = params?.optString("tracking")?.toFloatOrNull()?.sp ?: TextUnit.Unspecified,
                 )
                 val shrink: (TextLayoutResult) -> Unit = { layout ->
                     val width = layout.layoutInput.constraints.maxWidth
@@ -1095,11 +1111,23 @@ fun IsoNode(
         "progress" -> if (j.has("v")) {
             // `.tint`: the bar's fill (Material's track and shape otherwise).
             val tint = hexColorOf(j.optJSONObject("params")?.optString("tint") ?: "")
-            LinearProgressIndicator(
-                progress = { j.optDouble("v", 0.0).toFloat() },
-                modifier = m.fillMaxWidth(),
-                color = tint ?: ProgressIndicatorDefaults.linearColor,
-            )
+            // `.progressViewStyle(.circular)` with a value: a ring filled to it.
+            if (j.optJSONObject("params")?.optString("pstyle") == "circular") {
+                CircularProgressIndicator(
+                    progress = { j.optDouble("v", 0.0).toFloat() },
+                    modifier = m.size(28.dp),
+                    color = tint ?: ProgressIndicatorDefaults.circularColor,
+                )
+            } else {
+                LinearProgressIndicator(
+                    progress = { j.optDouble("v", 0.0).toFloat() },
+                    modifier = m.fillMaxWidth(),
+                    color = tint ?: ProgressIndicatorDefaults.linearColor,
+                )
+            }
+        } else if (j.optJSONObject("params")?.optString("pstyle") == "linear") {
+            // `.progressViewStyle(.linear)` without a value: an indeterminate bar.
+            LinearProgressIndicator(m.fillMaxWidth().graphicsLayer())
         } else {
             // Its own layer: the spinner redraws every frame, and without
             // one each frame re-records everything that shares its layer (a
@@ -3593,6 +3621,29 @@ private fun Modifier.doubleTap(id: String): Modifier = pointerInputOverChildren(
  *  and the magnification to the pinch handler, and "ended" to both when
  *  the last finger lifts. The gesture then owns the pointers (as a SwiftUI
  *  gesture does over a scroll view it sits in). */
+/** A guest's long press, reported as the web's is (see the caller). */
+private fun Modifier.guestLongPress(id: String, minSeconds: Double, maxDistance: Float): Modifier =
+    pointerInput(id, minSeconds, maxDistance) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            sendEvent(id, "press:1")
+            val limit = maxDistance * density
+            // Within the time: lifted, or strayed (true); held: null.
+            val endedEarly = withTimeoutOrNull((minSeconds * 1000).toLong()) {
+                while (true) {
+                    val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                    if (!change.pressed || (change.position - down.position).getDistance() > limit) break
+                }
+                true
+            }
+            if (endedEarly == null) {
+                sendEvent(id, "fire")
+                while (awaitPointerEvent().changes.any { it.pressed }) {}
+            }
+            sendEvent(id, "press:0")
+        }
+    }
+
 private fun Modifier.guestGestures(dragID: String, magnifyID: String): Modifier = pointerInputOverChildren(dragID + "|" + magnifyID) {
     awaitEachGesture {
         awaitFirstDown(requireUnconsumed = false)

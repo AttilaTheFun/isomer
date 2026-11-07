@@ -37,6 +37,10 @@ extension StoryCatalog {
             "layout.anylayout", "AnyLayout",
             summary: "A stack's layout as a value (HStackLayout, VStackLayout, ZStackLayout): the same views, laid out another way when the layout changes."
         ) { AnyLayoutStory() },
+        Story(
+            "layout.priority", "Layout priority",
+            summary: "Two long lines sharing a row too narrow for both: without a priority they split the room; with .layoutPriority(1) the first keeps its whole line and the other truncates."
+        ) { LayoutPriorityStory() },
     ])
 }
 
@@ -216,6 +220,26 @@ struct AnyLayoutStory: View {
                 }
             }
         }
+    }
+}
+// end story
+
+// story: layout.priority
+struct LayoutPriorityStory: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("The title, which matters most")
+                Text("A long subtitle that can give way")
+            }
+            .lineLimit(1)
+            HStack {
+                Text("The title, which matters most").layoutPriority(1)
+                Text("A long subtitle that can give way")
+            }
+            .lineLimit(1)
+        }
+        .frame(width: 320, alignment: .leading)
     }
 }
 // end story

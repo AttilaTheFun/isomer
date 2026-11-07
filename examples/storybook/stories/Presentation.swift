@@ -20,6 +20,10 @@ extension StoryCatalog {
             summary: "A choice among actions, one of them destructive: an action sheet on iOS, a dialog elsewhere."
         ) { ConfirmationStory() },
         Story(
+            "presentation.dialogitem", "Dialog about an item",
+            summary: "confirmationDialog(_:item:): a dialog about the item a row chose, its actions and message made from it, shown while the item is set; dismissing it clears the item."
+        ) { ItemDialogStory() },
+        Story(
             "presentation.popover", "Popover",
             summary: "Content in a bubble beside the button that showed it; a sheet on a phone."
         ) { PopoverStory() },
@@ -100,6 +104,30 @@ struct ConfirmationStory: View {
             Button("Messages") { choice = "Messages" }
             Button("Mail") { choice = "Mail" }
             Button("Remove", role: .destructive) { choice = "Remove" }
+        }
+    }
+}
+// end story
+
+// story: presentation.dialogitem
+struct ItemDialogStory: View {
+    @State private var fileToDelete: String?
+    @State private var deleted: [String] = []
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(["Notes.txt", "Photo.png"], id: \.self) { file in
+                Button("Delete \(file)…") { fileToDelete = file }
+                    .buttonStyle(.bordered)
+            }
+            Text(deleted.isEmpty ? "Nothing deleted" : "Deleted: \(deleted.joined(separator: ", "))")
+                .font(.footnote)
+                .foregroundColor(.secondary)
+        }
+        .confirmationDialog("Delete file?", item: $fileToDelete, titleVisibility: .visible) { file in
+            Button("Delete \(file)", role: .destructive) { deleted.append(file) }
+        } message: { file in
+            Text("\(file) goes to the trash.")
         }
     }
 }

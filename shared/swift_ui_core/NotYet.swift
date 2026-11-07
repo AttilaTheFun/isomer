@@ -153,56 +153,6 @@ extension Alignment {
     public static var trailingLastTextBaseline: Alignment { fatalError() }
 }
 
-extension View {
-    @available(*, unavailable, message: "Not yet in Isomer: Layout (docs/parity/SwiftUI.md)")
-    public nonisolated func layoutPriority(_ value: Double) -> some View { self }
-}
-
-extension ShapeStyle where Self == LinearGradient {
-    @available(*, unavailable, message: "Not yet in Isomer: Styles (docs/parity/SwiftUI.md)")
-    public static func linearGradient(_ gradient: Gradient, startPoint: UnitPoint, endPoint: UnitPoint) -> LinearGradient { fatalError() }
-}
-
-extension ShapeStyle where Self == LinearGradient {
-    @available(*, unavailable, message: "Not yet in Isomer: Styles (docs/parity/SwiftUI.md)")
-    public static func linearGradient(colors: [Color], startPoint: UnitPoint, endPoint: UnitPoint) -> LinearGradient { fatalError() }
-}
-
-extension ShapeStyle where Self == LinearGradient {
-    @available(*, unavailable, message: "Not yet in Isomer: Styles (docs/parity/SwiftUI.md)")
-    public static func linearGradient(stops: [Gradient.Stop], startPoint: UnitPoint, endPoint: UnitPoint) -> LinearGradient { fatalError() }
-}
-
-extension ShapeStyle where Self == AngularGradient {
-    @available(*, unavailable, message: "Not yet in Isomer: Styles (docs/parity/SwiftUI.md)")
-    public static func angularGradient(_ gradient: Gradient, center: UnitPoint, startAngle: Angle, endAngle: Angle) -> AngularGradient { fatalError() }
-}
-
-extension ShapeStyle where Self == AngularGradient {
-    @available(*, unavailable, message: "Not yet in Isomer: Styles (docs/parity/SwiftUI.md)")
-    public static func angularGradient(colors: [Color], center: UnitPoint, startAngle: Angle, endAngle: Angle) -> AngularGradient { fatalError() }
-}
-
-extension ShapeStyle where Self == AngularGradient {
-    @available(*, unavailable, message: "Not yet in Isomer: Styles (docs/parity/SwiftUI.md)")
-    public static func angularGradient(stops: [Gradient.Stop], center: UnitPoint, startAngle: Angle, endAngle: Angle) -> AngularGradient { fatalError() }
-}
-
-extension ShapeStyle where Self == AngularGradient {
-    @available(*, unavailable, message: "Not yet in Isomer: Styles (docs/parity/SwiftUI.md)")
-    public static func conicGradient(_ gradient: Gradient, center: UnitPoint, angle: Angle = .zero) -> AngularGradient { fatalError() }
-}
-
-extension ShapeStyle where Self == AngularGradient {
-    @available(*, unavailable, message: "Not yet in Isomer: Styles (docs/parity/SwiftUI.md)")
-    public static func conicGradient(colors: [Color], center: UnitPoint, angle: Angle = .zero) -> AngularGradient { fatalError() }
-}
-
-extension ShapeStyle where Self == AngularGradient {
-    @available(*, unavailable, message: "Not yet in Isomer: Styles (docs/parity/SwiftUI.md)")
-    public static func conicGradient(stops: [Gradient.Stop], center: UnitPoint, angle: Angle = .zero) -> AngularGradient { fatalError() }
-}
-
 extension ShapeStyle where Self == HierarchicalShapeStyle {
     @available(*, unavailable, message: "Not yet in Isomer: Styles (docs/parity/SwiftUI.md)")
     public static var quinary: HierarchicalShapeStyle { fatalError() }
@@ -536,11 +486,6 @@ extension Path {
 extension Path {
     @available(*, unavailable, message: "Not yet in Isomer: Shapes, colors and geometry (docs/parity/SwiftUI.md)")
     public func lineSubtraction(_ other: Path, eoFill: Bool = false) -> Path { fatalError() }
-}
-
-extension Path {
-    @available(*, unavailable, message: "Not yet in Isomer: Shapes, colors and geometry (docs/parity/SwiftUI.md)")
-    public func applying(_ transform: CGAffineTransform) -> Path { fatalError() }
 }
 
 extension RoundedRectangle {

@@ -10,6 +10,12 @@ final class NavigationState {
         /// The value this screen shows (value-based navigation:
         /// `NavigationLink(value:)`, a bound path), nil for a destination's.
         var value: AnyHashable? = nil
+        /// `navigationDestination(isPresented:)` / `(item:)`: the modifier
+        /// that pushed this screen (its tree path), the item it shows, and
+        /// what Back does to its binding (sets it false, or nil).
+        var presenter: String? = nil
+        var presentedItem: AnyHashable? = nil
+        var onPop: (() -> Void)? = nil
     }
 
     var stack: [Entry] = []
@@ -23,6 +29,13 @@ final class NavigationState {
     /// registered as the views that declare them build (and kept: the screen
     /// that declared one is not built while a screen above it shows).
     var destinations: [ObjectIdentifier: (AnyHashable) -> any View] = [:]
+    /// `navigationDestination(isPresented:)` / `(item:)`, by the modifier's
+    /// tree path: what the screen it pushed shows (the latest build's
+    /// closure), and whether its binding still asks for the screen, read as
+    /// the stack builds (the screen that declared it isn't built while the
+    /// pushed one shows).
+    var presentedDestinations: [String: () -> any View] = [:]
+    var presenterActive: [String: () -> AnyHashable?] = [:]
     var rootTitle: String?
     var rootSubtitle: String?
     /// `ToolbarItem(placement: .bottomBar)` contents declared by the visible
@@ -116,10 +129,45 @@ final class NavigationState {
                     path.set(values)
                 }
             }
-            stack.removeLast()
+            let popped = stack.removeLast()
+            // A presented screen: its binding false (or nil) again.
+            popped.onPop?()
             if let key { Runtime.shared.stateDidChange(key: key) }
             Runtime.shared.requestFrame()
         }
+    }
+
+    /// `navigationDestination(isPresented:)` / `(item:)` at `presenter`:
+    /// its screen pushed when `item` is non-nil (another item replaces it),
+    /// taken off (with the screens above it) when nil. Run after the build
+    /// (a frame effect), from the modifier as it builds.
+    func present(_ presenter: String, item: AnyHashable?, onPop: @escaping () -> Void) {
+        let index = stack.firstIndex { $0.presenter == presenter }
+        if let item {
+            if let index, stack[index].presentedItem == item { return }
+            if let index { stack.removeSubrange(index...) }
+            var entry = Entry(makeView: { [weak self] in self?.presentedDestinations[presenter]?() ?? EmptyView() }, title: nil)
+            entry.presenter = presenter
+            entry.presentedItem = item
+            entry.onPop = onPop
+            stack.append(entry)
+        } else {
+            guard let index else { return }
+            stack.removeSubrange(index...)
+        }
+        if let key { Runtime.shared.stateDidChange(key: key) }
+        Runtime.shared.requestFrame()
+    }
+
+    /// Presented screens whose binding no longer asks for them (set false
+    /// or nil while they showed, their declaring screen unbuilt) taken off,
+    /// with the screens above them: as the stack builds.
+    func followPresenters() {
+        guard let index = stack.firstIndex(where: { entry in
+            guard let presenter = entry.presenter, let active = presenterActive[presenter] else { return false }
+            return active() != entry.presentedItem
+        }) else { return }
+        stack.removeSubrange(index...)
     }
 
     func setTitle(_ title: String, level: Int) {
@@ -266,6 +314,7 @@ extension NavigationStack: _PrimitiveView {
         // the destination for its value's type.
         nav.path = path
         nav.followPath()
+        nav.followPresenters()
         _registerDestinations(nav: nav, ctx: &ctx)
         // Track for the system back button (innermost visible stack pops first).
         Runtime.shared.registerFrameEffect { Runtime.shared.navigationStates.append(nav) }
@@ -1462,6 +1511,37 @@ extension _NavigationDestinationView: _PrimitiveView {
 
 extension _NavigationDestinationView: View {}
 
+/// `navigationDestination(isPresented:)` / `(item:)`: a screen the binding
+/// pushes onto the enclosing stack, and takes off.
+struct _PresentedDestinationView {
+    let child: any View
+    let item: () -> AnyHashable?
+    let dismiss: () -> Void
+    let make: (AnyHashable) -> any View
+
+    typealias Body = Never
+    var body: Never { fatalError("primitive view") }
+}
+
+extension _PresentedDestinationView: _PrimitiveView {
+    @MainActor
+    func makeNode(_ ctx: inout BuildContext) -> RenderNode {
+        let presenter = ctx.path
+        if let nav = ctx.navigation {
+            let current = item()
+            let make = make, item = item
+            nav.presentedDestinations[presenter] = { current.map(make) ?? EmptyView() }
+            nav.presenterActive[presenter] = item
+            let dismiss = dismiss
+            Runtime.shared.registerFrameEffect { nav.present(presenter, item: current, onPop: dismiss) }
+        }
+        var sub = ctx.descend("navpresented")
+        return buildNode(view: child, ctx: &sub)
+    }
+}
+
+extension _PresentedDestinationView: View {}
+
 struct _NavigationTitleView {
     let child: any View
     let title: String
@@ -1741,6 +1821,34 @@ extension View {
             if let value = value.base as? D { return destination(value) }
             return EmptyView()
         })
+    }
+
+    /// Pushes `destination` onto the enclosing stack while `isPresented` is
+    /// true; Back sets it false.
+    nonisolated public func navigationDestination<V>(
+        isPresented: Binding<Bool>, @ViewBuilder destination: () -> V
+    ) -> some View where V: View {
+        let made = destination()
+        return _PresentedDestinationView(
+            child: self,
+            item: { isPresented.wrappedValue ? AnyHashable(true) : nil },
+            dismiss: { isPresented.wrappedValue = false },
+            make: { _ in made })
+    }
+
+    /// Pushes `destination(item)` onto the enclosing stack while `item` is
+    /// non-nil (another value replaces the screen); Back sets it nil.
+    nonisolated public func navigationDestination<D, C>(
+        item: Binding<Optional<D>>, @ViewBuilder destination: @escaping (D) -> C
+    ) -> some View where D: Hashable, C: View {
+        _PresentedDestinationView(
+            child: self,
+            item: { item.wrappedValue.map { AnyHashable($0) } },
+            dismiss: { item.wrappedValue = nil },
+            make: { value in
+                guard let value = value.base as? D else { return EmptyView() }
+                return destination(value)
+            })
     }
 
     nonisolated public func navigationTitle<S: StringProtocol>(_ title: S) -> some View {
