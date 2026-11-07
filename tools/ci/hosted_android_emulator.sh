@@ -57,6 +57,9 @@ for _ in $(seq 1 60); do
     sleep 2
 done
 sleep 20
+# Gesture navigation, as OS Server's phones have (the AOSP image comes up
+# with the three-button bar).
+"$adb" shell cmd overlay enable com.android.internal.systemui.navbar.gestural > /dev/null 2>&1 || true
 "$adb" shell settings put global sysui_demo_allowed 1
 demo() { "$adb" shell am broadcast -a com.android.systemui.demo -e command "$@" > /dev/null; }
 for _ in 1 2 3; do
