@@ -326,6 +326,18 @@ def apk_install_run(name, apk, activity, extras = "", **kwargs):
 
 # --- Isomer adoption-level macros (docs/adoption_levels.md) ----------
 
+# Isomer's shared platform library (//android/libraries/swift_ui:isomer_platform):
+# with --@isomer//tools/android:shared_platform an app's library links
+# against it, and the app ships it, instead of holding its own copy of the
+# Swift runtime, Foundation and Isomer (README, "One platform library for
+# several apps").
+_SHARED_PLATFORM = Label("//android/libraries/swift_ui:isomer_platform")
+
+_SHARED_PLATFORM_LIBRARIES = select({
+    Label("//tools/android:shared_platform_on"): [Label("//android/libraries/swift_ui:libisomer_platform.so")],
+    "//conditions:default": [],
+})
+
 def isomer_android_library(name, swift_library, extra_kotlin_srcs = [], extra_deps = [], visibility = None):
     """Level 3 building block: the app's Swift + the Isomer Android
     runtime, packaged for embedding in an existing app.
@@ -351,10 +363,13 @@ def isomer_android_library(name, swift_library, extra_kotlin_srcs = [], extra_de
         java_package = "dev.isomer.runtime",
         module_name = "SwiftUI",
         swift = swift_library,
+        link_deps = [Label("//android/libraries/swift_ui:application_entry")],
+        shared_platform = _SHARED_PLATFORM,
+        shared_platform_when = Label("//tools/android:shared_platform_on"),
     )
     cc_library(
         name = name + "_native",
-        srcs = [":lib%s_bindings.so" % name],
+        srcs = [":lib%s_bindings.so" % name] + _SHARED_PLATFORM_LIBRARIES,
         tags = ["manual"],
         visibility = visibility,
     )
@@ -793,7 +808,7 @@ def isomer_android_aar(
         name = name,
         lib = ":%s_lib" % name,
         manifest = ":%s_manifest" % name,
-        native_libs = [":lib%s_runtime_bindings.so" % name],
+        native_libs = [":lib%s_runtime_bindings.so" % name] + _SHARED_PLATFORM_LIBRARIES,
         proguard = ":%s_proguard" % name,
         visibility = visibility,
     )

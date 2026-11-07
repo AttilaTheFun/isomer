@@ -837,6 +837,42 @@ swiftffi.NativeLibraries.loader = { name -> SplitInstallHelper.loadLibrary(conte
 swiftffi.NativeLibraries.markLoaded("app_runtime_bindings")
 ```
 
+### One platform library for several apps
+
+By default an app's Swift is one library holding everything: the Swift
+runtime, Foundation, Isomer and the app. With
+`--@isomer//tools/android:shared_platform` the same sources link in two:
+
+- `libisomer_platform.so` (//android/libraries/swift_ui:isomer_platform):
+  the Swift runtime and standard library, Foundation, SwiftUI and the rest
+  of Isomer's SDK, linked once and every symbol exported;
+- `lib<app>_runtime_bindings.so`: the app's own code, its services and the
+  JNI glue, which needs the platform (DT_NEEDED) and holds none of it.
+
+Both go in the APK (or the AAR), and the generated Kotlin loads the platform
+first (through `swiftffi.NativeLibraries`, so a feature split's loader is
+asked for both, in that order). Several Isomer apps or features in one host
+then share one runtime and one copy of Isomer, and changing an app relinks
+only its small library. The two libraries must come from one build of
+isomer, since the app's library links against that platform exactly.
+
+The Storybook, measured at 0.42 with `--config=android_release`: the
+platform 19.8 MB and the app's library 0.6 MB (16.7 MB APK), against
+16.2 MB as one library (15.6 MB APK). A shipped app that is alone in its
+process is smallest as one library, where the linker can drop whatever the
+app doesn't reach.
+
+Underneath, these are swift_ffi rules: `kt_swift_platform` (a shared
+library of Swift libraries, exported whole) and `kt_swift_library(...,
+shared_platform = ..., shared_platform_when = ...)` (a JNI library linked
+against it, leaving out every archive the platform holds). Swift's Android
+toolchain links shared objects with `-Wl,--exclude-libs,ALL`, which no
+version script can undo, so the platform is linked without that flag
+(swift_ffi/rules/shared_platform.bzl). The runtime reaches the app's `@main`
+through a registration made as the app's library loads
+(android/libraries/swift_ui/application_main.c), since a platform loaded
+first can't find it by name.
+
 ### Embedding an Isomer app in an Android app
 
 `isomer_android_aar` (tools/android/defs.bzl) builds the app
