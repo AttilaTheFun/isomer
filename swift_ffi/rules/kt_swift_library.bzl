@@ -73,12 +73,25 @@ def kt_swift_library(
     # which is exactly what `System.loadLibrary("<name>")` looks up.
     # (Swift Concurrency's dispatch libraries are linked by the rules_swift
     # Android toolchain itself since bazelbuild/rules_swift#1830.)
+    # Shipped (--//swift_ffi/rules:jni_exports_only): the JNI entry points
+    # alone exported, the rest local, so --gc-sections drops what they
+    # don't reach, and the symbol tables stripped.
     swift_binary(
         name = name + "_native",
         srcs = [REACTOR_STUB],
         module_name = name + "_native",
         deps = [swift, ":" + name + "_adapter"],
-        linkopts = linkopts,
+        additional_linker_inputs = [Label("//swift_ffi/rules:jni_exports.lds")],
+        linkopts = linkopts + select({
+            Label("//swift_ffi/rules:jni_exports_only_on"): [
+                "-Wl,--version-script=$(location %s)" % Label("//swift_ffi/rules:jni_exports.lds"),
+                # The script names JNI_OnLoad, which a library may not have.
+                "-Wl,--undefined-version",
+                "-Wl,--gc-sections",
+                "-Wl,--strip-all",
+            ],
+            "//conditions:default": [],
+        }),
         linkshared = True,
         tags = ["manual"],
     )

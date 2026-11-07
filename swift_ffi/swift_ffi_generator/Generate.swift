@@ -25,7 +25,7 @@ struct Generate: ParsableCommand {
     @Option(help: "Kotlin facade object name for the kotlin/jni kinds.")
     var javaClass: String = "Native"
 
-    @Option(help: "Native library name for System.loadLibrary in the kotlin kind.")
+    @Option(help: "Native library name the kotlin kind loads (swiftffi.NativeLibraries.load, System.loadLibrary unless the host installs a loader).")
     var libraryName: String = "native"
 
     @Option(help: "The generated C header's file name (jni-adapter / cpp includes).")

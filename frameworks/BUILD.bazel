@@ -1,9 +1,10 @@
 # The other Apple frameworks SwiftUI's interface names, for the platforms
 # without Apple's (docs/isomer_031_plan.md): CoreTransferable,
-# UniformTypeIdentifiers and PhotosUI under Apple's names. Each platform's
-# SwiftUI depends on them; its PhotosUI (over that SwiftUI) is built beside
-# it. Not Combine, UIKit or Dispatch: their APIs are for backward
-# compatibility, and Isomer's apps use Observation and Swift concurrency.
+# UniformTypeIdentifiers and PhotosUI under Apple's names, and Combine
+# (since 0.42, beneath Foundation: code from before Observation compiles
+# unchanged). Each platform's SwiftUI depends on them; its PhotosUI (over
+# that SwiftUI) is built beside it. Not UIKit or Dispatch; Isomer's own apps
+# use Observation and Swift concurrency.
 
 load("@rules_swift//swift:swift_library_group.bzl", "swift_library_group")
 
@@ -26,5 +27,12 @@ swift_library_group(
             "//frameworks/core_transferable",
             "//frameworks/uniform_type_identifiers",
         ],
+    }) + select({
+        # Combine: on wasm and Android Isomer's Foundation brings it (one
+        # configuration of it: a second, linked beside, duplicates every
+        # symbol); on Linux and Windows the toolchain's Foundation doesn't.
+        "@platforms//os:linux": ["//frameworks/combine"],
+        "@platforms//os:windows": ["//frameworks/combine"],
+        "//conditions:default": [],
     }),
 )

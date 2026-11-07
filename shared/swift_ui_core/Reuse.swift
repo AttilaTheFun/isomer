@@ -562,7 +562,8 @@ extension EnvironmentValues {
               horizontalSizeClass == other.horizontalSizeClass,
               verticalSizeClass == other.verticalSizeClass,
               tabIconSize == other.tabIconSize,
-              custom.count == other.custom.count, objects.count == other.objects.count
+              custom.count == other.custom.count, objects.count == other.objects.count,
+              environmentObjects.count == other.environmentObjects.count
         else { return false }
         for (key, value) in custom {
             guard let theirs = other.custom[key], reuseEqual(value, theirs) else { return false }
@@ -570,13 +571,16 @@ extension EnvironmentValues {
         for (key, object) in objects {
             guard let theirs = other.objects[key], theirs === object else { return false }
         }
+        for (key, object) in environmentObjects {
+            guard let theirs = other.environmentObjects[key], theirs === object else { return false }
+        }
         return true
     }
 }
 
 // Wrappers over state the core cannot see change per view. (Not the
 // observed objects: a change to one marks the views observing it, as a
-// `@State` write does — Observable.swift.)
+// `@State` write does — ObservableObject.swift.)
 extension AppStorage { var _blocksSubtreeReuse: Bool { true } }
 // Not `@FocusState`: it is a `@State` underneath (the same storage slot,
 // written when the host moves focus), so a change to it marks its view

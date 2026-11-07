@@ -17,4 +17,5 @@ SMOKE_STORIES = [
     "shapes.gradients",
     "input.field",
     "state.observable",
+    "state.observableobject",
 ]

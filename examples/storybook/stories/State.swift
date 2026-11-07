@@ -1,6 +1,7 @@
 // State and data: @State and @Binding, Observation, the environment,
 // @AppStorage, and work tied to a view's lifetime.
 
+import Combine
 import Foundation
 import Observation
 import SwiftUI
@@ -15,6 +16,10 @@ extension StoryCatalog {
             "state.observable", "@Observable",
             summary: "A model class whose properties are observed: held in @State, put in the environment, read below, and bound to controls with @Bindable. Only the views that read a property redraw when it changes."
         ) { ObservableStory() },
+        Story(
+            "state.observableobject", "ObservableObject",
+            summary: "A model class from before Observation: its @Published properties send objectWillChange, a view owns it with @StateObject, passes it with @ObservedObject or the environment (@EnvironmentObject), binds to it with $model.property, and runs code on a publisher's values with onReceive."
+        ) { ObservableObjectStory() },
         Story(
             "state.environment", "Environment values",
             summary: "Values the system passes down (the appearance, the size class) and values a view sets for the views inside it."
@@ -89,6 +94,55 @@ struct ObservableStory: View {
             TextField("Name", text: $profile.name)
                 .textFieldStyle(.roundedBorder)
             Stepper("Likes: \(profile.likes)", value: $profile.likes, in: 0 ... 99)
+        }
+    }
+}
+// end story
+
+// story: state.observableobject
+final class StoryCounter: ObservableObject {
+    @Published var count = 0
+    @Published var title = "Taps"
+    let resets = PassthroughSubject<Void, Never>()
+}
+
+struct ObservableObjectStory: View {
+    @StateObject private var counter = StoryCounter()
+    @State private var resetCount = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            CounterSummary(counter: counter)
+            CounterControls()
+            Text("Reset \(resetCount) times").foregroundStyle(.secondary)
+        }
+        .environmentObject(counter)
+        .onReceive(counter.resets) { resetCount += 1 }
+    }
+
+    struct CounterSummary: View {
+        @ObservedObject var counter: StoryCounter
+
+        var body: some View {
+            Text("\(counter.title): \(counter.count)").font(.headline)
+        }
+    }
+
+    struct CounterControls: View {
+        @EnvironmentObject private var counter: StoryCounter
+
+        var body: some View {
+            TextField("Title", text: $counter.title)
+                .textFieldStyle(.roundedBorder)
+            HStack {
+                Button("Tap") { counter.count += 1 }
+                    .buttonStyle(.borderedProminent)
+                Button("Reset") {
+                    counter.count = 0
+                    counter.resets.send()
+                }
+                .buttonStyle(.bordered)
+            }
         }
     }
 }

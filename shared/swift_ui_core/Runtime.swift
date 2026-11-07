@@ -731,7 +731,6 @@ package final class Runtime {
     // Building views again alone (InPlace.swift).
     /// The composite views' last builds, by path.
     var rebuildSites: [String: _RebuildSite] = [:]
-    /// The views observing each `ObservableObject` (Observable.swift).
     /// Which views' builds read each `@State` (InPlace.swift): its keys, the
     /// state each composite's last build read, the reads of the builds in
     /// progress, and the states read where no view's build was running.

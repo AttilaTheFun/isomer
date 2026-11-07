@@ -493,9 +493,9 @@ def isomer_android_app(
     and `version_code` (an integer that only grows) are the manifest's
     android:versionName / android:versionCode, what the system's app info
     shows and what an update is ordered by; left out, the APK has neither.
-    `min_sdk_version` is the manifest's minSdkVersion (28, the Swift SDK's
-    supported minimum; lower takes what README's "Android below API 28"
-    says, the NDK's api_level and a rules_swift patch among it).
+    `min_sdk_version` is the manifest's minSdkVersion (28 by default; down
+    to 23, Swift 6.4's Android SDK's minimum, with the NDK's api_level at it
+    too: README's "Android below API 28").
     `extra_binary_deps` are further android_binary deps: a native library
     the app's Kotlin loads (//android/libraries/wasm_view:engine_native,
     WasmKit for WasmView). `extra_application` is manifest XML placed

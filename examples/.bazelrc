@@ -241,3 +241,12 @@ try-import %workspace%/.bazelrc.user
 # macOS 15 minimum; building everything at it keeps what they share with the
 # rest of the build (@isomer//:foundation) in one configuration, one copy.
 common --macos_minimum_os=15.0
+
+# Android apps linked to ship (README, "Android release size"): optimized for
+# size, each JNI library exporting its entry points alone (the rest local, so
+# the linker drops what they don't reach), stripped, and no Swift module
+# embedded in it for the debugger (.swift_ast).
+build:android_release -c opt
+build:android_release --@rules_swift//swift:copt=-Osize
+build:android_release --features=swift.no_embed_debug_module
+build:android_release --@isomer//swift_ffi/rules:jni_exports_only

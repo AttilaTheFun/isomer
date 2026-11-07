@@ -1,0 +1,33 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The sources, for a feature compiled against Isomer's frameworks on an Apple
+# platform, should one take Isomer's Combine as it takes its CoreTransferable.
+filegroup(
+    name = "srcs",
+    srcs = glob(["*.swift"]),
+)
+
+# Combine as code written for SwiftUI before Observation uses it:
+# ObservableObject and @Published, subjects, sink and assign, the operators,
+# schedulers and AsyncPublisher. Isomer's own, written against Apple's
+# interface (a strict subset of it: tools/parity/reasons/Combine.json says
+# what isn't here). It sits beneath Foundation, which imports it as Apple's
+# does, so it depends on nothing but the standard library and the C
+# library's mutexes (Lock.swift); no Dispatch, which wasm lacks.
+swift_library(
+    name = "combine",
+    package_name = "isomer",
+    # Apple platforms have the real one; this one would shadow it.
+    target_compatible_with = select({
+        "@platforms//os:macos": ["@platforms//:incompatible"],
+        "@platforms//os:ios": ["@platforms//:incompatible"],
+        "@platforms//os:tvos": ["@platforms//:incompatible"],
+        "@platforms//os:watchos": ["@platforms//:incompatible"],
+        "@platforms//os:visionos": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
+    srcs = glob(["*.swift"]),
+    module_name = "Combine",
+)
