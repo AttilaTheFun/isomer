@@ -103,6 +103,21 @@ ts_swift_wasm_library(name = "greeter_web", swift = ":greeter")
 cc_swift_library(name = "greeter_cpp", swift = ":greeter")
 ```
 
+Several JNI libraries in one app can share one copy of the Swift runtime and
+of the libraries they have in common: link those into a `kt_swift_platform`
+and give each `kt_swift_library` its `shared_platform` (with
+`shared_platform_when`, a config_setting picks this or the whole library
+from the same sources). Ship the platform's `lib<name>.so` beside them; the
+Kotlin bindings load it first.
+
+```starlark
+load("@isomer//swift_ffi/rules:kt_swift_library.bzl", "kt_swift_library", "kt_swift_platform")
+
+kt_swift_platform(name = "shared_swift", deps = [":common"])
+
+kt_swift_library(name = "greeter_android", swift = ":greeter", java_package = "dev.example", shared_platform = ":shared_swift")
+```
+
 The [example matrix](../docs/swift_ffi/examples.md) is a full working reference for every
 platform — `examples/shared/greeter` is one annotated library, and each
 `//swift_ffi/examples/<platform>/...` application delivers it unchanged, either
