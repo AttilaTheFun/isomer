@@ -44,6 +44,13 @@ iOS 26's glass restart button over 2048, in tools/ci/proof_ignore.txt.
   with the release before AND a second run of the same commit: whatever
   moves without the app changing gets fixed before the next.
 - **The Pokédex reads PokéAPI live.** Its pictures have held still so far.
+- **Android's 2048, 1 px higher at 0.41 (Swift 6.4.2).** In both proofs of
+  a6ceeb16 (quick and full), its content sits 1 px above v0.40.1's; the
+  web's and the iPhone's 2048 (the same project, compiled for wasm too)
+  are pixel-identical. Android runs the Playground's wasm under WasmKit
+  built by the Android Swift 6.4.2 toolchain, and its host measures with
+  Compose: find which number moved (a float conversion in the engine, or
+  a host measurement) before it hides a real change.
 - **Actions write for the Claude app**, so agents can start a full proof or
   rerun a failed job.
 - **oss**: `oss machine ssh` printed a lease's JSON, passwords included,
