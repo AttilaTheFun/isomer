@@ -2895,6 +2895,7 @@ struct Main {
         checkObservableObject(mock)
         checkPresentedDestinations(mock)
         checkEllipticalGradient(mock)
+        checkDatePickerValue(mock)
         checkItemDialogs(mock)
         checkItemAlerts(mock)
         checkProgressViewStyle(mock)
