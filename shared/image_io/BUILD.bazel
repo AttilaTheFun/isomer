@@ -1,3 +1,5 @@
+load("@rules_swift//swift:swift_library_group.bzl", "swift_library_group")
+
 # ImageIO's decoding subset for the platforms without Apple's (see
 # ImageIO.swift), compiled per platform as a module named `ImageIO` that the
 # platform's `SwiftUI` depends on, so `import ImageIO` resolves wherever the
@@ -7,3 +9,19 @@ filegroup(
     srcs = ["ImageIO.swift"],
     visibility = ["//visibility:public"],
 )
+
+# The ImageIO isomer's Swift package's SwiftUI reads on Linux and Windows
+# (MODULE.bazel's configure_package): their own decoders
+# (linux|windows/libraries/image_io); elsewhere the package has its own
+# (this directory's) or Apple's.
+alias(
+    name = "for_swift_ui",
+    actual = select({
+        "@platforms//os:linux": "//linux/libraries/image_io",
+        "@platforms//os:windows": "//windows/libraries/image_io",
+        "//conditions:default": ":none",
+    }),
+    visibility = ["//visibility:public"],
+)
+
+swift_library_group(name = "none")

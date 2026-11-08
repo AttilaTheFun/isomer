@@ -152,7 +152,20 @@ swift_deps.configure_package(
 # @isomer by the application's inject_repo (README: "Consuming isomer").
 swift_deps.configure_package(
     name = "isomer",
-    target_deps = {"Foundation": ["@isomer//foundation/internationalization"]},
+    target_deps = {
+        "Foundation": ["@isomer//foundation/internationalization"],
+        # FlatBuffers' Swift runtime, the render tree's wire format, from
+        # this module (a SwiftPM dependency on it would bring its test-only
+        # grpc-swift 1 into every application's graph); until the wire
+        # format is protobuf.
+        "IsomerSwiftUI": ["@isomer//shared/renderers:flatbuffers_swift"],
+        "SwiftUI": [
+            "@isomer//shared/renderers:flatbuffers_swift",
+            # Linux's and Windows' ImageIO, their own decoders (the package's
+            # is the web's and Android's).
+            "@isomer//shared/image_io:for_swift_ui",
+        ],
+    },
 )
 use_repo(swift_deps, "swiftpkg_isomer", "swiftpkg_swift_foundation", "swiftpkg_swift_syntax")
 

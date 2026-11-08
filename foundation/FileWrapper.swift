@@ -4,8 +4,11 @@
 // hands over. A Swift class, as Isomer's other Foundation classes are
 // (Apple's is an NSObject). Also compiled into the SwiftUI of Linux and
 // Windows, whose Foundation is the toolchain's: FileManager's own API
-// only.
+// only. In isomer's Swift package the SwiftUI target lists this file
+// (shared/swift_ui_corelibs) on every platform, so it is compiled there only
+// where SwiftUI's Foundation is the toolchain's.
 
+#if !ISOMER_SWIFTUI || os(Linux) || os(Windows)
 import FoundationEssentials
 
 open class FileWrapper: @unchecked Sendable {
@@ -135,3 +138,4 @@ open class FileWrapper: @unchecked Sendable {
         if options.contains(.withNameUpdating) { filename = url.lastPathComponent }
     }
 }
+#endif

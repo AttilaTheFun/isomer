@@ -149,31 +149,46 @@ a repository of its own):
   SwiftPM package an app links there depends on `@isomer//:foundation`
   through `configure_package(target_deps = ...)` in its MODULE.bazel;
   `tools/foundation/check_link.py <app targets>` finds one that doesn't.
-- **Isomer's Swift is a Swift package (0.43)**: the root Package.swift
-  (Foundation, FoundationNetworking, IsomerFoundation, CoreGraphics,
-  Combine and the two small modules under Foundation) beside the Bazel
-  module. rules_swift_package_manager builds it as `@swiftpkg_isomer` in
-  the root's one graph, under its own `swift_deps` extension (not a
-  re-export: isomer's configure_package tags, swift-foundation's patches and
-  Foundation's internationalization dependency, apply to the root's graph):
-  an application lists isomer in its Package.swift by revision (the
-  release's tag) and adds `inject_repo(swift_deps, "isomer")`, since the
-  generated repositories see rules_swift_package_manager's names, not the
-  root's. isomer's own graph (third_party/swift_packages, dev-only: every
-  module's from_package is resolved) and the examples' take the package by
-  path, which needs cgrindel/rules_swift_package_manager#2638 (a local
-  package that is a Bazel module too is copied without its Bazel files),
-  applied by both roots' single_version_override until a release has it;
-  an application takes the package from git, which needs nothing. Isomer's labels (`//foundation`,
-  `//core_graphics`, `//frameworks/combine`, ...) are groups over the
-  package's products, incompatible on Apple platforms as before. Its
-  platforms are swift-foundation's (26): rules_swift_package_manager holds
-  a package to its dependencies' minimums even where it builds no Apple
-  code. `--@isomer//foundation:internationalization` can't be a SwiftPM
-  condition, so foundation/internationalization (a module re-exporting
-  FoundationInternationalization, or nothing) is added to Foundation's
-  target by configure_package and Foundation checks
-  `canImport(IsomerFoundationInternationalization)`.
+- **Isomer's Swift is a Swift package (0.43; SwiftUI since 0.44)**: the
+  root Package.swift beside the Bazel module: Foundation, FoundationNetworking,
+  IsomerFoundation, CoreGraphics and Combine (0.43), and SwiftUI with what it
+  stands on (IsomerSwiftUI, CoreTransferable, UniformTypeIdentifiers, ImageIO,
+  PhotosUI, the SwiftUIMacros macro target; 0.44). rules_swift_package_manager
+  builds it as `@swiftpkg_isomer` in the root's one graph, under its own
+  `swift_deps` extension (not a re-export: isomer's configure_package tags
+  apply to the root's graph): an application lists isomer in its
+  Package.swift by revision (the release's tag) and adds
+  `inject_repo(swift_deps, "isomer")`. isomer's own graph
+  (third_party/swift_packages, dev-only) and the examples' take the package by
+  path (cgrindel/rules_swift_package_manager#2638; with #2639 and #2640 the
+  registry's 1.25.0.isomer.1). Isomer's labels (`//foundation`,
+  `//core_graphics`, `//shared/isomer_swift_ui`, each platform's
+  `libraries/swift_ui:core`, ...) are `one_configuration` wrappers over the
+  package's products. SwiftUI is one target, the same on every platform off
+  Apple: what differs is plugged in, each platform's host (IsomerWebHost,
+  IsomerAndroidHost, IsomerLinuxHost, IsomerWindowsHost, IsomerHeadlessHost,
+  IsomerTerminalHost: `App.main` hands the process to `iso_process_host_run`,
+  which the host defines) and the GPU renderer (IsomerGPURenderer), Bazel
+  modules over it; `:swift_ui` is the group of SwiftUI and the host. What the
+  package can't express comes from the Bazel module through configure_package
+  `target_deps`: Foundation's internationalization (a marker module Foundation
+  checks with `canImport`, `--@isomer//foundation:internationalization`),
+  FlatBuffers' Swift runtime (until the wire format is protobuf), Linux's and
+  Windows' ImageIO. Generated sources the package compiles are checked in, with
+  diff_tests (shared/isomer_swift_ui/TreeGenerated.swift, flatc's;
+  shared/swift_ui_core/JSONInternal.swift). The package's minimums are
+  Isomer's own (iOS 16, macOS 13; #2639 applies none off Apple).
+  - **The package's modules share one output directory**, and SwiftCompile
+    runs unsandboxed: a build whose SwiftUI isn't the package's (Apple's beside
+    the tree views, a core compiled in place: IsomerCore, the Playground's slim
+    reactor SwiftUI, the core's tests) takes the package's modules through a
+    configuration of its own (`one_configuration(configuration =
+    "own_swift_ui")`, e.g. `//shared/isomer_swift_ui:beside_own_swift_ui`), or
+    the package's SwiftUI, built there for another target, shadows its own.
+    Stale outputs do the same: `bazel clean` once after a module moves into
+    the package.
+  - Editing the root Package.swift needs `bazel shutdown`: the extension
+    doesn't watch a local package's manifest.
 - **A server built in a Linux container from a consumer's module** means
   that module has to resolve on Linux.
 - **C for wasm**: rules_swift's wasm cc toolchain gave compiles no clang

@@ -1,4 +1,4 @@
-load("@rules_swift//swift:swift.bzl", "swift_library")
+load("//foundation:defs.bzl", "one_configuration")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -10,11 +10,9 @@ filegroup(
 )
 
 # CoreTransferable's Transferable, as SwiftUI's pickers and drops take it.
-swift_library(
+one_configuration(
     name = "core_transferable",
-    package_name = "isomer",
-    # Apple platforms have the real one; this one would shadow it (a compiled
-    # feature's is //apple/libraries/compiled_swift_ui:core_transferable).
+    actual = "@swiftpkg_isomer//:CoreTransferable",
     target_compatible_with = select({
         "@platforms//os:macos": ["@platforms//:incompatible"],
         "@platforms//os:ios": ["@platforms//:incompatible"],
@@ -23,7 +21,4 @@ swift_library(
         "@platforms//os:visionos": ["@platforms//:incompatible"],
         "//conditions:default": [],
     }),
-    srcs = glob(["*.swift"]),
-    module_name = "CoreTransferable",
-    deps = ["//:foundation"],
 )

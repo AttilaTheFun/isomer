@@ -16,5 +16,6 @@ swift_library(
     module_name = "IsomerTree",
     visibility = ["//visibility:public"],
     deps = [
-        "//shared/isomer_swift_ui","@flatbuffers//swift"],
+        "//shared/isomer_swift_ui:beside_own_swift_ui",
+    ],
 )

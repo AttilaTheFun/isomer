@@ -52,19 +52,30 @@ def _language_feature(feature):
             return True
     return False
 
-def _clear_minimum_os_impl(settings, _attr):
+# Which build of isomer's Swift package's modules `actual` is ("" for the
+# one every application links). A build with a SwiftUI that isn't the
+# package's builds them apart ("own_swift_ui"): Apple's SwiftUI beside
+# Isomer's tree views, a core compiled in place (the Playground's slim reactor
+# SwiftUI, IsomerCore, the core's tests). The package's modules share one
+# output directory, and the package's SwiftUI, built there for an application
+# in the same build, would shadow that build's own in its compiles
+# (SwiftCompile runs unsandboxed, .bazelrc).
+_CONFIGURATION = str(Label("//foundation:configuration"))
+
+def _clear_minimum_os_impl(settings, attr):
     cleared = {option: None for option in _OPTIONS}
     cleared["//command_line_option:features"] = [
         feature
         for feature in settings["//command_line_option:features"]
         if not _language_feature(feature)
     ]
+    cleared[_CONFIGURATION] = attr.configuration or settings[_CONFIGURATION]
     return cleared
 
 _clear_minimum_os = transition(
     implementation = _clear_minimum_os_impl,
-    inputs = ["//command_line_option:features"],
-    outputs = _OPTIONS + ["//command_line_option:features"],
+    inputs = ["//command_line_option:features", _CONFIGURATION],
+    outputs = _OPTIONS + ["//command_line_option:features", _CONFIGURATION],
 )
 
 def _one_configuration_impl(ctx):
@@ -84,6 +95,9 @@ one_configuration = rule(
             cfg = _clear_minimum_os,
             mandatory = True,
             providers = [[SwiftInfo], [CcInfo]],
+        ),
+        "configuration": attr.string(
+            doc = "A build of the package's modules apart from the one applications link (`_CONFIGURATION`).",
         ),
         "_allowlist_function_transition": attr.label(
             default = "@bazel_tools//tools/allowlists/function_transition_allowlist",

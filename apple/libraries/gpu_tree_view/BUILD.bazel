@@ -33,9 +33,8 @@ swift_library(
         "//conditions:default": ["@platforms//:incompatible"],
     }),
     deps = [
-        "//shared/isomer_swift_ui",
+        "//shared/isomer_swift_ui:beside_own_swift_ui",
         "//frameworks:for_core",
-        "@flatbuffers//swift",
         "//swift_gpu/apple:swift_gpu",
     ],
     plugins = SWIFT_UI_MACROS_PLUGINS,

@@ -1,6 +1,6 @@
 load("@rules_swift//swift:swift.bzl", "swift_library")
+load("//foundation:defs.bzl", "one_configuration")
 load("@rules_swift//swift:swift_library_group.bzl", "swift_library_group")
-load("//swift_ui_macros:defs.bzl", "SWIFT_UI_MACROS_PLUGINS")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -19,31 +19,14 @@ _WASM_COPTS = [
 # unchanged.
 
 # ImageIO's decoding subset (//shared/image_io), under Apple's module name.
-swift_library(
+one_configuration(
     name = "image_io",
-    package_name = "isomer",
-    srcs = ["//shared/image_io:srcs"],
-    module_name = "ImageIO",
-    deps = ["//:foundation"],
+    actual = "@swiftpkg_isomer//:ImageIO",
 )
 
-swift_library(
+one_configuration(
     name = "core",
-    package_name = "isomer",
-    srcs = [
-        "//shared/renderers:srcs_no_gpu",
-        "//shared/swift_ui_core:srcs",
-    ],
-    copts = _WASM_COPTS,
-    module_name = "SwiftUI",
-    deps = [
-        "//shared/isomer_swift_ui",
-        ":image_io",
-        "@flatbuffers//swift",
-        "//frameworks/core_transferable",
-        "//frameworks/uniform_type_identifiers",
-    ] + ["//:foundation"],
-    plugins = SWIFT_UI_MACROS_PLUGINS,
+    actual = "@swiftpkg_isomer//:SwiftUI",
 )
 
 # The GPU renderer (SwiftGPURenderer.swift, which draws everything through
@@ -86,7 +69,6 @@ swift_library(
         "//shared/isomer_network_host",
         "//swift_ffi/swift_ffi",
         "//swift_gpu/wasm:swift_gpu",
-        "@flatbuffers//swift",
         "//:foundation",
     ],
 )
@@ -102,17 +84,9 @@ swift_library_group(
 )
 
 # PhotosUI's SwiftUI photo picker, over this SwiftUI (//frameworks).
-swift_library(
+one_configuration(
     name = "photos_ui",
-    package_name = "isomer",
-    srcs = ["//frameworks/photos_ui:srcs"],
-    copts = _WASM_COPTS,
-    module_name = "PhotosUI",
-    deps = [
-        ":swift_ui",
-        "//frameworks/core_transferable",
-        "//frameworks/uniform_type_identifiers",
-    ],
+    actual = "@swiftpkg_isomer//:PhotosUI",
 )
 
 # What an application builds against (@isomer//:swift_ui): SwiftUI, the

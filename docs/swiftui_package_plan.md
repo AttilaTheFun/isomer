@@ -57,7 +57,7 @@ reactor's no-plugin build is the likeliest to stay its own).
    plugin to its dependents, as `@isomer//swift_ffi/swift_ffi` does today, so
    applications that write `@ExportedInterface` (Visor's, Reviews',
    the Playground's) need nothing new.
-3. **Hosts out of SwiftUI.** Each host becomes a module of its own
+3. **Hosts out of SwiftUI** (done, #117-#120). Each host becomes a module of its own
    (IsomerWebHost, IsomerAndroidHost, IsomerLinuxHost, IsomerWindowsHost,
    IsomerTerminalHost, IsomerHeadlessHost), reaching the runtime's `package`
    plumbing as a module of the same package. `App.main` installs the app and
@@ -67,12 +67,14 @@ reactor's no-plugin build is the likeliest to stay its own).
    swift_ffi names generated bindings after their module (`SwiftUIBridge`
    today), so the Kotlin and JavaScript runtimes follow the bridges' new
    module names.
-4. **Renderers out of SwiftUI.** SwiftGPURenderer becomes a module over
+4. **Renderers out of SwiftUI** (the GPU renderer: done, #121; the component
+   renderers stay in SwiftUI, the same on every platform). SwiftGPURenderer becomes a module over
    SwiftUI and SwiftGPU's interface, its backend the host's to link; the
    component renderers (React, Compose: their Swift side) and the tree
    renderers likewise, so SwiftUI has no GPU dependency and the headless and
    CLI builds stop needing `srcs_no_gpu`.
-5. **The rest of the deps.** FlatBuffers' Swift runtime from SwiftPM
+5. **The rest of the deps** (done but FlatBuffers, which comes from the Bazel
+   module until protobuf replaces it in 0.45). FlatBuffers' Swift runtime from SwiftPM
    (google/flatbuffers' Package.swift, by version; its WASI and Android
    `import Foundation` answered by Isomer's Foundation, as the other packages
    are, instead of the registry patch; flatc stays a Bazel tool). ImageIO one
@@ -80,7 +82,9 @@ reactor's no-plugin build is the likeliest to stay its own).
    Linux and Windows SwiftUI as a source of the one target under
    `#if` corelibs. The map engine through the plug the flag is today.
 6. **SwiftUI, the Isomer module, PhotosUI, IsomerSwiftUI, swift_ffi's
-   runtime and macros into Package.swift.** Isomer's labels
+   runtime and macros into Package.swift** (SwiftUI, PhotosUI, IsomerSwiftUI
+   and the macros: done; the Isomer module, swift_ffi and Isomer's Metal,
+   which the web's MetalView needs, next). Isomer's labels
    (`@isomer//:swift_ui`, `:isomer`, `//swift_ffi/swift_ffi`) become wrappers
    over `@swiftpkg_isomer`, as Foundation's are. The compiled-against-Isomer
    feature builds the same target for iOS 16 in its own configuration.
