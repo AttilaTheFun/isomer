@@ -4,12 +4,6 @@
 # from run to run however the proof holds it still; each still shows in the
 # pictures, before and after.
 
-# iOS 26's glass restart button in 2048's bar, over its beige: lit one of
-# two ways per launch (the whole button, by up to 25 levels), the same
-# throughout a launch, whatever the wait, Reduce Motion or a change of
-# appearance. The Storybook's glass buttons, over white, hold still.
-ios-playground-game2048 1020 180 144 144
-
 # An indeterminate ProgressView spins for as long as it's on screen: each
 # picture catches it at another angle. Its box on each platform (Android's
 # below the status bar, which its pictures crop off).

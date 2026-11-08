@@ -3,7 +3,7 @@
 // menu bar's clock, the desktop and where macOS put the window don't count.
 // Bounds come from CoreGraphics' window list, which needs no Accessibility
 // or Screen Recording permission. Run in the GUI session
-// (`sudo launchctl asuser $(id -u runner) window_rect Storybook Playground`).
+// (`sudo launchctl asuser $(id -u runner) window_rect Storybook`).
 
 import CoreGraphics
 import Foundation

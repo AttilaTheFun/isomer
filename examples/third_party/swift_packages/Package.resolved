@@ -1,15 +1,6 @@
 {
   "pins" : [
     {
-      "identity" : "agent_ui",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/AttilaTheFun/agent_ui.git",
-      "state" : {
-        "revision" : "05df0071c165c930056af28252e45dcd39ad9572",
-        "version" : "0.39.1"
-      }
-    },
-    {
       "identity" : "grpc-swift-2",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/grpc/grpc-swift-2.git",
@@ -34,15 +25,6 @@
       "state" : {
         "revision" : "176c5a434fd76f6f479848d1a8f7d44967534168",
         "version" : "2.4.1"
-      }
-    },
-    {
-      "identity" : "open_router_cli",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/AttilaTheFun/open_router_cli.git",
-      "state" : {
-        "revision" : "e059c0cdf4422e4bdb15861c1211d25ec4bc5967",
-        "version" : "0.5.0"
       }
     },
     {

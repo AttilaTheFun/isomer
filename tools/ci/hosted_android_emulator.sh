@@ -4,9 +4,7 @@
 # (tools/ci/hosted_android_test.sh) and pictures (tools/ci/proof.sh): the
 # runner's Android SDK's emulator, an x86_64 Android 15 (the AOSP image)
 # shaped as OS Server's android leases are (1080×2400, 420 dpi), so its
-# pictures and theirs compare (the proof's Android Playground is taken on
-# one), its status bar held
-# still by SystemUI's demo mode. It boots, and stays running for the rest
+# pictures and theirs compare, its status bar held still by SystemUI's demo mode. It boots, and stays running for the rest
 # of the job; its serial is written to <serial file>. (Not printed: a
 # caller's `$(…)` would wait for the emulator and adb's server, which keep
 # the output open, to end.)

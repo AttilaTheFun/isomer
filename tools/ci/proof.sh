@@ -1,6 +1,6 @@
 #!/bin/bash
-# Isomer's proof, from CI: its two apps (the Storybook, the Playground) on
-# its tier-1 platforms (PLATFORMS below), each with its one renderer (SwiftUI
+# Isomer's proof, from CI: the Storybook (the Playground's is
+# AttilaTheFun/playground's since 0.47) on its tier-1 platforms (PLATFORMS below), each with its one renderer (SwiftUI
 # on iOS and the Mac, Compose on Android, React on the web), pictured on machines leased from OS Server (tools/proof/proof.py),
 # each picture compared with the base's, and the `proof` artifact Reviews
 # reads made of them (tools/ci/proof_compare.swift).
@@ -14,9 +14,10 @@
 #   --stage build --apps <dir> --review <dir>
 #       (CI's container) every app built into <apps>/<platform>/ (the
 #       Android Storybook for x86_64, in <apps>/hosted/android/, for the
-#       Ubuntu runner's emulator), and the Android Playground pictured here,
-#       on an emulator leased from OS Server, into <review>: its compiler,
-#       built into the app, is arm64's alone
+#       Ubuntu runner's emulator)
+#   --stage prebuild --apps <dir> --review <dir>
+#       (main's populate) the same builds, nothing pictured: so a release's
+#       proof finds its actions in Bazel's cache
 #   --stage shoot --platform ios|macos|android|web --apps <dir> --review <dir>
 #       (GitHub's runner: `xcode-27` for the iPhone and the Mac, Ubuntu for
 #       Android and the web) one platform's apps pictured on that machine
@@ -27,9 +28,8 @@
 #
 # Run only by hand (the Build workflow's workflow_dispatch), to propose a
 # release or, after the fact, to bisect a regression. full: every story.
-# quick: both apps still built on every platform, a core set of stories
-# (and every story in a story file a branch touches), and the Playground's
-# screens.
+# quick: the app still built on every platform, a core set of stories
+# (and every story in a story file a branch touches).
 #
 # The baseline is the base's pictures, never the change's own:
 #   a commit on main (run on main, or on a branch pushed at a commit of
@@ -49,7 +49,7 @@
 #
 # The proof, in <dir>:
 #   screens/<name>.png  every picture: <platform>-<app>-<screen>
-#                       (ios-storybook-navigation.links, web-playground-pokedex)
+#                       (ios-storybook-navigation.links)
 #   before/<name>.png   the baseline's picture of each that changed
 #   diffs/<name>.png    each that changed, its changed pixels red
 #   proof.json          {"commit", "ref", "kind", "run", "base": {"ref", "commit"},
@@ -65,9 +65,7 @@
 # Server's files; Android's, the web's, its pictures in Chrome for Testing
 # there), or on a Mac with its Xcode and Chrome when run by hand there.
 # Linux's (when PROOF_PLATFORMS names it) are packaged in a container leased
-# from OS Server; Windows' are built on its VM. The Playground's compilers that Bazel doesn't make:
-# the iPhone simulator's, Android's, the Mac's and the browser's, staged
-# from OS Server's files (tools/ci/stage_playground_compilers.sh).
+# from OS Server; Windows' are built on its VM.
 #
 #   PROOF_REF           the ref the proof is of (default: GITHUB_REF, else the branch)
 #   PROOF_PYTHON        the python3 that runs proof.py, with Pillow, which crops
@@ -201,12 +199,10 @@ compare() {
         done
     done
     for platform in $PLATFORMS; do
-        for app in storybook playground; do
-            if ! ls "$work/pictures/$platform-$app-"*.png > /dev/null 2>&1; then
-                echo "::error::no picture of $platform's $app"
-                status=1
-            fi
-        done
+        if ! ls "$work/pictures/$platform-storybook-"*.png > /dev/null 2>&1; then
+            echo "::error::no picture of $platform's Storybook"
+            status=1
+        fi
     done
     "$work/proof_compare" "$work/pictures" "$baseline" "$proof" --commit "$commit" --ref "$ref" --kind "$kind" \
         ${GITHUB_RUN_ID:+--run "$GITHUB_RUN_ID"} ${base_ref:+--base-ref "$base_ref"} ${base_commit:+--base-commit "$base_commit"} \
@@ -216,27 +212,17 @@ compare() {
     phase "done: $(ls "$proof/screens" | wc -l | tr -d ' ') pictures"
 }
 
-# --stage build: every app built for the stages that picture them
-# elsewhere, and the Android Playground pictured here (its compiler, built
-# into the app, is arm64's alone, and GitHub's runners with KVM are x86_64).
-build_apps() {
+# --stage build (and prebuild): every app built for the stages that
+# picture them elsewhere.
+build() {
     echo "::group::The apps, built (tools/proof/proof.py --build-to)"
     background "$python" -u "$ROOT/tools/proof/proof.py" ios macos web --build-to "$apps" --review "$review" \
-        --commit "$commit" --web-toolchain "$web_toolchain" || { echo "::error::the apps didn't build"; exit 1; }
+        --commit "$commit" || { echo "::error::the apps didn't build"; exit 1; }
     background "$python" -u "$ROOT/tools/proof/proof.py" android --apps storybook --android-abi x86_64 \
         --build-to "$apps/hosted" --review "$review" --commit "$commit" ||
         { echo "::error::the Android Storybook (x86_64) didn't build"; exit 1; }
     echo "::endgroup::"
     phase "built"
-}
-
-build() {
-    build_apps
-    echo "::group::The Android Playground, on an emulator leased from OS Server"
-    background "$python" -u "$ROOT/tools/proof/proof.py" android --apps playground --review "$review" --commit "$commit" \
-        ${quick[@]+"${quick[@]}"} || { echo "::error::the Android Playground: a build failed or a picture didn't come back"; exit 1; }
-    echo "::endgroup::"
-    phase "the Android Playground pictured"
 }
 
 # --stage shoot, before anything else: what the platform's machine needs.
@@ -284,12 +270,11 @@ shoot_setup() {
 
 # --stage shoot: the platform's apps pictured on this machine.
 shoot() {
-    local from="$apps" only=()
-    # The Android Storybook alone (x86_64): its Playground was pictured in
-    # the build stage.
-    if [ "$platform" = android ]; then from="$apps/hosted"; only=(--apps storybook); fi
+    local from="$apps"
+    # Android's for x86_64, the runner's.
+    [ "$platform" != android ] || from="$apps/hosted"
     echo "::group::$platform's apps, pictured here (tools/proof/proof.py --here)"
-    background "$python" -u "$ROOT/tools/proof/proof.py" "$platform" --here --from "$from" ${only[@]+"${only[@]}"} \
+    background "$python" -u "$ROOT/tools/proof/proof.py" "$platform" --here --from "$from" \
         --review "$review" --commit "$commit" ${quick[@]+"${quick[@]}"} ||
         { echo "::error::$platform: a picture didn't come back"; exit 1; }
     echo "::endgroup::"
@@ -322,7 +307,7 @@ elif [ -n "$inside" ]; then
     [ -n "$host" ] || { echo "::error::no host for OS Server's files: set OSS_FILES_HOST (or OSS_SERVERS)"; exit 1; }
     echo "::group::The container's tools"
     root_do() { if [ "$(id -u)" = 0 ]; then "$@"; else sudo "$@"; fi; }
-    # gh (the baseline, the release site); Python with Pillow for proof.py;
+    # gh (the baseline); Python with Pillow for proof.py;
     # what Chrome for Testing loads; unzip.
     packages=(gh git python3 python3-pil unzip libnss3 libasound2t64 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2
               libpango-1.0-0 libcairo2 libcups2t64 libdrm2 libgbm1 fonts-dejavu-core)
@@ -330,7 +315,7 @@ elif [ -n "$inside" ]; then
         { root_do apt-get update -qq > /dev/null &&
           root_do env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends "${packages[@]}" > /dev/null; }
     # The Apple targets' toolchains and SDK archive (OS Server's files),
-    # for every Bazel command in the examples (proof.py's, package_site.sh's).
+    # for every Bazel command in the examples (proof.py's).
     sdk="$(sed -n 's/^SDK_SHA256="\(.*\)"/\1/p' "$ROOT/tools/ci/container_build.sh")"
     cat > "$work/downloader.cfg" <<EOF2
 rewrite apple-sdks\.invalid/.* http://$host:7490/files/sha256/$sdk
@@ -363,26 +348,8 @@ if stages shoot; then
     exit 0
 fi
 
-if stages all build prebuild; then
-echo "::group::The Playground's compilers"
-# The staged compilers from OS Server's files, unpacked where the apps'
-# BUILD files find them (the checkout's gitignored folders).
-"$ROOT/tools/ci/stage_playground_compilers.sh" ios-simulator android macos web
-web_toolchain="$ROOT/examples/playground/web/playground_web_application/staged_toolchain"
-[ -f "$web_toolchain/manifest.json" ] || { echo "::error::no browser compiler staged at $web_toolchain"; exit 1; }
-echo "::endgroup::"
-phase "compilers staged"
-fi
-
-if stages build; then
+if stages build prebuild; then
     build
-    exit 0
-fi
-# --stage prebuild (main's populate): the apps built as the build stage builds
-# them, and nothing pictured or leased, so a release's proof finds its
-# actions in the cache.
-if stages prebuild; then
-    build_apps
     exit 0
 fi
 
@@ -478,14 +445,9 @@ if [[ " $PLATFORMS " == *" linux "* ]]; then
     root=$1 out=$2
     cd "$root/examples"
     bazel build -c opt --experimental_convenience_symlinks=ignore \
-        //linux/storybook_linux_application:storybook_linux_application_bin \
-        //playground/linux/playground_linux_application:playground_linux_application_bin \
-        //playground/linux/playground_linux_application:playground_wasm_loader \
-        //playground/shared/compiler:toolchain //playground/apple/playground_ios_application:playground_sdk
+        //linux/storybook_linux_application:storybook_linux_application_bin
     linux/storybook_linux_application/package.sh /root/storybook-linux -c opt
-    playground/linux/playground_linux_application/package.sh /root/playground-linux -c opt
     tar -czf "$out/storybook-linux.tgz" -C /root storybook-linux
-    tar -czf "$out/playground-linux.tgz" -C /root playground-linux
     '
     background oss machine run container --image="$IMAGE" --cpus=6 --memory=16 \
         --mount="$ROOT:$ROOT" --volume="isomer-proof-${GITHUB_RUN_ID:-$$}:/var/cache/bazel:128" --inside --cache="$host" -- \
@@ -499,7 +461,7 @@ echo "::group::The apps on every platform (tools/proof/proof.py)"
 status=0
 # shellcheck disable=SC2086
 background "$python" -u "$ROOT/tools/proof/proof.py" $PLATFORMS --review "$work/review" --commit "$commit" \
-    --web-toolchain "$web_toolchain" ${linux_packages[@]+"${linux_packages[@]}"} ${quick[@]+"${quick[@]}"} \
+    ${linux_packages[@]+"${linux_packages[@]}"} ${quick[@]+"${quick[@]}"} \
     || { echo "::error::tools/proof/proof.py: a build failed or a picture didn't come back"; status=1; }
 echo "::endgroup::"
 phase "pictured"

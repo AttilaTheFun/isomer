@@ -8,10 +8,10 @@
 # copied in at each run; Bazel's output and downloads stay on a kept volume
 # between runs.
 #
-#   tools/linux/build.sh                       # //linux/... in isomer, and in examples (the Playground's too)
+#   tools/linux/build.sh                       # //linux/... in isomer, and in examples
 #   tools/linux/build.sh <targets>             # in isomer's root module
 #   tools/linux/build.sh --module examples [--after '<command>'] [--out <path> <dir>] <targets>
-#                                              # in that module (the Storybook, the Playground); then
+#                                              # in that module (the Storybook); then
 #                                              # <command> there, in the container (packaging
 #                                              # what was built), and <path> in its home
 #                                              # copied out to <dir> here
@@ -132,7 +132,7 @@ if [ "${1:-}" = --in-lease ]; then
     elif [ $# -gt 0 ]; then
         command="cd /work/isomer && bazel build $flags $targets"
     else
-        command="cd /work/isomer && bazel build $flags //linux/... && cd examples && bazel build $flags //linux/... //playground/linux/..."
+        command="cd /work/isomer && bazel build $flags //linux/... && cd examples && bazel build $flags //linux/..."
     fi
     # A fresh copy of the checkout each run (files deleted here go there
     # too), in the container's own /work; every bazel there (a packaging

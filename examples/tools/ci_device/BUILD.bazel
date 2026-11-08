@@ -2,8 +2,8 @@ load("@isomer_signing//:signing.bzl", "TEAM_ID")
 
 package(default_visibility = ["//visibility:public"])
 
-# CI's device build of the Storybook's and the Playground's iPhone and iPad
-# apps (--config=ci_device, .bazelrc), as Reviews' is: CI holds no profile of
+# CI's device build of the Storybook's iPhone and iPad app
+# (--config=ci_device, .bazelrc), as Reviews' is: CI holds no profile of
 # the team's, so it signs ad hoc (--ios_signing_cert_name=-) with this
 # placeholder, which allows what the apps' entitlements ask for (their own
 # app ID and keychain group, and Applications' app group). Applications

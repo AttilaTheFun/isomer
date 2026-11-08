@@ -1,38 +1,41 @@
 # Isomer's CI, by the owner's policy for protected repositories
-# (AttilaTheFun/reviews' docs/CI_POLICY.md, 2026-11-07):
-#
-# Automated CI builds every target on Linux and runs no tests (the owner,
-# 2026-11-07): tests and the proof run only by hand, to propose a release or
-# to bisect a regression.
+# (AttilaTheFun/reviews' docs/CI_POLICY.md) and the shape the owner set on
+# 2026-11-08: the tests without a GUI before a merge, every build after
+# one, the GUI tests and the proof by hand to propose a release, on
+# GitHub's own runners. No slot of OS Server's primary VM: those are for
+# private repositories' GUI tests.
 #
 # - container (every pull request from a branch of this repository: a
-#   self-hosted runner never runs a fork's code): every target built in one
-#   Linux container on OS Server's on-demand runners (tools/ci/
-#   container_build.sh all: every platform's Storybook, the Apple ones with
-#   rules_applecross, and the tests' targets, none run), reading OS Server's
-#   Bazel cache and never writing it, and leasing nothing. The required
-#   check. A newer push cancels its run.
-# - populate (each commit on main): the same build of the merged tree: the
-#   one job that writes OS Server's Bazel cache (OS Server's ci.populate
-#   names it), so a later pull request's build is mostly hits.
+#   self-hosted runner never runs a fork's code): every platform's
+#   Storybook built in one Linux container on OS Server's on-demand runners
+#   (tools/ci/container_build.sh pr: the Apple ones with rules_applecross),
+#   then every test without a GUI: the core's, the web's in headless Chrome,
+#   the Storybook's headless UI tests and the remote-driving tests. It reads
+#   OS Server's Bazel cache, never writes it, and leases nothing. The
+#   required check. A newer push cancels its run.
+# - populate (each commit on main): the merged tree built (container_build.sh
+#   all), and what a release builds (the published apps as alpha builds
+#   them, the proof's apps): the one job that writes OS Server's Bazel cache
+#   (OS Server's ci.populate names it), so a later pull request's build, and
+#   a release's, is mostly hits.
 # - By hand (workflow_dispatch, `run:`):
-#   - verify: the tests: the core's and the web's in the build container,
-#     the iPhone's and the Mac's on OS Server's leases (a private copy's
-#     Android's too: tools/ci/platform_tests.sh), and a public one's
-#     Android's on GitHub's own Ubuntu runner (android: an emulator on its
-#     KVM, free); and beside them the proof: the Storybook
-#     and the Playground on every platform, built in CI's container,
-#     pictured on GitHub's own machines (a private copy's on OS Server's),
-#     each picture compared with the previous release's, uploaded as the
-#     `proof` artifact Reviews reads (proof, proof-shoot, proof-compare;
-#     tools/ci/proof.sh). The full set by default; `kind: quick` the core
-#     set. On a commit of main, or, to bisect a regression, on a branch
-#     pushed at an earlier one;
+#   - verify: the GUI tests: everything built in the container, then the
+#     Storybook's test stories on GitHub's own runners (apple: the iPhone's
+#     simulator and the Mac on `xcode-27`; android: an emulator under
+#     Ubuntu's KVM; windows: windows-11-arm, tier 2, not waited for; a
+#     private copy on OS Server's leases instead); and beside them the
+#     proof: the Storybook on every tier-1 platform, built in CI's
+#     container, pictured on GitHub's own machines (a private copy's on OS
+#     Server's), each picture compared with the previous release's,
+#     uploaded as the `proof` artifact Reviews reads (proof, proof-shoot,
+#     proof-compare; tools/ci/proof.sh). The full set by default; `kind:
+#     quick` the core set. On a commit of main, or, to bisect a regression,
+#     on a branch pushed at an earlier one;
 #   - prerelease (main): alpha alone: its version asked of Applications
-#     Server, the Storybook and the Playground built for the iPhone and iPad
-#     (.ipa), the Mac (.zip) and Android (.apk) as Alphas, published (the
-#     server signs the Apple ones, and notarizes the Mac's), and a draft
-#     release marked pre-release (tools/ci/draft_release.sh). No tests;
+#     Server, the Storybook built for the iPhone and iPad (.ipa), the Mac
+#     (.zip) and Android (.apk) as Alphas, published (the server signs the
+#     Apple ones, and notarizes the Mac's), the web site packaged, and a
+#     draft release marked pre-release (tools/ci/draft_release.sh). No tests;
 #   - release (main): verify and the proof, then, only once they pass,
 #     alpha, and a draft release proposed for release, naming this run;
 #   - adhoc (a branch other than main or a release branch): the apps built
@@ -44,8 +47,10 @@
 #   (tools/ci/verified.sh), its iPhone's and Mac's Alphas promoted to
 #   production by the server (nothing Apple rebuilt), Android's built for
 #   production and published, and the release given its assets: the proof,
-#   the Mac apps' disk images, the Android apps and the iPhone apps for the
+#   the Mac app's disk image, the Android app and the iPhone app for the
 #   simulator. A pre-release is never released so.
+# The Playground was isomer's until 0.47; it is AttilaTheFun/playground's,
+# with CI of the same shape.
 # No signing key, notary key or password here: the publishing jobs' OIDC
 # token says where their builds came from, and which commit's version they
 # are given (the private AttilaTheFun/applications' docs/CI.md).
@@ -82,27 +87,20 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read
-# What the publishing jobs build, each with its own --config: the Storybook's
-# and the Playground's iPhone and iPad apps (device builds, signed ad hoc with
-# a placeholder profile by --config=ci_device, which the server signs again
-# with the bundle id's own), Mac apps and Android apps (their android_binary,
-# whose signed .apk is published), optimized, as they ship. Flags as
-# --name=value (tools/ci/container_build.sh package).
-# The Playground's compilers come staged from OS Server's files (each job's
-# "The Playground's compilers", tools/ci/stage_playground_compilers.sh): the
-# iPhone's links the device's in (--define=iso_playground_embedded=1, which
-# nothing else reads), the Mac's Resources take the Mac's staged one (built
-# in the Linux container, the building machine's compiler would be Linux's:
-# shared/compiler/toolchain.bzl), and the APK carries Android's.
+# What the publishing jobs build, each with its own --config: the
+# Storybook's iPhone and iPad app (a device build, signed ad hoc with a
+# placeholder profile by --config=ci_device, which the server signs again
+# with the bundle id's own), Mac app and Android app (its android_binary,
+# whose signed .apk is published), optimized, as they ship, and the web
+# site (isomer-site.tar.gz, which the release carries and pages.yml
+# deploys). Flags as --name=value (tools/ci/container_build.sh package).
 env:
   PUBLISHED_APPS: >-
-    --config=ci_device --compilation_mode=opt --define=iso_playground_embedded=1
+    --config=ci_device --compilation_mode=opt
     //apple/storybook_ios_application:storybook_ios_application
     //apple/storybook_macos_application:storybook_macos_application
     //android/storybook_android_application:storybook_android_application_apk
-    //playground/apple/playground_ios_application:playground_ios_application
-    //playground/apple/playground_macos_application:playground_macos_application
-    //playground/android/playground_android_application:playground_android_application_apk
+    //web/storybook_web_application:isomer_site
 
 jobs:
   container:
@@ -147,8 +145,6 @@ jobs:
       # What a release builds, built here too, so its jobs find their actions
       # in the cache: the published apps as alpha builds them (unstamped:
       # only what the version reaches differs), and the proof's apps.
-      - name: The Playground's compilers
-        run: tools/ci/stage_playground_compilers.sh ios-device ios-simulator macos android web
       - name: The published apps, built into the cache
         run: exec tools/ci/container_build.sh package .ci/packages --config=alpha $PUBLISHED_APPS
       - name: The proof's apps, built into the cache
@@ -290,11 +286,9 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release')
     # OS Server's single-use Linux containers, as the build's: the apps built
     # in it (rules_applecross for the Apple ones). A public repository's are
-    # then pictured on GitHub's own machines (the proof-* jobs below), but
-    # the Android Playground, pictured here on an emulator leased from OS
-    # Server (its compiler is arm64's alone; GitHub's runners with KVM are
-    # x86_64). A private copy pictures everything here, on machines it
-    # leases, the web in Chrome for Testing in this container.
+    # then pictured on GitHub's own machines (the proof-* jobs below). A
+    # private copy pictures everything here, on machines it leases, the web
+    # in Chrome for Testing in this container.
     runs-on: [self-hosted, isomer-jit]
     concurrency:
       group: isomer-proof-${{ github.ref }}
@@ -329,7 +323,7 @@ jobs:
           name: proof
           path: ${{ runner.temp }}/proof
           retention-days: 90
-      - name: The apps built, and the Android Playground pictured
+      - name: The apps built
         if: ${{ !github.event.repository.private }}
         run: exec tools/ci/proof.sh --stage build --kind "$PROOF_KIND" --apps "$RUNNER_TEMP/proof-apps" --review "$RUNNER_TEMP/proof-review"
       - uses: actions/upload-artifact@v4
@@ -448,8 +442,8 @@ jobs:
     # stamped in (tools/ci/stamp_apps.sh), the apps built in a Linux
     # container (tools/ci/container_build.sh package), the Mac apps' icons
     # checked for the dark appearance, published (tools/ci/publish_from_ci.sh;
-    # the server signs the Apple ones and notarizes the Mac's), the web site
-    # packaged, and the draft release made (tools/ci/draft_release.sh).
+    # the server signs the Apple ones and notarizes the Mac's), and the draft
+    # release made with the web site (tools/ci/draft_release.sh).
     needs: [verify, apple, android, proof, proof-compare]
     if: >-
       always() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
@@ -477,12 +471,6 @@ jobs:
         env:
           APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
         run: tools/ci/stamp_apps.sh
-      # The Playground's compilers from OS Server's files, into the
-      # checkout's gitignored folders: the iPhone's (linked into the
-      # device's app), the Mac's (its Resources'), Android's (the APK's) and
-      # the browser's (the site's).
-      - name: The Playground's compilers
-        run: tools/ci/stage_playground_compilers.sh ios-device macos android web
       # Bazel's tree a volume of the publishing jobs' own, kept between runs.
       # exec: the runner's cancel reaches oss, which ends the build.
       - name: Build
@@ -498,21 +486,13 @@ jobs:
         env:
           APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
         run: tools/ci/publish_from_ci.sh --notes-file "$RUNNER_TEMP/notes.md" .ci/packages/*.zip .ci/packages/*.ipa .ci/packages/*.apk
-      # The web site the release carries, which pages.yml deploys when it's
-      # published: stamped with the version above, its in-browser compiler
-      # the one staged from OS Server's files.
-      - name: The site
-        run: >-
-          cd examples/playground && tools/playground/package_site.sh
-          --toolchain-from web/playground_web_application/staged_toolchain
-          --out "$GITHUB_WORKSPACE/.ci/isomer-site.tar.gz"
       - name: The draft release
         env:
           GH_TOKEN: ${{ github.token }}
           KIND: ${{ inputs.run }}
         run: |
-          version="$(sed -n '/CFBundleShortVersionString/{n;s/.*<string>\(.*\)<\/string>.*/\1/p;}' examples/playground/apple/playground_ios_application/Info.plist)"
-          tools/ci/draft_release.sh "$version" "$KIND" .ci/isomer-site.tar.gz
+          version="$(sed -n '/CFBundleShortVersionString/{n;s/.*<string>\(.*\)<\/string>.*/\1/p;}' examples/apple/storybook_ios_application/Info.plist)"
+          tools/ci/draft_release.sh "$version" "$KIND" .ci/packages/isomer-site.tar.gz
 
   # AdHoc: a branch built by hand (workflow_dispatch with run: adhoc, on a
   # branch that is neither main nor a release branch), the apps built as
@@ -534,8 +514,6 @@ jobs:
         env:
           APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
         run: tools/ci/stamp_apps.sh
-      - name: The Playground's compilers
-        run: tools/ci/stage_playground_compilers.sh ios-device macos android
       - name: Build
         env:
           ISOMER_CI_VOLUME: isomer-ci-publish
@@ -557,8 +535,8 @@ jobs:
   # builds the owner tested) are promoted by Applications Server, stamped
   # Production and signed again (tools/ci/promote_from_ci.sh). Android's
   # are built for production and published, the server signing none. The
-  # release then carries its proof, the Mac apps' disk images, the Android
-  # apps and the iPhone apps for the simulator (tools/ci/release_assets.sh).
+  # release then carries its proof, the Mac app's disk image, the Android
+  # app and the iPhone app for the simulator (tools/ci/release_assets.sh).
   release:
     if: github.event_name == 'release' && !github.event.release.prerelease
     runs-on: [self-hosted, isomer-jit]
@@ -604,15 +582,12 @@ jobs:
         env:
           APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
         run: tools/ci/stamp_apps.sh
-      - name: The Playground's compilers
-        run: tools/ci/stage_playground_compilers.sh ios-simulator android
       - name: Android's, for production
         env:
           ISOMER_CI_VOLUME: isomer-ci-publish
         run: >-
           tools/ci/container_build.sh package .ci/android --config=prod --compilation_mode=opt
           //android/storybook_android_application:storybook_android_application_apk
-          //playground/android/playground_android_application:playground_android_application_apk
       - name: Android's, published
         env:
           APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
@@ -623,7 +598,6 @@ jobs:
         run: >-
           tools/ci/container_build.sh package .ci/simulator --compilation_mode=opt --ios_multi_cpus=sim_arm64
           //apple/storybook_ios_application:storybook_ios_sim_application
-          //playground/apple/playground_ios_application:playground_ios_sim_application
       - name: The release's assets
         env:
           GH_TOKEN: ${{ github.token }}

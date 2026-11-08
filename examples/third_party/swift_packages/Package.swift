@@ -1,10 +1,9 @@
 // swift-tools-version: 5.9
 // The SwiftPM manifest rules_swift_package_manager consumes for every
-// example and the Playground. SwiftProtobuf provides protoc-gen-swift + the
-// runtime and the grpc-swift-2 family the transport for the proto greeter;
-// AgentUI the Playground's agent chat page (AgentView), the same SwiftUI
-// source the iOS Playground builds against Apple's SwiftUI and the web and
-// Android Playgrounds against Isomer's.
+// example. SwiftProtobuf provides protoc-gen-swift + the runtime and the
+// grpc-swift-2 family the transport for the proto greeter. (AgentUI and
+// OpenRouterKit were the Playground's, which moved to AttilaTheFun/playground
+// in 0.47.)
 import PackageDescription
 
 let package = Package(
@@ -22,15 +21,7 @@ let package = Package(
         // SQLite: its C API and the Swift layer over it (the files probe and
         // the WASI check).
         .package(url: "https://github.com/AttilaTheFun/swift_sql.git", exact: "0.35.0"),
-        // AgentUI 0.39.0, whose Markdown is a product of its own
-        // (MarkdownViews), shared with the other apps that render Markdown.
-        .package(url: "https://github.com/AttilaTheFun/agent_ui.git", exact: "0.39.1"),
-        // OpenRouterKit (the OpenRouter client, agent loop and coding
-        // tools), the library behind the openrouter CLI; shared with
-        // Visor. The Playground's own OpenRouter loop is to move onto it.
-        .package(url: "https://github.com/AttilaTheFun/open_router_cli.git", exact: "0.5.0"),
-        // UpdateKit: the Storybook's and the Playground's iPhone and Mac
-        // apps write the build they are (version and BuildVariant) for
+        // UpdateKit: the Storybook's iPhone and Mac apps write the build they are (version and BuildVariant) for
         // Applications at each launch, and are told of newer ones.
         // (ApplicationUpdates in AttilaTheFun/applications until 0.10.45.)
         .package(url: "https://github.com/AttilaTheFun/update_kit.git", exact: "0.11.0"),

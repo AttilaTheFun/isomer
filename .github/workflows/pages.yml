@@ -1,21 +1,17 @@
 # Deploys Isomer's web site to GitHub Pages (https://attilathefun.github.io/isomer/):
-# the front page at the root, the web Playground under playground/ and the
-# Playground's in-browser Swift toolchain under playground/toolchain/
-# (examples/playground/docs/playground_web.md, "Publishing").
+# the web Storybook at the root. (The Playground's site, here under
+# playground/ until 0.47, is AttilaTheFun/playground's own since it moved.)
 #
 # The site is not built here. It is the `isomer-site.tar.gz` asset of a
-# GitHub release, made by examples/playground/tools/playground/package_site.sh (a
-# Bazel `-c opt` build of //web/splash_web_application:site plus the staged
-# toolchain) and attached with `gh release upload <tag> isomer-site.tar.gz`.
-# Compiled output never goes into git: the site is over 100 MB with the
-# compiler, and building it needs the compiler built by
-# examples/playground/tools/browser_toolchain, which no runner has.
+# GitHub release, the Build workflow's alpha job's build of
+# //web/storybook_web_application:isomer_site (in the examples), attached
+# to the draft release it makes. Compiled output never goes into git.
 #
 # On GitHub's own runner for this public repository (OS Server's single-use
 # Linux containers for a private copy), with curl and tar alone: the asset comes from the
 # release's public download URL (no gh), and the Pages artifact is made
 # here, the plain tar upload-pages-artifact would make. The site is already
-# dereferenced (package_site.sh), so tar archives it as is.
+# dereferenced (its genrule's tar -h), so tar archives it as is.
 #
 # Runs when a release is published (attach the asset to the draft before
 # publishing it), or by hand for any release that carries one:
@@ -63,7 +59,7 @@ jobs:
           curl -fsSL --retry 3 -o isomer-site.tar.gz "https://github.com/$GITHUB_REPOSITORY/releases/$path/isomer-site.tar.gz"
           mkdir site
           tar -xzf isomer-site.tar.gz -C site
-          test -f site/index.html && test -f site/playground/toolchain/manifest.json
+          test -f site/index.html && test -f site/app_bridge.js
       # What upload-pages-artifact makes: the site as one plain tar,
       # artifact.tar, in an artifact named github-pages, which deploy-pages
       # takes. On a Mac (run by hand there), COPYFILE_DISABLE and

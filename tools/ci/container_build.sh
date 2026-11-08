@@ -56,7 +56,8 @@
 # opt): every argument that doesn't start with "-" is taken for a target.
 # An Android app's files are its signed .apk (published as signed by its
 # build: Applications Server keeps no Android key), its unsigned one and its
-# deploy jar; only the first is copied.
+# deploy jar; only the first is copied. A .tar.gz (the web site) is copied
+# as is.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 IMAGE="${ISOMER_CI_IMAGE:-$(cat "$ROOT/tools/ci/agent_image")}"
@@ -143,7 +144,7 @@ if [ "$mode" = package ]; then
     for file in $files; do
         case "$file" in
             *_unsigned.apk) ;;
-            *.ipa | *.zip | *.apk) cp "$exec_root/$file" "$out/" || exit ;;
+            *.ipa | *.zip | *.apk | *.tar.gz) cp "$exec_root/$file" "$out/" || exit ;;
         esac
     done
     ls -l "$out"

@@ -1,4 +1,4 @@
-# The patches only a root module's overrides apply: the Playground's
-# rules_swift_package_manager patch for Windows, hermetic_android_toolchains'
+# The patches only a root module's overrides apply:
+# rules_swift_package_manager's patch for Windows, hermetic_android_toolchains'
 # for Linux hosts of any CPU, and rules_applecross' (applecross/).
 exports_files(glob(["*.patch"]))

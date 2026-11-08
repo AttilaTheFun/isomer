@@ -30,7 +30,7 @@ previous="$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD^ 2> /dev/null 
         echo "Isomer $version, a pre-release made by run $run on $sha (no tests or proof)."
     fi
     echo
-    echo "Alphas: the Storybook and the Playground $version for the iPhone, the Mac and Android, in Applications."
+    echo "Alphas: the Storybook $version for the iPhone, the Mac and Android, in Applications."
     if [ -n "$previous" ]; then
         echo
         echo "## Changes since $previous"

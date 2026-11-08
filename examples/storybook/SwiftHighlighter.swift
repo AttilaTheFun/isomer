@@ -1,8 +1,8 @@
 // Colours a story's Swift as the Playground's editor does: keywords, types,
 // strings (their interpolations left plain), comments, numbers, and
 // attributes and directives (`@State`, `#if`), in Xcode's palettes, the
-// dark one in dark appearance. The Playground's lexer
-// (playground/apple/playground_ios_application/CodeEditor.swift) in plain
+// dark one in dark appearance. The Playground's lexer (AttilaTheFun/
+// playground's apple/playground_ios_application/CodeEditor.swift) in plain
 // Swift, so it runs on every platform: the result is a Text a line, its
 // tokens' coloured Texts interpolated into it (not an AttributedString,
 // whose colours an app compiled against Isomer's frameworks on an Apple
