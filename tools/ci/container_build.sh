@@ -10,11 +10,12 @@
 #
 #   tools/ci/container_build.sh [<bazel build args>…]   # default: every platform's Storybook
 #   tools/ci/container_build.sh all   # everything the checks build, built,
-#                                     # and nothing run or copied: the
-#                                     # automated CI's (a pull request's
-#                                     # container, main's populate, the Bazel
-#                                     # cache's one writer: OS Server grants
-#                                     # that job the write)
+#                                     # and only the headless tests run
+#                                     # (examples' //headless), nothing
+#                                     # copied: the automated CI's (a pull
+#                                     # request's container, main's populate,
+#                                     # the Bazel cache's one writer: OS
+#                                     # Server grants that job the write)
 #   tools/ci/container_build.sh package <dir> <bazel build args>…
 #                                     # the build, then the targets' packages
 #                                     # (.ipa, a Mac app's .zip, the signed
@@ -165,6 +166,12 @@ built_tests=$?
 run_tests "${flags[@]}" --test_output=errors //tests/platforms:storybook_web_test //tests/foundation_networking:networking_test \
     //tests/cxx_interop:cxx_interop_test
 tested_here=$?
+# The headless tests: the Storybook built for the headless host and driven
+# through its runtime (//headless in the examples), nothing drawn. Run in
+# every mode, the automated builds included: seconds in a container (the
+# owner, 2026-11-07).
+bazel test "${flags[@]}" --@isomer//headless --test_output=errors //headless/...
+headless=$?
 cd "$root"
 bazel build //swift_gpu/linux:gl_backend_test
 built_gl=$?
@@ -178,7 +185,7 @@ if [ "$mode" = all ]; then
     built_x86=0
     [ -z "${ISOMER_ANDROID_X86_64:-}" ] || bazel build "${flags[@]}" --android_platforms=@rules_android//:x86_64 \
         //android/storybook_android_application:storybook_android_application_apk || built_x86=1
-    for result in $built $built_windows $built_tests $tested_here $built_gl $checked $built_x86; do [ "$result" -ne 0 ] && exit "$result"; done
+    for result in $built $built_windows $built_tests $tested_here $headless $built_gl $checked $built_x86; do [ "$result" -ne 0 ] && exit "$result"; done
     exit 0
 fi
 # The apps tested elsewhere, for tools/ci/platform_tests.sh.
@@ -214,7 +221,7 @@ if [ -n "${ISOMER_ANDROID_X86_64:-}" ]; then
 fi
 chmod -R a+rwX "$platforms"
 ls -l "$platforms"
-for result in $built $built_windows $built_tests $tested_here $built_gl $checked $built_x86; do [ "$result" -ne 0 ] && exit "$result"; done
+for result in $built $built_windows $built_tests $tested_here $headless $built_gl $checked $built_x86; do [ "$result" -ne 0 ] && exit "$result"; done
 exit 0
 '
 

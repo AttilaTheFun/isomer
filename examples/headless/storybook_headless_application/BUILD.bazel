@@ -1,0 +1,35 @@
+load("@rules_swift//swift:swift_binary.bzl", "swift_binary")
+load("@rules_swift//swift:swift_test.bzl", "swift_test")
+
+package(default_visibility = ["//visibility:public"])
+
+# The Storybook headless (@isomer//headless/libraries/swift_ui): its UI read
+# and driven over standard input and output, nothing drawn, on the building
+# machine (a Mac, or Linux in a container). Build with --@isomer//headless:
+#
+#   bazel run --@isomer//headless //headless/storybook_headless_application
+#   {"cmd": "ls"}
+swift_binary(
+    name = "storybook_headless_application",
+    srcs = ["//shared/example_application:srcs"],
+    copts = ["-parse-as-library"],
+    module_name = "ExampleApplication",
+    deps = [
+        "//storybook",
+        "//shared/platform_services",
+        "@isomer//headless/libraries/swift_ui",
+        "@isomer//headless/libraries/swift_ui:isomer",
+    ],
+)
+
+# The Storybook's headless tests (StorybookHeadlessTests.swift): in a
+# container in seconds, nothing drawn. With the app's flag:
+#
+#   bazel test --@isomer//headless //headless/...
+swift_test(
+    name = "storybook_headless_test",
+    srcs = ["StorybookHeadlessTests.swift"],
+    data = [":storybook_headless_application"],
+    module_name = "StorybookHeadlessTests",
+    deps = ["@isomer//headless/isomer_headless"],
+)

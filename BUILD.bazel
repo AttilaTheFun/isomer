@@ -12,6 +12,8 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 alias(
     name = "swift_ui",
     actual = select({
+        # The headless host on the building machine (--@isomer//headless).
+        "//headless:on": "//headless/libraries/swift_ui:sdk",
         # A feature compiled into an Apple app against Isomer's frameworks
         # (apple/compiled): Isomer's SwiftUI on Apple platforms too.
         "//apple/compiled:feature_on": "//apple/libraries/compiled_swift_ui:sdk",
@@ -29,6 +31,7 @@ alias(
 alias(
     name = "isomer",
     actual = select({
+        "//headless:on": "//headless/libraries/swift_ui:isomer",
         "//apple/compiled:feature_on": "//apple/libraries/compiled_swift_ui:isomer",
         "@platforms//os:wasi": "//wasm/libraries/swift_ui:isomer",
         "@platforms//os:linux": "//linux/libraries/swift_ui:isomer",

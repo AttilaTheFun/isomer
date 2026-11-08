@@ -8,6 +8,15 @@ public protocol Scene {
 
 extension Never: Scene {}
 
+extension Scene {
+    /// A window's size when it first opens, as Apple's: Isomer's hosts size
+    /// their windows themselves (the desktop hosts to their own default, the
+    /// rest to the screen or the page), so the scene is unchanged.
+    public nonisolated func defaultSize(_ size: CGSize) -> some Scene { self }
+
+    public nonisolated func defaultSize(width: CGFloat, height: CGFloat) -> some Scene { self }
+}
+
 /// A scene the runtime shows itself: its root view and its window title
 /// (document.title on web, task label on Android, the window title on
 /// desktop hosts; "" leaves the host's own).
@@ -87,6 +96,10 @@ extension App {
         // The terminal host (cli/libraries/swift_ui): the binary owns the
         // terminal until the user quits.
         TerminalApp.run()
+        #elseif ISOMER_HEADLESS_HOST
+        // The headless host (headless/libraries/swift_ui): nothing drawn, the
+        // UI read and driven over standard input and output until `quit`.
+        HeadlessApp.run()
         #endif
     }
 }
