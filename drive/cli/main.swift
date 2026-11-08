@@ -224,13 +224,17 @@ func command(_ verb: String, _ rest: [String], _ options: Options) -> Wire_Comma
 /// slider, sheet, alert…; a plural as its singular), every one when nil.
 nonisolated(unsafe) var shownRoles: Set<String>?
 
-/// A label or a text in double quotes, its quotes, backslashes and line
-/// breaks escaped, so each element stays one line.
+/// A label or a text as Swift writes a string: in double quotes, its quotes
+/// and backslashes escaped; one of several lines as a multiline literal
+/// ("""), its lines as they are, only backslashes and a triple quote
+/// escaped.
 func quoted(_ text: String) -> String {
-    var escaped = text.replacingOccurrences(of: "\\", with: "\\\\")
-    escaped = escaped.replacingOccurrences(of: "\"", with: "\\\"")
-    escaped = escaped.replacingOccurrences(of: "\n", with: "\\n")
-    return "\"" + escaped + "\""
+    let backslashed = text.replacingOccurrences(of: "\\", with: "\\\\")
+    if text.contains("\n") {
+        let body = backslashed.replacingOccurrences(of: "\"\"\"", with: "\\\"\"\"")
+        return "\"\"\"\n" + body + "\n\"\"\""
+    }
+    return "\"" + backslashed.replacingOccurrences(of: "\"", with: "\\\"") + "\""
 }
 
 /// An answer as a person reads it: a line an element, in the screen's order
