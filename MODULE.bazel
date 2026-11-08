@@ -115,25 +115,17 @@ bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.1")
 # extra declarations made internal, and `package` on the Essentials helpers
 # Foundation searches strings with (it is built in swift-foundation's package
 # for that).
-bazel_dep(name = "rules_swift_package_manager", version = "1.25.0")
-
-# Three pull requests to cgrindel/rules_swift_package_manager, the
-# registry's 1.25.0.isomer.1 for consumers until a release has them: #2638
+#
+# The registry's 1.25.0.isomer.1: upstream 1.25.0 with three pull requests to
+# cgrindel/rules_swift_package_manager, until a release has them (MVS gives
+# it to every consumer): #2638
 # (a local package that is a Bazel module too, isomer's taken by path in its
 # own graph, is copied without its Bazel files), #2639 (no Apple minimum OS
 # versions off Apple: isomer declares iOS 16 and macOS 13 over
 # swift-foundation's 26) and #2640 (a Swift target's cSettings defines reach
 # its Clang importer, as SwiftPM passes them: swift-foundation's WASI
 # emulation macros).
-single_version_override(
-    module_name = "rules_swift_package_manager",
-    patch_strip = 1,
-    patches = [
-        "//tools/patches:rules_swift_package_manager_local_bazel_package.patch",
-        "//tools/patches:rules_swift_package_manager_minimum_os_off_apple.patch",
-        "//tools/patches:rules_swift_package_manager_swift_target_cdefines.patch",
-    ],
-)
+bazel_dep(name = "rules_swift_package_manager", version = "1.25.0.isomer.1")
 
 # rules_swift_package_manager's own extension, so an application's graph and
 # this module's packages are one: what isomer declares here (its patches, a
