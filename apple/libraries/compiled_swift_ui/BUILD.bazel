@@ -26,6 +26,7 @@ swift_library(
     srcs = [
         "//shared/renderers:srcs_no_gpu",
         "//shared/swift_ui_core:srcs",
+        "//shared/no_process_host:srcs",
     ],
     # A compiled feature reads Apple's SwiftUI text attributes
     # (shared/swift_ui_core/AttributedText.swift): their symbols are SwiftUI's.

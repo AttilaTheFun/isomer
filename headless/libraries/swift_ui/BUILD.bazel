@@ -26,7 +26,6 @@ swift_library(
         "@platforms//os:linux": ["//foundation:FileWrapper.swift"],
         "//conditions:default": [],
     }),
-    copts = ["-DISOMER_HEADLESS_HOST"],
     module_name = "SwiftUI",
     deps = [
         "//shared/isomer_swift_ui",

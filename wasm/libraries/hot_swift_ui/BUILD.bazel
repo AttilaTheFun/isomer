@@ -67,6 +67,7 @@ swift_library(
     srcs = [
         "//shared/renderers:srcs_no_gpu",
         "//shared/swift_ui_core:srcs",
+        "//shared/no_process_host:srcs",
     ],
     # The `Extern` feature is for the `@_extern(c, "main")` trampoline the
     # reactor uses to run the app's @main (it has no _start).

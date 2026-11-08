@@ -107,3 +107,8 @@ struct AndroidHostBridge: HostBridge {
         host.platformCommand(key: key, value: value)
     }
 }
+
+/// This host's process (shared/swift_ui_core/App.swift): nothing to run
+/// from `App.main`, which returns; the host drives the runtime from outside.
+@_silgen_name("iso_process_host_run")
+func _isoAndroidProcessHostRun() {}

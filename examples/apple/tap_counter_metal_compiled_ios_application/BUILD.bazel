@@ -32,7 +32,6 @@ swift_library(
         "@isomer//shared/renderers:srcs",
         "@isomer//shared/swift_ui_core:srcs",
     ],
-    defines = ["ISOMER_IOS_METAL_HOST"],
     # The shared core spells its own types `SwiftUI.X` where a generic
     # parameter shadows the name (`Button where Label == SwiftUI.Label<…>`),
     # as Apple's interface does; this module is that SwiftUI under another name.

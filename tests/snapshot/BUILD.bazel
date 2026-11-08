@@ -11,6 +11,7 @@ swift_library(
     srcs = [
         "//shared/renderers:srcs",
         "//shared/swift_ui_core:srcs",
+        "//shared/no_process_host:srcs",
     ] + select({
         # FileDocument's FileWrapper, which the toolchain's Foundation lacks.
         "@platforms//os:linux": ["//foundation:FileWrapper.swift"],

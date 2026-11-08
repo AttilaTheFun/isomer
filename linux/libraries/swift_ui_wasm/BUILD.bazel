@@ -30,7 +30,7 @@ swift_library(
         # FileDocument's FileWrapper, which the toolchain's Foundation lacks.
         "//foundation:FileWrapper.swift",
     ],
-    copts = _LINUX_COPTS + ["-DISOMER_LINUX_HOST"],
+    copts = _LINUX_COPTS,
     module_name = "SwiftUI",
     swiftc_inputs = ["//linux/libraries/swift_ui:renderer.h"],
     target_compatible_with = ["@platforms//os:linux"],

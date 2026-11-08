@@ -31,7 +31,7 @@ swift_library(
         # FileDocument's FileWrapper, which the toolchain's Foundation lacks.
         "//foundation:FileWrapper.swift",
     ],
-    copts = _WINDOWS_COPTS + ["-DISOMER_WINDOWS_HOST"],
+    copts = _WINDOWS_COPTS,
     module_name = "SwiftUI",
     swiftc_inputs = ["//windows/libraries/swift_ui:renderer.h"],
     target_compatible_with = ["@platforms//os:windows"],

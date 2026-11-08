@@ -65,44 +65,31 @@ public protocol App {
 }
 
 extension App {
-    /// Entry point for `@main`. Installs the app; the platform host calls
-    /// back into the runtime (e.g. `iso_start` on wasm, `nativeStart` over
-    /// JNI) to begin rendering.
-    ///
-    /// On Windows the app is a real `.exe` that owns its process, so — unlike
-    /// the wasm/Android hosts that are driven externally — the entry point
-    /// itself creates the window and runs the message/render loop (which does
-    /// not return until the window is closed).
+    /// Entry point for `@main`. Installs the app, then hands the process to
+    /// its host (`iso_process_host_run`): the hosts that own their process
+    /// (Linux's and Windows' windows, the terminal, headless, the compiled
+    /// Metal cell's UIApplicationMain) run their loops there and don't
+    /// return; the web's and Android's, driven from outside (`iso_start` on
+    /// wasm, `nativeStart` over JNI), return at once.
     public static func main() {
         Runtime.shared.installApp(Self())
-        #if os(Windows) && ISOMER_WINDOWS_HOST
-        // Same gate as Linux below: only the Windows host library (which
-        // provides `WindowsApp`) defines the flag; the core alone still
-        // builds for a Windows *host* (e.g. the snapshot test's `core_host`).
-        WindowsApp.run()
-        #elseif os(Linux) && ISOMER_LINUX_HOST
-        // Gated on the Linux host library's compile flag so the platform-agnostic
-        // core still builds for a Linux *host* on its own (e.g. the snapshot
-        // test's `core_host`), where `LinuxApp` (in `linux/libraries/swift_ui`)
-        // isn't linked.
-        LinuxApp.run()
-        #elseif os(iOS) && ISOMER_IOS_METAL_HOST
-        // The compiled self-drawing iOS cell (SwiftGPU over Metal): like the
-        // desktop hosts above, the app owns its process — `run()` enters
-        // UIApplicationMain and never returns. Only that cell's host library
-        // (which provides `IOSMetalApp`) defines the flag.
-        IOSMetalApp.run()
-        #elseif ISOMER_CLI_HOST
-        // The terminal host (cli/libraries/swift_ui): the binary owns the
-        // terminal until the user quits.
-        TerminalApp.run()
-        #elseif ISOMER_HEADLESS_HOST
-        // The headless host (headless/libraries/swift_ui): nothing drawn, the
-        // UI read and driven over standard input and output until `quit`.
-        HeadlessApp.run()
+        #if !ISOMER_EMBEDDED_CORE
+        _isoProcessHostRun()
         #endif
     }
 }
+
+/// What the process's host does once `App.main` has installed the app. Each
+/// host defines it, under this name with Swift's calling convention
+/// (`@_silgen_name`, on both sides: a C definition would be called with
+/// Swift's convention and trap on wasm), and a binary links exactly one: its
+/// host, or //shared/no_process_host where nothing hosts the app (the core's
+/// tests). The core picks no host itself, so it is built the same for all.
+/// The cores built beside Apple's SwiftUI (IsomerCore, IsomerGPUTreeView:
+/// `ISOMER_EMBEDDED_CORE`) own no process and call none: one of them shares a
+/// binary with a compiled feature's core, whose definition is the binary's.
+@_silgen_name("iso_process_host_run")
+package func _isoProcessHostRun()
 
 /// Hosts a single isomer view inside an existing host app, the
 /// reimplementation's analogue of `UIHostingController` (Apple's
