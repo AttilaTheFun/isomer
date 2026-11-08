@@ -115,9 +115,19 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       # Every target built in the Linux container (Windows on Arm with
-      # --config=windows_on_linux), the tests' too, none run.
-      - name: Every target, built
-        run: exec tools/ci/container_build.sh all
+      # --config=windows_on_linux), then every test that runs without a GUI:
+      # the core's, the web's in headless Chrome, the headless UI tests.
+      - name: Every target built, and the tests without a GUI
+        env:
+          ISOMER_EXECUTION_LOGS: ${{ runner.temp }}/execution-logs
+        run: exec tools/ci/container_build.sh pr
+      # What each invocation ran, to find what the cache misses.
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: execution-logs
+          path: ${{ runner.temp }}/execution-logs
+          retention-days: 7
 
   populate:
     # Each commit on main: the merged tree built as container builds it,
@@ -131,7 +141,24 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: The merged tree, built into the cache
+        env:
+          ISOMER_EXECUTION_LOGS: ${{ runner.temp }}/execution-logs
         run: exec tools/ci/container_build.sh all
+      # What a release builds, built here too, so its jobs find their actions
+      # in the cache: the published apps as alpha builds them (unstamped:
+      # only what the version reaches differs), and the proof's apps.
+      - name: The Playground's compilers
+        run: tools/ci/stage_playground_compilers.sh ios-device ios-simulator macos android web
+      - name: The published apps, built into the cache
+        run: exec tools/ci/container_build.sh package .ci/packages --config=alpha $PUBLISHED_APPS
+      - name: The proof's apps, built into the cache
+        run: exec tools/ci/proof.sh --stage prebuild --apps "$RUNNER_TEMP/proof-apps" --review "$RUNNER_TEMP/proof-review"
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: execution-logs
+          path: ${{ runner.temp }}/execution-logs
+          retention-days: 7
 
   verify:
     # By hand: every platform built, and the container's own tests; a public
@@ -157,6 +184,12 @@ jobs:
         with:
           name: android-test-apk
           path: .ci/platforms/android-x86_64
+          retention-days: 3
+      - uses: actions/upload-artifact@v4
+        if: ${{ !github.event.repository.private }}
+        with:
+          name: windows-test-app
+          path: .ci/platforms/windows
           retention-days: 3
       - uses: actions/upload-artifact@v4
         if: ${{ !github.event.repository.private }}
@@ -201,6 +234,31 @@ jobs:
         with:
           name: platform-tests-apple
           path: .ci/platform-tests/apple
+          retention-days: 14
+
+  windows:
+    # The Windows Storybook's tests on GitHub's own windows-11-arm runner, run
+    # natively (tools/ci/hosted_windows_test.ps1), for a public repository's
+    # verify. Windows is tier 2: its result is reported, and a release
+    # doesn't wait for it.
+    needs: verify
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release') && !github.event.repository.private }}
+    runs-on: windows-11-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-test-app
+          path: .ci/windows
+      - name: The Windows Storybook's tests
+        shell: pwsh
+        run: tools/ci/hosted_windows_test.ps1 .ci/windows .ci/platform-tests/windows
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: platform-tests-windows
+          path: .ci/platform-tests/windows
           retention-days: 14
 
   android:

@@ -10,18 +10,24 @@
 #
 #   tools/ci/container_build.sh [<bazel build args>…]   # default: every platform's Storybook
 #   tools/ci/container_build.sh all   # everything the checks build, built,
-#                                     # and only the headless tests run
-#                                     # (examples' //headless and //remote), nothing
-#                                     # copied: the automated CI's (a pull
-#                                     # request's container, main's populate,
-#                                     # the Bazel cache's one writer: OS
+#                                     # nothing run or copied: main's populate
+#                                     # (the Bazel cache's one writer: OS
 #                                     # Server grants that job the write)
+#   tools/ci/container_build.sh pr    # the same build, then every test that
+#                                     # runs without a GUI: the core's, the
+#                                     # web's in headless Chrome, the headless
+#                                     # UI tests (examples' //headless and
+#                                     # //remote): a pull request's container
+#                                     # (the owner, 2026-11-08: headless tests
+#                                     # before a merge, builds after one)
 #   tools/ci/container_build.sh package <dir> <bazel build args>…
 #                                     # the build, then the targets' packages
 #                                     # (.ipa, a Mac app's .zip, the signed
 #                                     # .apk) copied to <dir>, in this checkout,
 #                                     # for CI to publish
 #
+#   ISOMER_EXECUTION_LOGS  a folder for Bazel's execution logs (compact),
+#                    to compare two runs' action keys when the cache misses
 #   OSS_FILES_HOST   the name the container reaches this Mac's OS Server by
 #                    (default: this Mac's tailnet name, from Tailscale)
 #   ISOMER_CI_IMAGE  the image (default: Visor's agent image, tools/ci/agent_image)
@@ -99,9 +105,9 @@ if [ "${1:-}" = package ]; then
     chmod 775 "$out"
     mode=package
     shift 2
-elif [ $# -eq 0 ] || [ "$*" = all ]; then
+elif [ $# -eq 0 ] || [ "$*" = all ] || [ "$*" = pr ]; then
     mode=checks
-    [ "$*" != all ] || mode=all
+    [ $# -eq 0 ] || mode="$*"
     set -- --ios_multi_cpus=sim_arm64 \
         //apple/storybook_ios_application:storybook_ios_sim_application \
         //apple/storybook_macos_application:storybook_macos_application \
@@ -118,7 +124,11 @@ steps='
 root=$1 mode=$2 out=$3; shift 3
 cd "$root/examples"
 flags=(--config=apple_on_linux "--downloader_config=$root/.ci/downloader.cfg")
-bazel build --keep_going "${flags[@]}" "$@"
+# An execution log an invocation, named for what it builds (ISOMER_EXECUTION_LOGS).
+logs="${ISOMER_EXECUTION_LOGS:-}"
+[ -z "$logs" ] || mkdir -p "$logs"
+log_of() { [ -z "$logs" ] || printf -- "--execution_log_compact_file=%s/%s.zst" "$logs" "$1"; }
+bazel build --keep_going "${flags[@]}" $(log_of build) "$@"
 built=$?
 if [ "$mode" = package ]; then
     [ $built -eq 0 ] || exit $built
@@ -139,14 +149,14 @@ if [ "$mode" = package ]; then
     ls -l "$out"
     exit 0
 fi
-[ "$mode" = checks ] || [ "$mode" = all ] || exit $built
+[ "$mode" = checks ] || [ "$mode" = all ] || [ "$mode" = pr ] || exit $built
 start=$SECONDS
-# all: the tests built, not run.
+# all: the tests built, not run (main: builds alone, to fill the cache).
 run_tests() { if [ "$mode" = all ]; then bazel build "$@"; else bazel test "$@"; fi; }
 # What the tests here need beyond the image: Xvfb, Mesa'"'"'s drivers, and the
 # libraries Chrome for Testing loads.
 root_do() { if [ "$(id -u)" = 0 ]; then "$@"; else sudo "$@"; fi; }
-if [ "$mode" = checks ] && ! command -v Xvfb >/dev/null || [ ! -e /usr/lib/aarch64-linux-gnu/libnss3.so ]; then
+if [ "$mode" != all ] && ! command -v Xvfb >/dev/null || [ ! -e /usr/lib/aarch64-linux-gnu/libnss3.so ]; then
     root_do env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends xvfb libnss3 \
         libgl1-mesa-dri libegl-mesa0 libasound2t64 libxkbcommon0 libxcomposite1 libxdamage1 \
         libxrandr2 libpango-1.0-0 libcairo2 libcups2t64 libdrm2 fonts-dejavu-core >/dev/null ||
@@ -168,14 +178,13 @@ run_tests "${flags[@]}" --test_output=errors //tests/platforms:storybook_web_tes
 tested_here=$?
 # The headless tests: the Storybook built for the headless host and driven
 # through its runtime (//headless in the examples), nothing drawn, and served
-# to remote clients by the gateway (//remote: over gRPC, and the web thin
-# client in headless Chrome). Run in every mode, the automated builds
-# included: seconds in a container (the owner, 2026-11-07).
-bazel test "${flags[@]}" --@isomer//headless --test_output=errors //headless/... //remote/...
+# over every transport (//remote: gRPC, WebSockets, Unix sockets, the CLI,
+# the web thin client in headless Chrome).
+run_tests "${flags[@]}" --@isomer//headless $(log_of headless) --test_output=errors //headless/... //remote/...
 headless=$?
 # A headful app driven from the command line: the web Storybook with its
 # driver built in, in Chrome, dialling out to the isomer CLI hub.
-bazel test "${flags[@]}" --@isomer//drive:headful --test_output=errors //remote:headful_web_test
+run_tests "${flags[@]}" --@isomer//drive:headful $(log_of headful) --test_output=errors //remote:headful_web_test
 headful=$?
 [ $headless -ne 0 ] || headless=$headful
 cd "$root"
@@ -185,8 +194,8 @@ run_tests --test_output=errors //tests/renderer:mock_renderer_test //tests/snaps
 checked=$?
 echo "container_build.sh: the tests took $((SECONDS - start)) s"
 
-# all: the x86_64 APK built too, and done.
-if [ "$mode" = all ]; then
+# all and pr: the x86_64 APK built too, and done.
+if [ "$mode" = all ] || [ "$mode" = pr ]; then
     cd "$root/examples"
     built_x86=0
     [ -z "${ISOMER_ANDROID_X86_64:-}" ] || bazel build "${flags[@]}" --android_platforms=@rules_android//:x86_64 \
