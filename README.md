@@ -743,6 +743,10 @@ Each release's notes have an Upgrading section; three things are easy to miss:
   there now. A `build_bazel_rules_swift` or `rules_license` dependency or
   injection kept only for the generated repositories can go too: they see
   rules_swift_package_manager's own.
+- **SwiftUI is in the package too (since 0.44).** Nothing changes in what
+  you write, but run `bazel clean` once after upgrading: SwiftUI's module
+  moves into the package's output directory, and a stale one left elsewhere
+  by an earlier build can shadow it (Swift compiles run unsandboxed).
 - **Apple apps bundle through rules_applecross (since 0.40).** The
   registry's rules_apple (5.3.1.applecross.6) bundles through
   `@rules_applecross//toolchain:apple_bundling_toolchain_type`, and

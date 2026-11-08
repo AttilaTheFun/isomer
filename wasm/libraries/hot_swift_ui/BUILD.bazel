@@ -1,5 +1,7 @@
 load("@rules_swift//swift:swift.bzl", "swift_library")
 
+load("//foundation:defs.bzl", "one_configuration")
+
 package(default_visibility = ["//visibility:public"])
 
 # A slim `SwiftUI` module for the hot-reload / wasm-feature reactors: the shared
@@ -82,10 +84,32 @@ swift_library(
     ],
     module_name = "SwiftUI",
     deps = [
-        "//shared/isomer_swift_ui",
-        "@flatbuffers//swift",
-        "//:foundation",
-        "//frameworks/core_transferable",
-        "//frameworks/uniform_type_identifiers",
+        ":slim_core_transferable",
+        ":slim_foundation",
+        ":slim_isomer_swift_ui",
+        ":slim_uniform_type_identifiers",
     ],
 )
+
+# What the slim SwiftUI stands on, built apart ("own_swift_ui",
+# foundation/defs.bzl): isomer's Swift package's modules share one output
+# directory, and the package's own SwiftUI, built beside them for an
+# application in the same build, would shadow this one in a reactor's compile
+# (SwiftCompile runs unsandboxed, .bazelrc). So everything the slim family
+# reaches of the package comes through these, never the plain labels.
+[
+    one_configuration(
+        name = "slim_" + name,
+        actual = actual,
+        configuration = "own_swift_ui",
+    )
+    for name, actual in [
+        ("core_transferable", "//frameworks/core_transferable"),
+        ("foundation", "//:foundation"),
+        ("isomer_network_host", "//shared/isomer_network_host"),
+        ("isomer_swift_ui", "//shared/isomer_swift_ui"),
+        ("uniform_type_identifiers", "//frameworks/uniform_type_identifiers"),
+        ("for_core", "//frameworks:for_core"),
+        ("swift_gpu_android", "//swift_gpu/android:swift_gpu"),
+    ]
+]

@@ -20,7 +20,10 @@ cd "$(dirname "$0")/.." || exit 1
 root=$(pwd -P)
 status=0
 for manifest in $(git ls-files 'Package.swift' '*/Package.swift'); do
-  if grep -n -E 'branch:[[:space:]]*"' "$manifest"; then
+  # A branch only where swift-foundation takes the same package by it
+  # (swift-syntax: SwiftPM reconciles no other requirement on it), said on
+  # the line; Package.resolved pins its commit.
+  if grep -n -E 'branch:[[:space:]]*"' "$manifest" | grep -v -E '// as swift-foundation'; then
     echo "$manifest: a package pinned to a branch, not a released version" >&2
     status=1
   fi

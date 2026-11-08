@@ -37,3 +37,13 @@ genrule(
 )
 
 exports_files(["tree.fbs"])
+
+# FlatBuffers' Swift runtime, which isomer's Swift package (IsomerSwiftUI,
+# SwiftUI) takes from this module until the wire format is protobuf
+# (MODULE.bazel's configure_package): named here, where the package's
+# generated repositories can see it.
+alias(
+    name = "flatbuffers_swift",
+    actual = "@flatbuffers//swift",
+    visibility = ["//visibility:public"],
+)

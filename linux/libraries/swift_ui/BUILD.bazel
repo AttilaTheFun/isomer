@@ -1,7 +1,8 @@
 load("@rules_swift//swift:swift.bzl", "swift_library")
 load("@rules_swift//swift:swift_library_group.bzl", "swift_library_group")
 load("@rules_cc//cc:defs.bzl", "cc_library")
-load("//swift_ui_macros:defs.bzl", "SWIFT_UI_MACROS_PLUGINS")
+
+load("//foundation:defs.bzl", "one_configuration")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -110,24 +111,10 @@ _LINUX_COPTS = [
 # host bridge, compiled as a module named `SwiftUI` (see the wasm/Android/Windows
 # counterparts) so application code can `import SwiftUI` unchanged.
 
-swift_library(
+one_configuration(
     name = "core",
-    package_name = "isomer",
-    srcs = [
-        "//shared/renderers:srcs_no_gpu",
-        "//shared/swift_ui_core:srcs",
-        # FileDocument's FileWrapper, which the toolchain's Foundation lacks.
-        "//foundation:FileWrapper.swift",
-    ],
-    module_name = "SwiftUI",
+    actual = "@swiftpkg_isomer//:SwiftUI",
     target_compatible_with = ["@platforms//os:linux"],
-    deps = [
-        "//linux/libraries/image_io",
-        "//shared/isomer_swift_ui",
-        "@flatbuffers//swift",
-        "//frameworks:for_core",
-    ],
-    plugins = SWIFT_UI_MACROS_PLUGINS,
 )
 
 # The GPU renderer (SwiftGPURenderer.swift, which draws everything through
@@ -171,7 +158,6 @@ swift_library(
         "//shared/isomer_swift_ui",
         "//swift_gpu/linux:swift_gpu",
         "//shared:map_engine_linux",
-        "@flatbuffers//swift",
     ],
 )
 
@@ -218,19 +204,10 @@ swift_library(
 # the web and Android. Its picker is a request to the host, which this
 # self-drawing renderer doesn't run yet: here it picks nothing, as
 # `fileImporter` doesn't.
-swift_library(
+one_configuration(
     name = "photos_ui",
-    package_name = "isomer",
-    srcs = ["//frameworks/photos_ui:srcs"],
-    copts = _LINUX_COPTS,
-    module_name = "PhotosUI",
-    swiftc_inputs = ["renderer.h"],
+    actual = "@swiftpkg_isomer//:PhotosUI",
     target_compatible_with = ["@platforms//os:linux"],
-    deps = [
-        ":swift_ui",
-        "//frameworks/core_transferable",
-        "//frameworks/uniform_type_identifiers",
-    ],
 )
 
 # What an application builds against (@isomer//:swift_ui): SwiftUI, the

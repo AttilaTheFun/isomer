@@ -39,9 +39,8 @@ swift_library(
     module_name = "IsoSwiftUICore",
     tags = ["manual"],
     deps = [
-        "@isomer//shared/isomer_swift_ui",
+        "@isomer//shared/isomer_swift_ui:beside_own_swift_ui",
         "@isomer//frameworks:for_core",
-        "@flatbuffers//swift",
         "@isomer//swift_gpu/apple:swift_gpu",
     ],
     plugins = SWIFT_UI_MACROS_PLUGINS,

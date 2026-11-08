@@ -1,9 +1,9 @@
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_swift//swift:swift.bzl", "swift_library")
+load("//foundation:defs.bzl", "one_configuration")
 load("@rules_swift//swift:swift_library_group.bzl", "swift_library_group")
 load("@rules_kotlin//kotlin:core.bzl", "kt_compiler_plugin")
 load("//swift_ffi/rules:kt_swift_library.bzl", "kt_swift_platform")
-load("//swift_ui_macros:defs.bzl", "SWIFT_UI_MACROS_PLUGINS")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -21,13 +21,10 @@ _ANDROID_COPTS = [
 # host bridge, compiled as a module named `SwiftUI` (see web counterpart).
 
 # ImageIO's decoding subset (//shared/image_io), under Apple's module name.
-swift_library(
+one_configuration(
     name = "image_io",
-    package_name = "isomer",
-    srcs = ["//shared/image_io:srcs"],
-    module_name = "ImageIO",
+    actual = "@swiftpkg_isomer//:ImageIO",
     target_compatible_with = ["@platforms//os:android"],
-    deps = ["//:foundation"],
 )
 
 # How the runtime reaches the app's @main (application_main.c), and what the
@@ -47,28 +44,10 @@ cc_library(
     alwayslink = True,
 )
 
-swift_library(
+one_configuration(
     name = "core",
-    package_name = "isomer",
-    srcs = [
-        "//shared/renderers:srcs_no_gpu",
-        "//shared/swift_ui_core:srcs",
-    ],
-    copts = _ANDROID_COPTS,
-    module_name = "SwiftUI",
-    swiftc_inputs = ["jni_bridge.h"],
-    # Reached through the app binaries' Android platform transition; the JNI
-    # bridging header can't compile in the host config, so wildcard builds
-    # must skip the bare target.
+    actual = "@swiftpkg_isomer//:SwiftUI",
     target_compatible_with = ["@platforms//os:android"],
-    deps = [
-        "//shared/isomer_swift_ui",
-        ":image_io",
-        "@flatbuffers//swift",
-        "//frameworks/core_transferable",
-        "//frameworks/uniform_type_identifiers",
-    ] + ["//:foundation"],
-    plugins = SWIFT_UI_MACROS_PLUGINS,
 )
 
 # The GPU renderer (SwiftGPURenderer.swift, which draws everything through
@@ -117,7 +96,6 @@ swift_library(
         "//shared/isomer_network_host",
         "//swift_ffi/swift_ffi",
         "//swift_gpu/android:swift_gpu",
-        "@flatbuffers//swift",
         "//:foundation",
     ],
 )
@@ -134,17 +112,10 @@ swift_library_group(
 )
 
 # PhotosUI's SwiftUI photo picker, over this SwiftUI (//frameworks).
-swift_library(
+one_configuration(
     name = "photos_ui",
-    package_name = "isomer",
-    srcs = ["//frameworks/photos_ui:srcs"],
-    module_name = "PhotosUI",
+    actual = "@swiftpkg_isomer//:PhotosUI",
     target_compatible_with = ["@platforms//os:android"],
-    deps = [
-        ":swift_ui",
-        "//frameworks/core_transferable",
-        "//frameworks/uniform_type_identifiers",
-    ],
 )
 
 # What an application builds against (@isomer//:swift_ui): SwiftUI, the

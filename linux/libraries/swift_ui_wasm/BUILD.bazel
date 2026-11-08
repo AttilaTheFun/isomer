@@ -38,7 +38,6 @@ swift_library(
         # FoundationNetworking), beneath the host's own dependencies.
         "//shared/isomer_network_host/urlsession",
         "//swift_ffi/runtime/swift_wasm_host",
-        "@flatbuffers//swift",
         "//swift_gpu/linux:swift_gpu",
     ] + [
         # `Map` engine injection point: defaults to an empty stub; a consumer

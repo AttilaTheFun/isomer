@@ -21,7 +21,7 @@ swift_library(
     ],
     module_name = "HotBridge",
     deps = [
-        "//shared/isomer_network_host",
+        "//wasm/libraries/hot_swift_ui:slim_isomer_network_host",
         "//wasm/libraries/hot_swift_ui",
     ] + select({
         # Natively (a host-configuration analysis, or apple/compiled): the

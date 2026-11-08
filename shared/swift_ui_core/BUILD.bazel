@@ -1,23 +1,32 @@
-# Platform-agnostic SwiftUI reimplementation sources. These are compiled into
-# the per-platform `SwiftUI` modules under wasm/libraries/swift_ui and
-# android/libraries/swift_ui (Apple uses the system SwiftUI instead).
+load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
+
+# Platform-agnostic SwiftUI reimplementation sources: isomer's Swift
+# package's SwiftUI target (Package.swift), and the cores that compile them
+# themselves (Apple's IsomerCore and IsomerGPUTreeView, the Playground's slim
+# reactor SwiftUI, the core's tests).
 filegroup(
     name = "srcs",
-    srcs = glob(["*.swift"]) + [":json_internal"],
+    srcs = glob(["*.swift"]),
     visibility = ["//visibility:public"],
 )
 
-# The pure-Swift JSON parser is also compiled into the Apple shim (it has no
-# Foundation / CG dependency), so app code parses API responses identically.
-
-# The JSON helpers the renderers use internally (gradient paint on the wire),
-# generated from the ONE source in //shared/swift_ui_extensions with every
-# `public` stripped: the public API lives in SwiftUIExtensions, the `SwiftUI`
-# module keeps a private copy so it stays Apple's surface only.
+# The JSON helpers the renderers use internally (gradient paint on the wire):
+# JSONInternal.swift, generated from the ONE source in
+# //shared/swift_ui_extensions with every `public` stripped (the public API
+# is the Isomer module's; SwiftUI keeps a private copy, so it stays Apple's
+# surface only), checked in so the Swift package builds it; json_internal_test
+# keeps it the generated one.
 genrule(
     name = "json_internal",
     srcs = ["//shared/swift_ui_extensions:JSON.swift"],
-    outs = ["JSONInternal.swift"],
+    outs = ["JSONInternal.generated.swift"],
     cmd = """{ echo '// GENERATED from //shared/swift_ui_extensions:JSON.swift (internal copy).';
               grep -v '^import ' $(location //shared/swift_ui_extensions:JSON.swift) | sed -E 's/(^|[[:space:]])public[[:space:]]/\\1/g'; } > $@""",
+)
+
+diff_test(
+    name = "json_internal_test",
+    failure_message = "Regenerate shared/swift_ui_core/JSONInternal.swift: bazel build //shared/swift_ui_core:json_internal, and copy its output over it.",
+    file1 = "JSONInternal.swift",
+    file2 = ":json_internal",
 )

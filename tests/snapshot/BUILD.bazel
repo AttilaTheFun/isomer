@@ -25,8 +25,7 @@ swift_library(
     testonly = True,
     visibility = ["//tests:__subpackages__"],
     deps = [
-        "//shared/isomer_swift_ui",
-        "@flatbuffers//swift",
+        "//shared/isomer_swift_ui:beside_own_swift_ui",
         # The Apple-named ones (CoreTransferable, UniformTypeIdentifiers)
         # are the Mac's own on a Mac, Isomer's on Linux (a container's
         # host), as the Linux SwiftUI has them.

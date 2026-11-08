@@ -33,8 +33,7 @@ swift_library(
     ],
     module_name = "IsomerCore",
     deps = [
-        "//shared/isomer_swift_ui",
-        "@flatbuffers//swift",
+        "//shared/isomer_swift_ui:beside_own_swift_ui",
         "//frameworks:for_core",
     ],
     plugins = SWIFT_UI_MACROS_PLUGINS,

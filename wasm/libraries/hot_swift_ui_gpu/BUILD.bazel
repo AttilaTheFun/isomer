@@ -34,11 +34,10 @@ swift_library(
     ],
     module_name = "SwiftUI",
     deps = [
-        "//shared/isomer_swift_ui",
-        "//frameworks:for_core",
-        "@flatbuffers//swift",
-        "//:foundation",
-        "//swift_gpu/android:swift_gpu",
+        "//wasm/libraries/hot_swift_ui:slim_isomer_swift_ui",
+        "//wasm/libraries/hot_swift_ui:slim_for_core",
+        "//wasm/libraries/hot_swift_ui:slim_foundation",
+        "//wasm/libraries/hot_swift_ui:slim_swift_gpu_android",
     ],
 )
 
