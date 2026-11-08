@@ -9,6 +9,7 @@
 // previously carried the same surface.
 
 internal import SwiftUI
+internal import IsomerSwiftUI
 import ImageIO
 package import IsomerFFI
 internal import IsomerNetworkHost
@@ -18,6 +19,7 @@ import Synchronization
 
 #if canImport(SwiftGPU)
 import SwiftGPU
+import IsomerGPURenderer
 #endif
 
 @ExportedStruct
@@ -290,6 +292,7 @@ package func nativeDrainMainQueue() {
 
 @ExportedFunction
 package func nativeStart(host: any AndroidHost, renderer: String, width: Double, height: Double) {
+    PlatformBridges.current = AndroidPlatformBridge()
     // A host entry point: the host calls it on the thread the main
     // executor drains, which is where views live.
     MainActor.assumeIsolated {
@@ -443,3 +446,26 @@ package func nativeOverscroll(path: String, amount: Double) {
     Runtime.shared.nativeOverscroll(path: path, amount: amount)
 }
 
+/// The Isomer module's `Bridge` on Android (shared/isomer/Bridge.swift):
+/// logging to logcat, the clock from POSIX time, URLs opened by Kotlin
+/// through the swift_ffi AndroidHost.
+struct AndroidPlatformBridge: PlatformBridge {
+    var platformName: String { "Android" }
+    var rendererName: String { _boundRendererName }
+
+    func log(_ message: String) {
+        _ = message.withCString { cMessage in
+            "IsomerBridge".withCString { cTag in
+                __android_log_write(Int32(ANDROID_LOG_INFO.rawValue), cTag, cMessage)
+            }
+        }
+    }
+
+    func epochMilliseconds() -> Int64 {
+        var ts = timespec()
+        clock_gettime(CLOCK_REALTIME, &ts)
+        return Int64(ts.tv_sec) * 1000 + Int64(ts.tv_nsec) / 1_000_000
+    }
+
+    func openURL(_ url: String) { _AndroidBridgeCalls.openURL(url) }
+}

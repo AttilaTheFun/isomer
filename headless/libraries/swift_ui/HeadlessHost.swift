@@ -199,6 +199,7 @@ enum HeadlessApp {
         Renderer.bind(renderer)
         let width = Double(environment["ISO_HEADLESS_WIDTH"] ?? "") ?? 390
         let height = Double(environment["ISO_HEADLESS_HEIGHT"] ?? "") ?? 844
+        PlatformBridges.current = HeadlessPlatformBridge()
         Runtime.shared.start(host: HeadlessHostBridge(), width: width, height: height)
 
         // The commands are read on a thread of their own and run on the main
@@ -344,4 +345,15 @@ enum HeadlessApp {
 @_silgen_name("iso_process_host_run")
 func _isoHeadlessProcessHostRun() {
     MainActor.assumeIsolated { HeadlessApp.run() }
+}
+
+/// The Isomer module's `Bridge` headless (shared/isomer/Bridge.swift):
+/// nothing to bridge to, so the log goes to standard error and URLs are
+/// recorded there for the driver.
+struct HeadlessPlatformBridge: PlatformBridge {
+    var platformName: String { "Headless" }
+    var rendererName: String { "None" }
+    func log(_ message: String) { FileHandle.standardError.write(Data(("[iso] " + message + "\n").utf8)) }
+    func epochMilliseconds() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
+    func openURL(_ url: String) { FileHandle.standardError.write(Data(("[iso] openURL " + url + "\n").utf8)) }
 }

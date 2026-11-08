@@ -14,7 +14,7 @@ extension CGRect {
     /// The overlap of two rectangles, or `.zero` when they do not meet
     /// (CoreGraphics' `intersection` gives `.null` then, whose origin is at
     /// infinity): what clip rectangles and scissors want.
-    func clipped(to other: CGRect) -> CGRect {
+    package func clipped(to other: CGRect) -> CGRect {
         let overlap = intersection(other)
         return overlap.isNull ? .zero : overlap
     }

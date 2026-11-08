@@ -4,14 +4,14 @@
 // its own, so it is covered here and drawn as a texture). Plain Swift with
 // no math library (wasm's Foundation has none): square roots only.
 
-enum PathRaster {
+package enum PathRaster {
     /// Rows of samples a pixel (horizontal coverage is exact).
     static let rowsPerPixel = 4
 
     /// How much of each pixel the subpaths cover, filled by the non-zero
     /// rule (every subpath closed, as a fill closes them). `xs[i]`/`ys[i]`
     /// are subpath i's points, in pixels from the raster's corner.
-    static func fill(xs: [[Double]], ys: [[Double]], width: Int, height: Int) -> [Float] {
+    package static func fill(xs: [[Double]], ys: [[Double]], width: Int, height: Int) -> [Float] {
         var coverage = [Float](repeating: 0, count: width * height)
         // Each edge as (x0, y0, x1, y1, winding), downward.
         var edges: [(x0: Double, y0: Double, x1: Double, y1: Double, dir: Int)] = []
@@ -58,7 +58,7 @@ enum PathRaster {
     /// How much of each pixel a stroke `halfWidth` either side of the
     /// segments covers (round joins and ends, from the distance to the
     /// nearest segment).
-    static func stroke(
+    package static func stroke(
         xs: [[Double]], ys: [[Double]], closed: [Bool], halfWidth: Double, width: Int, height: Int
     ) -> [Float] {
         var coverage = [Float](repeating: 0, count: width * height)

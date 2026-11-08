@@ -50,7 +50,7 @@ swift_library(
     name = "core",
     package_name = "isomer",
     srcs = [
-        "//shared/renderers:srcs",
+        "//shared/renderers:srcs_no_gpu",
         "//shared/swift_ui_core:srcs",
         # FileDocument's FileWrapper, which the toolchain's Foundation lacks.
         "//foundation:FileWrapper.swift",
@@ -61,17 +61,28 @@ swift_library(
         "//windows/libraries/image_io",
         "//shared/isomer_swift_ui",
         "@flatbuffers//swift",
-        # Lights up canImport(SwiftGPU): the shared SwiftGPURenderer becomes
-        # the self-drawing renderer, drawing through swift_gpu's D3D11 backend.
-        "//swift_gpu/windows:swift_gpu",
         "//frameworks:for_core",
-    ] + [
-        # `Map` engine injection point: defaults to an empty stub; a consumer
-        # with its own swift_map dep points the flag at the real engine to
-        # light up canImport(SwiftMap). See //shared/BUILD.bazel.
-        "//shared:map_engine_windows",
     ],
     plugins = SWIFT_UI_MACROS_PLUGINS,
+)
+
+# The GPU renderer (SwiftGPURenderer.swift, which draws everything through
+# swift_gpu's D3D11 backend): a module of its own over the SwiftUI above, which
+# the host plugs in. With a SwiftMap engine (the map engine flag:
+# //shared/BUILD.bazel), `Map` draws real tiles.
+swift_library(
+    name = "gpu_renderer",
+    package_name = "isomer",
+    srcs = ["//shared/renderers:SwiftGPURenderer.swift"],
+    copts = ["-DISOMER_GPU_RENDERER_MODULE"],
+    module_name = "IsomerGPURenderer",
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        ":core",
+        "//shared/isomer_swift_ui",
+        "//swift_gpu/windows:swift_gpu",
+        "//shared:map_engine_windows",
+    ],
 )
 
 # Windows' host (WindowsHost.swift, over the C++ renderer's window): a module
@@ -89,6 +100,7 @@ swift_library(
     swiftc_inputs = ["renderer.h"],
     target_compatible_with = ["@platforms//os:windows"],
     deps = [
+        ":gpu_renderer",
         ":core",
         ":renderer",
         "//windows/libraries/image_io",
@@ -125,17 +137,13 @@ swift_library(
     name = "isomer",
     package_name = "isomer",
     srcs = [
-        "IsomerBridge.swift",
+        "//shared/isomer:Bridge.swift",
         "//shared/isomer:Exports.swift",
         "//shared/swift_ui_extensions:srcs",
     ],
-    copts = _WINDOWS_COPTS,
     module_name = "Isomer",
-    swiftc_inputs = ["renderer.h"],
     target_compatible_with = ["@platforms//os:windows"],
     deps = [
-        ":host",
-        ":renderer",
         ":swift_ui",
         "//swift_ffi/swift_ffi",
         "//shared/isomer_swift_ui",

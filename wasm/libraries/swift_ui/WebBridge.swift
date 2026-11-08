@@ -7,11 +7,13 @@
 // and staging-buffer plumbing that previously carried the same surface.
 
 internal import SwiftUI
+internal import IsomerSwiftUI
 package import IsomerFFI
 internal import IsomerNetworkHost
 
 #if canImport(SwiftGPU)
 import SwiftGPU
+import IsomerGPURenderer
 #endif
 
 @ExportedStruct
@@ -125,6 +127,7 @@ package func isoSetDisplayScale(scale: Double) {
 
 @ExportedFunction
 package func isoStart(host: any WebHost, renderer: String, width: Double, height: Double) {
+    PlatformBridges.current = WebPlatformBridge()
     // A host entry point: the host calls it on the thread the main
     // executor drains, which is where views live.
     MainActor.assumeIsolated {
@@ -285,4 +288,14 @@ package func isoHostEvent(id: String, value: String) {
 @ExportedFunction
 package func isoKeyEvent(id: String, value: String) -> Bool {
     Runtime.shared.keyPressEvent(id: id, value: value)
+}
+
+/// The Isomer module's `Bridge` on the web (shared/isomer/Bridge.swift):
+/// the page logs, keeps the clock and opens URLs.
+struct WebPlatformBridge: PlatformBridge {
+    var platformName: String { "Web (WebAssembly)" }
+    var rendererName: String { _boundRendererName }
+    func log(_ message: String) { _WebBridgeCalls.log(message) }
+    func epochMilliseconds() -> Int64 { _WebBridgeCalls.epochMilliseconds() }
+    func openURL(_ url: String) { _WebBridgeCalls.openURL(url) }
 }

@@ -31,7 +31,7 @@ swift_library(
     name = "core",
     package_name = "isomer",
     srcs = [
-        "//shared/renderers:srcs",
+        "//shared/renderers:srcs_no_gpu",
         "//shared/swift_ui_core:srcs",
     ],
     copts = _WASM_COPTS,
@@ -39,19 +39,30 @@ swift_library(
     deps = [
         "//shared/isomer_swift_ui",
         ":image_io",
-        "//swift_ffi/swift_ffi",
-        "//shared/isomer_network_host",
         "@flatbuffers//swift",
-        "//swift_gpu/wasm:swift_gpu",
         "//frameworks/core_transferable",
         "//frameworks/uniform_type_identifiers",
-    ] + ["//:foundation"] + [
-        # `Map` engine injection point: defaults to an empty stub; a consumer
-        # with its own swift_map dep points the flag at the real engine to
-        # light up canImport(SwiftMap). See //shared/BUILD.bazel.
+    ] + ["//:foundation"],
+    plugins = SWIFT_UI_MACROS_PLUGINS,
+)
+
+# The GPU renderer (SwiftGPURenderer.swift, which draws everything through
+# swift_gpu's WebGPU (Metal) backend): a module of its own over the SwiftUI above, which
+# the host plugs in. With a SwiftMap engine (the map engine flag:
+# //shared/BUILD.bazel), `Map` draws real tiles.
+swift_library(
+    name = "gpu_renderer",
+    package_name = "isomer",
+    srcs = ["//shared/renderers:SwiftGPURenderer.swift"],
+    copts = _WASM_COPTS + ["-DISOMER_GPU_RENDERER_MODULE"],
+    module_name = "IsomerGPURenderer",
+    target_compatible_with = ["@platforms//os:wasi"],
+    deps = [
+        ":core",
+        "//shared/isomer_swift_ui",
+        "//swift_gpu/wasm:swift_gpu",
         "//shared:map_engine_wasm",
     ],
-    plugins = SWIFT_UI_MACROS_PLUGINS,
 )
 
 # The web's host (WasmHost.swift, and WebBridge.swift's swift_ffi surface that
@@ -69,6 +80,7 @@ swift_library(
     copts = _WASM_COPTS,
     module_name = "IsomerWebHost",
     deps = [
+        ":gpu_renderer",
         ":core",
         "//shared/isomer_swift_ui",
         "//shared/isomer_network_host",
@@ -132,7 +144,7 @@ swift_library(
     name = "isomer",
     package_name = "isomer",
     srcs = [
-        "IsomerBridge.swift",
+        "//shared/isomer:Bridge.swift",
         "MetalView.swift",
         "//shared/isomer:Exports.swift",
         "//shared/swift_ui_extensions:srcs",
@@ -140,7 +152,7 @@ swift_library(
     copts = _WASM_COPTS,
     module_name = "Isomer",
     deps = [
-        ":host",
+        ":gpu_renderer",
         ":swift_ui",
         "//metal/isomer_metal",
         "//metal/metal",

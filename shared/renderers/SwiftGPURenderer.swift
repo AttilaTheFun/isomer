@@ -14,6 +14,12 @@
 
 import SwiftGPU
 package import IsomerSwiftUI
+#if ISOMER_GPU_RENDERER_MODULE
+// Its own module (IsomerGPURenderer) over a platform's SwiftUI; compiled
+// into a core instead (the cores beside Apple's SwiftUI, the Playground's
+// GPU reactor), it is part of that core already.
+package import SwiftUI
+#endif
 #if os(WASI) && canImport(Metal)
 import Metal
 #endif

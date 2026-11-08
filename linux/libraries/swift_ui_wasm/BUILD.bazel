@@ -25,6 +25,7 @@ swift_library(
     target_compatible_with = ["@platforms//os:linux"],
     deps = [
         "//linux/libraries/swift_ui:core",
+        "//linux/libraries/swift_ui:gpu_renderer",
         "//linux/libraries/swift_ui:host",
         "//linux/libraries/image_io",
         "//shared/isomer_swift_ui",

@@ -13,6 +13,7 @@
 @_exported import IsomerMetalWeb
 import Metal
 import SwiftUI
+internal import IsomerGPURenderer
 
 /// One frame of a MetalView: what an MTKView's delegate reads from the view.
 public struct MetalViewFrame {

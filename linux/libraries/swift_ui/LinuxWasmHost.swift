@@ -24,6 +24,7 @@ import SwiftFFIWasmHost
 
 #if canImport(SwiftGPU)
 import SwiftGPU
+import IsomerGPURenderer
 #endif
 
 /// `ISO_WASM_TRACE` in the environment: each frame the reactor hands up,
