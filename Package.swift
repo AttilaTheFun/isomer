@@ -164,7 +164,7 @@ let package = Package(
                 .target(name: "CoreTransferable", condition: .when(platforms: offApple)),
                 .target(name: "UniformTypeIdentifiers", condition: .when(platforms: offApple)),
                 .target(name: "Foundation", condition: .when(platforms: [.android, .wasi])),
-                .target(name: "ImageIO", condition: .when(platforms: [.android, .wasi])),
+                .target(name: "ImageIO", condition: .when(platforms: offApple)),
                 .target(name: "CoreGraphics", condition: .when(platforms: [.linux, .windows])),
                 .target(name: "Combine", condition: .when(platforms: [.linux, .windows])),
             ],

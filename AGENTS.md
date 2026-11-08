@@ -173,8 +173,7 @@ a repository of its own):
   package can't express comes from the Bazel module through configure_package
   `target_deps`: Foundation's internationalization (a marker module Foundation
   checks with `canImport`, `--@isomer//foundation:internationalization`),
-  FlatBuffers' Swift runtime (until the wire format is protobuf), Linux's and
-  Windows' ImageIO. Generated sources the package compiles are checked in, with
+  FlatBuffers' Swift runtime (until the wire format is protobuf). Generated sources the package compiles are checked in, with
   diff_tests (shared/isomer_swift_ui/TreeGenerated.swift, flatc's;
   shared/swift_ui_core/JSONInternal.swift). The package's minimums are
   Isomer's own (iOS 16, macOS 13; #2639 applies none off Apple).

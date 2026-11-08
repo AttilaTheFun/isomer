@@ -1,4 +1,4 @@
-load("@rules_swift//swift:swift.bzl", "swift_library")
+load("//foundation:defs.bzl", "one_configuration")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -8,11 +8,8 @@ package(default_visibility = ["//visibility:public"])
 # search path, and //windows/libraries/swift_ui's holds the native SwiftUI
 # module, which would shadow //windows/libraries/swift_ui_wasm's for those that
 # import the wasm cell's.
-swift_library(
+one_configuration(
     name = "image_io",
-    package_name = "isomer",
-    srcs = ["//shared/image_io:srcs"],
-    module_name = "ImageIO",
+    actual = "@swiftpkg_isomer//:ImageIO",
     target_compatible_with = ["@platforms//os:windows"],
-    deps = ["//:foundation"],
 )

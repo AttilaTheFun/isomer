@@ -159,12 +159,7 @@ swift_deps.configure_package(
         # grpc-swift 1 into every application's graph); until the wire
         # format is protobuf.
         "IsomerSwiftUI": ["@isomer//shared/renderers:flatbuffers_swift"],
-        "SwiftUI": [
-            "@isomer//shared/renderers:flatbuffers_swift",
-            # Linux's and Windows' ImageIO, their own decoders (the package's
-            # is the web's and Android's).
-            "@isomer//shared/image_io:for_swift_ui",
-        ],
+        "SwiftUI": ["@isomer//shared/renderers:flatbuffers_swift"],
     },
 )
 use_repo(swift_deps, "swiftpkg_isomer", "swiftpkg_swift_foundation", "swiftpkg_swift_syntax")
