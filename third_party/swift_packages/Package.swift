@@ -1,15 +1,14 @@
 // swift-tools-version: 5.9
 // isomer's own SwiftPM graph, which rules_swift_package_manager consumes:
-// swift-foundation, whose FoundationEssentials (and, when an app asks,
-// FoundationInternationalization) Isomer's Foundation is built over on the
-// platforms without Apple's. At swift-6.4.2-RELEASE's commit (the tag is
-// not a version SwiftPM reads: tools/released_pins.sh checks the tag), with
-// the patches MODULE.bazel lists.
+// isomer's package itself (the root Package.swift: Foundation, CoreGraphics,
+// Combine and the rest of Isomer's Swift), and through it swift-foundation,
+// with the patches MODULE.bazel lists. An application's graph lists isomer
+// by revision instead, and the same repositories come from it.
 import PackageDescription
 
 let package = Package(
     name: "isomer_swift_packages",
     dependencies: [
-        .package(url: "https://github.com/swiftlang/swift-foundation.git", revision: "e4049b2d77e2d5d70c4cfcc99fd5eca32e1bcb06"), // tag: swift-6.4.2-RELEASE
+        .package(path: "../.."),
     ]
 )

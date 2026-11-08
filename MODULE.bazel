@@ -110,6 +110,14 @@ bazel_dep(name = "swift-syntax", version = "603.0.2")
 # package for that).
 bazel_dep(name = "rules_swift_package_manager", version = "1.25.0")
 
+# Swift package spike: a local package that is a Bazel module too is copied
+# without its Bazel files (tools/patches, for upstream).
+single_version_override(
+    module_name = "rules_swift_package_manager",
+    patch_strip = 1,
+    patches = ["//tools/patches:rules_swift_package_manager_local_bazel_package.patch"],
+)
+
 # The generated package repositories load these by their apparent names,
 # which they take from the module that owns their extension: this one.
 bazel_dep(name = "rules_license", version = "1.0.0")
@@ -130,7 +138,7 @@ swift_deps.configure_package(
         "//tools/patches:swift_foundation_sdk_icu.patch",
     ],
 )
-use_repo(swift_deps, "swiftpkg_swift_foundation")
+use_repo(swift_deps, "swiftpkg_isomer", "swiftpkg_swift_foundation")
 
 # The generated package repositories load rules_swift by its old apparent
 # name, which they see among this module's; inject_repo would only apply
