@@ -31,9 +31,17 @@ its own GPU backend, map engine and image decoder among the deps.
 | CLI | no GPU | TerminalApp, TerminalRenderer | none | |
 
 Every one also has IsomerSwiftUI, FlatBuffers, CoreTransferable,
-UniformTypeIdentifiers and Foundation. Apple's compiled-against-Isomer
-SwiftUI (apple/libraries/compiled_swift_ui) is the core again under
-`ISOMER_COMPILED_FEATURE`, for iOS 16.
+UniformTypeIdentifiers and Foundation. Sixteen targets compile the core's
+sources in all: besides those six, the Playground's slim reactor SwiftUI
+(wasm/libraries/hot_swift_ui, no macro plugins: the on-device compilers run
+none) and its GPU twin, the Linux and Windows wasm hosts' SwiftUI
+(linux|windows/libraries/swift_ui_wasm), Apple's IsomerCore and
+IsomerGPUTreeView (the core under other module names beside Apple's
+SwiftUI), the compiled-against-Isomer SwiftUI
+(apple/libraries/compiled_swift_ui, `ISOMER_COMPILED_FEATURE`, iOS 16), two
+Metal tap-counter examples and the snapshot tests. Each becomes the one
+target with a host and renderer plugged in, or says why it can't (the slim
+reactor's no-plugin build is the likeliest to stay its own).
 
 ## Steps
 
