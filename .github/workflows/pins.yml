@@ -4,9 +4,8 @@
 # in development; a release may not, and Reviews holds a release until its
 # commit's `pins` check passes.
 #
-# The script is sh, git, grep and awk: on GitHub's own runner for this
-# public repository, on OS Server's single-use Linux containers for a
-# private copy.
+# The script is sh, git, grep and awk, in CI's Linux container (OS Server's
+# single-use containers), as every job but the GUI tests.
 name: Pins
 on:
   push:
@@ -16,7 +15,7 @@ permissions:
   contents: read
 jobs:
   pins:
-    runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted", "isomer-jit"]') || 'ubuntu-24.04' }}
+    runs-on: [self-hosted, isomer-jit]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5

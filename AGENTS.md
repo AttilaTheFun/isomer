@@ -354,8 +354,12 @@ then (tools/ci/release_extras.sh) proof.tar.gz (the commit's proof, which
 the next release's proof takes as its baseline before any artifact) and the
 iPhone app for the simulator, beside isomer-site.tar.gz (the web Storybook,
 //web/storybook_web_application:isomer_site), attached to the draft for
-pages.yml. A proposal's draft carries its Alphas the same way (the publish
-job's attach_release.sh).
+pages.yml. A proposal's draft carries its Alphas the same way (alpha's
+attach_release.sh). Every job runs in CI's Linux container but the GUI
+tests and the proof's pictures (apple, windows, android, proof-shoot), on
+GitHub's own macOS, Windows and Ubuntu VMs: the Mac icon's dark appearance
+is read in the container (tools/ci/check_mac_icons.sh), and pages.yml and
+pins.yml run there too.
 
 **Adoption levels** (docs/adoption_levels.md): (1) rules_swift — raw Swift
 on the platform; (2) swift_ffi — idiomatic bindings; (3) embedded Isomer
