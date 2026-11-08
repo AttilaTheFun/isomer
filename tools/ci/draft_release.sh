@@ -10,7 +10,8 @@
 #
 #   tools/ci/draft_release.sh <version> prerelease|release [<asset>…]
 #
-# GH_TOKEN: the job's token (its `contents: write` makes drafts).
+# GH_TOKEN: the job's token (its `contents: write` makes drafts). Needs curl
+# and python3, no gh.
 set -euo pipefail
 version="${1:?usage: draft_release.sh <version> prerelease|release [<asset>…]}"
 kind="${2:?usage: draft_release.sh <version> prerelease|release [<asset>…]}"
@@ -37,11 +38,25 @@ previous="$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD^ 2> /dev/null 
         git log --first-parent --format='- %s' "$previous..HEAD"
     fi
 } > "$notes"
-if [ "$(gh release view "$tag" --repo "$repo" --json isDraft --jq .isDraft 2> /dev/null || true)" = true ]; then
-    gh release delete "$tag" --repo "$repo" --yes
-fi
-flags=()
-[ "$kind" = release ] || flags=(--prerelease)
-gh release create "$tag" --repo "$repo" --draft --target "$sha" --title "Isomer $version" --notes-file "$notes" \
-    ${flags[@]+"${flags[@]}"} "$@"
+# GitHub's REST API over curl: CI's container has no gh.
+api() {
+    curl -fsS -H "Authorization: Bearer ${GH_TOKEN:?}" -H "Accept: application/vnd.github+json" \
+        -H "X-GitHub-Api-Version: 2022-11-28" "$@"
+}
+# A draft of this tag from an earlier run goes (a draft has no tag yet, so
+# it is found among the releases, not by its tag).
+for id in $(api "https://api.github.com/repos/$repo/releases?per_page=100" |
+    python3 -c 'import json, sys; print(" ".join(str(r["id"]) for r in json.load(sys.stdin) if r["draft"] and r["tag_name"] == sys.argv[1]))' "$tag"); do
+    api -X DELETE "https://api.github.com/repos/$repo/releases/$id" > /dev/null
+done
+release="$(python3 -c 'import json, sys
+print(json.dumps({"tag_name": sys.argv[1], "target_commitish": sys.argv[2], "name": "Isomer " + sys.argv[3],
+    "body": open(sys.argv[4]).read(), "draft": True, "prerelease": sys.argv[5] != "release"}))' \
+    "$tag" "$sha" "$version" "$notes" "$kind")"
+id="$(api -X POST "https://api.github.com/repos/$repo/releases" -d "$release" |
+    python3 -c 'import json, sys; print(json.load(sys.stdin)["id"])')"
+for asset in "$@"; do
+    api -X POST -H "Content-Type: application/octet-stream" --data-binary "@$asset" \
+        "https://uploads.github.com/repos/$repo/releases/$id/assets?name=$(basename "$asset")" > /dev/null
+done
 echo "draft_release.sh: $tag drafted ($kind) on $sha"
