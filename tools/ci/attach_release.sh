@@ -21,7 +21,14 @@ repo="${GITHUB_REPOSITORY:?}"
 . "$ROOT/tools/ci/gh_ready.sh"
 
 # A draft has no tag yet: it is found by its tag's name among the releases.
-release="$(gh api "repos/$repo/releases?per_page=100" --jq ".[] | select(.tag_name == \"$tag\") | .id" | head -1)"
+# A draft just made may not be listed for a few seconds: asked again, up to
+# a minute.
+release=""
+for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+  release="$(gh api "repos/$repo/releases?per_page=100" --jq ".[] | select(.tag_name == \"$tag\") | .id" | head -1)"
+  [ -z "$release" ] || break
+  [ "$attempt" = 12 ] || sleep 5
+done
 [ -n "$release" ] || { echo "attach_release: no release $tag in $repo" >&2; exit 1; }
 
 work="$(mktemp -d)"
