@@ -14,6 +14,7 @@
 #if !canImport(WASILibc)
 
 internal import IsomerSwiftUI
+internal import SwiftUI
 #if canImport(Darwin)
 import Darwin
 #elseif canImport(Glibc)

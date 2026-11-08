@@ -14,6 +14,8 @@
 
 #if !canImport(WASILibc)
 
+internal import SwiftUI
+
 /// One styled character cell.
 struct TerminalCell {
     var character: Character = " "
