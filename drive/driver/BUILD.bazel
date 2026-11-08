@@ -1,0 +1,9 @@
+load("//foundation:defs.bzl", "one_configuration")
+
+package(default_visibility = ["//visibility:public"])
+
+# IsomerDriver (isomer's Swift package, Package.swift; docs/drive_plan.md): An app's screen read and used through its runtime, in any host.
+one_configuration(
+    name = "driver",
+    actual = "@swiftpkg_isomer//:IsomerDriver",
+)

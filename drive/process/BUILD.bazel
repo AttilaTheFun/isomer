@@ -1,0 +1,9 @@
+load("//foundation:defs.bzl", "one_configuration")
+
+package(default_visibility = ["//visibility:public"])
+
+# IsomerProcessTransport (isomer's Swift package, Package.swift; docs/drive_plan.md): The services over standard input and output or a Unix socket: no TCP on one machine.
+one_configuration(
+    name = "process",
+    actual = "@swiftpkg_isomer//:IsomerProcessTransport",
+)

@@ -1,0 +1,9 @@
+load("//foundation:defs.bzl", "one_configuration")
+
+package(default_visibility = ["//visibility:public"])
+
+# IsomerWebSocketTransport (isomer's Swift package, Package.swift; docs/drive_plan.md): The services over WebSockets (SwiftNIO): clients without gRPC.
+one_configuration(
+    name = "websocket",
+    actual = "@swiftpkg_isomer//:IsomerWebSocketTransport",
+)

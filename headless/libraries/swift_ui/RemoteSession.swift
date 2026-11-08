@@ -1,101 +1,97 @@
-// The headless host serving its app to a remote client
-// (ISO_HEADLESS_PROTOCOL=session): shared/wire/session.proto on standard
-// input and output, length-delimited. The client (a browser's React, an
-// Android phone's Compose: nothing of the app but its renderer) sends what
-// the person does; the app answers with each frame as a tree.proto Patch,
-// the same patches the component-system renderers take in process, and what
-// it asks of the platform. One process is one session: a server (the
-// examples' //remote:gateway) starts one for each connection.
+// A head drawing the headless app (shared/wire/session.proto's Session.Connect,
+// over whichever transport the app is served on): the head (a browser's React,
+// an Android phone's Compose: nothing of the app but its renderer) sends what
+// the person does; the app answers with each frame as a tree.proto Patch, the
+// same patches the component-system renderers take in process, and what it
+// asks of the platform. One head at a time; the driver keeps working while it
+// draws, on the same screen.
 //
-// The app lays nothing out by the client's fonts: text is measured as the
+// The app lays nothing out by the head's fonts: text is measured as the
 // headless host measures it (a fixed-width estimate), and every image is
-// ready. The client's renderer lays out the tree as it would in process; what
+// ready. The head's renderer lays out the tree as it would in process; what
 // the app itself computes from a measurement (a GeometryReader of text) is
 // approximate.
 
 #if !canImport(WASILibc)
 
+internal import IsomerServing
 internal import IsomerSwiftUI
 internal import IsomerWire
 internal import SwiftUI
 import Foundation
-#if canImport(Darwin)
-import Darwin
-#elseif canImport(Glibc)
-import Glibc
-#endif
 
 enum RemoteSession {
-    nonisolated(unsafe) static var needsFrame = true
-    nonisolated(unsafe) static var rendererName = "React"
+    /// The renderer drawing the app: a head's, or none.
+    nonisolated(unsafe) static var rendererName = "None"
+    /// Where the head's messages go, while one is drawing.
+    nonisolated(unsafe) static var sink: AsyncStream<Wire_ServerMessage>.Continuation?
 
-    /// One message to the client.
-    static func send(_ message: Wire_ServerMessage) {
-        guard let framed = try? WireDelimited.frame(message) else { return }
-        FileHandle.standardOutput.write(framed)
-    }
-
+    /// One message to the head drawing the app, if one is.
     static func send(_ build: (inout Wire_ServerMessage) -> Void) {
+        guard let sink else { return }
         var message = Wire_ServerMessage()
         build(&message)
-        send(message)
+        sink.yield(message)
     }
 
-    /// Waits for the client's `start`, starts the app at its size, then
-    /// takes the client's messages on the main actor in order, and renders a
-    /// frame whenever the app asked for one, until the input ends.
+    /// No head: frames still go through a component-system renderer (its
+    /// encoding installs the tree's handlers and fires `onAppear`), to
+    /// nowhere.
     @MainActor
-    static func run() {
-        var start: Wire_Start?
-        while start == nil {
-            guard let bytes = WireDelimited.read(from: 0) else { exit(0) }
-            if let message = try? Wire_ClientMessage(serializedBytes: bytes), case .start(let first)? = message.message {
-                start = first
+    static func bindIdle() {
+        Renderer.bind(ReactRenderer(send: { _ in }))
+        rendererName = "None"
+    }
+
+    /// A head's session: its `start`, then its events until it goes.
+    static func serve(_ messages: IsomerInbound<Wire_ClientMessage>, _ frames: IsomerOutbound<Wire_ServerMessage>) async throws {
+        var incoming = messages.makeAsyncIterator()
+        guard let first = try await incoming.next(), case .start(let start)? = first.message else {
+            throw IsomerCallError(.invalidArgument, "a session's first message is its start")
+        }
+        let (outgoing, continuation) = AsyncStream<Wire_ServerMessage>.makeStream()
+        try await MainActor.run {
+            guard sink == nil else { throw IsomerCallError(.unavailable, "a head is drawing this app already") }
+            sink = continuation
+            begin(start)
+        }
+        let forwarding = Task {
+            for await message in outgoing { try? await frames.write(message) }
+        }
+        do {
+            while let message = try await incoming.next() {
+                await MainActor.run { receive(message) }
             }
+        } catch {
+            // The head went: its session is over either way.
         }
-        guard let start else { exit(0) }
-        for (key, value) in start.environment where key.hasPrefix("ISO_") {
-            setenv(key, value, 1)
+        await MainActor.run {
+            sink = nil
+            continuation.finish()
+            bindIdle()
         }
+        await forwarding.value
+    }
+
+    /// The head's renderer bound (a new one: its first frame is the whole
+    /// tree), at the head's size and appearance.
+    @MainActor
+    static func begin(_ start: Wire_Start) {
         let compose = start.renderer == "compose"
         rendererName = compose ? "Compose" : "React"
-        PlatformBridges.current = RemotePlatformBridge()
-        if start.dark { Runtime.shared.setSystemColorScheme(dark: true) }
-        if start.displayScale > 0 { Runtime.shared.displayScale = CGFloat(start.displayScale) }
         let send: ([UInt8]) -> Void = { patch in RemoteSession.send { $0.patch = Data(patch) } }
         Renderer.bind(compose ? JetpackComposeRenderer(send: send) : ReactRenderer(send: send))
-        let width = start.hasSize && start.size.width > 0 ? start.size.width : 390
-        let height = start.hasSize && start.size.height > 0 ? start.size.height : 844
-        Runtime.shared.start(host: RemoteHostBridge(), width: width, height: height)
-
-        // A frame when the app asked for one, at most one a display frame.
-        let frames = Timer(timeInterval: 1.0 / 60, repeats: true) { _ in
-            MainActor.assumeIsolated { renderIfNeeded() }
+        let runtime = Runtime.shared
+        runtime.setSystemColorScheme(dark: start.dark)
+        if start.displayScale > 0 { runtime.displayScale = CGFloat(start.displayScale) }
+        if start.hasSize, start.size.width > 0, start.size.height > 0 {
+            runtime.resize(width: start.size.width, height: start.size.height)
         }
-        RunLoop.main.add(frames, forMode: .default)
-        renderIfNeeded()
-
-        Thread.detachNewThread {
-            while let bytes = WireDelimited.read(from: 0) {
-                guard let message = try? Wire_ClientMessage(serializedBytes: bytes) else { continue }
-                DispatchQueue.main.async {
-                    MainActor.assumeIsolated { receive(message) }
-                }
-            }
-            // The client went away: the session is over.
-            exit(0)
-        }
-        HeadlessApp.runMainLoop()
+        runtime.setNeedsRender()
+        HeadlessApp.renderIfNeeded()
     }
 
-    @MainActor
-    static func renderIfNeeded() {
-        guard needsFrame else { return }
-        needsFrame = false
-        Runtime.shared.renderFrame()
-    }
-
-    /// One of the client's messages, as the in-process hosts' entry points
+    /// One of the head's messages, as the in-process hosts' entry points
     /// take it (wasm/libraries/swift_ui/WebBridge.swift's `iso…` exports).
     @MainActor
     static func receive(_ message: Wire_ClientMessage) {
@@ -136,65 +132,8 @@ enum RemoteSession {
         }
         // What the message changed renders in the next frame (the app asks for
         // it); a frame now answers the person sooner.
-        renderIfNeeded()
+        HeadlessApp.renderIfNeeded()
     }
-}
-
-/// The services half for a remote client: measurement as the headless
-/// host's, and what the app asks of the platform sent to the client.
-final class RemoteHostBridge: HostBridge {
-    private let measuring = HeadlessHostBridge()
-
-    func measureText(_ text: String, fontSize: Double, weight: Int, wrapWidth: Double?) -> CGSize {
-        measuring.measureText(text, fontSize: fontSize, weight: weight, wrapWidth: wrapWidth)
-    }
-
-    func imageInfo(_ source: String, isRemote: Bool) -> ImageStatus { .ready(CGSize(width: 1, height: 1)) }
-    func syncHostViews(_ viewsJSON: String) {}
-    func beginTextInput(_ text: String, in rect: CGRect, fontSize: Double) {
-        RemoteSession.send {
-            $0.textInput = Wire_TextInputRequest.with {
-                $0.text = text
-                $0.x = rect.origin.x
-                $0.y = rect.origin.y
-                $0.width = rect.size.width
-                $0.height = rect.size.height
-                $0.fontSize = fontSize
-            }
-        }
-    }
-    func endTextInput() { RemoteSession.send { $0.endTextInput = Wire_Empty() } }
-    func scheduleRender() { RemoteSession.needsFrame = true }
-    func log(_ message: String) { RemoteSession.send { $0.log = message } }
-    func openURL(_ url: String) { RemoteSession.send { $0.openURL = url } }
-    func setColorScheme(dark: Bool) { RemoteSession.send { $0.dark = dark } }
-    func platformCommand(_ key: String, _ value: String) {
-        RemoteSession.send {
-            $0.command = Wire_PlatformCommand.with {
-                $0.key = key
-                $0.value = value
-            }
-        }
-    }
-    func registerImage(_ source: String, bytes: [UInt8]) {
-        RemoteSession.send {
-            $0.image = Wire_Image.with {
-                $0.source = source
-                $0.bytes = Data(bytes)
-            }
-        }
-    }
-    func now() -> Double { Date().timeIntervalSince1970 }
-}
-
-/// The Isomer module's `Bridge` in a remote session: the client's renderer,
-/// the log and URLs sent to the client.
-struct RemotePlatformBridge: PlatformBridge {
-    var platformName: String { "Remote" }
-    var rendererName: String { RemoteSession.rendererName }
-    func log(_ message: String) { RemoteSession.send { $0.log = message } }
-    func epochMilliseconds() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
-    func openURL(_ url: String) { RemoteSession.send { $0.openURL = url } }
 }
 
 #endif

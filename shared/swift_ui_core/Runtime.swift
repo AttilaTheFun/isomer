@@ -577,7 +577,7 @@ package final class Runtime {
     }
 
     /// Asks for a frame; what changed is marked where it is.
-    func requestFrame() {
+    package func requestFrame() {
         if !needsRender, !isShuttingDown {
             needsRender = true
             // Within a frame's build passes the frame schedules what is left.
@@ -703,8 +703,9 @@ package final class Runtime {
     /// at *layout* time (see Layout.swift). So a pure resize can reuse this
     /// tree and re-run only the renderer (for the self-drawing path: layout +
     /// draw, which re-invokes any GeometryReader build at the new size)
-    /// instead of rebuilding the whole hierarchy. Refreshed every frame.
-    var retainedTree: RenderNode?
+    /// instead of rebuilding the whole hierarchy. Refreshed every frame. A
+    /// driver reads the screen from it (drive/driver), in any host.
+    package internal(set) var retainedTree: RenderNode?
 
     // Subtree reuse (Reuse.swift).
     /// Bumped by every build that reads or registers runtime state; a view

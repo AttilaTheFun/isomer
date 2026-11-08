@@ -1,0 +1,9 @@
+load("//foundation:defs.bzl", "one_configuration")
+
+package(default_visibility = ["//visibility:public"])
+
+# IsomerServing (isomer's Swift package, Package.swift; docs/drive_plan.md): The services apart from any transport: the IsomerServer protocol, its calls and tokens, the in-process connection, the URLSession WebSocket client.
+one_configuration(
+    name = "serving",
+    actual = "@swiftpkg_isomer//:IsomerServing",
+)

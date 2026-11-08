@@ -1,21 +1,23 @@
 #!/bin/bash
 # The web's thin client in headless Chrome (//tools/testing/browser_check)
-# against the gateway: the headless Storybook's story drawn by the page's
-# React renderer from the session's patches, its button clicked in the page,
-# and the count it changes drawn from the next frame. The picture is the
-# test's output (TEST_UNDECLARED_OUTPUTS_DIR).
-#   web_test.sh <gateway> <app> <browser_check> <thin client's site> <chrome or "">
+# against the Storybook built headless, served on a WebSocket of its own
+# (ISO_DRIVE_LISTEN): the story drawn by the page's renderer from the
+# session's patches, its button clicked in the page, and the count it changes
+# drawn from the next frame. The picture is the test's output
+# (TEST_UNDECLARED_OUTPUTS_DIR).
+#   web_test.sh <app> <browser_check> <thin client's site> <chrome or "">
 set -euo pipefail
-gateway="$1" app="$2" check="$3" site="$4"
-chrome="${5:-${CHROME:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}}"
+app="$1" check="$2" site="$3"
+chrome="${4:-${CHROME:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}}"
 out="${TEST_UNDECLARED_OUTPUTS_DIR:-$(mktemp -d)}"
 log="$(mktemp)"
-"$gateway" --app "$app" --port 0 --grpc-port 0 > "$log" &
+ISO_DRIVE_LISTEN="ws://127.0.0.1:0" ISO_HEADLESS_PROTOCOL=serve ISO_STORYBOOK_STORY=state.observableobject \
+    "$app" > "$log" 2>&1 < /dev/null &
 pid=$!
 trap 'kill $pid 2>/dev/null || true; rm -f "$log"' EXIT
-for _ in $(seq 100); do grep -q "^gateway:" "$log" && break; sleep 0.1; done
-session="$(sed -n 's/^gateway: \(ws:[^ ]*\).*/\1/p' "$log")"
-[ -n "$session" ] || { echo "the gateway didn't start"; exit 1; }
+for _ in $(seq 200); do grep -q "isomer: listening ws:" "$log" && break; sleep 0.1; done
+session="$(sed -n 's/^isomer: listening \(ws:[^ ]*\).*/\1/p' "$log")/session"
+[ "$session" != "/session" ] || { echo "the app didn't start listening:"; cat "$log"; exit 1; }
 # Taps once the first frame shows "Taps: 0", then waits for "Taps: 1".
 until='(() => {
   const tree = window.__isoLastTree || "";
@@ -27,4 +29,4 @@ until='(() => {
   return false;
 })()'
 "$check" --site "$site" --chrome "$chrome" --until "$until" --settle 1 --timeout 60 \
-    --page "?session=$session&ISO_STORYBOOK_STORY=state.observableobject=$out/remote-web.png"
+    --page "?session=$session=$out/remote-web.png"

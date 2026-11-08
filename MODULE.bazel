@@ -162,7 +162,20 @@ swift_deps.configure_package(
     name = "swift-protobuf",
     target_deps = {"SwiftProtobuf": ["@isomer//foundation:for_swift_packages"]},
 )
-use_repo(swift_deps, "swiftpkg_isomer", "swiftpkg_swift_foundation", "swiftpkg_swift_protobuf", "swiftpkg_swift_syntax")
+# gRPC Swift 2 and SwiftNIO (driving an app: drive/): in every application's
+# graph, as isomer's package depends on them; built only where an app is
+# served or driven from (a Mac, Linux), never for the web or Android.
+use_repo(
+    swift_deps,
+    "swiftpkg_grpc_swift_2",
+    "swiftpkg_grpc_swift_nio_transport",
+    "swiftpkg_grpc_swift_protobuf",
+    "swiftpkg_isomer",
+    "swiftpkg_swift_foundation",
+    "swiftpkg_swift_nio",
+    "swiftpkg_swift_protobuf",
+    "swiftpkg_swift_syntax",
+)
 
 swift_deps_root = use_extension(
     "@rules_swift_package_manager//:extensions.bzl",

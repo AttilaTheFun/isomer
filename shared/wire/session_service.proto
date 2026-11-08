@@ -1,11 +1,13 @@
-// The remote session (session.proto) and the headless driver (headless.proto)
-// as gRPC services: a server that runs an app built headless serves each
-// stream from a run of its own (the examples' //remote:gateway). A stream is
-// one session; it ends when either side ends it.
+// The remote session (session.proto) and the driver (headless.proto) as gRPC
+// services, the transport an Isomer app is driven over remotely (gRPC Swift 2
+// over HTTP/2). The same messages also go over a WebSocket, standard input
+// and output, a Unix socket or a call in the same process (drive/: the
+// IsomerServer protocol and its adapters).
 //
-// Headless.Drive takes the app's launch environment from the call's
-// metadata: a key `iso_storybook_story` is ISO_STORYBOOK_STORY (only iso_
-// keys). Session.Connect takes it from its first message, `start`.
+// An app built headless serves Session and Headless itself. A headful app
+// dials out to a test host (or a CLI's hub) and serves Driver.Attach's
+// commands over the connection it opened. A stream ends when either side
+// ends it. A call to a remote app carries `authorization: Bearer <token>`.
 
 syntax = "proto3";
 
@@ -24,4 +26,10 @@ service Session {
 
 service Headless {
   rpc Drive(stream Command) returns (stream Answer);
+}
+
+// A headful app driven over a connection it opened: the host sends the
+// commands, the app the answers, its first one carrying `info` (who it is).
+service Driver {
+  rpc Attach(stream Answer) returns (stream Command);
 }

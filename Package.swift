@@ -40,6 +40,15 @@ let package = Package(
         .library(name: "ImageIO", targets: ["ImageIO"]),
         .library(name: "SwiftUI", targets: ["SwiftUI"]),
         .library(name: "PhotosUI", targets: ["PhotosUI"]),
+        // Driving and serving an app (drive/, docs/drive_plan.md).
+        .library(name: "IsomerWire", targets: ["IsomerWire"]),
+        .library(name: "IsomerServing", targets: ["IsomerServing"]),
+        .library(name: "IsomerProcessTransport", targets: ["IsomerProcessTransport"]),
+        .library(name: "IsomerWebSocketTransport", targets: ["IsomerWebSocketTransport"]),
+        .library(name: "IsomerGRPCTransport", targets: ["IsomerGRPCTransport"]),
+        .library(name: "IsomerRemote", targets: ["IsomerRemote"]),
+        .library(name: "IsomerDriver", targets: ["IsomerDriver"]),
+        .executable(name: "isomer", targets: ["isomer"]),
     ],
     dependencies: [
         // swift-6.4.2-RELEASE's commit: the swift-foundation the Swift SDKs'
@@ -51,6 +60,15 @@ let package = Package(
         .package(url: "https://github.com/swiftlang/swift-syntax", branch: "release/6.4.x"), // as swift-foundation
         // The render tree's wire format (shared/wire/tree.proto).
         .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.38.1"),
+        // Driving an app remotely: gRPC Swift 2 over HTTP/2, and SwiftNIO's
+        // WebSockets for clients without gRPC. gRPC Swift 2 marks its API
+        // available from macOS 15 and iOS 18 rather than raising a package
+        // minimum, so this package keeps macOS 13 and iOS 16; the gRPC
+        // transport's API carries the same marks.
+        .package(url: "https://github.com/grpc/grpc-swift-2.git", from: "2.4.3"),
+        .package(url: "https://github.com/grpc/grpc-swift-protobuf.git", from: "2.4.1"),
+        .package(url: "https://github.com/grpc/grpc-swift-nio-transport.git", from: "2.10.0"),
+        .package(url: "https://github.com/apple/swift-nio.git", from: "2.81.0"),
     ],
     targets: [
         .target(
@@ -196,6 +214,92 @@ let package = Package(
                 .target(name: "UniformTypeIdentifiers", condition: .when(platforms: offApple)),
             ],
             path: "frameworks/photos_ui",
+            exclude: ["BUILD.bazel"]
+        ),
+        // Driving and serving an app (drive/, docs/drive_plan.md): the
+        // messages (shared/wire: protoc's Swift, checked in), the services
+        // apart from any transport (IsomerServing: builds wherever Isomer
+        // does), the transports (standard input and output or a Unix socket;
+        // WebSockets; gRPC Swift 2), a client by URL (IsomerRemote), the
+        // driver an app serves (IsomerDriver), and the `isomer` CLI.
+        .target(
+            name: "IsomerWire",
+            dependencies: [
+                .product(name: "SwiftProtobuf", package: "swift-protobuf"),
+                .target(name: "Foundation", condition: .when(platforms: [.android, .wasi])),
+            ],
+            path: "shared/wire/swift",
+            exclude: ["BUILD.bazel"]
+        ),
+        .target(
+            name: "IsomerServing",
+            dependencies: [
+                "IsomerWire",
+                .product(name: "SwiftProtobuf", package: "swift-protobuf"),
+                .target(name: "Foundation", condition: .when(platforms: [.android, .wasi])),
+            ],
+            path: "drive/serving",
+            exclude: ["BUILD.bazel"]
+        ),
+        .target(
+            name: "IsomerProcessTransport",
+            dependencies: ["IsomerServing", "IsomerWire"],
+            path: "drive/process",
+            exclude: ["BUILD.bazel"]
+        ),
+        .target(
+            name: "IsomerWebSocketTransport",
+            dependencies: [
+                "IsomerServing",
+                .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "NIOHTTP1", package: "swift-nio"),
+                .product(name: "NIOPosix", package: "swift-nio"),
+                .product(name: "NIOWebSocket", package: "swift-nio"),
+            ],
+            path: "drive/websocket",
+            exclude: ["BUILD.bazel"]
+        ),
+        .target(
+            name: "IsomerGRPCTransport",
+            dependencies: [
+                "IsomerServing",
+                "IsomerWire",
+                .product(name: "GRPCCore", package: "grpc-swift-2"),
+                .product(name: "GRPCProtobuf", package: "grpc-swift-protobuf"),
+                .product(name: "GRPCNIOTransportHTTP2", package: "grpc-swift-nio-transport"),
+            ],
+            path: "drive/grpc",
+            exclude: ["BUILD.bazel"]
+        ),
+        .target(
+            name: "IsomerRemote",
+            dependencies: [
+                "IsomerServing",
+                "IsomerWire",
+                "IsomerProcessTransport",
+                "IsomerWebSocketTransport",
+                "IsomerGRPCTransport",
+            ],
+            path: "drive/remote",
+            exclude: ["BUILD.bazel"]
+        ),
+        .target(
+            name: "IsomerDriver",
+            dependencies: ["IsomerServing", "IsomerWire", "IsomerSwiftUI", "SwiftUI"],
+            path: "drive/driver",
+            exclude: ["BUILD.bazel"]
+        ),
+        .executableTarget(
+            name: "isomer",
+            dependencies: [
+                "IsomerGRPCTransport",
+                "IsomerRemote",
+                "IsomerServing",
+                "IsomerWebSocketTransport",
+                "IsomerWire",
+                .product(name: "SwiftProtobuf", package: "swift-protobuf"),
+            ],
+            path: "drive/cli",
             exclude: ["BUILD.bazel"]
         ),
     ],

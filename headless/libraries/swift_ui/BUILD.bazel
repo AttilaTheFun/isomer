@@ -20,11 +20,12 @@ one_configuration(
     actual = "@swiftpkg_isomer//:SwiftUI",
 )
 
-# The headless host (HeadlessHost.swift; RemoteSession.swift its remote
+# The headless host (HeadlessHost.swift; RemoteSession.swift a head's
 # session): a module of its own over the SwiftUI above, reaching the
 # runtime's `package` plumbing as a module of Isomer's package. It defines
 # `iso_process_host_run`, so a binary that links it is run headless
-# (shared/swift_ui_core/App.swift). Its protocols are //shared/wire's.
+# (shared/swift_ui_core/App.swift), and serves the app over drive/'s
+# transports (docs/drive_plan.md).
 swift_library(
     name = "host",
     package_name = "isomer",
@@ -36,6 +37,12 @@ swift_library(
     module_name = "IsomerHeadlessHost",
     deps = [
         ":swift_ui",
+        "//drive/driver",
+        "//drive/grpc",
+        "//drive/process",
+        "//drive/remote",
+        "//drive/serving",
+        "//drive/websocket",
         "//shared/isomer_swift_ui",
         "//shared/wire/swift",
         "//shared/wire/swift:swift_protobuf",
