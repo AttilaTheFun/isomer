@@ -1,4 +1,5 @@
 load("@rules_swift//swift:swift.bzl", "swift_library")
+load("//foundation:defs.bzl", "one_configuration")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -21,7 +22,16 @@ swift_library(
     ],
     module_name = "IsomerWire",
     deps = [
+        ":swift_protobuf",
         "//:foundation",
-        "@swiftpkg_swift_protobuf//:SwiftProtobuf",
     ],
+)
+
+# SwiftProtobuf in the configuration the package's modules are built in
+# (IsomerSwiftUI depends on it there): reached directly, it would be built a
+# second time beside them, and a binary with both (the headless host's)
+# fails to link on Linux on duplicate symbols.
+one_configuration(
+    name = "swift_protobuf",
+    actual = "@swiftpkg_swift_protobuf//:SwiftProtobuf",
 )

@@ -38,7 +38,7 @@ swift_library(
         ":swift_ui",
         "//shared/isomer_swift_ui",
         "//shared/wire/swift",
-        "@swiftpkg_swift_protobuf//:SwiftProtobuf",
+        "//shared/wire/swift:swift_protobuf",
     ],
 )
 
