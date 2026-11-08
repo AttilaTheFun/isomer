@@ -16,7 +16,7 @@ const STYLES = ["sheet", "popover", "alert"];
 const textDecoder = new TextDecoder();
 
 // A reader over `bytes[start, end)`: protobuf's fields, one at a time.
-function makeReader(bytes, start = 0, end = bytes.length) {
+export function makeReader(bytes, start = 0, end = bytes.length) {
   const buf = bytes instanceof Uint8Array ? bytes : Uint8Array.from(bytes);
   const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
   let pos = start;

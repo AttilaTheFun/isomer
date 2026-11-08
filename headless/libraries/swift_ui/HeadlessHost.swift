@@ -1,8 +1,8 @@
 // The headless host (headless/libraries/swift_ui): an app's SwiftUI run on
 // the building machine (macOS, or Linux in a container) with nothing drawn,
 // its UI read and driven through the runtime. `App.main()` runs `HeadlessApp`
-// (`iso_process_host_run`), which speaks newline-delimited JSON on standard
-// input and output, a command a line and an answer a line:
+// (`iso_process_host_run`), which speaks shared/wire/headless.proto on
+// standard input and output, a command and then its answer:
 //
 //   {"cmd": "ls"}                                   the screen as it is
 //   {"cmd": "tap", "target": "Send"}                a button, by its accessibility
@@ -18,12 +18,18 @@
 // Each answer is `{"ok": true|false, "error": …, "screen": {…}}`, the screen
 // once the UI has settled after the command: what the flat tree a host
 // receives shows (texts; buttons, fields and controls with their roles,
-// labels, identifiers and values; what is presented), never pixels. The
-// tests' client is IsomerHeadless (headless/isomer_headless).
+// labels, identifiers and values; what is presented), never pixels. That is
+// the protocol's JSON mapping, a message a line, for a terminal (the
+// default); ISO_HEADLESS_PROTOCOL=binary speaks it length-delimited, as the
+// tests' client does (IsomerHeadless, headless/isomer_headless), and
+// ISO_HEADLESS_PROTOCOL=session serves the app to a remote client instead
+// (shared/wire/session.proto, RemoteSession.swift).
 
 #if !canImport(WASILibc)
 
 internal import IsomerSwiftUI
+internal import IsomerWire
+internal import SwiftProtobuf
 internal import SwiftUI
 import Foundation
 #if canImport(Darwin)
@@ -162,17 +168,25 @@ struct HeadlessFrame {
             ?? candidates.last { $0.label.contains(target) }
     }
 
-    var json: [String: Any] {
-        [
-            "texts": texts,
-            "elements": elements.map { element -> [String: Any] in
-                var entry: [String: Any] = ["role": element.role, "label": element.label]
-                if let id = element.id { entry["id"] = id }
-                if let value = element.value { entry["value"] = value }
-                return entry
-            },
-            "presented": presented.map { ["style": $0.style, "title": $0.title, "message": $0.message] },
-        ]
+    var wire: Wire_Screen {
+        var screen = Wire_Screen()
+        screen.texts = texts
+        screen.elements = elements.map { element in
+            var entry = Wire_Element()
+            entry.role = element.role
+            entry.label = element.label
+            if let id = element.id { entry.id = id }
+            if let value = element.value { entry.value = value }
+            return entry
+        }
+        screen.presented = presented.map { presentation in
+            var entry = Wire_Presentation()
+            entry.style = presentation.style
+            entry.title = presentation.title
+            entry.message = presentation.message
+            return entry
+        }
+        return screen
     }
 }
 
@@ -192,6 +206,11 @@ enum HeadlessApp {
     @MainActor
     static func run() {
         let environment = ProcessInfo.processInfo.environment
+        if environment["ISO_HEADLESS_PROTOCOL"] == "session" {
+            RemoteSession.run()
+            return
+        }
+        let binary = environment["ISO_HEADLESS_PROTOCOL"] == "binary"
         if environment["ISO_DARK"] != nil {
             Runtime.shared.setSystemColorScheme(dark: true)
         }
@@ -203,31 +222,61 @@ enum HeadlessApp {
 
         // The commands are read on a thread of their own and run on the main
         // actor one at a time, so the app's tasks run between them.
-        let done = DispatchSemaphore(value: 0)
         Thread.detachNewThread {
-            while let line = readLine() {
-                if line.trimmingCharacters(in: .whitespaces).isEmpty { continue }
+            while let command = binary ? readBinaryCommand() : readJSONCommand() {
                 let finished = DispatchSemaphore(value: 0)
-                var quit = false
+                nonisolated(unsafe) var answer = Wire_Answer()
                 Task { @MainActor in
-                    quit = await handle(line)
+                    answer = await handle(command)
                     finished.signal()
                 }
                 finished.wait()
-                if quit { break }
+                if binary {
+                    if let framed = try? WireDelimited.frame(answer) { FileHandle.standardOutput.write(framed) }
+                } else {
+                    print(json(answer))
+                    fflush(stdout)
+                }
+                if command.cmd == "quit" { break }
             }
-            done.signal()
+            exit(0)
         }
         // The main queue (and with it the main actor) runs on the main thread,
         // whose stack a deep view tree needs (dispatchMain would hand it to a
         // worker thread's 512 KB), until the reader ends.
-        Thread.detachNewThread {
-            done.wait()
-            exit(0)
-        }
+        runMainLoop()
+    }
+
+    static func runMainLoop() -> Never {
         while true {
             _ = RunLoop.main.run(mode: .default, before: .distantFuture)
         }
+    }
+
+    /// The next line's command (one that doesn't parse is a command no one
+    /// knows, answered so); nil at the input's end.
+    static func readJSONCommand() -> Wire_Command? {
+        while let line = readLine() {
+            if line.trimmingCharacters(in: .whitespaces).isEmpty { continue }
+            var options = JSONDecodingOptions()
+            options.ignoreUnknownFields = true
+            if let command = try? Wire_Command(jsonString: line, options: options) { return command }
+            var unknown = Wire_Command()
+            unknown.cmd = line
+            return unknown
+        }
+        return nil
+    }
+
+    static func readBinaryCommand() -> Wire_Command? {
+        guard let bytes = WireDelimited.read(from: 0) else { return nil }
+        return (try? Wire_Command(serializedBytes: bytes)) ?? Wire_Command()
+    }
+
+    /// An answer as a line of JSON (protobuf's mapping leaves out a field at
+    /// its default: an empty list of texts).
+    static func json(_ answer: Wire_Answer) -> String {
+        (try? answer.jsonString()) ?? #"{"ok": false}"#
     }
 
     /// The frame as it stands, encoded as a host receives it, its handlers
@@ -246,7 +295,7 @@ enum HeadlessApp {
     @MainActor
     static func settle(timeout: Double = 3) async -> HeadlessFrame? {
         let deadline = Date().addingTimeInterval(timeout)
-        var last = ""
+        var last: Wire_Screen?
         var still = 0
         var current = frame()
         while Date() < deadline {
@@ -255,7 +304,7 @@ enum HeadlessApp {
                 Runtime.shared.renderFrame()
             }
             current = frame()
-            let text = current.map { serialize($0.json) } ?? ""
+            let text = current?.wire
             if text == last {
                 still += 1
                 if still >= 3 { break }
@@ -268,15 +317,13 @@ enum HeadlessApp {
         return current
     }
 
-    /// Runs one command and writes its answer; true when it was `quit`.
+    /// Runs one command and answers it.
     @MainActor
-    static func handle(_ line: String) async -> Bool {
+    static func handle(_ command: Wire_Command) async -> Wire_Answer {
         var error: String?
-        var quit = false
-        let command = (try? JSONSerialization.jsonObject(with: Data(line.utf8))) as? [String: Any] ?? [:]
-        let target = command["target"] as? String ?? ""
+        let target = command.target
         let before = await settle()
-        switch command["cmd"] as? String {
+        switch command.cmd {
         case "ls":
             break
         case "tap":
@@ -287,13 +334,13 @@ enum HeadlessApp {
             }
         case "type":
             if let handler = before?.element(target, roles: ["textField"])?.handler {
-                Runtime.shared.hostViewEvent(id: handler, value: command["text"] as? String ?? "")
+                Runtime.shared.hostViewEvent(id: handler, value: command.text)
             } else {
                 error = "no text field \(target)"
             }
         case "set":
             if let handler = before?.element(target)?.handler {
-                Runtime.shared.hostViewEvent(id: handler, value: command["value"] as? String ?? "")
+                Runtime.shared.hostViewEvent(id: handler, value: command.value)
             } else {
                 error = "no control \(target)"
             }
@@ -306,8 +353,8 @@ enum HeadlessApp {
                 error = "nothing presented"
             }
         case "wait":
-            let text = command["text"] as? String ?? ""
-            let deadline = Date().addingTimeInterval(command["timeout"] as? Double ?? 5)
+            let text = command.text
+            let deadline = Date().addingTimeInterval(command.timeout > 0 ? command.timeout : 5)
             var shown = false
             while Date() < deadline {
                 if let frame = await settle(timeout: 0.5), frame.texts.contains(where: { $0.contains(text) })
@@ -318,22 +365,16 @@ enum HeadlessApp {
             }
             if !shown { error = "\(text) didn't show" }
         case "quit":
-            quit = true
+            break
         default:
-            error = "unknown command: \(line)"
+            error = "unknown command: \(command.cmd)"
         }
         needsFrame = true
-        var answer: [String: Any] = ["ok": error == nil]
-        if let error { answer["error"] = error }
-        if let frame = await settle() { answer["screen"] = frame.json }
-        print(serialize(answer))
-        fflush(stdout)
-        return quit
-    }
-
-    static func serialize(_ object: Any) -> String {
-        guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]) else { return "{}" }
-        return String(decoding: data, as: UTF8.self)
+        var answer = Wire_Answer()
+        answer.ok = error == nil
+        if let error { answer.error = error }
+        if let frame = await settle() { answer.screen = frame.wire }
+        return answer
     }
 }
 

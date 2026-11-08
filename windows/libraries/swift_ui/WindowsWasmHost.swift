@@ -3,7 +3,7 @@
 // `iso_hot` reactor on WasmKit, the Swift interpreter, through the same
 // platform-free core every native host drives (`WasmFeatureRuntime` over
 // `WasmKitRuntime`, //shared/wasm_host) rather than compiled in. The reactor
-// ships a `tree.fbs` Patch per frame — the only wire format — applied to the
+// ships a `tree.proto` Patch per frame — the only wire format — applied to the
 // retained decoded tree (`FlatTreeDecoder.applyPatch`; the first patch
 // carries the full tree), and the result draws through the same
 // `SwiftGPURenderer` the compiled cell uses. Input hit-tests the decoded tree;

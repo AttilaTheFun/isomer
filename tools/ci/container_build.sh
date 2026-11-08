@@ -11,7 +11,7 @@
 #   tools/ci/container_build.sh [<bazel build args>…]   # default: every platform's Storybook
 #   tools/ci/container_build.sh all   # everything the checks build, built,
 #                                     # and only the headless tests run
-#                                     # (examples' //headless), nothing
+#                                     # (examples' //headless and //remote), nothing
 #                                     # copied: the automated CI's (a pull
 #                                     # request's container, main's populate,
 #                                     # the Bazel cache's one writer: OS
@@ -167,10 +167,11 @@ run_tests "${flags[@]}" --test_output=errors //tests/platforms:storybook_web_tes
     //tests/cxx_interop:cxx_interop_test
 tested_here=$?
 # The headless tests: the Storybook built for the headless host and driven
-# through its runtime (//headless in the examples), nothing drawn. Run in
-# every mode, the automated builds included: seconds in a container (the
-# owner, 2026-11-07).
-bazel test "${flags[@]}" --@isomer//headless --test_output=errors //headless/...
+# through its runtime (//headless in the examples), nothing drawn, and served
+# to remote clients by the gateway (//remote: over a WebSocket, gRPC, and the
+# web's thin client in headless Chrome). Run in every mode, the automated
+# builds included: seconds in a container (the owner, 2026-11-07).
+bazel test "${flags[@]}" --@isomer//headless --test_output=errors //headless/... //remote/...
 headless=$?
 cd "$root"
 bazel build //swift_gpu/linux:gl_backend_test

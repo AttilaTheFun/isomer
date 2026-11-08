@@ -1,0 +1,27 @@
+// The remote session (session.proto) and the headless driver (headless.proto)
+// as gRPC services: a server that runs an app built headless serves each
+// stream from a run of its own (the examples' //remote:gateway). A stream is
+// one session; it ends when either side ends it.
+//
+// Headless.Drive takes the app's launch environment from the call's
+// metadata: a key `iso_storybook_story` is ISO_STORYBOOK_STORY (only iso_
+// keys). Session.Connect takes it from its first message, `start`.
+
+syntax = "proto3";
+
+package isomer.wire;
+
+import "headless.proto";
+import "session.proto";
+
+option swift_prefix = "Wire_";
+option java_package = "dev.isomer.wire";
+option java_multiple_files = true;
+
+service Session {
+  rpc Connect(stream ClientMessage) returns (stream ServerMessage);
+}
+
+service Headless {
+  rpc Drive(stream Command) returns (stream Answer);
+}

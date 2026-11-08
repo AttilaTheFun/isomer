@@ -4,7 +4,14 @@ load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
 # (shared/isomer_swift_ui/tree.pb.swift, so isomer's Swift package builds it
 # without protoc); the JavaScript and Kotlin readers are hand-written
 # (wasm/libraries/swift_ui/runtime/flat_tree.js, android/…/FlatTree.kt).
-exports_files(["tree.proto"])
+# The remote session's (session.proto) and the headless driver's
+# (headless.proto) Swift is checked in too, in ./swift (IsomerWire).
+exports_files([
+    "headless.proto",
+    "session.proto",
+    "session_service.proto",
+    "tree.proto",
+])
 
 genrule(
     name = "tree_swift",
@@ -24,3 +31,28 @@ diff_test(
     file1 = "//shared/isomer_swift_ui:tree.pb.swift",
     file2 = ":tree_swift",
 )
+
+[
+    genrule(
+        name = name + "_swift",
+        srcs = [name + ".proto"],
+        outs = [name + ".pb.swift"],
+        cmd = "$(location @protobuf//:protoc) --plugin=protoc-gen-swift=$(location @swiftpkg_swift_protobuf//:protoc-gen-swift) " +
+              "--swift_out=$(RULEDIR) --swift_opt=Visibility=Public -I $$(dirname $(location " + name + ".proto)) $(location " + name + ".proto)",
+        tools = [
+            "@protobuf//:protoc",
+            "@swiftpkg_swift_protobuf//:protoc-gen-swift",
+        ],
+    )
+    for name in ["session", "headless"]
+]
+
+[
+    diff_test(
+        name = name + "_swift_test",
+        failure_message = "Regenerate shared/wire/swift/" + name + ".pb.swift: bazel build //shared/wire:" + name + "_swift, and copy its output over it.",
+        file1 = "//shared/wire/swift:" + name + ".pb.swift",
+        file2 = ":" + name + "_swift",
+    )
+    for name in ["session", "headless"]
+]

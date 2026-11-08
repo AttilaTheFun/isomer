@@ -1,0 +1,28 @@
+load("//tools/wasm:defs.bzl", "assemble_directory", "site_imports_test")
+
+package(default_visibility = ["//visibility:public"])
+
+# The web's thin client for a remote session (wasm/libraries/swift_ui/
+# runtime/remote.js): the React renderer and a WebSocket, no wasm. A gateway
+# serves it beside the session (the examples' //remote:gateway, --site).
+assemble_directory(
+    name = "remote_client",
+    spec = {
+        "index.html": "index.html",
+        "//wasm/libraries/swift_ui:runtime/flat_tree.js": "runtime/flat_tree.js",
+        "//wasm/libraries/swift_ui:runtime/file_system.js": "runtime/file_system.js",
+        "//wasm/libraries/swift_ui:runtime/imported_files.js": "runtime/imported_files.js",
+        "//wasm/libraries/swift_ui:runtime/raster.js": "runtime/raster.js",
+        "//wasm/libraries/swift_ui:runtime/react_renderer.js": "runtime/react_renderer.js",
+        "//wasm/libraries/swift_ui:runtime/remote.js": "runtime/remote.js",
+        "//wasm/libraries/swift_ui:runtime/session_messages.js": "runtime/session_messages.js",
+        "//wasm/libraries/swift_ui:runtime/symbols.js": "runtime/symbols.js",
+        "@react_dom_umd//:umd/react-dom.production.min.js": "runtime/react-dom.production.min.js",
+        "@react_umd//:umd/react.production.min.js": "runtime/react.production.min.js",
+    },
+)
+
+site_imports_test(
+    name = "remote_client_imports_test",
+    site = ":remote_client",
+)

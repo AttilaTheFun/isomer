@@ -23,7 +23,7 @@ object FlatTree {
     private val STYLES = arrayOf("sheet", "popover", "alert")
 
     /** Protobuf's fields in `bytes[from, to)`, one at a time. */
-    private class Reader(val bytes: ByteArray, from: Int, private val to: Int) {
+    internal class Reader(val bytes: ByteArray, from: Int, private val to: Int) {
         var pos = from
         fun done() = pos >= to
 

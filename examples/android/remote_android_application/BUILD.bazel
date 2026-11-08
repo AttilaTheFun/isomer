@@ -1,0 +1,42 @@
+load("@rules_android//rules:rules.bzl", "android_binary")
+load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
+load("@isomer//tools/android:defs.bzl", "apk_install_run")
+
+# Isomer's Android thin client (dev.isomer.runtime.IsomerRemote): an app's
+# SwiftUI running on a server (//remote:gateway over an app built headless),
+# drawn here by the Compose renderer from the session's frames. Kotlin and
+# Compose only: no Swift, no native library.
+kt_android_library(
+    name = "remote_app",
+    srcs = glob(["kotlin/**/*.kt"]) + [
+        "@isomer//android/libraries/swift_ui:interpreter_kotlin",
+    ],
+    custom_package = "dev.isomer.remote",
+    manifest = "AndroidManifest.xml",
+    plugins = ["@isomer//android/libraries/swift_ui:compose_compiler_plugin"],
+    tags = ["manual"],
+    deps = [
+        "@isomer//tools/android:maven_androidx_activity_activity_compose",
+        "@isomer//tools/android:maven_androidx_compose_foundation_foundation",
+        "@isomer//tools/android:maven_androidx_compose_material3_material3",
+        "@isomer//tools/android:maven_androidx_compose_runtime_runtime",
+        "@isomer//tools/android:maven_androidx_compose_ui_ui",
+        "@isomer//tools/android:maven_org_jetbrains_kotlinx_kotlinx_coroutines_android",
+        "@isomer//tools/android:maven_org_jetbrains_kotlinx_kotlinx_coroutines_core",
+    ],
+)
+
+android_binary(
+    name = "remote_android_application_apk",
+    manifest = "AndroidManifest.xml",
+    deps = [
+        "@isomer//tools/android:maven_androidx_profileinstaller_profileinstaller",
+        ":remote_app",
+    ],
+)
+
+apk_install_run(
+    name = "remote_android_application",
+    activity = "dev.isomer.remote/.MainActivity",
+    apk = ":remote_android_application_apk.apk",
+)

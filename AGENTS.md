@@ -1260,9 +1260,23 @@ What carries that, beyond the renderers' own chrome:
 **Headless Isomer** (docs/headless.md; a prototype in 0.43): an app built
 with `--@isomer//headless` runs on the building machine with nothing drawn,
 its UI read and used over standard input and output
-(headless/libraries/swift_ui); IsomerHeadless (headless/isomer_headless)
-drives it from tests. The Storybook's headless tests
-(examples' //headless) run in every CI build, in seconds.
+(headless/libraries/swift_ui; shared/wire/headless.proto, JSON lines by
+default, length-delimited binary with ISO_HEADLESS_PROTOCOL=binary);
+IsomerHeadless (headless/isomer_headless) drives it from tests. The
+Storybook's headless tests (examples' //headless) run in every CI build, in
+seconds.
+
+**Remote sessions** (docs/remote_sessions.md, 0.45): the same headless
+binary with ISO_HEADLESS_PROTOCOL=session serves the app to a client that
+holds only a renderer (shared/wire/session.proto: the client's events in,
+tree.proto patches out). The examples' gateway (examples/remote/gateway)
+runs one app process per connection, over a WebSocket (/session,
+/headless) and gRPC (session_service.proto: Session.Connect,
+Headless.Drive), and serves the web's thin client (web/remote_client:
+runtime/remote.js, React and a WebSocket, no wasm). Android's is
+`IsomerRemote(url)` (RemoteIsomer.kt, Swift-free;
+examples/android/remote_android_application, no native library). Its tests
+(examples' //remote, with the headless flag) run beside the headless ones.
 
 
 **A person's own phone is not a test device.** Install a build there when
