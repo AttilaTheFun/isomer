@@ -21,6 +21,11 @@ extension StoryCatalog {
             summary: "Actions on a row: swiped from its edge, deleted with a full swipe, or chosen from its context menu (a long press, or a secondary click)."
         ) { RowActionsStory() },
         Story(
+            "lists.edit-actions", "editActions",
+            height: 300,
+            summary: "A list over a binding that the person edits directly: each row's delete swipe, and while editing its move handle, change the collection itself, with no handler of the app's own."
+        ) { EditActionsStory() },
+        Story(
             "lists.form", "Form",
             height: 440,
             summary: "Settings-style rows of controls in grouped sections, with labeled values and footers."
@@ -112,6 +117,34 @@ struct RowActionsStory: View {
 
     private func toggleFlag(_ subject: String) {
         if flagged.contains(subject) { flagged.remove(subject) } else { flagged.insert(subject) }
+    }
+}
+// end story
+
+// story: lists.edit-actions
+struct EditActionsStory: View {
+    struct Chore: Identifiable {
+        let id: Int
+        var title: String
+        var done = false
+    }
+
+    @State private var chores = [
+        Chore(id: 1, title: "Water the plants"),
+        Chore(id: 2, title: "Take out the recycling", done: true),
+        Chore(id: 3, title: "Book the dentist"),
+        Chore(id: 4, title: "Call the bank"),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("\(chores.filter(\.done).count) of \(chores.count) done")
+                .font(.headline)
+                .padding(.bottom, 8)
+            List($chores, editActions: .all) { $chore in
+                Toggle(chore.title, isOn: $chore.done)
+            }
+        }
     }
 }
 // end story

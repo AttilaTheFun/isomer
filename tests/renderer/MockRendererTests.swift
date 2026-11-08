@@ -2902,6 +2902,8 @@ struct Main {
         checkGestures(mock)
         checkLayoutPriority(mock)
         checkListEditing(mock)
+        checkEditActions(mock)
+        checkEditActionsSelection(mock)
         checkListSectionFooter(mock)
         checkAlignmentGuideInOverlay(mock)
         checkFloatingProbeBuilds(mock)

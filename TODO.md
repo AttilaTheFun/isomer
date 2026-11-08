@@ -118,10 +118,6 @@ Isomer's Kotlin calls above 23 are behind version checks (#96).
 
 ## SwiftUI's next gaps (after 0.42's)
 
-- `List`/`ForEach(_:editActions:)` over a binding (iOS 16): needs Apple's
-  `IndexedIdentifierCollection` and `EditableCollectionContent` for the
-  initializers' `Content ==` constraints to stay a strict subset; built on
-  0.42's `onDelete`/`onMove` editing (ListEditing.swift).
 - `AnyGradient.colorSpace(_:)` (needs `Gradient.ColorSpace` on gradients)
   and `GraphicsContext.Shading`'s gradients.
 - The web's guest has no time zone (WebAssembly carries no tz database):
