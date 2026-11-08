@@ -35,14 +35,28 @@ swift_library(
     ],
 )
 
-# The sample apps (the New Project templates), and the SDK when
-# stage_toolchain.sh has run (one zip: resource dir, sysroot, Isomer modules).
+# The sample apps (the New Project templates), the staged toolchain when
+# stage_toolchain.sh has run (one zip: resource dir, sysroot, and the Isomer
+# modules it was staged with), and this build's own Isomer SDK (sdk.zip),
+# which the app unpacks over the staged one: a project builds against the
+# Isomer the app is, as the web's and the iPhone's do, and only the compiler
+# and the WASI sysroot are staged.
 flat_assets(
     name = "assets",
     srcs = [
+        ":sdk_zip",
         ":web_site_zip",
         "//playground/web/playground_web_application:templates",
     ] + glob(["toolchain/toolchain.zip"], allow_empty = True),
+)
+
+# The Playground SDK (wasm_sdk_bundle: modules, archives, clang modules and
+# its manifest.json) as one zip.
+genrule(
+    name = "sdk_zip",
+    srcs = ["//playground/apple/playground_ios_application:playground_sdk"],
+    outs = ["sdk.zip"],
+    cmd = "cd $(location //playground/apple/playground_ios_application:playground_sdk) && zip -q -r -X $$OLDPWD/$@ .",
 )
 
 # The web-run page — the iOS Playground's bundled site (index.html, the

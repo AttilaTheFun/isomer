@@ -83,7 +83,9 @@ object PlaygroundAndroidServices {
 
 /** The compiler (native executables in the APK's library directory) and the
  *  SDK, unpacked from assets/toolchain.zip on first use (or after a newer zip
- *  ships: the manifest's version names the unpacking). */
+ *  ships: the manifest's version names the unpacking), with this build's own
+ *  Isomer SDK (assets/sdk.zip) unpacked over the one the toolchain was
+ *  staged with (again after each install of the app). */
 private class Toolchain(private val context: Context) {
     val root = File(context.filesDir, "toolchain")
     private val libraries = File(context.applicationInfo.nativeLibraryDir)
@@ -109,35 +111,77 @@ private class Toolchain(private val context: Context) {
     /** null when ready, else why not. */
     @Synchronized fun ensure(): String? {
         if (!packaged) return "the toolchain is not in this build (run stage_toolchain.sh, then build again)"
-        val packagedVersion = try {
+        val toolchainVersion = try {
             ZipInputStream(context.assets.open("toolchain.zip")).use { zip ->
                 generateSequence { zip.nextEntry }.firstOrNull { it.name == "manifest.json" }
                     ?.let { JSONObject(zip.readBytes().toString(Charsets.UTF_8)).optString("version") }
             } ?: "unversioned"
         } catch (e: Exception) { return "cannot read the toolchain: $e" }
+        // An app updated in place may carry a new SDK with the same
+        // toolchain: its install names the unpacking too.
+        val installed = context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime
+        val packagedVersion = "$toolchainVersion/$installed"
         if (marker.exists() && marker.readText() == packagedVersion) return null
         root.deleteRecursively()
         root.mkdirs()
         try {
-            ZipInputStream(context.assets.open("toolchain.zip")).use { zip ->
-                var entry = zip.nextEntry
-                while (entry != null) {
-                    val target = File(root, entry.name)
-                    if (!target.canonicalPath.startsWith(root.canonicalPath)) throw IllegalStateException("bad path ${entry.name}")
-                    if (entry.isDirectory) target.mkdirs() else {
-                        target.parentFile?.mkdirs()
-                        target.outputStream().use { zip.copyTo(it) }
-                    }
-                    entry = zip.nextEntry
-                }
+            unpack("toolchain.zip", root)
+            if (hasAsset("sdk.zip")) {
+                val sdk = File(root, "sdk")
+                sdk.deleteRecursively()
+                unpack("sdk.zip", sdk)
             }
         } catch (e: Exception) { return "cannot unpack the toolchain: $e" }
         marker.writeText(packagedVersion)
         return null
     }
 
-    /** The SDK's layout, from its manifest (the browser bundle's). */
-    val manifest: JSONObject get() = JSONObject(File(root, "manifest.json").readText())
+    private fun hasAsset(name: String): Boolean =
+        try { context.assets.open(name).close(); true } catch (_: Exception) { false }
+
+    private fun unpack(asset: String, into: File) {
+        into.mkdirs()
+        ZipInputStream(context.assets.open(asset)).use { zip ->
+            var entry = zip.nextEntry
+            while (entry != null) {
+                val target = File(into, entry.name)
+                if (!target.canonicalPath.startsWith(into.canonicalPath)) throw IllegalStateException("bad path ${entry.name}")
+                if (entry.isDirectory) target.mkdirs() else {
+                    target.parentFile?.mkdirs()
+                    target.outputStream().use { zip.copyTo(it) }
+                }
+                entry = zip.nextEntry
+            }
+        }
+    }
+
+    /** The SDK's layout: the toolchain's manifest (the browser bundle's), its
+     *  `sdk` section taken from the SDK's own manifest when this build's SDK
+     *  was unpacked over the staged one. */
+    val manifest: JSONObject get() {
+        val toolchain = JSONObject(File(root, "manifest.json").readText())
+        val own = File(root, "sdk/manifest.json")
+        if (!own.exists()) return toolchain
+        val sdkManifest = JSONObject(own.readText())
+        val sdk = toolchain.getJSONObject("sdk")
+        sdk.put("modules", "sdk/modules")
+        val archives = org.json.JSONArray()
+        val ownArchives = sdkManifest.getJSONArray("archives")
+        for (i in 0 until ownArchives.length()) archives.put("sdk/" + ownArchives.getString(i))
+        sdk.put("archives", archives)
+        val clangModules = org.json.JSONArray()
+        val ownModules = sdkManifest.optJSONArray("clang_modules") ?: org.json.JSONArray()
+        for (i in 0 until ownModules.length()) {
+            val module = ownModules.getJSONObject(i)
+            clangModules.put(JSONObject().apply {
+                module.optString("modulemap").takeIf { it.isNotEmpty() }?.let { put("modulemap", "sdk/$it") }
+                module.optString("include").takeIf { it.isNotEmpty() }?.let { put("include", "sdk/$it") }
+            })
+        }
+        sdk.put("clangModules", clangModules)
+        sdkManifest.opt("exports")?.let { sdk.put("exports", it) }
+        return toolchain
+    }
 }
 
 /** Whether the build's window (RunActivity, its own process) is up. */
