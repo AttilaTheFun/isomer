@@ -1223,6 +1223,14 @@ What carries that, beyond the renderers' own chrome:
 
 ## Headless verification
 
+**Headless Isomer** (docs/headless.md; a prototype in 0.43): an app built
+with `--@isomer//headless` runs on the building machine with nothing drawn,
+its UI read and used over standard input and output
+(headless/libraries/swift_ui); IsomerHeadless (headless/isomer_headless)
+drives it from tests. The Storybook's headless tests
+(examples' //headless) run in every CI build, in seconds.
+
+
 **A person's own phone is not a test device.** Install a build there when
 asked, read the version back, and stop: no launching, tapping or
 screenshots unless they explicitly ask. Everything below is simulator,
