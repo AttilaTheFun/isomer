@@ -120,8 +120,8 @@ package final class Runtime {
     public var host: HostBridge?
     var makeRootView: (() -> any View)?
     let storage = StateStorage()
-    var width: Double = 0
-    var height: Double = 0
+    package var width: Double = 0
+    package var height: Double = 0
     var tapRegions: [TapRegion] = []
     var scrollRegions: [ScrollRegion] = []
     var sliderRegions: [SliderRegion] = []
@@ -238,7 +238,7 @@ package final class Runtime {
     /// External URLs delivered before handlers were registered (`openURL(external:)`).
     var pendingExternalURLs: [String] = []
     /// The `WindowGroup` title, reported to the host once via `platformCommand`.
-    var windowTitle = ""
+    package var windowTitle = ""
     /// Last value sent per platform-command key (modifiers re-send each build;
     /// the host only hears changes).
     package var sentPlatformCommands: [String: String] = [:]
