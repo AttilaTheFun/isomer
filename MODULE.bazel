@@ -128,6 +128,7 @@ single_version_override(
     patches = [
         "//tools/patches:rules_swift_package_manager_local_bazel_package.patch",
         "//tools/patches:rules_swift_package_manager_minimum_os_off_apple.patch",
+        "//tools/patches:rules_swift_package_manager_swift_target_cdefines.patch",
     ],
 )
 
@@ -145,7 +146,6 @@ swift_deps.configure_package(
         "//tools/patches:swift_foundation_create_directory_root.patch",
         "//tools/patches:swift_foundation_apple_interface.patch",
         "//tools/patches:swift_foundation_package_helpers.patch",
-        "//tools/patches:swift_foundation_wasi_swift_settings.patch",
         "//tools/patches:swift_foundation_sdk_icu.patch",
     ],
 )
