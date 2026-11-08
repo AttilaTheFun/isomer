@@ -73,3 +73,17 @@ exports_files(["FileWrapper.swift"], visibility = [
     "//windows/libraries/swift_ui:__pkg__",
     "//windows/libraries/swift_ui_wasm:__pkg__",
 ])
+
+# Isomer's Foundation for a Swift package's targets where it is the Foundation
+# (the web, Android), and nothing elsewhere (Apple's, or the toolchain's): what
+# MODULE.bazel's configure_package gives SwiftProtobuf.
+alias(
+    name = "for_swift_packages",
+    actual = select({
+        "@platforms//os:android": "//:foundation",
+        "@platforms//os:wasi": "//:foundation",
+        "//conditions:default": ":none",
+    }),
+)
+
+swift_library_group(name = "none")

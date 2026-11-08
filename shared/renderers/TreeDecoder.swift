@@ -1,4 +1,4 @@
-// Decodes a `tree.fbs` FlatBuffer (produced by `FlatTreeEncoder`) back into a
+// Decodes a `tree.proto` message (produced by `FlatTreeEncoder`) back into a
 // `RenderNode` tree so a self-drawing renderer (`SwiftGPURenderer`) can draw a
 // wasm-delivered UI. The exact inverse of `FlatTreeEncoder`: it reads the same
 // `IsoFlat_Node` accessors Apple's `IsomerTreeView` reads, but rebuilds
@@ -12,7 +12,6 @@
 // a drag's handler and a scroll's phases round-trip; rotation, overlays,
 // masks (drawn unmasked) and minimum sizes do not yet (docs/desktop_wasm_implementation_notes.md, blocker 2).
 
-import FlatBuffers
 internal import IsomerSwiftUI
 
 package final class FlatTreeDecoder {
@@ -27,10 +26,10 @@ package final class FlatTreeDecoder {
         self.send = send
     }
 
-    /// Decodes a finished `tree.fbs` buffer into a fresh `RenderNode` tree.
+    /// Decodes a finished `tree.proto` buffer into a fresh `RenderNode` tree.
     public func decode(bytes: [UInt8]) -> RenderNode {
-        var buffer = ByteBuffer(bytes: bytes)
-        let root = getRoot(byteBuffer: &buffer) as IsoFlat_Node
+        // A tree that doesn't parse (a desynced stream) decodes as nothing.
+        guard let root = try? IsoFlat_Node(treeBytes: bytes) else { return RenderNode(kind: .box) }
         return node(root)
     }
 
@@ -44,8 +43,7 @@ package final class FlatTreeDecoder {
     /// a single full-tree op at "n". RenderNode is a reference type, so ops
     /// splice in place; unchanged subtrees keep their nodes (and closures).
     public func applyPatch(bytes: [UInt8], to retained: RenderNode?) -> RenderNode {
-        var buffer = ByteBuffer(bytes: bytes)
-        let patch = getRoot(byteBuffer: &buffer) as IsoFlat_Patch
+        guard let patch = try? IsoFlat_Patch(patchBytes: bytes) else { return retained ?? RenderNode(kind: .box) }
         var root = retained
         for index in 0..<patch.ops.count {
             let op = patch.ops[index]

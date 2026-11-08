@@ -34,7 +34,6 @@ swift_module_mapping(
     name = "mapping",
     aliases = {
         "CoreTransferable": "IsomerCompiledCoreTransferable",
-        "FlatBuffers": "IsomerCompiledFlatBuffers",
         "HotBridge": "IsomerCompiledHotBridge",
         "Isomer": "IsomerCompiledIsomer",
         "IsomerFFI": "IsomerCompiledFFI",
@@ -44,6 +43,7 @@ swift_module_mapping(
         "Observation": "IsomerCompiledObservation",
         "PhotosUI": "IsomerCompiledPhotosUI",
         "QuickLook": "IsomerCompiledQuickLook",
+        "SwiftProtobuf": "IsomerCompiledSwiftProtobuf",
         "SwiftUI": "IsomerCompiledSwiftUI",
         "Synchronization": "IsomerCompiledSynchronization",
     },

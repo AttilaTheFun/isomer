@@ -1,7 +1,5 @@
 package dev.isomer.runtime
 
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -9,9 +7,9 @@ import org.json.JSONObject
 // UNode.kt (@Immutable-annotated, skippable in Compose).
 
 /**
- * Decodes the render-tree FlatBuffer (shared/renderers/tree.fbs) into a retained
- * [UNode] tree. Hand-written against the standard FlatBuffers wire format; the
- * field slot numbers MUST match the numbered comments in tree.fbs (append-only).
+ * Decodes the render tree (shared/wire/tree.proto: protobuf) into a retained
+ * [UNode] tree. Hand-written against protobuf's wire format; the field
+ * numbers MUST match tree.proto's.
  */
 object FlatTree {
     private val KINDS = arrayOf(
@@ -24,199 +22,213 @@ object FlatTree {
     private val SHAPES = arrayOf("rect", "circle", "capsule")
     private val STYLES = arrayOf("sheet", "popover", "alert")
 
-    private fun indirect(buf: ByteBuffer, pos: Int): Int = pos + buf.getInt(pos)
+    /** Protobuf's fields in `bytes[from, to)`, one at a time. */
+    private class Reader(val bytes: ByteArray, from: Int, private val to: Int) {
+        var pos = from
+        fun done() = pos >= to
 
-    /** Absolute position of field `slot` inside the table at `table`, or 0. */
-    private fun field(buf: ByteBuffer, table: Int, slot: Int): Int {
-        val vtable = table - buf.getInt(table)
-        val vtSize = buf.getShort(vtable).toInt() and 0xFFFF
-        val entry = 4 + 2 * slot
-        if (entry >= vtSize) return 0
-        val offset = buf.getShort(vtable + entry).toInt() and 0xFFFF
-        return if (offset == 0) 0 else table + offset
+        /** A varint's low 64 bits. */
+        fun varint(): Long {
+            var result = 0L
+            var shift = 0
+            while (true) {
+                val byte = bytes[pos++].toInt()
+                if (shift < 64) result = result or ((byte and 0x7f).toLong() shl shift)
+                if (byte and 0x80 == 0) return result
+                shift += 7
+            }
+        }
+
+        /** The next field's number and wire type. */
+        fun tag(): Pair<Int, Int> {
+            val tag = varint().toInt()
+            return Pair(tag ushr 3, tag and 7)
+        }
+
+        fun int32() = varint().toInt()
+        fun bool() = varint() != 0L
+        fun double(): Double {
+            var bits = 0L
+            for (i in 0 until 8) bits = bits or ((bytes[pos + i].toLong() and 0xff) shl (8 * i))
+            pos += 8
+            return java.lang.Double.longBitsToDouble(bits)
+        }
+        fun float(): Float {
+            var bits = 0
+            for (i in 0 until 4) bits = bits or ((bytes[pos + i].toInt() and 0xff) shl (8 * i))
+            pos += 4
+            return java.lang.Float.intBitsToFloat(bits)
+        }
+
+        /** A length-delimited field's bounds; the reader moves past it. */
+        fun span(): IntRange {
+            val length = varint().toInt()
+            val from = pos
+            pos += length
+            return from until pos
+        }
+
+        fun string(): String {
+            val span = span()
+            return String(bytes, span.first, span.last - span.first + 1, Charsets.UTF_8)
+        }
+
+        fun skip(type: Int) {
+            when (type) {
+                0 -> varint()
+                1 -> pos += 8
+                2 -> pos += varint().toInt()
+                5 -> pos += 4
+            }
+        }
+
+        fun sub(span: IntRange) = Reader(bytes, span.first, span.last + 1)
     }
 
-    private fun string(buf: ByteBuffer, pos: Int): String {
-        val data = indirect(buf, pos)
-        val length = buf.getInt(data)
-        val out = ByteArray(length)
-        for (i in 0 until length) out[i] = buf.get(data + 4 + i)
-        return String(out, Charsets.UTF_8)
+    private fun color(r: Reader): JSONArray {
+        val out = doubleArrayOf(0.0, 0.0, 0.0, 0.0)
+        while (!r.done()) {
+            val (field, type) = r.tag()
+            if (type == 5 && field in 1..4) out[field - 1] = r.float().toDouble() else r.skip(type)
+        }
+        return JSONArray().apply { out.forEach { put(it) } }
     }
 
-    private fun color(buf: ByteBuffer, pos: Int): JSONArray = JSONArray().apply {
-        put(buf.getFloat(pos).toDouble())
-        put(buf.getFloat(pos + 4).toDouble())
-        put(buf.getFloat(pos + 8).toDouble())
-        put(buf.getFloat(pos + 12).toDouble())
+    private fun shadow(r: Reader): JSONObject {
+        val out = JSONObject().apply {
+            put("color", JSONArray().apply { repeat(4) { put(0.0) } })
+            put("radius", 0.0)
+            put("x", 0.0)
+            put("y", 0.0)
+        }
+        while (!r.done()) {
+            val (field, type) = r.tag()
+            when {
+                field == 1 && type == 2 -> out.put("color", color(r.sub(r.span())))
+                field == 2 && type == 5 -> out.put("radius", r.float().toDouble())
+                field == 3 && type == 5 -> out.put("x", r.float().toDouble())
+                field == 4 && type == 5 -> out.put("y", r.float().toDouble())
+                else -> r.skip(type)
+            }
+        }
+        return out
     }
 
     /**
-     * Decodes the `Node` table at `table` into a [UNode]. Attributes go into the
-     * JSONObject (slot order 0..43); children (slot 44) become retained [UNode]s.
-     * The [StringBuilder] `sig` accumulates a deterministic own-signature: each
-     * present field appends `slot:value;` in slot order, so two nodes with equal
-     * own attributes produce byte-identical sigs regardless of hash-map order.
+     * Decodes one `Node` message into a [UNode]. Attributes go into the
+     * JSONObject; children (field 45) become retained [UNode]s. The
+     * [StringBuilder] `sig` accumulates a deterministic own-signature: each
+     * present field appends `slot:value;` in field order (slot = field - 1,
+     * as in the FlatBuffers format before), so two nodes with equal own
+     * attributes produce byte-identical sigs regardless of hash-map order.
      */
-    private fun node(buf: ByteBuffer, table: Int): UNode {
+    private fun node(r: Reader): UNode {
         val n = JSONObject()
         val sig = StringBuilder()
         fun sig(slot: Int, value: Any) { sig.append(slot).append(':').append(value).append(';') }
 
-        val kindPos = field(buf, table, 0)
-        val kind = KINDS.getOrElse(if (kindPos != 0) buf.get(kindPos).toInt() else 0) { "box" }
+        var kind = "box"
+        var numeric: Double? = null
+        var hasAxis = false
+        var options: JSONArray? = null
+        var params: JSONObject? = null
+        var padding: JSONArray? = null
+        val children = ArrayList<UNode>()
+        while (!r.done()) {
+            val (field, type) = r.tag()
+            when (field) {
+                1 -> kind = KINDS.getOrElse(r.int32()) { "box" }
+                2 -> { val s = r.string(); n.put("v", s); sig(1, s) }
+                3 -> numeric = r.double()
+                4 -> { val s = r.string(); n.put("id", s); sig(3, s) }
+                5 -> { val d = r.double(); n.put("size", d); sig(4, d) }
+                6 -> { val i = r.int32(); n.put("weight", i); sig(5, i) }
+                7 -> { val c = color(r.sub(r.span())); n.put("color", c); sig(6, c) }
+                8 -> { val i = r.int32(); n.put("lines", i); sig(7, i) }
+                9 -> { val s = SHAPES[r.int32()]; n.put("shape", s); sig(8, s) }
+                10 -> { val c = color(r.sub(r.span())); n.put("fill", c); sig(9, c) }
+                11 -> { val c = color(r.sub(r.span())); n.put("stroke", c); sig(10, c) }
+                12 -> { val d = r.double(); n.put("strokeWidth", d); sig(11, d) }
+                13 -> { val s = AXES[r.int32()]; n.put("axis", s); sig(12, s); hasAxis = true }
+                14 -> { val d = r.double(); n.put("spacing", d); sig(13, d) }
+                15 -> { val d = r.double(); n.put("min", d); sig(14, d) }
+                16 -> { val s = r.string(); n.put("src", s); sig(15, s) }
+                17 -> { val b = r.bool(); n.put("remote", b); sig(16, b) }
+                18 -> { val b = r.bool(); n.put("resizable", b); sig(17, b) }
+                19 -> { val b = r.bool(); n.put("fit", b); sig(18, b) }
+                20 -> { val s = r.string(); n.put("placeholder", s); sig(19, s) }
+                21 -> { val s = r.string(); n.put("edit", s); sig(20, s) }
+                22 -> { val s = r.string(); n.put("view", s); sig(21, s) }
+                23 -> (options ?: JSONArray().also { options = it }).put(r.string())
+                24 -> {
+                    val kv = r.sub(r.span())
+                    var key = ""
+                    var value = ""
+                    while (!kv.done()) {
+                        val (f, t) = kv.tag()
+                        when {
+                            f == 1 && t == 2 -> key = kv.string()
+                            f == 2 && t == 2 -> value = kv.string()
+                            else -> kv.skip(t)
+                        }
+                    }
+                    (params ?: JSONObject().also { params = it }).put(key, value)
+                }
+                25 -> { val b = r.bool(); n.put("growW", b); sig(24, b) }
+                26 -> { val b = r.bool(); n.put("growH", b); sig(25, b) }
+                27 -> { val s = ALIGN_H[r.int32()]; n.put("alignH", s); sig(26, s) }
+                28 -> { val s = ALIGN_V[r.int32()]; n.put("alignV", s); sig(27, s) }
+                29 -> { val s = shadow(r.sub(r.span())); n.put("shadow", s); sig(28, s) }
+                30 -> {
+                    val list = padding ?: JSONArray().also { padding = it }
+                    if (type == 2) {
+                        val packed = r.sub(r.span())
+                        while (!packed.done()) list.put(packed.double())
+                    } else {
+                        list.put(r.double())
+                    }
+                }
+                31 -> { val d = r.double(); n.put("width", d); sig(30, d) }
+                32 -> { val d = r.double(); n.put("height", d); sig(31, d) }
+                33 -> { val b = r.bool(); n.put("expandW", b); sig(32, b) }
+                34 -> { val b = r.bool(); n.put("expandH", b); sig(33, b) }
+                35 -> { val d = r.double(); n.put("radius", d); sig(34, d) }
+                36 -> { val d = r.double(); n.put("opacity", d); sig(35, d) }
+                37 -> { val c = color(r.sub(r.span())); n.put("bg", c); sig(36, c) }
+                38 -> { val s = r.string(); n.put("gradient", s); sig(37, s) }
+                39 -> { val s = r.string(); n.put("tap", s); sig(38, s) }
+                40 -> { val i = r.int32(); n.put("feedback", i); sig(39, i) }
+                41 -> { val s = STYLES[r.int32()]; n.put("style", s); sig(40, s) }
+                42 -> { val s = r.string(); n.put("title", s); sig(41, s) }
+                43 -> { val s = r.string(); n.put("message", s); sig(42, s) }
+                44 -> { val s = r.string(); n.put("dismiss", s); sig(43, s) }
+                45 -> children.add(node(r.sub(r.span())))
+                46 -> { val d = r.double(); n.put("offsetX", d); sig(45, d) }
+                47 -> { val d = r.double(); n.put("offsetY", d); sig(46, d) }
+                48 -> { val d = r.double(); n.put("scale", d); sig(47, d) }
+                49 -> { val s = r.string(); n.put("drag", s); sig(48, s) }
+                // Identity among its siblings: what composables key on.
+                50 -> n.put("key", r.string())
+                else -> r.skip(type)
+            }
+        }
         n.put("k", kind)
-        sig(0, kind)
-        var pos = field(buf, table, 1)
-        if (pos != 0) { val s = string(buf, pos); n.put("v", s); sig(1, s) }
-        pos = field(buf, table, 2)
-        if (pos != 0) { val d = buf.getDouble(pos); n.put("v", d); sig(2, d) } // numeric value
-        pos = field(buf, table, 3)
-        if (pos != 0) { val s = string(buf, pos); n.put("id", s); sig(3, s) }
-        pos = field(buf, table, 4)
-        if (pos != 0) { val d = buf.getDouble(pos); n.put("size", d); sig(4, d) }
-        pos = field(buf, table, 5)
-        if (pos != 0) { val i = buf.getInt(pos); n.put("weight", i); sig(5, i) }
-        pos = field(buf, table, 6)
-        if (pos != 0) { val c = color(buf, pos); n.put("color", c); sig(6, c) }
-        pos = field(buf, table, 7)
-        if (pos != 0) { val i = buf.getInt(pos); n.put("lines", i); sig(7, i) }
-        pos = field(buf, table, 8)
-        if (pos != 0) { val s = SHAPES[buf.get(pos).toInt()]; n.put("shape", s); sig(8, s) }
-        pos = field(buf, table, 9)
-        if (pos != 0) { val c = color(buf, pos); n.put("fill", c); sig(9, c) }
-        pos = field(buf, table, 10)
-        if (pos != 0) { val c = color(buf, pos); n.put("stroke", c); sig(10, c) }
-        pos = field(buf, table, 11)
-        if (pos != 0) { val d = buf.getDouble(pos); n.put("strokeWidth", d); sig(11, d) }
-        pos = field(buf, table, 12)
-        if (pos != 0) { val s = AXES[buf.get(pos).toInt()]; n.put("axis", s); sig(12, s) }
-        else if (kind == "stack" || kind == "scroll") { n.put("axis", "h"); sig(12, "h") }
-        pos = field(buf, table, 13)
-        if (pos != 0) { val d = buf.getDouble(pos); n.put("spacing", d); sig(13, d) }
-        pos = field(buf, table, 14)
-        if (pos != 0) { val d = buf.getDouble(pos); n.put("min", d); sig(14, d) }
-        pos = field(buf, table, 15)
-        if (pos != 0) { val s = string(buf, pos); n.put("src", s); sig(15, s) }
-        pos = field(buf, table, 16)
-        if (pos != 0) { val b = buf.get(pos).toInt() != 0; n.put("remote", b); sig(16, b) }
-        pos = field(buf, table, 17)
-        if (pos != 0) { val b = buf.get(pos).toInt() != 0; n.put("resizable", b); sig(17, b) }
-        pos = field(buf, table, 18)
-        if (pos != 0) { val b = buf.get(pos).toInt() != 0; n.put("fit", b); sig(18, b) }
-        pos = field(buf, table, 19)
-        if (pos != 0) { val s = string(buf, pos); n.put("placeholder", s); sig(19, s) }
-        pos = field(buf, table, 20)
-        if (pos != 0) { val s = string(buf, pos); n.put("edit", s); sig(20, s) }
-        pos = field(buf, table, 21)
-        if (pos != 0) { val s = string(buf, pos); n.put("view", s); sig(21, s) }
-        pos = field(buf, table, 22)
-        if (pos != 0) {
-            val vec = indirect(buf, pos)
-            val count = buf.getInt(vec)
-            val options = JSONArray()
-            for (i in 0 until count) options.put(string(buf, vec + 4 + i * 4))
-            n.put("options", options)
-            sig(22, options)
+        sig.insert(0, "0:$kind;")
+        numeric?.let { n.put("v", it); sig(2, it) } // numeric value
+        if (!hasAxis && (kind == "stack" || kind == "scroll")) { n.put("axis", "h"); sig(12, "h") }
+        options?.let { n.put("options", it); sig(22, it) }
+        params?.let { p ->
+            n.put("params", p)
+            // JSONObject iteration is unordered; sign each entry in a stable
+            // key order.
+            for (k in p.keys().asSequence().sorted()) sig.append("23.").append(k).append(':').append(p.opt(k)).append(';')
         }
-        pos = field(buf, table, 23)
-        if (pos != 0) {
-            val vec = indirect(buf, pos)
-            val count = buf.getInt(vec)
-            val params = JSONObject()
-            for (i in 0 until count) {
-                val kv = indirect(buf, vec + 4 + i * 4)
-                params.put(string(buf, field(buf, kv, 0)), string(buf, field(buf, kv, 1)))
-            }
-            n.put("params", params)
-            // Params keys are emitted sorted by the encoder, but JSONObject
-            // iteration is unordered; sign each entry in a stable key order.
-            val keys = params.keys().asSequence().sorted().toList()
-            for (k in keys) sig.append("23.").append(k).append(':').append(params.opt(k)).append(';')
-        }
-        pos = field(buf, table, 24)
-        if (pos != 0) { val b = buf.get(pos).toInt() != 0; n.put("growW", b); sig(24, b) }
-        pos = field(buf, table, 25)
-        if (pos != 0) { val b = buf.get(pos).toInt() != 0; n.put("growH", b); sig(25, b) }
-        pos = field(buf, table, 26)
-        if (pos != 0) { val s = ALIGN_H[buf.get(pos).toInt()]; n.put("alignH", s); sig(26, s) }
-        pos = field(buf, table, 27)
-        if (pos != 0) { val s = ALIGN_V[buf.get(pos).toInt()]; n.put("alignV", s); sig(27, s) }
-        pos = field(buf, table, 28)
-        if (pos != 0) {
-            val shadow = JSONObject().apply {
-                put("color", color(buf, pos))
-                put("radius", buf.getFloat(pos + 16).toDouble())
-                put("x", buf.getFloat(pos + 20).toDouble())
-                put("y", buf.getFloat(pos + 24).toDouble())
-            }
-            n.put("shadow", shadow)
-            sig(28, shadow)
-        }
-        pos = field(buf, table, 29)
-        if (pos != 0) {
-            val vec = indirect(buf, pos)
-            val count = buf.getInt(vec)
-            val padding = JSONArray()
-            for (i in 0 until count) padding.put(buf.getDouble(vec + 4 + i * 8))
-            n.put("padding", padding)
-            sig(29, padding)
-        }
-        pos = field(buf, table, 30)
-        if (pos != 0) { val d = buf.getDouble(pos); n.put("width", d); sig(30, d) }
-        pos = field(buf, table, 31)
-        if (pos != 0) { val d = buf.getDouble(pos); n.put("height", d); sig(31, d) }
-        pos = field(buf, table, 32)
-        if (pos != 0) { val b = buf.get(pos).toInt() != 0; n.put("expandW", b); sig(32, b) }
-        pos = field(buf, table, 33)
-        if (pos != 0) { val b = buf.get(pos).toInt() != 0; n.put("expandH", b); sig(33, b) }
-        pos = field(buf, table, 34)
-        if (pos != 0) { val d = buf.getDouble(pos); n.put("radius", d); sig(34, d) }
-        pos = field(buf, table, 35)
-        if (pos != 0) { val d = buf.getDouble(pos); n.put("opacity", d); sig(35, d) }
-        pos = field(buf, table, 36)
-        if (pos != 0) { val c = color(buf, pos); n.put("bg", c); sig(36, c) }
-        pos = field(buf, table, 37)
-        if (pos != 0) { val s = string(buf, pos); n.put("gradient", s); sig(37, s) }
-        pos = field(buf, table, 38)
-        if (pos != 0) { val s = string(buf, pos); n.put("tap", s); sig(38, s) }
-        pos = field(buf, table, 39)
-        if (pos != 0) { val i = buf.getInt(pos); n.put("feedback", i); sig(39, i) }
-        pos = field(buf, table, 40)
-        if (pos != 0) { val s = STYLES[buf.get(pos).toInt()]; n.put("style", s); sig(40, s) }
-        pos = field(buf, table, 41)
-        if (pos != 0) { val s = string(buf, pos); n.put("title", s); sig(41, s) }
-        pos = field(buf, table, 42)
-        if (pos != 0) { val s = string(buf, pos); n.put("message", s); sig(42, s) }
-        pos = field(buf, table, 43)
-        if (pos != 0) { val s = string(buf, pos); n.put("dismiss", s); sig(43, s) }
-        // Visual transforms (slots 45-47) and a drag gesture's handler (48).
-        pos = field(buf, table, 45)
-        if (pos != 0) { val d = buf.getDouble(pos); n.put("offsetX", d); sig(45, d) }
-        pos = field(buf, table, 46)
-        if (pos != 0) { val d = buf.getDouble(pos); n.put("offsetY", d); sig(46, d) }
-        pos = field(buf, table, 47)
-        if (pos != 0) { val d = buf.getDouble(pos); n.put("scale", d); sig(47, d) }
-        pos = field(buf, table, 48)
-        if (pos != 0) { val s = string(buf, pos); n.put("drag", s); sig(48, s) }
-        // Identity among its siblings (slot 49): what composables key on.
-        pos = field(buf, table, 49)
-        if (pos != 0) n.put("key", string(buf, pos))
-
-        var children: List<UNode> = emptyList()
-        pos = field(buf, table, 44)
-        if (pos != 0) {
-            val vec = indirect(buf, pos)
-            val count = buf.getInt(vec)
-            val list = ArrayList<UNode>(count)
-            for (i in 0 until count) list.add(node(buf, indirect(buf, vec + 4 + i * 4)))
-            children = list
-        }
+        padding?.let { n.put("padding", it); sig(29, it) }
         return UNode(n, children, sig.toString())
     }
 
     /**
-     * Apply a `Patch` buffer (shared/renderers/tree.fbs, emitted by
+     * Apply a `Patch` (shared/wire/tree.proto, emitted by
      * FlatTreeEncoder.encodePatch) to the retained tree, returning the new root.
      * Copy-on-write: only the nodes on each op's path are rebuilt; every off-path
      * sibling keeps its [UNode] identity, so the skippable [IsoNode] recomposes
@@ -224,38 +236,41 @@ object FlatTree {
      * after the reactor enables diffs is a single root op = the whole tree.
      */
     fun applyPatch(retained: UNode?, bytes: ByteArray): UNode {
-        val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
-        val patch = indirect(buf, 0)
+        val r = Reader(bytes, 0, bytes.size)
         var root = retained
-        val opsPos = field(buf, patch, 0) // Patch.ops (slot 0)
-        if (opsPos != 0) {
-            val vec = indirect(buf, opsPos)
-            val count = buf.getInt(vec)
-            for (i in 0 until count) {
-                val op = indirect(buf, vec + 4 + i * 4)
-                val pathPos = field(buf, op, 0) // PatchOp.path (slot 0)
-                if (pathPos == 0) continue
-                val path = string(buf, pathPos)
-                val orderPos = field(buf, op, 3) // PatchOp.order (slot 3)
-                if (orderPos != 0) {
-                    val orderVec = indirect(buf, orderPos)
-                    val order = IntArray(buf.getInt(orderVec)) { buf.getInt(orderVec + 4 + it * 4) }
-                    val insertsPos = field(buf, op, 4) // PatchOp.inserts (slot 4)
-                    val inserts = ArrayList<UNode>()
-                    if (insertsPos != 0) {
-                        val vec = indirect(buf, insertsPos)
-                        for (k in 0 until buf.getInt(vec)) inserts.add(node(buf, indirect(buf, vec + 4 + k * 4)))
+        while (!r.done()) {
+            val (field, type) = r.tag()
+            if (field != 1 || type != 2) { r.skip(type); continue } // Patch.ops
+            val op = r.sub(r.span())
+            var path: String? = null
+            var decoded: UNode? = null
+            var attrsOnly = false
+            var reorder = false
+            val order = ArrayList<Int>()
+            val inserts = ArrayList<UNode>()
+            while (!op.done()) {
+                val (f, t) = op.tag()
+                when {
+                    f == 1 && t == 2 -> path = op.string()
+                    f == 2 && t == 2 -> decoded = node(op.sub(op.span()))
+                    f == 3 && t == 0 -> attrsOnly = op.bool()
+                    f == 4 && t == 2 -> {
+                        val packed = op.sub(op.span())
+                        while (!packed.done()) order.add(packed.int32())
                     }
-                    root = root?.let { reorderAt(it, path, order, inserts) }
-                    continue
+                    f == 4 && t == 0 -> order.add(op.int32())
+                    f == 5 && t == 2 -> inserts.add(node(op.sub(op.span())))
+                    f == 6 && t == 0 -> reorder = op.bool()
+                    else -> op.skip(t)
                 }
-                val nodePos = field(buf, op, 1) // PatchOp.node (slot 1)
-                if (nodePos == 0) continue
-                val attrsPos = field(buf, op, 2) // PatchOp.attrs_only (slot 2)
-                val attrsOnly = attrsPos != 0 && buf.get(attrsPos).toInt() != 0
-                val decoded = node(buf, indirect(buf, nodePos))
-                root = applyOp(root, path, decoded, attrsOnly)
             }
+            val opPath = path ?: continue
+            if (reorder || order.isNotEmpty()) {
+                root = root?.let { reorderAt(it, opPath, order.toIntArray(), inserts) }
+                continue
+            }
+            val node = decoded ?: continue
+            root = applyOp(root, opPath, node, attrsOnly)
         }
         // Non-null after the first (root) op; the empty box guards a degenerate
         // empty-ops patch against a still-empty retained tree.

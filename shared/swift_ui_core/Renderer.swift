@@ -14,7 +14,7 @@
 //   * `Runtime.installTreeHandlers(_:)` + `fireTreeAppearances(_:)` — the
 //     event plumbing for renderers that hand the tree to a component system
 //     across an FFI boundary (the wire format lives with the renderers:
-//     shared/renderers/tree.fbs + TreeEncoder.swift).
+//     shared/wire/tree.proto + TreeEncoder.swift).
 //   * `Runtime.drawTree(root:)` — the layout + draw walk (with drawn-chrome
 //     expansion), for renderers that draw every pixel themselves.
 

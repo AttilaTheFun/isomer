@@ -18,7 +18,7 @@ import SwiftFFIWasmHost
 /// What the running reactor calls back into: the Kotlin host.
 @ExportedInterface(namespace: "wasm_engine")
 public protocol WasmKitHost {
-    /// A fresh serialized render tree (a tree.fbs patch).
+    /// A fresh serialized render tree (a tree.proto patch).
     func renderTree(tree: [UInt8])
     /// "Render again soon": the host calls `wasmKitRender` at its next frame.
     func scheduleRender()

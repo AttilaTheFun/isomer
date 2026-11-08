@@ -3,7 +3,7 @@
 // swift_ffi bindings (app_bridge.js), this host speaks the fixed `iso_hot`
 // render ABI directly, so it can run ANY feature bundle — including one
 // compiled outside bazel (the Playground app's on-the-fly user builds) —
-// with no generated code. The reactor pushes tree.fbs Patches; the React
+// with no generated code. The reactor pushes tree.proto Patches; the React
 // renderer mounts them as real DOM.
 //
 // ABI (mirrors HotBridge.swift):

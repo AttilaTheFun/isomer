@@ -32,7 +32,7 @@ struct SplashPage: View {
                     }
                 }
                 section("How it works: one tree, pluggable renderers") {
-                    Para("Every frame, the app's SwiftUI body builds a render tree: stacks, text, images, shapes, scroll views, inputs, navigation chrome. It is diffed and serialized as patches on a small FlatBuffers wire format, and a renderer applies it. Renderers are pluggable and come in two kinds.")
+                    Para("Every frame, the app's SwiftUI body builds a render tree: stacks, text, images, shapes, scroll views, inputs, navigation chrome. It is diffed and serialized as patches in a small protobuf wire format, and a renderer applies it. Renderers are pluggable and come in two kinds.")
                     Para("Component-system renderers build the platform's own components from the tree — React DOM on the web (this page), Jetpack Compose or classic Views on Android, SwiftUI or UIKit views on Apple when a feature runs as a bundle inside a native app. They get the platform's native feel for free: real text fields, real scrolling, real navigation bars.")
                     Para("The self-drawing renderer, SwiftGPU, draws everything itself — layout, text, chrome — identically on every backend, for hosts without a component system or for pixel-identical output across platforms.")
                     DemoCard(title: "2048", template: "2048", note: "Drag gestures, GeometryReader layout, withAnimation — swipe the board.", send: send) {

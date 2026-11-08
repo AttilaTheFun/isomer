@@ -25,7 +25,7 @@ public enum HostScenePhase: Sendable {
 public protocol RuntimeConnection: AnyObject {
     /// Starts rendering into the host: the first frame follows.
     func start(host: any HostBridge, width: Double, height: Double)
-    /// Frames reach the host as encoded render trees: `tree.fbs`'s patches
+    /// Frames reach the host as encoded render trees: `tree.proto`'s patches
     /// (IsomerSwiftUI's `IsoFlat_Patch`), each against the previous tree, the
     /// first a whole tree. For a host that builds the screen from its own
     /// components (the web's React, Android's Compose, Apple's SwiftUI).

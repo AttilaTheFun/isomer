@@ -1,4 +1,4 @@
-// `GPUTreeView`: a UIView that draws a wasm feature's render tree (tree.fbs
+// `GPUTreeView`: a UIView that draws a wasm feature's render tree (tree.proto
 // patches) with the self-drawing SwiftGPU renderer over Metal — the iOS
 // Playground's "Metal" renderer for a run, the alternative to real SwiftUI
 // (`IsomerTreeView`). This module compiles the SwiftUI *reimplementation*
@@ -74,7 +74,7 @@ public final class GPUTreeView: UIView {
         scheduleRender()
     }
 
-    /// One tree.fbs Patch from the feature, in arrival order (never coalesce:
+    /// One tree.proto Patch from the feature, in arrival order (never coalesce:
     /// each is a delta against the retained tree).
     public func apply(patch: [UInt8]) {
         pendingBytes.append(patch)

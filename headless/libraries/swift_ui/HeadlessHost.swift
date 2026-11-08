@@ -25,7 +25,6 @@
 
 internal import IsomerSwiftUI
 internal import SwiftUI
-import FlatBuffers
 import Foundation
 #if canImport(Darwin)
 import Darwin
@@ -237,8 +236,7 @@ enum HeadlessApp {
     static func frame() -> HeadlessFrame? {
         guard let tree = renderer.tree else { return nil }
         encoder = FlatTreeEncoder()
-        var buffer = ByteBuffer(bytes: encoder.encode(root: tree))
-        let root: IsoFlat_Node = getRoot(byteBuffer: &buffer)
+        guard let root = try? IsoFlat_Node(treeBytes: encoder.encode(root: tree)) else { return nil }
         Runtime.shared.installTreeHandlers(encoder.handlers)
         return HeadlessFrame(root)
     }

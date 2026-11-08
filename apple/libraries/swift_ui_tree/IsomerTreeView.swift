@@ -1,5 +1,5 @@
 // The native SwiftUIRenderer's Apple half: interprets the render-tree
-// FlatBuffer (shared/renderers/tree.fbs) as REAL SwiftUI views. The tree
+// protobuf message (shared/wire/tree.proto) as REAL SwiftUI views. The tree
 // producer runs elsewhere — a wasm module under WasmKit in the hot-reload
 // example host, where the runtime binds `SwiftUIRenderer { bytes in … }` —
 // and events go back by node id through `send` (the counterpart of
@@ -11,7 +11,6 @@
 // Native `.sheet`/NavigationStack mapping is future work — presentations
 // and bars render as styled layers driven purely by the tree.
 
-import FlatBuffers
 import os
 import SwiftUI
 public import IsomerSwiftUI

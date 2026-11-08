@@ -1,0 +1,157 @@
+// The render tree's wire format (0.45): what Isomer's SwiftUI sends a host
+// that builds the screen from its own components (the web's React, Android's
+// Compose, Apple's SwiftUI tree view), in the same process, from a headless
+// runtime on a server, or recorded to a file and replayed. It replaced the
+// FlatBuffers schema (tree.fbs, until 0.45) field for field: a field's number
+// is its FlatBuffers slot + 1, and numbers are never reused.
+//
+// A frame is a Patch against the tree the reader holds (the first, after a
+// start or a reconnection, a single op at "n": the whole tree). In a stream
+// (a socket, a file) each message is length-delimited (a varint length, then
+// the message), as protobuf's writeDelimitedTo writes them.
+
+syntax = "proto3";
+
+package isomer.wire;
+
+option swift_prefix = "Wire_";
+option java_package = "dev.isomer.wire";
+option java_multiple_files = true;
+
+enum Kind {
+  KIND_BOX = 0;
+  KIND_TEXT = 1;
+  KIND_SHAPE = 2;
+  KIND_STACK = 3;
+  KIND_SPACER = 4;
+  KIND_DIVIDER = 5;
+  KIND_SCROLL = 6;
+  KIND_IMAGE = 7;
+  KIND_TEXT_FIELD = 8;
+  KIND_SLIDER = 9;
+  KIND_GRADIENT = 10;
+  KIND_HOST_VIEW = 11;
+  KIND_PROGRESS = 12;
+  KIND_PRESENTATION = 13;
+}
+
+enum Axis {
+  AXIS_HORIZONTAL = 0;
+  AXIS_VERTICAL = 1;
+  AXIS_DEPTH = 2;
+}
+
+// Leading/top, center, trailing/bottom (per the node's axis).
+enum Align {
+  ALIGN_START = 0;
+  ALIGN_CENTER = 1;
+  ALIGN_END = 2;
+}
+
+enum Shape {
+  SHAPE_RECT = 0;
+  SHAPE_CIRCLE = 1;
+  SHAPE_CAPSULE = 2;
+}
+
+enum PresentationStyle {
+  PRESENTATION_STYLE_SHEET = 0;
+  PRESENTATION_STYLE_POPOVER = 1;
+  PRESENTATION_STYLE_ALERT = 2;
+}
+
+message Color {
+  float r = 1;
+  float g = 2;
+  float b = 3;
+  float a = 4;
+}
+
+message Shadow {
+  Color color = 1;
+  float radius = 2;
+  float x = 3;
+  float y = 4;
+}
+
+message KV {
+  string key = 1;
+  string value = 2;
+}
+
+message Node {
+  Kind kind = 1;
+  optional string v = 2;              // string value (text / textField / hostView)
+  optional double num = 3;            // numeric value (slider fraction, progress)
+  optional string id = 4;             // textField identity
+  optional double size = 5;           // font size
+  optional int32 weight = 6;          // font weight
+  Color color = 7;                    // text color
+  optional int32 lines = 8;           // lineLimit
+  optional Shape shape = 9;
+  Color fill = 10;
+  Color stroke = 11;
+  optional double stroke_width = 12;
+  optional Axis axis = 13;
+  optional double spacing = 14;
+  optional double min = 15;           // spacer min length
+  optional string src = 16;           // image source
+  optional bool remote = 17;
+  optional bool resizable = 18;
+  optional bool fit = 19;
+  optional string placeholder = 20;
+  optional string edit = 21;          // edit-handler id
+  optional string view = 22;          // hostView kind
+  repeated string options = 23;
+  repeated KV params = 24;
+  bool grow_w = 25;
+  bool grow_h = 26;
+  optional Align align_h = 27;
+  optional Align align_v = 28;
+  Shadow shadow = 29;
+  repeated double padding = 30;       // [top, leading, bottom, trailing]
+  optional double width = 31;
+  optional double height = 32;
+  bool expand_w = 33;
+  bool expand_h = 34;
+  optional double radius = 35;
+  optional double opacity = 36;
+  Color bg = 37;
+  optional string gradient = 38;      // paint JSON (HostBridge.fillGradient's)
+  optional string tap = 39;           // tap-handler id
+  optional int32 feedback = 40;
+  optional PresentationStyle style = 41;
+  optional string title = 42;         // alert title
+  optional string message = 43;       // alert message
+  optional string dismiss = 44;       // presentation dismiss-handler id
+  repeated Node ch = 45;
+  optional double offset_x = 46;      // visual translation (.offset)
+  optional double offset_y = 47;
+  optional double scale = 48;         // uniform .scaleEffect about the center
+  optional string drag = 49;          // drag-handler id
+  optional string key = 50;           // identity among its siblings
+}
+
+// One change to the reader's tree. Ops run in order, and `path` is the
+// target node's position ("n", "n.0", "n.0.1", ...) in the tree as it stands
+// when the op runs (a node's ops precede its children's):
+//   - `reorder`: the node keeps its attributes; its new children are, for
+//     each `order` entry, the retained child at that index, or for -1 the
+//     next of `inserts` (children matched by `key`, so a row inserted among
+//     others ships alone). `node` is absent.
+//   - otherwise, `attrs_only` false: the whole subtree at `path` becomes
+//     `node` (its `ch` the complete new children).
+//   - `attrs_only` true: only the node's attributes become `node`'s, its
+//     children kept (`node` carries no `ch`).
+message PatchOp {
+  string path = 1;
+  Node node = 2;
+  bool attrs_only = 3;
+  repeated int32 order = 4;
+  repeated Node inserts = 5;
+  bool reorder = 6;                   // a reorder: `order` present, even if empty
+}
+
+message Patch {
+  repeated PatchOp ops = 1;
+}

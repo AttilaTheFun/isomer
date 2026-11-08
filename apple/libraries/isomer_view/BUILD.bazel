@@ -6,7 +6,7 @@ package(default_visibility = ["//visibility:public"])
 # feature, with two interchangeable engines behind one SwiftUI view:
 # `.compiled` (the feature built natively against IsomerCore, running
 # in-process) and `.wasm` (the same source as a `iso_hot` reactor bundle).
-# Both emit the same tree.fbs Patch stream into the same `IsomerTreeView`,
+# Both emit the same tree.proto Patch stream into the same `IsomerTreeView`,
 # so a host ships compiled by default and can override with a wasm bundle —
 # dev hot-reload or a dynamically delivered hotfix — without the app noticing.
 swift_library(

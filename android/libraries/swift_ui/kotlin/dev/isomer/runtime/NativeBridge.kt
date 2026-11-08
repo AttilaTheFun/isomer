@@ -107,7 +107,7 @@ object NativeBridge {
         }
 
         override fun renderTree(tree: ByteArray) {
-            // The render-tree FlatBuffer (tree.fbs), reconciled into the retained
+            // The render tree (tree.proto), reconciled into the retained
             // UNode tree so unchanged subtrees keep identity and only the changed
             // views update. Default consumer = the Compose interpreter; a host
             // may install another sink.

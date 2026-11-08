@@ -19,7 +19,7 @@ Swift" where the longer name reads better): the repo and the Bazel module are
 macros are `isomer_android_app` / `isomer_web_app`. GitHub redirects the old
 URL. The internal prefix is `iso` since 0.31 (C symbols `iso_*`, CSS
 variables `--iso-*`, `data-iso-*` attributes, `ISO_*` environment variables,
-`__iso*` JS hooks, the FlatBuffers namespace `IsoFlat`); it was `uui` (for
+`__iso*` JS hooks, the render tree's reading types `IsoFlat_*`); it was `uui` (for
 "universal UI") before, and docs written then (benchmarks, plans) still say
 "UUI". Bundles built before 0.31 (the Playground's hot-reload demo feed, a
 Playground toolchain staged before it) export the old `uui_hot_*` names
@@ -54,8 +54,7 @@ and so on up. A consumer pins ONE version of isomer (by version from the
 project's registry, AttilaTheFun/bazel_registry, from 0.36.0; a commit
 between releases) and lists that registry before the BCR in its .bazelrc:
 no override of isomer's dependencies since 0.40 (rules_swift 4.2.2.isomer.3
-sorts above the 4.2.2 rules_applecross asks for). FlatBuffers is a registry version with isomer's patches since
-0.40 (25.12.19.isomer.1): no override of it, nor of rules_foreign_cc.
+sorts above the 4.2.2 rules_applecross asks for).
 
 **Versions (from 0.38).** A version is MAJOR.MINOR.BUILD; there are no
 point releases. MODULE.bazel and the Playground's apps commit MAJOR.MINOR.0
@@ -99,8 +98,8 @@ tagged.
 Things the fold taught:
 
 - **The root module must not use rules_js's `npm` extension.** flatbuffers
-  hands it a tag rules_js 3 rejects (`root_package`); that is harmless only
-  while nobody evaluates the extension. swift_ffi's web example therefore
+  (a dependency until 0.45) handed it a tag rules_js 3 rejects
+  (`root_package`), harmless only while nobody evaluated the extension. swift_ffi's web example therefore
   declares the two Node APIs it uses by hand (`node.d.ts`) instead of pulling
   `@types/node`, and tsc's version is written in MODULE.bazel.
 - **SQLite (0.34).** SQLite is swift_sql's (AttilaTheFun/swift_sql,
@@ -173,9 +172,18 @@ a repository of its own):
   package can't express comes from the Bazel module through configure_package
   `target_deps`: Foundation's internationalization (a marker module Foundation
   checks with `canImport`, `--@isomer//foundation:internationalization`),
-  FlatBuffers' Swift runtime (until the wire format is protobuf). Generated sources the package compiles are checked in, with
-  diff_tests (shared/isomer_swift_ui/TreeGenerated.swift, flatc's;
-  shared/swift_ui_core/JSONInternal.swift). The package's minimums are
+  nothing else. Generated sources the package compiles are checked in, with
+  diff_tests (shared/isomer_swift_ui/tree.pb.swift, protoc's;
+  shared/swift_ui_core/JSONInternal.swift).
+- **The render tree's wire format is protobuf (0.45)**: shared/wire/tree.proto
+  (FlatBuffers' tree.fbs before, field for field: a field's number is its old
+  slot + 1). FlatTreeEncoder writes `Wire_Node`/`Wire_Patch`
+  (SwiftProtobuf, IsomerSwiftUI's dependency in the package); readers in Swift
+  use IsomerSwiftUI's TreeReader.swift (`IsoFlat_Node`, `IsoFlat_Patch`: the
+  names from the FlatBuffers days, an optional where a field may be absent);
+  the web's (runtime/flat_tree.js) and Android's (FlatTree.kt) readers are
+  hand-written against protobuf's wire format (npm- and Maven-free). A stream
+  or a file of them is length-delimited messages. The package's minimums are
   Isomer's own (iOS 16, macOS 13; #2639 applies none off Apple).
   - **The package's modules share one output directory**, and SwiftCompile
     runs unsandboxed: a build whose SwiftUI isn't the package's (Apple's beside

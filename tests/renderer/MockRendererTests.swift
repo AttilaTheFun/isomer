@@ -5,7 +5,6 @@
 // and the serialized form. A plain executable (no XCTest), exits non-zero
 // on failure; wrapped as a sh_test.
 
-import FlatBuffers
 import Foundation
 import SwiftUI  // IsomerCore, aliased (BUILD.bazel)
 import Observation
@@ -2855,7 +2854,7 @@ struct Main {
 
         // The canonical tree carries chrome as semantic host views — the
         // renderer decides how to visualize them; the core does not. The
-        // wire format is the tree.fbs FlatBuffer.
+        // wire format is the tree.proto message.
         let encoder = FlatTreeEncoder()
         let bytes = encoder.encode(root: tree)
         expect(!bytes.isEmpty, "encoder produces a buffer")

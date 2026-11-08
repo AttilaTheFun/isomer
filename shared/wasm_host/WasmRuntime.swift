@@ -28,7 +28,7 @@ public typealias WasmScalar = SwiftFFIScalar
 /// are already materialized (the engine reads `(ptr, len)` out of guest memory
 /// before invoking `onRenderTree` / `onLog`), so this surface is engine-neutral.
 public struct WasmHostImports {
-    /// The reactor pushed a fresh serialized render tree (tree.fbs).
+    /// The reactor pushed a fresh serialized render tree (tree.proto).
     public var onRenderTree: ([UInt8]) -> Void
     /// Guest `log(...)` output.
     public var onLog: (String) -> Void

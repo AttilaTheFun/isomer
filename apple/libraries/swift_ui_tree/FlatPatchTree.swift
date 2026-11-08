@@ -1,4 +1,4 @@
-// The SwiftUI host's retained render tree + tree.fbs `Patch` applier — the
+// The SwiftUI host's retained render tree + tree.proto `Patch` applier — the
 // Swift analogue of the Android Compose host's `FlatTree.applyPatch`
 // (FlatTree.kt). Patches are the ONLY wire format the reactor ships (the
 // first patch after start/reload is a single full-tree op at "n").
@@ -10,7 +10,6 @@
 // copy-on-write: only nodes on an op's path are rebuilt, so an unchanged
 // subtree keeps its `PatchedNode` reference across frames.
 
-import FlatBuffers
 public import IsomerSwiftUI
 
 /// One retained node. Reference identity == unchanged subtree.
@@ -84,8 +83,7 @@ public enum FlatPatchTree {
     /// falls outside the retained shape indicate a desynced stream and are
     /// dropped rather than spliced at a wrong spot.
     public static func apply(patch bytes: [UInt8], to retained: PatchedNode?) -> PatchedNode? {
-        var buffer = ByteBuffer(bytes: bytes)
-        let patch = getRoot(byteBuffer: &buffer) as IsoFlat_Patch
+        guard let patch = try? IsoFlat_Patch(patchBytes: bytes) else { return retained }
         var root = retained
         for index in 0..<patch.ops.count {
             let op = patch.ops[index]

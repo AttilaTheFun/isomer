@@ -671,7 +671,7 @@ bazel_dep(name = "isomer", version = "0.36.1")
 ```
  The patched
 rules_swift isomer needs comes from that registry by version, patches and
-all, FlatBuffers too (25.12.19.isomer.1, since 0.40).
+all.
 
 Isomer's Swift libraries are a Swift package too (since 0.43: Foundation,
 CoreGraphics, Combine and what they stand on, from isomer's root

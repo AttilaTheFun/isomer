@@ -41,7 +41,7 @@ public typealias IsomerCoreView = IsomerCore.View
 
 @MainActor
 final class CompiledFeatureModel: ObservableObject {
-    /// The retained render tree, advanced by each tree.fbs Patch the core's
+    /// The retained render tree, advanced by each tree.proto Patch the core's
     /// `SwiftUIRenderer` emits (applied in arrival order, never coalesced).
     @Published private(set) var tree: PatchedNode?
 

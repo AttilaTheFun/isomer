@@ -1,0 +1,26 @@
+load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
+
+# The render tree's wire format (tree.proto). Its Swift is checked in
+# (shared/isomer_swift_ui/tree.pb.swift, so isomer's Swift package builds it
+# without protoc); the JavaScript and Kotlin readers are hand-written
+# (wasm/libraries/swift_ui/runtime/flat_tree.js, android/…/FlatTree.kt).
+exports_files(["tree.proto"])
+
+genrule(
+    name = "tree_swift",
+    srcs = ["tree.proto"],
+    outs = ["tree.pb.swift"],
+    cmd = "$(location @protobuf//:protoc) --plugin=protoc-gen-swift=$(location @swiftpkg_swift_protobuf//:protoc-gen-swift) " +
+          "--swift_out=$(RULEDIR) --swift_opt=Visibility=Public -I $$(dirname $(location tree.proto)) $(location tree.proto)",
+    tools = [
+        "@protobuf//:protoc",
+        "@swiftpkg_swift_protobuf//:protoc-gen-swift",
+    ],
+)
+
+diff_test(
+    name = "tree_swift_test",
+    failure_message = "Regenerate shared/isomer_swift_ui/tree.pb.swift: bazel build //shared/wire:tree_swift, and copy its output over it.",
+    file1 = "//shared/isomer_swift_ui:tree.pb.swift",
+    file2 = ":tree_swift",
+)

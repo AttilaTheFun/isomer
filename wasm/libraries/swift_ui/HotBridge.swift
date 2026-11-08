@@ -25,7 +25,7 @@
 //     iso_hot.schedule_render()
 //
 // The bridge binds `SwiftUIRenderer`: the runtime builds and serializes the
-// view tree to the tree.fbs FlatBuffer and hands the bytes to the host,
+// view tree to the tree.proto message and hands the bytes to the host,
 // which renders them natively (real SwiftUI / Compose) — nothing in the
 // wasm draws or measures.
 

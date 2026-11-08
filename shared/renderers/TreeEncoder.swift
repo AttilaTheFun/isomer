@@ -1,5 +1,5 @@
-// Encodes the resolved (pre-layout) `RenderNode` tree as a FlatBuffer
-// (shared/renderers/tree.fbs) for component-system renderers. Interactive
+// Encodes the resolved (pre-layout) `RenderNode` tree as a protobuf message
+// (shared/wire/tree.proto) for component-system renderers. Interactive
 // nodes register their closures in `handlers`, keyed by a stable id the
 // consumer echoes back through `Runtime.hostViewEvent(id:value:)`; nodes
 // with `onAppear` collect into `appearances` for the renderer to fire after
@@ -17,7 +17,7 @@
 // mirror of the tree (children, and own attributes compared field by field)
 // — which is both what gets serialized and what the next frame diffs against.
 
-import FlatBuffers
+import SwiftProtobuf
 internal import IsomerSwiftUI
 
 package final class FlatTreeEncoder {
@@ -141,10 +141,12 @@ package final class FlatTreeEncoder {
         appearances = []
         disappearances = [:]
         let tree = flattenRoot(root)
-        var fbb = FlatBufferBuilder(initialSize: 16_384)
-        let offset = serialize(tree, includeChildren: true, &fbb)
-        fbb.finish(offset: offset)
-        return fbb.sizedByteArray
+        return Self.bytes(serialize(tree, includeChildren: true))
+    }
+
+    private static func bytes(_ message: some SwiftProtobuf.Message) -> [UInt8] {
+        // Serializing a complete message of known fields can't fail.
+        (try? message.serializedBytes()) ?? []
     }
 
     // MARK: - Diff-aware encode
@@ -163,14 +165,10 @@ package final class FlatTreeEncoder {
             let stale = passStats.stale.prefix(6).joined(separator: ", ") + (passStats.stale.count > 6 ? " (+\(passStats.stale.count - 6))" : "")
             Runtime.shared.host?.log("[encode] flattened \(passStats.nodes) nodes | cached subtrees replayed \(passStats.hits), flattened again \(passStats.stale.count): \(stale.isEmpty ? "-" : stale) | new \(passStats.fresh.count): \(passStats.fresh.prefix(4).joined(separator: ", "))")
         }
-        var fbb = FlatBufferBuilder(initialSize: 4_096)
-        var ops: [Offset] = []
-        diff(previous, tree, path: "n", &fbb, &ops)
-        let opsVector = fbb.createVector(ofOffsets: ops)
-        let patch = IsoFlat_Patch.createPatch(&fbb, opsVectorOffset: opsVector)
-        fbb.finish(offset: patch)
+        var patch = Wire_Patch()
+        diff(previous, tree, path: "n", &patch.ops)
         previous = tree
-        return fbb.sizedByteArray
+        return Self.bytes(patch)
     }
 
     // MARK: - Diff
@@ -188,18 +186,17 @@ package final class FlatTreeEncoder {
     /// tree as it stands when the op runs: a node's own ops come before its
     /// children's, so a child's path is its position after any reorder.
     private func diff(
-        _ old: FlatNode?, _ new: FlatNode, path: String,
-        _ fbb: inout FlatBufferBuilder, _ ops: inout [Offset]
+        _ old: FlatNode?, _ new: FlatNode, path: String, _ ops: inout [Wire_PatchOp]
     ) {
         guard let old, old.kind == new.kind else {
-            ops.append(op(path, serialize(new, includeChildren: true, &fbb), attrsOnly: false, &fbb))
+            ops.append(op(path, serialize(new, includeChildren: true), attrsOnly: false))
             return
         }
         // The same cached subtree as last frame (a reused view's): nothing
         // in it changed.
         if new.subtreeToken != 0, new.subtreeToken == old.subtreeToken { return }
         if !old.sameOwnAttributes(as: new) {
-            ops.append(op(path, serialize(new, includeChildren: false, &fbb), attrsOnly: true, &fbb))
+            ops.append(op(path, serialize(new, includeChildren: false), attrsOnly: true))
         }
         // Where each new child was among the old ones (-1: it is new).
         var sameOrder = old.children.count == new.children.count
@@ -213,53 +210,52 @@ package final class FlatTreeEncoder {
         }
         if sameOrder {
             for index in new.children.indices {
-                diff(old.children[index], new.children[index], path: "\(path).\(index)", &fbb, &ops)
+                diff(old.children[index], new.children[index], path: "\(path).\(index)", &ops)
             }
             return
         }
         // No children left: a plain replace (an `order` op is never empty,
         // so readers can tell one by its entries).
         if new.children.isEmpty {
-            ops.append(op(path, serialize(new, includeChildren: true, &fbb), attrsOnly: false, &fbb))
+            ops.append(op(path, serialize(new, includeChildren: true), attrsOnly: false))
             return
         }
         var oldIndex: [String: Int] = [:]
         oldIndex.reserveCapacity(old.children.count)
         for (index, child) in old.children.enumerated() { oldIndex[child.matchKey] = index }
-        var inserts: [Offset] = []
+        var inserts: [Wire_Node] = []
         for child in new.children {
             if let index = oldIndex[child.matchKey], old.children[index].kind == child.kind {
                 order.append(Int32(index))
             } else {
                 order.append(-1)
-                inserts.append(serialize(child, includeChildren: true, &fbb))
+                inserts.append(serialize(child, includeChildren: true))
             }
         }
-        ops.append(reorderOp(path, order: order, inserts: inserts, &fbb))
+        ops.append(reorderOp(path, order: order, inserts: inserts))
         for (index, child) in new.children.enumerated() where order[index] >= 0 {
-            diff(old.children[Int(order[index])], child, path: "\(path).\(index)", &fbb, &ops)
+            diff(old.children[Int(order[index])], child, path: "\(path).\(index)", &ops)
         }
     }
 
-    private func op(
-        _ path: String, _ node: Offset, attrsOnly: Bool, _ fbb: inout FlatBufferBuilder
-    ) -> Offset {
-        let pathOffset = fbb.create(string: path)
-        return IsoFlat_PatchOp.createPatchOp(
-            &fbb, pathOffset: pathOffset, nodeOffset: node, attrsOnly: attrsOnly)
+    private func op(_ path: String, _ node: Wire_Node, attrsOnly: Bool) -> Wire_PatchOp {
+        var op = Wire_PatchOp()
+        op.path = path
+        op.node = node
+        op.attrsOnly = attrsOnly
+        return op
     }
 
     /// The node at `path` keeps its attributes; its children become, for
     /// each `order` entry, the old child at that index, or (for -1) the next
     /// of `inserts`.
-    private func reorderOp(
-        _ path: String, order: [Int32], inserts: [Offset], _ fbb: inout FlatBufferBuilder
-    ) -> Offset {
-        let pathOffset = fbb.create(string: path)
-        let orderVector = fbb.createVector(order)
-        let insertsVector = fbb.createVector(ofOffsets: inserts)
-        return IsoFlat_PatchOp.createPatchOp(
-            &fbb, pathOffset: pathOffset, orderVectorOffset: orderVector, insertsVectorOffset: insertsVector)
+    private func reorderOp(_ path: String, order: [Int32], inserts: [Wire_Node]) -> Wire_PatchOp {
+        var op = Wire_PatchOp()
+        op.path = path
+        op.reorder = true
+        op.order = order
+        op.inserts = inserts
+        return op
     }
 
     // MARK: - Flatten (RenderNode -> FlatNode)
@@ -1287,102 +1283,74 @@ package final class FlatTreeEncoder {
         if let popover = node.popoverAnchor { out.params = (out.params ?? []) + [("popover", popover)] }
     }
 
-    // MARK: - Serialize (FlatNode -> FlatBuffer Node)
+    // MARK: - Serialize (FlatNode -> wire Node)
 
     /// Serializes a `FlatNode` to a `Node` table. When `includeChildren` is
     /// false the `ch` vector is omitted — the attrs-only patch encoding whose
     /// consumer keeps the retained node's existing children.
     // swiftlint:disable:next cyclomatic_complexity function_body_length
-    private func serialize(
-        _ node: FlatNode, includeChildren: Bool, _ fbb: inout FlatBufferBuilder
-    ) -> Offset {
-        // Children and every string/vector are created BEFORE the table.
-        let childOffsets: [Offset] = includeChildren
-            ? node.children.map { serialize($0, includeChildren: true, &fbb) }
-            : []
-        let childrenVector: Offset? =
-            childOffsets.isEmpty ? nil : fbb.createVector(ofOffsets: childOffsets)
-
-        let vOffset = node.v.map { fbb.create(string: $0) }
-        let idOffset = node.id.map { fbb.create(string: $0) }
-        let srcOffset = node.src.map { fbb.create(string: $0) }
-        let placeholderOffset = node.placeholder.map { fbb.create(string: $0) }
-        let editOffset = node.edit.map { fbb.create(string: $0) }
-        let viewOffset = node.view.map { fbb.create(string: $0) }
-        let gradientOffset = node.gradient.map { fbb.create(string: $0) }
-        let tapOffset = node.tap.map { fbb.create(string: $0) }
-        let titleOffset = node.title.map { fbb.create(string: $0) }
-        let messageOffset = node.message.map { fbb.create(string: $0) }
-        let dismissOffset = node.dismiss.map { fbb.create(string: $0) }
-        let dragOffset = node.drag.map { fbb.create(string: $0) }
-        let keyOffset = node.key.map { fbb.create(string: $0) }
-        let optionsVector = node.options.map { options in
-            fbb.createVector(ofOffsets: options.map { fbb.create(string: $0) })
-        }
-        let paramsVector = node.params.map { params -> Offset in
-            let entries = params.map { key, value -> Offset in
-                let keyOffset = fbb.create(string: key)
-                let valueOffset = fbb.create(string: value)
-                return IsoFlat_KV.createKV(&fbb, keyOffset: keyOffset, valueOffset: valueOffset)
+    private func serialize(_ node: FlatNode, includeChildren: Bool) -> Wire_Node {
+        var out = Wire_Node()
+        out.kind = node.kind.wire
+        if let v = node.v { out.v = v }
+        if let num = node.num { out.num = num }
+        if let id = node.id { out.id = id }
+        if let fontSize = node.fontSize { out.size = fontSize }
+        if let weight = node.weight { out.weight = weight }
+        if let color = node.color { out.color = color.wire }
+        if let lines = node.lines { out.lines = lines }
+        if let shape = node.shape { out.shape = shape.wire }
+        if let fill = node.fill { out.fill = fill.wire }
+        if let stroke = node.stroke { out.stroke = stroke.wire }
+        if let strokeWidth = node.strokeWidth { out.strokeWidth = strokeWidth }
+        if let axis = node.axis { out.axis = axis.wire }
+        if let spacing = node.spacing { out.spacing = spacing }
+        if let min = node.min { out.min = min }
+        if let src = node.src { out.src = src }
+        if let remote = node.remote { out.remote = remote }
+        if let resizable = node.resizable { out.resizable = resizable }
+        if let fit = node.fit { out.fit = fit }
+        if let placeholder = node.placeholder { out.placeholder = placeholder }
+        if let edit = node.edit { out.edit = edit }
+        if let view = node.view { out.view = view }
+        if let options = node.options { out.options = options }
+        if let params = node.params {
+            out.params = params.map { key, value in
+                var entry = Wire_KV()
+                entry.key = key
+                entry.value = value
+                return entry
             }
-            return fbb.createVector(ofOffsets: entries)
         }
-        let paddingVector = node.padding.map { fbb.createVector($0) }
-
-        let start = IsoFlat_Node.startNode(&fbb)
-        IsoFlat_Node.add(kind: node.kind, &fbb)
-        if let vOffset { IsoFlat_Node.add(v: vOffset, &fbb) }
-        if let num = node.num { IsoFlat_Node.add(num: num, &fbb) }
-        if let idOffset { IsoFlat_Node.add(id: idOffset, &fbb) }
-        if let fontSize = node.fontSize { IsoFlat_Node.add(size: fontSize, &fbb) }
-        if let weight = node.weight { IsoFlat_Node.add(weight: weight, &fbb) }
-        if let color = node.color { IsoFlat_Node.add(color: color, &fbb) }
-        if let lines = node.lines { IsoFlat_Node.add(lines: lines, &fbb) }
-        if let shape = node.shape { IsoFlat_Node.add(shape: shape, &fbb) }
-        if let fill = node.fill { IsoFlat_Node.add(fill: fill, &fbb) }
-        if let stroke = node.stroke { IsoFlat_Node.add(stroke: stroke, &fbb) }
-        if let strokeWidth = node.strokeWidth { IsoFlat_Node.add(strokeWidth: strokeWidth, &fbb) }
-        if let axis = node.axis { IsoFlat_Node.add(axis: axis, &fbb) }
-        if let spacing = node.spacing { IsoFlat_Node.add(spacing: spacing, &fbb) }
-        if let min = node.min { IsoFlat_Node.add(min: min, &fbb) }
-        if let srcOffset { IsoFlat_Node.add(src: srcOffset, &fbb) }
-        if let remote = node.remote { IsoFlat_Node.add(remote: remote, &fbb) }
-        if let resizable = node.resizable { IsoFlat_Node.add(resizable: resizable, &fbb) }
-        if let fit = node.fit { IsoFlat_Node.add(fit: fit, &fbb) }
-        if let placeholderOffset { IsoFlat_Node.add(placeholder: placeholderOffset, &fbb) }
-        if let editOffset { IsoFlat_Node.add(edit: editOffset, &fbb) }
-        if let viewOffset { IsoFlat_Node.add(view: viewOffset, &fbb) }
-        if let optionsVector { IsoFlat_Node.addVectorOf(options: optionsVector, &fbb) }
-        if let paramsVector { IsoFlat_Node.addVectorOf(params: paramsVector, &fbb) }
-        if node.growW { IsoFlat_Node.add(growW: true, &fbb) }
-        if node.growH { IsoFlat_Node.add(growH: true, &fbb) }
-        if let alignH = node.alignH { IsoFlat_Node.add(alignH: alignH, &fbb) }
-        if let alignV = node.alignV { IsoFlat_Node.add(alignV: alignV, &fbb) }
-        if let shadow = node.shadow { IsoFlat_Node.add(shadow: shadow, &fbb) }
-        if let paddingVector { IsoFlat_Node.addVectorOf(padding: paddingVector, &fbb) }
-        if let width = node.width { IsoFlat_Node.add(width: width, &fbb) }
-        if let height = node.height { IsoFlat_Node.add(height: height, &fbb) }
-        if node.expandW { IsoFlat_Node.add(expandW: true, &fbb) }
-        if node.expandH { IsoFlat_Node.add(expandH: true, &fbb) }
-        if let radius = node.radius { IsoFlat_Node.add(radius: radius, &fbb) }
-        if let opacity = node.opacity { IsoFlat_Node.add(opacity: opacity, &fbb) }
-        if let bg = node.bg { IsoFlat_Node.add(bg: bg, &fbb) }
-        if let gradientOffset { IsoFlat_Node.add(gradient: gradientOffset, &fbb) }
-        if let tapOffset {
-            IsoFlat_Node.add(tap: tapOffset, &fbb)
-            if let feedback = node.feedback { IsoFlat_Node.add(feedback: feedback, &fbb) }
+        out.growW = node.growW
+        out.growH = node.growH
+        if let alignH = node.alignH { out.alignH = alignH.wire }
+        if let alignV = node.alignV { out.alignV = alignV.wire }
+        if let shadow = node.shadow { out.shadow = shadow.wire }
+        if let padding = node.padding { out.padding = padding }
+        if let width = node.width { out.width = width }
+        if let height = node.height { out.height = height }
+        out.expandW = node.expandW
+        out.expandH = node.expandH
+        if let radius = node.radius { out.radius = radius }
+        if let opacity = node.opacity { out.opacity = opacity }
+        if let bg = node.bg { out.bg = bg.wire }
+        if let gradient = node.gradient { out.gradient = gradient }
+        if let tap = node.tap {
+            out.tap = tap
+            if let feedback = node.feedback { out.feedback = feedback }
         }
-        if let style = node.style { IsoFlat_Node.add(style: style, &fbb) }
-        if let titleOffset { IsoFlat_Node.add(title: titleOffset, &fbb) }
-        if let messageOffset { IsoFlat_Node.add(message: messageOffset, &fbb) }
-        if let dismissOffset { IsoFlat_Node.add(dismiss: dismissOffset, &fbb) }
-        if let childrenVector { IsoFlat_Node.addVectorOf(ch: childrenVector, &fbb) }
-        if let offsetX = node.offsetX { IsoFlat_Node.add(offsetX: offsetX, &fbb) }
-        if let offsetY = node.offsetY { IsoFlat_Node.add(offsetY: offsetY, &fbb) }
-        if let scale = node.scale { IsoFlat_Node.add(scale: scale, &fbb) }
-        if let dragOffset { IsoFlat_Node.add(drag: dragOffset, &fbb) }
-        if let keyOffset { IsoFlat_Node.add(key: keyOffset, &fbb) }
-        return IsoFlat_Node.endNode(&fbb, start: start)
+        if let style = node.style { out.style = style.wire }
+        if let title = node.title { out.title = title }
+        if let message = node.message { out.message = message }
+        if let dismiss = node.dismiss { out.dismiss = dismiss }
+        if includeChildren { out.ch = node.children.map { serialize($0, includeChildren: true) } }
+        if let offsetX = node.offsetX { out.offsetX = offsetX }
+        if let offsetY = node.offsetY { out.offsetY = offsetY }
+        if let scale = node.scale { out.scale = scale }
+        if let drag = node.drag { out.drag = drag }
+        if let key = node.key { out.key = key }
+        return out
     }
 
     // MARK: - Mapping helpers

@@ -9,7 +9,7 @@ package dev.isomer.runtime
 // app's Swift library. It renders the tree the reactor emits with the SAME
 // Compose interpreter (IsoNode) the native path uses.
 //
-// The reactor's render tree is the tree.fbs the native path also emits, so the
+// The reactor's render tree is the tree.proto the native path also emits, so the
 // only wasm-specific glue is (1) launching the reactor with a bundle's bytes
 // and (2) routing node events back to the reactor via `WasmEngine.event`
 // (IsoEventRouter). Feature-flag / analytics DI is answered natively through

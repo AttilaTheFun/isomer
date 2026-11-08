@@ -3,7 +3,7 @@
 // drawn by the self-drawing `SwiftGPURenderer` through swift_gpu's METAL
 // backend — the iOS analogue of the desktop wasm hosts. The wiring mirrors
 // LinuxWasmHost: the reactor runs on WasmKit under the shared feature
-// runtime (WasmFeatureRuntime over WasmKitRuntime) and emits tree.fbs, the
+// runtime (WasmFeatureRuntime over WasmKitRuntime) and emits tree.proto, the
 // host decodes it and SwiftGPURenderer lays out + draws every pixel into an
 // MTKView pass.
 //
@@ -297,7 +297,7 @@ final class MetalWasmViewController: UIViewController {
         }
 
         // WasmKit under the shared feature runtime, which pumps the reactor's
-        // renders on the main queue. The reactor ships tree.fbs Patches — the
+        // renders on the main queue. The reactor ships tree.proto Patches — the
         // only wire format; the first render after start is a single
         // full-tree op at "n". Each buffer is queued in order (`pendingBytes`)
         // and applied on the next draw.
