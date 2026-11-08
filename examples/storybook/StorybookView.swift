@@ -172,20 +172,13 @@ struct CodeCard: View {
 
     var body: some View {
         ScrollView(.horizontal) {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(SwiftHighlighter.lines(code, dark: colorScheme == .dark).enumerated()), id: \.offset) { _, line in
-                    line
-                }
-            }
+            SwiftHighlighter.text(code, dark: colorScheme == .dark)
             .font(.system(size: 12, design: .monospaced))
             .fixedSize(horizontal: true, vertical: true)
             .padding(12)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.secondary.opacity(0.12)))
-        // One element: the listing reads as one text (VoiceOver's, a
-        // driver's), not a text a line.
-        .accessibilityElement(children: .combine)
         .accessibilityIdentifier("story-code")
     }
 }
