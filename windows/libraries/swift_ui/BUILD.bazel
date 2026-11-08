@@ -47,23 +47,19 @@ _WINDOWS_COPTS = [
 # counterparts) so application code can `import SwiftUI` unchanged.
 
 swift_library(
-    name = "swift_ui",
+    name = "core",
     package_name = "isomer",
     srcs = [
-        "WindowsHost.swift",
         "//shared/renderers:srcs",
         "//shared/swift_ui_core:srcs",
         # FileDocument's FileWrapper, which the toolchain's Foundation lacks.
         "//foundation:FileWrapper.swift",
     ],
-    copts = _WINDOWS_COPTS,
     module_name = "SwiftUI",
-    swiftc_inputs = ["renderer.h"],
     target_compatible_with = ["@platforms//os:windows"],
     deps = [
         "//windows/libraries/image_io",
         "//shared/isomer_swift_ui",
-        ":renderer",
         "@flatbuffers//swift",
         # Lights up canImport(SwiftGPU): the shared SwiftGPURenderer becomes
         # the self-drawing renderer, drawing through swift_gpu's D3D11 backend.
@@ -78,15 +74,46 @@ swift_library(
     plugins = SWIFT_UI_MACROS_PLUGINS,
 )
 
-# The wasm delivery cell's `SwiftUI` module lives in a sibling package
-# (//windows/libraries/swift_ui_wasm) — it reuses `WindowsHost.swift` +
-# `renderer.h` from here (exported below) plus its own `WindowsWasmHost.swift`.
-# It carries the SAME `module_name = "SwiftUI"`, so it MUST be a separate Bazel
-# package: two same-named swiftmodules in one package collide on the emitted
-# `SwiftUI.swiftmodule` output path (a `bazel build //...` action conflict), even
-# though the compiled and wasm cells are never linked together.
+# Windows' host (WindowsHost.swift, over the C++ renderer's window): a module
+# of its own over the SwiftUI above, reaching the runtime's `package`
+# plumbing as a module of Isomer's package. It defines
+# `iso_process_host_run` (shared/swift_ui_core/App.swift); the wasm cell
+# (//windows/libraries/swift_ui_wasm) runs its window through it too.
+swift_library(
+    name = "host",
+    package_name = "isomer",
+    srcs = ["WindowsHost.swift"],
+    alwayslink = True,
+    copts = _WINDOWS_COPTS,
+    module_name = "IsomerWindowsHost",
+    swiftc_inputs = ["renderer.h"],
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        ":core",
+        ":renderer",
+        "//windows/libraries/image_io",
+        "//shared/isomer_swift_ui",
+        "//swift_gpu/windows:swift_gpu",
+        "//shared:map_engine_windows",
+        "@flatbuffers//swift",
+    ],
+)
+
+# SwiftUI with Windows' host: what Windows' apps and the modules over SwiftUI
+# here depend on.
+swift_library_group(
+    name = "swift_ui",
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        ":core",
+        ":host",
+    ],
+)
+
+# The wasm delivery cell (//windows/libraries/swift_ui_wasm) builds
+# `WindowsWasmHost.swift` over this package's SwiftUI and host, calling the
+# C++ renderer too.
 exports_files([
-    "WindowsHost.swift",
     "WindowsWasmHost.swift",
     "renderer.h",
 ])
@@ -107,6 +134,7 @@ swift_library(
     swiftc_inputs = ["renderer.h"],
     target_compatible_with = ["@platforms//os:windows"],
     deps = [
+        ":host",
         ":renderer",
         ":swift_ui",
         "//swift_ffi/swift_ffi",

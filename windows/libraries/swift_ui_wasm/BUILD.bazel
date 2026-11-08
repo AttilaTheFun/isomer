@@ -1,18 +1,12 @@
 load("@rules_swift//swift:swift.bzl", "swift_library")
-load("//swift_ui_macros:defs.bzl", "SWIFT_UI_MACROS_PLUGINS")
 
 package(default_visibility = ["//visibility:public"])
 
-# The `SwiftUI` module for the native Windows **wasm delivery cell**: the same
-# shared core + Direct2D/D3D11 host bridge as
-# //windows/libraries/swift_ui:swift_ui, plus `WindowsWasmHost.swift` and the
-# engine (WasmKit, under the shared feature runtime), so the wasm example
-# .exe can drive an `example_full.wasm` reactor and draw its decoded tree through the
-# same SwiftGPU/D3D11 renderer. It carries the SAME `module_name = "SwiftUI"` (so
-# app code does `import SwiftUI` unchanged) and therefore lives in its OWN
-# package: two same-named swiftmodules in one package collide on the
-# `SwiftUI.swiftmodule` output path. `WindowsHost.swift` + `renderer.h` are
-# reused from the sibling package (exported there); the compiled `swift_ui` never
+# The native Windows **wasm delivery cell** (IsomerWindowsWasmCell):
+# `WindowsWasmHost.swift` and the engine (WasmKit, under the shared feature
+# runtime) over //windows/libraries/swift_ui's SwiftUI and host, so the wasm
+# example .exe can drive an `example_full.wasm` reactor and draw its decoded
+# tree through the same SwiftGPU/D3D11 renderer. The compiled `swift_ui` never
 # links an interpreter.
 _WINDOWS_COPTS = [
     "-import-objc-header",
@@ -24,18 +18,15 @@ swift_library(
     name = "swift_ui_wasm",
     package_name = "isomer",
     srcs = [
-        "//windows/libraries/swift_ui:WindowsHost.swift",
         "//windows/libraries/swift_ui:WindowsWasmHost.swift",
-        "//shared/renderers:srcs",
-        "//shared/swift_ui_core:srcs",
-        # FileDocument's FileWrapper, which the toolchain's Foundation lacks.
-        "//foundation:FileWrapper.swift",
     ],
     copts = _WINDOWS_COPTS,
-    module_name = "SwiftUI",
+    module_name = "IsomerWindowsWasmCell",
     swiftc_inputs = ["//windows/libraries/swift_ui:renderer.h"],
     target_compatible_with = ["@platforms//os:windows"],
     deps = [
+        "//windows/libraries/swift_ui:core",
+        "//windows/libraries/swift_ui:host",
         "//windows/libraries/image_io",
         "//shared/isomer_swift_ui",
         "//frameworks:for_core",
@@ -55,11 +46,10 @@ swift_library(
         # light up canImport(SwiftMap). See //shared/BUILD.bazel.
         "//shared:map_engine_windows",
     ],
-    plugins = SWIFT_UI_MACROS_PLUGINS,
 )
 
 # IsomerDesktopWasmHost: the cell's public entry (WindowsWasmApp) for a host program,
-# over the `SwiftUI` module above, whose loop is package.
+# over the cell above, whose loop is package.
 swift_library(
     name = "host",
     package_name = "isomer",

@@ -1,9 +1,8 @@
 // The Linux wasm cell's entry, on Isomer's side: a host program's `@main`
-// reads the reactor's bytes and calls this. The loop itself is in the
-// cell's `SwiftUI` module (LinuxWasmLoop, package), which as an Apple-named
-// module has nothing of Isomer's own in its interface.
+// reads the reactor's bytes and calls this. The loop itself is the cell's
+// (IsomerLinuxWasmCell's LinuxWasmLoop, package).
 
-internal import SwiftUI
+internal import IsomerLinuxWasmCell
 import IsomerNativePlatformServices
 import SwiftFFIWasmHost
 

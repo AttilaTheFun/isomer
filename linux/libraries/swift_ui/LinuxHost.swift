@@ -9,8 +9,9 @@
 import Foundation
 import ImageIO
 package import IsomerSwiftUI
+internal import SwiftUI
 
-func withUTF8Pointer(_ string: String, _ body: (UnsafePointer<CChar>?, Int32) -> Void) {
+package func withUTF8Pointer(_ string: String, _ body: (UnsafePointer<CChar>?, Int32) -> Void) {
     var copy = string
     copy.withUTF8 { buffer in
         buffer.withMemoryRebound(to: CChar.self) { rebound in
@@ -232,7 +233,7 @@ final class GLRendererSurface: SwiftGPURendererSurface {
 /// The runtime host: the self-drawing SwiftGPURenderer over the GL backend
 /// wrapping the services bridge. SwiftGPU is the only self-drawing renderer;
 /// linking swift_gpu (OpenGL) for Linux is required.
-func linuxMakeHost() -> HostBridge {
+package func linuxMakeHost() -> HostBridge {
     #if canImport(SwiftGPU)
     #if canImport(SwiftMap)
     Renderer.hostRendersMaps = true  // `Map` draws real SwiftMap tiles
@@ -316,7 +317,7 @@ enum LinuxApp {
 /// host's loop is the main thread: without a turn of the run loop here they
 /// never ran, and an app's async work stayed where it started.
 @inline(__always)
-func isoRunMainQueue() {
+package func isoRunMainQueue() {
     _ = RunLoop.main.run(mode: .default, before: Date())
 }
 

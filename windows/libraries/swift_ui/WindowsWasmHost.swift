@@ -14,6 +14,9 @@
 // threaded reactors.)
 
 import Foundation
+internal import SwiftUI
+internal import IsomerWindowsHost
+internal import IsomerSwiftUI
 import IsomerWasmHost
 import IsomerURLSessionNetwork
 import IsomerWasmKitRuntime

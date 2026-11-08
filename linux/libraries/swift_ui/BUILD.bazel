@@ -111,26 +111,19 @@ _LINUX_COPTS = [
 # counterparts) so application code can `import SwiftUI` unchanged.
 
 swift_library(
-    name = "swift_ui",
+    name = "core",
     package_name = "isomer",
     srcs = [
-        "LinuxHost.swift",
         "//shared/renderers:srcs",
         "//shared/swift_ui_core:srcs",
         # FileDocument's FileWrapper, which the toolchain's Foundation lacks.
         "//foundation:FileWrapper.swift",
     ],
-    # The define activates the `os(Linux)` host entry point in `App.main()`
-    # (which calls `LinuxApp.run()`, defined here); the platform-agnostic core
-    # builds without it for a plain Linux host (e.g. the snapshot test).
-    copts = _LINUX_COPTS,
     module_name = "SwiftUI",
-    swiftc_inputs = ["renderer.h"],
     target_compatible_with = ["@platforms//os:linux"],
     deps = [
         "//linux/libraries/image_io",
         "//shared/isomer_swift_ui",
-        ":renderer",
         "@flatbuffers//swift",
         # Lights up canImport(SwiftGPU): the shared SwiftGPURenderer becomes
         # the self-drawing renderer, drawing through swift_gpu's GL backend.
@@ -145,15 +138,46 @@ swift_library(
     plugins = SWIFT_UI_MACROS_PLUGINS,
 )
 
-# The wasm delivery cell's `SwiftUI` module lives in a sibling package
-# (//linux/libraries/swift_ui_wasm) — it reuses `LinuxHost.swift` + `renderer.h`
-# from here (exported below) plus its own `LinuxWasmHost.swift`. It carries the
-# SAME `module_name = "SwiftUI"`, so it MUST be a separate Bazel package: two
-# same-named swiftmodules in one package collide on the emitted
-# `SwiftUI.swiftmodule` output path (a `bazel build //...` action conflict), even
-# though the compiled and wasm cells are never linked together.
+# Linux's host (LinuxHost.swift, over the C renderer's SDL2 window): a module
+# of its own over the SwiftUI above, reaching the runtime's `package` plumbing
+# as a module of Isomer's package. It defines `iso_process_host_run`
+# (shared/swift_ui_core/App.swift); the wasm cell
+# (//linux/libraries/swift_ui_wasm) runs its window through it too.
+swift_library(
+    name = "host",
+    package_name = "isomer",
+    srcs = ["LinuxHost.swift"],
+    alwayslink = True,
+    copts = _LINUX_COPTS,
+    module_name = "IsomerLinuxHost",
+    swiftc_inputs = ["renderer.h"],
+    target_compatible_with = ["@platforms//os:linux"],
+    deps = [
+        ":core",
+        ":renderer",
+        "//linux/libraries/image_io",
+        "//shared/isomer_swift_ui",
+        "//swift_gpu/linux:swift_gpu",
+        "//shared:map_engine_linux",
+        "@flatbuffers//swift",
+    ],
+)
+
+# SwiftUI with Linux's host: what Linux's apps and the modules over SwiftUI
+# here depend on.
+swift_library_group(
+    name = "swift_ui",
+    target_compatible_with = ["@platforms//os:linux"],
+    deps = [
+        ":core",
+        ":host",
+    ],
+)
+
+# The wasm delivery cell (//linux/libraries/swift_ui_wasm) builds
+# `LinuxWasmHost.swift` over this package's SwiftUI and host, calling the C
+# renderer too.
 exports_files([
-    "LinuxHost.swift",
     "LinuxWasmHost.swift",
     "renderer.h",
 ])
@@ -174,6 +198,7 @@ swift_library(
     swiftc_inputs = ["renderer.h"],
     target_compatible_with = ["@platforms//os:linux"],
     deps = [
+        ":host",
         ":renderer",
         ":swift_ui",
         "//swift_ffi/swift_ffi",

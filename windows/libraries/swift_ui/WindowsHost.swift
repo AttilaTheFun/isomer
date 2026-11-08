@@ -9,6 +9,7 @@
 import Foundation
 import ImageIO
 package import IsomerSwiftUI
+internal import SwiftUI
 
 func withUTF8Pointer(_ string: String, _ body: (UnsafePointer<CChar>?, Int32) -> Void) {
     var copy = string
@@ -266,7 +267,7 @@ nonisolated(unsafe) var windowsGPUSurface: DirectXRendererSurface?
 /// The runtime host: the self-drawing SwiftGPURenderer over D3D11 wrapping
 /// the services bridge. SwiftGPU is the only self-drawing renderer; a D3D11
 /// device is required (there is no longer a Direct2D draw-list fallback).
-func windowsMakeHost() -> HostBridge {
+package func windowsMakeHost() -> HostBridge {
     #if canImport(SwiftGPU)
     guard let surface = DirectXRendererSurface() else {
         fatalError(
@@ -351,7 +352,7 @@ enum WindowsApp {
 /// host's loop is the main thread: without a turn of the run loop here they
 /// never ran, and an app's async work stayed where it started.
 @inline(__always)
-func isoRunMainQueue() {
+package func isoRunMainQueue() {
     _ = RunLoop.main.run(mode: .default, before: Date())
 }
 
