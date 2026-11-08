@@ -1266,17 +1266,24 @@ IsomerHeadless (headless/isomer_headless) drives it from tests. The
 Storybook's headless tests (examples' //headless) run in every CI build, in
 seconds.
 
-**Remote sessions** (docs/remote_sessions.md, 0.45): the same headless
-binary with ISO_HEADLESS_PROTOCOL=session serves the app to a client that
-holds only a renderer (shared/wire/session.proto: the client's events in,
-tree.proto patches out). The examples' gateway (examples/remote/gateway)
-runs one app process per connection, over a WebSocket (/session,
-/headless) and gRPC (session_service.proto: Session.Connect,
-Headless.Drive), and serves the web's thin client (web/remote_client:
-runtime/remote.js, React and a WebSocket, no wasm). Android's is
-`IsomerRemote(url)` (RemoteIsomer.kt, Swift-free;
-examples/android/remote_android_application, no native library). Its tests
-(examples' //remote, with the headless flag) run beside the headless ones.
+**Driving apps** (docs/drive.md, 0.46; docs/drive_plan.md the design): one
+driver protocol (headless.proto) and one session protocol (session.proto),
+served by an `IsomerServer` apart from any transport (drive/serving), carried
+by adapters: gRPC Swift 2 over HTTP/2 (drive/grpc, primary for remote
+driving; macOS 15 and iOS 18, which gRPC Swift 2 marks its API with rather
+than raising a package minimum), WebSockets (drive/websocket, SwiftNIO; and
+drive/serving's URLSession client, iOS 16+, Android, the web) and standard
+input and output or Unix sockets (drive/process). IsomerRemote picks one by
+URL. An app built headless serves itself (ISO_DRIVE_LISTEN, tokens) to
+drivers and to heads that draw it (docs/remote_sessions.md: the web's
+web/remote_client, Android's `IsomerRemote(url)`); drive/driver reads the
+screen through the runtime in any host. Headful apps dial out
+(ISO_DRIVER) when built with --@isomer//drive:headful (off by default: never
+in a release). The `isomer` CLI (drive/cli) keeps apps by name with tokens,
+drives the selected one, and is the hub apps dial out to. The same SwiftUI
+source still builds against Apple's SwiftUI with none of it. Tests: the
+examples' //remote (with the headless flag) beside the headless ones, and
+//remote:headful_web_test (with the headful flag) on its own.
 
 
 **A person's own phone is not a test device.** Install a build there when

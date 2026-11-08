@@ -3,7 +3,7 @@ load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
 load("@isomer//tools/android:defs.bzl", "apk_install_run")
 
 # Isomer's Android thin client (dev.isomer.runtime.IsomerRemote): an app's
-# SwiftUI running on a server (//remote:gateway over an app built headless),
+# SwiftUI running on a server (an app built headless, serving itself),
 # drawn here by the Compose renderer from the session's frames. Kotlin and
 # Compose only: no Swift, no native library.
 kt_android_library(

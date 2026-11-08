@@ -1,4 +1,4 @@
-# Driving Isomer apps (0.46 plan)
+# Driving Isomer apps (the plan; docs/drive.md what 0.46 has)
 
 The owner's design (2026-11-08), and how it lands. One driver protocol,
 shared/wire/headless.proto (ls, info, tap, type, set, swipe, select, back,
@@ -68,13 +68,17 @@ an in-process accessibility driver, for Apple's own rendering.
 
 ## The package
 
-grpc-swift-2 needs macOS 15 and iOS 18. isomer's package moves from macOS 13
-to 15 (nothing built for the Mac from it is older: the Mac apps take no
-package target); iOS stays 16. Its drive targets (IsomerWire, the services,
-the server, the client, the CLI) are never built for iOS 16: the hosted-test
-transport there takes the driver in process.
+gRPC Swift 2 marks its API available from macOS 15 and iOS 18 rather than
+raising a package minimum, so isomer's package keeps macOS 13 and iOS 16:
+IsomerGRPCTransport's API carries the same marks, and everything else
+(IsomerServing, the WebSocket client over URLSession, the driver) builds
+wherever Isomer does. Below iOS 18 a client takes the WebSocket.
 
 ## Order
+
+0.46 has steps 1 and 2 (headful dial-out from the web's and Android's hosts),
+and the transports as the owner refined them: an `IsomerServer` free of gRPC
+(iOS 16), server and client adapters for gRPC, WebSockets and processes.
 
 1. The package: IsomerWire and the gRPC services in it; the headless app's
    server (gRPC and WebSocket, tokens); the `isomer` CLI with its registry;

@@ -1005,7 +1005,10 @@ and used through the runtime: tests drive it in seconds
 ([docs/headless.md](docs/headless.md)). The same build serves the app to a
 client that holds only a renderer (a browser's React, an Android phone's
 Compose) over a WebSocket or gRPC, its frames as protobuf patches of the
-render tree ([docs/remote_sessions.md](docs/remote_sessions.md)):
+render tree ([docs/remote_sessions.md](docs/remote_sessions.md)). The `isomer`
+CLI and the tests drive an app headless or headful, here or on another
+machine, over gRPC, WebSockets or a Unix socket
+([docs/drive.md](docs/drive.md)):
 
 ```sh
 cd examples

@@ -111,19 +111,32 @@ failing to link (swift_ffi in the SDK twice) before any test did. It should
 run in CI's container (the toolchain's Linux repository name) beside the
 headless tests.
 
-## Remote sessions (0.45): what's left
+## Driving and remote sessions: what's left
 
-docs/remote_sessions.md says what there is. Open:
+docs/drive.md and docs/remote_sessions.md say what there is,
+docs/drive_plan.md the order. Open:
 
+- **Headful iOS and the Mac** (the plan's step 3): the Isomer-compiled build
+  dialling out first; a hosted XCTest transport (the driver in process);
+  runs on a leased simulator from Linux; then an in-process accessibility
+  driver for apps on Apple's SwiftUI (step 5).
+- **`isomer_test`** (step 4): one test source against Isomer's frameworks on
+  Linux and Apple's in an XCTest bundle.
+- **The DOM renderer** (owner, 2026-11-08): the web's React renderer replaced
+  by one that applies the tree's patches to the DOM itself, held to the
+  Storybook's pictures (0.47).
+- **The Playground over sessions** (owner, 2026-11-08): the hot reloader a
+  head paired with a headless app, a rebuild swapping the app; Playgrounds
+  peer to peer (headless wasm in a browser one Playground proxies, drawn by
+  another).
 - **Android's thin client in CI.** It was checked by hand on an emulator
-  (drawn, tapped, typed into). The `android` job could run it: the gateway
-  built for the runner, the x86_64 APK, `adb reverse` to the gateway's port.
-- **The gateway for consumers.** It is the examples' (it needs gRPC Swift and
-  SwiftNIO, which isomer's own graph doesn't have): a product of a package
-  of its own, or of isomer's behind a trait, so an app's server can run it.
-- **TLS and who may connect.** The gateway speaks plaintext WebSocket and
-  gRPC, for a local network or behind a proxy that terminates TLS and
-  checks who connects.
+  (drawn, tapped, typed into). The `android` job could run it: the app built
+  headless for the runner, the x86_64 APK, `adb reverse` to its port.
+- **TLS for WebSockets.** gRPC serves TLS (`grpcs`, IsomerGRPCServer's
+  `tls`); the WebSocket listener is plaintext, for a local network or behind
+  a proxy that terminates TLS.
+- **The hub's apps leaving.** An attached app that goes is noticed at the
+  next command sent to it.
 - **The client's measurements.** Text is measured on the server as the
   headless host measures it; a client could send its fonts' metrics in
   `start` (a table per size and weight) for what the app computes from them.
