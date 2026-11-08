@@ -213,7 +213,9 @@ bazel_dep(name = "rules_swift_package_manager", version = "1.25.0")
 
 # rules_swift_package_manager on Windows (the Windows Storybook and
 # Playground): tools/patches/rules_swift_package_manager_windows.patch says
-# what it changes.
+# what it changes. And isomer's package, taken by path here, copied without
+# its Bazel files (cgrindel/rules_swift_package_manager#2638; isomer's
+# MODULE.bazel applies the same patch for its own graph).
 single_version_override(
     module_name = "rules_swift_package_manager",
     patch_strip = 1,

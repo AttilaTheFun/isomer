@@ -118,7 +118,9 @@ bazel_dep(name = "rules_swift_package_manager", version = "1.25.0")
 
 # A local package that is a Bazel module too (isomer's, taken by path in its
 # own graph) is copied without its Bazel files: cgrindel/
-# rules_swift_package_manager#2638, the registry's 1.25.0.isomer.1.
+# rules_swift_package_manager#2638. Only a root that takes isomer's package
+# by path needs it (this module, the examples): an application takes it by
+# revision, from git, whose Bazel files rules_swift_package_manager removes.
 single_version_override(
     module_name = "rules_swift_package_manager",
     patch_strip = 1,

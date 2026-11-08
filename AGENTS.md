@@ -161,9 +161,10 @@ a repository of its own):
   generated repositories see rules_swift_package_manager's names, not the
   root's. isomer's own graph (third_party/swift_packages, dev-only: every
   module's from_package is resolved) and the examples' take the package by
-  path, which needs cgrindel/rules_swift_package_manager#2638 (the
-  registry's 1.25.0.isomer.1: a local package that is a Bazel module too is
-  copied without its Bazel files). Isomer's labels (`//foundation`,
+  path, which needs cgrindel/rules_swift_package_manager#2638 (a local
+  package that is a Bazel module too is copied without its Bazel files),
+  applied by both roots' single_version_override until a release has it;
+  an application takes the package from git, which needs nothing. Isomer's labels (`//foundation`,
   `//core_graphics`, `//frameworks/combine`, ...) are groups over the
   package's products, incompatible on Apple platforms as before. Its
   platforms are swift-foundation's (26): rules_swift_package_manager holds
