@@ -8,16 +8,13 @@
 /.github/ @AttilaTheFun
 
 # Publishing, versions and signing.
-/examples/playground/tools/playground/package_site.sh @AttilaTheFun
-/examples/playground/tools/playground/stamp.py @AttilaTheFun
+/examples/tools/stamp_storybook.py @AttilaTheFun
 /examples/tools/signing/ @AttilaTheFun
 /tools/ci/check_mac_icons.sh @AttilaTheFun
 /tools/ci/connect_from_ci.sh @AttilaTheFun
 /tools/ci/next_version.sh @AttilaTheFun
 /tools/ci/publish_from_ci.sh @AttilaTheFun
 /tools/ci/stamp_apps.sh @AttilaTheFun
-# The compilers the published Playground carries, by SHA-256.
-/tools/ci/stage_playground_compilers.sh @AttilaTheFun
 
 # The license.
 LICENSE @AttilaTheFun

@@ -33,8 +33,7 @@ Each piece is usable alone.
 
 **One module since 2026-10-02.** swift_ffi, swift_gpu and swift_map were
 repositories of their own; they were folded in to simplify version
-management. The repo is ONE Bazel module, `isomer`, plus the examples and
-the Playground:
+management. The repo is ONE Bazel module, `isomer`, plus the examples:
 
 | Directory | Module | What |
 | --- | --- | --- |
@@ -45,7 +44,7 @@ the Playground:
 | `metal/` | (isomer) | Isomer's `Metal` (`//metal/metal`), IsomerMetal (`//metal/isomer_metal`: the MSL→WGSL translator, the backend interface), the web backend (`//metal/web`, `//metal/runtime`) |
 | `swift_gpu/` | (isomer) | the GPU abstraction (`//swift_gpu/{core,metal,apple,android,wasm,linux,windows}`) |
 | `swift_map/` | (isomer) | the OpenStreetMap renderer (`//swift_map/swift_map/{core,renderer}`, platform libraries under `//swift_map/<platform>/libraries/...`, its example apps and their small tools) |
-| `examples/` | `isomer_examples` | Isomer's applications: the Storybook (`examples/storybook`, its apps `examples/<platform>/storybook_<platform>_application`), the Playground (`examples/playground`: write SwiftUI on the device, build it there, run it on Isomer: iOS, web, Android; `examples/playground/AGENTS.md` is its guide) and the example apps and probes. A module of its own: it consumes isomer the way an outside application does. |
+| `examples/` | `isomer_examples` | Isomer's applications: the Storybook (`examples/storybook`, its apps `examples/<platform>/storybook_<platform>_application`), and the example apps and probes. A module of its own: it consumes isomer the way an outside application does. |
 
 Layering still points one way: CoreGraphics < Foundation < swift_ffi <
 Metal < swift_gpu < swift_map < the SwiftUI libraries < the Isomer module;
@@ -57,13 +56,13 @@ no override of isomer's dependencies since 0.40 (rules_swift 4.2.2.isomer.3
 sorts above the 4.2.2 rules_applecross asks for).
 
 **Versions (from 0.38).** A version is MAJOR.MINOR.BUILD; there are no
-point releases. MODULE.bazel and the Playground's apps commit MAJOR.MINOR.0
+point releases. MODULE.bazel and the Storybook's apps commit MAJOR.MINOR.0
 (the iPhone's build number is always 1, Android's versionCode MAJOR×1,000,000
-+ MINOR×1,000 + BUILD); CI stamps each build's own, 0.38.N, N the
-Playground's build from the release server's number, and a release is
-tagged v0.38.N, the build it releases. The registry's isomer 0.38.N entry is
++ MINOR×1,000 + BUILD); CI stamps each build's own, 0.47.N, N the
+Storybook's build from the release server's number (the Playground's until
+0.47), and a release is tagged v0.47.N, the build it releases. The registry's isomer 0.38.N entry is
 the tag with one patch setting module() to 0.38.N (its tools/add_version.py
---stamped). The examples' apps are tests and stay at 1.0.
+--stamped). The examples' other apps are tests and stay at 1.0.
 
 **Which number a release bumps (2026-11-04).** Semantic versioning, by the
 public interface (the Isomer module, the Apple-named modules, the Bazel
@@ -89,7 +88,7 @@ patches is a new entry (.isomer.4), made with the registry's
 tools/add_version.py --fork and approved there like any version. Swift
 packages are SwiftPM's, through rules_swift_package_manager, never Bazel
 modules. tools/released_pins.sh says whether every pin is a released
-version (the Playground's and examples' Package.swift by version, no
+version (the examples' Package.swift by version, no
 git/archive override, a local_path_override only inside this repository);
 CI's `pins` job runs it on main's commits, and Reviews holds a release until
 its commit's `pins` passes. A release is added to the registry once
@@ -117,15 +116,12 @@ Things the fold taught:
   isomer overrode every consumer's SDK choice. Consumers declare
   `swift.toolchain`/`wasm_sdk`/`android_sdk` and register the Swift
   toolchains themselves (examples/MODULE.bazel is the block to copy).
-- **The Playground lives in `examples/playground/`** (since 0.39), part of
-  the examples' module (`//playground/...` there): the iOS, web and Android
-  apps, the splash page, the compilers' build scripts
-  (`tools/playground_toolchain`, `tools/browser_toolchain`), its docs and
-  tests; `examples/playground/AGENTS.md` is its guide. It was
+- **The Playground is AttilaTheFun/playground's** (since 0.47: public, a
+  Bazel module of its own that depends on isomer by version, with CI and
+  releases of its own; agent_ui is its dependency, not isomer's). It was
   `examples/*/playground_*` until 0.15, a repository of its own until 0.35,
-  and a module of its own in `playground/` until 0.39 (one output base and
-  one copy of isomer's overrides now, with the Storybook's: one Bazel
-  workspace for both apps). What is framework stays in isomer proper: `wasm_sdk_bundle`,
+  a module of its own in `playground/` until 0.39, and
+  `examples/playground/` until 0.47. What is framework stays in isomer: `wasm_sdk_bundle`,
   `site_imports_test`, `assemble_directory` (tools/wasm/defs.bzl), WasmView,
   `AppHostViews`, hot_host.js. The headless Chrome drivers
   `cdp_shot.js`/`cdp_eval.js` are in `tools/testing` beside cdp.py.
@@ -284,15 +280,13 @@ platform's renderer, are released with Isomer, and their proof is a
 screenshot of every story's page (`ISO_STORYBOOK_STORY=<id>` opens one; the
 web page's `?ISO_STORYBOOK_STORY=`). A story uses only what both Apple's
 SwiftUI (iOS 17, macOS 14) and Isomer's have: the web build is the check.
-The mini apps are the Playground's canned projects only.
-
-**The release proof** (tools/proof/proof.py, since 0.38): Isomer's two apps
-on its tier-1 platforms, one renderer each (SwiftUI on iOS and the Mac,
+**The release proof** (tools/proof/proof.py, since 0.38): the Storybook
+(alone since 0.47, when the Playground moved to AttilaTheFun/playground,
+which proves its own) on Isomer's tier-1 platforms, one renderer each (SwiftUI on iOS and the Mac,
 Compose on Android, React on the web; since 2026-11-05 CI pictures only
 these, to save its time, and builds Linux and Windows without running them;
 proof.py still pictures Linux with OpenGL and Windows with DirectX when
-tools/ci/proof.sh's PROOF_PLATFORMS names them): the Storybook's every story, and the Playground's projects with
-2048 and the Pokédex built on the device and running. On the iPhone the
+tools/ci/proof.sh's PROOF_PLATFORMS names them): every story. On the iPhone the
 Storybook is also compiled against Isomer's frameworks
 (examples/apple/storybook_isomer_ios_application: a test, not released)
 and every story is held to Apple's SwiftUI's same screen
@@ -311,29 +305,33 @@ CI's own Linux container after the build: the apps built there, the Apple
 ones with rules_applecross). Since 0.42 a public repository's proof is
 pictured on GitHub's own machines, in stages (proof.sh --stage
 build|shoot|compare, proof.py --build-to/--from/--here): built in the
-container, which also pictures the Android Playground on an OS Server
-emulator (its on-device compiler is arm64's alone), then the iPhone (a
+container, then the iPhone (a
 simulator made for the run) and the Mac on `xcode-27` runners, the Android
 Storybook on an emulator under Ubuntu's KVM (tools/ci/hosted_android_emulator.sh,
 shaped as OS Server's phones: API 35, 1080×2400, 420 dpi, gesture
 navigation) and the web in Ubuntu's Chrome (the `proof-shoot` jobs), then
 compared in the container (`proof-compare`); a private copy pictures
 everything on OS Server's leases as above. CI follows the owner's policy
-for protected repositories (AttilaTheFun/reviews' docs/CI_POLICY.md,
-2026-11-07; build.yml's header). Automated CI builds every target on Linux
-and runs no tests: a pull request gets `container` (every target built in
-one container, reading the Bazel cache, leasing nothing; the required
-check), each commit on main `populate` (the same build, the cache's only
-writer). Tests and the proof run only by hand: `run: verify` (the core's
-and the web's tests in the build container, the iPhone's and the Mac's on
-OS Server's leases, Android's on GitHub's Ubuntu runner, and the proof),
+for protected repositories (AttilaTheFun/reviews' docs/CI_POLICY.md) and
+the shape the owner set on 2026-11-08 (build.yml's header): the tests
+without a GUI before a merge, every build after one, the GUI tests and the
+proof by hand on GitHub's runners, never a slot of OS Server's primary VM
+(those are for private repositories). A pull request gets `container`
+(every target built in one container, reading the Bazel cache, leasing
+nothing, then the core's tests, the web's in headless Chrome, and the
+Storybook's headless and remote-driving tests; the required check), each
+commit on main `populate` (the same build, then what a release builds: the
+published apps under --config=alpha and the proof's apps; the cache's only
+writer). The GUI tests and the proof run only by hand: `run: verify` (the
+Storybook's test stories on GitHub's runners: the iPhone's simulator and
+the Mac on `xcode-27`, Android on Ubuntu's KVM, Windows on windows-11-arm,
+not waited for; and the proof),
 `run: prerelease` (Alphas
 and a draft marked pre-release), `run: release` (verify and the proof, then
 the Alphas and the draft proposed for release, tools/ci/draft_release.sh).
 Drafts are CI's; an agent proposes by running the workflow on main, never
 by making a draft or a tag. The proof is the full set by default (every
-story; `quick` the core set: a story from each area and the Playground's
-projects), each picture compared with the previous release's (never the
+story; `quick` the core set: a story from each area), each picture compared with the previous release's (never the
 change's own). To bisect
 a regression, prove earlier commits after the fact: push a branch at the
 commit and run the workflow on that branch (its proof is found by commit,
@@ -350,11 +348,10 @@ production on Applications Server (tools/ci/promote_from_ci.sh: nothing
 Apple rebuilt, since 0.40), builds and publishes Android's for production,
 and attaches the release's assets (tools/ci/release_assets.sh):
 proof.tar.gz (the commit's proof, which the next release's proof takes as
-its baseline before any artifact), the Mac apps' disk images, the Android
-apps and the iPhone apps for the simulator, beside isomer-site.tar.gz,
-attached to the draft for pages.yml. The Playground's staged compilers reach CI from OS
-Server's files (proof.sh names their SHA-256s): after staging new ones,
-`oss files add` their archives and change those.
+its baseline before any artifact), the Mac app's disk image, the Android
+app and the iPhone app for the simulator, beside isomer-site.tar.gz (the
+web Storybook, //web/storybook_web_application:isomer_site), attached to
+the draft for pages.yml.
 
 **Adoption levels** (docs/adoption_levels.md): (1) rules_swift — raw Swift
 on the platform; (2) swift_ffi — idiomatic bindings; (3) embedded Isomer
@@ -504,9 +501,8 @@ still hosts the emulator runner (`apk_install_run`) and the Level 4 codegen
 templates. iOS device builds need the team's Xcode-managed wildcard
 profile ('iOS Team Provisioning Profile: *'); a machine without it fails
 them — an environment issue, not code; exclude iOS from wildcard
-verification builds. The Playground is com.LoganShire.IsomerPlayground
-("Playground", Playground.app; Android the same); the examples' apps share
-com.LoganShire.IsomerExamples.
+verification builds. The Storybook is com.LoganShire.IsomerStorybook; the
+examples' other apps share com.LoganShire.IsomerExamples.
 
 ## Build & run (macOS host)
 

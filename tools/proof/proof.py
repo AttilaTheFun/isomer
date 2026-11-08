@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Isomer's release proof: its two apps on its six platforms, each platform
+"""Isomer's release proof: the Storybook on its six platforms, each platform
 with its one renderer (SwiftUI on iOS and the Mac, Compose on Android, React
 on the web, OpenGL on Linux, DirectX on Windows).
 
@@ -10,14 +10,12 @@ on the web, OpenGL on Linux, DirectX on Windows).
     (examples/apple/storybook_isomer_ios_application, a test, not released):
     each story beside its Apple-SwiftUI shot, with a diff, which should be
     empty (review-ios-storybook-isomer). A difference is Isomer's.
-  * The Playground (examples/playground/): its projects, a project open, and 2048 and
-    the Pokédex built on the device by the compiler it carries and running
-    (ISO_PLAYGROUND_RUN_PROJECT=<name>).
+  (The Playground, pictured here too until 0.47, is AttilaTheFun/playground's,
+  with a proof of its own.)
 
   tools/proof/proof.py [ios] [macos] [android] [web] [linux] [windows] --review <dir>
       [--commit <sha>] [--version 0.38.N] [--stories text.styles,controls.picker]
-      [--quick [--base origin/main]] [--held windows=<file>] [--web-toolchain <dir>]
-      [--apps storybook,playground] [--android-abi x86_64]
+      [--quick [--base origin/main]] [--held windows=<file>] [--android-abi x86_64]
       [--build-to <dir> | --from <dir> [--here]]
 
 CI's proof builds in its Linux container and pictures on GitHub's own
@@ -27,9 +25,9 @@ building; --here pictures on this machine, nothing leased (an iPhone
 simulator made here, this Mac's screen, the emulator adb sees, this
 machine's Chrome).
 
---quick is a pull request's proof: both apps still built on every platform
+--quick is a pull request's proof: the app still built on every platform
 (building is what catches most), a core set of stories (QUICK_STORIES) and
-every story in a story file the change touches, and the Playground. Its
+every story in a story file the change touches. Its
 runs say `"scope": "quick"` and name no release, so they never stand for
 one: a release is always proven whole.
 
@@ -63,32 +61,20 @@ oss alone (PROOF_IOS=local: simctl on this Mac, for a server whose
 simulators are its Mac's), an Android emulator, a slot of OS Server's
 primary macOS VM (PROOF_MAC=vm: a macOS VM of its own), Linux and Windows
 VMs; the web in this Mac's headless Chrome), released however the run
-ends. Stamp the build's version into both modules first, as CI does
-(examples/playground/tools/playground/stamp.py and examples/tools/stamp_storybook.py),
-and check the files out after.
+ends. Stamp the build's version first, as CI does
+(examples/tools/stamp_storybook.py), and check the files out after.
 """
 import argparse, json, os, re, shlex, shutil, subprocess, sys, tempfile, threading, time, urllib.parse
 
 ISOMER = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 EXAMPLES = os.path.join(ISOMER, "examples")
-PLAYGROUND = os.path.join(EXAMPLES, "playground")   # in the examples' module
 APPS = {
     "storybook": {"name": "Storybook", "bundle": "com.LoganShire.IsomerStorybook"},
-    "playground": {"name": "Playground", "bundle": "com.LoganShire.IsomerPlayground"},
 }
 # The Storybook compiled against Isomer's frameworks (iPhone only; a test,
 # not released): every story shot again and set beside the Storybook's own,
 # which is Apple's SwiftUI throughout. They should match.
 ISOMER_STORYBOOK = {"name": "Storybook", "bundle": "com.LoganShire.IsomerStorybookCompiled"}
-# The Playground's screens: its opening screen, a project open, and two
-# projects built on the device and running (2048; the Pokédex, whose
-# @Observable needs the compiler's macro plugins).
-PLAYGROUND_SHOTS = [
-    ("projects", "Projects", {}, "open"),
-    ("project", "A project (2048)", {"ISO_PLAYGROUND_OPEN_PROJECT": "2048"}, "open"),
-    ("game2048", "2048, built here and running", {"ISO_PLAYGROUND_RUN_PROJECT": "2048"}, "run"),
-    ("pokedex", "The Pokédex, built here and running", {"ISO_PLAYGROUND_RUN_PROJECT": "Pokédex"}, "run"),
-]
 
 # What every app is launched with, whatever the machine: UTC, so a story
 # showing a fixed instant (the DatePicker's) shows the same time on GitHub's
@@ -100,7 +86,7 @@ failures = []
 lock = threading.Lock()
 # --here: the platform is this machine (GitHub's runners, in CI's proof: an
 # iPhone simulator made here, this Mac's screen, the emulator adb sees, this
-# machine's Chrome), nothing leased. --apps: the apps pictured (default both).
+# machine's Chrome), nothing leased.
 HERE = False
 CHOSEN = set(APPS)
 
@@ -428,28 +414,14 @@ def storybook_shots(out, story_list, launcher, waits, switcher, app="storybook")
 
 
 def shoot_apps(review, platform, device, orientation, launcher, story_list, waits, switcher=None):
-    """Both apps on one platform. `launcher(app, environment, wait, path)`
+    """The Storybook on one platform. `launcher(app, environment, wait, path)`
     launches the app afresh with `environment`, waits, and shoots `path`.
-    `waits`: seconds after a launch: open (the app's opening screen or a
-    page), story, run (a project built and running). `switcher`: the
-    Storybook's stories in one launch (Switcher)."""
+    `waits`: seconds after a launch: open (the app's opening screen),
+    story. `switcher`: the Storybook's stories in one launch (Switcher)."""
     if "storybook" in CHOSEN:
         out = review.dir(f"{platform}-storybook")
         shots = storybook_shots(out, story_list, launcher, waits, switcher)
         review.cell(f"{platform}-storybook", "storybook", device, orientation, shots)
-    if "playground" not in CHOSEN:
-        return
-
-    out = review.dir(f"{platform}-playground")
-    shots = []
-    for slug, title, environment, kind in PLAYGROUND_SHOTS:
-        capture = f"{slug}.png"
-        try:
-            launcher("playground", environment, waits[kind], os.path.join(out, capture))
-        except Exception as error:
-            log(f"playground {slug}: {error}")
-        shots.append((title, capture))
-    review.cell(f"{platform}-playground", "playground", device, orientation, shots)
 
 
 # --- iOS (an oss simulator lease: since OS Server put its `ios` leases in
@@ -464,10 +436,6 @@ def build_ios():
                                   "-c", "opt", "--ios_multi_cpus=sim_arm64", suffix=".ipa"),
         "storybook-isomer": bazel_output(EXAMPLES, "//apple/storybook_isomer_ios_application", "-c", "opt",
                                          "--ios_multi_cpus=sim_arm64", suffix=".ipa"),
-        # The compiler linked into the app (its staged embedded_toolchain).
-        "playground": bazel_output(EXAMPLES, "//playground/apple/playground_ios_application:playground_ios_sim_application",
-                                   "-c", "opt", "--ios_multi_cpus=sim_arm64", "--define", "iso_playground_embedded=1",
-                                   suffix=".ipa"),
     }
 
 
@@ -643,7 +611,7 @@ def ios(review, story_list, builds):
             return Switcher(start=lambda path: launcher(app, {"ISO_STORYBOOK_CONTROL": control}, 5, path),
                             request=request, shown=shown, shoot=simulator.screenshot)
 
-        waits = {"open": 5, "story": 4, "run": 25}
+        waits = {"open": 5, "story": 4}
         shoot_apps(review, "ios", "iPhone (simulator)", "portrait", launcher, story_list, waits, switcher("storybook"))
         # The Storybook compiled against Isomer's frameworks, each story
         # beside the one just shot with Apple's SwiftUI.
@@ -675,7 +643,6 @@ def ios(review, story_list, builds):
 def build_macos():
     return {
         "storybook": bazel_output(EXAMPLES, "//apple/storybook_macos_application", "-c", "opt", suffix=".zip"),
-        "playground": bazel_output(EXAMPLES, "//playground/apple/playground_macos_application", "-c", "opt", suffix=".zip"),
     }
 
 
@@ -836,7 +803,7 @@ def macos_here(review, story_list, builds):
         switcher = Switcher(start=lambda path: launcher("storybook", {"ISO_STORYBOOK_CONTROL": control}, 6, path),
                             request=request, shown=shown, shoot=shoot)
         shoot_apps(review, "macos", f"Mac (macOS {version})", "landscape", launcher, story_list,
-                   {"open": 6, "story": 4, "run": 30}, switcher)
+                   {"open": 6, "story": 4}, switcher)
     finally:
         stop()
 
@@ -850,8 +817,8 @@ def macos_slot(review, story_list, builds):
     The primary is shared and lives on, where a VM lease was fresh: what
     the apps keep goes to a home of the proof's own (CFFIXED_USER_HOME, which
     Foundation's home directory, Application Support and the defaults
-    follow), not the console user's, so the Playground's projects and both
-    apps' defaults start as on a fresh VM; and the scroll bars are set in
+    follow), not the console user's, so the app's defaults start as on a
+    fresh VM; and the scroll bars are set in
     the apps' argument domain rather than the session's defaults."""
     env = lease("mac")
     slot = env["OSS_ID"]
@@ -928,7 +895,7 @@ def macos_slot(review, story_list, builds):
                             shown=lambda: run("/bin/cat", f"{control}.shown", check=False).stdout.strip(),
                             shoot=shoot)
         shoot_apps(review, "macos", "Mac (macOS 27 VM)", "landscape", launcher, story_list,
-                   {"open": 6, "story": 4, "run": 30}, switcher)
+                   {"open": 6, "story": 4}, switcher)
     finally:
         stop()
         # The proof's folder outlives the slot (it's the primary's /tmp, not
@@ -985,8 +952,8 @@ def macos_vm(review, story_list, builds):
                             shown=lambda: ssh(env, f"cat {control}.shown 2>/dev/null", check=False).stdout.strip(),
                             shoot=shoot)
         shoot_apps(review, "macos", "Mac (macOS 27 VM)", "landscape", launcher, story_list,
-                   {"open": 6, "story": 4, "run": 30}, switcher)
-        ssh(env, "pkill -x Storybook; pkill -x Playground", check=False)
+                   {"open": 6, "story": 4}, switcher)
+        ssh(env, "pkill -x Storybook", check=False)
     finally:
         release(env)
 
@@ -994,12 +961,11 @@ def macos_vm(review, story_list, builds):
 # --- Android (an oss emulator lease)
 
 def build_android(abi=None):
-    """The apps --apps names, for `abi` if given (x86_64, for GitHub's
-    Ubuntu runner's emulator; the Playground's compiler is arm64's alone)."""
+    """The Storybook, for `abi` if given (x86_64, for GitHub's Ubuntu
+    runner's emulator)."""
     flags = ["-c", "opt"] + ([f"--android_platforms=@rules_android//:{abi}"] if abi else [])
     targets = {
         "storybook": "//android/storybook_android_application:storybook_android_application_apk",
-        "playground": "//playground/android/playground_android_application:playground_android_application_apk",
     }
     return {app: bazel_output(EXAMPLES, target, *flags, suffix="_apk.apk") for app, target in targets.items() if app in CHOSEN}
 
@@ -1065,7 +1031,7 @@ def android(review, story_list, builds):
                                                             "-d", shlex.quote(f"iso://story/{story}"), bundle]),
                             shoot=shot, settle=1.5)
         shoot_apps(review, "android", "Android phone (emulator)", "portrait", launcher, story_list,
-                   {"open": 6, "story": 5, "run": 30}, switcher)
+                   {"open": 6, "story": 5}, switcher)
         for app in APPS.values():
             sh(adb + ["shell", "am", "force-stop", app["bundle"]], check=False)
     finally:
@@ -1074,17 +1040,9 @@ def android(review, story_list, builds):
 
 # --- The web (this Mac's headless Chrome, the optimized sites served here)
 
-def build_web(toolchain):
-    """The Storybook's site, and the Playground's whole site (the splash page
-    and the Playground under playground/), with the in-browser compiler
-    staged from `toolchain` (package_site.sh)."""
-    storybook = bazel_output(EXAMPLES, "//web/storybook_web_application:storybook_web_application_site", "-c", "opt")
-    work = tempfile.mkdtemp(prefix="proof-web-")
-    sh([os.path.join(PLAYGROUND, "tools", "playground", "package_site.sh"), "--toolchain-from", toolchain,
-        "--out", os.path.join(work, "site.tar.gz")], cwd=PLAYGROUND)
-    os.makedirs(os.path.join(work, "site"))
-    sh(["tar", "-xzf", os.path.join(work, "site.tar.gz"), "-C", os.path.join(work, "site")])
-    return {"storybook": storybook, "playground": os.path.join(work, "site")}
+def build_web():
+    """The Storybook's site."""
+    return {"storybook": bazel_output(EXAMPLES, "//web/storybook_web_application:storybook_web_application_site", "-c", "opt")}
 
 
 def web(review, story_list, builds):
@@ -1092,12 +1050,11 @@ def web(review, story_list, builds):
     servers = {
         app: (port + offset, subprocess.Popen([sys.executable, "-m", "http.server", str(port + offset), "--bind", "127.0.0.1"],
                                               cwd=builds[app], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
-        for offset, app in enumerate(["storybook", "playground"]) if app in builds
+        for offset, app in enumerate(["storybook"]) if app in builds
     }
     cdp = os.path.join(ISOMER, "tools", "testing", "cdp.py")
     # Chrome's profile is the run's own: a page's stored state outlasted the
-    # run that made it in the shared one (the Playground opened on the
-    # project the last run's 2048 shot had chosen).
+    # run that made it in the shared one.
     profile = tempfile.mkdtemp(prefix="proof-chrome-")
     # Light, whatever this Mac's appearance is (Chrome follows it).
     chrome_env = dict(os.environ, CDP_PROFILE=profile, CDP_COLOR_SCHEME="light", **HELD_ENVIRONMENT)
@@ -1106,14 +1063,13 @@ def web(review, story_list, builds):
 
         def launcher(app, environment, wait, path):
             app_port = servers[app][0]
-            page = "" if app == "storybook" else "playground/"
+            page = ""
             query = "&".join(["renderer=react"] + [f"{k}={urllib.parse.quote(v)}" for k, v in environment.items()])
             url = f"http://127.0.0.1:{app_port}/{page}?{query}"
             # The page drawn (the renderer's first tree committed) before the
             # wait, which is then the settling: a fixed wait alone shot a blank
             # page when a load ran slow (0.39.1's web Storybook, three stories).
-            # A page that never drew in a minute is loaded again: one run's
-            # Pokédex was the bare background.
+            # A page that never drew in a minute is loaded again.
             for attempt in range(3):
                 shot = sh([sys.executable, cdp, url, path, "until=window.__isoLastTree", f"wait={wait}",
                            "width=1280", "height=800"], env=chrome_env)
@@ -1121,13 +1077,12 @@ def web(review, story_list, builds):
                     break
                 log(f"web {os.path.basename(path)}: the page never drew (try {attempt + 1} of 3)")
 
-        # A fresh Chrome profile's first load compiles the reactor: warm both
-        # sites up before the shots.
+        # A fresh Chrome profile's first load compiles the reactor: warm the
+        # site up before the shots.
         for app in builds:
             launcher(app, {}, 15, os.path.join(tempfile.mkdtemp(), "warm.png"))
         shoot_apps(review, "web", "Chrome (desktop width)", "landscape", launcher, story_list,
-                   # A run fetches and starts the in-browser compiler first.
-                   {"open": 8, "story": 6, "run": 75})
+                   {"open": 8, "story": 6})
     finally:
         for _, server in servers.values():
             server.terminate()
@@ -1137,7 +1092,7 @@ def web(review, story_list, builds):
 # --- Linux (built in a Linux container here, run on an oss VM)
 
 def build_linux(packaged=None):
-    """Both apps built and packaged in the container, each one directory;
+    """The Storybook built and packaged in the container, one directory;
     or (CI's) packaged already, `<packaged>/<app>-linux.tgz`."""
     if packaged:
         return {app: os.path.join(packaged, f"{app}-linux.tgz") for app in APPS}
@@ -1147,12 +1102,6 @@ def build_linux(packaged=None):
         "--after", "linux/storybook_linux_application/package.sh /root/storybook-linux -c opt",
         "--out", "storybook-linux", os.path.join(work, "storybook-linux"),
         "-c", "opt", "//linux/storybook_linux_application:storybook_linux_application_bin"])
-    sh([script, "--module", "examples",
-        "--after", "playground/linux/playground_linux_application/package.sh /root/playground-linux -c opt",
-        "--out", "playground-linux", os.path.join(work, "playground-linux"),
-        "-c", "opt", "//playground/linux/playground_linux_application:playground_linux_application_bin",
-        "//playground/linux/playground_linux_application:playground_wasm_loader", "//playground/shared/compiler:toolchain",
-        "//playground/apple/playground_ios_application:playground_sdk"])
     packages = {}
     for app in APPS:
         package = os.path.join(work, f"{app}-linux.tgz")
@@ -1172,7 +1121,7 @@ def linux(review, story_list, builds):
         # its own 1100x720 it sat small in the VM's 1920x1080 desktop, which
         # the crop below kept around it.
         session = "XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0 DISPLAY=:0 ISO_WINDOW_MAXIMIZED=1"
-        kill = "for p in $(pgrep -x storybook) $(pgrep -x playground) $(pgrep -x playground_wasm); do kill $p; done"
+        kill = "for p in $(pgrep -x storybook); do kill $p; done"
 
         def shoot(path):
             oss_shot(env, path)
@@ -1196,7 +1145,7 @@ def linux(review, story_list, builds):
                             shown=lambda: ssh(env, f"cat {control}.shown 2>/dev/null", check=False).stdout.strip(),
                             shoot=shoot, settle=2.0)
         shoot_apps(review, "linux", "Ubuntu 26.04 (VM, llvmpipe)", "landscape", launcher, story_list,
-                   {"open": 8, "story": 6, "run": 50}, switcher)
+                   {"open": 8, "story": 6}, switcher)
         ssh(env, kill, check=False)
     finally:
         release(env)
@@ -1205,29 +1154,21 @@ def linux(review, story_list, builds):
 # --- Windows (built and run on an oss VM with the Swift build layer)
 
 def build_windows():
-    """What the Windows VM takes from here: the Playground SDK and the wasm
-    SDK's sysroot and static stdlib (platform-independent files; the VM's
-    own Swift toolchain gives the frontend and wasm-ld)."""
+    """What the Windows VM takes from here: this checkout's source, which
+    it builds."""
     work = tempfile.mkdtemp(prefix="proof-windows-")
-    sdk = bazel_output(EXAMPLES, "//playground/apple/playground_ios_application:playground_sdk", "-c", "opt")
-    toolchain = bazel_output(EXAMPLES, "//playground/shared/compiler:toolchain", "-c", "opt")
     environment = dict(os.environ, COPYFILE_DISABLE="1")
-    sh(["tar", "--no-xattrs", "-czhf", os.path.join(work, "playground_sdk.tgz"), "-C", os.path.dirname(sdk), os.path.basename(sdk)], env=environment)
-    sh(["tar", "--no-xattrs", "-czhf", os.path.join(work, "wasm_data.tgz"), "-C", os.path.join(toolchain, "playground_toolchain"), "data"], env=environment)
     source = os.path.join(work, "isomer-src.tgz")
     sh(f"git ls-files -co --exclude-standard -z | tar --no-xattrs -czf {shlex.quote(source)} --null -T -", cwd=ISOMER, env=environment)
-    return {"sdk": os.path.join(work, "playground_sdk.tgz"), "data": os.path.join(work, "wasm_data.tgz"), "source": source}
+    return {"source": source}
 
 
 # PowerShell, with $bin a module's bazel-bin: an app in C:\proof\<app> as it
 # would ship: its executables with the DLLs their runfiles name beside them,
-# version.txt, and (the Storybook's) images with a runfiles manifest beside
+# version.txt, and its images with a runfiles manifest beside
 # the executable, which the renderer finds an image by.
 def windows_package(app, version):
-    if app == "storybook":
-        out, executables = "$bin\\windows\\storybook_windows_application", ["storybook_windows_application.exe"]
-    else:
-        out, executables = "$bin\\playground\\windows\\playground_windows_application", ["playground.exe", "playground_wasm_loader.exe"]
+    out, executables = "$bin\\windows\\storybook_windows_application", ["storybook_windows_application.exe"]
     steps = [
         f"$out = \"{out}\"; $app = 'C:\\proof\\{app}'",
         "Remove-Item -Recurse -Force $app -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force $app | Out-Null",
@@ -1236,30 +1177,12 @@ def windows_package(app, version):
         "ForEach-Object { $real = $_.Substring($_.IndexOf(' ') + 1); if ($real.EndsWith('.dll')) { Copy-Item $real $app -Force } } }",
         f"Set-Content \"$app\\version.txt\" '{version}'",
     ]
-    if app == "storybook":
-        steps += [
-            "Copy-Item -Recurse C:\\isomer\\examples\\storybook\\assets \"$app\\assets\"",
-            "$lines = Get-ChildItem -Recurse \"$app\\assets\" -Filter *.png | ForEach-Object { "
-            "'storybook/' + $_.FullName.Substring($app.Length + 1).Replace('\\', '/') + ' ' + $_.FullName }",
-            "$lines | Set-Content \"$app\\storybook_windows_application.exe.runfiles_manifest\"",
-        ]
-    else:
-        # The compiler beside the app: the VM's Swift toolchain's frontend,
-        # wasm-ld, macro plugin server and plugins with the DLLs they load
-        # (Windows' toolchain keeps them all in usr\bin), the wasm SDK's
-        # data and the Playground SDK from the Mac.
-        steps += [
-            "$tc = (Get-ChildItem \"$env:LOCALAPPDATA\\Programs\\Swift\\Toolchains\" | Select-Object -First 1).FullName + '\\usr\\bin'",
-            "New-Item -ItemType Directory -Force \"$app\\playground_toolchain\\usr\\bin\" | Out-Null",
-            "Copy-Item \"$tc\\swift-frontend.exe\", \"$tc\\wasm-ld.exe\", \"$tc\\*.dll\" \"$app\\playground_toolchain\\usr\\bin\"",
-            "tar -xzf C:\\Users\\runner\\wasm_data.tgz -C \"$app\\playground_toolchain\"",
-            "tar -xzf C:\\Users\\runner\\playground_sdk.tgz -C $app",
-            # Its projects start from the templates (a VM that ran an
-            # earlier build keeps that build's in Application Support).
-            # Guarded: on a fresh VM there is none, and a failed Remove-Item,
-            # silent or not, as the last command fails the whole step.
-            "if (Test-Path \"$env:LOCALAPPDATA\\playground\") { Remove-Item -Recurse -Force \"$env:LOCALAPPDATA\\playground\" }",
-        ]
+    steps += [
+        "Copy-Item -Recurse C:\\isomer\\examples\\storybook\\assets \"$app\\assets\"",
+        "$lines = Get-ChildItem -Recurse \"$app\\assets\" -Filter *.png | ForEach-Object { "
+        "'storybook/' + $_.FullName.Substring($app.Length + 1).Replace('\\', '/') + ' ' + $_.FullName }",
+        "$lines | Set-Content \"$app\\storybook_windows_application.exe.runfiles_manifest\"",
+    ]
     return "; ".join(steps)
 
 
@@ -1304,20 +1227,18 @@ def windows(review, story_list, builds):
         ]) + "\r\n")
         scp(env, build, "C:/Users/runner/build.cmd")
         for module, app, targets in (
-                ("examples", "storybook", "//windows/storybook_windows_application:storybook_windows_application"),
-                ("examples", "playground", "//playground/windows/playground_windows_application:playground "
-                                           "//playground/windows/playground_windows_application:playground_wasm_loader")):
+                ("examples", "storybook", "//windows/storybook_windows_application:storybook_windows_application"),):
             ps(f"cmd /c C:\\Users\\runner\\build.cmd {module} build -c opt {targets}")
             ps(f"$bin = (cmd /c C:\\Users\\runner\\build.cmd {module} info -c opt bazel-bin 2>$null | Select-Object -Last 1); "
                + windows_package(app, review.version))
 
-        executables = {"storybook": "storybook_windows_application.exe", "playground": "playground.exe"}
-        stop = "Stop-Process -Name storybook_windows_application,playground,playground_wasm_loader -ErrorAction SilentlyContinue"
+        executables = {"storybook": "storybook_windows_application.exe"}
+        stop = "Stop-Process -Name storybook_windows_application -ErrorAction SilentlyContinue"
         scripts = tempfile.mkdtemp(prefix="proof-windows-run-")
 
         def powershell_string(value):
             # ASCII only, whatever the console's code page: other characters
-            # as [char] codes ("Pokédex").
+            # as [char] codes.
             return '"' + "".join(c if ord(c) < 128 and c not in '"$`' else f"$([char]0x{ord(c):X})" for c in value) + '"'
 
         # The foreground window's visible bounds (DWM's, without the shadow)
@@ -1382,7 +1303,6 @@ def windows(review, story_list, builds):
 
         # The first launch after packaging is scanned by Windows first: longer.
         launcher("storybook", {}, 30, os.path.join(tempfile.mkdtemp(), "warm.png"))
-        launcher("playground", {}, 30, os.path.join(tempfile.mkdtemp(), "warm.png"))
         control = "C:\\proof\\storybook-control.txt"
         ps(f"if (Test-Path {control}.shown) {{ Remove-Item {control}.shown }}", check=False)
         switcher = Switcher(start=lambda path: launcher("storybook", {"ISO_STORYBOOK_CONTROL": control}, 12, path),
@@ -1390,7 +1310,7 @@ def windows(review, story_list, builds):
                             shown=lambda: ps(f"if (Test-Path {control}.shown) {{ Get-Content {control}.shown }}", check=False).stdout.strip(),
                             shoot=shoot, settle=2.0)
         shoot_apps(review, "windows", "Windows 11 (VM, ARM64)", "landscape", launcher, story_list,
-                   {"open": 12, "story": 10, "run": 60}, switcher)
+                   {"open": 12, "story": 10}, switcher)
         ps(stop, check=False)
     finally:
         release(env)
@@ -1398,7 +1318,7 @@ def windows(review, story_list, builds):
 
 PLATFORMS = {
     "ios": (build_ios, ios), "macos": (build_macos, macos), "android": (build_android, android),
-    "web": (None, web), "linux": (build_linux, linux), "windows": (build_windows, windows),
+    "web": (build_web, web), "linux": (build_linux, linux), "windows": (build_windows, windows),
 }
 
 
@@ -1428,7 +1348,7 @@ def kept(folder):
 
 
 def main():
-    global HERE, CHOSEN
+    global HERE
     parser = argparse.ArgumentParser()
     parser.add_argument("platforms", nargs="*", default=list(PLATFORMS))
     parser.add_argument("--review", required=True)
@@ -1438,15 +1358,12 @@ def main():
     parser.add_argument("--quick", action="store_true",
                         help="a pull request's proof: QUICK_STORIES and the stories in story files changed from --base")
     parser.add_argument("--base", default="origin/main", help="what --quick compares with (default origin/main)")
-    parser.add_argument("--web-toolchain", default=None,
-                        help="a staged in-browser compiler (an earlier site's playground/toolchain) for the web Playground")
     parser.add_argument("--linux-packages", default=None,
-                        help="the Linux apps packaged already (<dir>/storybook-linux.tgz, playground-linux.tgz): CI's, from a container")
+                        help="the Linux app packaged already (<dir>/storybook-linux.tgz): CI's, from a container")
     parser.add_argument("--held", action="append", default=[], metavar="PLATFORM=FILE",
                         help="a lease you hold, its `oss machine lease --exports` output in FILE: used, not released")
     parser.add_argument("--here", action="store_true",
                         help="picture on this machine, nothing leased (CI's proof on GitHub's runners)")
-    parser.add_argument("--apps", default=",".join(APPS), help="the apps pictured, comma-separated (default: both)")
     parser.add_argument("--android-abi", default=None, help="the Android apps built for this ABI (x86_64)")
     parser.add_argument("--build-to", default=None, metavar="DIR",
                         help="build the platforms' apps into DIR/<platform>/ and stop, for --from elsewhere")
@@ -1454,10 +1371,9 @@ def main():
                         help="picture the apps --build-to kept in DIR/<platform>/ rather than building them")
     args = parser.parse_args()
     HERE = args.here
-    CHOSEN = set(args.apps.split(",")) & set(APPS)
     held.update(item.split("=", 1) for item in args.held)
     version = args.version or re.search(r'version_name = "([^"]+)"', open(os.path.join(
-        PLAYGROUND, "android/playground_android_application/BUILD.bazel")).read()).group(1)
+        EXAMPLES, "android/storybook_android_application/BUILD.bazel")).read()).group(1)
     chosen = set(args.stories.split(",")) if args.stories else None
     if args.quick:
         chosen = (chosen or set()) | set(QUICK_STORIES) | changed_stories(args.base)
@@ -1472,10 +1388,6 @@ def main():
         make, _ = PLATFORMS[name]
         if args.built:
             builds[name] = lambda folder=os.path.join(args.built, name): kept(folder)
-        elif name == "web":
-            if not args.web_toolchain:
-                raise SystemExit("the web needs --web-toolchain (an earlier site's playground/toolchain)")
-            builds[name] = lambda toolchain=os.path.abspath(args.web_toolchain): build_web(toolchain)
         elif name == "linux":
             builds[name] = lambda packaged=args.linux_packages: build_linux(packaged)
         elif name == "windows":

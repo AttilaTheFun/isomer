@@ -11,11 +11,11 @@
 #
 # Isomer's versions are MAJOR.MINOR.BUILD too (AGENTS.md, "Versions"):
 # MODULE.bazel and the apps commit MAJOR.MINOR.0, and a build's BUILD is
-# the Playground's, the number releases are tagged with (v0.39.N). So
-# tools/ci/stamp_apps.sh asks for app "Playground" and stamps the one
-# version into the Storybook's Info.plists as well as the Playground's,
-# then (examples/tools/stamp_storybook.py and the Playground's stamp.py)
-# into their Android versionName and versionCode.
+# the Storybook's, the number releases are tagged with (v0.47.N; the
+# Playground's before it moved out in 0.47). So tools/ci/stamp_apps.sh
+# asks for app "Storybook" and stamps the version into its Info.plists,
+# then (examples/tools/stamp_storybook.py) into its Android versionName
+# and versionCode and its web page.
 #
 #   tools/ci/next_version.sh <app> <Info.plist>…
 #

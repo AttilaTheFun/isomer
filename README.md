@@ -94,13 +94,10 @@ package's values in `.bazelrc` (`build --minimum_os_version=14.0` next to
 `--macos_minimum_os=14.0`) and the transition is a no-op.
 
 **The Playground** (write SwiftUI on the device, build it there, run it on
-Isomer: an iOS app, a web site and an Android app) lives in
-`examples/playground/`, part of the examples' module, which consumes isomer
-from this checkout (`local_path_override`) as an outside application does
-(`cd examples && bazel build //playground/...`; its README and AGENTS.md say
-more).
-It was `examples/*/playground_*` here until 0.15, then a repository of its
-own until 0.35, then a module of its own in `playground/` until 0.39.
+Isomer: an iOS app, a web site and an Android app) is
+[AttilaTheFun/playground](https://github.com/AttilaTheFun/playground) since
+0.47, an application on Isomer that depends on it by version. It was here,
+in `examples/playground/`, until then.
 
 **Foundation and CoreGraphics.** On wasm and Android, `import Foundation`
 is Isomer's: swift-foundation's FoundationEssentials, a Swift package at its

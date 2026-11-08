@@ -18,7 +18,7 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
 |---|---|---|
 | T1 | iOS, macOS | simulators, the Mac |
 | T2 | wasm (web, Electron), Android | headless Chrome, the hermetic emulator |
-| T3 | Linux, Windows | built and run on oss machines from the Mac: Linux in a container (`tools/linux/build.sh`) and run in a Linux VM, Windows on the Windows VM with the Swift build layer (the Playground's `tests/proof/proof.py`) |
+| T3 | Linux, Windows | built and run on oss machines from the Mac: Linux in a container (`tools/linux/build.sh`) and run in a Linux VM, Windows on the Windows VM with the Swift build layer (`tools/proof/proof.py`) |
 
 ## Releases
 
@@ -39,11 +39,8 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
   (tools/ci/oss/windows-swift.ps1: Visual Studio's build tools, Swift,
   Python), in MSVC's environment with Git's bash and POSIX tools (the
   release proof, tools/proof/proof.py, says how): the Storybook drawn by
-  each platform's renderer, and the Playground compiling projects there
-  and running them in the WasmKit loader's window. Linux's Playground
-  carries the swift.org toolchain's frontend and wasm-ld (shared/compiler);
-  Windows' takes them from the build VM's installed Swift, since rules_swift
-  has no Windows host toolchain to assemble them from. Visual Studio and an
+  each platform's renderer (the Playground's, AttilaTheFun/playground's
+  since 0.47, compiling projects there too). Visual Studio and an
   installed Swift are a stopgap until the hermetic toolchains replace them.
 - **An inline picker is drawn as a menu** by the GPU renderer (Linux,
   Windows): `pickerStyle(.inline)` lays its choices out as rows on the web
@@ -117,10 +114,9 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
 
 ## The web (T2)
 
-- **The web's fastbuild overflows the stack** (the Playground's and the
-  Storybook's: "RangeError: Maximum call stack size exceeded", a
+- **The web's fastbuild overflows the stack** (the Storybook's: "RangeError: Maximum call stack size exceeded", a
   WebAssembly native stack overflow, in FlatTreeEncoder's flatten); `-c
-  opt` builds work and are what ships (examples/playground/docs/playground_web.md).
+  opt` builds work and are what ships.
   The tree is shallow (the Storybook's is 14 levels); unoptimized,
   `flattenNode` (shared/renderers/TreeEncoder.swift, one ~900-line
   function) has so many wasm locals that each frame V8's baseline compiler
@@ -207,14 +203,3 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
 - **Consumers on Foundation's services** (the plan's phase 12): Visor
   Isomer moved (visor_isomer db8894b). Other applications' file stores and
   host HTTP are their own to move; not checked here.
-- **Playground projects**: an unedited project made from a template by any
-  earlier build is brought to the current template at launch (the Playground
-  `TemplateHistory`, rebuilt from git history by
-  `examples/playground/tools/playground/template_history.py`); an edited one keeps its source and
-  needs a manual update where 0.31 removed API it used (`ObservableObject`,
-  `DispatchQueue`, the injected services).
-- **The Playground's macro toolchain is built outside Bazel**:
-  `examples/playground/tools/browser_toolchain`'s scripts build the WASI
-  compiler and `MacroPlugins.wasm` (ObservationMacros, SwiftMacros), and
-  Android's prebuilt plugins are staged by `stage_toolchain.sh`; a toolchain
-  bump means running them again by hand.

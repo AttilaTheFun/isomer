@@ -9,8 +9,7 @@
 # Xcode's assetutil: on a Mac, there; elsewhere (CI's Linux containers, the
 # isomer-jit runners), on a slot of OS Server's primary Mac
 # (tools/ci/mac_slot.sh), where this same script runs on the zips, sent up.
-# The Storybook's and the Playground's Mac apps both have Icon Composer
-# icons. Copied from AttilaTheFun/reviews' tools/ci/check_mac_icons.sh.
+# The Storybook's Mac app has an Icon Composer icon. Copied from AttilaTheFun/reviews' tools/ci/check_mac_icons.sh.
 #
 #   tools/ci/check_mac_icons.sh <dir>
 set -euo pipefail

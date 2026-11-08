@@ -58,7 +58,6 @@ upload)
     app() {
         case "$1" in
             *storybook*) echo Storybook ;;
-            *playground*) echo Playground ;;
             *) echo "" ;;
         esac
     }

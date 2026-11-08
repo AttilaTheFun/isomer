@@ -220,8 +220,8 @@ build:windows_on_linux --extra_toolchains=@swift_windows_sdk//:all
 # for later), Production, which only CI's release job builds, on a release
 # branch, or AdHoc, a pull request's branch built by hand. One bundle id,
 # name and link scheme for all of them; the build says which it is in its
-# Info.plist's BuildVariant (//tools/variant). The Storybook's and the
-# Playground's iPhone, iPad and Mac apps alone so far: Android, the web,
+# Info.plist's BuildVariant (//tools/variant). The Storybook's iPhone, iPad
+# and Mac apps alone so far: Android, the web,
 # Linux and Windows are built the same whatever the config.
 build:alpha --//tools/variant:variant=alpha
 build:beta --//tools/variant:variant=beta

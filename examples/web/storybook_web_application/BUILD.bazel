@@ -58,3 +58,15 @@ alias(
         "//shared/example_application:__pkg__",
     ],
 )
+
+# Isomer's web site (https://attilathefun.github.io/isomer/): the Storybook
+# at its root, as the alpha job builds it (-c opt: iOS Safari overflows its
+# stack on an -Onone page), the asset a release carries and
+# .github/workflows/pages.yml deploys (Pages from an Actions artifact runs
+# no Jekyll). Its files dereferenced, so the archive stands alone.
+genrule(
+    name = "isomer_site",
+    srcs = [":storybook_web_application_site"],
+    outs = ["isomer-site.tar.gz"],
+    cmd = "tar -czhf $@ -C $(location :storybook_web_application_site) .",
+)

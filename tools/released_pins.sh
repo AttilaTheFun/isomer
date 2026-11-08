@@ -6,8 +6,8 @@
 # version (`revision:` with a `// tag: <tag>` comment), not another
 # revision, a branch or a path outside this repository; a Bazel module from
 # a registry (the project's, then the BCR), not a git or archive override,
-# and not a local one outside this repository. The examples and the
-# Playground are modules of their own over this checkout
+# and not a local one outside this repository. The examples are a module
+# of their own over this checkout
 # (`local_path_override(path = "..")`, and isomer's package by
 # `.package(path:)`): what stays inside the repository is the same commit,
 # not a pin.

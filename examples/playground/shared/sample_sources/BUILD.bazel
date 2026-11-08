@@ -1,7 +1,0 @@
-# The Playground's canned examples (its project templates), and the screens
-# the site's front page embeds: their one home. samples.bzl wraps each in a
-# `@main` App to make a one-file project that compiles against the
-# Playground SDK.
-package(default_visibility = ["//visibility:public"])
-
-exports_files(glob(["*.swift"]))

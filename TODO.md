@@ -26,12 +26,10 @@ sharing a pool with visor's and agent_ui's. Moved between releases:
 
 ## The CI proof: what's left
 
-The Build workflow's `proof` job pictures the Storybook and the Playground
-on every platform after each commit merges to main (the core set, 136
-pictures, about 40 min after the build), each compared with the newest
-commit before it that has a proof (AGENTS.md). Two runs of one commit
-(40960663857, 40967787636) matched on 135 of 136 screens; the other is
-iOS 26's glass restart button over 2048, in tools/ci/proof_ignore.txt.
+The Build workflow's proof jobs picture the Storybook on every tier-1
+platform when run by hand (verify, release), each picture compared with
+the previous release's (AGENTS.md). Since 0.47 the Storybook alone: the
+Playground's proof is AttilaTheFun/playground's.
 
 - **Reviews' Publish waits for the proof** of the release's commit (a
   change in Reviews).
@@ -43,14 +41,6 @@ iOS 26's glass restart button over 2048, in tools/ci/proof_ignore.txt.
   `images.async` (a remote image). After each release, compare its proof
   with the release before AND a second run of the same commit: whatever
   moves without the app changing gets fixed before the next.
-- **The Pokédex reads PokéAPI live.** Its pictures have held still so far.
-- **Android's 2048, 1 px higher at 0.41 (Swift 6.4.2).** In both proofs of
-  a6ceeb16 (quick and full), its content sits 1 px above v0.40.1's; the
-  web's and the iPhone's 2048 (the same project, compiled for wasm too)
-  are pixel-identical. Android runs the Playground's wasm under WasmKit
-  built by the Android Swift 6.4.2 toolchain, and its host measures with
-  Compose: find which number moved (a float conversion in the engine, or
-  a host measurement) before it hides a real change.
 - **Actions write for the Claude app**, so agents can start a full proof or
   rerun a failed job.
 - **oss**: `oss machine ssh` printed a lease's JSON, passwords included,
@@ -61,8 +51,8 @@ iOS 26's glass restart button over 2048, in tools/ci/proof_ignore.txt.
 
 The proof's Mac part runs on a `mac` slot of OS Server's primary macOS VM
 (#64) and its iPhone part in a simulator inside that VM (#65); the
-Storybook and the Playground publish an Alpha of each main commit to
-Applications Server (#59, #60, #62). Left:
+Storybook publishes an Alpha when a release is proposed (#59, #60, #62).
+Left:
 
 - **Production promoted, not rebuilt**: the release job asks Applications
   Server to stamp the release commit's Alpha (BuildVariant rewritten,
@@ -100,16 +90,6 @@ container with its own KVM, the iPhone and the Mac on slots. Left:
   Chrome's libraries into Visor's agent image at each run; Wine 10 needs
   Ubuntu 26.04, so Windows runs in a container of its own. An image of
   Isomer's (or these in Visor's) would save both.
-
-## The Playground's templates in CI
-
-`//playground/tests/templates:templates_compile_test` (the examples)
-compiles and links every template against the Playground SDK with the
-host's wasm toolchain. It is `local` and finds the Mac's toolchain, so no CI
-job runs it, and 0.44's first proof showed the Playground's projects
-failing to link (swift_ffi in the SDK twice) before any test did. It should
-run in CI's container (the toolchain's Linux repository name) beside the
-headless tests.
 
 ## Driving and remote sessions: what's left
 
@@ -264,7 +244,6 @@ run`), CoreGraphics and ImageIO for images.
   - swift_ffi's `export_list.py` (a reactor's exports);
   - tools/wasm's `icu_data.py`, `sdk_exports.py` and `serve.py` (the web
     apps' `bazel run`, swift_map's too), and its `site_imports_test.py`;
-  - the Playground's `dev_compile_server.py`;
   - the network probe's `network_check.py`.
 
   With these in Swift, rules_python and its toolchain leave MODULE.bazel.
@@ -279,9 +258,7 @@ run`), CoreGraphics and ImageIO for images.
   - the parity reports (`tools/parity`);
   - the SwiftUI audit (`tools/swiftui_audit`, nine scripts);
   - `tools/foundation/check_link.py` and `tools/symbols/generate.py`;
-  - the version stamps (`examples/tools/stamp_storybook.py`, the
-    Playground's `stamp.py` and `template_history.py`);
-  - the Playground's e2e runner (`tests/e2e/run.py`);
+  - the version stamp (`examples/tools/stamp_storybook.py`);
   - the pixel benchmark.
 
 ## No Node
