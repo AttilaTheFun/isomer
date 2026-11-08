@@ -14,6 +14,9 @@
 // `LinuxHost.swift`'s bridge/surface/loop primitives (same module).
 
 import Foundation
+internal import SwiftUI
+internal import IsomerLinuxHost
+internal import IsomerSwiftUI
 import IsomerWasmHost
 import IsomerURLSessionNetwork
 import IsomerWasmKitRuntime
