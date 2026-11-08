@@ -1,0 +1,65 @@
+// The headless host's driver protocol (0.45): a test, an agent or a person
+// drives an app built headless (headless/libraries/swift_ui) by what it
+// shows, one command and its answer at a time, never pixels.
+//
+// Two encodings of the same messages: newline-delimited JSON (protobuf's JSON
+// mapping, `{"cmd": "tap", "target": "Send"}` a line), the host's default,
+// for a terminal; and length-delimited binary (a varint length, then the
+// message) with ISO_HEADLESS_PROTOCOL=binary, IsomerHeadless's.
+
+syntax = "proto3";
+
+package isomer.wire;
+
+option swift_prefix = "Wire_";
+option java_package = "dev.isomer.wire";
+option java_multiple_files = true;
+
+message Command {
+  // ls, tap, type, set, back, dismiss, wait or quit
+  // (headless/libraries/swift_ui/HeadlessHost.swift says each).
+  string cmd = 1;
+  // The element: its accessibility identifier, its label, or the last whose
+  // label holds it.
+  string target = 2;
+  // `type`'s text; `wait`'s text to wait for.
+  string text = 3;
+  // `set`'s value (a toggle's "1" or "0", a picker's index).
+  string value = 4;
+  // `wait`'s timeout in seconds (5 when 0).
+  double timeout = 5;
+}
+
+message Answer {
+  // Always set, so the JSON shows `"ok": false` too.
+  optional bool ok = 1;
+  optional string error = 2;
+  // The screen once the UI settled after the command.
+  Screen screen = 3;
+}
+
+message Screen {
+  // Every text shown.
+  repeated string texts = 1;
+  // What can be used: buttons, text fields, controls.
+  repeated Element elements = 2;
+  // What is presented (sheets, popovers, alerts), the topmost last.
+  repeated Presentation presented = 3;
+}
+
+message Element {
+  // button, textField, toggle, picker, segmented, stepper, slider,
+  // datepicker or colorpicker.
+  string role = 1;
+  string label = 2;
+  // Its `accessibilityIdentifier`.
+  optional string id = 3;
+  optional string value = 4;
+}
+
+message Presentation {
+  // sheet, popover or alert.
+  string style = 1;
+  string title = 2;
+  string message = 3;
+}

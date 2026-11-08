@@ -3,10 +3,12 @@ load("@rules_swift//swift:swift.bzl", "swift_library")
 package(default_visibility = ["//visibility:public"])
 
 # IsomerHeadless: the client tests and agents drive a headless Isomer app
-# with (HeadlessApp.swift). Foundation alone: it launches the app's binary
-# and speaks its protocol, so it builds wherever the tests run.
+# with (HeadlessApp.swift). Foundation and the protocol's messages
+# (//shared/wire/swift) alone: it launches the app's binary and speaks its
+# protocol, so it builds wherever the tests run.
 swift_library(
     name = "isomer_headless",
     srcs = ["HeadlessApp.swift"],
     module_name = "IsomerHeadless",
+    deps = ["//shared/wire/swift"],
 )

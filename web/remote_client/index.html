@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Isomer</title>
+  <style>
+    :root { color-scheme: light dark; }
+    html, body { margin: 0; height: 100%; background: light-dark(#fff, rgb(18, 18, 20)); }
+  </style>
+</head>
+<body>
+  <!-- React 18 UMD globals for the React renderer. -->
+  <script src="./runtime/react.production.min.js"></script>
+  <script src="./runtime/react-dom.production.min.js"></script>
+  <script type="module">
+    import { connectIsomer } from "./runtime/remote.js";
+
+    // The session is the page's own server's (a gateway serves this page
+    // and /session), or ?session=ws://….
+    const params = new URLSearchParams(location.search);
+    const scheme = location.protocol === "https:" ? "wss:" : "ws:";
+    connectIsomer({
+      url: params.get("session") || `${scheme}//${location.host}/session`,
+      container: document.body,
+      onClose: () => { document.title = "Disconnected"; },
+    });
+  </script>
+</body>
+</html>

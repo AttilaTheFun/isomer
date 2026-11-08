@@ -1,8 +1,9 @@
 // IsomerHeadless: a test's (or an agent's) client for an Isomer app built
 // headless (--@isomer//headless, headless/libraries/swift_ui). It launches
-// the app's binary and speaks its protocol (HeadlessHost.swift): each call
-// sends one command and returns the screen once the UI has settled, or
-// throws with the screen as it was.
+// the app's binary and speaks its protocol (shared/wire/headless.proto,
+// length-delimited: ISO_HEADLESS_PROTOCOL=binary): each call sends one
+// command and returns the screen once the UI has settled, or throws with the
+// screen as it was.
 //
 //   let app = try HeadlessApp(executable: path, environment: ["ISO_STORYBOOK_STORY": "state.observableobject"])
 //   try app.tap("Tap")
@@ -10,6 +11,7 @@
 //   XCTAssertEqual(try app.screen().element("Title")?.value, "Taps")
 
 import Foundation
+import IsomerWire
 
 /// The screen as the app's runtime shows it: no pixels, what a person sees
 /// and can do.
@@ -34,16 +36,12 @@ public struct HeadlessScreen: Sendable {
     public let elements: [Element]
     public let presented: [Presentation]
 
-    init(_ json: [String: Any]) {
-        texts = json["texts"] as? [String] ?? []
-        elements = (json["elements"] as? [[String: Any]] ?? []).map {
-            Element(role: $0["role"] as? String ?? "", label: $0["label"] as? String ?? "",
-                    id: $0["id"] as? String, value: $0["value"] as? String)
+    init(_ screen: Wire_Screen) {
+        texts = screen.texts
+        elements = screen.elements.map {
+            Element(role: $0.role, label: $0.label, id: $0.hasID ? $0.id : nil, value: $0.hasValue ? $0.value : nil)
         }
-        presented = (json["presented"] as? [[String: Any]] ?? []).map {
-            Presentation(style: $0["style"] as? String ?? "", title: $0["title"] as? String ?? "",
-                         message: $0["message"] as? String ?? "")
-        }
+        presented = screen.presented.map { Presentation(style: $0.style, title: $0.title, message: $0.message) }
     }
 
     /// Whether a text on the screen is, or holds, `text`.
@@ -74,7 +72,6 @@ public final class HeadlessApp {
     private let process = Process()
     private let input = Pipe()
     private let output = Pipe()
-    private var buffered = Data()
 
     /// Launches `executable` (an app built with --@isomer//headless).
     /// `environment` adds to the process's own: the app's launch hooks
@@ -83,7 +80,9 @@ public final class HeadlessApp {
     /// that fit).
     public init(executable: String, environment: [String: String] = [:]) throws {
         process.executableURL = URL(fileURLWithPath: executable)
-        process.environment = ProcessInfo.processInfo.environment.merging(environment) { $1 }
+        process.environment = ProcessInfo.processInfo.environment
+            .merging(environment) { $1 }
+            .merging(["ISO_HEADLESS_PROTOCOL": "binary"]) { $1 }
         process.standardInput = input
         process.standardOutput = output
         try process.run()
@@ -95,68 +94,64 @@ public final class HeadlessApp {
 
     /// The screen as it is.
     @discardableResult
-    public func screen() throws -> HeadlessScreen { try send(["cmd": "ls"]) }
+    public func screen() throws -> HeadlessScreen { try send("ls") }
 
     /// Taps a button, found by identifier, label or the text in it.
     @discardableResult
-    public func tap(_ target: String) throws -> HeadlessScreen { try send(["cmd": "tap", "target": target]) }
+    public func tap(_ target: String) throws -> HeadlessScreen { try send("tap") { $0.target = target } }
 
     /// Sets a text field's text.
     @discardableResult
     public func type(_ target: String, _ text: String) throws -> HeadlessScreen {
-        try send(["cmd": "type", "target": target, "text": text])
+        try send("type") {
+            $0.target = target
+            $0.text = text
+        }
     }
 
     /// Sets a control's value: a toggle's "1" or "0", a picker's index.
     @discardableResult
     public func set(_ target: String, _ value: String) throws -> HeadlessScreen {
-        try send(["cmd": "set", "target": target, "value": value])
+        try send("set") {
+            $0.target = target
+            $0.value = value
+        }
     }
 
     @discardableResult
-    public func back() throws -> HeadlessScreen { try send(["cmd": "back"]) }
+    public func back() throws -> HeadlessScreen { try send("back") }
 
     @discardableResult
-    public func dismiss() throws -> HeadlessScreen { try send(["cmd": "dismiss"]) }
+    public func dismiss() throws -> HeadlessScreen { try send("dismiss") }
 
     /// Waits until a text shows (or a control's label or value holds it).
     @discardableResult
     public func wait(for text: String, timeout: Double = 5) throws -> HeadlessScreen {
-        try send(["cmd": "wait", "text": text, "timeout": timeout])
+        try send("wait") {
+            $0.text = text
+            $0.timeout = timeout
+        }
     }
 
     /// Ends the app.
     public func quit() {
-        _ = try? send(["cmd": "quit"])
+        _ = try? send("quit")
         process.waitUntilExit()
     }
 
-    private func send(_ command: [String: Any]) throws -> HeadlessScreen {
-        var line = try JSONSerialization.data(withJSONObject: command)
-        line.append(0x0A)
-        input.fileHandleForWriting.write(line)
-        guard let answerLine = readLine(),
-              let answer = try JSONSerialization.jsonObject(with: answerLine) as? [String: Any] else {
-            throw HeadlessError(message: "the app ended without answering \(command)", screen: nil)
+    private func send(_ cmd: String, _ fill: (inout Wire_Command) -> Void = { _ in }) throws -> HeadlessScreen {
+        var command = Wire_Command()
+        command.cmd = cmd
+        fill(&command)
+        input.fileHandleForWriting.write(try WireDelimited.frame(command))
+        guard let bytes = WireDelimited.read(from: output.fileHandleForReading.fileDescriptor),
+              let answer = try? Wire_Answer(serializedBytes: bytes) else {
+            throw HeadlessError(message: "the app ended without answering \(cmd) \(command.target)", screen: nil)
         }
-        let screen = (answer["screen"] as? [String: Any]).map(HeadlessScreen.init)
-        if answer["ok"] as? Bool != true {
-            throw HeadlessError(message: answer["error"] as? String ?? "failed", screen: screen)
+        let screen = answer.hasScreen ? HeadlessScreen(answer.screen) : nil
+        if !answer.ok {
+            throw HeadlessError(message: answer.hasError ? answer.error : "failed", screen: screen)
         }
-        return screen ?? HeadlessScreen([:])
-    }
-
-    /// One line of the app's output.
-    private func readLine() -> Data? {
-        while true {
-            if let newline = buffered.firstIndex(of: 0x0A) {
-                let line = buffered[buffered.startIndex..<newline]
-                buffered.removeSubrange(buffered.startIndex...newline)
-                return Data(line)
-            }
-            let chunk = output.fileHandleForReading.availableData
-            if chunk.isEmpty { return nil }
-            buffered.append(chunk)
-        }
+        return screen ?? HeadlessScreen(Wire_Screen())
     }
 }

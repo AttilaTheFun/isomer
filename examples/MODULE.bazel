@@ -31,7 +31,7 @@ module(
 #   git_override(module_name = "isomer",
 #                remote = "https://github.com/AttilaTheFun/isomer.git",
 #                commit = "<commit>")
-bazel_dep(name = "isomer", version = "0.44.0")
+bazel_dep(name = "isomer", version = "0.45.0")
 local_path_override(
     module_name = "isomer",
     path = "..",
@@ -327,6 +327,7 @@ use_repo(
     "swiftpkg_grpc_swift_protobuf",
     "swiftpkg_open_router_cli",
     "swiftpkg_swift_collections",
+    "swiftpkg_swift_nio",
     "swiftpkg_swift_protobuf",
     "swiftpkg_swift_sql",
     "swiftpkg_update_kit",

@@ -111,6 +111,26 @@ failing to link (swift_ffi in the SDK twice) before any test did. It should
 run in CI's container (the toolchain's Linux repository name) beside the
 headless tests.
 
+## Remote sessions (0.45): what's left
+
+docs/remote_sessions.md says what there is. Open:
+
+- **Android's thin client in CI.** It was checked by hand on an emulator
+  (drawn, tapped, typed into). The `android` job could run it: the gateway
+  built for the runner, the x86_64 APK, `adb reverse` to the gateway's port.
+- **The gateway for consumers.** It is the examples' (it needs gRPC Swift and
+  SwiftNIO, which isomer's own graph doesn't have): a product of a package
+  of its own, or of isomer's behind a trait, so an app's server can run it.
+- **TLS and who may connect.** The gateway speaks plaintext WebSocket and
+  gRPC, for a local network or behind a proxy that terminates TLS and
+  checks who connects.
+- **The client's measurements.** Text is measured on the server as the
+  headless host measures it; a client could send its fonts' metrics in
+  `start` (a table per size and weight) for what the app computes from them.
+- **Reconnecting.** A dropped connection ends its session (the app's run);
+  resuming one (the app kept for a while, the client given the whole tree
+  again) is open, as are recording a session and replaying it.
+
 ## Android below API 28 (2026-11-06)
 
 Done with Swift 6.4 (0.41): swift.org's 6.4 Android SDK is built at API 23

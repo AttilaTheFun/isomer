@@ -998,6 +998,20 @@ browser involved. Regenerate goldens after an intentional change with
 `bazel test //tests/snapshot:snapshot_test --test_env=ISO_RECORD=1 --test_output=all`
 and paste the printed blocks.
 
+### Headless, and on a server
+
+An app built with `--@isomer//headless` runs with nothing drawn, its UI read
+and used through the runtime: tests drive it in seconds
+([docs/headless.md](docs/headless.md)). The same build serves the app to a
+client that holds only a renderer (a browser's React, an Android phone's
+Compose) over a WebSocket or gRPC, its frames as protobuf patches of the
+render tree ([docs/remote_sessions.md](docs/remote_sessions.md)):
+
+```sh
+cd examples
+bazel test --@isomer//headless //headless/... //remote/...
+```
+
 ## Repository layout
 
 ```

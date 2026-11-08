@@ -3,7 +3,7 @@
 // binary — it runs as an `iso_hot` reactor on WasmKit, the Swift interpreter,
 // through the same platform-free core every native host drives
 // (`WasmFeatureRuntime` over `WasmKitRuntime`, //shared/wasm_host). Each
-// frame the reactor serializes its `RenderNode` tree to `tree.fbs`; this host
+// frame the reactor serializes its `RenderNode` tree to `tree.proto`; this host
 // decodes it (`FlatTreeDecoder`) and draws it through the exact same
 // `SwiftGPURenderer` the compiled cell uses. Input hit-tests the decoded tree;
 // a tap echoes the node's id back into the reactor, which re-renders and
@@ -39,7 +39,7 @@ final class LinuxWasmCell {
     /// The running reactor (nil between a hot-reload's teardown and its
     /// replacement).
     var core: WasmFeatureRuntime?
-    /// Decodes each `tree.fbs` push into a drawable `RenderNode`, routing every
+    /// Decodes each `tree.proto` push into a drawable `RenderNode`, routing every
     /// interactive node's events back into the reactor by id.
     let decoder: FlatTreeDecoder
     /// The most recently decoded tree, redrawn every scheduled frame.

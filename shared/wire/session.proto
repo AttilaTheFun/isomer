@@ -1,0 +1,157 @@
+// A remote session (0.45): an app's SwiftUI runs in one process (a server's,
+// built headless) and its screen is drawn in another (a browser's React, an
+// Android phone's Compose), which holds nothing of the app but the renderer.
+// The client sends what the person does; the app sends each frame as a
+// tree.proto Patch, and what it asks of the platform.
+//
+// In a stream of bytes (the headless host's standard input and output) each
+// message is length-delimited: a varint length, then the message. Over a
+// WebSocket each binary message is one message, undelimited. Over gRPC it is
+// the Session service's stream (session_service.proto).
+//
+// A session is one run of the app: its first client message is `start`, and
+// its first server message a patch at "n" (the whole tree). A client that
+// reconnects starts a new session.
+
+syntax = "proto3";
+
+package isomer.wire;
+
+option swift_prefix = "Wire_";
+option java_package = "dev.isomer.wire";
+option java_multiple_files = true;
+
+message ClientMessage {
+  oneof message {
+    // The session's first message.
+    Start start = 1;
+    // The client's screen, in points.
+    Size resize = 2;
+    // A tree node's event: the id the tree gave it (a tap's, an edit's)
+    // and its value (Runtime.hostViewEvent).
+    Event event = 3;
+    // A key for `.onKeyPress` (Runtime.keyPressEvent). The app's answer
+    // (whether a handler took it) comes too late to keep the key from a
+    // field: a remote client lets every key through.
+    Event key = 4;
+    // A pointer, for self-drawing clients (the tree's coordinates).
+    Pointer pointer = 5;
+    Wheel wheel = 6;
+    // The text input the app began (`ServerMessage.text_input`).
+    TextInput text = 7;
+    // The system's color scheme changed.
+    bool dark = 8;
+    // Device pixels per point.
+    double display_scale = 9;
+    ScenePhase scene_phase = 10;
+    // A URL for the app's `.onOpenURL`.
+    string open_url = 11;
+    // The system's back (Android's back gesture, the browser's).
+    Empty back = 12;
+  }
+}
+
+message Start {
+  Size size = 1;
+  double display_scale = 2;
+  bool dark = 3;
+  // The app's launch environment (ISO_STORYBOOK_STORY, ISO_OPEN_APP …):
+  // a server passes on only the ISO_ ones.
+  map<string, string> environment = 4;
+  // The renderer drawing the tree ("react", "compose"), which the app's
+  // `Bridge.rendererName` reports.
+  string renderer = 5;
+}
+
+message Size {
+  double width = 1;
+  double height = 2;
+}
+
+message Event {
+  string id = 1;
+  string value = 2;
+}
+
+message Pointer {
+  enum Phase {
+    PHASE_DOWN = 0;
+    PHASE_UP = 1;
+    PHASE_MOVED = 2;
+  }
+  Phase phase = 1;
+  double x = 2;
+  double y = 3;
+}
+
+message Wheel {
+  double x = 1;
+  double y = 2;
+  double delta_x = 3;
+  double delta_y = 4;
+}
+
+message TextInput {
+  enum Change {
+    CHANGE_EDITED = 0;
+    CHANGE_SUBMITTED = 1;
+    CHANGE_ENDED = 2;
+  }
+  Change change = 1;
+  // The field's text, when edited.
+  string text = 2;
+}
+
+enum ScenePhase {
+  SCENE_PHASE_ACTIVE = 0;
+  SCENE_PHASE_INACTIVE = 1;
+  SCENE_PHASE_BACKGROUND = 2;
+}
+
+// A message that is its field: nothing more to say.
+message Empty {}
+
+message ServerMessage {
+  oneof message {
+    // A frame: a serialized tree.proto Patch, applied to the tree the
+    // client holds (the first, a single op at "n": the whole tree). Its
+    // bytes are a Patch message's; a reader that knows tree.proto may read
+    // this field as one.
+    bytes patch = 1;
+    // A platform command (`platformCommand(key, value)`: the window's
+    // title, the clipboard, an app's own).
+    PlatformCommand command = 2;
+    // An image the app made (`registerImage`): a frame's image nodes name
+    // it by source.
+    Image image = 3;
+    // The app asks the system to open a URL.
+    string open_url = 4;
+    // The app's own color scheme (`preferredColorScheme`).
+    bool dark = 5;
+    // The app began text input over a field (self-drawing clients) …
+    TextInputRequest text_input = 6;
+    // … or ended it.
+    Empty end_text_input = 7;
+    // A line of the app's log.
+    string log = 8;
+  }
+}
+
+message PlatformCommand {
+  string key = 1;
+  string value = 2;
+}
+
+message Image {
+  string source = 1;
+  bytes bytes = 2;
+}
+
+message TextInputRequest {
+  string text = 1;
+  double x = 2;
+  double y = 3;
+  double width = 4;
+  double height = 5;
+  double font_size = 6;
+}

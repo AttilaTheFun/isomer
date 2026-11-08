@@ -175,6 +175,8 @@ exports_files([
     "runtime/react_renderer.js",
     "runtime/react_embed.js",
     "runtime/raster.js",
+    "runtime/remote.js",
+    "runtime/session_messages.js",
     "runtime/symbols.js",
     "runtime/platform_services.js",
     "runtime/imported_files.js",
