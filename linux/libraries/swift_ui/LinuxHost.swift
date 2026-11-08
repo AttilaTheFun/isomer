@@ -146,7 +146,8 @@ struct LinuxHostBridge: HostBridge {
 // Set by `scheduleRender()` (and the initial frame); the loop renders only when
 // it is set, then clears it. An in-flight animation keeps it set because the
 // runtime re-calls `scheduleRender()` from each frame while animating.
-nonisolated(unsafe) var linuxRenderScheduled = true
+// `package`: the wasm cell (IsomerLinuxWasmCell) runs the same loop.
+nonisolated(unsafe) package var linuxRenderScheduled = true
 
 // MARK: - Async fetch bookkeeping
 

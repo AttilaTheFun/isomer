@@ -191,7 +191,9 @@ run_tests "${flags[@]}" --@isomer//drive:headful $(log_of headful) --test_output
 headful=$?
 [ $headless -ne 0 ] || headless=$headful
 cd "$root"
-bazel build //swift_gpu/linux:gl_backend_test
+# The Linux wasm cell too (the Linux Playground links it; nothing
+# here does).
+bazel build //swift_gpu/linux:gl_backend_test //linux/libraries/swift_ui_wasm
 built_gl=$?
 run_tests --test_output=errors //tests/renderer:mock_renderer_test //tests/snapshot:snapshot_test
 checked=$?
