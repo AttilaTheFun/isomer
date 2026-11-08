@@ -168,9 +168,9 @@ run_tests "${flags[@]}" --test_output=errors //tests/platforms:storybook_web_tes
 tested_here=$?
 # The headless tests: the Storybook built for the headless host and driven
 # through its runtime (//headless in the examples), nothing drawn, and served
-# to remote clients by the gateway (//remote: over a WebSocket, gRPC, and the
-# web's thin client in headless Chrome). Run in every mode, the automated
-# builds included: seconds in a container (the owner, 2026-11-07).
+# to remote clients by the gateway (//remote: over gRPC, and the web thin
+# client in headless Chrome). Run in every mode, the automated builds
+# included: seconds in a container (the owner, 2026-11-07).
 bazel test "${flags[@]}" --@isomer//headless --test_output=errors //headless/... //remote/...
 headless=$?
 cd "$root"
