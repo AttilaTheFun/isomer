@@ -34,3 +34,7 @@ macos-storybook-isomer.map 176 520 696 298
 # where the network is slow or shut). Its frame is left out; the controls
 # around it still count.
 ios-storybook-isomer.video 108 1313 990 556
+
+# The web's VideoPlayer of a remote video: Chrome's controls draw how much of
+# it is buffered, which is how much the network delivered by the picture.
+web-storybook-isomer.video 296 494 664 10
