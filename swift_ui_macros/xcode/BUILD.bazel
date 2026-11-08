@@ -10,9 +10,9 @@ swift_compiler_plugin(
     features = ["swift.enable_v6"],
     module_name = "SwiftUIMacros",
     deps = [
-        "@swift-syntax//:SwiftCompilerPlugin",
-        "@swift-syntax//:SwiftDiagnostics",
-        "@swift-syntax//:SwiftSyntax",
-        "@swift-syntax//:SwiftSyntaxMacros",
+        "@swiftpkg_swift_syntax//:SwiftCompilerPlugin",
+        "@swiftpkg_swift_syntax//:SwiftDiagnostics",
+        "@swiftpkg_swift_syntax//:SwiftSyntax",
+        "@swiftpkg_swift_syntax//:SwiftSyntaxMacros",
     ],
 )

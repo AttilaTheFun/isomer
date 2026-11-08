@@ -23,7 +23,7 @@ swift_compiler_plugin(
     visibility = ["//visibility:public"],
     deps = [
         "//swift_ffi/swift_ffi_plugin_library",
-        "@swift-syntax//:SwiftCompilerPlugin",
-        "@swift-syntax//:SwiftSyntaxMacros",
+        "@swiftpkg_swift_syntax//:SwiftCompilerPlugin",
+        "@swiftpkg_swift_syntax//:SwiftSyntaxMacros",
     ],
 )

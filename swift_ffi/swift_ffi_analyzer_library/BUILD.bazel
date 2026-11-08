@@ -25,7 +25,7 @@ swift_library(
     visibility = ["//visibility:public"],
     deps = [
         "//swift_ffi/swift_ffi_ir_library",
-        "@swift-syntax//:SwiftParser",
-        "@swift-syntax//:SwiftSyntax",
+        "@swiftpkg_swift_syntax//:SwiftParser",
+        "@swiftpkg_swift_syntax//:SwiftSyntax",
     ],
 )

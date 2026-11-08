@@ -31,9 +31,9 @@ swift_library(
     ],
     module_name = "SwiftUIMacrosLibrary",
     deps = [
-        "@swift-syntax//:SwiftDiagnostics",
-        "@swift-syntax//:SwiftSyntax",
-        "@swift-syntax//:SwiftSyntaxMacros",
+        "@swiftpkg_swift_syntax//:SwiftDiagnostics",
+        "@swiftpkg_swift_syntax//:SwiftSyntax",
+        "@swiftpkg_swift_syntax//:SwiftSyntaxMacros",
     ],
 )
 
@@ -54,10 +54,10 @@ swift_compiler_plugin(
     module_name = "SwiftUIMacros",
     visibility = ["//visibility:public"],
     deps = [
-        "@swift-syntax//:SwiftCompilerPlugin",
-        "@swift-syntax//:SwiftDiagnostics",
-        "@swift-syntax//:SwiftSyntax",
-        "@swift-syntax//:SwiftSyntaxMacros",
+        "@swiftpkg_swift_syntax//:SwiftCompilerPlugin",
+        "@swiftpkg_swift_syntax//:SwiftDiagnostics",
+        "@swiftpkg_swift_syntax//:SwiftSyntax",
+        "@swiftpkg_swift_syntax//:SwiftSyntaxMacros",
     ],
 )
 
@@ -74,8 +74,8 @@ swift_test(
     ],
     deps = [
         ":library",
-        "@swift-syntax//:SwiftSyntax",
-        "@swift-syntax//:SwiftSyntaxMacros",
-        "@swift-syntax//:SwiftSyntaxMacrosTestSupport",
+        "@swiftpkg_swift_syntax//:SwiftSyntax",
+        "@swiftpkg_swift_syntax//:SwiftSyntaxMacros",
+        "@swiftpkg_swift_syntax//:SwiftSyntaxMacrosTestSupport",
     ],
 )

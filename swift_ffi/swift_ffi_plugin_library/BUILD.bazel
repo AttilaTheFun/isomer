@@ -33,7 +33,7 @@ swift_library(
     module_name = "SwiftFFIPluginLibrary",
     visibility = ["//visibility:public"],
     deps = [
-        "@swift-syntax//:SwiftSyntax",
-        "@swift-syntax//:SwiftSyntaxMacros",
+        "@swiftpkg_swift_syntax//:SwiftSyntax",
+        "@swiftpkg_swift_syntax//:SwiftSyntaxMacros",
     ],
 )
