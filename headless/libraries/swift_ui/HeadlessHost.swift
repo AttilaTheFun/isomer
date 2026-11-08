@@ -1,7 +1,7 @@
 // The headless host (headless/libraries/swift_ui): an app's SwiftUI run on
 // the building machine (macOS, or Linux in a container) with nothing drawn,
 // its UI read and driven through the runtime. `App.main()` runs `HeadlessApp`
-// (ISOMER_HEADLESS_HOST), which speaks newline-delimited JSON on standard
+// (`iso_process_host_run`), which speaks newline-delimited JSON on standard
 // input and output, a command a line and an answer a line:
 //
 //   {"cmd": "ls"}                                   the screen as it is
@@ -176,7 +176,7 @@ struct HeadlessFrame {
     }
 }
 
-/// Not Apple's, so not public: `App.main()` calls it (ISOMER_HEADLESS_HOST).
+/// Not Apple's, so not public: `App.main()` calls it (`iso_process_host_run`, below).
 enum HeadlessApp {
     nonisolated(unsafe) static var needsFrame = true
     nonisolated(unsafe) static var openedURLs: [String] = []
@@ -338,3 +338,9 @@ enum HeadlessApp {
 }
 
 #endif
+
+/// The headless host's process (shared/swift_ui_core/App.swift): nothing drawn, the UI read and driven over standard input and output until `quit`.
+@_silgen_name("iso_process_host_run")
+func _isoHeadlessProcessHostRun() {
+    MainActor.assumeIsolated { HeadlessApp.run() }
+}

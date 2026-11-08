@@ -1,0 +1,7 @@
+# The source a SwiftUI library compiles in when no host defines
+# `iso_process_host_run` beside it (shared/swift_ui_core/App.swift).
+filegroup(
+    name = "srcs",
+    srcs = ["NoProcessHost.swift"],
+    visibility = ["//visibility:public"],
+)

@@ -56,7 +56,7 @@ private func clockMillis() -> Int64 {
     return Int64(ts.tv_sec) * 1000 + Int64(ts.tv_nsec) / 1_000_000
 }
 
-/// Not Apple's, so not public: `App.main()` calls it (ISOMER_CLI_HOST).
+/// Not Apple's, so not public: `App.main()` calls it (`iso_process_host_run`, below).
 enum TerminalApp {
     static var needsRender = false
 
@@ -135,3 +135,9 @@ enum TerminalApp {
 }
 
 #endif
+
+/// The terminal host's process (shared/swift_ui_core/App.swift): the terminal, until the user quits.
+@_silgen_name("iso_process_host_run")
+func _isoTerminalProcessHostRun() {
+    MainActor.assumeIsolated { TerminalApp.run() }
+}

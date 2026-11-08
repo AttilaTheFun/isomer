@@ -24,7 +24,13 @@ swift_library(
     # The shared core spells its own types `SwiftUI.X` where a generic
     # parameter shadows the name (`Button where Label == SwiftUI.Label<…>`),
     # as Apple's interface does; this module is that SwiftUI under another name.
-    copts = ["-module-alias", "SwiftUI=IsomerCore"],
+    # A core beside Apple's SwiftUI, which never owns a process: App.main
+    # hands it to no host (shared/swift_ui_core/App.swift).
+    copts = [
+        "-module-alias",
+        "SwiftUI=IsomerCore",
+        "-DISOMER_EMBEDDED_CORE",
+    ],
     module_name = "IsomerCore",
     deps = [
         "//shared/isomer_swift_ui",

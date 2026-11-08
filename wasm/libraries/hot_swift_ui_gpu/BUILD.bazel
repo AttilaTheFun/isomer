@@ -21,6 +21,7 @@ swift_library(
     srcs = [
         "//shared/renderers:srcs",
         "//shared/swift_ui_core:srcs",
+        "//shared/no_process_host:srcs",
     ],
     # SwiftUI's macros left out (Macros.swift): this is the SwiftUI the
     # Playground's compilers build against, in a browser or on a phone,

@@ -123,7 +123,7 @@ swift_library(
     # The define activates the `os(Linux)` host entry point in `App.main()`
     # (which calls `LinuxApp.run()`, defined here); the platform-agnostic core
     # builds without it for a plain Linux host (e.g. the snapshot test).
-    copts = _LINUX_COPTS + ["-DISOMER_LINUX_HOST"],
+    copts = _LINUX_COPTS,
     module_name = "SwiftUI",
     swiftc_inputs = ["renderer.h"],
     target_compatible_with = ["@platforms//os:linux"],

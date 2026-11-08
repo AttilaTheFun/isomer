@@ -354,3 +354,9 @@ enum WindowsApp {
 func isoRunMainQueue() {
     _ = RunLoop.main.run(mode: .default, before: Date())
 }
+
+/// The Windows host's process (shared/swift_ui_core/App.swift): its window and message loop, until the window closes.
+@_silgen_name("iso_process_host_run")
+func _isoWindowsProcessHostRun() {
+    MainActor.assumeIsolated { WindowsApp.run() }
+}

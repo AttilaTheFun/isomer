@@ -319,3 +319,9 @@ enum LinuxApp {
 func isoRunMainQueue() {
     _ = RunLoop.main.run(mode: .default, before: Date())
 }
+
+/// The Linux host's process (shared/swift_ui_core/App.swift): its SDL window and render loop, until the window closes.
+@_silgen_name("iso_process_host_run")
+func _isoLinuxProcessHostRun() {
+    MainActor.assumeIsolated { LinuxApp.run() }
+}

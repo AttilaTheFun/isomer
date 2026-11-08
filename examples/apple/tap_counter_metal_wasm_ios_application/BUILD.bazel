@@ -25,6 +25,7 @@ swift_library(
         "MetalWasmApp.swift",
         "@isomer//shared/renderers:srcs",
         "@isomer//shared/swift_ui_core:srcs",
+        "@isomer//shared/no_process_host:srcs",
     ],
     # The shared core spells its own types `SwiftUI.X` where a generic
     # parameter shadows the name (`Button where Label == SwiftUI.Label<…>`),

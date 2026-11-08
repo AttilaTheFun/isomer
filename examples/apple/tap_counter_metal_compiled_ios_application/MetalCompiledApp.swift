@@ -8,7 +8,7 @@
 // core runs in-process, events and trees never cross a boundary).
 //
 // Entry: the app's `@main` (in TapCounter.swift, its own module) →
-// `App.main()` → `Runtime.installApp` → the ISOMER_IOS_METAL_HOST gate →
+// `App.main()` → `Runtime.installApp` → `iso_process_host_run` (below) →
 // `IOSMetalApp.run()` → UIApplicationMain (never returns) — the same
 // owns-its-process pattern as the Windows/Linux hosts.
 //
@@ -24,7 +24,7 @@ public import IsomerSwiftUI
 private typealias CFSize = CoreFoundation.CGSize
 private typealias CFRect = CoreFoundation.CGRect
 
-// MARK: - Process entry (called from App.main() via the host gate)
+// MARK: - Process entry (called from App.main() through iso_process_host_run)
 
 public enum IOSMetalApp {
     public static func run() {
@@ -410,4 +410,10 @@ final class MetalCompiledViewController: UIViewController {
         // Foundation's Date, NOT the core module's calendar shim.
         return (Foundation.Date().timeIntervalSince1970 - startSec) * 1000
     }
+}
+
+/// The compiled Metal cell's host's process (shared/swift_ui_core/App.swift): UIApplicationMain, which never returns.
+@_silgen_name("iso_process_host_run")
+func _isoMetalCellProcessHostRun() {
+    MainActor.assumeIsolated { IOSMetalApp.run() }
 }
