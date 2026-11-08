@@ -9,7 +9,9 @@
 //   isomer application stop <name>          an exec: app started in the background
 //
 //   isomer ls [<role>…] | info              (ls text, ls button: one role)
-//   isomer tap <element>
+//   isomer inspect <element>                everything the app knows of one
+//   isomer tap <element>                    an element: its name (button-3,
+//                                           text-2), identifier or label
 //   isomer type <element> <text>
 //   isomer set <element> <value>
 //   isomer select <element> <option>
@@ -193,6 +195,7 @@ func command(_ verb: String, _ rest: [String], _ options: Options) -> Wire_Comma
         }
     case "info", "back", "dismiss", "quit": break
     case "tap": command.target = argument(0, "tap <element>")
+    case "inspect": command.target = argument(0, "inspect <element>")
     case "type":
         command.target = argument(0, "type <element> <text>")
         command.text = argument(1, "type <element> <text>")
@@ -255,14 +258,39 @@ func describe(_ answer: Wire_Answer) -> String {
         lines.append(line)
     }
     for element in screen.elements where shown(element.role) {
-        var line = "\(element.role) \(quoted(element.label))"
+        var line = "\(element.name.isEmpty ? element.role : element.name) \(quoted(element.label))"
         if element.hasID { line += " #\(element.id)" }
         if element.hasValue { line += " = \(quoted(element.value))" }
         if !element.options.isEmpty { line += " [\(element.options.map(quoted).joined(separator: ", "))]" }
         lines.append(line)
     }
     if shown("text") {
-        for text in screen.texts { lines.append("text \(quoted(text))") }
+        for (index, text) in screen.texts.enumerated() { lines.append("text-\(index + 1) \(quoted(text))") }
+    }
+    return lines.joined(separator: "\n")
+}
+
+/// `inspect`'s answer: a field a line.
+func describe(_ inspection: Wire_Inspection) -> String {
+    var lines = ["\(inspection.name) \(quoted(inspection.label))", "role: \(inspection.role)", "kind: \(inspection.kind)"]
+    if inspection.hasID { lines.append("id: \(inspection.id)") }
+    if inspection.hasValue { lines.append("value: \(quoted(inspection.value))") }
+    if !inspection.options.isEmpty { lines.append("options: " + inspection.options.map(quoted).joined(separator: ", ")) }
+    if inspection.hasContainer { lines.append("in: \(inspection.container)") }
+    if !inspection.actions.isEmpty { lines.append("actions: " + inspection.actions.joined(separator: ", ")) }
+    if inspection.hasFontSize || inspection.hasFontWeight {
+        var font = "font:"
+        if inspection.hasFontSize { font += " \(inspection.fontSize)pt" }
+        if inspection.hasFontWeight { font += " weight \(inspection.fontWeight)" }
+        lines.append(font)
+    }
+    if inspection.hasColor { lines.append("color: \(inspection.color)") }
+    if inspection.hasLines { lines.append("lines: \(inspection.lines)") }
+    if !inspection.texts.isEmpty, inspection.texts != [inspection.label] {
+        lines.append("texts: " + inspection.texts.map(quoted).joined(separator: ", "))
+    }
+    for key in inspection.params.keys.sorted() {
+        lines.append("\(key): \(quoted(inspection.params[key]!))")
     }
     return lines.joined(separator: "\n")
 }
@@ -280,7 +308,13 @@ func run(_ commands: [Wire_Command], _ options: Options) async throws -> Bool {
     for command in commands {
         try await call.write(command)
         guard let answer = try await answers.next() else { fail("the app ended the call") }
-        print(options.json ? json(answer) : describe(answer))
+        if options.json {
+            print(json(answer))
+        } else if command.cmd == "inspect", answer.hasInspection {
+            print(describe(answer.inspection))
+        } else {
+            print(describe(answer))
+        }
         if !answer.ok { ok = false }
     }
     await call.finish()

@@ -35,6 +35,9 @@ public struct HeadlessScreen: Sendable {
         public let value: String?
         /// A picker's or a segmented control's options.
         public let options: [String]
+        /// Its name on the screen: its role and its place among that role's,
+        /// from 1 (`button-3`), which any command takes as its target.
+        public let name: String
     }
 
     public struct Presentation: Sendable {
@@ -52,7 +55,7 @@ public struct HeadlessScreen: Sendable {
         texts = screen.texts
         elements = screen.elements.map {
             Element(role: $0.role, label: $0.label, id: $0.hasID ? $0.id : nil, value: $0.hasValue ? $0.value : nil,
-                    options: $0.options)
+                    options: $0.options, name: $0.name)
         }
         presented = screen.presented.map { Presentation(style: $0.style, title: $0.title, message: $0.message) }
     }
@@ -62,10 +65,10 @@ public struct HeadlessScreen: Sendable {
         texts.contains { $0 == text || $0.contains(text) }
     }
 
-    /// The element a target names: its identifier, its label, or the last
-    /// whose label holds it (the app's own lookup).
+    /// The element a target names: its name (`button-3`), its identifier,
+    /// its label, or the last whose label holds it (the app's own lookup).
     public func element(_ target: String) -> Element? {
-        elements.first { $0.id == target } ?? elements.last { $0.label == target }
+        elements.first { $0.name == target } ?? elements.first { $0.id == target } ?? elements.last { $0.label == target }
             ?? elements.last { $0.label.contains(target) }
     }
 }
@@ -177,7 +180,18 @@ public final class HeadlessApp: @unchecked Sendable {
                             platform: info.platform, renderer: info.renderer, width: info.width, height: info.height)
     }
 
-    /// Taps a button, found by identifier, label or the text in it.
+    /// One element or text in full (`inspect`): its kind, actions,
+    /// parameters, the texts in it, a text's font and colour.
+    public func inspect(_ target: String) throws -> Wire_Inspection {
+        let answer = try exchange("inspect") { $0.target = target }
+        guard answer.ok, answer.hasInspection else {
+            throw HeadlessError(message: answer.hasError ? answer.error : "nothing inspected",
+                                screen: answer.hasScreen ? HeadlessScreen(answer.screen) : nil)
+        }
+        return answer.inspection
+    }
+
+    /// Taps a button, found by its name, identifier, label or the text in it.
     @discardableResult
     public func tap(_ target: String) throws -> HeadlessScreen { try send("tap") { $0.target = target } }
 

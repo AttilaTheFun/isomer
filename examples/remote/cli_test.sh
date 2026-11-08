@@ -15,11 +15,15 @@ trap '"$isomer" application stop storybook >/dev/null 2>&1 || true; rm -rf "$XDG
 "$isomer" application add storybook "exec:$app"
 EXPECTED='^\* storybook' has "$isomer" application list
 EXPECTED='Taps: 0' has "$isomer" ls
-EXPECTED='^text "Taps: 0"$' has "$isomer" ls text
-EXPECTED='^button "Tap"$' has "$isomer" ls button
-if EXPECTED='^text ' has "$isomer" ls button; then echo "ls button listed texts"; exit 1; fi
+EXPECTED='^text-[0-9]* "Taps: 0"$' has "$isomer" ls text
+EXPECTED='^button-[0-9]* "Tap"$' has "$isomer" ls button
+if EXPECTED='^text-' has "$isomer" ls button; then echo "ls button listed texts"; exit 1; fi
+# Elements by their names on the screen: the button, tapped by its name.
+tap="$("$isomer" ls button | sed -n 's/^\(button-[0-9]*\) "Tap"$/\1/p')"
+[ -n "$tap" ] || { echo "no button named for Tap"; exit 1; }
+"$isomer" tap "$tap" > /dev/null
 "$isomer" tap Tap > /dev/null
-"$isomer" tap Tap > /dev/null
+EXPECTED='^role: textField$' has "$isomer" inspect Title
 # The app kept running: its count went on from the last command's.
 EXPECTED='Taps: 2' has "$isomer" wait "Taps: 2"
 EXPECTED='Headless' has "$isomer" info

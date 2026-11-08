@@ -9,6 +9,7 @@
 // web_launcher.sh (:storybook_headful_web_test).
 
 import IsomerHeadless
+import IsomerWire
 import XCTest
 
 final class StorybookHeadlessTests: XCTestCase {
@@ -84,6 +85,27 @@ final class StorybookHeadlessTests: XCTestCase {
         screen = try app.back()
         XCTAssertNotNil(screen.element("Text styles"))
         XCTAssertNil(screen.element("Reset"))
+    }
+
+    func testNamesTargetElementsAndInspectTellsMore() throws {
+        let app = try launch(story: "state.observableobject")
+        defer { app.quit() }
+        // Each element has a name: its role and its place among that role's.
+        let tap = try XCTUnwrap(app.screen().element("Tap"))
+        XCTAssertTrue(tap.name.hasPrefix("button-"))
+        try app.tap(tap.name)
+        let screen = try app.wait(for: "Taps: 1")
+        // A text by its place among the texts (text-<n>), its font as the tree
+        // has it.
+        let index = try XCTUnwrap(screen.texts.firstIndex(of: "Taps: 1"))
+        let text = try app.inspect("text-\(index + 1)")
+        XCTAssertEqual(text.role, "text")
+        XCTAssertEqual(text.label, "Taps: 1")
+        XCTAssertTrue(text.hasFontSize)
+        let field = try app.inspect("Title")
+        XCTAssertEqual(field.role, "textField")
+        XCTAssertTrue(field.actions.contains("edit"))
+        XCTAssertThrowsError(try app.inspect("button-999"))
     }
 
     func testUnknownTargetFailsWithTheScreen() throws {

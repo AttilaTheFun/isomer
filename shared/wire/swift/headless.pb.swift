@@ -34,12 +34,14 @@ public nonisolated struct Wire_Command: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// ls, info, tap, type, set, select, swipe, back, dismiss, wait or quit
-  /// (headless/libraries/swift_ui/HeadlessHost.swift says each).
+  /// ls, info, inspect, tap, type, set, select, swipe, back, dismiss, wait or
+  /// quit (drive/driver/IsomerAppDriver.swift says each).
   public var cmd: String = String()
 
-  /// The element: its accessibility identifier, its label, or the last whose
-  /// label holds it.
+  /// The element: its name on the screen (`button-3`, `text-2`: its role and
+  /// its place among that role's, from 1), its accessibility identifier, its
+  /// label, or the last whose label holds it. A text taps or inspects as
+  /// itself; `tap` on a text taps the button holding it.
   public var target: String = String()
 
   /// `type`'s text; `wait`'s text to wait for.
@@ -60,59 +62,66 @@ public nonisolated struct Wire_Command: Sendable {
   public init() {}
 }
 
-public nonisolated struct Wire_Answer: Sendable {
+public nonisolated struct Wire_Answer: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Always set, so the JSON shows `"ok": false` too.
   public var ok: Bool {
-    get {_ok ?? false}
-    set {_ok = newValue}
+    get {_storage._ok ?? false}
+    set {_uniqueStorage()._ok = newValue}
   }
   /// Returns true if `ok` has been explicitly set.
-  public var hasOk: Bool {self._ok != nil}
+  public var hasOk: Bool {_storage._ok != nil}
   /// Clears the value of `ok`. Subsequent reads from it will return its default value.
-  public mutating func clearOk() {self._ok = nil}
+  public mutating func clearOk() {_uniqueStorage()._ok = nil}
 
   public var error: String {
-    get {_error ?? String()}
-    set {_error = newValue}
+    get {_storage._error ?? String()}
+    set {_uniqueStorage()._error = newValue}
   }
   /// Returns true if `error` has been explicitly set.
-  public var hasError: Bool {self._error != nil}
+  public var hasError: Bool {_storage._error != nil}
   /// Clears the value of `error`. Subsequent reads from it will return its default value.
-  public mutating func clearError() {self._error = nil}
+  public mutating func clearError() {_uniqueStorage()._error = nil}
 
   /// The screen once the UI settled after the command.
   public var screen: Wire_Screen {
-    get {_screen ?? Wire_Screen()}
-    set {_screen = newValue}
+    get {_storage._screen ?? Wire_Screen()}
+    set {_uniqueStorage()._screen = newValue}
   }
   /// Returns true if `screen` has been explicitly set.
-  public var hasScreen: Bool {self._screen != nil}
+  public var hasScreen: Bool {_storage._screen != nil}
   /// Clears the value of `screen`. Subsequent reads from it will return its default value.
-  public mutating func clearScreen() {self._screen = nil}
+  public mutating func clearScreen() {_uniqueStorage()._screen = nil}
 
   /// What the app is: `info`'s answer, and the first message an app that
   /// dials out sends (session_service.proto's Driver.Attach).
   public var info: Wire_Info {
-    get {_info ?? Wire_Info()}
-    set {_info = newValue}
+    get {_storage._info ?? Wire_Info()}
+    set {_uniqueStorage()._info = newValue}
   }
   /// Returns true if `info` has been explicitly set.
-  public var hasInfo: Bool {self._info != nil}
+  public var hasInfo: Bool {_storage._info != nil}
   /// Clears the value of `info`. Subsequent reads from it will return its default value.
-  public mutating func clearInfo() {self._info = nil}
+  public mutating func clearInfo() {_uniqueStorage()._info = nil}
+
+  /// `inspect`'s answer: one element or text in full.
+  public var inspection: Wire_Inspection {
+    get {_storage._inspection ?? Wire_Inspection()}
+    set {_uniqueStorage()._inspection = newValue}
+  }
+  /// Returns true if `inspection` has been explicitly set.
+  public var hasInspection: Bool {_storage._inspection != nil}
+  /// Clears the value of `inspection`. Subsequent reads from it will return its default value.
+  public mutating func clearInspection() {_uniqueStorage()._inspection = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _ok: Bool? = nil
-  fileprivate var _error: String? = nil
-  fileprivate var _screen: Wire_Screen? = nil
-  fileprivate var _info: Wire_Info? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 public nonisolated struct Wire_Info: Sendable {
@@ -195,12 +204,123 @@ public nonisolated struct Wire_Element: Sendable {
   /// A picker's or a segmented control's options, by label.
   public var options: [String] = []
 
+  /// Its name on this screen: its role and its place among that role's, from
+  /// 1 (`button-3`). A text's is `text-<n>`, its place in Screen.texts.
+  public var name: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _id: String? = nil
   fileprivate var _value: String? = nil
+}
+
+/// An element or a text as the app's tree has it: what `inspect` answers.
+public nonisolated struct Wire_Inspection: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Its name on the screen (`button-3`, `text-2`) and its role.
+  public var name: String = String()
+
+  public var role: String = String()
+
+  public var label: String = String()
+
+  public var id: String {
+    get {_id ?? String()}
+    set {_id = newValue}
+  }
+  /// Returns true if `id` has been explicitly set.
+  public var hasID: Bool {self._id != nil}
+  /// Clears the value of `id`. Subsequent reads from it will return its default value.
+  public mutating func clearID() {self._id = nil}
+
+  public var value: String {
+    get {_value ?? String()}
+    set {_value = newValue}
+  }
+  /// Returns true if `value` has been explicitly set.
+  public var hasValue: Bool {self._value != nil}
+  /// Clears the value of `value`. Subsequent reads from it will return its default value.
+  public mutating func clearValue() {self._value = nil}
+
+  public var options: [String] = []
+
+  /// The texts inside it, in order.
+  public var texts: [String] = []
+
+  /// What the tree has it as: text, box, stack, textField, slider, a host
+  /// view's kind (toggle, picker, navstack…).
+  public var kind: String = String()
+
+  /// What it does with input: tap, edit, drag.
+  public var actions: [String] = []
+
+  /// Its node's parameters: accessibility (a11yLabel, a11yValue, a11yHint…),
+  /// a control's title and style, disabled, and what its host reads.
+  public var params: Dictionary<String,String> = [:]
+
+  /// A text's font size and weight, its colour (#rrggbbaa), its line limit.
+  public var fontSize: Double {
+    get {_fontSize ?? 0}
+    set {_fontSize = newValue}
+  }
+  /// Returns true if `fontSize` has been explicitly set.
+  public var hasFontSize: Bool {self._fontSize != nil}
+  /// Clears the value of `fontSize`. Subsequent reads from it will return its default value.
+  public mutating func clearFontSize() {self._fontSize = nil}
+
+  public var fontWeight: Int32 {
+    get {_fontWeight ?? 0}
+    set {_fontWeight = newValue}
+  }
+  /// Returns true if `fontWeight` has been explicitly set.
+  public var hasFontWeight: Bool {self._fontWeight != nil}
+  /// Clears the value of `fontWeight`. Subsequent reads from it will return its default value.
+  public mutating func clearFontWeight() {self._fontWeight = nil}
+
+  public var color: String {
+    get {_color ?? String()}
+    set {_color = newValue}
+  }
+  /// Returns true if `color` has been explicitly set.
+  public var hasColor: Bool {self._color != nil}
+  /// Clears the value of `color`. Subsequent reads from it will return its default value.
+  public mutating func clearColor() {self._color = nil}
+
+  public var lines: Int32 {
+    get {_lines ?? 0}
+    set {_lines = newValue}
+  }
+  /// Returns true if `lines` has been explicitly set.
+  public var hasLines: Bool {self._lines != nil}
+  /// Clears the value of `lines`. Subsequent reads from it will return its default value.
+  public mutating func clearLines() {self._lines = nil}
+
+  /// The element it is in (a text in a button: the button's name).
+  public var container: String {
+    get {_container ?? String()}
+    set {_container = newValue}
+  }
+  /// Returns true if `container` has been explicitly set.
+  public var hasContainer: Bool {self._container != nil}
+  /// Clears the value of `container`. Subsequent reads from it will return its default value.
+  public mutating func clearContainer() {self._container = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _id: String? = nil
+  fileprivate var _value: String? = nil
+  fileprivate var _fontSize: Double? = nil
+  fileprivate var _fontWeight: Int32? = nil
+  fileprivate var _color: String? = nil
+  fileprivate var _lines: Int32? = nil
+  fileprivate var _container: String? = nil
 }
 
 public nonisolated struct Wire_Presentation: Sendable {
@@ -281,48 +401,97 @@ nonisolated extension Wire_Command: SwiftProtobuf.Message, SwiftProtobuf._Messag
 
 nonisolated extension Wire_Answer: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Answer"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}ok\0\u{1}error\0\u{1}screen\0\u{1}info\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}ok\0\u{1}error\0\u{1}screen\0\u{1}info\0\u{1}inspection\0")
+
+  fileprivate class _StorageClass {
+    var _ok: Bool? = nil
+    var _error: String? = nil
+    var _screen: Wire_Screen? = nil
+    var _info: Wire_Info? = nil
+    var _inspection: Wire_Inspection? = nil
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _ok = source._ok
+      _error = source._error
+      _screen = source._screen
+      _info = source._info
+      _inspection = source._inspection
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularBoolField(value: &self._ok) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self._error) }()
-      case 3: try { try decoder.decodeSingularMessageField(value: &self._screen) }()
-      case 4: try { try decoder.decodeSingularMessageField(value: &self._info) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularBoolField(value: &_storage._ok) }()
+        case 2: try { try decoder.decodeSingularStringField(value: &_storage._error) }()
+        case 3: try { try decoder.decodeSingularMessageField(value: &_storage._screen) }()
+        case 4: try { try decoder.decodeSingularMessageField(value: &_storage._info) }()
+        case 5: try { try decoder.decodeSingularMessageField(value: &_storage._inspection) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._ok {
-      try visitor.visitSingularBoolField(value: v, fieldNumber: 1)
-    } }()
-    try { if let v = self._error {
-      try visitor.visitSingularStringField(value: v, fieldNumber: 2)
-    } }()
-    try { if let v = self._screen {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
-    } }()
-    try { if let v = self._info {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
-    } }()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      try { if let v = _storage._ok {
+        try visitor.visitSingularBoolField(value: v, fieldNumber: 1)
+      } }()
+      try { if let v = _storage._error {
+        try visitor.visitSingularStringField(value: v, fieldNumber: 2)
+      } }()
+      try { if let v = _storage._screen {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+      } }()
+      try { if let v = _storage._info {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+      } }()
+      try { if let v = _storage._inspection {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+      } }()
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Wire_Answer, rhs: Wire_Answer) -> Bool {
-    if lhs._ok != rhs._ok {return false}
-    if lhs._error != rhs._error {return false}
-    if lhs._screen != rhs._screen {return false}
-    if lhs._info != rhs._info {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._ok != rhs_storage._ok {return false}
+        if _storage._error != rhs_storage._error {return false}
+        if _storage._screen != rhs_storage._screen {return false}
+        if _storage._info != rhs_storage._info {return false}
+        if _storage._inspection != rhs_storage._inspection {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -430,7 +599,7 @@ nonisolated extension Wire_Screen: SwiftProtobuf.Message, SwiftProtobuf._Message
 
 nonisolated extension Wire_Element: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Element"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}role\0\u{1}label\0\u{1}id\0\u{1}value\0\u{1}options\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}role\0\u{1}label\0\u{1}id\0\u{1}value\0\u{1}options\0\u{1}name\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -443,6 +612,7 @@ nonisolated extension Wire_Element: SwiftProtobuf.Message, SwiftProtobuf._Messag
       case 3: try { try decoder.decodeSingularStringField(value: &self._id) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self._value) }()
       case 5: try { try decoder.decodeRepeatedStringField(value: &self.options) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.name) }()
       default: break
       }
     }
@@ -468,6 +638,9 @@ nonisolated extension Wire_Element: SwiftProtobuf.Message, SwiftProtobuf._Messag
     if !self.options.isEmpty {
       try visitor.visitRepeatedStringField(value: self.options, fieldNumber: 5)
     }
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -477,6 +650,111 @@ nonisolated extension Wire_Element: SwiftProtobuf.Message, SwiftProtobuf._Messag
     if lhs._id != rhs._id {return false}
     if lhs._value != rhs._value {return false}
     if lhs.options != rhs.options {return false}
+    if lhs.name != rhs.name {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Wire_Inspection: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".Inspection"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}role\0\u{1}label\0\u{1}id\0\u{1}value\0\u{1}options\0\u{1}texts\0\u{1}kind\0\u{1}actions\0\u{1}params\0\u{3}font_size\0\u{3}font_weight\0\u{1}color\0\u{1}lines\0\u{1}container\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.role) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.label) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self._id) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self._value) }()
+      case 6: try { try decoder.decodeRepeatedStringField(value: &self.options) }()
+      case 7: try { try decoder.decodeRepeatedStringField(value: &self.texts) }()
+      case 8: try { try decoder.decodeSingularStringField(value: &self.kind) }()
+      case 9: try { try decoder.decodeRepeatedStringField(value: &self.actions) }()
+      case 10: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: &self.params) }()
+      case 11: try { try decoder.decodeSingularDoubleField(value: &self._fontSize) }()
+      case 12: try { try decoder.decodeSingularInt32Field(value: &self._fontWeight) }()
+      case 13: try { try decoder.decodeSingularStringField(value: &self._color) }()
+      case 14: try { try decoder.decodeSingularInt32Field(value: &self._lines) }()
+      case 15: try { try decoder.decodeSingularStringField(value: &self._container) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
+    }
+    if !self.role.isEmpty {
+      try visitor.visitSingularStringField(value: self.role, fieldNumber: 2)
+    }
+    if !self.label.isEmpty {
+      try visitor.visitSingularStringField(value: self.label, fieldNumber: 3)
+    }
+    try { if let v = self._id {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 4)
+    } }()
+    try { if let v = self._value {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 5)
+    } }()
+    if !self.options.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.options, fieldNumber: 6)
+    }
+    if !self.texts.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.texts, fieldNumber: 7)
+    }
+    if !self.kind.isEmpty {
+      try visitor.visitSingularStringField(value: self.kind, fieldNumber: 8)
+    }
+    if !self.actions.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.actions, fieldNumber: 9)
+    }
+    if !self.params.isEmpty {
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: self.params, fieldNumber: 10)
+    }
+    try { if let v = self._fontSize {
+      try visitor.visitSingularDoubleField(value: v, fieldNumber: 11)
+    } }()
+    try { if let v = self._fontWeight {
+      try visitor.visitSingularInt32Field(value: v, fieldNumber: 12)
+    } }()
+    try { if let v = self._color {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 13)
+    } }()
+    try { if let v = self._lines {
+      try visitor.visitSingularInt32Field(value: v, fieldNumber: 14)
+    } }()
+    try { if let v = self._container {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 15)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Wire_Inspection, rhs: Wire_Inspection) -> Bool {
+    if lhs.name != rhs.name {return false}
+    if lhs.role != rhs.role {return false}
+    if lhs.label != rhs.label {return false}
+    if lhs._id != rhs._id {return false}
+    if lhs._value != rhs._value {return false}
+    if lhs.options != rhs.options {return false}
+    if lhs.texts != rhs.texts {return false}
+    if lhs.kind != rhs.kind {return false}
+    if lhs.actions != rhs.actions {return false}
+    if lhs.params != rhs.params {return false}
+    if lhs._fontSize != rhs._fontSize {return false}
+    if lhs._fontWeight != rhs._fontWeight {return false}
+    if lhs._color != rhs._color {return false}
+    if lhs._lines != rhs._lines {return false}
+    if lhs._container != rhs._container {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

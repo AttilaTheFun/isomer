@@ -31,7 +31,10 @@ swift_test(
     srcs = ["StorybookHeadlessTests.swift"],
     data = [":storybook_headless_application"],
     module_name = "StorybookHeadlessTests",
-    deps = ["@isomer//headless/isomer_headless"],
+    deps = [
+        "@isomer//headless/isomer_headless",
+        "@isomer//shared/wire/swift",
+    ],
 )
 
 # The same tests against the web Storybook headful: drawn by the React
@@ -80,5 +83,8 @@ swift_test(
         "manual",
         "no-sandbox",
     ],
-    deps = ["@isomer//headless/isomer_headless"],
+    deps = [
+        "@isomer//headless/isomer_headless",
+        "@isomer//shared/wire/swift",
+    ],
 )

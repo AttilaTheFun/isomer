@@ -57,9 +57,11 @@ isomer application add staging grpc://build-host:7701 --token-file ~/.staging-to
 isomer application select storybook
 isomer application list
 
-isomer ls                          # the screen, a line an element
+isomer ls                          # the screen, a line an element: button-1 "Tap", text-3 "Taps: 0"
 isomer ls text                     # one role: text, button, textField, toggle…
 isomer info                        # name, platform, renderer, window
+isomer inspect text-3              # one element in full: kind, actions, font, colour, its parameters
+isomer tap button-1                # by name (role and place), identifier or label
 isomer tap Tap
 isomer type Title "Hits"
 isomer set Wi-Fi 0
@@ -70,7 +72,11 @@ isomer wait "Taps: 1" --timeout 10
 isomer drive                       # JSON lines on standard input
 ```
 
-`--app <name>` drives another than the selected one, `--url <url>` one with
+An element's name is its role and its place among that role's on the
+screen, from 1 (`button-3`, `textField-1`; `text-2` the second text): any
+command takes it as its target, resolved by the app against the screen
+as it stands, so a name from one `ls` holds until the screen changes. A
+text names the button it is in for `tap`. `--app <name>` drives another than the selected one, `--url <url>` one with
 no name, `--json` prints protobuf's JSON. An `exec:` application is started
 on its first command and kept running on a Unix socket, so its state lasts
 between commands, until `isomer application stop <name>`. Applications are
