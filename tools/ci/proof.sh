@@ -94,6 +94,7 @@ usage() {
     cat >&2 << 'EOF2'
 usage: tools/ci/proof.sh --proof <dir> [--kind quick|full]
        tools/ci/proof.sh --stage build --apps <dir> --review <dir> [--kind quick|full]
+       tools/ci/proof.sh --stage prebuild --apps <dir> --review <dir>
        tools/ci/proof.sh --stage shoot --platform <platform> --apps <dir> --review <dir> [--kind quick|full]
        tools/ci/proof.sh --stage compare --parts <dir> --proof <dir> [--kind quick|full]
 EOF2
@@ -122,7 +123,7 @@ case "$kind" in quick | full) ;; *) usage ;; esac
 absolute() { mkdir -p "$1" && (cd "$1" && pwd); }
 case "$stage" in
     all) [ -n "$proof" ] || usage ;;
-    build) [ -n "$apps" ] && [ -n "$review" ] || usage ;;
+    build | prebuild) [ -n "$apps" ] && [ -n "$review" ] || usage ;;
     shoot) [ -n "$platform" ] && [ -n "$apps" ] && [ -n "$review" ] || usage ;;
     compare) [ -n "$parts" ] && [ -n "$proof" ] || usage ;;
     *) usage ;;
@@ -218,7 +219,7 @@ compare() {
 # --stage build: every app built for the stages that picture them
 # elsewhere, and the Android Playground pictured here (its compiler, built
 # into the app, is arm64's alone, and GitHub's runners with KVM are x86_64).
-build() {
+build_apps() {
     echo "::group::The apps, built (tools/proof/proof.py --build-to)"
     background "$python" -u "$ROOT/tools/proof/proof.py" ios macos web --build-to "$apps" --review "$review" \
         --commit "$commit" --web-toolchain "$web_toolchain" || { echo "::error::the apps didn't build"; exit 1; }
@@ -227,6 +228,10 @@ build() {
         { echo "::error::the Android Storybook (x86_64) didn't build"; exit 1; }
     echo "::endgroup::"
     phase "built"
+}
+
+build() {
+    build_apps
     echo "::group::The Android Playground, on an emulator leased from OS Server"
     background "$python" -u "$ROOT/tools/proof/proof.py" android --apps playground --review "$review" --commit "$commit" \
         ${quick[@]+"${quick[@]}"} || { echo "::error::the Android Playground: a build failed or a picture didn't come back"; exit 1; }
@@ -358,7 +363,7 @@ if stages shoot; then
     exit 0
 fi
 
-if stages all build; then
+if stages all build prebuild; then
 echo "::group::The Playground's compilers"
 # The staged compilers from OS Server's files, unpacked where the apps'
 # BUILD files find them (the checkout's gitignored folders).
@@ -371,6 +376,13 @@ fi
 
 if stages build; then
     build
+    exit 0
+fi
+# --stage prebuild (main's populate): the apps built as the build stage builds
+# them, and nothing pictured or leased, so a release's proof finds its
+# actions in the cache.
+if stages prebuild; then
+    build_apps
     exit 0
 fi
 
