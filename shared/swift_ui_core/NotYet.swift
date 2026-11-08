@@ -55,11 +55,6 @@ extension View {
 
 extension Scene {
     @available(*, unavailable, message: "Not yet in Isomer: Documents, scenes, windows and commands (docs/parity/SwiftUI.md)")
-    public nonisolated func defaultSize(_ size: CGSize) -> some Scene { self }
-}
-
-extension Scene {
-    @available(*, unavailable, message: "Not yet in Isomer: Documents, scenes, windows and commands (docs/parity/SwiftUI.md)")
     public nonisolated func environment<V>(_ keyPath: WritableKeyPath<EnvironmentValues, V>, _ value: V) -> some Scene { self }
 }
 

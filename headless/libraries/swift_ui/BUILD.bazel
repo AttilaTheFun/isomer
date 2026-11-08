@@ -1,0 +1,83 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@rules_swift//swift:swift_library_group.bzl", "swift_library_group")
+load("//swift_ui_macros:defs.bzl", "SWIFT_UI_MACROS_PLUGINS")
+
+package(default_visibility = ["//visibility:public"])
+
+# The headless platform module: the shared core and renderers compiled for the
+# building machine (macOS, or Linux in a container) with HeadlessHost.swift,
+# whose `App.main()` reads and drives the app's UI over standard input and
+# output with nothing drawn (HeadlessHost.swift says the protocol). An app
+# builds against it with --@isomer//headless, which points @isomer//:swift_ui
+# and @isomer//:isomer here.
+#
+# Its own package, as the other platform SwiftUI twins: the
+# `SwiftUI.swiftmodule` output must not collide with another module of the
+# same name in one build.
+swift_library(
+    name = "swift_ui",
+    package_name = "isomer",
+    srcs = [
+        "HeadlessHost.swift",
+        "//shared/renderers:srcs_no_gpu",
+        "//shared/swift_ui_core:srcs",
+    ] + select({
+        # The toolchain's Foundation there has no FileWrapper (FileDocument's).
+        "@platforms//os:linux": ["//foundation:FileWrapper.swift"],
+        "//conditions:default": [],
+    }),
+    copts = ["-DISOMER_HEADLESS_HOST"],
+    module_name = "SwiftUI",
+    deps = [
+        "//shared/isomer_swift_ui",
+        "@flatbuffers//swift",
+        "//frameworks:for_core",
+    ],
+    plugins = SWIFT_UI_MACROS_PLUGINS,
+)
+
+swift_library(
+    name = "isomer",
+    package_name = "isomer",
+    srcs = [
+        "IsomerBridge.swift",
+        "//shared/isomer:Exports.swift",
+        "//shared/swift_ui_extensions:srcs",
+    ],
+    module_name = "Isomer",
+    deps = [
+        ":swift_ui",
+        "//swift_ffi/swift_ffi",
+        "//shared/isomer_swift_ui",
+    ],
+)
+
+swift_library(
+    name = "photos_ui",
+    package_name = "isomer",
+    srcs = ["//frameworks/photos_ui:srcs"],
+    module_name = "PhotosUI",
+    deps = [
+        ":swift_ui",
+        "//frameworks/core_transferable",
+        "//frameworks/uniform_type_identifiers",
+    ],
+)
+
+# What an app builds against headless. On a Mac, the system's
+# UniformTypeIdentifiers and CoreTransferable serve (Isomer's are for the
+# platforms without Apple's), and there is no PhotosUI: Apple's would bring
+# Apple's SwiftUI beside this one.
+swift_library_group(
+    name = "sdk",
+    deps = [
+        ":isomer",
+        ":swift_ui",
+    ] + select({
+        "@platforms//os:macos": [],
+        "//conditions:default": [
+            ":photos_ui",
+            "//frameworks/uniform_type_identifiers",
+        ],
+    }),
+)

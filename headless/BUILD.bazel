@@ -1,0 +1,16 @@
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
+
+package(default_visibility = ["//visibility:public"])
+
+# --@isomer//headless: an app built for the headless host on the building
+# machine (headless/libraries/swift_ui): @isomer//:swift_ui and
+# @isomer//:isomer point there.
+bool_flag(
+    name = "headless",
+    build_setting_default = False,
+)
+
+config_setting(
+    name = "on",
+    flag_values = {":headless": "True"},
+)
