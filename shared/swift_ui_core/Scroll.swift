@@ -164,7 +164,7 @@ extension List {
     public init<Data: RandomAccessCollection, RowContent: View>(
         _ data: Data,
         @ViewBuilder rowContent: @escaping (Data.Element) -> RowContent
-    ) where Data.Element: Identifiable, Content == ForEach<Data, RowContent> {
+    ) where Data.Element: Identifiable, Content == ForEach<Data, Data.Element.ID, RowContent> {
         self.init { ForEach(data, content: rowContent) }
     }
 
@@ -174,7 +174,7 @@ extension List {
         _ data: Data,
         selection: Binding<SelectionValue?>?,
         @ViewBuilder rowContent: @escaping (Data.Element) -> RowContent
-    ) where Data.Element: Identifiable, Content == ForEach<Data, RowContent> {
+    ) where Data.Element: Identifiable, Content == ForEach<Data, Data.Element.ID, RowContent> {
         self.init(selection: selection) {
             ForEach(taggingRowsOf: data, content: rowContent)
         }
@@ -184,7 +184,7 @@ extension List {
         _ data: Data,
         id: KeyPath<Data.Element, ID>,
         @ViewBuilder rowContent: @escaping (Data.Element) -> RowContent
-    ) where Content == ForEach<Data, RowContent> {
+    ) where Content == ForEach<Data, ID, RowContent> {
         self.init { ForEach(data, id: id, content: rowContent) }
     }
 
@@ -192,7 +192,7 @@ extension List {
     public init<C: MutableCollection & RandomAccessCollection, RowContent: View>(
         _ data: Binding<C>,
         @ViewBuilder rowContent: @escaping (Binding<C.Element>) -> RowContent
-    ) where C.Element: Identifiable, Content == ForEach<C, RowContent> {
+    ) where C.Element: Identifiable, Content == ForEach<C, C.Element.ID, RowContent> {
         self.init { ForEach(data, content: rowContent) }
     }
 }

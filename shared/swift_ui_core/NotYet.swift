@@ -168,9 +168,24 @@ extension View {
     public nonisolated func backgroundStyle<S>(_ style: S) -> some View where S : ShapeStyle { self }
 }
 
+extension ToolbarContent {
+    @available(*, unavailable, message: "Not yet in Isomer: Animation and transitions (docs/parity/SwiftUI.md)")
+    public nonisolated func matchedTransitionSource(id: some Hashable, in namespace: Namespace.ID) -> some ToolbarContent { self }
+}
+
+extension View {
+    @available(*, unavailable, message: "Not yet in Isomer: Animation and transitions (docs/parity/SwiftUI.md)")
+    public nonisolated func matchedTransitionSource(id: some Hashable, in namespace: Namespace.ID) -> some View { self }
+}
+
 extension AnyTransition {
     @available(*, unavailable, message: "Not yet in Isomer: Animation and transitions (docs/parity/SwiftUI.md)")
     public static func modifier<E>(active: E, identity: E) -> AnyTransition where E : ViewModifier { fatalError() }
+}
+
+extension Transaction {
+    @available(*, unavailable, message: "Not yet in Isomer: Animation and transitions (docs/parity/SwiftUI.md)")
+    public mutating func addAnimationCompletion(criteria: AnimationCompletionCriteria = .logicallyComplete, _ completion: @escaping () -> Void) { fatalError() }
 }
 
 extension Animation {
@@ -573,6 +588,16 @@ extension Angle {
     public mutating func negate() { fatalError() }
 }
 
+extension Gradient {
+    @available(*, unavailable, message: "Not yet in Isomer: Shapes, colors and geometry (docs/parity/SwiftUI.md)")
+    public func colorSpace(_ space: Gradient.ColorSpace) -> AnyGradient { fatalError() }
+}
+
+extension AnyGradient {
+    @available(*, unavailable, message: "Not yet in Isomer: Shapes, colors and geometry (docs/parity/SwiftUI.md)")
+    public func colorSpace(_ space: Gradient.ColorSpace) -> AnyGradient { fatalError() }
+}
+
 extension View {
     @available(*, unavailable, message: "Not yet in Isomer: Data flow (docs/parity/SwiftUI.md)")
     public nonisolated func defaultAppStorage(_ store: UserDefaults) -> some View { self }
@@ -915,7 +940,7 @@ extension View {
 
 extension View {
     @available(*, unavailable, message: "Not yet in Isomer: View modifiers (docs/parity/SwiftUI.md)")
-    public nonisolated func safeAreaPadding(_ insets: EdgeInsets) -> some View { self }
+    public nonisolated func glassEffectID(_ id: (some Hashable & Sendable)?, in namespace: Namespace.ID) -> some View { self }
 }
 
 extension ViewModifier {
@@ -1026,6 +1051,16 @@ extension View {
 extension View {
     @available(*, unavailable, message: "Not yet in Isomer: New in iOS 27 (docs/parity/SwiftUI.md)")
     public nonisolated func defaultTabBarPlacement(_ defaultPlacement: AdaptableTabBarPlacement) -> some View { self }
+}
+
+extension View {
+    @available(*, unavailable, message: "Not yet in Isomer: New in iOS 27 (docs/parity/SwiftUI.md)")
+    public nonisolated func draggable<ItemID>(containerItemID: ItemID, containerNamespace: Namespace.ID? = nil) -> some View where ItemID : Hashable, ItemID : Sendable { self }
+}
+
+extension View {
+    @available(*, unavailable, message: "Not yet in Isomer: New in iOS 27 (docs/parity/SwiftUI.md)")
+    public nonisolated func dragContainerSelection<ItemID>(_ selection: @autoclosure @escaping () -> Array<ItemID>, containerNamespace: Namespace.ID? = nil) -> some View where ItemID : Hashable, ItemID : Sendable { self }
 }
 
 extension EnvironmentValues {

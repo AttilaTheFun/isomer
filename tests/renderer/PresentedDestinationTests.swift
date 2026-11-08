@@ -317,3 +317,98 @@ func checkListEditing(_ mock: MockRenderer) {
     Runtime.shared.renderFrame()
     expect(findTextInTree(mock.lastTree!, "Edit") && frame().drags.isEmpty, "Done ends editing")
 }
+
+// `List($items, editActions:)`: the same handles and minuses, the
+// collection written by the List itself; `.delete` alone offers no handles.
+
+struct EditPet: Identifiable { let id: Int; var name: String }
+nonisolated(unsafe) var editPets: [EditPet] = []
+
+struct EditActionsScreen: View {
+    let actions: EditActions<[EditPet]>
+    var body: some View {
+        VStack {
+            EditButton()
+            List(Binding(get: { editPets }, set: { editPets = $0; Runtime.shared.setNeedsRender() }),
+                 editActions: actions) { $pet in
+                Text(pet.name)
+            }
+        }
+    }
+}
+
+@MainActor
+func checkEditActions(_ mock: MockRenderer) {
+    editPets = [EditPet(id: 1, name: "Ann"), EditPet(id: 2, name: "Bo"), EditPet(id: 3, name: "Cy")]
+    Runtime.shared.installRootView { EditActionsScreen(actions: .all) }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 760)
+    Runtime.shared.setNeedsRender()
+    Runtime.shared.renderFrame()
+    func frame() -> (taps: [String], drags: [String]) {
+        let encoder = FlatTreeEncoder()
+        var buffer = ByteBuffer(bytes: encoder.encode(root: mock.lastTree!))
+        Runtime.shared.installTreeHandlers(encoder.handlers)
+        let root = getRoot(byteBuffer: &buffer) as IsoFlat_Node
+        return (orderedIDs(root, drag: false), orderedIDs(root, drag: true))
+    }
+    expect(["Ann", "Bo", "Cy"].allSatisfy { findTextInTree(mock.lastTree!, $0) }, "editActions: each element's row")
+    guard let edit = frame().taps.first else { return expect(false, "EditButton is a tap target") }
+    Runtime.shared.hostViewEvent(id: edit, value: "")
+    Runtime.shared.renderFrame()
+    let editing = frame()
+    expect(editing.drags.count == 3, "editActions .all: a move handle per row while editing (\(editing.drags.count))")
+    if let first = editing.drags.first {
+        Runtime.shared.hostViewEvent(id: first, value: "changed:0,50")
+        Runtime.shared.hostViewEvent(id: first, value: "ended:0,50")
+    }
+    Runtime.shared.renderFrame()
+    expect(editPets.map(\.id) == [2, 1, 3], "editActions: a handle moves its element (\(editPets.map(\.id)))")
+    let taps = frame().taps
+    expect(taps.count == 4, "editActions: Done and a minus per row (\(taps.count))")
+    if taps.count == 4 { Runtime.shared.hostViewEvent(id: taps[3], value: "") }
+    Runtime.shared.renderFrame()
+    expect(editPets.map(\.id) == [2, 1], "editActions: a minus deletes its element (\(editPets.map(\.id)))")
+    if let done = frame().taps.first { Runtime.shared.hostViewEvent(id: done, value: "") }
+    Runtime.shared.renderFrame()
+
+    // `.delete` alone: minuses, no handles.
+    editPets = [EditPet(id: 1, name: "Ann"), EditPet(id: 2, name: "Bo")]
+    Runtime.shared.installRootView { EditActionsScreen(actions: .delete) }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 760)
+    Runtime.shared.setNeedsRender()
+    Runtime.shared.renderFrame()
+    if let edit = frame().taps.first { Runtime.shared.hostViewEvent(id: edit, value: "") }
+    Runtime.shared.renderFrame()
+    let deleting = frame()
+    expect(deleting.drags.isEmpty && deleting.taps.count == 3,
+           "editActions .delete: minuses and no handles (\(deleting.taps.count) taps, \(deleting.drags.count) drags)")
+    if let done = deleting.taps.first { Runtime.shared.hostViewEvent(id: done, value: "") }
+    Runtime.shared.renderFrame()
+}
+
+// `List($items, editActions:, selection:)`: rows select by their ids.
+
+nonisolated(unsafe) var editPetSelection: Int? = 2
+
+@MainActor
+func checkEditActionsSelection(_ mock: MockRenderer) {
+    editPets = [EditPet(id: 1, name: "Ann"), EditPet(id: 2, name: "Bo")]
+    editPetSelection = 2
+    Runtime.shared.installRootView {
+        List(Binding(get: { editPets }, set: { editPets = $0; Runtime.shared.setNeedsRender() }),
+             editActions: .delete,
+             selection: Binding(get: { editPetSelection }, set: { editPetSelection = $0 })) { $pet in
+            Text(pet.name)
+        }
+    }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 760)
+    let encoder = FlatTreeEncoder()
+    let tree = lastFlatTree(mock, encoder)
+    let rows = flatNodes(tree) { param($0, "cell") == "row" }
+    expect(rows.map { param($0, "selected") } == [nil, "1"], "editActions with selection: the selected id's row (\(rows.map { param($0, "selected") ?? "-" }))")
+    Runtime.shared.installTreeHandlers(encoder.handlers)
+    if let tap = rows.first?.tap { Runtime.shared.hostViewEvent(id: tap, value: "") }
+    expect(editPetSelection == 1, "editActions with selection: a tap selects its row's id (\(String(describing: editPetSelection)))")
+    let swipes = flatNodes(tree) { param($0, "swipeTrailing") != nil }
+    expect(swipes.count == 2, "editActions with selection: each row still deletes (\(swipes.count))")
+}

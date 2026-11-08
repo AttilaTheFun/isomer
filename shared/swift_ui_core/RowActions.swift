@@ -107,5 +107,7 @@ func rowTag(of view: any View) -> AnyHashable? {
     // an AnyView is the row's too, as SwiftUI's traits rise.
     if let modified = view as? _AnyModifiedContent { return rowTag(of: modified._contentView) }
     if let any = view as? AnyView { return rowTag(of: any.wrapped) }
+    // A row deletable or movable while editing is the row it wraps.
+    if let editing = view as? _EditingRow { return rowTag(of: editing.content) }
     return nil
 }

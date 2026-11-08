@@ -1,4 +1,4 @@
-public struct ForEach<Data, Content: View> {
+public struct ForEach<Data: RandomAccessCollection, ID: Hashable, Content: View> {
     /// The rows, by position: how many, each one's id, and each one's view
     /// made only when asked for (a lazy List builds the rows it shows).
     let rows: () -> _ForEachRows
@@ -25,7 +25,7 @@ extension ForEach: _IndexedRows {
     func indexedRows() -> _ForEachRows { rows() }
 }
 
-extension ForEach where Data == Range<Int> {
+extension ForEach where Data == Range<Int>, ID == Int {
     public init(_ data: Range<Int>, @ViewBuilder content: @escaping (Int) -> Content) {
         currentData = { data }
         rows = {
@@ -34,7 +34,7 @@ extension ForEach where Data == Range<Int> {
     }
 }
 
-extension ForEach where Data: RandomAccessCollection, Data.Element: Identifiable {
+extension ForEach where Data.Element: Identifiable, ID == Data.Element.ID {
     public init(_ data: Data, @ViewBuilder content: @escaping (Data.Element) -> Content) {
         currentData = { data }
         rows = {
@@ -57,8 +57,8 @@ extension ForEach where Data: RandomAccessCollection, Data.Element: Identifiable
     }
 }
 
-extension ForEach where Data: RandomAccessCollection {
-    public init<ID: Hashable>(
+extension ForEach {
+    public init(
         _ data: Data,
         id: KeyPath<Data.Element, ID>,
         @ViewBuilder content: @escaping (Data.Element) -> Content
@@ -109,11 +109,11 @@ extension ForEach where Data: MutableCollection & RandomAccessCollection {
     public init(
         _ data: Binding<Data>,
         @ViewBuilder content: @escaping (Binding<Data.Element>) -> Content
-    ) where Data.Element: Identifiable {
+    ) where Data.Element: Identifiable, ID == Data.Element.ID {
         self.init(data, id: \.id, content: content)
     }
 
-    public init<ID: Hashable>(
+    public init(
         _ data: Binding<Data>,
         id: KeyPath<Data.Element, ID>,
         @ViewBuilder content: @escaping (Binding<Data.Element>) -> Content
@@ -135,7 +135,7 @@ public protocol DynamicViewContent<Data>: View {
     var data: Data { get }
 }
 
-extension ForEach: DynamicViewContent where Data: Collection {
+extension ForEach: DynamicViewContent {
     public var data: Data { currentData() as! Data }
 }
 

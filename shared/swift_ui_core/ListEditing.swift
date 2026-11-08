@@ -174,3 +174,12 @@ struct _DeletableEditingRow: View {
         }
     }
 }
+
+/// A row wrapped for editing (its minus, its move handle): its tag is the
+/// row's (`rowTag(of:)`).
+protocol _EditingRow {
+    var content: AnyView { get }
+}
+
+extension _MovableRow: _EditingRow {}
+extension _DeletableEditingRow: _EditingRow {}
