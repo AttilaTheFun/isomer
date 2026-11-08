@@ -3,7 +3,7 @@
 // With `--@isomer//foundation:internationalization` the lists are ICU's,
 // localized, and these are not compiled (docs/parity/Foundation.md).
 
-#if !ISOMER_FOUNDATION_INTERNATIONALIZATION
+#if !canImport(IsomerFoundationInternationalization)
 import FoundationEssentials
 
 extension Calendar {

@@ -21,9 +21,8 @@ package(
     ],
 )
 
-swift_library(
+one_configuration(
     name = "isomer_foundation",
-    # Beneath Isomer's Foundation, which Apple platforms do not use.
     target_compatible_with = select({
         "@platforms//os:macos": ["@platforms//:incompatible"],
         "@platforms//os:ios": ["@platforms//:incompatible"],
@@ -32,9 +31,7 @@ swift_library(
         "@platforms//os:visionos": ["@platforms//:incompatible"],
         "//conditions:default": [],
     }),
-    srcs = glob(["*.swift"]),
-    module_name = "IsomerFoundation",
-    deps = ["@swiftpkg_swift_foundation//:FoundationEssentials"],
+    actual = "@swiftpkg_isomer//:IsomerFoundation",
 )
 
 # What a host outside //foundation depends on (through

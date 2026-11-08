@@ -30,8 +30,8 @@
 #if canImport(Dispatch)
 @_exported import Dispatch
 #endif
-#if ISOMER_FOUNDATION_INTERNATIONALIZATION
-@_exported import FoundationInternationalization
+#if canImport(IsomerFoundationInternationalization)
+@_exported import IsomerFoundationInternationalization
 #endif
 
 // Dispatch's time constants (NSEC_PER_SEC and its family), which Apple's

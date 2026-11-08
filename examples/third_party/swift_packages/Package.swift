@@ -11,6 +11,9 @@ let package = Package(
     name: "isomer_examples_swift_packages",
     platforms: [.macOS("15.0")],
     dependencies: [
+        // Isomer's Swift (Foundation and the frameworks off Apple), this
+        // repository's: an application elsewhere lists it by revision.
+        .package(path: "../../.."),
         .package(url: "https://github.com/apple/swift-protobuf.git", exact: "1.38.1"),
         // 2.4.3 is the first release with WASI support (grpc/grpc-swift-2#52).
         .package(url: "https://github.com/grpc/grpc-swift-2.git", exact: "2.4.3"),

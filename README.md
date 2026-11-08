@@ -671,16 +671,37 @@ bazel_dep(name = "isomer", version = "0.36.1")
 ```
  The patched
 rules_swift isomer needs comes from that registry by version, patches and
-all, FlatBuffers too (25.12.19.isomer.1, since 0.40). swift-foundation is a
-Swift package of isomer's own graph (third_party/swift_packages, through
-rules_swift_package_manager, since 0.40); if your SwiftPM graph has
-swift-collections too (SwiftNIO's, say), point isomer's at yours, so an app
-links one:
+all, FlatBuffers too (25.12.19.isomer.1, since 0.40).
+
+Isomer's Swift libraries are a Swift package too (since 0.43: Foundation,
+CoreGraphics, Combine and what they stand on, from isomer's root
+Package.swift), built through rules_swift_package_manager in your own
+SwiftPM graph, so swift-foundation and swift-collections resolve once for
+your packages and Isomer's. List isomer in the Package.swift your graph
+reads, at the same release, by its tag (or a commit between releases;
+swift-foundation takes its own dependencies by branch, which SwiftPM allows
+only beneath a revision pin):
+
+```swift
+.package(url: "https://github.com/AttilaTheFun/isomer.git", revision: "v0.43.1"),
+```
+
+use rules_swift_package_manager's own `swift_deps` extension (not a
+re-export of your own: isomer adds its patches and a dependency of its
+Foundation to it), and let the generated package repositories see
+`@isomer`, which those additions name:
 
 ```starlark
-isomer_swift_deps = use_extension("@isomer//third_party/swift_packages:extensions.bzl", "swift_deps")
-override_repo(isomer_swift_deps, swiftpkg_swift_collections = "swiftpkg_swift_collections")
+swift_deps = use_extension("@rules_swift_package_manager//:extensions.bzl", "swift_deps")
+swift_deps.from_package(
+    resolved = "//third_party/swift_packages:Package.resolved",
+    swift = "//third_party/swift_packages:Package.swift",
+)
+inject_repo(swift_deps, "isomer")
 ```
+
+swift-foundation pins swift-collections exactly (1.1.6 at Swift 6.4.2), so
+your graph takes that version.
 
 Nothing of isomer's needs an override in your MODULE.bazel since 0.40 (its
 rules_swift, 4.2.2.isomer.3, sorts above the version rules_applecross asks
@@ -709,8 +730,19 @@ license acceptance, `--strategy=SwiftCompile=local`, …) and
 
 ### Upgrading isomer
 
-Each release's notes have an Upgrading section; two things are easy to miss:
+Each release's notes have an Upgrading section; three things are easy to miss:
 
+- **Isomer's Swift is a Swift package (since 0.43).** Add isomer to the
+  Package.swift your rules_swift_package_manager graph reads (by revision,
+  the release's tag: "Consuming isomer" above), use
+  `@rules_swift_package_manager//:extensions.bzl`'s `swift_deps` rather
+  than a re-export of your own, and add `inject_repo(swift_deps, "isomer")`.
+  Drop the `override_repo` of isomer's `swiftpkg_swift_collections`
+  (`@isomer//third_party/swift_packages:extensions.bzl` is gone), and any
+  `@@isomer+//` canonical labels in your `target_deps`: `@isomer//` resolves
+  there now. A `build_bazel_rules_swift` or `rules_license` dependency or
+  injection kept only for the generated repositories can go too: they see
+  rules_swift_package_manager's own.
 - **Apple apps bundle through rules_applecross (since 0.40).** The
   registry's rules_apple (5.3.1.applecross.6) bundles through
   `@rules_applecross//toolchain:apple_bundling_toolchain_type`, and

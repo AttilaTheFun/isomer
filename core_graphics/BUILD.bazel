@@ -11,10 +11,8 @@ load("//foundation:defs.bzl", "one_configuration")
 
 package(default_visibility = ["//visibility:public"])
 
-swift_library(
+one_configuration(
     name = "core_graphics",
-    package_name = "isomer",
-    # Apple platforms have the real one; this one would shadow it.
     target_compatible_with = select({
         "@platforms//os:macos": ["@platforms//:incompatible"],
         "@platforms//os:ios": ["@platforms//:incompatible"],
@@ -23,18 +21,7 @@ swift_library(
         "@platforms//os:visionos": ["@platforms//:incompatible"],
         "//conditions:default": [],
     }),
-    srcs = glob(["*.swift"]),
-    # Linux and Windows still build on the toolchain's Foundation
-    # (swift-corelibs-foundation), which declares CGFloat, CGPoint, CGSize and
-    # CGRect with most of their API: there this module is the rest of
-    # CoreGraphics over it (CGVector, CGAffineTransform, CGPath, CGColor, the
-    # functions), and leaves those out.
-    copts = select({
-        "@platforms//os:linux": ["-DISOMER_CORELIBS_FOUNDATION"],
-        "@platforms//os:windows": ["-DISOMER_CORELIBS_FOUNDATION"],
-        "//conditions:default": [],
-    }),
-    module_name = "CoreGraphics",
+    actual = "@swiftpkg_isomer//:CoreGraphics",
 )
 
 # What dependents use (through @isomer//:core_graphics): built in one
