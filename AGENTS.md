@@ -149,13 +149,30 @@ a repository of its own):
   SwiftPM package an app links there depends on `@isomer//:foundation`
   through `configure_package(target_deps = ...)` in its MODULE.bazel;
   `tools/foundation/check_link.py <app targets>` finds one that doesn't.
-- **Two modules, one RSPM extension**: a module that has its own SwiftPM
-  graph AND depends on one that does re-exports `swift_deps` from its own
-  `.bzl` (extension identity) and `override_repo`s the dependency's package
-  repos onto its graph. Generated package repos see the apparent repo names
-  of the module that owns the extension (hence `rules_license`,
-  `build_bazel_rules_apple` deps and `inject_repo(build_bazel_rules_swift)`).
-  The examples do this for their graph.
+- **Isomer's Swift is a Swift package (0.43)**: the root Package.swift
+  (Foundation, FoundationNetworking, IsomerFoundation, CoreGraphics,
+  Combine and the two small modules under Foundation) beside the Bazel
+  module. rules_swift_package_manager builds it as `@swiftpkg_isomer` in
+  the root's one graph, under its own `swift_deps` extension (not a
+  re-export: isomer's configure_package tags, swift-foundation's patches and
+  Foundation's internationalization dependency, apply to the root's graph):
+  an application lists isomer in its Package.swift by revision (the
+  release's tag) and adds `inject_repo(swift_deps, "isomer")`, since the
+  generated repositories see rules_swift_package_manager's names, not the
+  root's. isomer's own graph (third_party/swift_packages, dev-only: every
+  module's from_package is resolved) and the examples' take the package by
+  path, which needs cgrindel/rules_swift_package_manager#2638 (the
+  registry's 1.25.0.isomer.1: a local package that is a Bazel module too is
+  copied without its Bazel files). Isomer's labels (`//foundation`,
+  `//core_graphics`, `//frameworks/combine`, ...) are groups over the
+  package's products, incompatible on Apple platforms as before. Its
+  platforms are swift-foundation's (26): rules_swift_package_manager holds
+  a package to its dependencies' minimums even where it builds no Apple
+  code. `--@isomer//foundation:internationalization` can't be a SwiftPM
+  condition, so foundation/internationalization (a module re-exporting
+  FoundationInternationalization, or nothing) is added to Foundation's
+  target by configure_package and Foundation checks
+  `canImport(IsomerFoundationInternationalization)`.
 - **A server built in a Linux container from a consumer's module** means
   that module has to resolve on Linux.
 - **C for wasm**: rules_swift's wasm cc toolchain gave compiles no clang
@@ -782,18 +799,12 @@ yet in Isomer: <group>"); implementing one means running it again (or
 deleting the stub); tools/parity/stubs_skip.txt keeps one out.
 
 - **Foundation** (//foundation, `@isomer//:foundation`): built over
-  swift-foundation, a Swift package of isomer's own graph
-  (third_party/swift_packages: swift-6.4.2-RELEASE's commit, through
-  rules_swift_package_manager under an extension of isomer's, since 0.40;
+  swift-foundation (swift-6.4.2-RELEASE's commit), a dependency of isomer's
+  Swift package (above; through rules_swift_package_manager since 0.40,
   the registry's Bazel module 6.3.2.isomer.2 before), with patches
   (MODULE.bazel says which and why). ICU is the Swift SDK's prebuilt one, a
   patch to its manifest linking it by name, not swift-foundation-icu built
-  from source. isomer is usually not the root module, so neither
-  inject_repo nor override_repo of its own apply: the generated
-  repositories' `@build_bazel_rules_swift` is a repository of isomer's
-  (third_party/swift_packages/rules_swift_alias.bzl), and an application
-  whose graph has swift-collections points isomer's at its own (README,
-  examples/MODULE.bazel).
+  from source.
   FoundationEssentials, plus what corelibs has that apps reach for, written
   in Swift here: CharacterSet, NSString's string API (searching, replacing,
   trimming, comparing, percent encoding; built in swift-foundation's

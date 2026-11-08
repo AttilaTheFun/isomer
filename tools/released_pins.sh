@@ -1,12 +1,16 @@
 #!/bin/sh
 # Whether every dependency is pinned to a released version: a SwiftPM
-# package by version (exact:, from:, a range), or by a release tag's commit
-# where the tag isn't a version (`revision:` with a `// tag: <tag>` comment),
-# not another revision, a branch or a path; a Bazel module from a registry (the project's, then the BCR), not a
-# git or archive override, and not a local one outside this repository.
-# The examples and the Playground are modules of their own over this
-# checkout (`local_path_override(path = "..")`): an override that stays
-# inside the repository is the same commit, not a pin.
+# package by version (exact:, from:, a range), by a release's tag
+# (`revision: "v0.43.1"`: isomer, whose dependencies SwiftPM allows only
+# beneath a revision), or by a release tag's commit where the tag isn't a
+# version (`revision:` with a `// tag: <tag>` comment), not another
+# revision, a branch or a path outside this repository; a Bazel module from
+# a registry (the project's, then the BCR), not a git or archive override,
+# and not a local one outside this repository. The examples and the
+# Playground are modules of their own over this checkout
+# (`local_path_override(path = "..")`, and isomer's package by
+# `.package(path:)`): what stays inside the repository is the same commit,
+# not a pin.
 #
 # A branch may pin a revision while what it needs is in development, and so
 # may main between releases; a release may not. CI's `pins` job runs this on
@@ -16,16 +20,33 @@ cd "$(dirname "$0")/.." || exit 1
 root=$(pwd -P)
 status=0
 for manifest in $(git ls-files 'Package.swift' '*/Package.swift'); do
-  if grep -n -E 'branch:[[:space:]]*"|\.package\([[:space:]]*path:' "$manifest"; then
-    echo "$manifest: a package pinned to a branch or a path, not a released version" >&2
+  if grep -n -E 'branch:[[:space:]]*"' "$manifest"; then
+    echo "$manifest: a package pinned to a branch, not a released version" >&2
     status=1
   fi
+  for path in $(sed -n 's/.*\.package([[:space:]]*path:[[:space:]]*"\([^"]*\)".*/\1/p' "$manifest"); do
+    target=$(cd "$(dirname "$manifest")" && cd "$path" 2>/dev/null && pwd -P)
+    case "$target" in
+      "$root" | "$root"/*) ;;
+      *) echo "$manifest: .package(path: \"$path\") is outside this repository" >&2
+         status=1 ;;
+    esac
+  done
   # A revision is a release only as a tag's commit: one whose version
   # SwiftPM can't read (swift-foundation's swift-6.4.2-RELEASE), named in a
   # `// tag: <tag>` comment on its line, and checked against the tag.
-  grep -n -E 'revision:[[:space:]]*"' "$manifest" | while IFS= read -r line; do
+  grep -n -E 'revision:[[:space:]]*"' "$manifest" | grep -v -E '^[0-9]+:[[:space:]]*//' | while IFS= read -r line; do
     url=$(printf '%s\n' "$line" | sed -n 's/.*url:[[:space:]]*"\([^"]*\)".*/\1/p')
-    revision=$(printf '%s\n' "$line" | sed -n 's/.*revision:[[:space:]]*"\([0-9a-f]*\)".*/\1/p')
+    revision=$(printf '%s\n' "$line" | sed -n 's/.*revision:[[:space:]]*"\([^"]*\)".*/\1/p')
+    # A release's own tag, which SwiftPM resolves to its commit.
+    if printf '%s\n' "$revision" | grep -q -E '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+      if [ -z "$(git ls-remote "$url" "refs/tags/$revision")" ]; then
+        echo "$manifest:$line" >&2
+        echo "$manifest: a package pinned to a tag that $url doesn't have" >&2
+        exit 1
+      fi
+      continue
+    fi
     tag=$(printf '%s\n' "$line" | sed -n 's|.*// tag: *\([^ ]*\).*|\1|p')
     tagged=""
     [ -n "$tag" ] && tagged=$(git ls-remote "$url" "refs/tags/$tag" "refs/tags/$tag^{}" | tail -1 | cut -f1)

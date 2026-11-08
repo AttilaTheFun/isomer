@@ -6,7 +6,6 @@
 # time zones beyond the Gregorian/UTC basics) and ICU with it.
 
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
-load("@rules_swift//swift:swift.bzl", "swift_library")
 load("@rules_swift//swift:swift_library_group.bzl", "swift_library_group")
 load(":defs.bzl", "one_configuration")
 
@@ -22,12 +21,12 @@ config_setting(
     flag_values = {":internationalization": "true"},
 )
 
-swift_library(
+# Isomer's Swift package's Foundation (Package.swift: the sources here, built
+# in swift-foundation's package, whose `package` helpers the string API in
+# StringProtocol+NSString.swift searches with), with FoundationInternationalization
+# when the build asks for it (internationalization/, added by MODULE.bazel).
+swift_library_group(
     name = "foundation",
-    # swift-foundation's package: the string API here (StringProtocol+NSString.swift)
-    # searches with Essentials' own `package` helpers. Nothing here is
-    # Isomer's `package` plumbing.
-    package_name = "swift-foundation",
     # Apple platforms have the real one; this one would shadow it.
     target_compatible_with = select({
         "@platforms//os:macos": ["@platforms//:incompatible"],
@@ -37,34 +36,7 @@ swift_library(
         "@platforms//os:visionos": ["@platforms//:incompatible"],
         "//conditions:default": [],
     }),
-    srcs = glob(["*.swift"]),
-    copts = select({
-        ":with_internationalization": ["-DISOMER_FOUNDATION_INTERNATIONALIZATION"],
-        "//conditions:default": [],
-    }),
-    module_name = "Foundation",
-    deps = [
-        # Isomer's Combine, beneath Foundation: its ObservableObject and
-        # Published named from here too (Combine.swift), as Apple's.
-        "//frameworks/combine",
-        "//core_graphics",
-        # What hosts install beneath Foundation (URLSession's transports,
-        # UserDefaults' store), read through `internal import`.
-        "//foundation/isomer_foundation",
-        "@swiftpkg_swift_foundation//:FoundationEssentials",
-    ] + select({
-        # Dispatch's NSEC_PER_SEC family, which these platforms lack.
-        "@platforms//os:android": ["//foundation/dispatch_time"],
-        "@platforms//os:wasi": ["//foundation/dispatch_time"],
-        "//conditions:default": [],
-    }) + select({
-        # Thread.isMainThread in a threaded (wasip1-threads) build.
-        "@platforms//os:wasi": ["//foundation/wasi_thread_identity"],
-        "//conditions:default": [],
-    }) + select({
-        ":with_internationalization": ["@swiftpkg_swift_foundation//:FoundationInternationalization"],
-        "//conditions:default": [],
-    }),
+    deps = ["@swiftpkg_isomer//:Foundation"],
 )
 
 # What dependents use (through @isomer//:foundation): built in one

@@ -1,4 +1,5 @@
 load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@rules_swift//swift:swift_library_group.bzl", "swift_library_group")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -16,10 +17,8 @@ filegroup(
 # what isn't here). It sits beneath Foundation, which imports it as Apple's
 # does, so it depends on nothing but the standard library and the C
 # library's mutexes (Lock.swift); no Dispatch, which wasm lacks.
-swift_library(
+swift_library_group(
     name = "combine",
-    package_name = "isomer",
-    # Apple platforms have the real one; this one would shadow it.
     target_compatible_with = select({
         "@platforms//os:macos": ["@platforms//:incompatible"],
         "@platforms//os:ios": ["@platforms//:incompatible"],
@@ -28,6 +27,5 @@ swift_library(
         "@platforms//os:visionos": ["@platforms//:incompatible"],
         "//conditions:default": [],
     }),
-    srcs = glob(["*.swift"]),
-    module_name = "Combine",
+    deps = ["@swiftpkg_isomer//:Combine"],
 )

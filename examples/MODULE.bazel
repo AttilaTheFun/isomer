@@ -31,7 +31,7 @@ module(
 #   git_override(module_name = "isomer",
 #                remote = "https://github.com/AttilaTheFun/isomer.git",
 #                commit = "<commit>")
-bazel_dep(name = "isomer", version = "0.42.0")
+bazel_dep(name = "isomer", version = "0.43.0")
 local_path_override(
     module_name = "isomer",
     path = "..",
@@ -217,25 +217,24 @@ bazel_dep(name = "rules_swift_package_manager", version = "1.25.0")
 single_version_override(
     module_name = "rules_swift_package_manager",
     patch_strip = 1,
-    patches = ["//tools/patches:rules_swift_package_manager_windows.patch"],
+    patches = [
+        "//tools/patches:rules_swift_package_manager_windows.patch",
+        "//tools/patches:rules_swift_package_manager_local_bazel_package.patch",
+    ],
 )
 
 bazel_dep(name = "protobuf", version = "34.0.bcr.1")
 bazel_dep(name = "rules_proto", version = "7.1.0")
 
-# The generated SwiftPM package repositories load these by their apparent
-# names, which they take from the module that owns their extension — this one,
-# since //third_party/swift_packages:extensions.bzl re-exports it.
-bazel_dep(name = "rules_license", version = "1.0.0")
 
 # Forward-pin: the transitively-resolved rules_go is too old for Bazel 9 /
 # builds gazelle's repo tools against the host Go (same fix as swift_interop).
 bazel_dep(name = "rules_go", version = "0.61.1")
 
-swift_deps = use_extension(
-    "//third_party/swift_packages:extensions.bzl",
-    "swift_deps",
-)
+# rules_swift_package_manager's own extension, which isomer uses too: one
+# graph for this module's packages and Isomer's (Package.swift lists isomer,
+# by path here, by revision in an application elsewhere).
+swift_deps = use_extension("@rules_swift_package_manager//:extensions.bzl", "swift_deps")
 swift_deps.from_package(
     resolved = "//third_party/swift_packages:Package.resolved",
     swift = "//third_party/swift_packages:Package.swift",
@@ -302,17 +301,16 @@ swift_deps.configure_package(
 # AgentUI (the Playground's agent page) imports SwiftUI and Foundation. On
 # Apple those are the system's; on the web and Android isomer's `SwiftUI` and
 # `Foundation` modules, each reached through one label that resolves per
-# platform (and to nothing on Apple). The canonical repository names: the
-# generated package repos cannot see this module's apparent names.
+# platform (and to nothing on Apple).
 swift_deps.configure_package(
     name = "agent_ui",
     target_deps = {
-        "AgentUI": ["@@isomer+//:swift_ui", "@@isomer+//:foundation"],
-        "InboxUI": ["@@isomer+//:swift_ui", "@@isomer+//:foundation"],
-        "MarkdownViews": ["@@isomer+//:swift_ui", "@@isomer+//:foundation"],
-        "MessagesCore": ["@@isomer+//:swift_ui", "@@isomer+//:foundation"],
-        "MessagesUI": ["@@isomer+//:swift_ui", "@@isomer+//:foundation"],
-        "NavigationUI": ["@@isomer+//:swift_ui", "@@isomer+//:foundation"],
+        "AgentUI": ["@isomer//:swift_ui", "@isomer//:foundation"],
+        "InboxUI": ["@isomer//:swift_ui", "@isomer//:foundation"],
+        "MarkdownViews": ["@isomer//:swift_ui", "@isomer//:foundation"],
+        "MessagesCore": ["@isomer//:swift_ui", "@isomer//:foundation"],
+        "MessagesUI": ["@isomer//:swift_ui", "@isomer//:foundation"],
+        "NavigationUI": ["@isomer//:swift_ui", "@isomer//:foundation"],
     },
 )
 # UpdateKit (AttilaTheFun/update_kit): the Storybook's and the
@@ -322,7 +320,7 @@ swift_deps.configure_package(
 swift_deps.configure_package(
     name = "update_kit",
     target_deps = {
-        "UpdateKit": ["@@isomer+//:foundation"],
+        "UpdateKit": ["@isomer//:foundation"],
     },
 )
 use_repo(
@@ -339,16 +337,9 @@ use_repo(
     "swiftpkg_update_kit",
 )
 
-# isomer's own graph (swift-foundation, under its extension) shares
-# swift-collections with this one (SwiftNIO's): one copy in an app, this
-# graph's, as any application on Isomer with such a package does.
-isomer_swift_deps = use_extension("@isomer//third_party/swift_packages:extensions.bzl", "swift_deps")
-override_repo(isomer_swift_deps, swiftpkg_swift_collections = "swiftpkg_swift_collections")
-
-inject_repo(
-    swift_deps,
-    build_bazel_rules_swift = "rules_swift",
-)
+# The generated package repositories see rules_swift_package_manager's
+# repositories; the target_deps above (and isomer's own) name @isomer.
+inject_repo(swift_deps, "isomer")
 
 bazel_dep(name = "rules_java", version = "9.3.0")
 bazel_dep(name = "rules_kotlin", version = "2.2.2")

@@ -27,7 +27,7 @@ toolchains (see the `swift` extension below); the wasm/android targets are plain
 
 module(
     name = "isomer",
-    version = "0.42.0",
+    version = "0.43.0",
 )
 
 bazel_dep(name = "bazel_skylib", version = "1.9.0")
@@ -91,42 +91,47 @@ bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.1")
 # The macro plugin and the source analyzer.
 bazel_dep(name = "swift-syntax", version = "603.0.2")
 
-# --- Foundation (non-Apple platforms) -----------------------------------------
-# Isomer's Foundation is built over swift-foundation's FoundationEssentials
-# (and FoundationInternationalization when an app asks for it), a Swift
-# package through rules_swift_package_manager (isomer's graph:
-# third_party/swift_packages, swift-6.4.2-RELEASE's commit and the
-# swift-foundation-icu and swift-syntax of that release). //foundation
-# assembles the `Foundation` module, adding what corelibs gives Swift code
-# elsewhere (CharacterSet, NSString's string API, String(format:) and the rest
-# of foundation/). Apple platforms use Apple's Foundation.
+# --- Isomer's Swift package (Foundation and the frameworks off Apple) -------
+# Isomer's Swift libraries are a Swift package too (Package.swift, at the
+# root): Foundation, CoreGraphics, Combine and what they stand on.
+# rules_swift_package_manager builds them from it, as @swiftpkg_isomer, in
+# the application's one SwiftPM graph: an application lists isomer in its
+# Package.swift (by revision: the release's tag or a commit) beside its
+# bazel_dep here, so swift-foundation and swift-collections resolve once,
+# for its packages and Isomer's alike. This module's own graph, used when it
+# is the root (third_party/swift_packages), takes the package by path.
 #
-# The patches: swift-foundation#2409 (merged upstream; in its next release),
-# Android's fts_open (the Android SDK's apinotes would make it unneeded, but
-# rules_swift compiles with the static resource directory, which has none),
-# Apple's signatures where swift-foundation's differ and its extra
-# declarations made internal, and `package` on the Essentials helpers
-# //foundation searches strings with (it is built in swift-foundation's
-# package for that).
+# Isomer's Foundation is built over swift-foundation's FoundationEssentials
+# (and FoundationInternationalization when an app asks for it,
+# //foundation:internationalization), adding what corelibs gives Swift code
+# elsewhere (CharacterSet, NSString's string API, String(format:) and the
+# rest of foundation/). Apple platforms use Apple's Foundation.
+#
+# swift-foundation's patches: swift-foundation#2409 (merged upstream; in its
+# next release), Android's fts_open (the Android SDK's apinotes would make it
+# unneeded, but rules_swift compiles with the static resource directory,
+# which has none), Apple's signatures where swift-foundation's differ and its
+# extra declarations made internal, and `package` on the Essentials helpers
+# Foundation searches strings with (it is built in swift-foundation's package
+# for that).
 bazel_dep(name = "rules_swift_package_manager", version = "1.25.0")
 
-# Swift package spike: a local package that is a Bazel module too is copied
-# without its Bazel files (tools/patches, for upstream).
+# A local package that is a Bazel module too (isomer's, taken by path in its
+# own graph) is copied without its Bazel files: cgrindel/
+# rules_swift_package_manager#2638, the registry's 1.25.0.isomer.1.
 single_version_override(
     module_name = "rules_swift_package_manager",
     patch_strip = 1,
     patches = ["//tools/patches:rules_swift_package_manager_local_bazel_package.patch"],
 )
 
-# The generated package repositories load these by their apparent names,
-# which they take from the module that owns their extension: this one.
-bazel_dep(name = "rules_license", version = "1.0.0")
-
-swift_deps = use_extension("//third_party/swift_packages:extensions.bzl", "swift_deps")
-swift_deps.from_package(
-    resolved = "//third_party/swift_packages:Package.resolved",
-    swift = "//third_party/swift_packages:Package.swift",
-)
+# rules_swift_package_manager's own extension, so an application's graph and
+# this module's packages are one: what isomer declares here (its patches, a
+# dependency of its Foundation) applies to the application's graph, and the
+# repositories isomer uses are that graph's. Its graph is declared only when
+# it is the root (dev_dependency, below): every module's from_package is
+# resolved, and two graphs would declare the same repositories.
+swift_deps = use_extension("@rules_swift_package_manager//:extensions.bzl", "swift_deps")
 swift_deps.configure_package(
     name = "swift-foundation",
     patch_args = ["-p1"],
@@ -138,15 +143,28 @@ swift_deps.configure_package(
         "//tools/patches:swift_foundation_sdk_icu.patch",
     ],
 )
+
+# FoundationInternationalization, re-exported by Foundation when the build
+# asks for it (`--@isomer//foundation:internationalization`, which no
+# SwiftPM condition can express): a module Foundation can import, or
+# nothing (foundation/internationalization). The generated repositories see
+# @isomer by the application's inject_repo (README: "Consuming isomer").
+swift_deps.configure_package(
+    name = "isomer",
+    target_deps = {"Foundation": ["@isomer//foundation/internationalization"]},
+)
 use_repo(swift_deps, "swiftpkg_isomer", "swiftpkg_swift_foundation")
 
-# The generated package repositories load rules_swift by its old apparent
-# name, which they see among this module's; inject_repo would only apply
-# with isomer the root module, so it is a repository of its own re-exporting
-# rules_swift's rules (third_party/swift_packages/rules_swift_alias.bzl).
-rules_swift_alias = use_repo_rule("//third_party/swift_packages:rules_swift_alias.bzl", "rules_swift_alias")
-
-rules_swift_alias(name = "build_bazel_rules_swift")
+swift_deps_root = use_extension(
+    "@rules_swift_package_manager//:extensions.bzl",
+    "swift_deps",
+    dev_dependency = True,
+)
+swift_deps_root.from_package(
+    resolved = "//third_party/swift_packages:Package.resolved",
+    swift = "//third_party/swift_packages:Package.swift",
+)
+inject_repo(swift_deps_root, "isomer")
 
 # CLI parsing for the analyzer / generator tools.
 bazel_dep(name = "swift_argument_parser", version = "1.7.0")

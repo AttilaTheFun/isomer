@@ -7,6 +7,7 @@
 # host imports it by name.
 
 load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@rules_swift//swift:swift_library_group.bzl", "swift_library_group")
 load("//foundation:defs.bzl", "one_configuration")
 
 package(
@@ -21,9 +22,8 @@ package(
     ],
 )
 
-swift_library(
+swift_library_group(
     name = "isomer_foundation",
-    # Beneath Isomer's Foundation, which Apple platforms do not use.
     target_compatible_with = select({
         "@platforms//os:macos": ["@platforms//:incompatible"],
         "@platforms//os:ios": ["@platforms//:incompatible"],
@@ -32,9 +32,7 @@ swift_library(
         "@platforms//os:visionos": ["@platforms//:incompatible"],
         "//conditions:default": [],
     }),
-    srcs = glob(["*.swift"]),
-    module_name = "IsomerFoundation",
-    deps = ["@swiftpkg_swift_foundation//:FoundationEssentials"],
+    deps = ["@swiftpkg_isomer//:IsomerFoundation"],
 )
 
 # What a host outside //foundation depends on (through

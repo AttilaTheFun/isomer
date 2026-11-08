@@ -33,7 +33,7 @@ let package = Package(
     dependencies: [
         // swift-6.4.2-RELEASE's commit: the swift-foundation the Swift SDKs'
         // Foundation is built from.
-        .package(url: "https://github.com/swiftlang/swift-foundation.git", revision: "e4049b2d77e2d5d70c4cfcc99fd5eca32e1bcb06"),
+        .package(url: "https://github.com/swiftlang/swift-foundation.git", revision: "e4049b2d77e2d5d70c4cfcc99fd5eca32e1bcb06"), // tag: swift-6.4.2-RELEASE
     ],
     targets: [
         .target(
@@ -60,13 +60,11 @@ let package = Package(
         ),
         .target(
             name: "IsomerDispatchTime",
-            path: "foundation/dispatch_time",
-            exclude: ["BUILD.bazel"]
+            path: "foundation/dispatch_time"
         ),
         .target(
             name: "CWasiThreadIdentity",
             path: "foundation/wasi_thread_identity",
-            exclude: ["BUILD.bazel"],
             publicHeadersPath: "."
         ),
         .target(
@@ -80,7 +78,7 @@ let package = Package(
                 .target(name: "CWasiThreadIdentity", condition: .when(platforms: [.wasi])),
             ],
             path: "foundation",
-            exclude: ["BUILD.bazel", "defs.bzl", "dispatch_time", "isomer_foundation", "networking", "tests", "wasi_thread_identity"],
+            exclude: ["BUILD.bazel", "defs.bzl", "dispatch_time", "internationalization", "isomer_foundation", "networking", "tests", "wasi_thread_identity"],
             swiftSettings: [
                 // Built in swift-foundation's package, as the Bazel target is:
                 // its string API searches with Essentials' `package` helpers.

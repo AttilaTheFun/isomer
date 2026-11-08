@@ -1,0 +1,29 @@
+# FoundationInternationalization for Isomer's Foundation, when the build asks
+# for it (`--@isomer//foundation:internationalization`): a module that
+# re-exports it, which Foundation re-exports in turn when it can import it
+# (Foundation.swift), or nothing. MODULE.bazel adds this to the Foundation
+# target of isomer's Swift package: no SwiftPM condition can follow a Bazel
+# flag. Foundation asks for this module by name, not for
+# FoundationInternationalization: the Android Swift SDK has one of its own,
+# importable whatever the build.
+
+load("@rules_swift//swift:swift.bzl", "swift_library", "swift_library_group")
+
+alias(
+    name = "internationalization",
+    actual = select({
+        "//foundation:with_internationalization": ":module",
+        "//conditions:default": ":none",
+    }),
+    visibility = ["//visibility:public"],
+)
+
+swift_library(
+    name = "module",
+    package_name = "isomer",
+    srcs = ["IsomerFoundationInternationalization.swift"],
+    module_name = "IsomerFoundationInternationalization",
+    deps = ["@swiftpkg_swift_foundation//:FoundationInternationalization"],
+)
+
+swift_library_group(name = "none")
