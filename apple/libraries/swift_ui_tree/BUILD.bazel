@@ -1,7 +1,7 @@
 load("@rules_swift//swift:swift.bzl", "swift_library")
 
 # The native SwiftUIRenderer's Apple half: interprets the render-tree
-# FlatBuffer (shared/renderers/tree.fbs) as real SwiftUI. Consumed by the
+# protobuf message (shared/wire/tree.proto) as real SwiftUI. Consumed by the
 # hot-reload example host, which runs the tree PRODUCER (the wasm-compiled
 # runtime) under WasmKit and feeds the received buffers here.
 swift_library(

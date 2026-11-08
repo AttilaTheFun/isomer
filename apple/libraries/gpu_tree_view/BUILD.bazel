@@ -4,7 +4,7 @@ load("//swift_ui_macros:defs.bzl", "SWIFT_UI_MACROS_PLUGINS")
 package(default_visibility = ["//visibility:public"])
 
 # GPUTreeView: the self-drawing SwiftGPU renderer (over Metal) as a UIView
-# that draws a wasm feature's tree.fbs patches — the iOS "GPU" renderer for
+# that draws a wasm feature's tree.proto patches — the iOS "GPU" renderer for
 # WasmView, next to the real-SwiftUI IsomerTreeView. Compiles the
 # reimplementation core, so importers must use a scoped import
 # (`import class IsomerGPUTreeView.GPUTreeView`) beside real SwiftUI.

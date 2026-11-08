@@ -3,7 +3,6 @@
 // item replaces the screen, and the app clearing the binding while the
 // screen shows takes it off (its declaring screen unbuilt then).
 
-import FlatBuffers
 import Foundation
 import SwiftUI  // IsomerCore, aliased (BUILD.bazel)
 import IsomerSwiftUI

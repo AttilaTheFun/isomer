@@ -570,7 +570,7 @@ export async function boot({
     epochMillis() { return Date.now(); },
     registerImage(source, bytes) { registerImageBytes(source, bytes); },
     renderTree(tree) {
-      // Each buffer is a tree.fbs `Patch` — the only wire format — applied in
+      // Each buffer is a tree.proto `Patch` — the only wire format — applied in
       // arrival order to the retained plain-object tree the React interpreter
       // walks (the first patch after start is a full-tree op at "n").
       retainedTree = applyPatch(retainedTree, tree);

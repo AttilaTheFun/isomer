@@ -55,7 +55,7 @@ package protocol AndroidHost {
     /// [h u32][premultiplied RGBA8...] out; empty when unavailable).
     func rasterize(spec: String) -> [UInt8]
     /// JetpackComposeRenderer path: render the serialized view tree (the
-    /// tree.fbs FlatBuffer) as composables. Unused under the SwiftGPURenderer.
+    /// tree.proto message) as composables. Unused under the SwiftGPURenderer.
     func renderTree(tree: [UInt8])
     /// An encoded picture's bytes for `source` (`IsomerImages`), decoded off
     /// the main thread; empty bytes forget it.

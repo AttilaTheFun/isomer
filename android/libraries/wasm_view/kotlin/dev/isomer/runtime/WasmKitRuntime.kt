@@ -12,7 +12,7 @@ package dev.isomer.runtime
 
 /** Callbacks the running reactor drives back into the host. */
 interface WasmEngineCallbacks {
-    /** A fresh serialized render tree (tree.fbs). */
+    /** A fresh serialized render tree (tree.proto). */
     fun renderTree(tree: ByteArray)
     /** "Schedule a frame soon" — bounce onto the UI loop and call [WasmEngine.render]. */
     fun scheduleRender()

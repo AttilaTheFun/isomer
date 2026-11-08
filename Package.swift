@@ -49,6 +49,8 @@ let package = Package(
         // takes it, by its branch (SwiftPM reconciles no other requirement on
         // it); the commit is Package.resolved's.
         .package(url: "https://github.com/swiftlang/swift-syntax", branch: "release/6.4.x"), // as swift-foundation
+        // The render tree's wire format (shared/wire/tree.proto).
+        .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.38.1"),
     ],
     targets: [
         .target(
@@ -107,15 +109,15 @@ let package = Package(
             exclude: ["BUILD.bazel"]
         ),
         // The modules SwiftUI stands on, off Apple: what Isomer's SwiftUI
-        // reads of its host and runtime (IsomerSwiftUI: the tree's wire format,
-        // TreeGenerated.swift being flatc's, checked in), CoreTransferable,
+        // reads of its host and runtime (IsomerSwiftUI: the render tree's wire
+        // format, tree.pb.swift being protoc's, checked in), CoreTransferable,
         // UniformTypeIdentifiers and ImageIO under Apple's names.
-        // IsomerSwiftUI's FlatBuffers comes from isomer's Bazel module
-        // (MODULE.bazel's configure_package) until the wire format is
-        // protobuf.
         .target(
             name: "IsomerSwiftUI",
-            dependencies: [.target(name: "Foundation", condition: .when(platforms: [.android, .wasi]))],
+            dependencies: [
+                .product(name: "SwiftProtobuf", package: "swift-protobuf"),
+                .target(name: "Foundation", condition: .when(platforms: [.android, .wasi])),
+            ],
             path: "shared/isomer_swift_ui",
             exclude: ["BUILD.bazel"]
         ),

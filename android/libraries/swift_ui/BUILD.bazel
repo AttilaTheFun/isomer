@@ -173,7 +173,7 @@ swift_library(
 # IsomerView). Compiled per-app together with the generated bindings by
 # `isomer_android_library` (tools/android/defs.bzl) — the bindings'
 # package is fixed at dev.isomer.runtime so these sources resolve them.
-# The Swift-FREE Compose interpreter: decode tree.fbs (FlatTree), render it as
+# The Swift-FREE Compose interpreter: decode tree.proto (FlatTree), render it as
 # Material composables (ComposeRenderer/IsoNode), and the pure-Kotlin host
 # services it needs (HostServices: image cache, scale, openURL), Foundation's
 # among them (:foundation_hosts_kotlin). It references

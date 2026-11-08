@@ -206,13 +206,6 @@ has it.
   #516 (constant-pool reservations), #517 (internal calls off the native
   stack) and #518 (the dispatch fusions, on #517). #517's CoreMark needs a
   measurement on a quiet machine.
-- **flatbuffers** (the registry's 25.12.19.isomer.1): google/flatbuffers#9461
-  (open): FlatBuffers without Foundation on WASI (Android's part of
-  `flatbuffers_foundation_wasi.patch` stays ours); the Swift Vectors glob is
-  fixed upstream (#8875) and goes with the next release.
-  `flatbuffers_dev_dependencies.patch` (its JS, TS, Go and gRPC dependencies
-  dev-only, so no rules_foreign_cc in a consumer's graph) is ours to keep
-  until the BCR's entry does the same, or upstream's MODULE.bazel.
 - **rules_swift_package_manager**: cgrindel/rules_swift_package_manager#2621
   (draft): Windows hosts.
 - **hermetic_android_toolchains**: keith/hermetic_android_toolchains#110

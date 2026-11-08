@@ -3,8 +3,8 @@
 // platform bridge constructs one and installs it with `Renderer.bind(_:)`
 // before `Runtime.start`. See docs/renderer_layers.md.
 
-/// Base for component-system renderers: encodes the tree as a FlatBuffer
-/// (tree.fbs) and hands it to the platform transport (an FFI call to the
+/// Base for component-system renderers: encodes the tree as a protobuf message
+/// (tree.proto) and hands it to the platform transport (an FFI call to the
 /// host's tree consumer), then fires lifecycle for newly appearing nodes.
 package class ComponentSystemRenderer: TreeRenderer {
     private let send: ([UInt8]) -> Void

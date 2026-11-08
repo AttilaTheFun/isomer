@@ -54,8 +54,8 @@ package protocol WebHost {
     func openURL(url: String)
     func platformCommand(key: String, value: String)
     func epochMillis() -> Double
-    /// ReactRenderer path: render the serialized view tree (the tree.fbs
-    /// FlatBuffer) as React components. Unused under the SwiftGPURenderer.
+    /// ReactRenderer path: render the serialized view tree (the tree.proto
+    /// protobuf) as React components. Unused under the SwiftGPURenderer.
     func renderTree(tree: [UInt8])
     /// An encoded picture's bytes for `source` (`IsomerImages`): the browser
     /// keeps them as a Blob and draws it by its object URL; empty bytes

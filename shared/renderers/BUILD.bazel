@@ -24,26 +24,3 @@ filegroup(
     ),
     visibility = ["//visibility:public"],
 )
-
-# flatc-generated Swift accessors for tree.fbs (the render-tree wire
-# format); compiled once, into IsomerSwiftUI (//shared/isomer_swift_ui).
-genrule(
-    name = "tree_swift",
-    srcs = ["tree.fbs"],
-    outs = ["tree_generated.swift"],
-    cmd = "$(location @flatbuffers//:flatc) --swift -o $(RULEDIR) $(location tree.fbs)",
-    tools = ["@flatbuffers//:flatc"],
-    visibility = ["//shared/isomer_swift_ui:__pkg__"],
-)
-
-exports_files(["tree.fbs"])
-
-# FlatBuffers' Swift runtime, which isomer's Swift package (IsomerSwiftUI,
-# SwiftUI) takes from this module until the wire format is protobuf
-# (MODULE.bazel's configure_package): named here, where the package's
-# generated repositories can see it.
-alias(
-    name = "flatbuffers_swift",
-    actual = "@flatbuffers//swift",
-    visibility = ["//visibility:public"],
-)

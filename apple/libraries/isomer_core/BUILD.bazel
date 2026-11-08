@@ -8,7 +8,7 @@ package(default_visibility = ["//visibility:public"])
 # compiled engine behind `IsomerView` (apple/libraries/isomer_view).
 # Same source set as the wasm reactors' slim module
 # (//wasm/libraries/hot_swift_ui): core + component-system renderers (no GPU),
-# so `SwiftUIRenderer` serializes tree.fbs Patches exactly like a reactor
+# so `SwiftUIRenderer` serializes tree.proto Patches exactly like a reactor
 # does — the host applies them with `FlatPatchTree` and renders real SwiftUI.
 #
 # Feature code written against `import SwiftUI` compiles against this module

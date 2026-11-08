@@ -12,7 +12,7 @@ package(default_visibility = ["//visibility:public"])
 # The shared feature compiled NATIVELY against the IsomerCore
 # reimplementation (`import SwiftUI` in the source resolves to the core via
 # -module-alias) so `IsomerView`'s compiled engine can run it in-process,
-# emitting the same tree.fbs Patch stream as the wasm twin.
+# emitting the same tree.proto Patch stream as the wasm twin.
 swift_library(
     name = "feature_lib",
     srcs = ["//shared/embedded_example:card"],

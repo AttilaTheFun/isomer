@@ -1,8 +1,7 @@
-// Decodes the render-tree FlatBuffer (shared/renderers/tree.fbs) into the
-// plain-object shape the React interpreter consumes ({k, v, ch, ...} — the
-// former JSON layout). Hand-written against the standard FlatBuffers wire
-// format so the web stays npm-free; the field slot numbers MUST match the
-// numbered comments in tree.fbs (append-only).
+// Decodes the render tree (shared/wire/tree.proto: protobuf) into the
+// plain-object shape the React interpreter consumes ({k, v, ch, ...}).
+// Hand-written against protobuf's wire format so the web stays npm-free;
+// the field numbers MUST match tree.proto's.
 
 const KINDS = [
   "box", "text", "shape", "stack", "spacer", "divider", "scroll", "image",
@@ -14,174 +13,232 @@ const ALIGN_V = ["top", "center", "bottom"];
 const SHAPES = ["rect", "circle", "capsule"];
 const STYLES = ["sheet", "popover", "alert"];
 
-// Shared low-level reader over one serialized buffer (a full tree or a Patch).
-function makeReader(bytes) {
+const textDecoder = new TextDecoder();
+
+// A reader over `bytes[start, end)`: protobuf's fields, one at a time.
+function makeReader(bytes, start = 0, end = bytes.length) {
   const buf = bytes instanceof Uint8Array ? bytes : Uint8Array.from(bytes);
   const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
-  const decoder = new TextDecoder();
-
-  const u8 = (pos) => view.getUint8(pos);
-  const u16 = (pos) => view.getUint16(pos, true);
-  const i32 = (pos) => view.getInt32(pos, true);
-  const u32 = (pos) => view.getUint32(pos, true);
-  const f32 = (pos) => view.getFloat32(pos, true);
-  const f64 = (pos) => view.getFloat64(pos, true);
-
-  // Absolute position of field `slot` inside the table at `table`, or 0.
-  function field(table, slot) {
-    const vtable = table - i32(table);
-    const vtSize = u16(vtable);
-    const entry = 4 + 2 * slot;
-    if (entry >= vtSize) return 0;
-    const offset = u16(vtable + entry);
-    return offset === 0 ? 0 : table + offset;
+  let pos = start;
+  // A varint's low 32 bits as a signed int32 (an int32 field's negative
+  // values are ten bytes long) and as an unsigned number (a length, a tag).
+  function varint() {
+    let lo = 0;
+    let shift = 0;
+    let byte;
+    do {
+      byte = buf[pos];
+      pos += 1;
+      if (shift < 32) lo |= (byte & 0x7f) << shift;
+      shift += 7;
+    } while (byte & 0x80);
+    return lo;
   }
-  const indirect = (pos) => pos + u32(pos);
-  function string(pos) {
-    const data = indirect(pos);
-    const length = u32(data);
-    return decoder.decode(buf.subarray(data + 4, data + 4 + length));
-  }
-  const color = (pos) => [f32(pos), f32(pos + 4), f32(pos + 8), f32(pos + 12)];
+  return {
+    buf,
+    done: () => pos >= end,
+    tag() {
+      const tag = varint() >>> 0;
+      return [tag >>> 3, tag & 7];
+    },
+    int32: () => varint() | 0,
+    uint: () => varint() >>> 0,
+    bool: () => varint() !== 0,
+    double() {
+      const value = view.getFloat64(pos, true);
+      pos += 8;
+      return value;
+    },
+    float() {
+      const value = view.getFloat32(pos, true);
+      pos += 4;
+      return value;
+    },
+    // A length-delimited field's bounds; the reader moves past it.
+    span() {
+      const length = varint() >>> 0;
+      const from = pos;
+      pos += length;
+      return [from, pos];
+    },
+    string() {
+      const length = varint() >>> 0;
+      const text = textDecoder.decode(buf.subarray(pos, pos + length));
+      pos += length;
+      return text;
+    },
+    skip(type) {
+      if (type === 0) varint();
+      else if (type === 1) pos += 8;
+      else if (type === 2) pos += varint() >>> 0;
+      else if (type === 5) pos += 4;
+    },
+  };
+}
 
-  function node(table) {
-    const n = {};
-    const kindPos = field(table, 0);
-    n.k = KINDS[kindPos ? u8(kindPos) : 0] || "box";
-    let pos;
-    if ((pos = field(table, 1))) n.v = string(pos);
-    if ((pos = field(table, 2))) n.v = f64(pos); // numeric value (slider/progress)
-    if ((pos = field(table, 3))) n.id = string(pos);
-    if ((pos = field(table, 4))) n.size = f64(pos);
-    if ((pos = field(table, 5))) n.weight = i32(pos);
-    if ((pos = field(table, 6))) n.color = color(pos);
-    if ((pos = field(table, 7))) n.lines = i32(pos);
-    if ((pos = field(table, 8))) n.shape = SHAPES[u8(pos)];
-    if ((pos = field(table, 9))) n.fill = color(pos);
-    if ((pos = field(table, 10))) n.stroke = color(pos);
-    if ((pos = field(table, 11))) n.strokeWidth = f64(pos);
-    if ((pos = field(table, 12))) n.axis = AXES[u8(pos)];
-    else if (n.k === "stack" || n.k === "scroll") n.axis = "h";
-    if ((pos = field(table, 13))) n.spacing = f64(pos);
-    if ((pos = field(table, 14))) n.min = f64(pos);
-    if ((pos = field(table, 15))) n.src = string(pos);
-    if ((pos = field(table, 16))) n.remote = u8(pos) !== 0;
-    if ((pos = field(table, 17))) n.resizable = u8(pos) !== 0;
-    if ((pos = field(table, 18))) n.fit = u8(pos) !== 0;
-    if ((pos = field(table, 19))) n.placeholder = string(pos);
-    if ((pos = field(table, 20))) n.edit = string(pos);
-    if ((pos = field(table, 21))) n.view = string(pos);
-    if ((pos = field(table, 22))) {
-      const vec = indirect(pos);
-      const count = u32(vec);
-      n.options = [];
-      for (let index = 0; index < count; index += 1) {
-        n.options.push(string(vec + 4 + index * 4));
-      }
-    }
-    if ((pos = field(table, 23))) {
-      const vec = indirect(pos);
-      const count = u32(vec);
-      n.params = {};
-      for (let index = 0; index < count; index += 1) {
-        const kv = indirect(vec + 4 + index * 4);
-        n.params[string(field(kv, 0))] = string(field(kv, 1));
-      }
-    }
-    if ((pos = field(table, 24))) n.growW = u8(pos) !== 0;
-    if ((pos = field(table, 25))) n.growH = u8(pos) !== 0;
-    if ((pos = field(table, 26))) n.alignH = ALIGN_H[u8(pos)];
-    if ((pos = field(table, 27))) n.alignV = ALIGN_V[u8(pos)];
-    if ((pos = field(table, 28))) {
-      n.shadow = {
-        color: color(pos), radius: f32(pos + 16), x: f32(pos + 20), y: f32(pos + 24),
-      };
-    }
-    if ((pos = field(table, 29))) {
-      const vec = indirect(pos);
-      const count = u32(vec);
-      n.padding = [];
-      for (let index = 0; index < count; index += 1) {
-        n.padding.push(f64(vec + 4 + index * 8));
-      }
-    }
-    if ((pos = field(table, 30))) n.width = f64(pos);
-    if ((pos = field(table, 31))) n.height = f64(pos);
-    if ((pos = field(table, 32))) n.expandW = u8(pos) !== 0;
-    if ((pos = field(table, 33))) n.expandH = u8(pos) !== 0;
-    if ((pos = field(table, 34))) n.radius = f64(pos);
-    if ((pos = field(table, 45))) n.offsetX = f64(pos);
-    if ((pos = field(table, 46))) n.offsetY = f64(pos);
-    if ((pos = field(table, 47))) n.scale = f64(pos);
-    if ((pos = field(table, 48))) n.drag = string(pos);
-    if ((pos = field(table, 49))) n.key = string(pos);
-    if ((pos = field(table, 35))) n.opacity = f64(pos);
-    if ((pos = field(table, 36))) n.bg = color(pos);
-    if ((pos = field(table, 37))) n.gradient = string(pos);
-    if ((pos = field(table, 38))) n.tap = string(pos);
-    if ((pos = field(table, 39))) n.feedback = i32(pos);
-    if ((pos = field(table, 40))) n.style = STYLES[u8(pos)];
-    if ((pos = field(table, 41))) n.title = string(pos);
-    if ((pos = field(table, 42))) n.message = string(pos);
-    if ((pos = field(table, 43))) n.dismiss = string(pos);
-    if ((pos = field(table, 44))) {
-      const vec = indirect(pos);
-      const count = u32(vec);
-      n.ch = [];
-      for (let index = 0; index < count; index += 1) {
-        n.ch.push(node(indirect(vec + 4 + index * 4)));
-      }
-    }
-    return n;
+function color(buf, [from, to]) {
+  const r = makeReader(buf, from, to);
+  const out = [0, 0, 0, 0];
+  while (!r.done()) {
+    const [field, type] = r.tag();
+    if (type === 5 && field >= 1 && field <= 4) out[field - 1] = r.float();
+    else r.skip(type);
   }
+  return out;
+}
 
-  return { node, field, string, u8, u32, i32, indirect };
+function shadow(buf, [from, to]) {
+  const r = makeReader(buf, from, to);
+  const out = { color: [0, 0, 0, 0], radius: 0, x: 0, y: 0 };
+  while (!r.done()) {
+    const [field, type] = r.tag();
+    if (field === 1 && type === 2) out.color = color(buf, r.span());
+    else if (field === 2 && type === 5) out.radius = r.float();
+    else if (field === 3 && type === 5) out.x = r.float();
+    else if (field === 4 && type === 5) out.y = r.float();
+    else r.skip(type);
+  }
+  return out;
+}
+
+function keyValue(buf, [from, to]) {
+  const r = makeReader(buf, from, to);
+  let key = "";
+  let value = "";
+  while (!r.done()) {
+    const [field, type] = r.tag();
+    if (field === 1 && type === 2) key = r.string();
+    else if (field === 2 && type === 2) value = r.string();
+    else r.skip(type);
+  }
+  return [key, value];
+}
+
+function node(buf, [from, to]) {
+  const r = makeReader(buf, from, to);
+  const n = { k: "box" };
+  let numeric;
+  let hasAxis = false;
+  while (!r.done()) {
+    const [field, type] = r.tag();
+    switch (field) {
+      case 1: n.k = KINDS[r.uint()] || "box"; break;
+      case 2: n.v = r.string(); break;
+      case 3: numeric = r.double(); break; // numeric value (slider/progress)
+      case 4: n.id = r.string(); break;
+      case 5: n.size = r.double(); break;
+      case 6: n.weight = r.int32(); break;
+      case 7: n.color = color(buf, r.span()); break;
+      case 8: n.lines = r.int32(); break;
+      case 9: n.shape = SHAPES[r.uint()]; break;
+      case 10: n.fill = color(buf, r.span()); break;
+      case 11: n.stroke = color(buf, r.span()); break;
+      case 12: n.strokeWidth = r.double(); break;
+      case 13: n.axis = AXES[r.uint()]; hasAxis = true; break;
+      case 14: n.spacing = r.double(); break;
+      case 15: n.min = r.double(); break;
+      case 16: n.src = r.string(); break;
+      case 17: n.remote = r.bool(); break;
+      case 18: n.resizable = r.bool(); break;
+      case 19: n.fit = r.bool(); break;
+      case 20: n.placeholder = r.string(); break;
+      case 21: n.edit = r.string(); break;
+      case 22: n.view = r.string(); break;
+      case 23: (n.options ??= []).push(r.string()); break;
+      case 24: {
+        const [key, value] = keyValue(buf, r.span());
+        (n.params ??= {})[key] = value;
+        break;
+      }
+      case 25: n.growW = r.bool(); break;
+      case 26: n.growH = r.bool(); break;
+      case 27: n.alignH = ALIGN_H[r.uint()]; break;
+      case 28: n.alignV = ALIGN_V[r.uint()]; break;
+      case 29: n.shadow = shadow(buf, r.span()); break;
+      case 30: {
+        n.padding ??= [];
+        if (type === 2) {
+          const [start, end] = r.span();
+          const packed = makeReader(buf, start, end);
+          while (!packed.done()) n.padding.push(packed.double());
+        } else {
+          n.padding.push(r.double());
+        }
+        break;
+      }
+      case 31: n.width = r.double(); break;
+      case 32: n.height = r.double(); break;
+      case 33: n.expandW = r.bool(); break;
+      case 34: n.expandH = r.bool(); break;
+      case 35: n.radius = r.double(); break;
+      case 36: n.opacity = r.double(); break;
+      case 37: n.bg = color(buf, r.span()); break;
+      case 38: n.gradient = r.string(); break;
+      case 39: n.tap = r.string(); break;
+      case 40: n.feedback = r.int32(); break;
+      case 41: n.style = STYLES[r.uint()]; break;
+      case 42: n.title = r.string(); break;
+      case 43: n.message = r.string(); break;
+      case 44: n.dismiss = r.string(); break;
+      case 45: (n.ch ??= []).push(node(buf, r.span())); break;
+      case 46: n.offsetX = r.double(); break;
+      case 47: n.offsetY = r.double(); break;
+      case 48: n.scale = r.double(); break;
+      case 49: n.drag = r.string(); break;
+      case 50: n.key = r.string(); break;
+      default: r.skip(type);
+    }
+  }
+  if (numeric !== undefined) n.v = numeric;
+  if (!hasAxis && (n.k === "stack" || n.k === "scroll")) n.axis = "h";
+  return n;
 }
 
 export function decodeTree(bytes) {
   const r = makeReader(bytes);
-  return r.node(r.indirect(0));
+  return node(r.buf, [0, r.buf.length]);
 }
 
-// Apply a `Patch` buffer (shared/renderers/tree.fbs, the ONLY wire format the
-// reactor ships) to the retained plain-object tree, returning the new root.
+// One PatchOp: { path, node, attrsOnly, reorder, order, inserts }.
+function patchOp(buf, [from, to]) {
+  const r = makeReader(buf, from, to);
+  const op = { path: null, node: null, attrsOnly: false, reorder: false, order: [], inserts: [] };
+  while (!r.done()) {
+    const [field, type] = r.tag();
+    if (field === 1 && type === 2) op.path = r.string();
+    else if (field === 2 && type === 2) op.node = node(buf, r.span());
+    else if (field === 3 && type === 0) op.attrsOnly = r.bool();
+    else if (field === 4 && type === 2) {
+      const [start, end] = r.span();
+      const packed = makeReader(buf, start, end);
+      while (!packed.done()) op.order.push(packed.int32());
+    } else if (field === 4 && type === 0) op.order.push(r.int32());
+    else if (field === 5 && type === 2) op.inserts.push(node(buf, r.span()));
+    else if (field === 6 && type === 0) op.reorder = r.bool();
+    else r.skip(type);
+  }
+  return op;
+}
+
+// Apply a `Patch` (shared/wire/tree.proto, the ONLY wire format the reactor
+// ships) to the retained plain-object tree, returning the new root.
 // Copy-on-write: only nodes on each op's path are rebuilt, so unchanged
 // subtrees keep their object identity (React.memo-friendly). The first patch
 // after start is a single full-tree op at "n"; `retained` is null then.
 export function applyPatch(retained, bytes) {
   const r = makeReader(bytes);
-  const patch = r.indirect(0);
   let root = retained;
-  const opsPos = r.field(patch, 0); // Patch.ops (slot 0)
-  if (opsPos) {
-    const vec = r.indirect(opsPos);
-    const count = r.u32(vec);
-    for (let index = 0; index < count; index += 1) {
-      const op = r.indirect(vec + 4 + index * 4);
-      const pathPos = r.field(op, 0); // PatchOp.path (slot 0)
-      if (!pathPos) continue;
-      const path = r.string(pathPos);
-      const orderPos = r.field(op, 3); // PatchOp.order (slot 3)
-      if (orderPos) {
-        const orderVec = r.indirect(orderPos);
-        const order = [];
-        for (let i = 0; i < r.u32(orderVec); i += 1) order.push(r.i32(orderVec + 4 + i * 4));
-        const insertsPos = r.field(op, 4); // PatchOp.inserts (slot 4)
-        const inserts = [];
-        if (insertsPos) {
-          const vec = r.indirect(insertsPos);
-          for (let i = 0; i < r.u32(vec); i += 1) inserts.push(r.node(r.indirect(vec + 4 + i * 4)));
-        }
-        root = reorderAt(root, path, order, inserts);
-        continue;
-      }
-      const nodePos = r.field(op, 1); // PatchOp.node (slot 1)
-      if (!nodePos) continue;
-      const attrsPos = r.field(op, 2); // PatchOp.attrs_only (slot 2)
-      const attrsOnly = attrsPos !== 0 && r.u8(attrsPos) !== 0;
-      const decoded = r.node(r.indirect(nodePos));
-      root = applyOp(root, path, decoded, attrsOnly);
+  while (!r.done()) {
+    const [field, type] = r.tag();
+    if (field !== 1 || type !== 2) { r.skip(type); continue; } // Patch.ops
+    const op = patchOp(r.buf, r.span());
+    if (op.path === null) continue;
+    if (op.reorder || op.order.length) {
+      root = reorderAt(root, op.path, op.order, op.inserts);
+      continue;
     }
+    if (!op.node) continue;
+    root = applyOp(root, op.path, op.node, op.attrsOnly);
   }
   // Non-null after the first (root) op; the empty box guards a degenerate
   // empty-ops patch against a still-empty retained tree.

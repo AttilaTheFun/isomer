@@ -17,7 +17,7 @@
 //   • No bundle present and none emitted → the compiled root renders, at
 //     native performance. This is the shipping steady state.
 //
-// Both engines emit the SAME tree.fbs Patch stream into the SAME
+// Both engines emit the SAME tree.proto Patch stream into the SAME
 // `IsomerTreeView` (real SwiftUI), so the surrounding app never notices
 // which one is live.
 //

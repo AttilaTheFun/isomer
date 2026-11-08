@@ -3,7 +3,7 @@
 // the `iso_hot` render callbacks are all wired by WasmKitRuntime), inject a
 // native ConfigurationService, run `iso_hot_start`/`render`, and assert the reactor pushed
 // a tree containing the demo greeting AND the native-flag-gated promo banner.
-// Proves the whole path (WASI, swift_ffi DI, iso_hot render, FlatBuffers) works
+// Proves the whole path (WASI, swift_ffi DI, iso_hot render, the tree's wire format) works
 // without a GUI. Usage: hot_smoke <path-to.wasm> [expected-substring]
 
 import ApplePlatformServices

@@ -45,7 +45,7 @@ public final class WasmFeatureRuntime {
     /// future asset service exposes them to the feature.
     public private(set) var assets: [String: Data] = [:]
 
-    /// The latest serialized render tree (tree.fbs), or nil before first frame.
+    /// The latest serialized render tree (tree.proto), or nil before first frame.
     /// Human-readable load/run status for a host's status line.
     public private(set) var status = "Not loaded"
     /// A newer render tree is available (fires on the main actor).

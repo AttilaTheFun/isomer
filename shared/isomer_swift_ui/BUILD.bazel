@@ -1,12 +1,13 @@
-load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
 load("//foundation:defs.bzl", "one_configuration")
 
 package(default_visibility = ["//visibility:public"])
 
+exports_files(["tree.pb.swift"])
+
 # IsomerSwiftUI, isomer's Swift package's (Package.swift): what a host reads
-# of the runtime. TreeGenerated.swift is flatc's Swift for the render tree's
-# wire format (shared/renderers/tree.fbs), checked in so the package builds it
-# without flatc; tree_generated_test keeps it flatc's.
+# of the runtime. tree.pb.swift is protoc's Swift for the render tree's wire
+# format (shared/wire/tree.proto), checked in so the package builds it without
+# protoc; //shared/wire:tree_swift_test keeps it protoc's.
 one_configuration(
     name = "isomer_swift_ui",
     actual = "@swiftpkg_isomer//:IsomerSwiftUI",
@@ -21,9 +22,3 @@ one_configuration(
     configuration = "own_swift_ui",
 )
 
-diff_test(
-    name = "tree_generated_test",
-    failure_message = "Regenerate shared/isomer_swift_ui/TreeGenerated.swift: bazel build //shared/renderers:tree_swift, and copy its output over it.",
-    file1 = "TreeGenerated.swift",
-    file2 = "//shared/renderers:tree_swift",
-)

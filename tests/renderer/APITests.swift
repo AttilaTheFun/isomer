@@ -2,7 +2,6 @@
 // (docs/swiftui_api_audit.md): each builds a screen with the mock renderer
 // and asserts on the tree, the serialized form, or what a host event does.
 
-import FlatBuffers
 import Foundation
 import SwiftUI  // IsomerCore, aliased (BUILD.bazel)
 import IsomerSwiftUI
@@ -411,7 +410,7 @@ func checkRuntimeConnection(_ mock: MockRenderer) {
     expect(!sent.isEmpty, "a tree renderer bound through the connection gets the frame's encoded tree")
     var buffer = ByteBuffer(bytes: sent)
     let patch: IsoFlat_Patch = getRoot(byteBuffer: &buffer)
-    expect(patch.ops.count > 0, "the encoded frame is a tree.fbs patch (\(patch.ops.count) ops)")
+    expect(patch.ops.count > 0, "the encoded frame is a tree.proto patch (\(patch.ops.count) ops)")
     // Back to the mock for the checks after this one.
     Renderer.bind(mock)
 }

@@ -152,17 +152,17 @@ swift_deps.configure_package(
 # @isomer by the application's inject_repo (README: "Consuming isomer").
 swift_deps.configure_package(
     name = "isomer",
-    target_deps = {
-        "Foundation": ["@isomer//foundation/internationalization"],
-        # FlatBuffers' Swift runtime, the render tree's wire format, from
-        # this module (a SwiftPM dependency on it would bring its test-only
-        # grpc-swift 1 into every application's graph); until the wire
-        # format is protobuf.
-        "IsomerSwiftUI": ["@isomer//shared/renderers:flatbuffers_swift"],
-        "SwiftUI": ["@isomer//shared/renderers:flatbuffers_swift"],
-    },
+    target_deps = {"Foundation": ["@isomer//foundation/internationalization"]},
 )
-use_repo(swift_deps, "swiftpkg_isomer", "swiftpkg_swift_foundation", "swiftpkg_swift_syntax")
+# SwiftProtobuf (the render tree's wire format, shared/wire/tree.proto):
+# where Isomer's Foundation is the Foundation (the web, Android), its
+# `import Foundation` is Isomer's, as every package an application links
+# there (README).
+swift_deps.configure_package(
+    name = "swift-protobuf",
+    target_deps = {"SwiftProtobuf": ["@isomer//foundation:for_swift_packages"]},
+)
+use_repo(swift_deps, "swiftpkg_isomer", "swiftpkg_swift_foundation", "swiftpkg_swift_protobuf", "swiftpkg_swift_syntax")
 
 swift_deps_root = use_extension(
     "@rules_swift_package_manager//:extensions.bzl",
@@ -219,9 +219,7 @@ bazel_dep(name = "rules_nodejs", version = "6.7.5")
 # The tsc that ts_project runs. Pins @npm_typescript (the tsc ts_swift_library
 # compiles bridges with) in this module's own repo mapping, so consumers need
 # no rules_ts setup. The version is given here rather than read from a
-# package.json: nothing in the module uses npm packages. (flatbuffers' own
-# use of rules_js's `npm` extension, with a tag rules_js 3 rejects, is
-# dev-only in the registry's 25.12.19.isomer.1.)
+# package.json: nothing in the module uses npm packages.
 rules_ts_ext = use_extension("@aspect_rules_ts//ts:extensions.bzl", "ext")
 rules_ts_ext.deps(ts_version = "5.8.3")
 use_repo(rules_ts_ext, "npm_typescript")
@@ -245,16 +243,10 @@ register_toolchains("@rust_toolchains//:all", dev_dependency = True)
 # (examples' //tests/sqlite_wasi, through //tools/wasm/wasi_run). C compiled for wasm needs the rules_swift
 # patch above (the SDK's clang resource directory).
 
-# FlatBuffers: the render-tree wire format (tree.fbs in shared/renderers) —
-# flatc for codegen plus the Swift runtime the encoder/decoders link. From
-# this project's registry: 25.12.19.isomer.1 is upstream's 25.12.19 with
-# tools/patches' three: its JavaScript, TypeScript, Go and gRPC dependencies
-# dev-only (nothing of them builds flatc or the Swift runtime, and gRPC
-# brought a rules_foreign_cc that doesn't load under Bazel 9), Foundation
-# left out on WASI (google/flatbuffers#9461), and the Swift BUILD glob's
-# missing Vectors/ (upstream #8875, in its next release). A version, so a
-# consumer repeats no override of it.
-bazel_dep(name = "flatbuffers", version = "25.12.19.isomer.1")
+# protoc, for the render tree's checked-in Swift (shared/wire/tree.proto ->
+# shared/isomer_swift_ui/tree.pb.swift, //shared/wire:tree_swift_test): this
+# module's own check, so a dev dependency.
+bazel_dep(name = "protobuf", version = "34.0.bcr.1", dev_dependency = True)
 
 # swift_map (//swift_map/...) backs the SwiftUI `Map` view on Apple (Metal) and
 # on every SwiftGPURenderer platform; the platform SwiftUI modules reference

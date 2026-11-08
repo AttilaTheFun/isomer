@@ -56,11 +56,6 @@ bazel_dep(name = "rules_swift", version = "4.2.2.isomer.3")
 # package, in the graph below (third_party/swift_packages). It was isomer's
 # until 0.34.
 
-# flatbuffers: the render-tree wire format, from the project's registry with
-# isomer's patches (25.12.19.isomer.1; isomer's MODULE.bazel says what they
-# are): a version, nothing to override.
-bazel_dep(name = "flatbuffers", version = "25.12.19.isomer.1")
-
 # --- Toolchains (tags are read from the root module) --------------------------
 
 # The swift.org host toolchain + wasm/Android Swift SDK cross toolchains.

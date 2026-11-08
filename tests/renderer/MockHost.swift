@@ -51,3 +51,25 @@ nonisolated(unsafe) var stubHostNow = 0.0
 /// The URLs the runtime asked a StubHost to open outside the app.
 nonisolated(unsafe) var hostOpenedURLs: [String] = []
 
+
+// The tests read encoded trees as they did when the wire format was
+// FlatBuffers: a buffer over the bytes, and its root as a node or a patch
+// (IsomerSwiftUI's reading API, TreeReader.swift).
+struct ByteBuffer {
+    let bytes: [UInt8]
+    init(bytes: [UInt8]) { self.bytes = bytes }
+}
+
+protocol TreeRoot {
+    init(rootBytes: [UInt8])
+}
+
+extension IsoFlat_Node: TreeRoot {
+    init(rootBytes: [UInt8]) { try! self.init(treeBytes: rootBytes) }
+}
+
+extension IsoFlat_Patch: TreeRoot {
+    init(rootBytes: [UInt8]) { try! self.init(patchBytes: rootBytes) }
+}
+
+func getRoot<T: TreeRoot>(byteBuffer: inout ByteBuffer) -> T { T(rootBytes: byteBuffer.bytes) }

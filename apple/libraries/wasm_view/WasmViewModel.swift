@@ -30,7 +30,7 @@ public final class WasmViewModel: ObservableObject {
     public private(set) nonisolated(unsafe) static weak var benchShared: WasmViewModel?
 
     /// The retained render tree, or nil before the first frame. Each `on_tree`
-    /// buffer is a tree.fbs `Patch` — the only wire format — applied in arrival
+    /// buffer is a tree.proto `Patch` — the only wire format — applied in arrival
     /// order (never coalesced: a tap emits press + un-press patches; dropping
     /// one desyncs the retained tree).
     @Published public private(set) var tree: PatchedNode?
