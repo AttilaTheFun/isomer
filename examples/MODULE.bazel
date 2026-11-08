@@ -222,6 +222,7 @@ single_version_override(
     patches = [
         "//tools/patches:rules_swift_package_manager_windows.patch",
         "//tools/patches:rules_swift_package_manager_local_bazel_package.patch",
+        "//tools/patches:rules_swift_package_manager_minimum_os_off_apple.patch",
     ],
 )
 

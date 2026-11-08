@@ -124,7 +124,10 @@ bazel_dep(name = "rules_swift_package_manager", version = "1.25.0")
 single_version_override(
     module_name = "rules_swift_package_manager",
     patch_strip = 1,
-    patches = ["//tools/patches:rules_swift_package_manager_local_bazel_package.patch"],
+    patches = [
+        "//tools/patches:rules_swift_package_manager_local_bazel_package.patch",
+        "//tools/patches:rules_swift_package_manager_minimum_os_off_apple.patch",
+    ],
 )
 
 # rules_swift_package_manager's own extension, so an application's graph and
