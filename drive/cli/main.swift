@@ -8,7 +8,7 @@
 //   isomer application list
 //   isomer application stop <name>          an exec: app started in the background
 //
-//   isomer ls | info
+//   isomer ls [<role>…] | info              (ls text, ls button: one role)
 //   isomer tap <element>
 //   isomer type <element> <text>
 //   isomer set <element> <value>
@@ -182,7 +182,16 @@ func command(_ verb: String, _ rest: [String], _ options: Options) -> Wire_Comma
         return rest[index]
     }
     switch verb {
-    case "ls", "info", "back", "dismiss", "quit": break
+    case "ls":
+        // `ls <role>…`: only those roles (the filter is the CLI's own: the
+        // app answers with the whole screen).
+        if !rest.isEmpty {
+            shownRoles = Set(rest.map { role in
+                let lower = role.lowercased()
+                return lower.hasSuffix("s") && lower.count > 1 ? String(lower.dropLast()) : lower
+            })
+        }
+    case "info", "back", "dismiss", "quit": break
     case "tap": command.target = argument(0, "tap <element>")
     case "type":
         command.target = argument(0, "type <element> <text>")
@@ -208,7 +217,21 @@ func command(_ verb: String, _ rest: [String], _ options: Options) -> Wire_Comma
     return command
 }
 
-/// An answer as a person reads it.
+/// The roles `ls <role>` shows (button, text, textField, toggle, picker,
+/// slider, sheet, alert…; a plural as its singular), every one when nil.
+nonisolated(unsafe) var shownRoles: Set<String>?
+
+/// A label or a text in double quotes, its quotes, backslashes and line
+/// breaks escaped, so each element stays one line.
+func quoted(_ text: String) -> String {
+    var escaped = text.replacingOccurrences(of: "\\", with: "\\\\")
+    escaped = escaped.replacingOccurrences(of: "\"", with: "\\\"")
+    escaped = escaped.replacingOccurrences(of: "\n", with: "\\n")
+    return "\"" + escaped + "\""
+}
+
+/// An answer as a person reads it: a line an element, in the screen's order
+/// (what is presented, the controls, then the texts).
 func describe(_ answer: Wire_Answer) -> String {
     var lines: [String] = []
     if answer.hasError { lines.append("error: \(answer.error)") }
@@ -222,19 +245,24 @@ func describe(_ answer: Wire_Answer) -> String {
         lines.append("\(info.platform), \(info.renderer), \(Int(info.width))×\(Int(info.height))")
         return lines.joined(separator: "\n")
     }
-    let screen = answer.screen
-    for presentation in screen.presented {
-        lines.append("[\(presentation.style)] \(presentation.title)\(presentation.message.isEmpty ? "" : ": \(presentation.message)")")
+    func shown(_ role: String) -> Bool {
+        shownRoles.map { $0.contains(role.lowercased()) } ?? true
     }
-    for element in screen.elements {
-        var line = "\(element.role) \"\(element.label)\""
-        if element.hasID { line += " #\(element.id)" }
-        if element.hasValue { line += " = \(element.value)" }
-        if !element.options.isEmpty { line += " [\(element.options.joined(separator: ", "))]" }
+    let screen = answer.screen
+    for presentation in screen.presented where shown(presentation.style) {
+        var line = "\(presentation.style) \(quoted(presentation.title))"
+        if !presentation.message.isEmpty { line += ": \(quoted(presentation.message))" }
         lines.append(line)
     }
-    if !screen.texts.isEmpty {
-        lines.append("texts: " + screen.texts.joined(separator: " | "))
+    for element in screen.elements where shown(element.role) {
+        var line = "\(element.role) \(quoted(element.label))"
+        if element.hasID { line += " #\(element.id)" }
+        if element.hasValue { line += " = \(quoted(element.value))" }
+        if !element.options.isEmpty { line += " [\(element.options.map(quoted).joined(separator: ", "))]" }
+        lines.append(line)
+    }
+    if shown("text") {
+        for text in screen.texts { lines.append("text \(quoted(text))") }
     }
     return lines.joined(separator: "\n")
 }

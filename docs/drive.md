@@ -57,7 +57,8 @@ isomer application add staging grpc://build-host:7701 --token-file ~/.staging-to
 isomer application select storybook
 isomer application list
 
-isomer ls                          # the screen
+isomer ls                          # the screen, a line an element
+isomer ls text                     # one role: text, button, textField, toggle…
 isomer info                        # name, platform, renderer, window
 isomer tap Tap
 isomer type Title "Hits"

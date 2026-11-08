@@ -15,6 +15,9 @@ trap '"$isomer" application stop storybook >/dev/null 2>&1 || true; rm -rf "$XDG
 "$isomer" application add storybook "exec:$app"
 EXPECTED='^\* storybook' has "$isomer" application list
 EXPECTED='Taps: 0' has "$isomer" ls
+EXPECTED='^text "Taps: 0"$' has "$isomer" ls text
+EXPECTED='^button "Tap"$' has "$isomer" ls button
+if EXPECTED='^text ' has "$isomer" ls button; then echo "ls button listed texts"; exit 1; fi
 "$isomer" tap Tap > /dev/null
 "$isomer" tap Tap > /dev/null
 # The app kept running: its count went on from the last command's.
