@@ -108,6 +108,21 @@ final class StorybookHeadlessTests: XCTestCase {
         XCTAssertThrowsError(try app.inspect("button-999"))
     }
 
+    func testAnAlertIsTheWholeScreen() throws {
+        let app = try launch(story: "presentation.alert")
+        defer { app.quit() }
+        var screen = try app.tap("Delete draft…")
+        // What is presented is all that can be used: the page behind is not
+        // listed.
+        XCTAssertEqual(screen.presented.last?.style, "alert")
+        XCTAssertNotNil(screen.element("Delete"))
+        XCTAssertNotNil(screen.element("Cancel"))
+        XCTAssertNil(screen.element("Delete draft…"))
+        screen = try app.tap("Cancel")
+        XCTAssertTrue(screen.presented.isEmpty)
+        XCTAssertNotNil(screen.element("Delete draft…"))
+    }
+
     func testUnknownTargetFailsWithTheScreen() throws {
         let app = try launch(story: "state.observableobject")
         defer { app.quit() }

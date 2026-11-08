@@ -61,10 +61,25 @@ struct DriverScreen {
     /// and the column before, where `back` goes (as a host reports it,
     /// "compact:<column>:back").
     var splitBack: (handler: String, column: String)?
+    /// The topmost presentation's node (the last one walked), if any.
+    private var topPresentation: IsoFlat_Node?
 
     init(_ root: IsoFlat_Node, compact: Bool = false) {
         self.compact = compact
         walk(root, around: [], inside: nil)
+        // Something presented (a sheet, an alert, a popover) is all that can
+        // be used: the screen is the topmost presentation's, as a person
+        // sees it, with every presentation still listed.
+        if let top = topPresentation {
+            let shown = presented
+            texts = []
+            textNodes = []
+            elements = []
+            draggables = []
+            splitBack = nil
+            walk(top, around: [], inside: nil)
+            presented = shown
+        }
         var counts: [String: Int] = [:]
         for index in elements.indices {
             let role = elements[index].role
@@ -136,6 +151,7 @@ struct DriverScreen {
             default: style = "sheet"
             }
             presented.append((style, node.title ?? "", node.message ?? "", node.dismiss))
+            topPresentation = node
         case .hostview:
             let kind = node.view ?? "view"
             if ["toggle", "picker", "segmented", "stepper", "datepicker", "colorpicker"].contains(kind) {
