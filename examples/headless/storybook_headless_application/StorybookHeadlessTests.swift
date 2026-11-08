@@ -32,6 +32,8 @@ final class StorybookHeadlessTests: XCTestCase {
         let app = try launch(story: "state.observableobject")
         defer { app.quit() }
         XCTAssertTrue(try app.screen().shows("Taps: 0"))
+        // The story's code is one element: one text of many lines.
+        XCTAssertTrue(try app.screen().texts.contains { $0.hasPrefix("final class StoryCounter") && $0.contains("\n") })
         try app.tap("Tap")
         try app.tap("Tap")
         try app.wait(for: "Taps: 2")

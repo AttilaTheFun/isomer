@@ -286,7 +286,8 @@ func describe(_ inspection: Wire_Inspection) -> String {
     }
     if inspection.hasColor { lines.append("color: \(inspection.color)") }
     if inspection.hasLines { lines.append("lines: \(inspection.lines)") }
-    if !inspection.texts.isEmpty, inspection.texts != [inspection.label] {
+    if !inspection.texts.isEmpty, inspection.texts != [inspection.label],
+       inspection.texts.joined(separator: "\n") != inspection.label {
         lines.append("texts: " + inspection.texts.map(quoted).joined(separator: ", "))
     }
     for key in inspection.params.keys.sorted() {

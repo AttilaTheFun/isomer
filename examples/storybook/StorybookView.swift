@@ -183,6 +183,9 @@ struct CodeCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.secondary.opacity(0.12)))
+        // One element: the listing reads as one text (VoiceOver's, a
+        // driver's), not a text a line.
+        .accessibilityElement(children: .combine)
         .accessibilityIdentifier("story-code")
     }
 }

@@ -126,14 +126,27 @@ struct DriverScreen {
     /// has none of its own (a Toggle's label stands beside its switch).
     /// `inside`: the element the node is in (its index), for a text's
     /// container.
-    private mutating func walk(_ node: IsoFlat_Node, around: [String], inside: Int?) {
+    /// `combined`: inside an element made one (`.accessibilityElement(children:
+    /// .combine)`), whose texts were taken as one.
+    private mutating func walk(_ node: IsoFlat_Node, around: [String], inside: Int?, combined: Bool = false) {
         let p = Self.params(node)
         if p["a11yHidden"] == "1" { return }
         let id = p["a11yId"]
         let count = elements.count
+        // A view made one accessibility element of its children: its texts
+        // are one text, a line each (a code listing reads as one), as
+        // VoiceOver reads it as one element.
+        let combines = !combined && p["a11yChildren"] == "combine"
+        if combines {
+            let merged = Self.textsUnder(node).joined(separator: "\n")
+            if !merged.isEmpty {
+                texts.append(merged)
+                textNodes.append((node, inside))
+            }
+        }
         switch node.kind {
         case .text:
-            if let text = node.v, !text.isEmpty {
+            if !combined, !combines, let text = node.v, !text.isEmpty {
                 texts.append(text)
                 textNodes.append((node, inside))
             }
@@ -184,7 +197,7 @@ struct DriverScreen {
         }
         let within = elements.count > count ? elements.count - 1 : inside
         let children = split ? shownColumns(node, p) : node.ch
-        for child in children { walk(child, around: texts, inside: within) }
+        for child in children { walk(child, around: texts, inside: within, combined: combined || combines) }
     }
 
     /// A name on the screen (`button-3`, `text-2`): its role and place.
@@ -241,7 +254,8 @@ struct DriverScreen {
             container = textNodes[number - 1].container
             inspection.name = "text-\(number)"
             inspection.role = "text"
-            inspection.label = node.v ?? ""
+            // The text as listed: a combined element's, its texts as one.
+            inspection.label = texts[number - 1]
         } else {
             guard let element = element(target), let elementNode = element.node else { return nil }
             node = elementNode
