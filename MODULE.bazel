@@ -117,17 +117,21 @@ bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.1")
 # for that).
 bazel_dep(name = "rules_swift_package_manager", version = "1.25.0")
 
-# A local package that is a Bazel module too (isomer's, taken by path in its
-# own graph) is copied without its Bazel files: cgrindel/
-# rules_swift_package_manager#2638. Only a root that takes isomer's package
-# by path needs it (this module, the examples): an application takes it by
-# revision, from git, whose Bazel files rules_swift_package_manager removes.
+# Three pull requests to cgrindel/rules_swift_package_manager, the
+# registry's 1.25.0.isomer.1 for consumers until a release has them: #2638
+# (a local package that is a Bazel module too, isomer's taken by path in its
+# own graph, is copied without its Bazel files), #2639 (no Apple minimum OS
+# versions off Apple: isomer declares iOS 16 and macOS 13 over
+# swift-foundation's 26) and #2640 (a Swift target's cSettings defines reach
+# its Clang importer, as SwiftPM passes them: swift-foundation's WASI
+# emulation macros).
 single_version_override(
     module_name = "rules_swift_package_manager",
     patch_strip = 1,
     patches = [
         "//tools/patches:rules_swift_package_manager_local_bazel_package.patch",
         "//tools/patches:rules_swift_package_manager_minimum_os_off_apple.patch",
+        "//tools/patches:rules_swift_package_manager_swift_target_cdefines.patch",
     ],
 )
 
@@ -145,7 +149,6 @@ swift_deps.configure_package(
         "//tools/patches:swift_foundation_create_directory_root.patch",
         "//tools/patches:swift_foundation_apple_interface.patch",
         "//tools/patches:swift_foundation_package_helpers.patch",
-        "//tools/patches:swift_foundation_wasi_swift_settings.patch",
         "//tools/patches:swift_foundation_sdk_icu.patch",
     ],
 )

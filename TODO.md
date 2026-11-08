@@ -177,13 +177,17 @@ has it.
   - CharacterSet, NSString's string API and `String(format:)` are in
     //foundation; upstream's own CharacterSet (#2314) arrives with the
     next major release, and ours then gives way;
-  - the manifest's wasi-libc emulation defines for Swift targets (their
-    Clang importer needs them; upstream sets them for C targets only, so a
-    SwiftPM build for WASI fails on mmap): could go upstream;
+  - (the wasi-libc emulation defines its Swift targets' Clang importer
+    needs: rules_swift_package_manager#2640 passes their cSettings, as SwiftPM
+    does; no patch of swift-foundation since 0.44);
   - Isomer's own, with no upstream form: ICU linked from the Swift SDK
     (not swift-foundation-icu from source), Apple's signatures and
     swift-foundation's extra declarations made internal, `package` on the
-    string helpers //foundation uses.
+    string helpers //foundation uses (a copy would need its 2.8 MB Unicode
+    tables and the standard library's SPI: until upstream's next major
+    release brings CharacterSet, #2314, and its string API). Off Darwin its
+    `.diacriticInsensitive` and `.widthInsensitive` comparison is
+    `fatalError("not implemented yet")`: worth reporting upstream.
 - **WasmKit** (AttilaTheFun's fork, and two patches): swiftwasm/WasmKit #513
   (iOS guard pages), #514 (Android's software bounds checks), #515 (MSVC's C),
   #516 (constant-pool reservations), #517 (internal calls off the native
