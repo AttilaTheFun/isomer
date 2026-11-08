@@ -340,17 +340,20 @@ extension View {
 public struct DatePicker<Label: View> {
     let titleKey: String
     let selection: Binding<Date>
+    var components: DatePickerComponents = [.hourAndMinute, .date]
 
     public typealias Body = Never
     public var body: Never { fatalError("primitive view") }
 }
 
 extension DatePicker where Label == Text {
-    /// The host shows a native date input (`<input type=date>` on web, a
-    /// date picker on Android); the components are the date's.
+    /// The host shows its own date and time inputs (`<input type=date>`
+    /// and `type=time` on the web, Material's pickers on Android), for the
+    /// components asked for.
     public init<S: StringProtocol>(_ title: S, selection: Binding<Date>, displayedComponents: DatePicker<Label>.Components = [.hourAndMinute, .date]) {
         self.titleKey = String(title)
         self.selection = selection
+        self.components = displayedComponents
     }
 }
 
@@ -371,15 +374,26 @@ extension DatePicker: _PrimitiveView {
         let binding = selection
         // Canonical semantic node; the self-drawing path swaps in
         // DrawnDatePicker via chrome expansion.
+        // The value in the user's time zone: the date (yyyy-MM-dd) as `v`,
+        // its time (HH:mm) and the components shown as params. A host sends
+        // back a date (its time kept), "time:HH:mm" (its date kept), or both
+        // ("yyyy-MM-ddTHH:mm"); it formats them for its locale itself.
+        let local = DatePickerValue(binding.wrappedValue)
+        var shown: [String] = []
+        if components.contains(.date) { shown.append("date") }
+        if components.contains(.hourAndMinute) { shown.append("time") }
         let spec = HostViewSpec(
             id: ctx.path,
             kind: "datepicker",
-            params: ["title": titleKey, "labelsHidden": ctx.env.labelsHidden ? "1" : ""],
-            value: isoDate(fromEpochSeconds: binding.wrappedValue.timeIntervalSince1970),
+            params: [
+                "title": titleKey, "labelsHidden": ctx.env.labelsHidden ? "1" : "",
+                "components": shown.joined(separator: ","), "time": local.time,
+            ],
+            value: local.date,
             options: [],
-            onChange: { iso in
-                if let seconds = epochSeconds(fromISO: iso) {
-                    binding.wrappedValue = Date(timeIntervalSince1970: seconds)
+            onChange: { value in
+                if let date = DatePickerValue.date(binding.wrappedValue, changedBy: value) {
+                    binding.wrappedValue = date
                 }
             }
         )
@@ -389,62 +403,54 @@ extension DatePicker: _PrimitiveView {
     }
 }
 
-// Minimal yyyy-MM-dd <-> epoch-seconds conversion (UTC, date-only), no
-// Foundation. Good enough for a date picker demo.
-private let daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+/// A date picker's value in the user's calendar and time zone: its date
+/// (yyyy-MM-dd) and time (HH:mm), and a host's change applied to a date.
+package struct DatePickerValue {
+    package let date: String
+    package let time: String
 
-private func isLeap(_ year: Int) -> Bool {
-    (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
-}
-
-func isoDate(fromEpochSeconds seconds: Double) -> String {
-    var days = Int(seconds / 86400)
-    var year = 1970
-    while true {
-        let yearDays = isLeap(year) ? 366 : 365
-        if days >= yearDays {
-            days -= yearDays
-            year += 1
-        } else {
-            break
+    package init(_ value: Date) {
+        let parts = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: value)
+        func pad(_ number: Int?, _ width: Int = 2) -> String {
+            let text = String(number ?? 0)
+            return String(repeating: "0", count: max(0, width - text.count)) + text
         }
+        date = "\(pad(parts.year, 4))-\(pad(parts.month))-\(pad(parts.day))"
+        time = "\(pad(parts.hour)):\(pad(parts.minute))"
     }
-    var month = 0
-    while month < 12 {
-        var dim = daysInMonth[month]
-        if month == 1 && isLeap(year) { dim = 29 }
-        if days >= dim {
-            days -= dim
-            month += 1
+
+    /// `value` with a host's change: "yyyy-MM-dd" (the time kept),
+    /// "time:HH:mm" (the date kept) or "yyyy-MM-ddTHH:mm"; nil for neither.
+    package static func date(_ value: Date, changedBy change: String) -> Date? {
+        let calendar = Calendar.current
+        var parts = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: value)
+        var datePart: Substring?
+        var timePart: Substring?
+        if change.hasPrefix("time:") {
+            timePart = change.dropFirst(5)
+        } else if let t = change.firstIndex(of: "T") {
+            datePart = change[..<t]
+            timePart = change[change.index(after: t)...]
         } else {
-            break
+            datePart = Substring(change)
         }
+        if let datePart {
+            let numbers = datePart.split(separator: "-").compactMap { Int($0) }
+            guard numbers.count == 3 else { return nil }
+            parts.year = numbers[0]
+            parts.month = numbers[1]
+            parts.day = numbers[2]
+        }
+        if let timePart {
+            let numbers = timePart.split(separator: ":").compactMap { Int($0) }
+            guard numbers.count >= 2 else { return nil }
+            parts.hour = numbers[0]
+            parts.minute = numbers[1]
+            parts.second = 0
+        }
+        return calendar.date(from: parts)
     }
-    let m = month + 1
-    let d = days + 1
-    func pad(_ value: Int) -> String { value < 10 ? "0\(value)" : "\(value)" }
-    return "\(year)-\(pad(m))-\(pad(d))"
 }
-
-func epochSeconds(fromISO iso: String) -> Double? {
-    let parts = iso.split(separator: "-")
-    guard parts.count == 3,
-          let year = Int(parts[0]),
-          let month = Int(parts[1]),
-          let day = Int(parts[2]) else { return nil }
-    var days = 0
-    for y in 1970 ..< year {
-        days += isLeap(y) ? 366 : 365
-    }
-    for m in 0 ..< (month - 1) {
-        var dim = daysInMonth[m]
-        if m == 1 && isLeap(year) { dim = 29 }
-        days += dim
-    }
-    days += day - 1
-    return Double(days) * 86400
-}
-
 
 // The view conformances, in extensions: declared on the type itself they
 // would make the whole type main-actor isolated (see `View`).

@@ -176,6 +176,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.DisposableEffect
@@ -2219,36 +2221,75 @@ private fun IsoHostView(n: JSONObject, m: Modifier) {
             }
         }
         "datepicker" -> {
-            var open by remember { mutableStateOf(false) }
+            // The components asked for: a date button, a time button, or both,
+            // each labelled in the locale's own format (java.text: java.time
+            // is API 26) and opening Material's picker. A date goes back as
+            // "yyyy-MM-dd", a time as "time:HH:mm"; the core keeps the rest.
+            val params = n.optJSONObject("params")
+            val parts = (params?.optString("components") ?: "").ifEmpty { "date" }.split(",")
             val iso = n.optString("v")
-            TextButton(onClick = { open = true }, modifier = m) { Text(iso.ifEmpty { "Pick a date" }) }
-            if (open) {
-                // yyyy-MM-dd at midnight UTC, with java.text and java.util
-                // (java.time is API 26).
-                val utcDay = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).apply {
-                    timeZone = java.util.TimeZone.getTimeZone("UTC")
-                    isLenient = false
-                }
-                val initial = try {
-                    utcDay.parse(iso)?.time
-                } catch (_: Exception) {
-                    null
-                }
-                val state = rememberDatePickerState(initialSelectedDateMillis = initial)
+            val time = params?.optString("time") ?: ""
+            val utc = java.util.TimeZone.getTimeZone("UTC")
+            // The dialog's days are midnights UTC.
+            val utcDay = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).apply {
+                timeZone = utc
+                isLenient = false
+            }
+            val dayMillis = try {
+                utcDay.parse(iso)?.time
+            } catch (_: Exception) {
+                null
+            }
+            val dateLabel = dayMillis?.let {
+                java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).apply { timeZone = utc }
+                    .format(java.util.Date(it))
+            } ?: iso.ifEmpty { "Pick a date" }
+            val hour = time.substringBefore(":").toIntOrNull() ?: 0
+            val minute = time.substringAfter(":", "").toIntOrNull() ?: 0
+            val timeLabel = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).apply { timeZone = utc }
+                .format(java.util.Date((hour * 60L + minute) * 60_000L))
+            var openDate by remember { mutableStateOf(false) }
+            var openTime by remember { mutableStateOf(false) }
+            Row(m, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if ("date" in parts) TextButton(onClick = { openDate = true }) { Text(dateLabel) }
+                if ("time" in parts) TextButton(onClick = { openTime = true }) { Text(timeLabel) }
+            }
+            if (openDate) {
+                val state = rememberDatePickerState(initialSelectedDateMillis = dayMillis)
                 DatePickerDialog(
-                    onDismissRequest = { open = false },
+                    onDismissRequest = { openDate = false },
                     confirmButton = {
                         TextButton(onClick = {
-                            open = false
+                            openDate = false
                             state.selectedDateMillis?.let { millis ->
                                 sendEvent(edit, utcDay.format(java.util.Date(millis)))
                             }
                         }) { Text("OK") }
                     },
                     dismissButton = {
-                        TextButton(onClick = { open = false }) { Text("Cancel") }
+                        TextButton(onClick = { openDate = false }) { Text("Cancel") }
                     },
                 ) { DatePicker(state) }
+            }
+            if (openTime) {
+                val context = LocalContext.current
+                val state = rememberTimePickerState(
+                    initialHour = hour, initialMinute = minute,
+                    is24Hour = android.text.format.DateFormat.is24HourFormat(context),
+                )
+                AlertDialog(
+                    onDismissRequest = { openTime = false },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            openTime = false
+                            sendEvent(edit, "time:%02d:%02d".format(java.util.Locale.US, state.hour, state.minute))
+                        }) { Text("OK") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { openTime = false }) { Text("Cancel") }
+                    },
+                    text = { TimePicker(state = state) },
+                )
             }
         }
         "image" -> IsoImage(n.optString("v"), n.optString("v").startsWith("http"), true, m)
