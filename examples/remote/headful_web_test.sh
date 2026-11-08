@@ -15,18 +15,22 @@ trap 'kill $hub ${driver:-} 2>/dev/null || true; rm -f "$log" "$driven"' EXIT
 for _ in $(seq 200); do grep -q "isomer hub: ws:" "$log" && break; sleep 0.1; done
 url="$(sed -n 's/^isomer hub: \(ws:[^ ]*\).*/\1/p' "$log")"
 [ -n "$url" ] || { echo "the hub didn't start:"; cat "$log"; exit 1; }
-# The driver: until the page has attached, then a tap and the count it makes.
+# The driver: until the page has attached, a tap, whose answer (the screen
+# once it settled) shows the count it made; then a second tap, for the page
+# to see. The page closes once it has, so the second tap's answer may not
+# come back: only the first's is checked.
 (
     for _ in $(seq 300); do
-        if "$isomer" --url "$url" tap Tap > /dev/null 2>&1; then
-            "$isomer" --url "$url" wait "Taps: 1" > "$driven" 2>&1 && exit 0
+        if "$isomer" --url "$url" tap Tap > "$driven" 2>&1; then
+            "$isomer" --url "$url" tap Tap > /dev/null 2>&1 || true
+            exit 0
         fi
         sleep 0.2
     done
     exit 1
 ) &
 driver=$!
-"$check" --site "$site" --chrome "$chrome" --until 'window.__isoLastTree && window.__isoLastTree.includes("Taps: 1")' \
+"$check" --site "$site" --chrome "$chrome" --until 'window.__isoLastTree && window.__isoLastTree.includes("Taps: 2")' \
     --settle 1 --timeout 90 --allow-errors \
     --page "?renderer=react&ISO_STORYBOOK_STORY=state.observableobject&ISO_DRIVER=$url=$out/headful-web.png"
 wait $driver
