@@ -4,6 +4,7 @@
 // `nativeRender` export; see DrawListDecoder.kt for the format); everything
 // else calls up through the generated JNI foreign proxy with real values.
 
+internal import SwiftUI
 internal import IsomerSwiftUI
 
 final class AndroidHostState {

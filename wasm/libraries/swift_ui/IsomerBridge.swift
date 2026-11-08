@@ -3,6 +3,7 @@
 // of the bridging pattern documented in the README.
 
 import SwiftUI
+internal import IsomerWebHost
 
 public enum Bridge {
     public static var platformName: String { "Web (WebAssembly)" }

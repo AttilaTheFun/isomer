@@ -6,6 +6,7 @@
 // replaces the hand-written `@_extern(wasm, …)` imports, `@_cdecl` exports,
 // and staging-buffer plumbing that previously carried the same surface.
 
+internal import SwiftUI
 package import IsomerFFI
 internal import IsomerNetworkHost
 

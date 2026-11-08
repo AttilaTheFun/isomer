@@ -3,6 +3,7 @@
 // Values copy at the boundary — strings both ways, structs field-wise — so
 // there is no staging-buffer plumbing here.
 
+internal import SwiftUI
 internal import IsomerSwiftUI
 
 struct WasmHostBridge: HostBridge {

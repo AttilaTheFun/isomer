@@ -48,11 +48,9 @@ cc_library(
 )
 
 swift_library(
-    name = "swift_ui",
+    name = "core",
     package_name = "isomer",
     srcs = [
-        "AndroidBridge.swift",
-        "AndroidHost.swift",
         "//shared/renderers:srcs",
         "//shared/swift_ui_core:srcs",
     ],
@@ -65,7 +63,6 @@ swift_library(
     target_compatible_with = ["@platforms//os:android"],
     deps = [
         "//shared/isomer_swift_ui",
-        ":application_main",
         ":image_io",
         "//swift_ffi/swift_ffi",
         "//shared/isomer_network_host",
@@ -80,6 +77,48 @@ swift_library(
         "//shared:map_engine_android",
     ],
     plugins = SWIFT_UI_MACROS_PLUGINS,
+)
+
+# Android's host (AndroidHost.swift, and AndroidBridge.swift's swift_ffi
+# surface that the Kotlin runtime implements and calls, as `SwiftUIBridge`:
+# isomer_android_library names the bindings): a module of its own over the
+# SwiftUI above, reaching the runtime's `package` plumbing as a module of
+# Isomer's package. It defines `iso_process_host_run`
+# (shared/swift_ui_core/App.swift).
+swift_library(
+    name = "host",
+    package_name = "isomer",
+    srcs = [
+        "AndroidBridge.swift",
+        "AndroidHost.swift",
+    ],
+    alwayslink = True,
+    copts = _ANDROID_COPTS,
+    module_name = "IsomerAndroidHost",
+    swiftc_inputs = ["jni_bridge.h"],
+    target_compatible_with = ["@platforms//os:android"],
+    deps = [
+        ":application_main",
+        ":core",
+        ":image_io",
+        "//shared/isomer_swift_ui",
+        "//shared/isomer_network_host",
+        "//swift_ffi/swift_ffi",
+        "//swift_gpu/android:swift_gpu",
+        "@flatbuffers//swift",
+        "//:foundation",
+    ],
+)
+
+# SwiftUI with Android's host: what Android's apps and the modules over
+# SwiftUI here depend on.
+swift_library_group(
+    name = "swift_ui",
+    target_compatible_with = ["@platforms//os:android"],
+    deps = [
+        ":core",
+        ":host",
+    ],
 )
 
 # PhotosUI's SwiftUI photo picker, over this SwiftUI (//frameworks).
@@ -139,6 +178,7 @@ swift_library(
     swiftc_inputs = ["jni_bridge.h"],
     target_compatible_with = ["@platforms//os:android"],
     deps = [
+        ":host",
         ":swift_ui",
         "//swift_ffi/swift_ffi",
         "//:isomer_foundation",

@@ -3,6 +3,7 @@
 // openURL is forwarded up to Kotlin through the swift_ffi AndroidHost.
 
 import SwiftUI
+internal import IsomerAndroidHost
 
 public enum Bridge {
     public static var platformName: String { "Android" }

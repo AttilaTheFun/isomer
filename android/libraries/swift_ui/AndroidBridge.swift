@@ -8,6 +8,7 @@
 // (cached jmethodIDs, packed-jlong returns, version-script exports) that
 // previously carried the same surface.
 
+internal import SwiftUI
 import ImageIO
 package import IsomerFFI
 internal import IsomerNetworkHost

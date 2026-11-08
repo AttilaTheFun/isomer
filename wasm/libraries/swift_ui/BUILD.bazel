@@ -28,11 +28,9 @@ swift_library(
 )
 
 swift_library(
-    name = "swift_ui",
+    name = "core",
     package_name = "isomer",
     srcs = [
-        "WasmHost.swift",
-        "WebBridge.swift",
         "//shared/renderers:srcs",
         "//shared/swift_ui_core:srcs",
     ],
@@ -54,6 +52,41 @@ swift_library(
         "//shared:map_engine_wasm",
     ],
     plugins = SWIFT_UI_MACROS_PLUGINS,
+)
+
+# The web's host (WasmHost.swift, and WebBridge.swift's swift_ffi surface that
+# boot.js implements and calls): a module of its own over the SwiftUI above,
+# reaching the runtime's `package` plumbing as a module of Isomer's package.
+# It defines `iso_process_host_run` (shared/swift_ui_core/App.swift).
+swift_library(
+    name = "host",
+    package_name = "isomer",
+    srcs = [
+        "WasmHost.swift",
+        "WebBridge.swift",
+    ],
+    alwayslink = True,
+    copts = _WASM_COPTS,
+    module_name = "IsomerWebHost",
+    deps = [
+        ":core",
+        "//shared/isomer_swift_ui",
+        "//shared/isomer_network_host",
+        "//swift_ffi/swift_ffi",
+        "//swift_gpu/wasm:swift_gpu",
+        "@flatbuffers//swift",
+        "//:foundation",
+    ],
+)
+
+# SwiftUI with the web's host: what the web's apps and the modules over
+# SwiftUI here depend on.
+swift_library_group(
+    name = "swift_ui",
+    deps = [
+        ":core",
+        ":host",
+    ],
 )
 
 # PhotosUI's SwiftUI photo picker, over this SwiftUI (//frameworks).
@@ -107,6 +140,7 @@ swift_library(
     copts = _WASM_COPTS,
     module_name = "Isomer",
     deps = [
+        ":host",
         ":swift_ui",
         "//metal/isomer_metal",
         "//metal/metal",
