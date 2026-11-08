@@ -16,8 +16,8 @@
   <script type="module">
     import { connectIsomer } from "./runtime/remote.js";
 
-    // The session is the page's own server's (a gateway serves this page
-    // and /session), or ?session=ws://….
+    // The session is the page's own server's (an app built headless serves
+    // this page beside its /session: ISO_DRIVE_SITE), or ?session=ws://….
     const params = new URLSearchParams(location.search);
     const scheme = location.protocol === "https:" ? "wss:" : "ws:";
     connectIsomer({

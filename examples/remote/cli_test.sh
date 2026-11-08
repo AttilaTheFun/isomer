@@ -1,0 +1,27 @@
+#!/bin/bash
+# The `isomer` CLI driving the Storybook built headless: added as an exec:
+# application (started on the first command, kept running on a Unix socket),
+# driven a command at a time, its state kept between them, then stopped.
+#   cli_test.sh <isomer> <app>
+set -euo pipefail
+# Each answer is captured before it's matched: `grep -q` stops reading at its
+# first match, and the CLI writing the rest into a closed pipe would fail the
+# pipeline.
+has() { local output; output="$("$@")"; grep -q -- "$EXPECTED" <<< "$output"; }
+isomer="$PWD/$1" app="$PWD/$2"
+export XDG_CONFIG_HOME="$(mktemp -d)"
+export ISO_STORYBOOK_STORY=state.observableobject ISO_HEADLESS_HEIGHT=6000
+trap '"$isomer" application stop storybook >/dev/null 2>&1 || true; rm -rf "$XDG_CONFIG_HOME"' EXIT
+"$isomer" application add storybook "exec:$app"
+EXPECTED='^\* storybook' has "$isomer" application list
+EXPECTED='Taps: 0' has "$isomer" ls
+"$isomer" tap Tap > /dev/null
+"$isomer" tap Tap > /dev/null
+# The app kept running: its count went on from the last command's.
+EXPECTED='Taps: 2' has "$isomer" wait "Taps: 2"
+EXPECTED='Headless' has "$isomer" info
+EXPECTED='"ok":true' has "$isomer" --json ls
+if "$isomer" tap "No such button" > /dev/null; then echo "a missing button didn't fail"; exit 1; fi
+"$isomer" application stop storybook
+"$isomer" application remove storybook
+echo "PASS: the isomer CLI drove the Storybook"

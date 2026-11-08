@@ -1,33 +1,44 @@
 // The headless host (headless/libraries/swift_ui): an app's SwiftUI run on
 // the building machine (macOS, or Linux in a container) with nothing drawn,
-// its UI read and driven through the runtime. `App.main()` runs `HeadlessApp`
-// (`iso_process_host_run`), which speaks shared/wire/headless.proto on
-// standard input and output, a command and then its answer:
+// served to whatever drives it or draws it (docs/drive_plan.md). `App.main()`
+// runs `HeadlessApp` (`iso_process_host_run`), an `IsomerServer`:
 //
-//   {"cmd": "ls"}                                   the screen as it is
-//   {"cmd": "tap", "target": "Send"}                a button, by its accessibility
-//                                                   identifier, label or text
-//   {"cmd": "type", "target": "Title", "text": "Hi"} a text field's text
-//   {"cmd": "set", "target": "Wi-Fi", "value": "0"} a control's value (a toggle's
-//                                                   "1"/"0", a picker's index)
-//   {"cmd": "back"}                                 the system's back
-//   {"cmd": "dismiss"}                              the topmost presentation
-//   {"cmd": "wait", "text": "Taps: 1", "timeout": 5} until the text shows
-//   {"cmd": "quit"}
+// - `drive` (shared/wire/headless.proto): IsomerDriver reads the screen and
+//   uses it, a command at a time;
+// - `connect` (shared/wire/session.proto): a head draws the app, its events in
+//   and frames out (RemoteSession.swift).
 //
-// Each answer is `{"ok": true|false, "error": …, "screen": {…}}`, the screen
-// once the UI has settled after the command: what the flat tree a host
-// receives shows (texts; buttons, fields and controls with their roles,
-// labels, identifiers and values; what is presented), never pixels. That is
-// the protocol's JSON mapping, a message a line, for a terminal (the
-// default); ISO_HEADLESS_PROTOCOL=binary speaks it length-delimited, as the
-// tests' client does (IsomerHeadless, headless/isomer_headless), and
-// ISO_HEADLESS_PROTOCOL=session serves the app to a remote client instead
-// (shared/wire/session.proto, RemoteSession.swift).
+// How it's reached, by its environment:
+//
+//   (nothing)                     JSON lines on standard input and output, a
+//                                 command and its answer a line, for a terminal:
+//                                 {"cmd": "tap", "target": "Send"}
+//   ISO_HEADLESS_PROTOCOL=binary  one call on standard input and output
+//                                 (IsomerProcessTransport: a client that
+//                                 started the app, IsomerHeadless's)
+//   ISO_DRIVE_LISTEN=<addresses>  listening, space-separated: grpc://host:port,
+//                                 ws://host:port (with ISO_DRIVE_SITE, a
+//                                 directory served beside it: the web's thin
+//                                 client), unix:/path. With
+//                                 ISO_HEADLESS_PROTOCOL=serve, nothing on
+//                                 standard input. A listener on an address
+//                                 other than the loopback needs a token
+//                                 (ISO_DRIVE_TOKEN or ISO_DRIVE_TOKEN_FILE).
+//   ISO_DRIVER=<url>              dialling out to a hub or a test host and
+//                                 driven over that connection (Driver.Attach),
+//                                 as a headful app is; ISO_DRIVER_TOKEN its token
+//   ISO_HEADLESS_WIDTH/HEIGHT     the window (390 by 844), until a head says its own
+//   ISO_DARK                      the dark appearance
 
 #if !canImport(WASILibc)
 
+internal import IsomerDriver
+internal import IsomerGRPCTransport
+internal import IsomerProcessTransport
+internal import IsomerRemote
+internal import IsomerServing
 internal import IsomerSwiftUI
+internal import IsomerWebSocketTransport
 internal import IsomerWire
 internal import SwiftProtobuf
 internal import SwiftUI
@@ -39,7 +50,8 @@ import Glibc
 #endif
 
 /// The services half with nothing to draw: text measured as a fixed-width
-/// estimate, every image ready, frames asked for remembered.
+/// estimate, every image ready. What the app asks of the platform goes to a
+/// head drawing it, if one is (RemoteSession).
 final class HeadlessHostBridge: HostBridge {
     func measureText(_ text: String, fontSize: Double, weight: Int, wrapWidth: Double?) -> CGSize {
         let width = fontSize * 0.55 * Double(text.count)
@@ -51,347 +63,246 @@ final class HeadlessHostBridge: HostBridge {
     }
 
     func imageInfo(_ source: String, isRemote: Bool) -> ImageStatus { .ready(CGSize(width: 1, height: 1)) }
-    func beginFrame(width: Double, height: Double) {}
-    func fillRect(_ rect: CGRect, cornerRadius: Double, color: HostColor) {}
-    func strokeRect(_ rect: CGRect, cornerRadius: Double, lineWidth: Double, color: HostColor) {}
-    func fillGradient(_ rect: CGRect, cornerRadius: Double, gradientJSON: String) {}
-    func drawShadow(_ rect: CGRect, cornerRadius: Double, color: HostColor, radius: Double, x: Double, y: Double) {}
-    func drawText(_ text: String, in rect: CGRect, fontSize: Double, weight: Int, color: HostColor) {}
-    func drawImage(_ source: String, isRemote: Bool, in dest: CGRect, clip: CGRect, cornerRadius: Double, opacity: Double) {}
-    func pushClip(_ rect: CGRect, cornerRadius: Double) {}
-    func popClip() {}
     func syncHostViews(_ viewsJSON: String) {}
-    func endFrame() {}
-    func beginTextInput(_ text: String, in rect: CGRect, fontSize: Double) {}
-    func endTextInput() {}
+    func beginTextInput(_ text: String, in rect: CGRect, fontSize: Double) {
+        RemoteSession.send {
+            $0.textInput = Wire_TextInputRequest.with {
+                $0.text = text
+                $0.x = rect.origin.x
+                $0.y = rect.origin.y
+                $0.width = rect.size.width
+                $0.height = rect.size.height
+                $0.fontSize = fontSize
+            }
+        }
+    }
+    func endTextInput() { RemoteSession.send { $0.endTextInput = Wire_Empty() } }
     func scheduleRender() { HeadlessApp.needsFrame = true }
-    func log(_ message: String) { HeadlessApp.logLine("[iso] \(message)") }
-    func openURL(_ url: String) { HeadlessApp.openedURLs.append(url) }
+    func log(_ message: String) {
+        HeadlessApp.logLine("[iso] \(message)")
+        RemoteSession.send { $0.log = message }
+    }
+    func openURL(_ url: String) {
+        HeadlessApp.logLine("[iso] openURL \(url)")
+        RemoteSession.send { $0.openURL = url }
+    }
+    func setColorScheme(dark: Bool) { RemoteSession.send { $0.dark = dark } }
+    func platformCommand(_ key: String, _ value: String) {
+        RemoteSession.send {
+            $0.command = Wire_PlatformCommand.with {
+                $0.key = key
+                $0.value = value
+            }
+        }
+    }
+    func registerImage(_ source: String, bytes: [UInt8]) {
+        RemoteSession.send {
+            $0.image = Wire_Image.with {
+                $0.source = source
+                $0.bytes = Data(bytes)
+            }
+        }
+    }
     func now() -> Double { Date().timeIntervalSince1970 }
 }
 
-/// The tree a host would draw, kept.
-final class HeadlessRenderer: TreeRenderer {
-    let supportedModes: Set<IntegrationMode> = [.embedded, .app]
-    private(set) var tree: RenderNode?
+/// What the headless app serves: the driver's `drive`, a head's `connect`.
+struct HeadlessServer: IsomerServer {
+    let driving: IsomerDriverServer
 
-    @MainActor
-    func render(tree: RenderNode) {
-        self.tree = tree
-    }
-}
-
-/// One frame as a host sees it: the flat tree and its handlers.
-@MainActor
-struct HeadlessFrame {
-    struct Element {
-        var role: String
-        var label: String
-        var id: String?
-        var value: String?
-        /// The handler a tap or an edit goes to.
-        var handler: String?
+    func drive(_ commands: IsomerInbound<Wire_Command>, _ answers: IsomerOutbound<Wire_Answer>, context: IsomerCallContext) async throws {
+        try await driving.drive(commands, answers, context: context)
     }
 
-    var texts: [String] = []
-    var elements: [Element] = []
-    var presented: [(style: String, title: String, message: String, dismiss: String?)] = []
-
-    init(_ root: IsoFlat_Node) {
-        walk(root, around: [])
-    }
-
-    private static func params(_ node: IsoFlat_Node) -> [String: String] {
-        var result: [String: String] = [:]
-        for kv in node.params { result[kv.key] = kv.value }
-        return result
-    }
-
-    private static func textsUnder(_ node: IsoFlat_Node) -> [String] {
-        var found: [String] = []
-        func visit(_ node: IsoFlat_Node) {
-            if params(node)["a11yHidden"] == "1" { return }
-            if node.kind == .text, let text = node.v, !text.isEmpty { found.append(text) }
-            for child in node.ch { visit(child) }
-        }
-        visit(node)
-        return found
-    }
-
-    /// `around`: the texts of the node's parent, a control's label when it
-    /// has none of its own (a Toggle's label stands beside its switch).
-    private mutating func walk(_ node: IsoFlat_Node, around: [String]) {
-        let p = Self.params(node)
-        if p["a11yHidden"] == "1" { return }
-        let id = p["a11yId"]
-        switch node.kind {
-        case .text:
-            if let text = node.v, !text.isEmpty { texts.append(text) }
-        case .textfield:
-            elements.append(Element(role: "textField", label: p["a11yLabel"] ?? node.placeholder ?? "", id: id,
-                                    value: node.v ?? "", handler: node.edit ?? node.id.map { "\($0).text" }))
-        case .slider:
-            elements.append(Element(role: "slider", label: p["a11yLabel"] ?? p["title"] ?? "", id: id,
-                                    value: node.num.map { String($0) }, handler: node.edit))
-        case .presentation:
-            let style: String
-            switch node.style {
-            case .alert: style = "alert"
-            case .popover: style = "popover"
-            default: style = "sheet"
-            }
-            presented.append((style, node.title ?? "", node.message ?? "", node.dismiss))
-        case .hostview:
-            let kind = node.view ?? "view"
-            if ["toggle", "picker", "segmented", "stepper", "datepicker", "colorpicker"].contains(kind) {
-                var label = p["a11yLabel"] ?? p["title"] ?? Self.textsUnder(node).joined(separator: " ")
-                if label.isEmpty { label = around.joined(separator: " ") }
-                elements.append(Element(role: kind, label: label, id: id, value: node.v, handler: node.edit))
-            }
-        default:
-            break
-        }
-        if let tap = node.tap {
-            let label = p["a11yLabel"] ?? Self.textsUnder(node).joined(separator: " ")
-            elements.append(Element(role: "button", label: label, id: id, value: p["a11yValue"], handler: tap))
-        }
-        let texts = Self.textsUnder(node)
-        for child in node.ch { walk(child, around: texts) }
-    }
-
-    /// The element a target names: its accessibility identifier, then its
-    /// label exactly, then the last (innermost) whose label holds it.
-    func element(_ target: String, roles: Set<String>? = nil) -> Element? {
-        let candidates = elements.filter { roles == nil || roles!.contains($0.role) }
-        return candidates.first { $0.id == target }
-            ?? candidates.last { $0.label == target }
-            ?? candidates.last { $0.label.contains(target) }
-    }
-
-    var wire: Wire_Screen {
-        var screen = Wire_Screen()
-        screen.texts = texts
-        screen.elements = elements.map { element in
-            var entry = Wire_Element()
-            entry.role = element.role
-            entry.label = element.label
-            if let id = element.id { entry.id = id }
-            if let value = element.value { entry.value = value }
-            return entry
-        }
-        screen.presented = presented.map { presentation in
-            var entry = Wire_Presentation()
-            entry.style = presentation.style
-            entry.title = presentation.title
-            entry.message = presentation.message
-            return entry
-        }
-        return screen
+    func connect(_ messages: IsomerInbound<Wire_ClientMessage>, _ frames: IsomerOutbound<Wire_ServerMessage>, context: IsomerCallContext) async throws {
+        try await RemoteSession.serve(messages, frames)
     }
 }
 
 /// Not Apple's, so not public: `App.main()` calls it (`iso_process_host_run`, below).
 enum HeadlessApp {
     nonisolated(unsafe) static var needsFrame = true
-    nonisolated(unsafe) static var openedURLs: [String] = []
-    nonisolated(unsafe) static let renderer = HeadlessRenderer()
-    nonisolated(unsafe) static var encoder = FlatTreeEncoder()
 
     static func logLine(_ line: String) {
         FileHandle.standardError.write(Data((line + "\n").utf8))
     }
 
-    /// Runs the installed app headless: commands from standard input, one at
-    /// a time, answers on standard output; returns at `quit` or the input's end.
+    @MainActor
+    static func renderIfNeeded() {
+        guard needsFrame else { return }
+        needsFrame = false
+        Runtime.shared.renderFrame()
+    }
+
+    /// Runs the installed app headless and serves it; returns never (the
+    /// process ends at `quit`, at the end of its standard input when that is
+    /// how it's driven, or when it's stopped).
     @MainActor
     static func run() {
         let environment = ProcessInfo.processInfo.environment
-        if environment["ISO_HEADLESS_PROTOCOL"] == "session" {
-            RemoteSession.run()
-            return
-        }
-        let binary = environment["ISO_HEADLESS_PROTOCOL"] == "binary"
         if environment["ISO_DARK"] != nil {
             Runtime.shared.setSystemColorScheme(dark: true)
         }
-        Renderer.bind(renderer)
+        RemoteSession.bindIdle()
         let width = Double(environment["ISO_HEADLESS_WIDTH"] ?? "") ?? 390
         let height = Double(environment["ISO_HEADLESS_HEIGHT"] ?? "") ?? 844
         PlatformBridges.current = HeadlessPlatformBridge()
         Runtime.shared.start(host: HeadlessHostBridge(), width: width, height: height)
 
-        // The commands are read on a thread of their own and run on the main
-        // actor one at a time, so the app's tasks run between them.
-        Thread.detachNewThread {
-            while let command = binary ? readBinaryCommand() : readJSONCommand() {
-                let finished = DispatchSemaphore(value: 0)
-                nonisolated(unsafe) var answer = Wire_Answer()
-                Task { @MainActor in
-                    answer = await handle(command)
-                    finished.signal()
-                }
-                finished.wait()
-                if binary {
-                    if let framed = try? WireDelimited.frame(answer) { FileHandle.standardOutput.write(framed) }
-                } else {
-                    print(json(answer))
-                    fflush(stdout)
-                }
-                if command.cmd == "quit" { break }
-            }
-            exit(0)
+        // A frame when the app asked for one, at most one a display frame.
+        let frames = Timer(timeInterval: 1.0 / 60, repeats: true) { _ in
+            MainActor.assumeIsolated { renderIfNeeded() }
         }
-        // The main queue (and with it the main actor) runs on the main thread,
-        // whose stack a deep view tree needs (dispatchMain would hand it to a
-        // worker thread's 512 KB), until the reader ends.
+        RunLoop.main.add(frames, forMode: .default)
+        renderIfNeeded()
+
+        let driver = IsomerAppDriver(
+            info: IsomerAppDriver.bundleInfo(platform: "Headless", renderer: "None"),
+            renderIfNeeded: { renderIfNeeded() }
+        )
+        let quit: @Sendable () -> Void = { exit(0) }
+        let authorization = IsomerAuthorization.fromEnvironment(environment)
+        let server = IsomerAuthorizedServer(HeadlessServer(driving: IsomerDriverServer(driver, onQuit: quit)), authorization: authorization)
+
+        let protocolName = environment["ISO_HEADLESS_PROTOCOL"] ?? ""
+        let listening = environment["ISO_DRIVE_LISTEN"].map { $0.split(separator: " ").map(String.init) } ?? []
+        for address in listening {
+            listen(address, server, authorization: authorization, site: environment["ISO_DRIVE_SITE"])
+        }
+        if let url = environment["ISO_DRIVER"] {
+            Task { @MainActor in
+                do {
+                    let endpoint = try IsomerRemote.endpoint(url)
+                    try await driver.dialOut(endpoint.connection, context: endpoint.context(token: environment["ISO_DRIVER_TOKEN"]))
+                } catch {
+                    logLine("isomer: dialling out to \(url): \(error)")
+                }
+                // The driver's end is the app's.
+                exit(0)
+            }
+        }
+        switch protocolName {
+        case "binary":
+            // One call on standard input and output; the app ends with it.
+            Task.detached {
+                do {
+                    try await IsomerProcessServer.serveStandardIO(server)
+                } catch {
+                    logLine("isomer: \(error)")
+                }
+                exit(0)
+            }
+        case "serve":
+            if listening.isEmpty && environment["ISO_DRIVER"] == nil {
+                logLine("isomer: ISO_HEADLESS_PROTOCOL=serve, but nothing to serve on (ISO_DRIVE_LISTEN, ISO_DRIVER)")
+                exit(2)
+            }
+        default:
+            // JSON lines: a command a line, read on a thread of its own, run on
+            // the main actor one at a time, so the app's tasks run between them.
+            Thread.detachNewThread {
+                var decoding = JSONDecodingOptions()
+                decoding.ignoreUnknownFields = true
+                while let line = readLine() {
+                    if line.trimmingCharacters(in: .whitespaces).isEmpty { continue }
+                    let command = (try? Wire_Command(jsonString: line, options: decoding)) ?? Wire_Command.with { $0.cmd = line }
+                    let finished = DispatchSemaphore(value: 0)
+                    nonisolated(unsafe) var answer = Wire_Answer()
+                    Task { @MainActor in
+                        answer = await driver.handle(command)
+                        finished.signal()
+                    }
+                    finished.wait()
+                    print((try? answer.jsonString()) ?? #"{"ok": false}"#)
+                    fflush(stdout)
+                    if command.cmd == "quit" { exit(0) }
+                }
+                // The input's end ends the app, unless it's also served.
+                if listening.isEmpty { exit(0) }
+            }
+        }
         runMainLoop()
     }
 
+    /// Starts a listener on `address` (grpc://, ws://, unix:), printing
+    /// `isomer: listening <url>` on standard error once it does (the port
+    /// bound, for 0).
+    @MainActor
+    static func listen(_ address: String, _ server: any IsomerServer, authorization: IsomerAuthorization, site: String?) {
+        if address.hasPrefix("unix:") {
+            let path = String(address.dropFirst("unix:".count))
+            do {
+                try IsomerProcessServer.listen(unixSocket: path, server)
+                logLine("isomer: listening unix:\(path)")
+            } catch {
+                logLine("isomer: \(error)")
+                exit(2)
+            }
+            return
+        }
+        guard let components = URLComponents(string: address), let scheme = components.scheme else {
+            logLine("isomer: can't listen on \(address) (grpc://host:port, ws://host:port or unix:/path)")
+            exit(2)
+        }
+        let host = components.host ?? "127.0.0.1"
+        let port = components.port ?? 0
+        if !["127.0.0.1", "localhost", "::1"].contains(host) && !authorization.required {
+            logLine("isomer: listening on \(host) needs a token (ISO_DRIVE_TOKEN or ISO_DRIVE_TOKEN_FILE)")
+            exit(2)
+        }
+        Task.detached {
+            do {
+                switch scheme {
+                case "grpc":
+                    guard #available(macOS 15.0, *) else {
+                        logLine("isomer: gRPC needs macOS 15")
+                        exit(2)
+                    }
+                    try await IsomerGRPCServer(server, host: host, port: port).run { bound in
+                        logLine("isomer: listening grpc://\(host):\(bound)")
+                    }
+                case "ws":
+                    guard #available(macOS 14, *) else {
+                        logLine("isomer: WebSockets need macOS 14")
+                        exit(2)
+                    }
+                    try await IsomerWebSocketServer(server, host: host, port: port, site: site).run { bound in
+                        logLine("isomer: listening ws://\(host):\(bound)")
+                    }
+                default:
+                    logLine("isomer: no transport \(scheme) (grpc, ws or unix)")
+                    exit(2)
+                }
+            } catch {
+                logLine("isomer: \(address): \(error)")
+                exit(2)
+            }
+        }
+    }
+
+    /// The main queue (and with it the main actor) runs on the main thread,
+    /// whose stack a deep view tree needs (dispatchMain would hand it to a
+    /// worker thread's 512 KB).
     static func runMainLoop() -> Never {
         while true {
             _ = RunLoop.main.run(mode: .default, before: .distantFuture)
         }
     }
-
-    /// The next line's command (one that doesn't parse is a command no one
-    /// knows, answered so); nil at the input's end.
-    static func readJSONCommand() -> Wire_Command? {
-        while let line = readLine() {
-            if line.trimmingCharacters(in: .whitespaces).isEmpty { continue }
-            var options = JSONDecodingOptions()
-            options.ignoreUnknownFields = true
-            if let command = try? Wire_Command(jsonString: line, options: options) { return command }
-            var unknown = Wire_Command()
-            unknown.cmd = line
-            return unknown
-        }
-        return nil
-    }
-
-    static func readBinaryCommand() -> Wire_Command? {
-        guard let bytes = WireDelimited.read(from: 0) else { return nil }
-        return (try? Wire_Command(serializedBytes: bytes)) ?? Wire_Command()
-    }
-
-    /// An answer as a line of JSON (protobuf's mapping leaves out a field at
-    /// its default: an empty list of texts).
-    static func json(_ answer: Wire_Answer) -> String {
-        (try? answer.jsonString()) ?? #"{"ok": false}"#
-    }
-
-    /// The frame as it stands, encoded as a host receives it, its handlers
-    /// installed where the runtime looks them up.
-    @MainActor
-    static func frame() -> HeadlessFrame? {
-        guard let tree = renderer.tree else { return nil }
-        encoder = FlatTreeEncoder()
-        guard let root = try? IsoFlat_Node(treeBytes: encoder.encode(root: tree)) else { return nil }
-        Runtime.shared.installTreeHandlers(encoder.handlers)
-        return HeadlessFrame(root)
-    }
-
-    /// Frames until the screen holds still (three in a row the same, or the
-    /// timeout): the app's tasks and animations run meanwhile.
-    @MainActor
-    static func settle(timeout: Double = 3) async -> HeadlessFrame? {
-        let deadline = Date().addingTimeInterval(timeout)
-        var last: Wire_Screen?
-        var still = 0
-        var current = frame()
-        while Date() < deadline {
-            if needsFrame {
-                needsFrame = false
-                Runtime.shared.renderFrame()
-            }
-            current = frame()
-            let text = current?.wire
-            if text == last {
-                still += 1
-                if still >= 3 { break }
-            } else {
-                still = 0
-                last = text
-            }
-            try? await Task.sleep(nanoseconds: 25_000_000)
-        }
-        return current
-    }
-
-    /// Runs one command and answers it.
-    @MainActor
-    static func handle(_ command: Wire_Command) async -> Wire_Answer {
-        var error: String?
-        let target = command.target
-        let before = await settle()
-        switch command.cmd {
-        case "ls":
-            break
-        case "tap":
-            if let handler = before?.element(target, roles: ["button"])?.handler {
-                Runtime.shared.hostViewEvent(id: handler, value: "")
-            } else {
-                error = "no button \(target)"
-            }
-        case "type":
-            if let handler = before?.element(target, roles: ["textField"])?.handler {
-                Runtime.shared.hostViewEvent(id: handler, value: command.text)
-            } else {
-                error = "no text field \(target)"
-            }
-        case "set":
-            if let handler = before?.element(target)?.handler {
-                Runtime.shared.hostViewEvent(id: handler, value: command.value)
-            } else {
-                error = "no control \(target)"
-            }
-        case "back":
-            if !Runtime.shared.handleBackButton() { error = "nothing to go back from" }
-        case "dismiss":
-            if let dismiss = before?.presented.last?.dismiss {
-                Runtime.shared.hostViewEvent(id: dismiss, value: "")
-            } else {
-                error = "nothing presented"
-            }
-        case "wait":
-            let text = command.text
-            let deadline = Date().addingTimeInterval(command.timeout > 0 ? command.timeout : 5)
-            var shown = false
-            while Date() < deadline {
-                if let frame = await settle(timeout: 0.5), frame.texts.contains(where: { $0.contains(text) })
-                    || frame.elements.contains(where: { $0.label.contains(text) || ($0.value ?? "").contains(text) }) {
-                    shown = true
-                    break
-                }
-            }
-            if !shown { error = "\(text) didn't show" }
-        case "quit":
-            break
-        default:
-            error = "unknown command: \(command.cmd)"
-        }
-        needsFrame = true
-        var answer = Wire_Answer()
-        answer.ok = error == nil
-        if let error { answer.error = error }
-        if let frame = await settle() { answer.screen = frame.wire }
-        return answer
-    }
 }
 
 #endif
 
-/// The headless host's process (shared/swift_ui_core/App.swift): nothing drawn, the UI read and driven over standard input and output until `quit`.
+/// The headless host's process (shared/swift_ui_core/App.swift): nothing drawn, the UI served until it ends.
 @_silgen_name("iso_process_host_run")
 func _isoHeadlessProcessHostRun() {
     MainActor.assumeIsolated { HeadlessApp.run() }
 }
 
 /// The Isomer module's `Bridge` headless (shared/isomer/Bridge.swift):
-/// nothing to bridge to, so the log goes to standard error and URLs are
-/// recorded there for the driver.
+/// nothing to bridge to, so the log goes to standard error.
 struct HeadlessPlatformBridge: PlatformBridge {
     var platformName: String { "Headless" }
-    var rendererName: String { "None" }
+    var rendererName: String { RemoteSession.rendererName }
     func log(_ message: String) { FileHandle.standardError.write(Data(("[iso] " + message + "\n").utf8)) }
     func epochMilliseconds() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
     func openURL(_ url: String) { FileHandle.standardError.write(Data(("[iso] openURL " + url + "\n").utf8)) }

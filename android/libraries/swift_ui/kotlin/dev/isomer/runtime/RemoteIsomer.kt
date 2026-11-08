@@ -76,7 +76,7 @@ object SessionMessages {
     fun back() = Writer().message(12, Writer()).done()
 }
 
-/** One session with a gateway: its socket, and the frames it brings into
+/** One session with an app served headless: its socket, and the frames it brings into
  *  the interpreter's tree. */
 class RemoteSession(private val url: String, private val environment: Map<String, String>) {
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
@@ -180,7 +180,7 @@ class RemoteSession(private val url: String, private val environment: Map<String
 }
 
 /**
- * An app's SwiftUI on a server, drawn here: connects to `url` (a gateway's
+ * An app's SwiftUI on a server, drawn here: connects to `url` (the app's
  * /session) once the view has its size, and draws each frame with the
  * Compose renderer. `environment` is the app's launch environment (its ISO_
  * entries: `ISO_STORYBOOK_STORY`).

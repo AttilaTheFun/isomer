@@ -16,7 +16,7 @@ option java_package = "dev.isomer.wire";
 option java_multiple_files = true;
 
 message Command {
-  // ls, tap, type, set, back, dismiss, wait or quit
+  // ls, info, tap, type, set, select, swipe, back, dismiss, wait or quit
   // (headless/libraries/swift_ui/HeadlessHost.swift says each).
   string cmd = 1;
   // The element: its accessibility identifier, its label, or the last whose
@@ -24,10 +24,13 @@ message Command {
   string target = 2;
   // `type`'s text; `wait`'s text to wait for.
   string text = 3;
-  // `set`'s value (a toggle's "1" or "0", a picker's index).
+  // `set`'s value (a toggle's "1" or "0", a picker's index); `select`'s
+  // option, by its label.
   string value = 4;
   // `wait`'s timeout in seconds (5 when 0).
   double timeout = 5;
+  // `swipe`'s direction: up, down, left or right.
+  string direction = 6;
 }
 
 message Answer {
@@ -36,6 +39,23 @@ message Answer {
   optional string error = 2;
   // The screen once the UI settled after the command.
   Screen screen = 3;
+  // What the app is: `info`'s answer, and the first message an app that
+  // dials out sends (session_service.proto's Driver.Attach).
+  Info info = 4;
+}
+
+message Info {
+  // The app's name and bundle identifier.
+  string name = 1;
+  string bundle_identifier = 2;
+  string version = 3;
+  // Headless, Android, Web, iOS, macOS, Linux or Windows.
+  string platform = 4;
+  // The renderer drawing it (None headless, React, Compose, SwiftUI, …).
+  string renderer = 5;
+  // The window, in points.
+  double width = 6;
+  double height = 7;
 }
 
 message Screen {
@@ -55,6 +75,8 @@ message Element {
   // Its `accessibilityIdentifier`.
   optional string id = 3;
   optional string value = 4;
+  // A picker's or a segmented control's options, by label.
+  repeated string options = 5;
 }
 
 message Presentation {

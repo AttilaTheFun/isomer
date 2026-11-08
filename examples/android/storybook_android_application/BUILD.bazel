@@ -57,8 +57,8 @@ isomer_android_app(
     services_kt = "AppServices.kt",
     swift_library = ":app_swift",
     url_scheme = "iso",
-    version_code = 45000,
-    version_name = "0.45.0",
+    version_code = 46000,
+    version_name = "0.46.0",
     visibility = ["//shared/example_application:__pkg__"],
 )
 

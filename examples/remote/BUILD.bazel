@@ -1,131 +1,57 @@
-load("@rules_proto//proto:defs.bzl", "proto_library")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
-load("@rules_swift//proto:proto.bzl", "swift_proto_library")
-load("@rules_swift//swift:swift.bzl", "swift_binary", "swift_test")
+load("@rules_swift//swift:swift.bzl", "swift_test")
 
 package(default_visibility = ["//visibility:public"])
 
-# A remote session's server (gateway/Gateway.swift): an app built headless
-# (--@isomer//headless) served to clients that hold only a renderer, one run
-# of the app for each connection: a WebSocket at /session (a browser's, a
-# phone's), gRPC's Session and Headless services, and the files of a page
-# (the web's thin client). The protocol is isomer's shared/wire.
-#
-#   bazel run --@isomer//headless //remote:gateway -- \
-#       --app $PWD/bazel-bin/headless/storybook_headless_application/storybook_headless_application
-
-# Isomer's protos, copied here so this package's proto_library imports them
-# by their own names ("session.proto").
-genrule(
-    name = "protos",
-    srcs = [
-        "@isomer//shared/wire:headless.proto",
-        "@isomer//shared/wire:session.proto",
-        "@isomer//shared/wire:session_service.proto",
-        "@isomer//shared/wire:tree.proto",
-    ],
-    outs = [
-        "headless.proto",
-        "session.proto",
-        "session_service.proto",
-        "tree.proto",
-    ],
-    cmd = "for f in $(SRCS); do cp $$f $(RULEDIR)/$$(basename $$f); done",
-)
-
-proto_library(
-    name = "messages_proto",
-    srcs = [
-        "headless.proto",
-        "session.proto",
-        "tree.proto",
-    ],
-    strip_import_prefix = "/remote",
-)
-
-proto_library(
-    name = "service_proto",
-    srcs = ["session_service.proto"],
-    strip_import_prefix = "/remote",
-    deps = [":messages_proto"],
-)
-
-# The messages, generated (the gateway's own copy: isomer's IsomerWire is
-# for the headless host and its clients).
-swift_proto_library(
-    name = "messages_swift",
-    compilers = ["//proto_greeter:swift_proto"],
-    module_name = "RemoteWire",
-    protos = [":messages_proto"],
-)
-
-swift_proto_library(
-    name = "service_server_swift",
-    compilers = [
-        "//proto_greeter:swift_proto",
-        "//proto_greeter:grpc_swift_server_proto",
-    ],
-    module_name = "RemoteServiceServer",
-    protos = [":service_proto"],
-    deps = [":messages_swift"],
-)
-
-swift_proto_library(
-    name = "service_client_swift",
-    compilers = [
-        "//proto_greeter:swift_proto",
-        "//proto_greeter:grpc_swift_client_proto",
-    ],
-    module_name = "RemoteServiceClient",
-    protos = [":service_proto"],
-    deps = [":messages_swift"],
-)
-
-swift_binary(
-    name = "gateway",
-    srcs = glob(["gateway/*.swift"]),
-    copts = ["-parse-as-library"],
-    deps = [
-        ":messages_swift",
-        ":service_server_swift",
-        "@swiftpkg_grpc_swift_2//:GRPCCore",
-        "@swiftpkg_grpc_swift_nio_transport//:GRPCNIOTransportHTTP2",
-        "@swiftpkg_swift_nio//:NIOCore",
-        "@swiftpkg_swift_nio//:NIOHTTP1",
-        "@swiftpkg_swift_nio//:NIOPosix",
-        "@swiftpkg_swift_nio//:NIOWebSocket",
-    ],
-)
-
-# The gateway's gRPC services, Headless.Drive and Session.Connect
-# (GatewayGRPCTests.swift). With the app's flag:
+# An app built headless, served and driven over isomer's drive/ transports
+# (docs/drive_plan.md): the Storybook listening on gRPC, a WebSocket and a
+# Unix socket, with tokens; a head's session; the app dialling out to the
+# `isomer` CLI's hub. With the app's flag:
 #
 #   bazel test --@isomer//headless //remote/...
 swift_test(
-    name = "grpc_test",
-    srcs = ["GatewayGRPCTests.swift"],
+    name = "remote_test",
+    srcs = ["RemoteTests.swift"],
     data = [
-        ":gateway",
         "//headless/storybook_headless_application",
+        "@isomer//drive/cli:isomer",
     ],
-    module_name = "GatewayGRPCTests",
+    env = {"ISOMER_CLI": "$(rootpath @isomer//drive/cli:isomer)"},
+    module_name = "RemoteTests",
     deps = [
-        ":messages_swift",
-        ":service_client_swift",
-        "@swiftpkg_grpc_swift_2//:GRPCCore",
-        "@swiftpkg_grpc_swift_nio_transport//:GRPCNIOTransportHTTP2",
+        "@isomer//drive/remote",
+        "@isomer//drive/serving",
+        "@isomer//headless/isomer_headless",
+        "@isomer//shared/isomer_swift_ui",
+        "@isomer//shared/wire/swift",
+    ],
+)
+
+# The `isomer` CLI driving the Storybook: an exec: application added,
+# selected, driven a command at a time (the app kept running between them on
+# a Unix socket), and stopped (cli_test.sh).
+sh_test(
+    name = "cli_test",
+    size = "small",
+    srcs = ["cli_test.sh"],
+    args = [
+        "$(rootpath @isomer//drive/cli:isomer)",
+        "$(rootpath //headless/storybook_headless_application)",
+    ],
+    data = [
+        "//headless/storybook_headless_application",
+        "@isomer//drive/cli:isomer",
     ],
 )
 
 # The web's thin client (isomer's //web/remote_client) in headless Chrome,
-# drawing the gateway's session and clicking in it (web_test.sh): Chrome for
-# Testing on Linux, the Mac's own Chrome on a Mac. With the app's flag.
+# drawing the app over its WebSocket and clicking in it (web_test.sh): Chrome
+# for Testing on Linux, the Mac's own Chrome on a Mac.
 sh_test(
     name = "web_test",
     size = "medium",
     srcs = ["web_test.sh"],
     args = [
-        "$(rootpath :gateway)",
         "$(rootpath //headless/storybook_headless_application)",
         "$(rootpath @isomer//tools/testing/browser_check)",
         "$(rootpath @isomer//web/remote_client)",
@@ -135,7 +61,6 @@ sh_test(
         "//conditions:default": ["''"],
     }),
     data = [
-        ":gateway",
         "//headless/storybook_headless_application",
         "@isomer//tools/testing/browser_check",
         "@isomer//web/remote_client",
@@ -153,4 +78,49 @@ sh_test(
     # Chrome starts its own sandbox (or, as root in a container, none):
     # not inside Bazel's.
     tags = ["no-sandbox"],
+)
+
+# A headful app driven from the command line (headful_web_test.sh): the web
+# Storybook in headless Chrome dials out to the `isomer` CLI's hub
+# (ISO_DRIVER), which the CLI drives it through. The site needs the driver
+# built in, in an invocation of its own (manual: not in //remote/..., whose
+# other tests take --@isomer//headless; the two flags in one build shadow
+# swift-crypto's modules, as builds of the package's modules in two
+# configurations can, AGENTS.md):
+#
+#   bazel test --@isomer//drive:headful //remote:headful_web_test
+sh_test(
+    name = "headful_web_test",
+    size = "medium",
+    srcs = ["headful_web_test.sh"],
+    args = [
+        "$(rootpath @isomer//drive/cli:isomer)",
+        "$(rootpath @isomer//tools/testing/browser_check)",
+        "$(rootpath //web/storybook_web_application:storybook_web_application_site)",
+    ] + select({
+        "//tests/platforms:linux_arm64": ["$(rootpath @chrome_linux_arm64//:chrome)"],
+        "//tests/platforms:linux_x86_64": ["$(rootpath @chrome_linux_x86_64//:chrome)"],
+        "//conditions:default": ["''"],
+    }),
+    data = [
+        "//web/storybook_web_application:storybook_web_application_site",
+        "@isomer//drive/cli:isomer",
+        "@isomer//tools/testing/browser_check",
+    ] + select({
+        "//tests/platforms:linux_arm64": [
+            "@chrome_linux_arm64//:chrome",
+            "@chrome_linux_arm64//:files",
+        ],
+        "//tests/platforms:linux_x86_64": [
+            "@chrome_linux_x86_64//:chrome",
+            "@chrome_linux_x86_64//:files",
+        ],
+        "//conditions:default": [],
+    }),
+    # Chrome starts its own sandbox (or, as root in a container, none):
+    # not inside Bazel's.
+    tags = [
+        "manual",
+        "no-sandbox",
+    ],
 )

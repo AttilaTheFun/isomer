@@ -1,0 +1,9 @@
+load("//foundation:defs.bzl", "one_configuration")
+
+package(default_visibility = ["//visibility:public"])
+
+# IsomerRemote (isomer's Swift package, Package.swift; docs/drive_plan.md): A client by URL (grpc, grpcs, ws, unix, exec).
+one_configuration(
+    name = "remote",
+    actual = "@swiftpkg_isomer//:IsomerRemote",
+)

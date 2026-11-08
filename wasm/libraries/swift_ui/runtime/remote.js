@@ -23,7 +23,8 @@ export function launchEnvironment(search = location.search) {
   return Object.fromEntries([...new URLSearchParams(search)].filter(([key]) => key.startsWith("ISO_")));
 }
 
-// Connects to `url` (a gateway's /session) and draws the app into
+// Connects to `url` (an app's /session: one built headless, served on a
+// WebSocket, docs/drive.md) and draws the app into
 // `container` until the session ends. Returns `{ socket, tree() }`.
 export function connectIsomer({
   url,

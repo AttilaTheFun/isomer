@@ -1,14 +1,14 @@
 package dev.isomer.remote
 
 // Isomer's Android thin client as an app: an app's SwiftUI runs on a server
-// (the examples' //remote:gateway, serving an app built headless), and this
+// (an app built headless, serving itself: ISO_DRIVE_LISTEN), and this
 // APK, with no Swift and no native library, draws it with the Compose
 // renderer over a WebSocket (dev.isomer.runtime.IsomerRemote).
 //
 //   adb shell am start -n dev.isomer.remote/.MainActivity \
 //       -e url ws://10.0.2.2:8090/session -e ISO_STORYBOOK_STORY controls.toggle
 //
-// `url` is the gateway's session (the emulator's 10.0.2.2 is its host's
+// `url` is the app's session (the emulator's 10.0.2.2 is its host's
 // loopback); every ISO_ extra is the app's launch environment.
 
 import android.os.Bundle

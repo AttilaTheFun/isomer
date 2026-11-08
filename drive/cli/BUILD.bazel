@@ -1,0 +1,10 @@
+package(default_visibility = ["//visibility:public"])
+
+# isomer, the CLI (main.swift says its commands): an executable product of
+# isomer's Swift package.
+#
+#   bazel run @isomer//drive/cli:isomer -- application add storybook exec:$PWD/<app built headless>
+alias(
+    name = "isomer",
+    actual = "@swiftpkg_isomer//:isomer",
+)

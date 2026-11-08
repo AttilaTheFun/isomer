@@ -25,11 +25,14 @@ encodings (headless/libraries/swift_ui/HeadlessHost.swift):
 
 - protobuf's JSON mapping, a command a line on standard input and an answer
   a line on standard output: the default, for a terminal or an agent;
-- binary, each message length-delimited (a varint length, then the
-  message), with `ISO_HEADLESS_PROTOCOL=binary`: IsomerHeadless's.
+- binary, one call (a `CallHeader`, then the call's messages, each
+  length-delimited), with `ISO_HEADLESS_PROTOCOL=binary`: what IsomerHeadless
+  and the CLI's `exec:` URLs start an app with.
 
-`ISO_HEADLESS_PROTOCOL=session` serves the app to a remote client instead
-(shared/wire/session.proto, docs/remote_sessions.md).
+The app also serves itself on gRPC, WebSockets and Unix sockets
+(`ISO_DRIVE_LISTEN`), to drivers and to heads that draw it: docs/drive.md,
+docs/remote_sessions.md. The commands since 0.46 also include `info`,
+`select <element> <option>` and `swipe [<element>] <direction>`.
 
 | Command | Does |
 | --- | --- |
@@ -66,9 +69,9 @@ The Storybook's are examples/headless/storybook_headless_application
 build, pull requests' and main's alike (tools/ci/container_build.sh): they
 take seconds.
 
-A test can drive the app on another machine too: a gateway's
-`Headless.Drive` (gRPC, session_service.proto) or `/headless` WebSocket
-runs it there (docs/remote_sessions.md).
+A test can drive the app on another machine too, or a headful app that
+dialled out to it: `HeadlessApp(url:token:)` over any of docs/drive.md's
+transports.
 
 ## What's next
 

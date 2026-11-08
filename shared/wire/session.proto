@@ -155,3 +155,15 @@ message TextInputRequest {
   double height = 5;
   double font_size = 6;
 }
+
+// A call's opening over a transport that carries one call a connection and
+// has no headers of its own (a Unix socket, standard input and output): its
+// first message, length-delimited like the rest. WebSockets name the call by
+// their path (/session, /headless, /driver) and gRPC by its method.
+message CallHeader {
+  // Session.Connect, Headless.Drive or Driver.Attach.
+  string method = 1;
+  // As gRPC's metadata: `authorization` (Bearer <token>), the app's
+  // launch environment (iso_… keys).
+  map<string, string> metadata = 2;
+}

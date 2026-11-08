@@ -34,7 +34,7 @@ public nonisolated struct Wire_Command: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// ls, tap, type, set, back, dismiss, wait or quit
+  /// ls, info, tap, type, set, select, swipe, back, dismiss, wait or quit
   /// (headless/libraries/swift_ui/HeadlessHost.swift says each).
   public var cmd: String = String()
 
@@ -45,11 +45,15 @@ public nonisolated struct Wire_Command: Sendable {
   /// `type`'s text; `wait`'s text to wait for.
   public var text: String = String()
 
-  /// `set`'s value (a toggle's "1" or "0", a picker's index).
+  /// `set`'s value (a toggle's "1" or "0", a picker's index); `select`'s
+  /// option, by its label.
   public var value: String = String()
 
   /// `wait`'s timeout in seconds (5 when 0).
   public var timeout: Double = 0
+
+  /// `swipe`'s direction: up, down, left or right.
+  public var direction: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -90,6 +94,17 @@ public nonisolated struct Wire_Answer: Sendable {
   /// Clears the value of `screen`. Subsequent reads from it will return its default value.
   public mutating func clearScreen() {self._screen = nil}
 
+  /// What the app is: `info`'s answer, and the first message an app that
+  /// dials out sends (session_service.proto's Driver.Attach).
+  public var info: Wire_Info {
+    get {_info ?? Wire_Info()}
+    set {_info = newValue}
+  }
+  /// Returns true if `info` has been explicitly set.
+  public var hasInfo: Bool {self._info != nil}
+  /// Clears the value of `info`. Subsequent reads from it will return its default value.
+  public mutating func clearInfo() {self._info = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -97,6 +112,35 @@ public nonisolated struct Wire_Answer: Sendable {
   fileprivate var _ok: Bool? = nil
   fileprivate var _error: String? = nil
   fileprivate var _screen: Wire_Screen? = nil
+  fileprivate var _info: Wire_Info? = nil
+}
+
+public nonisolated struct Wire_Info: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// The app's name and bundle identifier.
+  public var name: String = String()
+
+  public var bundleIdentifier: String = String()
+
+  public var version: String = String()
+
+  /// Headless, Android, Web, iOS, macOS, Linux or Windows.
+  public var platform: String = String()
+
+  /// The renderer drawing it (None headless, React, Compose, SwiftUI, …).
+  public var renderer: String = String()
+
+  /// The window, in points.
+  public var width: Double = 0
+
+  public var height: Double = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
 }
 
 public nonisolated struct Wire_Screen: Sendable {
@@ -148,6 +192,9 @@ public nonisolated struct Wire_Element: Sendable {
   /// Clears the value of `value`. Subsequent reads from it will return its default value.
   public mutating func clearValue() {self._value = nil}
 
+  /// A picker's or a segmented control's options, by label.
+  public var options: [String] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -179,7 +226,7 @@ fileprivate nonisolated let _protobuf_package = "isomer.wire"
 
 nonisolated extension Wire_Command: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Command"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}cmd\0\u{1}target\0\u{1}text\0\u{1}value\0\u{1}timeout\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}cmd\0\u{1}target\0\u{1}text\0\u{1}value\0\u{1}timeout\0\u{1}direction\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -192,6 +239,7 @@ nonisolated extension Wire_Command: SwiftProtobuf.Message, SwiftProtobuf._Messag
       case 3: try { try decoder.decodeSingularStringField(value: &self.text) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.value) }()
       case 5: try { try decoder.decodeSingularDoubleField(value: &self.timeout) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.direction) }()
       default: break
       }
     }
@@ -213,6 +261,9 @@ nonisolated extension Wire_Command: SwiftProtobuf.Message, SwiftProtobuf._Messag
     if self.timeout.bitPattern != 0 {
       try visitor.visitSingularDoubleField(value: self.timeout, fieldNumber: 5)
     }
+    if !self.direction.isEmpty {
+      try visitor.visitSingularStringField(value: self.direction, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -222,6 +273,7 @@ nonisolated extension Wire_Command: SwiftProtobuf.Message, SwiftProtobuf._Messag
     if lhs.text != rhs.text {return false}
     if lhs.value != rhs.value {return false}
     if lhs.timeout != rhs.timeout {return false}
+    if lhs.direction != rhs.direction {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -229,7 +281,7 @@ nonisolated extension Wire_Command: SwiftProtobuf.Message, SwiftProtobuf._Messag
 
 nonisolated extension Wire_Answer: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Answer"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}ok\0\u{1}error\0\u{1}screen\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}ok\0\u{1}error\0\u{1}screen\0\u{1}info\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -240,6 +292,7 @@ nonisolated extension Wire_Answer: SwiftProtobuf.Message, SwiftProtobuf._Message
       case 1: try { try decoder.decodeSingularBoolField(value: &self._ok) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self._error) }()
       case 3: try { try decoder.decodeSingularMessageField(value: &self._screen) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._info) }()
       default: break
       }
     }
@@ -259,6 +312,9 @@ nonisolated extension Wire_Answer: SwiftProtobuf.Message, SwiftProtobuf._Message
     try { if let v = self._screen {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
     } }()
+    try { if let v = self._info {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -266,6 +322,67 @@ nonisolated extension Wire_Answer: SwiftProtobuf.Message, SwiftProtobuf._Message
     if lhs._ok != rhs._ok {return false}
     if lhs._error != rhs._error {return false}
     if lhs._screen != rhs._screen {return false}
+    if lhs._info != rhs._info {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Wire_Info: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".Info"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{3}bundle_identifier\0\u{1}version\0\u{1}platform\0\u{1}renderer\0\u{1}width\0\u{1}height\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.bundleIdentifier) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.version) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.platform) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.renderer) }()
+      case 6: try { try decoder.decodeSingularDoubleField(value: &self.width) }()
+      case 7: try { try decoder.decodeSingularDoubleField(value: &self.height) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
+    }
+    if !self.bundleIdentifier.isEmpty {
+      try visitor.visitSingularStringField(value: self.bundleIdentifier, fieldNumber: 2)
+    }
+    if !self.version.isEmpty {
+      try visitor.visitSingularStringField(value: self.version, fieldNumber: 3)
+    }
+    if !self.platform.isEmpty {
+      try visitor.visitSingularStringField(value: self.platform, fieldNumber: 4)
+    }
+    if !self.renderer.isEmpty {
+      try visitor.visitSingularStringField(value: self.renderer, fieldNumber: 5)
+    }
+    if self.width.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.width, fieldNumber: 6)
+    }
+    if self.height.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.height, fieldNumber: 7)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Wire_Info, rhs: Wire_Info) -> Bool {
+    if lhs.name != rhs.name {return false}
+    if lhs.bundleIdentifier != rhs.bundleIdentifier {return false}
+    if lhs.version != rhs.version {return false}
+    if lhs.platform != rhs.platform {return false}
+    if lhs.renderer != rhs.renderer {return false}
+    if lhs.width != rhs.width {return false}
+    if lhs.height != rhs.height {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -313,7 +430,7 @@ nonisolated extension Wire_Screen: SwiftProtobuf.Message, SwiftProtobuf._Message
 
 nonisolated extension Wire_Element: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Element"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}role\0\u{1}label\0\u{1}id\0\u{1}value\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}role\0\u{1}label\0\u{1}id\0\u{1}value\0\u{1}options\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -325,6 +442,7 @@ nonisolated extension Wire_Element: SwiftProtobuf.Message, SwiftProtobuf._Messag
       case 2: try { try decoder.decodeSingularStringField(value: &self.label) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self._id) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self._value) }()
+      case 5: try { try decoder.decodeRepeatedStringField(value: &self.options) }()
       default: break
       }
     }
@@ -347,6 +465,9 @@ nonisolated extension Wire_Element: SwiftProtobuf.Message, SwiftProtobuf._Messag
     try { if let v = self._value {
       try visitor.visitSingularStringField(value: v, fieldNumber: 4)
     } }()
+    if !self.options.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.options, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -355,6 +476,7 @@ nonisolated extension Wire_Element: SwiftProtobuf.Message, SwiftProtobuf._Messag
     if lhs.label != rhs.label {return false}
     if lhs._id != rhs._id {return false}
     if lhs._value != rhs._value {return false}
+    if lhs.options != rhs.options {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -40,6 +40,7 @@ isomer_web_app(
     site_visibility = [
         "//electron/example_full_react_electron_application:__pkg__",
         "//electron/example_full_webgpu_electron_application:__pkg__",
+        "//remote:__pkg__",
         "//shared/example_application:__pkg__",
         "//tests/platforms:__pkg__",
         "//web/example_full_webgpu_web_application:__pkg__",

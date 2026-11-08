@@ -1,0 +1,12 @@
+load("//foundation:defs.bzl", "one_configuration")
+
+package(default_visibility = ["//visibility:public"])
+
+# IsomerGRPCTransport (isomer's Swift package, Package.swift; docs/drive_plan.md): The services over gRPC Swift 2 (HTTP/2), the primary remote transport (macOS 15, iOS 18).
+one_configuration(
+    name = "grpc",
+    actual = "@swiftpkg_isomer//:IsomerGRPCTransport",
+)
+
+# protoc-gen-grpc-swift-2's code, checked in (//shared/wire's diff test).
+exports_files(["session_service.grpc.swift"])

@@ -10,6 +10,10 @@ import Darwin
 import Glibc
 #elseif canImport(Musl)
 import Musl
+#elseif canImport(Android)
+import Android
+#elseif canImport(WASILibc)
+import WASILibc
 #endif
 
 public enum WireDelimited {
@@ -48,11 +52,7 @@ public enum WireDelimited {
         var filled = 0
         while filled < count {
             let got = bytes.withUnsafeMutableBytes { buffer in
-                #if canImport(Darwin)
-                Darwin.read(descriptor, buffer.baseAddress! + filled, count - filled)
-                #else
-                Glibc.read(descriptor, buffer.baseAddress! + filled, count - filled)
-                #endif
+                systemRead(descriptor, buffer.baseAddress! + filled, count - filled)
             }
             if got < 0 && errno == EINTR { continue }
             if got <= 0 { return nil }
@@ -60,4 +60,19 @@ public enum WireDelimited {
         }
         return bytes
     }
+}
+
+/// `read`, by the module this platform's C library is.
+private func systemRead(_ descriptor: Int32, _ buffer: UnsafeMutableRawPointer, _ count: Int) -> Int {
+    #if canImport(Darwin)
+    Darwin.read(descriptor, buffer, count)
+    #elseif canImport(Glibc)
+    Glibc.read(descriptor, buffer, count)
+    #elseif canImport(Musl)
+    Musl.read(descriptor, buffer, count)
+    #elseif canImport(Android)
+    Android.read(descriptor, buffer, count)
+    #elseif canImport(WASILibc)
+    WASILibc.read(descriptor, buffer, count)
+    #endif
 }

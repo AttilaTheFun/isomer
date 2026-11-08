@@ -56,3 +56,30 @@ diff_test(
     )
     for name in ["session", "headless"]
 ]
+
+# The services' gRPC Swift 2 code, client and server (protoc-gen-grpc-swift-2),
+# checked in as drive/grpc/session_service.grpc.swift (IsomerGRPCTransport):
+# its messages are IsomerWire's.
+genrule(
+    name = "session_service_grpc_swift",
+    srcs = [
+        "headless.proto",
+        "session.proto",
+        "session_service.proto",
+    ],
+    outs = ["session_service.grpc.swift"],
+    cmd = "$(location @protobuf//:protoc) --plugin=protoc-gen-grpc-swift=$(location @swiftpkg_grpc_swift_protobuf//:protoc-gen-grpc-swift-2) " +
+          "--grpc-swift_out=$(RULEDIR) --grpc-swift_opt=Visibility=Public,Server=true,Client=true,ExtraModuleImports=IsomerWire " +
+          "-I $$(dirname $(location session_service.proto)) $(location session_service.proto)",
+    tools = [
+        "@protobuf//:protoc",
+        "@swiftpkg_grpc_swift_protobuf//:protoc-gen-grpc-swift-2",
+    ],
+)
+
+diff_test(
+    name = "session_service_grpc_swift_test",
+    failure_message = "Regenerate drive/grpc/session_service.grpc.swift: bazel build //shared/wire:session_service_grpc_swift, and copy its output over it.",
+    file1 = "//drive/grpc:session_service.grpc.swift",
+    file2 = ":session_service_grpc_swift",
+)

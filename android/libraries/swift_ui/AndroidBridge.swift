@@ -318,6 +318,7 @@ package func nativeStart(host: any AndroidHost, renderer: String, width: Double,
             _boundRendererName = "Jetpack Compose"
             Renderer.bind(JetpackComposeRenderer { androidHost?.renderTree(tree: $0) })
             Runtime.shared.start(host: AndroidHostBridge(), width: width, height: height)
+            _isoDriveAttach("Android", "Compose")
             return
         }
         #if canImport(SwiftGPU)
@@ -335,6 +336,7 @@ package func nativeStart(host: any AndroidHost, renderer: String, width: Double,
         Renderer.hostRendersMaps = true  // `Map` draws real SwiftMap tiles
         #endif
         Runtime.shared.start(host: gpuRenderer, width: width, height: height)
+        _isoDriveAttach("Android", "OpenGL")
         #else
         #error("HostDrawnRenderer has been removed; SwiftGPU is now the only self-drawing renderer. Link swift_gpu (OpenGL ES) for Android — see docs/renderer_layers.md")
         #endif
@@ -469,3 +471,9 @@ struct AndroidPlatformBridge: PlatformBridge {
 
     func openURL(_ url: String) { _AndroidBridgeCalls.openURL(url) }
 }
+
+/// The headful driver's start (drive/headful): dialling out when the app was
+/// launched with ISO_DRIVER, in a build with --@isomer//drive:headful; a no-op
+/// otherwise.
+@_silgen_name("iso_drive_attach")
+func _isoDriveAttach(_ platform: String, _ renderer: String)
