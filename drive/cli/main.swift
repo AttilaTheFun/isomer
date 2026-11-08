@@ -212,10 +212,15 @@ func command(_ verb: String, _ rest: [String], _ options: Options) -> Wire_Comma
 func describe(_ answer: Wire_Answer) -> String {
     var lines: [String] = []
     if answer.hasError { lines.append("error: \(answer.error)") }
+    // `info`: what the app is, not its screen (`ls` for that).
     if answer.hasInfo {
         let info = answer.info
-        lines.append("\(info.name) \(info.version) (\(info.bundleIdentifier))")
+        var first = info.name
+        if !info.version.isEmpty { first += " \(info.version)" }
+        if !info.bundleIdentifier.isEmpty { first += " (\(info.bundleIdentifier))" }
+        lines.append(first)
         lines.append("\(info.platform), \(info.renderer), \(Int(info.width))×\(Int(info.height))")
+        return lines.joined(separator: "\n")
     }
     let screen = answer.screen
     for presentation in screen.presented {

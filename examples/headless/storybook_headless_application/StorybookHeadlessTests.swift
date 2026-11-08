@@ -74,6 +74,18 @@ final class StorybookHeadlessTests: XCTestCase {
         XCTAssertTrue(screen.shows("Taps: 0"))
     }
 
+    func testAStoryReplacesTheListAndBackReturns() throws {
+        let app = try launch()
+        defer { app.quit() }
+        // At compact width the split view shows one column: the story alone.
+        var screen = try app.tap("ObservableObject")
+        XCTAssertTrue(screen.shows("Taps: 0"))
+        XCTAssertNil(screen.element("Text styles"))
+        screen = try app.back()
+        XCTAssertNotNil(screen.element("Text styles"))
+        XCTAssertNil(screen.element("Reset"))
+    }
+
     func testUnknownTargetFailsWithTheScreen() throws {
         let app = try launch(story: "state.observableobject")
         defer { app.quit() }

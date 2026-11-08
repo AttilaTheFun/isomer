@@ -47,8 +47,33 @@ struct DriverScreen {
     var draggables: [(label: String, id: String?, handler: String)] = []
     var presented: [(style: String, title: String, message: String, dismiss: String?)] = []
 
-    init(_ root: IsoFlat_Node) {
+    /// Whether the width is compact: a split view then shows one column.
+    let compact: Bool
+    /// A compact split view showing a column after its first: its handler
+    /// and the column before, where `back` goes (as a host reports it,
+    /// "compact:<column>:back").
+    var splitBack: (handler: String, column: String)?
+
+    init(_ root: IsoFlat_Node, compact: Bool = false) {
+        self.compact = compact
         walk(root, around: [])
+    }
+
+    /// The columns a split view shows: at compact width the one its
+    /// `compact` parameter names (the sidebar until it says otherwise), as the
+    /// hosts collapse it; every column at regular width.
+    private func shownColumns(_ node: IsoFlat_Node, _ p: [String: String]) -> [IsoFlat_Node] {
+        guard compact else { return node.ch }
+        let names = p["columns"] == "2" ? ["sidebar", "detail"] : ["sidebar", "content", "detail"]
+        guard let index = names.firstIndex(of: p["compact"] ?? "sidebar"), index < node.ch.count else { return node.ch }
+        return [node.ch[index]]
+    }
+
+    /// The column before the one a compact split view shows, if any.
+    private func previousColumn(_ p: [String: String]) -> String? {
+        let names = p["columns"] == "2" ? ["sidebar", "detail"] : ["sidebar", "content", "detail"]
+        guard let index = names.firstIndex(of: p["compact"] ?? "sidebar"), index > 0 else { return nil }
+        return names[index - 1]
     }
 
     private static func params(_ node: IsoFlat_Node) -> [String: String] {
@@ -111,7 +136,13 @@ struct DriverScreen {
             draggables.append((p["a11yLabel"] ?? Self.textsUnder(node).joined(separator: " "), id, drag))
         }
         let texts = Self.textsUnder(node)
-        for child in node.ch { walk(child, around: texts) }
+        let split = node.kind == .hostview && node.view == "navsplit"
+        // The innermost split showing a later column takes `back`.
+        if split, compact, let handler = node.edit, let previous = previousColumn(p) {
+            splitBack = (handler, previous)
+        }
+        let children = split ? shownColumns(node, p) : node.ch
+        for child in children { walk(child, around: texts) }
     }
 
     /// The element a target names: its accessibility identifier, then its
@@ -193,7 +224,7 @@ public final class IsomerAppDriver {
         encoder = FlatTreeEncoder()
         guard let root = try? IsoFlat_Node(treeBytes: encoder.encode(root: tree)) else { return nil }
         Runtime.shared.installTreeHandlers(encoder.handlers)
-        return DriverScreen(root)
+        return DriverScreen(root, compact: Runtime.shared.compactWidth)
     }
 
     /// Frames until the screen holds still (three readings in a row the same,
@@ -282,7 +313,15 @@ public final class IsomerAppDriver {
                 error = target.isEmpty ? "nothing on the screen takes a swipe" : "\(target) takes no swipe"
             }
         case "back":
-            if !runtime.handleBackButton() { error = "nothing to go back from" }
+            // A navigation stack's page first; then a compact split view's
+            // column, as its host goes back to the column before.
+            if !runtime.handleBackButton() {
+                if let back = before?.splitBack {
+                    runtime.hostViewEvent(id: back.handler, value: "compact:\(back.column):back")
+                } else {
+                    error = "nothing to go back from"
+                }
+            }
         case "dismiss":
             if let dismiss = before?.presented.last?.dismiss {
                 runtime.hostViewEvent(id: dismiss, value: "")
