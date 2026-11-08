@@ -2,4 +2,7 @@
 
 package(default_visibility = ["//visibility:public"])
 
-exports_files(["Exports.swift"])
+exports_files([
+    "Bridge.swift",
+    "Exports.swift",
+])

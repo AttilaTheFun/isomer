@@ -269,6 +269,7 @@ nonisolated(unsafe) var windowsGPUSurface: DirectXRendererSurface?
 /// the services bridge. SwiftGPU is the only self-drawing renderer; a D3D11
 /// device is required (there is no longer a Direct2D draw-list fallback).
 package func windowsMakeHost() -> HostBridge {
+    PlatformBridges.current = WindowsPlatformBridge()
     #if canImport(SwiftGPU)
     guard let surface = DirectXRendererSurface() else {
         fatalError(
@@ -361,4 +362,31 @@ package func isoRunMainQueue() {
 @_silgen_name("iso_process_host_run")
 func _isoWindowsProcessHostRun() {
     MainActor.assumeIsolated { WindowsApp.run() }
+}
+
+/// The Isomer module's `Bridge` on Windows (shared/isomer/Bridge.swift): the
+/// C renderer's host logs, keeps the clock and opens URLs (`renderer.h`).
+struct WindowsPlatformBridge: PlatformBridge {
+    var platformName: String { "Windows" }
+    var rendererName: String { "Direct2D" }
+
+    func log(_ message: String) {
+        var copy = message
+        copy.withUTF8 { buffer in
+            buffer.withMemoryRebound(to: CChar.self) { rebound in
+                iso_bridge_log(rebound.baseAddress, Int32(rebound.count))
+            }
+        }
+    }
+
+    func epochMilliseconds() -> Int64 { Int64(iso_bridge_epoch_millis()) }
+
+    func openURL(_ url: String) {
+        var copy = url
+        copy.withUTF8 { buffer in
+            buffer.withMemoryRebound(to: CChar.self) { rebound in
+                iso_bridge_open_url(rebound.baseAddress, Int32(rebound.count))
+            }
+        }
+    }
 }

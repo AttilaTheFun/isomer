@@ -235,6 +235,7 @@ final class GLRendererSurface: SwiftGPURendererSurface {
 /// wrapping the services bridge. SwiftGPU is the only self-drawing renderer;
 /// linking swift_gpu (OpenGL) for Linux is required.
 package func linuxMakeHost() -> HostBridge {
+    PlatformBridges.current = LinuxPlatformBridge()
     #if canImport(SwiftGPU)
     #if canImport(SwiftMap)
     Renderer.hostRendersMaps = true  // `Map` draws real SwiftMap tiles
@@ -326,4 +327,31 @@ package func isoRunMainQueue() {
 @_silgen_name("iso_process_host_run")
 func _isoLinuxProcessHostRun() {
     MainActor.assumeIsolated { LinuxApp.run() }
+}
+
+/// The Isomer module's `Bridge` on Linux (shared/isomer/Bridge.swift): the
+/// C renderer's host logs, keeps the clock and opens URLs (`renderer.h`).
+struct LinuxPlatformBridge: PlatformBridge {
+    var platformName: String { "Linux" }
+    var rendererName: String { "OpenGL" }
+
+    func log(_ message: String) {
+        var copy = message
+        copy.withUTF8 { buffer in
+            buffer.withMemoryRebound(to: CChar.self) { rebound in
+                iso_bridge_log(rebound.baseAddress, Int32(rebound.count))
+            }
+        }
+    }
+
+    func epochMilliseconds() -> Int64 { Int64(iso_bridge_epoch_millis()) }
+
+    func openURL(_ url: String) {
+        var copy = url
+        copy.withUTF8 { buffer in
+            buffer.withMemoryRebound(to: CChar.self) { rebound in
+                iso_bridge_open_url(rebound.baseAddress, Int32(rebound.count))
+            }
+        }
+    }
 }

@@ -39,8 +39,6 @@ swift_library(
     deps = [
         "//shared/isomer_swift_ui",
         ":image_io",
-        "//swift_ffi/swift_ffi",
-        "//shared/isomer_network_host",
         "@flatbuffers//swift",
         "//frameworks/core_transferable",
         "//frameworks/uniform_type_identifiers",
@@ -146,7 +144,7 @@ swift_library(
     name = "isomer",
     package_name = "isomer",
     srcs = [
-        "IsomerBridge.swift",
+        "//shared/isomer:Bridge.swift",
         "MetalView.swift",
         "//shared/isomer:Exports.swift",
         "//shared/swift_ui_extensions:srcs",
@@ -155,7 +153,6 @@ swift_library(
     module_name = "Isomer",
     deps = [
         ":gpu_renderer",
-        ":host",
         ":swift_ui",
         "//metal/isomer_metal",
         "//metal/metal",

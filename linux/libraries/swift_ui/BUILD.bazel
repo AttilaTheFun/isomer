@@ -201,17 +201,13 @@ swift_library(
     name = "isomer",
     package_name = "isomer",
     srcs = [
-        "IsomerBridge.swift",
+        "//shared/isomer:Bridge.swift",
         "//shared/isomer:Exports.swift",
         "//shared/swift_ui_extensions:srcs",
     ],
-    copts = _LINUX_COPTS,
     module_name = "Isomer",
-    swiftc_inputs = ["renderer.h"],
     target_compatible_with = ["@platforms//os:linux"],
     deps = [
-        ":host",
-        ":renderer",
         ":swift_ui",
         "//swift_ffi/swift_ffi",
         "//shared/isomer_swift_ui",
