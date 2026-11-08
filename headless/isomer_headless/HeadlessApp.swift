@@ -10,11 +10,17 @@
 //   try app.tap("Tap")
 //   try app.wait(for: "Taps: 1")
 //   XCTAssertEqual(try app.screen().element("Title")?.value, "Taps")
+//
+// The same test drives a headful app (drawn by its platform's renderer, its
+// driver built in with --@isomer//drive:headful) through a launcher: a
+// program that starts the app dialling out to the test's own hub and ends it
+// when stopped (`HeadlessApp(launcher:environment:)`).
 
 import Foundation
 import IsomerProcessTransport
 import IsomerRemote
 import IsomerServing
+import IsomerWebSocketTransport
 import IsomerWire
 
 /// The screen as the app's runtime shows it: no pixels, what a person sees
@@ -90,6 +96,8 @@ public struct HeadlessInfo: Sendable {
 public final class HeadlessApp: @unchecked Sendable {
     private let call: IsomerCall<Wire_Command, Wire_Answer>
     private var answers: IsomerInbound<Wire_Answer>.AsyncIterator
+    /// What ends a headful app's launcher, when one started the app.
+    private var launched: Process?
 
     /// Starts `executable` (an app built with --@isomer//headless), the call
     /// on its standard input and output. `environment` adds to the process's
@@ -113,6 +121,43 @@ public final class HeadlessApp: @unchecked Sendable {
         let opened = try Self.blocking { try await connection.drive(context: context) }
         call = opened
         answers = opened.inbound.makeAsyncIterator()
+    }
+
+    /// A headful app, started by `launcher` and driven through a hub in this
+    /// process (a WebSocket on the loopback address, its port the system's
+    /// choice). The launcher is run as
+    ///
+    ///     <launcher> <the hub's ws:// URL> <the app's name> [KEY=VALUE…]
+    ///
+    /// with `environment` as its KEY=VALUE arguments (the app's launch hooks:
+    /// ISO_STORYBOOK_STORY, ISO_HEADLESS_WIDTH and ISO_HEADLESS_HEIGHT for
+    /// its window), and must start the app with ISO_DRIVER set to the URL and
+    /// ISO_DRIVER_NAME to the name (a web page's ISO_ query, an Android
+    /// intent's extras), then run until it is stopped (SIGTERM), when it ends
+    /// the app. `quit()` stops it. The app has `timeout` seconds to attach.
+    public convenience init(launcher: String, environment: [String: String] = [:], timeout: Double = 120) throws {
+        let hub = try HeadfulHub.shared()
+        let name = HeadfulHub.nextName()
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: launcher)
+        process.arguments = [hub.url, name] + environment.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }
+        try process.run()
+        let attached = try Self.blocking { () async -> Bool in
+            let deadline = Date().addingTimeInterval(timeout)
+            while Date() < deadline {
+                if await hub.hub.waitUntilAttached(name, timeout: 1) { return true }
+                if !process.isRunning { return false }
+            }
+            return false
+        }
+        guard attached else {
+            if process.isRunning { process.terminate() }
+            throw HeadlessError(message: process.isRunning || process.terminationReason == .uncaughtSignal
+                ? "the app \(launcher) launched didn't attach in \(Int(timeout)) s"
+                : "\(launcher) ended (\(process.terminationStatus)) before its app attached", screen: nil)
+        }
+        try self.init(connection: IsomerLocalConnection(hub.hub), context: IsomerCallContext(metadata: ["iso-target": name]))
+        launched = process
     }
 
     deinit {
@@ -188,11 +233,19 @@ public final class HeadlessApp: @unchecked Sendable {
         }
     }
 
-    /// Ends the call (and an app built headless).
+    /// Ends the call (and an app built headless, or a headful app's
+    /// launcher, which ends the app).
     public func quit() {
         _ = try? exchange("quit")
         let call = call
         try? Self.blocking { await call.finish() }
+        if let launched, launched.isRunning {
+            launched.terminate()
+            let deadline = Date().addingTimeInterval(10)
+            while launched.isRunning, Date() < deadline { usleep(100_000) }
+            if launched.isRunning { kill(launched.processIdentifier, SIGKILL) }
+        }
+        launched = nil
     }
 
     private func send(_ cmd: String, _ fill: (inout Wire_Command) -> Void = { _ in }) throws -> HeadlessScreen {
@@ -231,5 +284,58 @@ public final class HeadlessApp: @unchecked Sendable {
         }
         done.wait()
         return try result!.get()
+    }
+}
+
+/// The hub headful apps a test launches dial out to: one a process, started
+/// at the first launch and served until the process ends.
+private final class HeadfulHub: @unchecked Sendable {
+    let hub: IsomerHub
+    let url: String
+
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var started: HeadfulHub?
+    nonisolated(unsafe) private static var launches = 0
+
+    static func shared() throws -> HeadfulHub {
+        lock.lock()
+        defer { lock.unlock() }
+        if let started { return started }
+        guard #available(macOS 14, iOS 17, *) else {
+            throw HeadlessError(message: "a headful app's hub needs macOS 14 (the WebSocket transport)", screen: nil)
+        }
+        let hub = IsomerHub()
+        let listening = DispatchSemaphore(value: 0)
+        nonisolated(unsafe) var port = 0
+        nonisolated(unsafe) var failure: (any Error)?
+        Task.detached {
+            do {
+                try await IsomerWebSocketServer(hub, host: "127.0.0.1", port: 0).run { bound in
+                    port = bound
+                    listening.signal()
+                }
+            } catch {
+                failure = error
+                listening.signal()
+            }
+        }
+        listening.wait()
+        if let failure { throw failure }
+        let made = HeadfulHub(hub: hub, url: "ws://127.0.0.1:\(port)")
+        started = made
+        return made
+    }
+
+    private init(hub: IsomerHub, url: String) {
+        self.hub = hub
+        self.url = url
+    }
+
+    /// A name no other launch of this process has.
+    static func nextName() -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        launches += 1
+        return "headful-\(ProcessInfo.processInfo.processIdentifier)-\(launches)"
     }
 }

@@ -33,3 +33,52 @@ swift_test(
     module_name = "StorybookHeadlessTests",
     deps = ["@isomer//headless/isomer_headless"],
 )
+
+# The same tests against the web Storybook headful: drawn by the React
+# renderer in headless Chrome (web_launcher.sh), the driver built into the
+# page, which dials out to the test's hub. In an invocation of its own, with
+# the driver's flag (manual: //headless/... takes --@isomer//headless; the
+# two flags in one build shadow swift-crypto's modules, AGENTS.md):
+#
+#   bazel test --@isomer//drive:headful //headless/storybook_headless_application:storybook_headful_web_test
+_HEADFUL_WEB_ENV = {
+    "ISOMER_BROWSER_CHECK": "$(rootpath @isomer//tools/testing/browser_check)",
+    "ISOMER_HEADFUL_LAUNCHER": "$(rootpath web_launcher.sh)",
+    "ISOMER_WEB_SITE": "$(rootpath //web/storybook_web_application:storybook_web_application_site)",
+}
+
+swift_test(
+    name = "storybook_headful_web_test",
+    size = "medium",
+    srcs = ["StorybookHeadlessTests.swift"],
+    data = [
+        "web_launcher.sh",
+        "//web/storybook_web_application:storybook_web_application_site",
+        "@isomer//tools/testing/browser_check",
+    ] + select({
+        "//tests/platforms:linux_arm64": [
+            "@chrome_linux_arm64//:chrome",
+            "@chrome_linux_arm64//:files",
+        ],
+        "//tests/platforms:linux_x86_64": [
+            "@chrome_linux_x86_64//:chrome",
+            "@chrome_linux_x86_64//:files",
+        ],
+        "//conditions:default": [],
+    }),
+    # Chrome for Testing in a Linux container; on a Mac, the installed
+    # Chrome (CHROME, or browser_check's default).
+    env = select({
+        "//tests/platforms:linux_arm64": _HEADFUL_WEB_ENV | {"CHROME": "$(rootpath @chrome_linux_arm64//:chrome)"},
+        "//tests/platforms:linux_x86_64": _HEADFUL_WEB_ENV | {"CHROME": "$(rootpath @chrome_linux_x86_64//:chrome)"},
+        "//conditions:default": _HEADFUL_WEB_ENV,
+    }),
+    module_name = "StorybookHeadfulTests",
+    # Chrome starts its own sandbox (or, as root in a container, none):
+    # not inside Bazel's.
+    tags = [
+        "manual",
+        "no-sandbox",
+    ],
+    deps = ["@isomer//headless/isomer_headless"],
+)

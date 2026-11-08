@@ -183,9 +183,11 @@ tested_here=$?
 # the web thin client in headless Chrome).
 run_tests "${flags[@]}" --@isomer//headless $(log_of headless) --test_output=errors //headless/... //remote/...
 headless=$?
-# A headful app driven from the command line: the web Storybook with its
-# driver built in, in Chrome, dialling out to the isomer CLI hub.
-run_tests "${flags[@]}" --@isomer//drive:headful $(log_of headful) --test_output=errors //remote:headful_web_test
+# Headful apps driven: the web Storybook with its driver built in, in
+# Chrome, dialling out: to the isomer CLI hub, and to the hub of the
+# Storybook tests run headful (the same tests as //headless).
+run_tests "${flags[@]}" --@isomer//drive:headful $(log_of headful) --test_output=errors //remote:headful_web_test \
+    //headless/storybook_headless_application:storybook_headful_web_test
 headful=$?
 [ $headless -ne 0 ] || headless=$headful
 cd "$root"

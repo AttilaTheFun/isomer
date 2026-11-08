@@ -105,10 +105,24 @@ target:
 let app = try HeadlessApp(executable: path, environment: ["ISO_STORYBOOK_STORY": "state.observableobject"])
 let app = try HeadlessApp(url: "grpc://127.0.0.1:7701", token: token)
 let app = try HeadlessApp(connection: IsomerLocalConnection(server))
+let app = try HeadlessApp(launcher: launcher, environment: ["ISO_STORYBOOK_STORY": "state.observableobject"])
 try app.tap("Tap")
 try app.wait(for: "Taps: 1")
 ```
 
-The examples' //remote tests drive the Storybook over each transport, with
-tokens, a head's session, the hub and the CLI; //remote:headful_web_test the
-web Storybook in Chrome through the hub.
+`HeadlessApp(launcher:environment:)` drives a headful app with the same
+test: the test holds a hub of its own (IsomerServing's `IsomerHub`, on a
+loopback WebSocket), and the launcher, run as `<launcher> <hub URL> <name>
+[KEY=VALUE…]`, starts the app dialling out to it (ISO_DRIVER,
+ISO_DRIVER_NAME) and ends it when stopped. A launcher a platform: the web's
+is the examples' headless/storybook_headless_application/web_launcher.sh
+(headless Chrome under browser_check `--hold`); Android's (an emulator's `am
+start` with the extras, the hub's port reversed with `adb reverse`) and the
+iPhone's come next.
+
+The examples' //headless tests drive the Storybook built headless, and
+:storybook_headful_web_test runs the same source against the web Storybook
+headful (ISOMER_HEADFUL_LAUNCHER names the launcher; CI's container runs
+both on every pull request). The //remote tests drive it over each
+transport, with tokens, a head's session, the hub and the CLI;
+//remote:headful_web_test the web Storybook in Chrome through the CLI's hub.

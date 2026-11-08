@@ -7,7 +7,7 @@
 //
 //   browser_check --site <dir> [--chrome <path>] [--width 1280] [--height 800]
 //                 [--until "<js>"] [--timeout 60] [--settle 2]
-//                 [--flag=<chrome flag>]… [--allow-errors]
+//                 [--flag=<chrome flag>]… [--allow-errors] [--hold]
 //                 --page "<path and query>=<out.png>" [--page …]
 //
 // Each page is loaded in turn and waited for until `--until` (a JavaScript
@@ -15,7 +15,9 @@
 // page that never gets there, or that throws, fails the run (exit 1), as
 // does an error on the console unless `--allow-errors`. The console and the
 // exceptions are printed either way. CHROME in the environment names Chrome
-// when `--chrome` doesn't.
+// when `--chrome` doesn't. `--hold` keeps the last page open after its
+// picture, its console still printed, until the process is told to stop
+// (SIGTERM or SIGINT): a headful app a test drives, launched this way.
 import Foundation
 #if canImport(Glibc)
 import Glibc
@@ -33,6 +35,7 @@ struct Options {
     var settle = 2.0
     var flags: [String] = []
     var allowErrors = false
+    var hold = false
     var pages: [(path: String, out: String)] = []
 
     static func parse(_ arguments: [String]) -> Options {
@@ -56,6 +59,7 @@ struct Options {
             case "--timeout": options.timeout = Double(value(argument)) ?? options.timeout
             case "--settle": options.settle = Double(value(argument)) ?? options.settle
             case "--allow-errors": options.allowErrors = true
+            case "--hold": options.hold = true
             case "--page":
                 let page = value(argument)
                 guard let equals = page.lastIndex(of: "=") else { fail("--page wants <path>=<out.png>: \(page)") }
@@ -310,6 +314,13 @@ final class Chrome: @unchecked Sendable {
 
 // A write to a Chrome that went away fails rather than ends the run.
 signal(SIGPIPE, SIG_IGN)
+
+/// --hold's end: set by SIGTERM or SIGINT.
+enum Held {
+    nonisolated(unsafe) static var stopping: sig_atomic_t = 0
+}
+signal(SIGTERM) { _ in Held.stopping = 1 }
+signal(SIGINT) { _ in Held.stopping = 1 }
 let options = Options.parse(Array(CommandLine.arguments.dropFirst()))
 let server = SiteServer(root: URL(fileURLWithPath: options.site))
 server.start()
@@ -395,5 +406,14 @@ for page in options.pages {
     let errors = drainConsole(name)
     let counted = errors.filter { options.allowErrors ? $0.hasPrefix("exception") : true }
     failures += counted.map { "\(name): \($0)" }
+}
+if options.hold, let last = options.pages.last {
+    let name = URL(fileURLWithPath: last.out).deletingPathExtension().lastPathComponent
+    log("\(name): held open until stopped")
+    while Held.stopping == 0 {
+        usleep(200_000)
+        let errors = drainConsole(name)
+        failures += errors.filter { options.allowErrors ? $0.hasPrefix("exception") : true }.map { "\(name): \($0)" }
+    }
 }
 finish()

@@ -1,17 +1,27 @@
 // The Storybook driven headless: its UI read and its controls used through
 // the runtime (IsomerHeadless), nothing drawn. Each test launches the app
 // on a story (ISO_STORYBOOK_STORY) and works it as a person would.
+//
+// The same tests drive a headful Storybook when ISOMER_HEADFUL_LAUNCHER
+// names a launcher (IsomerHeadless's `HeadlessApp(launcher:environment:)`):
+// the app drawn by its platform's renderer, its driver built in
+// (--@isomer//drive:headful), dialling out to the test's hub. The web's is
+// web_launcher.sh (:storybook_headful_web_test).
 
 import IsomerHeadless
 import XCTest
 
 final class StorybookHeadlessTests: XCTestCase {
-    /// The app built headless, from the test's runfiles.
+    /// The app built headless, from the test's runfiles; or headful, started
+    /// by the launcher the environment names.
     private func launch(story: String? = nil) throws -> HeadlessApp {
         let environment = ProcessInfo.processInfo.environment
-        let root = "\(environment["TEST_SRCDIR"] ?? "")/\(environment["TEST_WORKSPACE"] ?? "_main")"
         var launchEnvironment = ["ISO_HEADLESS_HEIGHT": "6000"]
         if let story { launchEnvironment["ISO_STORYBOOK_STORY"] = story }
+        if let launcher = environment["ISOMER_HEADFUL_LAUNCHER"], !launcher.isEmpty {
+            return try HeadlessApp(launcher: launcher, environment: launchEnvironment)
+        }
+        let root = "\(environment["TEST_SRCDIR"] ?? "")/\(environment["TEST_WORKSPACE"] ?? "_main")"
         return try HeadlessApp(
             executable: "\(root)/headless/storybook_headless_application/storybook_headless_application",
             environment: launchEnvironment)

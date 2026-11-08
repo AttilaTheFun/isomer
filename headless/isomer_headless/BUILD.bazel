@@ -4,7 +4,8 @@ package(default_visibility = ["//visibility:public"])
 
 # IsomerHeadless: the client tests and agents drive a headless Isomer app
 # with (HeadlessApp.swift), over any of drive/'s transports: an app it starts,
-# one served at a URL, one attached to a hub, a server in the same process.
+# one served at a URL, one attached to a hub, a server in the same process,
+# or a headful app a launcher starts, attached to a hub of its own.
 swift_library(
     name = "isomer_headless",
     srcs = ["HeadlessApp.swift"],
@@ -13,6 +14,7 @@ swift_library(
         "//drive/process",
         "//drive/remote",
         "//drive/serving",
+        "//drive/websocket",
         "//shared/wire/swift",
     ],
 )
