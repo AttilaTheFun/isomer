@@ -17,6 +17,10 @@ ios-storybook-controls.progress 100 1524 80 80
 ios-storybook-isomer-controls.progress 100 1524 80 80
 macos-storybook-controls.progress 176 364 44 44
 android-storybook-controls.progress 90 1196 82 82
+web-storybook-controls.progress 280 366 30 30
+# Apple's SwiftUI draws a ProgressView with a value in the .circular style as
+# the same spinner on iOS (the determinate ring is the Mac's).
+ios-storybook-controls.progressstyle 100 2128 80 80
 
 # The Map story's map: OpenStreetMap's live tiles, which change with the
 # map's data and the order they arrive in (a picture's tiles at another
