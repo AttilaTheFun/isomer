@@ -1,5 +1,5 @@
 diff --git a/swiftpkg/internal/minimum_os_transition.bzl b/swiftpkg/internal/minimum_os_transition.bzl
-index 0806a2aa..09821570 100644
+index 0806a2aa..704a32b1 100644
 --- a/swiftpkg/internal/minimum_os_transition.bzl
 +++ b/swiftpkg/internal/minimum_os_transition.bzl
 @@ -30,6 +30,11 @@ def _transition_outputs(settings, attr):
@@ -14,16 +14,18 @@ index 0806a2aa..09821570 100644
      platform_type = settings[_APPLE_PLATFORM_TYPE_OPTION]
      minimum_os_config = _MINIMUM_OS_CONFIG_BY_PLATFORM_TYPE.get(platform_type)
      if minimum_os_config == None:
-@@ -174,31 +179,54 @@ _minimum_os_attrs = {
-     "watchos_minimum_os": attr.string(
-         doc = "The package minimum deployment target for watchOS.",
-     ),
+@@ -153,6 +158,10 @@ def _actual(ctx):
+     return ctx.attr.deps[0]
+ 
+ _minimum_os_attrs = {
 +    "apple_platform": attr.bool(
 +        default = True,
 +        doc = "Whether the target platform is Apple's; set by the macros below.",
 +    ),
-     "_allowlist_function_transition": attr.label(
-         default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
+     "deps": attr.label_list(
+         aspects = [swift_clang_module_aspect],
+         mandatory = True,
+@@ -179,26 +188,45 @@ _minimum_os_attrs = {
      ),
  }
  
