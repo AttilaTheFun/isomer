@@ -978,3 +978,25 @@ func checkEllipticalGradient(_ mock: MockRenderer) {
     let kept = flatNodes(again) { $0.gradient?.contains("\"ell\":[0.1,0.6]") == true }
     expect(!kept.isEmpty, "and the decoder keeps them")
 }
+
+/// A DatePicker's value in the user's calendar: its date and time sent to
+/// the host as parts, and a host's change to one keeping the other.
+@MainActor
+func checkDatePickerValue(_ mock: MockRenderer) {
+    var parts = DateComponents()
+    parts.year = 2026
+    parts.month = 11
+    parts.day = 1
+    parts.hour = 7
+    parts.minute = 30
+    let start = Calendar.current.date(from: parts)!
+    let value = DatePickerValue(start)
+    expect(value.date == "2026-11-01" && value.time == "07:30", "the date and time sent (\(value.date) \(value.time))")
+    let newDay = DatePickerValue.date(start, changedBy: "2026-12-25").map(DatePickerValue.init)
+    expect(newDay?.date == "2026-12-25" && newDay?.time == "07:30", "a new date keeps the time")
+    let newTime = DatePickerValue.date(start, changedBy: "time:18:05").map(DatePickerValue.init)
+    expect(newTime?.date == "2026-11-01" && newTime?.time == "18:05", "a new time keeps the date")
+    let both = DatePickerValue.date(start, changedBy: "2027-01-02T09:15").map(DatePickerValue.init)
+    expect(both?.date == "2027-01-02" && both?.time == "09:15", "both at once")
+    expect(DatePickerValue.date(start, changedBy: "nonsense") == nil, "a value of neither form is refused")
+}

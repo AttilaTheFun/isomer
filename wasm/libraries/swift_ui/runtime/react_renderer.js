@@ -2957,11 +2957,25 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
            // `.menuIndicator(.hidden)`: no chevrons.
            p.indicator === "hidden" ? null : h("span", { key: "c", style: { fontSize: 11, opacity: 0.7 } }, "⌃⌄")]);
       }
-      case "datepicker":
-        props.type = "date";
-        props.value = n.v || "";
-        props.onChange = (e) => sendEvent(n.edit, e.target.value);
-        return h("input", props);
+      case "datepicker": {
+        // The components asked for: a date input, a time input, or both
+        // side by side; each sends its part ("yyyy-MM-dd", "time:HH:mm"),
+        // the core keeping the other. The browser formats them for its locale.
+        const parts = String((n.params || {}).components || "date").split(",");
+        const time = (n.params || {}).time || "";
+        const date = n.v || "";
+        const inputs = [];
+        if (parts.includes("date")) {
+          inputs.push(h("input", { ...props, key: "date", type: "date", value: date,
+            onChange: (e) => e.target.value && sendEvent(n.edit, e.target.value) }));
+        }
+        if (parts.includes("time")) {
+          inputs.push(h("input", { ...props, key: "time", type: "time", value: time,
+            onChange: (e) => e.target.value && sendEvent(n.edit, "time:" + e.target.value) }));
+        }
+        if (inputs.length === 1) return inputs[0];
+        return h("span", { key: props.key, style: { display: "inline-flex", gap: "6px" } }, inputs);
+      }
       case "image":
         props.src = /^(https?:|data:|blob:)/.test(n.v) ? n.v : assetBase + n.v;
         props.style = { ...props.style, maxWidth: "100%", objectFit: "contain" };

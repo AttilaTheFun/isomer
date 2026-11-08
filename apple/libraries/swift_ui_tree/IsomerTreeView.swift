@@ -890,9 +890,11 @@ struct HostViewBody: View {
         case "datepicker":
             NativeDatePicker(
                 title: param("title") ?? "",
-                iso: node.v ?? "",
-                onChange: { iso in
-                    if let edit = node.edit { send(edit, iso) }
+                date: node.v ?? "",
+                time: param("time") ?? "",
+                components: param("components") ?? "date",
+                onChange: { value in
+                    if let edit = node.edit { send(edit, value) }
                 })
                 .modifier(LabelsHiddenModifier(hidden: param("labelsHidden") == "1"))
         case "search":
@@ -2054,30 +2056,48 @@ struct TabBarBody: View {
     }
 }
 
+/// The guest's date picker: its date and time as the guest's wall clock
+/// (yyyy-MM-dd, HH:mm, in its own time zone), shown and sent back in one
+/// fixed zone so they come back as they went out, whatever the host's.
 struct NativeDatePicker: View {
     let title: String
-    let iso: String
+    let date: String
+    let time: String
+    let components: String
     let onChange: (String) -> Void
+
+    private static let wallClock = TimeZone(identifier: "UTC")!
 
     var body: some View {
         DatePicker(
             title,
-            selection: Binding(get: { parse(iso) }, set: { onChange(format($0)) }),
-            displayedComponents: .date)
+            selection: Binding(get: { parse() }, set: { onChange(format($0)) }),
+            displayedComponents: shown)
+            .environment(\.timeZone, Self.wallClock)
     }
 
-    private func parse(_ value: String) -> Date {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone(identifier: "UTC")
-        return formatter.date(from: value) ?? Date()
+    private var shown: DatePickerComponents {
+        var shown: DatePickerComponents = []
+        let parts = components.split(separator: ",")
+        if parts.contains("date") { shown.insert(.date) }
+        if parts.contains("time") { shown.insert(.hourAndMinute) }
+        return shown.isEmpty ? .date : shown
     }
 
-    private func format(_ date: Date) -> String {
+    private func formatter() -> DateFormatter {
         let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone(identifier: "UTC")
-        return formatter.string(from: date)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm"
+        formatter.timeZone = Self.wallClock
+        return formatter
+    }
+
+    private func parse() -> Date {
+        formatter().date(from: "\(date)T\(time.isEmpty ? "00:00" : time)") ?? Date()
+    }
+
+    private func format(_ value: Date) -> String {
+        formatter().string(from: value)
     }
 }
 
