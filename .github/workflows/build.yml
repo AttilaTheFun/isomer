@@ -134,15 +134,15 @@ jobs:
         run: exec tools/ci/container_build.sh all
 
   verify:
-    # By hand: the tests that need a Mac or a simulator, on OS Server's
-    # leases (and a private copy's Android's, on an emulator leased there),
-    # after the build and the container's own tests. The proof runs beside
-    # it (proof, proof-shoot, proof-compare).
+    # By hand: every platform built, and the container's own tests; a public
+    # repository's iPhone, Mac and Android tests then run on GitHub's own
+    # runners (apple, android, below), a private copy's here on OS Server's
+    # leases. The proof runs beside it (proof, proof-shoot, proof-compare).
     if: github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release')
     runs-on: [self-hosted, isomer-jit]
     timeout-minutes: 180
     env:
-      PLATFORM_TESTS: ${{ github.event.repository.private && 'android apple' || 'apple' }}
+      PLATFORM_TESTS: ${{ github.event.repository.private && 'android apple' || '' }}
       # A public repository's Android tests run on GitHub's own Ubuntu
       # runner (android, below), from an x86_64 test APK built here.
       ISOMER_ANDROID_X86_64: ${{ !github.event.repository.private && '1' || '' }}
@@ -158,14 +158,49 @@ jobs:
           name: android-test-apk
           path: .ci/platforms/android-x86_64
           retention-days: 3
+      - uses: actions/upload-artifact@v4
+        if: ${{ !github.event.repository.private }}
+        with:
+          name: apple-test-apps
+          path: |
+            .ci/platforms/*storybook_ios*.ipa
+            .ci/platforms/*storybook_macos*.zip
+          retention-days: 3
       # exec: the runner's cancel reaches the script, which releases its leases.
       - name: The tests on OS Server's leases
+        if: github.event.repository.private
         run: exec tools/ci/platform_tests.sh .ci/platform-tests
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
           name: platform-tests
           path: .ci/platform-tests
+          retention-days: 14
+
+  apple:
+    # The iPhone and Mac Storybooks' tests on GitHub's own `xcode-27` Mac (a
+    # simulator made for the run, and the Mac's own screen:
+    # tools/ci/hosted_apple_test.sh), for a public repository's verify; a
+    # private one runs them in verify itself, on OS Server's leases.
+    needs: verify
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release') && !github.event.repository.private }}
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: apple-test-apps
+          path: .ci/apple
+      - name: The iPhone and Mac Storybooks' tests
+        run: >-
+          exec tools/ci/hosted_apple_test.sh "$(ls .ci/apple/*storybook_ios*.ipa | head -1)"
+          "$(ls .ci/apple/*storybook_macos*.zip | head -1)" .ci/platform-tests/apple
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: platform-tests-apple
+          path: .ci/platform-tests/apple
           retention-days: 14
 
   android:
@@ -357,12 +392,12 @@ jobs:
     # checked for the dark appearance, published (tools/ci/publish_from_ci.sh;
     # the server signs the Apple ones and notarizes the Mac's), the web site
     # packaged, and the draft release made (tools/ci/draft_release.sh).
-    needs: [verify, android, proof, proof-compare]
+    needs: [verify, apple, android, proof, proof-compare]
     if: >-
       always() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
       (inputs.run == 'prerelease' || (inputs.run == 'release' && needs.verify.result == 'success' &&
       (github.event.repository.private ||
-      (needs.android.result == 'success' && needs.proof-compare.result == 'success')) &&
+      (needs.apple.result == 'success' && needs.android.result == 'success' && needs.proof-compare.result == 'success')) &&
       (!github.event.repository.private || needs.proof.result == 'success')))
     runs-on: [self-hosted, isomer-jit]
     timeout-minutes: 180
