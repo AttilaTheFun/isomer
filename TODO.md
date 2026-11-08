@@ -118,6 +118,12 @@ Isomer's Kotlin calls above 23 are behind version checks (#96).
 
 ## SwiftUI's next gaps (after 0.42's)
 
+- CGFloat and Double don't convert implicitly (SE-0307) on wasm and Android:
+  //core_graphics/tests:conversion_check_wasm and _android fail with
+  "standard library type 'Double' is missing or broken" under Swift 6.4.2,
+  on main too, though CGFloat has `init(_: Double)` and Double
+  `init(_: CGFloat)`. An app's `let width: Double = rect.width` fails
+  there. CI's build doesn't include the check; it should once it passes.
 - `AnyGradient.colorSpace(_:)` (needs `Gradient.ColorSpace` on gradients)
   and `GraphicsContext.Shading`'s gradients.
 - The web's guest has no time zone (WebAssembly carries no tz database):
