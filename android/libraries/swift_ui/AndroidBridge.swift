@@ -18,6 +18,7 @@ import Synchronization
 
 #if canImport(SwiftGPU)
 import SwiftGPU
+import IsomerGPURenderer
 #endif
 
 @ExportedStruct

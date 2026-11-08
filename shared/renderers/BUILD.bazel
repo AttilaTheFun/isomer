@@ -8,8 +8,13 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 
+# The GPU renderer (SwiftGPURenderer.swift), a module of its own on each
+# platform with a GPU (IsomerGPURenderer, beside its SwiftUI): what a host
+# plugs in to draw.
+exports_files(["SwiftGPURenderer.swift"])
+
 # The renderers minus SwiftGPURenderer.swift (the only one that imports
-# swift_gpu). The wasm hot-reload demo binds SwiftUIRenderer and never draws,
+# swift_gpu): what every platform's SwiftUI compiles. The wasm hot-reload demo binds SwiftUIRenderer and never draws,
 # so it links this slim set and skips the whole GPU stack.
 filegroup(
     name = "srcs_no_gpu",

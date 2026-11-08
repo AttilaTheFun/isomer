@@ -204,6 +204,7 @@ func linuxControlChanged(
 
 #if canImport(SwiftGPU)
 import SwiftGPU
+import IsomerGPURenderer
 
 /// The SwiftGPU surface for Linux: swift_gpu's GL device over the host's
 /// SDL2 window and core-3.3 context (created in iso_window_create; current

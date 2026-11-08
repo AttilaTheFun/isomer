@@ -12,6 +12,7 @@ internal import IsomerNetworkHost
 
 #if canImport(SwiftGPU)
 import SwiftGPU
+import IsomerGPURenderer
 #endif
 
 @ExportedStruct

@@ -24,6 +24,7 @@ import SwiftFFIWasmHost
 
 #if canImport(SwiftGPU)
 import SwiftGPU
+import IsomerGPURenderer
 #endif
 
 /// The one running wasm cell. Everything here lives on the loop's (main)

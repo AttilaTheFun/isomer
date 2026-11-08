@@ -225,6 +225,7 @@ func windowsControlChanged(
 
 #if canImport(SwiftGPU)
 import SwiftGPU
+import IsomerGPURenderer
 
 /// The SwiftGPU surface for Windows: swift_gpu's D3D11 device over the
 /// host's HWND. The host owns the window and sizing; the backend owns the

@@ -51,7 +51,7 @@ swift_library(
     name = "core",
     package_name = "isomer",
     srcs = [
-        "//shared/renderers:srcs",
+        "//shared/renderers:srcs_no_gpu",
         "//shared/swift_ui_core:srcs",
     ],
     copts = _ANDROID_COPTS,
@@ -67,16 +67,29 @@ swift_library(
         "//swift_ffi/swift_ffi",
         "//shared/isomer_network_host",
         "@flatbuffers//swift",
-        "//swift_gpu/android:swift_gpu",
         "//frameworks/core_transferable",
         "//frameworks/uniform_type_identifiers",
-    ] + ["//:foundation"] + [
-        # `Map` engine injection point: defaults to an empty stub; a consumer
-        # with its own swift_map dep points the flag at the real engine to
-        # light up canImport(SwiftMap). See //shared/BUILD.bazel.
+    ] + ["//:foundation"],
+    plugins = SWIFT_UI_MACROS_PLUGINS,
+)
+
+# The GPU renderer (SwiftGPURenderer.swift, which draws everything through
+# swift_gpu's OpenGL ES backend): a module of its own over the SwiftUI above, which
+# the host plugs in. With a SwiftMap engine (the map engine flag:
+# //shared/BUILD.bazel), `Map` draws real tiles.
+swift_library(
+    name = "gpu_renderer",
+    package_name = "isomer",
+    srcs = ["//shared/renderers:SwiftGPURenderer.swift"],
+    copts = ["-DISOMER_GPU_RENDERER_MODULE"],
+    module_name = "IsomerGPURenderer",
+    target_compatible_with = ["@platforms//os:android"],
+    deps = [
+        ":core",
+        "//shared/isomer_swift_ui",
+        "//swift_gpu/android:swift_gpu",
         "//shared:map_engine_android",
     ],
-    plugins = SWIFT_UI_MACROS_PLUGINS,
 )
 
 # Android's host (AndroidHost.swift, and AndroidBridge.swift's swift_ffi
@@ -98,6 +111,7 @@ swift_library(
     swiftc_inputs = ["jni_bridge.h"],
     target_compatible_with = ["@platforms//os:android"],
     deps = [
+        ":gpu_renderer",
         ":application_main",
         ":core",
         ":image_io",

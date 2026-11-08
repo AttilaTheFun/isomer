@@ -26,6 +26,7 @@ swift_library(
     target_compatible_with = ["@platforms//os:windows"],
     deps = [
         "//windows/libraries/swift_ui:core",
+        "//windows/libraries/swift_ui:gpu_renderer",
         "//windows/libraries/swift_ui:host",
         "//windows/libraries/image_io",
         "//shared/isomer_swift_ui",
