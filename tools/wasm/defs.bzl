@@ -533,14 +533,19 @@ def _wasm_sdk_bundle_impl(ctx):
                         if own_map and any([h.dirname != own_map.dirname for h in headers]):
                             own_map = None
                         clang_modules[module.name] = struct(headers = headers, module_map = own_map)
+    # One archive a library: the same library built in two configurations
+    # (the slim SwiftUI's "own_swift_ui" beside the default one, whose
+    # libraries below SwiftUI are the same build) is one archive, or the link
+    # pulls objects from both and fails on duplicate symbols. Its short path
+    # is the library's whatever the configuration.
     archives = []
     seen = {}
     for dep in ctx.attr.deps:
         for linker_input in dep[CcInfo].linking_context.linker_inputs.to_list():
             for lib in linker_input.libraries:
                 file = lib.static_library or lib.pic_static_library
-                if file and file.path not in seen:
-                    seen[file.path] = True
+                if file and file.short_path not in seen:
+                    seen[file.short_path] = True
                     archives.append(file)
 
     out = ctx.actions.declare_directory(ctx.label.name)

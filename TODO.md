@@ -101,6 +101,16 @@ container with its own KVM, the iPhone and the Mac on slots. Left:
   Ubuntu 26.04, so Windows runs in a container of its own. An image of
   Isomer's (or these in Visor's) would save both.
 
+## The Playground's templates in CI
+
+`//playground/tests/templates:templates_compile_test` (the examples)
+compiles and links every template against the Playground SDK with the
+host's wasm toolchain. It is `local` and finds the Mac's toolchain, so no CI
+job runs it, and 0.44's first proof showed the Playground's projects
+failing to link (swift_ffi in the SDK twice) before any test did. It should
+run in CI's container (the toolchain's Linux repository name) beside the
+headless tests.
+
 ## Android below API 28 (2026-11-06)
 
 Done with Swift 6.4 (0.41): swift.org's 6.4 Android SDK is built at API 23
