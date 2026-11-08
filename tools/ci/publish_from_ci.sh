@@ -4,13 +4,17 @@
 # where the builds came from with its OIDC token, which the server checks
 # against GitHub's keys and its own settings (its repository's bundle ids;
 # a release's tag, published by a releaser, for production) before it
-# signs and publishes them (the private AttilaTheFun/applications' docs/CI.md). Any
-# repository's workflow copies this file and connect_from_ci.sh beside it
-# (the token and the server, which next_version.sh takes too); it needs
-# bash, curl and openssl, on a Mac or Linux. Copied from
-# AttilaTheFun/reviews' tools/ci/publish_from_ci.sh.
+# signs and publishes them (the private AttilaTheFun/applications' docs/CI.md). Any repository's workflow copies
+# this file and connect_from_ci.sh beside it (the token and the server,
+# which next_version.sh takes too); it needs bash, curl and openssl, on a
+# Mac or Linux.
 #
-#   tools/ci/publish_from_ci.sh [--notes-file <notes.md>] [--app <app>] <package>…
+#   tools/ci/publish_from_ci.sh [--notes-file <notes.md>] [--app <app>] [--download <dir>] <package>…
+#
+# --download: each build, as the server signed it, downloaded into <dir> as
+# its release's asset, with builds.json describing them
+# (the private AttilaTheFun/applications' docs/RELEASE_ASSETS.md; release_assets.sh, beside this file), for the
+# job to attach to its release (attach_release.sh).
 #
 # Each package is an .ipa, a Mac app's .zip or .dmg, or an .apk, as CI
 # built it, unsigned (--config=alpha for a commit, --config=prod for a
@@ -31,16 +35,18 @@ fail() { echo "publish_from_ci: $*" >&2; exit 1; }
 
 notes_file=""
 app=""
+download=""
 packages=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --notes-file) notes_file="${2:?--notes-file takes the release notes file}"; shift 2 ;;
     --app) app="${2:?--app takes the name of the app}"; shift 2 ;;
+    --download) download="${2:?--download takes a folder}"; shift 2 ;;
     -*) fail "unknown option $1" ;;
     *) packages+=("$1"); shift ;;
   esac
 done
-[ ${#packages[@]} -gt 0 ] || fail "usage: tools/ci/publish_from_ci.sh [--notes-file <notes.md>] [--app <app>] <package>…"
+[ ${#packages[@]} -gt 0 ] || fail "usage: tools/ci/publish_from_ci.sh [--notes-file <notes.md>] [--app <app>] [--download <dir>] <package>…"
 for package in "${packages[@]}"; do [ -f "$package" ] || fail "no such file: $package"; done
 [ -z "$notes_file" ] || [ -f "$notes_file" ] || fail "no such file: $notes_file"
 
@@ -56,6 +62,8 @@ trap 'code=$?; rm -rf "$work"; [ -n "$finished" ] || [ "$code" -ne 0 ] || code=1
 # (connect_from_ci.sh, beside this file).
 . "$(dirname "$0")/connect_from_ci.sh"
 connect_from_ci
+# shellcheck source=tools/ci/release_assets.sh
+[ -z "$download" ] || . "$(dirname "$0")/release_assets.sh"
 
 # What each publish says besides the token: the notes and the app's name
 # (base64, as `applications-server publish` sends them) and the commit.
@@ -80,5 +88,12 @@ for package in "${packages[@]}"; do
   fi
   field() { sed -n "s/.*\"$1\":\"\\([^\"]*\\)\".*/\\1/p" "$work/answer"; }
   echo "Published $(field name) $(field version) ($(field bundleID)), $(field channel): build $(field id)"
+  if [ -n "$download" ]; then
+    case "$(field platform)" in
+      ios) file=app.ipa ;; macos) file=app.zip ;; android) file=app.apk ;;
+      *) fail "$(basename "$package"): no release asset for platform $(field platform)" ;;
+    esac
+    release_asset "$(tr -d '\n' < "$work/answer")" "$download" "$server" "$work/ca.pem" "$file" || fail "$(basename "$package")'s signed build was not saved"
+  fi
 done
 finished=1

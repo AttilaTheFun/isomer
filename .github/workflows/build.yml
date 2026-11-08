@@ -536,7 +536,11 @@ jobs:
 
   # The checked builds published (tools/ci/publish_from_ci.sh: the server
   # signs the Apple ones and notarizes the Mac's), and for alpha the draft
-  # release made with the web site (tools/ci/draft_release.sh).
+  # release made with the web site (tools/ci/draft_release.sh), the builds
+  # as the server signed them attached to it (tools/ci/attach_release.sh:
+  # <App>-<version>-<platform>.<ext> and builds.json, which Applications
+  # lists, the private AttilaTheFun/applications' docs/RELEASE_ASSETS.md).
+  # AdHoc builds are never attached.
   publish:
     needs: [alpha, adhoc, icons]
     if: ${{ always() && needs.icons.result == 'success' && (needs.alpha.result == 'success' || needs.adhoc.result == 'success') }}
@@ -563,23 +567,30 @@ jobs:
       - name: Publish
         env:
           APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
-        run: tools/ci/publish_from_ci.sh --notes-file "$RUNNER_TEMP/notes.md" .ci/packages/*.zip .ci/packages/*.ipa .ci/packages/*.apk
-      - name: The draft release
+          ALPHA: ${{ needs.alpha.result == 'success' && '1' || '' }}
+        run: >-
+          tools/ci/publish_from_ci.sh --notes-file "$RUNNER_TEMP/notes.md" ${ALPHA:+--download "$RUNNER_TEMP/assets"}
+          .ci/packages/*.zip .ci/packages/*.ipa .ci/packages/*.apk
+      - name: The draft release, its builds attached
         if: needs.alpha.result == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           KIND: ${{ inputs.run }}
           VERSION: ${{ needs.alpha.outputs.version }}
-        run: tools/ci/draft_release.sh "$VERSION" "$KIND" .ci/packages/isomer-site.tar.gz
+        run: |
+          tools/ci/draft_release.sh "$VERSION" "$KIND" .ci/packages/isomer-site.tar.gz
+          tools/ci/attach_release.sh "v$VERSION" "$RUNNER_TEMP/assets"
 
   # A release: when the owner publishes a GitHub release (its v0.40.N tag on
   # a main commit, whose proof is in). Nothing Apple is rebuilt: the
   # iPhone's and the Mac's Alphas main's CI published of that commit (the
   # builds the owner tested) are promoted by Applications Server, stamped
   # Production and signed again (tools/ci/promote_from_ci.sh). Android's
-  # are built for production and published, the server signing none. The
-  # release then carries its proof, the Mac app's disk image, the Android
-  # app and the iPhone app for the simulator (tools/ci/release_assets.sh).
+  # are built for production and published, the server signing none. Each
+  # is attached to the release as Applications reads it, replacing the
+  # Alphas of the same names, with the Mac app's disk image
+  # (tools/ci/attach_release.sh); then its proof and the iPhone app for the
+  # simulator (tools/ci/release_extras.sh).
   release:
     if: github.event_name == 'release' && !github.event.release.prerelease
     runs-on: [self-hosted, isomer-jit]
@@ -609,7 +620,7 @@ jobs:
       - name: Its proof
         env:
           GH_TOKEN: ${{ github.token }}
-        run: tools/ci/release_assets.sh proof "$GITHUB_REF_NAME" .ci/release
+        run: tools/ci/release_extras.sh proof "$GITHUB_REF_NAME" .ci/release
       # Untrusted text reaches the shell through env, never ${{ }} in run.
       - name: Notes
         env:
@@ -618,7 +629,7 @@ jobs:
       - name: The iPhone's and the Mac's, promoted
         env:
           APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
-        run: tools/ci/promote_from_ci.sh --notes-file "$RUNNER_TEMP/notes.md" --dmg-dir .ci/release
+        run: tools/ci/promote_from_ci.sh --notes-file "$RUNNER_TEMP/notes.md" --download "$RUNNER_TEMP/assets"
       # Android's and the simulator's builds: the version main's Alpha of
       # the commit was (the server's answer for the token's commit).
       - name: Version
@@ -634,7 +645,11 @@ jobs:
       - name: Android's, published
         env:
           APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
-        run: tools/ci/publish_from_ci.sh --notes-file "$RUNNER_TEMP/notes.md" .ci/android/*.apk
+        run: tools/ci/publish_from_ci.sh --notes-file "$RUNNER_TEMP/notes.md" --download "$RUNNER_TEMP/assets" .ci/android/*.apk
+      - name: The signed builds, attached
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: tools/ci/attach_release.sh "$GITHUB_REF_NAME" "$RUNNER_TEMP/assets"
       - name: The iPhone's, for the simulator
         env:
           ISOMER_CI_VOLUME: isomer-ci-publish
@@ -644,4 +659,4 @@ jobs:
       - name: The release's assets
         env:
           GH_TOKEN: ${{ github.token }}
-        run: tools/ci/release_assets.sh upload "$GITHUB_REF_NAME" .ci/release .ci/android .ci/simulator
+        run: tools/ci/release_extras.sh upload "$GITHUB_REF_NAME" .ci/release .ci/simulator

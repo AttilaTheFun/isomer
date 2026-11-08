@@ -41,7 +41,7 @@
 #   a release: the previous release's run (else its commit's on main);
 #   PROOF_BASELINE_RUN: a run of this workflow whose proof to compare with
 #     instead (how a second run of one commit shows it held still).
-# Each is a release's proof.tar.gz asset (tools/ci/release_assets.sh) when
+# Each is a release's proof.tar.gz asset (tools/ci/release_extras.sh) when
 # the base is a release that has one, else the `proof` artifact of a run of
 # this workflow (kept 90 days), fetched with gh. The pictures aren't kept in the repository: a full proof
 # is about 720 of them, some 300 MB, and every visible change would rewrite
@@ -403,7 +403,7 @@ fi
 baseline="-"
 base_commit=""
 # A release's own: the proof.tar.gz asset its release job attached
-# (tools/ci/release_assets.sh), which outlives the artifact's 90 days.
+# (tools/ci/release_extras.sh), which outlives the artifact's 90 days.
 if [[ $base_ref == refs/tags/* ]] &&
     gh release download "${base_ref#refs/tags/}" --repo "$repo" --pattern proof.tar.gz --dir "$work/release-proof" 2> /dev/null &&
     mkdir -p "$work/baseline" && tar -xzf "$work/release-proof/proof.tar.gz" -C "$work/baseline" &&

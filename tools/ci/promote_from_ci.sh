@@ -1,21 +1,25 @@
 #!/bin/bash
-# the private AttilaTheFun/applications' tools/ci/promote_from_ci.sh.
 # Makes a release production by promotion: asks Applications Server to
 # promote the Alphas main's CI published of the release's commit (the
 # builds the owner tested), which it copies, stamps Production (their
 # BuildVariant) and signs again for production, the Mac's notarized. Nothing
 # is built. The release job's OIDC token is the permission: its release
 # branch's push (or a v* tag's) by a releaser, of a repository configured
-# there (docs/CI.md).
+# there (the private AttilaTheFun/applications' docs/CI.md).
 # Any repository's workflow copies this file and connect_from_ci.sh beside
 # it; it needs bash, curl and openssl, on a Mac or Linux.
 #
-#   tools/ci/promote_from_ci.sh [--notes-file <notes.md>] [--dmg-dir <dir>]
+#   tools/ci/promote_from_ci.sh [--notes-file <notes.md>] [--dmg-dir <dir>] [--download <dir>]
 #
 # --dmg-dir: each promoted Mac app's disk image, which the server makes as
 # it promotes it (the app and a link to /Applications, signed, notarized
 # and stapled), downloaded there as <Name>-<version>.dmg, for the release
 # job to hand out with its release.
+#
+# --download: each promoted build, and each Mac app's disk image,
+# downloaded into <dir> as its release's assets, with builds.json describing
+# them (the private AttilaTheFun/applications' docs/RELEASE_ASSETS.md; release_assets.sh, beside this file), for
+# the job to attach to the release (attach_release.sh).
 #
 # From the job's environment, as publish_from_ci.sh has them: the job's
 # `permissions: id-token: write`, APPLICATIONS_CI_CODE and, if not
@@ -29,11 +33,13 @@ fail() { echo "promote_from_ci: $*" >&2; exit 1; }
 
 notes_file=""
 dmg_dir=""
+download=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --notes-file) notes_file="${2:?--notes-file takes the release notes file}"; shift 2 ;;
     --dmg-dir) dmg_dir="${2:?--dmg-dir takes a folder}"; shift 2 ;;
-    *) fail "usage: tools/ci/promote_from_ci.sh [--notes-file <notes.md>] [--dmg-dir <dir>]" ;;
+    --download) download="${2:?--download takes a folder}"; shift 2 ;;
+    *) fail "usage: tools/ci/promote_from_ci.sh [--notes-file <notes.md>] [--dmg-dir <dir>] [--download <dir>]" ;;
   esac
 done
 [ -z "$dmg_dir" ] || mkdir -p "$dmg_dir"
@@ -65,9 +71,13 @@ fi
 # One line a build: the answer is a JSON array of them, each one's keys
 # sorted, so its last is its version.
 awk '{ gsub(/"version":"[^"]*"/, "&\n"); print }' "$work/answer" | grep '"bundleID"' > "$work/builds" || true
+field() { printf '%s' "$build" | sed -n "s/.*\"$1\":\"\\([^\"]*\\)\".*/\\1/p"; }
+# Every build promoted said first, then the disk images: one that fails
+# leaves none of the builds unsaid.
 while IFS= read -r build; do
-  field() { printf '%s' "$build" | sed -n "s/.*\"$1\":\"\\([^\"]*\\)\".*/\\1/p"; }
   echo "Promoted $(field name) $(field version) ($(field bundleID), $(field platform)): build $(field id)"
+done < "$work/builds"
+while IFS= read -r build; do
   if [ -n "$dmg_dir" ] && [ "$(field platform)" = macos ]; then
     dmg="$dmg_dir/$(field name | tr ' ' '-')-$(field version).dmg"
     status="$(curl -sS --cacert "$work/ca.pem" --connect-timeout 10 --max-time 1800 -o "$dmg" -w '%{http_code}' \
@@ -76,4 +86,17 @@ while IFS= read -r build; do
     echo "Downloaded its disk image: $dmg"
   fi
 done < "$work/builds"
+if [ -n "$download" ]; then
+  # shellcheck source=tools/ci/release_assets.sh
+  . "$(dirname "$0")/release_assets.sh"
+  while IFS= read -r build; do
+    case "$(field platform)" in
+      ios) files="app.ipa" ;; macos) files="app.zip app.dmg" ;; android) files="app.apk" ;;
+      *) fail "$(field name): no release asset for platform $(field platform)" ;;
+    esac
+    for file in $files; do
+      release_asset "$build" "$download" "$server" "$work/ca.pem" "$file" || fail "$(field name) $(field version)'s $file was not saved"
+    done
+  done < "$work/builds"
+fi
 finished=1
