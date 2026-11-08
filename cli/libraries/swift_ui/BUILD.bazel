@@ -1,4 +1,5 @@
 load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@rules_swift//swift:swift_library_group.bzl", "swift_library_group")
 load("//swift_ui_macros:defs.bzl", "SWIFT_UI_MACROS_PLUGINS")
 
 package(default_visibility = ["//visibility:public"])
@@ -15,12 +16,9 @@ swift_library(
     name = "swift_ui",
     package_name = "isomer",
     srcs = [
-        "TerminalApp.swift",
-        "TerminalRenderer.swift",
         "//shared/renderers:srcs_no_gpu",
         "//shared/swift_ui_core:srcs",
     ],
-    # `App.main()` runs the terminal host (shared/swift_ui_core/App.swift).
     module_name = "SwiftUI",
     deps = [
         "//shared/isomer_swift_ui",
@@ -28,4 +26,33 @@ swift_library(
         "//frameworks:for_core",
     ],
     plugins = SWIFT_UI_MACROS_PLUGINS,
+)
+
+# The terminal host and its renderer (TerminalApp.swift, TerminalRenderer.swift):
+# a module of its own over the SwiftUI above. It defines
+# `iso_process_host_run`, so a binary that links it runs in the terminal
+# (shared/swift_ui_core/App.swift).
+swift_library(
+    name = "host",
+    package_name = "isomer",
+    srcs = [
+        "TerminalApp.swift",
+        "TerminalRenderer.swift",
+    ],
+    alwayslink = True,
+    module_name = "IsomerTerminalHost",
+    deps = [
+        ":swift_ui",
+        "//shared/isomer_swift_ui",
+        "@flatbuffers//swift",
+    ],
+)
+
+# What a terminal app builds against: SwiftUI and its host.
+swift_library_group(
+    name = "sdk",
+    deps = [
+        ":host",
+        ":swift_ui",
+    ],
 )

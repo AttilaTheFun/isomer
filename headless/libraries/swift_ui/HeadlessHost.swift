@@ -24,6 +24,7 @@
 #if !canImport(WASILibc)
 
 internal import IsomerSwiftUI
+internal import SwiftUI
 import FlatBuffers
 import Foundation
 #if canImport(Darwin)
