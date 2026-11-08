@@ -149,6 +149,7 @@ package func isoStart(host: any WebHost, renderer: String, width: Double, height
             Renderer.hostRendersMaps = true
             #endif
             Runtime.shared.start(host: WasmHostBridge(), width: width, height: height)
+            _isoDriveAttach("Web", "React")
             return
         }
         #if canImport(SwiftGPU)
@@ -164,11 +165,18 @@ package func isoStart(host: any WebHost, renderer: String, width: Double, height
         Renderer.hostRendersMaps = true  // `Map` draws real SwiftMap tiles
         #endif
         Runtime.shared.start(host: gpuRenderer, width: width, height: height)
+        _isoDriveAttach("Web", "SwiftGPU")
         #else
         #error("HostDrawnRenderer has been removed; SwiftGPU is now the only self-drawing renderer. Link swift_gpu (WebGPU) for web — see docs/renderer_layers.md")
         #endif
     }
 }
+
+/// The headful driver's start (drive/headful): dialling out when the app was
+/// launched with ISO_DRIVER, in a build with --@isomer//drive:headful; a no-op
+/// otherwise.
+@_silgen_name("iso_drive_attach")
+func _isoDriveAttach(_ platform: String, _ renderer: String)
 
 @ExportedFunction
 package func isoRender() {

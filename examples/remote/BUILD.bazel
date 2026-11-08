@@ -79,3 +79,48 @@ sh_test(
     # not inside Bazel's.
     tags = ["no-sandbox"],
 )
+
+# A headful app driven from the command line (headful_web_test.sh): the web
+# Storybook in headless Chrome dials out to the `isomer` CLI's hub
+# (ISO_DRIVER), which the CLI drives it through. The site needs the driver
+# built in, in an invocation of its own (manual: not in //remote/..., whose
+# other tests take --@isomer//headless; the two flags in one build shadow
+# swift-crypto's modules, as builds of the package's modules in two
+# configurations can, AGENTS.md):
+#
+#   bazel test --@isomer//drive:headful //remote:headful_web_test
+sh_test(
+    name = "headful_web_test",
+    size = "medium",
+    srcs = ["headful_web_test.sh"],
+    args = [
+        "$(rootpath @isomer//drive/cli:isomer)",
+        "$(rootpath @isomer//tools/testing/browser_check)",
+        "$(rootpath //web/storybook_web_application:storybook_web_application_site)",
+    ] + select({
+        "//tests/platforms:linux_arm64": ["$(rootpath @chrome_linux_arm64//:chrome)"],
+        "//tests/platforms:linux_x86_64": ["$(rootpath @chrome_linux_x86_64//:chrome)"],
+        "//conditions:default": ["''"],
+    }),
+    data = [
+        "//web/storybook_web_application:storybook_web_application_site",
+        "@isomer//drive/cli:isomer",
+        "@isomer//tools/testing/browser_check",
+    ] + select({
+        "//tests/platforms:linux_arm64": [
+            "@chrome_linux_arm64//:chrome",
+            "@chrome_linux_arm64//:files",
+        ],
+        "//tests/platforms:linux_x86_64": [
+            "@chrome_linux_x86_64//:chrome",
+            "@chrome_linux_x86_64//:files",
+        ],
+        "//conditions:default": [],
+    }),
+    # Chrome starts its own sandbox (or, as root in a container, none):
+    # not inside Bazel's.
+    tags = [
+        "manual",
+        "no-sandbox",
+    ],
+)

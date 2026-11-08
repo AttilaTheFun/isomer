@@ -66,6 +66,7 @@ swift_library(
         ":gpu_renderer",
         ":core",
         "//shared/isomer_swift_ui",
+        "//drive:headful_driver",
         "//shared/isomer_network_host",
         "//swift_ffi/swift_ffi",
         "//swift_gpu/wasm:swift_gpu",

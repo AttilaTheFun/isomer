@@ -173,6 +173,11 @@ tested_here=$?
 # included: seconds in a container (the owner, 2026-11-07).
 bazel test "${flags[@]}" --@isomer//headless --test_output=errors //headless/... //remote/...
 headless=$?
+# A headful app driven from the command line: the web Storybook with its
+# driver built in, in Chrome, dialling out to the isomer CLI hub.
+bazel test "${flags[@]}" --@isomer//drive:headful --test_output=errors //remote:headful_web_test
+headful=$?
+[ $headless -ne 0 ] || headless=$headful
 cd "$root"
 bazel build //swift_gpu/linux:gl_backend_test
 built_gl=$?
