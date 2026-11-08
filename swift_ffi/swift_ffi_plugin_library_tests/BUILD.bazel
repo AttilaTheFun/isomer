@@ -35,10 +35,10 @@ swift_test(
     module_name = "SwiftFFIPluginLibraryTests",
     deps = [
         "//swift_ffi/swift_ffi_plugin_library",
-        "@swift-syntax//:SwiftParser",
-        "@swift-syntax//:SwiftSyntax",
-        "@swift-syntax//:SwiftSyntaxMacroExpansion",
-        "@swift-syntax//:SwiftSyntaxMacros",
-        "@swift-syntax//:SwiftSyntaxMacrosTestSupport",
+        "@swiftpkg_swift_syntax//:SwiftParser",
+        "@swiftpkg_swift_syntax//:SwiftSyntax",
+        "@swiftpkg_swift_syntax//:SwiftSyntaxMacroExpansion",
+        "@swiftpkg_swift_syntax//:SwiftSyntaxMacros",
+        "@swiftpkg_swift_syntax//:SwiftSyntaxMacrosTestSupport",
     ],
 )

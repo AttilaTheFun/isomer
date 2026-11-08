@@ -88,8 +88,9 @@ bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.1")
 # kt/ts/c_swift_library generate the JNI .so + Kotlin bindings and the wasm
 # reactor + TypeScript bindings.
 
-# The macro plugin and the source analyzer.
-bazel_dep(name = "swift-syntax", version = "603.0.2")
+# The macro plugins (swift_ffi's, SwiftUI's) and the source analyzer use
+# swift-syntax from the SwiftPM graph (use_repo below): the one release/6.4.x
+# swift-foundation takes, matching the toolchain.
 
 # --- Isomer's Swift package (Foundation and the frameworks off Apple) -------
 # Isomer's Swift libraries are a Swift package too (Package.swift, at the
@@ -124,7 +125,10 @@ bazel_dep(name = "rules_swift_package_manager", version = "1.25.0")
 single_version_override(
     module_name = "rules_swift_package_manager",
     patch_strip = 1,
-    patches = ["//tools/patches:rules_swift_package_manager_local_bazel_package.patch"],
+    patches = [
+        "//tools/patches:rules_swift_package_manager_local_bazel_package.patch",
+        "//tools/patches:rules_swift_package_manager_minimum_os_off_apple.patch",
+    ],
 )
 
 # rules_swift_package_manager's own extension, so an application's graph and
@@ -155,7 +159,7 @@ swift_deps.configure_package(
     name = "isomer",
     target_deps = {"Foundation": ["@isomer//foundation/internationalization"]},
 )
-use_repo(swift_deps, "swiftpkg_isomer", "swiftpkg_swift_foundation")
+use_repo(swift_deps, "swiftpkg_isomer", "swiftpkg_swift_foundation", "swiftpkg_swift_syntax")
 
 swift_deps_root = use_extension(
     "@rules_swift_package_manager//:extensions.bzl",

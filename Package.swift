@@ -19,10 +19,10 @@ import PackageDescription
 
 let package = Package(
     name: "isomer",
-    // swift-foundation's: its targets build only where Apple's frameworks
-    // are not, but rules_swift_package_manager holds a package to its
-    // dependencies' minimums on every platform.
-    platforms: [.macOS("26"), .iOS("26"), .tvOS("26"), .watchOS("26"), .visionOS("26")],
+    // Where Isomer's own modules build on Apple platforms (an app compiled
+    // against Isomer's frameworks: iOS 16). Foundation and the frameworks
+    // build only off Apple, where swift-foundation's 26 means nothing.
+    platforms: [.macOS("13"), .iOS("16")],
     products: [
         .library(name: "Foundation", targets: ["Foundation"]),
         .library(name: "FoundationNetworking", targets: ["FoundationNetworking"]),
