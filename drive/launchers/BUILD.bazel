@@ -18,7 +18,7 @@ package(default_visibility = ["//visibility:public"])
             "requests.sh",
         ],
     )
-    for platform in ["ios", "macos", "android", "web", "linux"]
+    for platform in ["ios", "macos", "android", "web", "linux", "windows"]
 ]
 
 exports_files(glob(["*.sh"]))
