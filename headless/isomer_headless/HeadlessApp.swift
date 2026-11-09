@@ -168,6 +168,15 @@ public final class HeadlessApp: @unchecked Sendable {
     /// process, synchronously, with no network, as an XCUITest drives its
     /// app. Called on the main thread, where XCTest runs a test; waits up to
     /// `timeout` seconds for the app's host to have started its driver.
+    /// The app this test bundle is hosted in, when it is one with a driver
+    /// (an XCTest bundle in an app built with --@isomer//drive:headful);
+    /// nil otherwise, at once outside an app (a test binary of its own),
+    /// so the same tests run hosted or launch their app. Main thread.
+    public static func hostedIfAny(timeout: Double = 30) -> HeadlessApp? {
+        guard Thread.isMainThread, Bundle.main.bundlePath.hasSuffix(".app") else { return nil }
+        return try? hosted(timeout: timeout)
+    }
+
     public static func hosted(timeout: Double = 30) throws -> HeadlessApp {
         guard Thread.isMainThread else {
             throw HeadlessError(message: "a hosted app is driven from the main thread (a test method)", screen: nil)

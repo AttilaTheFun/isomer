@@ -64,6 +64,10 @@ apple)
     xcrun simctl ui "$udid" appearance light
     mkdir -p "$work/ios" && unzip -q "$ipa" -d "$work/ios" && xcrun simctl install "$udid" "$work/ios/Payload/"*.app || exit 1
     run storybook_headful_ios_test "$out" --test_env=ISOMER_SIMULATOR="$udid"
+    # The same tests hosted in the app: an XCTest bundle in the headful
+    # iPhone Storybook, built here (rules_apple runs it on a simulator of its
+    # own), driving it in its own process with no network.
+    run storybook_hosted_ios_test "$out" --@isomer//drive:headful --ios_multi_cpus=sim_arm64
     xcrun simctl shutdown "$udid" > /dev/null 2>&1
     # The Mac: this VM's own screen.
     ditto -x -k "$zip" "$work/mac" || exit 1

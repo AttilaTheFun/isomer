@@ -15,19 +15,18 @@ import XCTest
 final class StorybookHeadlessTests: XCTestCase {
     /// The app built headless, from the test's runfiles; or headful, started
     /// by the launcher the environment names; or the app this bundle is
-    /// hosted in (ISOMER_HOSTED: the Storybook's control file, by which a
-    /// story opens with no launch).
+    /// hosted in (a story opened in-process, with no launch).
     private func launch(story: String? = nil) throws -> HeadlessApp {
         let environment = ProcessInfo.processInfo.environment
-        if let control = environment["ISOMER_HOSTED"], !control.isEmpty {
+        if let app = HeadlessApp.hostedIfAny() {
             // Back to the list, then the story: each test starts as at launch.
-            try Self.show("stories", control: control)
-            if let story { try Self.show(story, control: control) }
-            return try HeadlessApp.hosted()
+            try Self.show("stories")
+            if let story { try Self.show(story) }
+            return app
         }
         #if os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
         // On a phone these run hosted alone: no processes to launch.
-        throw XCTSkip("ISOMER_HOSTED names no control file")
+        throw XCTSkip("not hosted in an app with a driver (--@isomer//drive:headful)")
         #else
         var launchEnvironment: [String: String] = [:]
         if let story { launchEnvironment["ISO_STORYBOOK_STORY"] = story }
@@ -47,17 +46,24 @@ final class StorybookHeadlessTests: XCTestCase {
         #endif
     }
 
-    /// Opens `story` through the Storybook's control file (a name in the
-    /// app's temporary directory, as the app reads it) and waits, turning the
-    /// main run loop as the app runs on it, until the app says it is shown.
-    private static func show(_ story: String, control: String) throws {
-        let path = control.hasPrefix("/") ? control : NSTemporaryDirectory() + control
-        try story.write(toFile: path, atomically: true, encoding: .utf8)
+    /// Opens `story` in the app this test is hosted in, as the Storybook
+    /// takes a request in-process (StorybookView's followOpenRequests), and
+    /// waits, turning the main run loop as the app runs on it, until it says
+    /// the story is shown.
+    private static func show(_ story: String) throws {
+        var shown = false
+        let token = NotificationCenter.default.addObserver(
+            forName: Notification.Name("IsomerStorybookShownStory"), object: nil, queue: nil
+        ) { note in
+            if note.object as? String == story { shown = true }
+        }
+        defer { NotificationCenter.default.removeObserver(token) }
+        NotificationCenter.default.post(name: Notification.Name("IsomerStorybookOpenStory"), object: story)
         let deadline = Date(timeIntervalSinceNow: 15)
-        while (try? String(contentsOfFile: path + ".shown", encoding: .utf8)) != story {
+        while !shown {
             if Date() > deadline {
                 throw NSError(domain: "StorybookHeadlessTests", code: 1, userInfo: [
-                    NSLocalizedDescriptionKey: "the Storybook never showed \(story) (ISO_STORYBOOK_CONTROL=\(control))"])
+                    NSLocalizedDescriptionKey: "the Storybook never showed \(story)"])
             }
             RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
         }

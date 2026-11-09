@@ -208,8 +208,9 @@ swift_test(
 # whose host is the iPhone Storybook built with --@isomer//drive:headful,
 # driving it in its own process, synchronously, with no network, as an
 # XCUITest drives its app (HeadlessApp.hosted, IsomerLocalServer). A story
-# opens through the Storybook's control file, a name in the app's temporary
-# directory (ISO_STORYBOOK_CONTROL), with no launch between tests.
+# opens in-process (a notification the Storybook takes), with no launch
+# between tests and nothing in the environment, which a runner such as
+# `oss machine xctest` doesn't pass on.
 #
 #   bazel test --@isomer//drive:headful --ios_multi_cpus=sim_arm64 :storybook_hosted_ios_test
 swift_library(
@@ -226,10 +227,6 @@ swift_library(
 
 ios_unit_test(
     name = "storybook_hosted_ios_test",
-    env = {
-        "ISOMER_HOSTED": "hosted-control",
-        "ISO_STORYBOOK_CONTROL": "hosted-control",
-    },
     minimum_os_version = "17.0",
     tags = ["manual"],
     test_host = "//apple/storybook_ios_application:storybook_ios_sim_application",
