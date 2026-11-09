@@ -84,6 +84,15 @@ def _swift_windows_sdk_impl(rctx):
         if rctx.path(share + name).exists:
             rctx.file(destination, rctx.read(share + name), executable = False)
             rctx.delete(share + name)
+    # Casings Swift packages' C includes that Windows' own headers and module
+    # maps don't, so case_links.swift made no link for them (SwiftNIO's
+    # CNIOWindows: <Winsock2.h>). A link beside the file, as case_links makes.
+    for area in ["um", "shared"]:
+        for name in ["Winsock2.h", "WinSock2.h", "Windows.h"]:
+            lower = rctx.path(kits + area + "/" + name.lower())
+            if lower.exists and not rctx.path(kits + area + "/" + name).exists:
+                rctx.symlink(lower, kits + area + "/" + name)
+
     # Headers the vcruntime module map names that an older MSVC lacks (the
     # compiler would inject them empty, through the same overlay).
     for header in ["__msvc_bit_utils.hpp", "__msvc_string_view.hpp"]:
