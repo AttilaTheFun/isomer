@@ -29,7 +29,7 @@ final class RemoteTests: XCTestCase {
 
     /// Starts `executable` and returns the URL it says it listens on (or
     /// serves), from its standard error's `isomer: listening <url>` or
-    /// standard output's `isomer hub: <url>`.
+    /// standard output's `iso hub: <url>`.
     private func start(_ executable: String, _ arguments: [String] = [], environment: [String: String]) throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
@@ -48,7 +48,7 @@ final class RemoteTests: XCTestCase {
             if chunk.isEmpty { break }
             text += String(decoding: chunk, as: UTF8.self)
             for line in text.split(separator: "\n") {
-                for marker in ["isomer: listening ", "isomer hub: "] {
+                for marker in ["isomer: listening ", "iso hub: "] {
                     if let range = line.range(of: marker) {
                         // Drained from here on, so the app never blocks on a
                         // full pipe.

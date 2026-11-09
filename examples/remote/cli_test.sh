@@ -1,5 +1,5 @@
 #!/bin/bash
-# The `isomer` CLI driving the Storybook built headless: added as an exec:
+# The `iso` CLI driving the Storybook built headless: added as an exec:
 # application (started on the first command, kept running on a Unix socket),
 # driven a command at a time, its state kept between them, then stopped.
 #   cli_test.sh <isomer> <app>
@@ -31,4 +31,4 @@ EXPECTED='"ok":true' has "$isomer" --json ls
 if "$isomer" tap "No such button" > /dev/null; then echo "a missing button didn't fail"; exit 1; fi
 "$isomer" application stop storybook
 "$isomer" application remove storybook
-echo "PASS: the isomer CLI drove the Storybook"
+echo "PASS: the iso CLI drove the Storybook"

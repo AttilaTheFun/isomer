@@ -1,6 +1,6 @@
 // A hub headful apps dial out to (session_service.proto's Driver.Attach),
 // driven by name (Headless.Drive with `iso-target`, or the only one
-// attached). The `isomer hub` command serves one on a transport; a test
+// attached). The `iso hub` command serves one on a transport; a test
 // driving headful apps holds one in its own process (IsomerHeadless).
 
 import Foundation

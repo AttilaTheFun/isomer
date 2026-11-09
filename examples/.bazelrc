@@ -254,3 +254,12 @@ build:android_release -c opt
 build:android_release --@rules_swift//swift:copt=-Osize
 build:android_release --features=swift.no_embed_debug_module
 build:android_release --@isomer//swift_ffi/rules:jni_exports_only
+
+# An app to drive from the iso CLI (docs/drive.md): built with its driver in,
+# and on Apple's SwiftUI listening for the CLI at ws://127.0.0.1:7700 once it
+# runs. `bazel run` of an iPhone app installs and launches it in a simulator,
+# whose apps share this Mac's loopback address:
+#
+#   bazel run //apple/storybook_ios_application --config=cli
+#   bazel run //xplat/iso -- ls          (in another shell)
+build:cli --@isomer//drive:headful
