@@ -10,7 +10,7 @@ sharing a pool with visor's and agent_ui's. Moved between releases:
 
 - Transfer the repository to the organization (GitHub redirects the old
   URL, archives included, while nothing new takes `AttilaTheFun/isomer`).
-- Register our self-hosted runners again under the new owner: OS Server's
+- Register our self-hosted runners again under the new owner: Shireworks'
   `isomer-jit` and the Mac's `isomer-containers` (the Shireworks session's).
 - Install the agents' GitHub App on the organization; check that the code
   owner can still approve and that Container Helper's merges still work.
@@ -43,13 +43,10 @@ Playground's proof is AttilaTheFun/playground's.
   moves without the app changing gets fixed before the next.
 - **Actions write for the Claude app**, so agents can start a full proof or
   rerun a failed job.
-- **oss**: `oss machine ssh` printed a lease's JSON, passwords included,
-  when its lookup failed (run 40955851424; that VM is deleted). proof.py
-  now redacts it; oss itself should not print it.
 
 ## Slots and app distribution (2026-11-03, done but for these)
 
-The proof's Mac part runs on a `mac` slot of OS Server's primary macOS VM
+The proof's Mac part runs on a `mac` slot of Shireworks' primary macOS VM
 (#64) and its iPhone part in a simulator inside that VM (#65); the
 Storybook publishes an Alpha when a release is proposed (#59, #60, #62).
 Left:
@@ -58,7 +55,7 @@ Left:
   Server to stamp the release commit's Alpha (BuildVariant rewritten,
   re-signed) once it has that route; it rebuilds with `--config=prod` today.
 - **Android on a slot**: the proof's Android part still uses an emulator on
-  OS Server's Mac. It moves when OS Server has an Ubuntu primary VM (held
+  Shireworks' Mac. It moves when Shireworks has an Ubuntu primary VM (held
   for the Mac Studio) or Android emulators in containers (being tried).
 
 ## The platforms' tests in containers (2026-11-04): what's left
@@ -71,15 +68,15 @@ container with its own KVM, the iPhone and the Mac on slots. Left:
 - **The proof's Linux and Windows parts** still lease whole VMs. Linux's
   could move to the container's Xvfb (its pictures then lose GNOME's title
   bar, a one-time change); Windows' pixels stay Windows' (a Windows slot of
-  a Windows primary, OS Server's backlog for the Mac Studio). The proof's
+  a Windows primary, Shireworks' backlog for the Mac Studio). The proof's
   Android part could use the container phone once its boot is fast enough.
 - **Android in a container doesn't finish booting on a Mac**, so CI tests
-  Android on an emulator leased from OS Server (the Mac's own hypervisor).
+  Android on an emulator leased from Shireworks (the Mac's own hypervisor).
   Cuttlefish in a container with its own KVM (tools/ci/android_device.sh)
   boots far into the system server, which then restarts each time
   WebView's zygote times out starting. Not nesting: Virtualization's vCPU
   threads aren't real-time, and macOS's timer leeway makes every timed wait
-  in a guest oversleep by about half (OS Server's maintainers measured it;
+  in a guest oversleep by about half (Shireworks' maintainers measured it;
   no Virtualization setting changes it; a report to Apple is filed).
   Android's timeouts scaled by 20 and the container's CPUs kept from idling
   got the system server from 75 to 18 minutes into a boot. On a Linux host
@@ -138,7 +135,7 @@ with NDK r30, so its own fallbacks are compiled in (the runtime's
 4.2.2.isomer.3) reads the SDK's minimum and leaves out RELR below 28.
 Isomer's Kotlin calls above 23 are behind version checks (#96).
 
-- Open: OS Server's api23 emulator config doesn't boot yet (Shireworks),
+- Open: Shireworks' api23 emulator config doesn't boot yet (Shireworks),
   so CI tests at 28+; draft isomer#92 ran the Storybook on Android 6.0.
 - Later: 32-bit ARM (armeabi-v7a), if an app needs it.
 

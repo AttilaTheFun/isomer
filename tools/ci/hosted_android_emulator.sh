@@ -3,7 +3,7 @@
 # a public repository), for the Android Storybook's tests
 # (tools/ci/hosted_android_test.sh) and pictures (tools/ci/proof.sh): the
 # runner's Android SDK's emulator, an x86_64 Android 15 (the AOSP image)
-# shaped as OS Server's android leases are (1080×2400, 420 dpi), so its
+# shaped as Shireworks' android leases are (1080×2400, 420 dpi), so its
 # pictures and theirs compare, its status bar held still by SystemUI's demo mode. It boots, and stays running for the rest
 # of the job; its serial is written to <serial file>. (Not printed: a
 # caller's `$(…)` would wait for the emulator and adb's server, which keep
@@ -55,7 +55,7 @@ for _ in $(seq 1 60); do
     sleep 2
 done
 sleep 20
-# Gesture navigation, as OS Server's phones have (the AOSP image comes up
+# Gesture navigation, as Shireworks' phones have (the AOSP image comes up
 # with the three-button bar).
 "$adb" shell cmd overlay enable com.android.internal.systemui.navbar.gestural > /dev/null 2>&1 || true
 "$adb" shell settings put global sysui_demo_allowed 1

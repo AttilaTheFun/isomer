@@ -89,7 +89,7 @@ register_toolchains(
     "@swift_toolchain//:swift_toolchain_wasm32_ubuntu24.04",
     "@swift_toolchain//:swift_toolchain_android_aarch64_ubuntu24.04",
     "@swift_toolchain//:swift_toolchain_android_x86_64_ubuntu24.04",
-    # arm64 Linux (and the OS Server containers tools/linux/build.sh and CI build in).
+    # arm64 Linux (and the Shireworks containers tools/linux/build.sh and CI build in).
     "@swift_toolchain//:swift_toolchain_exec_ubuntu24.04-aarch64",
     "@swift_toolchain//:cc_toolchain_wasm32_ubuntu24.04-aarch64",
     "@swift_toolchain//:swift_toolchain_wasm32_ubuntu24.04-aarch64",
@@ -101,7 +101,7 @@ register_toolchains(
 # isomer's MODULE.bazel (which says why each piece): the Swift that built
 # Xcode 27.0's SDKs for the Apple targets alone, the SDK archive by a
 # placeholder each builder's .bazelrc.user resolves (`--distdir`, or a
-# `--downloader_config` to an OS Server's /files/sha256/<hex>), and its
+# `--downloader_config` to a Shireworks server's /files/sha256/<hex>), and its
 # toolchains turned on by .bazelrc's apple_on_linux. A Mac builds as before.
 # The project registry's 0.0.3.382f8c3: rules_applecross's main at 382f8c3
 # (#289: an imported dynamic framework's lipo on Linux), with the preset
@@ -394,11 +394,11 @@ chrome_archive(
 )
 
 # Swift for Windows built on Linux (@isomer//tools/windows): the host's Swift
-# (arm64 Linux: OS Server's containers) with the Windows Swift SDK, out of
+# (arm64 Linux: Shireworks' containers) with the Windows Swift SDK, out of
 # swift.org's 6.4.2 Windows installer (tools/windows/make_swift_sdk.sh), and
 # Microsoft's SDK and MSVC libraries (make_msvc_sysroot.ps1 and .sh), which
 # may be used but not redistributed: both by placeholders a builder's
-# .bazelrc.user resolves (tools/ci/container_build.sh: OS Server's files, by
+# .bazelrc.user resolves (tools/ci/container_build.sh: Shireworks' files, by
 # SHA-256), and turned on by --config=windows_on_linux only.
 swift_windows_sdk = use_repo_rule("@isomer//tools/windows:defs.bzl", "swift_windows_sdk_repository")
 

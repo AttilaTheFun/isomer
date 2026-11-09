@@ -1,9 +1,9 @@
 #!/bin/bash
 # CI's build of every platform in a Linux container, on a self-hosted
-# runner's Mac: a container leased from that Mac's OS Server (`oss machine
+# runner's Mac: a container leased from that Mac's Shireworks (`oss machine
 # run container --inside`), in the image a Visor session runs in, so CI
 # builds where an agent works. The Apple targets take Xcode 27.0's SDK
-# archive and rules_applecross's ported tools from the same OS Server's
+# archive and rules_applecross's ported tools from the same Shireworks server's
 # files (by SHA-256, with its cache's read token) through a downloader
 # config written here, and its Bazel reads that server's cache: no host is
 # named in the repository.
@@ -28,11 +28,11 @@
 #
 #   ISOMER_EXECUTION_LOGS  a folder for Bazel's execution logs (compact),
 #                    to compare two runs' action keys when the cache misses
-#   OSS_FILES_HOST   the name the container reaches this Mac's OS Server by
+#   OSS_FILES_HOST   the name the container reaches this Mac's Shireworks by
 #                    (default: this Mac's tailnet name, from Tailscale)
 #   ISOMER_CI_IMAGE  the image (default: Visor's agent image, tools/ci/agent_image)
 #   ISOMER_CI_VOLUME Bazel's tree, kept between builds (default: isomer-ci;
-#                    `:keep`, so OS Server keeps it when the lease ends)
+#                    `:keep`, so Shireworks keeps it when the lease ends)
 #
 # With no arguments (CI's run) the tests run after the build, in the same
 # container: the core's (the mock renderer's and the snapshots', isomer's own
@@ -41,7 +41,7 @@
 # the GL backend's check (on Mesa's EGL) are built, not run, for now
 # (2026-11-05: CI runs the tier-1 platforms). The apps tested elsewhere are
 # put in .ci/platforms for tools/ci/platform_tests.sh: the iPhone's and the
-# Mac's (slots of OS Server's primary macOS VM), Android's (an emulator) and
+# Mac's (slots of Shireworks' primary macOS VM), Android's (an emulator) and
 # Windows' (built here for Windows on Arm, --config=windows_on_linux; run
 # under Wine only by hand). With ISOMER_ANDROID_X86_64 set (a public
 # repository's CI) the Android test APK is also built for x86_64, in
@@ -64,9 +64,9 @@ IMAGE="${ISOMER_CI_IMAGE:-$(cat "$ROOT/tools/ci/agent_image")}"
 VOLUME="${ISOMER_CI_VOLUME:-isomer-ci}"
 SDK_SHA256="251c252f7f41bcd3e08655e49e182686682d705945f4a2807049b9051c606ebb"
 
-# In CI the job's own container builds (the isomer-jit runners: OS Server's
+# In CI the job's own container builds (the isomer-jit runners: Shireworks'
 # single-use Linux containers, its cache's read token in ~/.netrc and its
-# cache in ~/.bazelrc already), in place. On a Mac (OS Server's own, whose
+# cache in ~/.bazelrc already), in place. On a Mac (Shireworks' own, whose
 # folders containers may mount) it leases one, as before.
 inside=""
 [ "$(uname -s)" = Darwin ] || inside=1
@@ -82,9 +82,9 @@ if [ -z "$host" ] && [ -z "$inside" ]; then
     tailscale=/Applications/Tailscale.app/Contents/MacOS/Tailscale
     host="$("$tailscale" status --json | python3 -c 'import json, sys; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))')"
 fi
-[ -n "$host" ] || { echo "container_build.sh: no host for OS Server's files: set OSS_FILES_HOST (or OSS_SERVERS)" >&2; exit 1; }
+[ -n "$host" ] || { echo "container_build.sh: no host for Shireworks' files: set OSS_FILES_HOST (or OSS_SERVERS)" >&2; exit 1; }
 
-# The placeholders in MODULE.bazel, to this Mac's OS Server; and GitHub's
+# The placeholders in MODULE.bazel, to this Mac's Shireworks; and GitHub's
 # downloads tried at GitHub, then at Bazel's mirror (GitHub's release
 # downloads have failed with 504s for hours).
 mkdir -p "$ROOT/.ci"

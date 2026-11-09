@@ -6,7 +6,7 @@
 # drawn in software (SwiftShader). Its host tools come from Cuttlefish's apt
 # repository, the device from Android's CI by `cvd fetch`, both kept in
 # <cache> (a kept volume) between runs. Prints the adb serial once the phone
-# has booted. CI tests Android on an emulator leased from OS Server instead
+# has booted. CI tests Android on an emulator leased from Shireworks instead
 # (platform_tests.sh); this is the by-hand path, and the fast one on a Linux
 # host with KVM.
 #
@@ -15,7 +15,7 @@
 #
 # Slow: Virtualization's vCPU threads aren't real-time, so every timed wait
 # in the guest oversleeps by about half (macOS's timer leeway, measured by
-# OS Server's maintainers), across thousands of Android's threads. A boot
+# Shireworks' maintainers), across thousands of Android's threads. A boot
 # takes over an hour; 2 vCPUs do better than 4; Android's own timeouts (the
 # system server's watchdog, ART's thread suspension) are scaled by 20
 # (hw_timeout_multiplier), or they end the boot first. Its browser view

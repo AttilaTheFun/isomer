@@ -469,7 +469,7 @@ register_toolchains(
 # by its name below, a placeholder: each builder's .bazelrc.user says where
 # it is, with `--distdir=<folder holding apple-sdks-27.0.tar.gz>` or a
 # `--downloader_config` rewriting apple-sdks.invalid to where it is served
-# (an OS Server's /files/sha256/<hex>, its read token in .netrc). The
+# (a Shireworks server's /files/sha256/<hex>, its read token in .netrc). The
 # toolchains are registered for Linux alone, by the builder that has the SDK
 # (.bazelrc's apple_on_linux, turned on in .bazelrc.user), so a Mac builds as
 # before. Dev-only: a consumer brings its own (its root's overrides too).
