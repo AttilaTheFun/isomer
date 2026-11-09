@@ -6,8 +6,7 @@
 // environment, an Android intent's ISO_ extras, the web page's ISO_ query):
 // ISO_STORYBOOK_STORY=<id> opens that story; ISO_STORYBOOK_CONTROL=<file>
 // opens whichever story the file names ("stories": the list, as at
-// launch; a name without a folder is in the app's temporary directory),
-// read four times a second, and
+// launch), read four times a second, and
 // writes `<file>.shown` with the story once it is open; and the URL
 // iso://story/<id> opens one too (Android's VIEW intents): the proof's ways
 // through every page without a launch each.
@@ -97,10 +96,7 @@ public struct StorybookView: View {
     /// changes; `<file>.shown` names it once its page has had a moment to
     /// build.
     private func followControl() async {
-        guard let named = launchEnvironment("ISO_STORYBOOK_CONTROL") else { return }
-        // A name alone is in the app's temporary directory, which a test
-        // hosted in the app finds too (its own process).
-        let path = named.hasPrefix("/") ? named : NSTemporaryDirectory() + named
+        guard let path = launchEnvironment("ISO_STORYBOOK_CONTROL") else { return }
         var shown: String?
         while !Task.isCancelled {
             let named = (try? String(contentsOfFile: path, encoding: .utf8))?
