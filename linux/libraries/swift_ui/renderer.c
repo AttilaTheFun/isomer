@@ -576,11 +576,85 @@ void iso_frame_wait(void) {
 // begins/clears; iso_end_frame below evicts + swaps). The per-frame state
 // for this file's own host-view drawing moved into iso_host_sync_begin.
 
+// A PNG of RGB rows, top to bottom, uncompressed (zlib's stored blocks): a
+// test's picture of the frame (drive/launchers/linux_launcher.sh), with no
+// image library to link.
+static uint32_t pngCRCTable[256];
+static uint32_t pngCRC(uint32_t crc, const unsigned char* bytes, size_t count) {
+  if (!pngCRCTable[1]) {
+    for (uint32_t n = 0; n < 256; n++) {
+      uint32_t c = n;
+      for (int k = 0; k < 8; k++) c = (c & 1) ? 0xEDB88320u ^ (c >> 1) : c >> 1;
+      pngCRCTable[n] = c;
+    }
+  }
+  for (size_t i = 0; i < count; i++) crc = pngCRCTable[(crc ^ bytes[i]) & 0xFF] ^ (crc >> 8);
+  return crc;
+}
+static void pngBig32(unsigned char* out, uint32_t value) {
+  out[0] = value >> 24; out[1] = value >> 16; out[2] = value >> 8; out[3] = value;
+}
+static void pngChunk(FILE* f, const char* type, const unsigned char* data, uint32_t count) {
+  unsigned char head[8];
+  pngBig32(head, count);
+  memcpy(head + 4, type, 4);
+  fwrite(head, 1, 8, f);
+  if (count) fwrite(data, 1, count, f);
+  uint32_t crc = pngCRC(0xFFFFFFFFu, (const unsigned char*)type, 4);
+  crc = pngCRC(crc, data, count) ^ 0xFFFFFFFFu;
+  unsigned char tail[4];
+  pngBig32(tail, crc);
+  fwrite(tail, 1, 4, f);
+}
+static void writePNG(FILE* f, const unsigned char* rgba, int w, int h) {
+  static const unsigned char signature[8] = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};
+  fwrite(signature, 1, 8, f);
+  unsigned char header[13];
+  pngBig32(header, (uint32_t)w);
+  pngBig32(header + 4, (uint32_t)h);
+  header[8] = 8; header[9] = 2; header[10] = 0; header[11] = 0; header[12] = 0;  // 8-bit RGB
+  pngChunk(f, "IHDR", header, 13);
+  // The raw rows (a filter byte, none, before each), GL's bottom row last.
+  size_t rowBytes = 1 + (size_t)w * 3, raw = rowBytes * h;
+  unsigned char* rows = (unsigned char*)malloc(raw);
+  if (!rows) return;
+  for (int y = 0; y < h; y++) {
+    unsigned char* out = rows + (size_t)y * rowBytes;
+    const unsigned char* in = rgba + (size_t)(h - 1 - y) * w * 4;
+    out[0] = 0;
+    for (int x = 0; x < w; x++) memcpy(out + 1 + x * 3, in + x * 4, 3);
+  }
+  // zlib: its header, the rows in stored blocks of at most 65535 bytes, Adler-32.
+  size_t blocks = raw / 65535 + 1;
+  unsigned char* z = (unsigned char*)malloc(2 + raw + blocks * 5 + 4);
+  if (!z) { free(rows); return; }
+  size_t n = 0;
+  z[n++] = 0x78; z[n++] = 0x01;
+  uint32_t a = 1, b = 0;
+  for (size_t at = 0; at < raw;) {
+    size_t take = raw - at < 65535 ? raw - at : 65535;
+    z[n++] = at + take == raw ? 1 : 0;
+    z[n++] = take & 0xFF; z[n++] = take >> 8;
+    z[n++] = ~take & 0xFF; z[n++] = (~take >> 8) & 0xFF;
+    memcpy(z + n, rows + at, take);
+    for (size_t i = 0; i < take; i++) { a = (a + rows[at + i]) % 65521; b = (b + a) % 65521; }
+    n += take; at += take;
+  }
+  pngBig32(z + n, (b << 16) | a);
+  n += 4;
+  pngChunk(f, "IDAT", z, (uint32_t)n);
+  pngChunk(f, "IEND", NULL, 0);
+  free(z);
+  free(rows);
+}
+
 void iso_end_frame(void) {
   // Debug capture (off unless ISO_SHOT names a path): dump the just-rendered
   // back buffer as a binary PPM, overwriting each frame so the file always
   // holds the latest frame. Used to verify the GL SwiftGPU renderer where the
   // compositor offers no screenshot path (e.g. WSLg). Read before the swap.
+  // A path ending in .png gets a PNG, written beside and renamed into place
+  // so a reader never sees half of one (a test's pictures).
   static int shotEnabled = -1;
   if (shotEnabled == -1) shotEnabled = getenv("ISO_SHOT") ? 1 : 0;
   if (shotEnabled) {
@@ -591,7 +665,21 @@ void iso_end_frame(void) {
       if (px) {
         glPixelStorei(GL_PACK_ALIGNMENT, 1);
         glReadPixels(0, 0, dw, dh, GL_RGBA, GL_UNSIGNED_BYTE, px);
-        FILE* f = fopen(getenv("ISO_SHOT"), "wb");
+        const char* shot = getenv("ISO_SHOT");
+        size_t shotLength = strlen(shot);
+        FILE* f = NULL;
+        if (shotLength > 4 && strcmp(shot + shotLength - 4, ".png") == 0) {
+          char partial[4096];
+          snprintf(partial, sizeof partial, "%s.partial", shot);
+          FILE* png = fopen(partial, "wb");
+          if (png) {
+            writePNG(png, px, dw, dh);
+            fclose(png);
+            rename(partial, shot);
+          }
+        } else {
+          f = fopen(shot, "wb");
+        }
         if (f) {
           fprintf(f, "P6\n%d %d\n255\n", dw, dh);
           // GL's origin is bottom-left; emit rows top-to-bottom, dropping alpha.

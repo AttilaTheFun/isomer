@@ -3,7 +3,8 @@
 # (docs/drive.md): built with --@isomer//drive:headful, under a display of
 # its own (Xvfb with Mesa's software OpenGL, else SDL's offscreen driver),
 # run with ISO_DRIVER and ISO_DRIVER_NAME in its environment until this is
-# stopped. No pictures yet (a test's `picture` gets none).
+# stopped. A test's pictures are the app's last frame: its renderer writes
+# each frame to ISO_SHOT, a PNG (linux/libraries/swift_ui/renderer.c).
 #
 #   linux_launcher.sh <the hub's ws:// URL> <the app's name> [KEY=VALUE…]
 #
@@ -14,7 +15,8 @@ url="${1:?usage: linux_launcher.sh <hub url> <name> [KEY=VALUE…]}"
 name="${2:?<name>}"
 shift 2
 app="${ISOMER_LINUX_APP:?ISOMER_LINUX_APP: the Linux app}"
-environment=(ISO_DRIVER="$url" ISO_DRIVER_NAME="$name" LIBGL_ALWAYS_SOFTWARE=1)
+frames="$(mktemp -d)"
+environment=(ISO_DRIVER="$url" ISO_DRIVER_NAME="$name" LIBGL_ALWAYS_SOFTWARE=1 ISO_SHOT="$frames/frame.png")
 for pair in "$@"; do
     case "${pair%%=*}" in
         ISO_HEADLESS_WIDTH | ISO_HEADLESS_HEIGHT) ;;
@@ -22,7 +24,7 @@ for pair in "$@"; do
     esac
 done
 pids=()
-stop() { for pid in "${pids[@]}"; do kill "$pid" 2> /dev/null; done; exit 0; }
+stop() { for pid in "${pids[@]}"; do kill "$pid" 2> /dev/null; done; rm -rf "$frames"; exit 0; }
 trap stop TERM INT
 if command -v Xvfb > /dev/null; then
     display=$((100 + RANDOM % 400))
@@ -35,8 +37,8 @@ else
 fi
 env "${environment[@]}" "$app" > "${TEST_UNDECLARED_OUTPUTS_DIR:-/tmp}/$name.log" 2>&1 &
 pids+=($!)
-# Pictures asked for are answered with none, for now.
-none() { return 1; }
-serve_requests none &
+# A picture: the last frame drawn (none before the first).
+last_frame() { [ -s "$frames/frame.png" ] && cp "$frames/frame.png" "$1"; }
+serve_requests last_frame &
 pids+=($!)
 wait "${pids[-2]}"
