@@ -16,10 +16,10 @@ swift_library(
         "//drive/driver",
         "//drive/serving",
     ] + select({
-        # Linux dials out through SwiftNIO (IsomerRemote), as a headless app
-        # does; Windows through URLSession, as SwiftNIO's NIOPosix doesn't
-        # build for it yet.
+        # Linux and Windows dial out through SwiftNIO (IsomerRemote), as a
+        # headless app does.
         "@platforms//os:linux": ["//drive/remote"],
+        "@platforms//os:windows": ["//drive/remote"],
         "//conditions:default": [],
     }),
 )
