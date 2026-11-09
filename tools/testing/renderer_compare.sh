@@ -15,6 +15,10 @@
 # bazel builds it). Writes <out>/<width>/<renderer>/<story>.png, its
 # .dom.txt and (the candidate) .diff.txt, and <out>/summary.txt: a line a
 # story and width, the pixels that differ and whether the DOM does.
+#
+# BASELINE=<an earlier run's out dir> compares the candidate with that run's
+# <base> pictures instead of shooting <base> again: a change to one renderer
+# held to its pictures before (react against react, before and after).
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 site="$(cd "${1:?usage: renderer_compare.sh <site dir> <out dir> [<base> <candidate>] [<story>…]}" && pwd)"
@@ -60,10 +64,11 @@ shoot() {
 : > "$out/summary.txt"
 for size in 1280x800 390x844; do
     width="${size%x*}" height="${size#*x}"
-    shoot "$base" "$width" "$height" ""
-    shoot "$candidate" "$width" "$height" "$out/$size/$base"
+    reference="${BASELINE:-$out}/$size/$base"
+    [ -n "${BASELINE:-}" ] || shoot "$base" "$width" "$height" ""
+    shoot "$candidate" "$width" "$height" "$reference"
     for story in "${stories[@]}"; do
-        a="$out/$size/$base/$story.png" b="$out/$size/$candidate/$story.png"
+        a="$reference/$story.png" b="$out/$size/$candidate/$story.png"
         pixels="$(cat "$b.diff.txt" 2> /dev/null || echo "?")"
         dom=same
         cmp -s "$a.dom.txt" "$b.dom.txt" || dom=differs

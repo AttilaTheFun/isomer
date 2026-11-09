@@ -256,6 +256,8 @@ _ISO_RUNTIME_JS = [
     Label("//wasm/libraries/swift_ui:runtime/bundle_provider.js"),
     Label("//wasm/libraries/swift_ui:runtime/flat_tree.js"),
     Label("//wasm/libraries/swift_ui:runtime/react_renderer.js"),
+    # The web renderers' shared styling (react_renderer.js imports it).
+    Label("//wasm/libraries/swift_ui:runtime/render_style.js"),
     Label("//wasm/libraries/swift_ui:runtime/react_embed.js"),
     Label("//wasm/libraries/swift_ui:runtime/raster.js"),
     Label("//wasm/libraries/swift_ui:runtime/symbols.js"),
