@@ -241,8 +241,29 @@ if [ -n "${ISOMER_ANDROID_X86_64:-}" ]; then
         built_x86=1
     fi
 fi
+# The same apps with their drivers built in (--@isomer//drive:headful), for
+# the Storybook tests the GUI jobs run headful on GitHub VMs
+# (tools/ci/hosted_headful_test.sh): the iPhone simulator app, the Mac app,
+# and (ISOMER_ANDROID_X86_64) the x86_64 APK.
+headful=(--@isomer//drive:headful)
+mkdir -p "$platforms/headful"
+bazel build "${flags[@]}" "${headful[@]}" --ios_multi_cpus=sim_arm64 \
+    //apple/storybook_ios_application:storybook_ios_sim_application //apple/storybook_macos_application || built_x86=1
+for f in $(files "${headful[@]}" --ios_multi_cpus=sim_arm64 //apple/storybook_ios_application:storybook_ios_sim_application) \
+         $(files "${headful[@]}" //apple/storybook_macos_application); do
+    case "$f" in *.ipa | *.zip) cp "$exec_root/$f" "$platforms/headful/" ;; esac
+done
+if [ -n "${ISOMER_ANDROID_X86_64:-}" ]; then
+    if bazel build "${flags[@]}" "${headful[@]}" "${x86[@]}" "$android"; then
+        for f in $(files "${headful[@]}" "${x86[@]}" "$android"); do
+            case "$f" in *_unsigned.apk) ;; *.apk) cp "$exec_root/$f" "$platforms/headful/storybook-x86_64.apk" ;; esac
+        done
+    else
+        built_x86=1
+    fi
+fi
 chmod -R a+rwX "$platforms"
-ls -l "$platforms"
+ls -l "$platforms" "$platforms/headful"
 for result in $built $built_windows $built_tests $tested_here $headless $built_gl $checked $built_x86; do [ "$result" -ne 0 ] && exit "$result"; done
 exit 0
 '

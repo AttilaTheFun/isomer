@@ -188,6 +188,14 @@ jobs:
           name: windows-test-app
           path: .ci/platforms/windows
           retention-days: 3
+      # The same apps with their drivers built in, for the Storybook's tests
+      # run headful (tools/ci/hosted_headful_test.sh).
+      - uses: actions/upload-artifact@v4
+        if: ${{ !github.event.repository.private }}
+        with:
+          name: headful-apps
+          path: .ci/platforms/headful
+          retention-days: 3
       - uses: actions/upload-artifact@v4
         if: ${{ !github.event.repository.private }}
         with:
@@ -215,7 +223,7 @@ jobs:
     needs: verify
     if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release') && !github.event.repository.private }}
     runs-on: xcode-27
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
@@ -224,8 +232,18 @@ jobs:
           path: .ci/apple
       - name: The iPhone and Mac Storybooks' tests
         run: >-
-          exec tools/ci/hosted_apple_test.sh "$(ls .ci/apple/*storybook_ios*.ipa | head -1)"
+          tools/ci/hosted_apple_test.sh "$(ls .ci/apple/*storybook_ios*.ipa | head -1)"
           "$(ls .ci/apple/*storybook_macos*.zip | head -1)" .ci/platform-tests/apple
+      - uses: actions/download-artifact@v4
+        with:
+          name: headful-apps
+          path: .ci/headful
+      # The Storybook's tests (the headless source) against the apps headful:
+      # the test built here, the apps the container's.
+      - name: The Storybook's tests, headful on the iPhone and the Mac
+        run: >-
+          exec tools/ci/hosted_headful_test.sh apple "$(ls .ci/headful/*storybook_ios*.ipa | head -1)"
+          "$(ls .ci/headful/*storybook_macos*.zip | head -1)" .ci/platform-tests/apple/headful
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
@@ -266,7 +284,7 @@ jobs:
     needs: verify
     if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release') && !github.event.repository.private }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
@@ -274,7 +292,13 @@ jobs:
           name: android-test-apk
           path: .ci/android
       - name: The Android Storybook's tests
-        run: exec tools/ci/hosted_android_test.sh .ci/android/storybook.apk .ci/platform-tests/android
+        run: tools/ci/hosted_android_test.sh .ci/android/storybook.apk .ci/platform-tests/android
+      - uses: actions/download-artifact@v4
+        with:
+          name: headful-apps
+          path: .ci/headful
+      - name: The Storybook's tests, headful on Android
+        run: exec tools/ci/hosted_headful_test.sh android .ci/headful/storybook-x86_64.apk .ci/platform-tests/android/headful
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
