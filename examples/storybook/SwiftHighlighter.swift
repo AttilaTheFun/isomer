@@ -50,9 +50,12 @@ enum SwiftHighlighter {
     /// The listing as one Text: a person, VoiceOver and a driver read it as
     /// one text of many lines.
     static func text(_ source: String, dark: Bool) -> Text {
+        // Every piece its colour, the plain ones .primary, as the stacked
+        // lines had them: the renderers' default text colour isn't .primary
+        // everywhere (the web draws .primary at 85% black), so a plain piece
+        // left to it would change shade.
         var pieces = tokens(source).filter { !$0.0.isEmpty }.map { part, kind in
-            // Line breaks stay plain, inside the one text.
-            kind == .plain ? Text(verbatim: part) : Text(verbatim: part).foregroundColor(color(kind, dark: dark))
+            Text(verbatim: part).foregroundColor(color(kind, dark: dark))
         }
         // Joined a pair at a time, so the text nests a few levels deep (the
         // log of its pieces), not one level a piece.
