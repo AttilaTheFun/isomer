@@ -313,14 +313,19 @@ final class AccessibilityDriver {
     }
 }
 
-/// Started once the app runs (iso_apple_drive_attach.c): when ISO_DRIVER
-/// names where to dial, the driver attaches there.
+/// Started once the app runs (iso_apple_drive_attach.c): the app's own
+/// driver, for a test bundle hosted in it (IsomerLocalServer, synchronous);
+/// and, when ISO_DRIVER names where to dial, attached there too.
 @_cdecl("iso_apple_drive_attach")
 public func isoAppleDriveAttach() {
     let environment = ProcessInfo.processInfo.environment
+    let driver = MainActor.assumeIsolated {
+        let driver = AccessibilityDriver()
+        IsomerLocalServer.register(IsomerLocalServer { await driver.handle($0) })
+        return driver
+    }
     guard let address = environment["ISO_DRIVER"], let url = URL(string: address) else { return }
     MainActor.assumeIsolated {
-        let driver = AccessibilityDriver()
         Task { @MainActor in
             do {
                 try await driver.dialOut(

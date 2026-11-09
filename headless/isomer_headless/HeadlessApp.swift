@@ -101,9 +101,24 @@ public struct HeadlessInfo: Sendable {
 
 /// An app driven a command at a time, over one call that lasts as long as
 /// this object.
+#if os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
+/// Foundation has no Process here (a test drives the app it is hosted in):
+/// a stand-in, never launched.
+private final class Process {
+    var isRunning: Bool { false }
+    var processIdentifier: Int32 { 0 }
+    func terminate() {}
+}
+#endif
+
 public final class HeadlessApp: @unchecked Sendable {
-    private let call: IsomerCall<Wire_Command, Wire_Answer>
-    private var answers: IsomerInbound<Wire_Answer>.AsyncIterator
+    /// The call a remote or another process's app answers on; nil for the
+    /// app this test is hosted in (`local`).
+    private let call: IsomerCall<Wire_Command, Wire_Answer>?
+    private var answers: IsomerInbound<Wire_Answer>.AsyncIterator?
+    /// The app this test bundle is hosted in: its own driver, answered
+    /// synchronously on the main thread (IsomerLocalServer).
+    private let local: IsomerLocalServer?
     /// What ends a headful app's launcher, when one started the app.
     private var launched: Process?
     /// Where `picture` asks the launcher for a picture (its
@@ -117,10 +132,13 @@ public final class HeadlessApp: @unchecked Sendable {
     /// own: the app's launch hooks (ISO_STORYBOOK_STORY…), ISO_HEADLESS_WIDTH
     /// and ISO_HEADLESS_HEIGHT (the window, 390 by 844 by default: a lazy
     /// list builds the rows that fit).
-    #if !os(Windows)
+    #if !os(Windows) && !(os(iOS) || os(tvOS) || os(watchOS) || os(visionOS))
     public convenience init(executable: String, environment: [String: String] = [:]) throws {
         try self.init(connection: IsomerProcessConnection(.executable(executable, arguments: [], environment: environment)))
     }
+    #endif
+
+    #if !os(Windows)
 
     /// An app served at `url` (IsomerRemote's: grpc://, grpcs://, ws://,
     /// unix:, exec:), with its token if it needs one.
@@ -136,8 +154,32 @@ public final class HeadlessApp: @unchecked Sendable {
         let opened = try Self.blocking { try await connection.drive(context: context) }
         call = opened
         answers = opened.inbound.makeAsyncIterator()
+        local = nil
     }
 
+    private init(local: IsomerLocalServer) {
+        call = nil
+        answers = nil
+        self.local = local
+    }
+
+    /// The app this test bundle is hosted in (an XCTest bundle whose host is
+    /// the app, built with --@isomer//drive:headful): driven in its own
+    /// process, synchronously, with no network, as an XCUITest drives its
+    /// app. Called on the main thread, where XCTest runs a test; waits up to
+    /// `timeout` seconds for the app's host to have started its driver.
+    public static func hosted(timeout: Double = 30) throws -> HeadlessApp {
+        guard Thread.isMainThread else {
+            throw HeadlessError(message: "a hosted app is driven from the main thread (a test method)", screen: nil)
+        }
+        let server = MainActor.assumeIsolated { IsomerLocalServer.waitForCurrent(timeout: timeout) }
+        guard let server else {
+            throw HeadlessError(message: "no driver in this process in \(Int(timeout)) s: is the host app built with --@isomer//drive:headful?", screen: nil)
+        }
+        return HeadlessApp(local: server)
+    }
+
+    #if !(os(iOS) || os(tvOS) || os(watchOS) || os(visionOS))
     /// A headful app, started by `launcher` and driven through a hub in this
     /// process (a WebSocket on the loopback address, its port the system's
     /// choice). The launcher is run as
@@ -188,10 +230,10 @@ public final class HeadlessApp: @unchecked Sendable {
         launched = process
         self.requests = requests
     }
+    #endif
 
     deinit {
-        let call = call
-        Task { await call.finish() }
+        if let call { Task { await call.finish() } }
     }
 
     /// The screen as it is.
@@ -342,9 +384,10 @@ public final class HeadlessApp: @unchecked Sendable {
     /// Ends the call (and an app built headless, or a headful app's
     /// launcher, which ends the app).
     public func quit() {
+        // The app a test is hosted in runs on: there is nothing to end.
+        guard local == nil else { return }
         _ = try? exchange("quit")
-        let call = call
-        try? Self.blocking { await call.finish() }
+        if let call { try? Self.blocking { await call.finish() } }
         if let launched, launched.isRunning {
             // A `stop` file beside the picture requests first: a launcher on
             // Windows, which has no SIGTERM to trap, ends its app on seeing it.
@@ -374,11 +417,17 @@ public final class HeadlessApp: @unchecked Sendable {
         var command = Wire_Command()
         command.cmd = cmd
         fill(&command)
-        let call = call
         let sent = command
-        let answer: Wire_Answer? = try Self.blocking { [self] in
-            try await call.write(sent)
-            return try await self.answers.next()
+        let answer: Wire_Answer?
+        if let local {
+            answer = MainActor.assumeIsolated { local.send(sent) }
+        } else if let call {
+            answer = try Self.blocking { [self] in
+                try await call.write(sent)
+                return try await self.answers?.next()
+            }
+        } else {
+            answer = nil
         }
         guard let answer else {
             throw HeadlessError(message: "the app ended without answering \(cmd) \(command.target)", screen: nil)

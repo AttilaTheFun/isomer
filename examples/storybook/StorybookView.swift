@@ -5,7 +5,9 @@
 // Launch hooks (the process environment natively, a reactor's WASI
 // environment, an Android intent's ISO_ extras, the web page's ISO_ query):
 // ISO_STORYBOOK_STORY=<id> opens that story; ISO_STORYBOOK_CONTROL=<file>
-// opens whichever story the file names, read four times a second, and
+// opens whichever story the file names ("stories": the list, as at
+// launch; a name without a folder is in the app's temporary directory),
+// read four times a second, and
 // writes `<file>.shown` with the story once it is open; and the URL
 // iso://story/<id> opens one too (Android's VIEW intents): the proof's ways
 // through every page without a launch each.
@@ -94,14 +96,23 @@ public struct StorybookView: View {
     /// changes; `<file>.shown` names it once its page has had a moment to
     /// build.
     private func followControl() async {
-        guard let path = launchEnvironment("ISO_STORYBOOK_CONTROL") else { return }
+        guard let named = launchEnvironment("ISO_STORYBOOK_CONTROL") else { return }
+        // A name alone is in the app's temporary directory, which a test
+        // hosted in the app finds too (its own process).
+        let path = named.hasPrefix("/") ? named : NSTemporaryDirectory() + named
         var shown: String?
         while !Task.isCancelled {
             let named = (try? String(contentsOfFile: path, encoding: .utf8))?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            if let id = named, id != shown, StoryCatalog.story(id) != nil {
+            if let id = named, id != shown, id == "stories" || StoryCatalog.story(id) != nil {
                 shown = id
-                open(id)
+                if id == "stories" {
+                    // The list, as at launch (a hosted test starting over).
+                    selection = nil
+                    openFirstStoryIfWide()
+                } else {
+                    open(id)
+                }
                 try? await Task.sleep(for: .milliseconds(300))
                 // Atomically where it can be; Wine's file replacement fails
                 // on its Unix drive, so plainly there (whoever reads it

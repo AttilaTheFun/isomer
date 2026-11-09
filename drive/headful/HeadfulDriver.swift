@@ -23,13 +23,20 @@ import IsomerWebSocketTransport
 @_silgen_name("iso_drive_attach")
 func _isoDriveAttach(_ platform: String, _ renderer: String) {
     let environment = ProcessInfo.processInfo.environment
+    // The app's own driver, for a test bundle hosted in it
+    // (IsomerLocalServer, synchronous); and, when ISO_DRIVER names where,
+    // dialled out to a hub or a test's own.
+    let driver = MainActor.assumeIsolated {
+        let driver = IsomerAppDriver(info: IsomerAppDriver.bundleInfo(platform: platform, renderer: renderer))
+        IsomerLocalServer.register(IsomerLocalServer { await driver.handle($0) })
+        return driver
+    }
     guard let address = environment["ISO_DRIVER"], let url = URL(string: address) else { return }
     // Said where a device's log shows it (logcat on Android, where standard
     // output goes nowhere).
     let log = Logger(subsystem: "dev.isomer", category: "drive")
     log.info("[iso] driver: dialling \(address, privacy: .public) as \(environment["ISO_DRIVER_NAME"] ?? "", privacy: .public)")
     MainActor.assumeIsolated {
-        let driver = IsomerAppDriver(info: IsomerAppDriver.bundleInfo(platform: platform, renderer: renderer))
         Task { @MainActor in
             do {
                 let metadata = environment["ISO_DRIVER_NAME"].map { ["iso-target": $0] } ?? [:]

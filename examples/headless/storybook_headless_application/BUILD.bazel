@@ -1,3 +1,5 @@
+load("@build_bazel_rules_apple//apple:ios.bzl", "ios_unit_test")
+load("@rules_swift//swift:swift.bzl", "swift_library")
 load("@rules_swift//swift:swift_binary.bzl", "swift_binary")
 load("@rules_swift//swift:swift_test.bzl", "swift_test")
 
@@ -200,4 +202,36 @@ swift_test(
         "@isomer//headless/isomer_headless",
         "@isomer//shared/wire/swift",
     ],
+)
+
+# The same tests hosted in the app (the plan's fourth way): an XCTest bundle
+# whose host is the iPhone Storybook built with --@isomer//drive:headful,
+# driving it in its own process, synchronously, with no network, as an
+# XCUITest drives its app (HeadlessApp.hosted, IsomerLocalServer). A story
+# opens through the Storybook's control file, a name in the app's temporary
+# directory (ISO_STORYBOOK_CONTROL), with no launch between tests.
+#
+#   bazel test --@isomer//drive:headful --ios_multi_cpus=sim_arm64 :storybook_hosted_ios_test
+swift_library(
+    name = "storybook_hosted_tests",
+    testonly = True,
+    srcs = ["StorybookHeadlessTests.swift"],
+    module_name = "StorybookHostedTests",
+    tags = ["manual"],
+    deps = [
+        "@isomer//headless/isomer_headless",
+        "@isomer//shared/wire/swift",
+    ],
+)
+
+ios_unit_test(
+    name = "storybook_hosted_ios_test",
+    env = {
+        "ISOMER_HOSTED": "hosted-control",
+        "ISO_STORYBOOK_CONTROL": "hosted-control",
+    },
+    minimum_os_version = "17.0",
+    tags = ["manual"],
+    test_host = "//apple/storybook_ios_application:storybook_ios_sim_application",
+    deps = [":storybook_hosted_tests"],
 )

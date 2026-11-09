@@ -14,9 +14,21 @@ import XCTest
 
 final class StorybookHeadlessTests: XCTestCase {
     /// The app built headless, from the test's runfiles; or headful, started
-    /// by the launcher the environment names.
+    /// by the launcher the environment names; or the app this bundle is
+    /// hosted in (ISOMER_HOSTED: the Storybook's control file, by which a
+    /// story opens with no launch).
     private func launch(story: String? = nil) throws -> HeadlessApp {
         let environment = ProcessInfo.processInfo.environment
+        if let control = environment["ISOMER_HOSTED"], !control.isEmpty {
+            // Back to the list, then the story: each test starts as at launch.
+            try Self.show("stories", control: control)
+            if let story { try Self.show(story, control: control) }
+            return try HeadlessApp.hosted()
+        }
+        #if os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
+        // On a phone these run hosted alone: no processes to launch.
+        throw XCTSkip("ISOMER_HOSTED names no control file")
+        #else
         var launchEnvironment: [String: String] = [:]
         if let story { launchEnvironment["ISO_STORYBOOK_STORY"] = story }
         if let launcher = environment["ISOMER_HEADFUL_LAUNCHER"], !launcher.isEmpty {
@@ -32,6 +44,23 @@ final class StorybookHeadlessTests: XCTestCase {
             executable: "\(root)/headless/storybook_headless_application/storybook_headless_application",
             environment: launchEnvironment)
         #endif
+        #endif
+    }
+
+    /// Opens `story` through the Storybook's control file (a name in the
+    /// app's temporary directory, as the app reads it) and waits, turning the
+    /// main run loop as the app runs on it, until the app says it is shown.
+    private static func show(_ story: String, control: String) throws {
+        let path = control.hasPrefix("/") ? control : NSTemporaryDirectory() + control
+        try story.write(toFile: path, atomically: true, encoding: .utf8)
+        let deadline = Date(timeIntervalSinceNow: 15)
+        while (try? String(contentsOfFile: path + ".shown", encoding: .utf8)) != story {
+            if Date() > deadline {
+                throw NSError(domain: "StorybookHeadlessTests", code: 1, userInfo: [
+                    NSLocalizedDescriptionKey: "the Storybook never showed \(story) (ISO_STORYBOOK_CONTROL=\(control))"])
+            }
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+        }
     }
 
     func testObservableObjectCounts() throws {
