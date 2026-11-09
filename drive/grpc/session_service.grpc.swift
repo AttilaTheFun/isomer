@@ -35,9 +35,9 @@ public enum Wire_Session: Sendable {
         /// Namespace for "Connect" metadata.
         public enum Connect: Sendable {
             /// Request type for "Connect".
-            public typealias Input = Wire_ClientMessage
+            public typealias Input = IsomerWire.Wire_ClientMessage
             /// Response type for "Connect".
-            public typealias Output = Wire_ServerMessage
+            public typealias Output = IsomerWire.Wire_ServerMessage
             /// Descriptor for "Connect".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "isomer.wire.Session"),
@@ -77,16 +77,16 @@ extension Wire_Session {
         /// Handle the "Connect" method.
         ///
         /// - Parameters:
-        ///   - request: A streaming request of `Wire_ClientMessage` messages.
+        ///   - request: A streaming request of `IsomerWire.Wire_ClientMessage` messages.
         ///   - context: Context providing information about the RPC.
         /// - Throws: Any error which occurred during the processing of the request. Thrown errors
         ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
         ///     to an internal error.
-        /// - Returns: A streaming response of `Wire_ServerMessage` messages.
+        /// - Returns: A streaming response of `IsomerWire.Wire_ServerMessage` messages.
         func connect(
-            request: GRPCCore.StreamingServerRequest<Wire_ClientMessage>,
+            request: GRPCCore.StreamingServerRequest<IsomerWire.Wire_ClientMessage>,
             context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Wire_ServerMessage>
+        ) async throws -> GRPCCore.StreamingServerResponse<IsomerWire.Wire_ServerMessage>
     }
 
     /// Service protocol for the "isomer.wire.Session" service.
@@ -100,16 +100,16 @@ extension Wire_Session {
         /// Handle the "Connect" method.
         ///
         /// - Parameters:
-        ///   - request: A streaming request of `Wire_ClientMessage` messages.
+        ///   - request: A streaming request of `IsomerWire.Wire_ClientMessage` messages.
         ///   - context: Context providing information about the RPC.
         /// - Throws: Any error which occurred during the processing of the request. Thrown errors
         ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
         ///     to an internal error.
-        /// - Returns: A streaming response of `Wire_ServerMessage` messages.
+        /// - Returns: A streaming response of `IsomerWire.Wire_ServerMessage` messages.
         func connect(
-            request: GRPCCore.StreamingServerRequest<Wire_ClientMessage>,
+            request: GRPCCore.StreamingServerRequest<IsomerWire.Wire_ClientMessage>,
             context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Wire_ServerMessage>
+        ) async throws -> GRPCCore.StreamingServerResponse<IsomerWire.Wire_ServerMessage>
     }
 
     /// Simple service protocol for the "isomer.wire.Session" service.
@@ -121,15 +121,15 @@ extension Wire_Session {
         /// Handle the "Connect" method.
         ///
         /// - Parameters:
-        ///   - request: A stream of `Wire_ClientMessage` messages.
-        ///   - response: A response stream of `Wire_ServerMessage` messages.
+        ///   - request: A stream of `IsomerWire.Wire_ClientMessage` messages.
+        ///   - response: A response stream of `IsomerWire.Wire_ServerMessage` messages.
         ///   - context: Context providing information about the RPC.
         /// - Throws: Any error which occurred during the processing of the request. Thrown errors
         ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
         ///     to an internal error.
         func connect(
-            request: GRPCCore.RPCAsyncSequence<Wire_ClientMessage, any Swift.Error>,
-            response: GRPCCore.RPCWriter<Wire_ServerMessage>,
+            request: GRPCCore.RPCAsyncSequence<IsomerWire.Wire_ClientMessage, any Swift.Error>,
+            response: GRPCCore.RPCWriter<IsomerWire.Wire_ServerMessage>,
             context: GRPCCore.ServerContext
         ) async throws
     }
@@ -141,8 +141,8 @@ extension Wire_Session.StreamingServiceProtocol {
     public func registerMethods<Transport>(with router: inout GRPCCore.RPCRouter<Transport>) where Transport: GRPCCore.ServerTransport {
         router.registerHandler(
             forMethod: Wire_Session.Method.Connect.descriptor,
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Wire_ClientMessage>(),
-            serializer: GRPCProtobuf.ProtobufSerializer<Wire_ServerMessage>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<IsomerWire.Wire_ClientMessage>(),
+            serializer: GRPCProtobuf.ProtobufSerializer<IsomerWire.Wire_ServerMessage>(),
             handler: { request, context in
                 try await self.connect(
                     request: request,
@@ -162,10 +162,10 @@ extension Wire_Session.ServiceProtocol {
 @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
 extension Wire_Session.SimpleServiceProtocol {
     public func connect(
-        request: GRPCCore.StreamingServerRequest<Wire_ClientMessage>,
+        request: GRPCCore.StreamingServerRequest<IsomerWire.Wire_ClientMessage>,
         context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.StreamingServerResponse<Wire_ServerMessage> {
-        return GRPCCore.StreamingServerResponse<Wire_ServerMessage>(
+    ) async throws -> GRPCCore.StreamingServerResponse<IsomerWire.Wire_ServerMessage> {
+        return GRPCCore.StreamingServerResponse<IsomerWire.Wire_ServerMessage>(
             metadata: [:],
             producer: { writer in
                 try await self.connect(
@@ -191,20 +191,20 @@ extension Wire_Session {
         /// Call the "Connect" method.
         ///
         /// - Parameters:
-        ///   - request: A streaming request producing `Wire_ClientMessage` messages.
-        ///   - serializer: A serializer for `Wire_ClientMessage` messages.
-        ///   - deserializer: A deserializer for `Wire_ServerMessage` messages.
+        ///   - request: A streaming request producing `IsomerWire.Wire_ClientMessage` messages.
+        ///   - serializer: A serializer for `IsomerWire.Wire_ClientMessage` messages.
+        ///   - deserializer: A deserializer for `IsomerWire.Wire_ServerMessage` messages.
         ///   - options: Options to apply to this RPC.
         ///   - handleResponse: A closure which handles the response and returns its result to
         ///       the caller. Returning from the closure will cancel the RPC if it hasn't
         ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func connect<Result>(
-            request: GRPCCore.StreamingClientRequest<Wire_ClientMessage>,
-            serializer: some GRPCCore.MessageSerializer<Wire_ClientMessage>,
-            deserializer: some GRPCCore.MessageDeserializer<Wire_ServerMessage>,
+            request: GRPCCore.StreamingClientRequest<IsomerWire.Wire_ClientMessage>,
+            serializer: some GRPCCore.MessageSerializer<IsomerWire.Wire_ClientMessage>,
+            deserializer: some GRPCCore.MessageDeserializer<IsomerWire.Wire_ServerMessage>,
             options: GRPCCore.CallOptions,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Wire_ServerMessage>) async throws -> Result
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<IsomerWire.Wire_ServerMessage>) async throws -> Result
         ) async throws -> Result where Result: Sendable
     }
 
@@ -227,20 +227,20 @@ extension Wire_Session {
         /// Call the "Connect" method.
         ///
         /// - Parameters:
-        ///   - request: A streaming request producing `Wire_ClientMessage` messages.
-        ///   - serializer: A serializer for `Wire_ClientMessage` messages.
-        ///   - deserializer: A deserializer for `Wire_ServerMessage` messages.
+        ///   - request: A streaming request producing `IsomerWire.Wire_ClientMessage` messages.
+        ///   - serializer: A serializer for `IsomerWire.Wire_ClientMessage` messages.
+        ///   - deserializer: A deserializer for `IsomerWire.Wire_ServerMessage` messages.
         ///   - options: Options to apply to this RPC.
         ///   - handleResponse: A closure which handles the response and returns its result to
         ///       the caller. Returning from the closure will cancel the RPC if it hasn't
         ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func connect<Result>(
-            request: GRPCCore.StreamingClientRequest<Wire_ClientMessage>,
-            serializer: some GRPCCore.MessageSerializer<Wire_ClientMessage>,
-            deserializer: some GRPCCore.MessageDeserializer<Wire_ServerMessage>,
+            request: GRPCCore.StreamingClientRequest<IsomerWire.Wire_ClientMessage>,
+            serializer: some GRPCCore.MessageSerializer<IsomerWire.Wire_ClientMessage>,
+            deserializer: some GRPCCore.MessageDeserializer<IsomerWire.Wire_ServerMessage>,
             options: GRPCCore.CallOptions = .defaults,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Wire_ServerMessage>) async throws -> Result
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<IsomerWire.Wire_ServerMessage>) async throws -> Result
         ) async throws -> Result where Result: Sendable {
             try await self.client.bidirectionalStreaming(
                 request: request,
@@ -260,21 +260,21 @@ extension Wire_Session.ClientProtocol {
     /// Call the "Connect" method.
     ///
     /// - Parameters:
-    ///   - request: A streaming request producing `Wire_ClientMessage` messages.
+    ///   - request: A streaming request producing `IsomerWire.Wire_ClientMessage` messages.
     ///   - options: Options to apply to this RPC.
     ///   - handleResponse: A closure which handles the response and returns its result to
     ///       the caller. Returning from the closure will cancel the RPC if it hasn't
     ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func connect<Result>(
-        request: GRPCCore.StreamingClientRequest<Wire_ClientMessage>,
+        request: GRPCCore.StreamingClientRequest<IsomerWire.Wire_ClientMessage>,
         options: GRPCCore.CallOptions = .defaults,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Wire_ServerMessage>) async throws -> Result
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<IsomerWire.Wire_ServerMessage>) async throws -> Result
     ) async throws -> Result where Result: Sendable {
         try await self.connect(
             request: request,
-            serializer: GRPCProtobuf.ProtobufSerializer<Wire_ClientMessage>(),
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Wire_ServerMessage>(),
+            serializer: GRPCProtobuf.ProtobufSerializer<IsomerWire.Wire_ClientMessage>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<IsomerWire.Wire_ServerMessage>(),
             options: options,
             onResponse: handleResponse
         )
@@ -298,10 +298,10 @@ extension Wire_Session.ClientProtocol {
     public func connect<Result>(
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
-        requestProducer producer: @Sendable @escaping (GRPCCore.RPCWriter<Wire_ClientMessage>) async throws -> Void,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Wire_ServerMessage>) async throws -> Result
+        requestProducer producer: @Sendable @escaping (GRPCCore.RPCWriter<IsomerWire.Wire_ClientMessage>) async throws -> Void,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<IsomerWire.Wire_ServerMessage>) async throws -> Result
     ) async throws -> Result where Result: Sendable {
-        let request = GRPCCore.StreamingClientRequest<Wire_ClientMessage>(
+        let request = GRPCCore.StreamingClientRequest<IsomerWire.Wire_ClientMessage>(
             metadata: metadata,
             producer: producer
         )
@@ -325,9 +325,9 @@ public enum Wire_Headless: Sendable {
         /// Namespace for "Drive" metadata.
         public enum Drive: Sendable {
             /// Request type for "Drive".
-            public typealias Input = Wire_Command
+            public typealias Input = IsomerWire.Wire_Command
             /// Response type for "Drive".
-            public typealias Output = Wire_Answer
+            public typealias Output = IsomerWire.Wire_Answer
             /// Descriptor for "Drive".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "isomer.wire.Headless"),
@@ -367,16 +367,16 @@ extension Wire_Headless {
         /// Handle the "Drive" method.
         ///
         /// - Parameters:
-        ///   - request: A streaming request of `Wire_Command` messages.
+        ///   - request: A streaming request of `IsomerWire.Wire_Command` messages.
         ///   - context: Context providing information about the RPC.
         /// - Throws: Any error which occurred during the processing of the request. Thrown errors
         ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
         ///     to an internal error.
-        /// - Returns: A streaming response of `Wire_Answer` messages.
+        /// - Returns: A streaming response of `IsomerWire.Wire_Answer` messages.
         func drive(
-            request: GRPCCore.StreamingServerRequest<Wire_Command>,
+            request: GRPCCore.StreamingServerRequest<IsomerWire.Wire_Command>,
             context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Wire_Answer>
+        ) async throws -> GRPCCore.StreamingServerResponse<IsomerWire.Wire_Answer>
     }
 
     /// Service protocol for the "isomer.wire.Headless" service.
@@ -390,16 +390,16 @@ extension Wire_Headless {
         /// Handle the "Drive" method.
         ///
         /// - Parameters:
-        ///   - request: A streaming request of `Wire_Command` messages.
+        ///   - request: A streaming request of `IsomerWire.Wire_Command` messages.
         ///   - context: Context providing information about the RPC.
         /// - Throws: Any error which occurred during the processing of the request. Thrown errors
         ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
         ///     to an internal error.
-        /// - Returns: A streaming response of `Wire_Answer` messages.
+        /// - Returns: A streaming response of `IsomerWire.Wire_Answer` messages.
         func drive(
-            request: GRPCCore.StreamingServerRequest<Wire_Command>,
+            request: GRPCCore.StreamingServerRequest<IsomerWire.Wire_Command>,
             context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Wire_Answer>
+        ) async throws -> GRPCCore.StreamingServerResponse<IsomerWire.Wire_Answer>
     }
 
     /// Simple service protocol for the "isomer.wire.Headless" service.
@@ -411,15 +411,15 @@ extension Wire_Headless {
         /// Handle the "Drive" method.
         ///
         /// - Parameters:
-        ///   - request: A stream of `Wire_Command` messages.
-        ///   - response: A response stream of `Wire_Answer` messages.
+        ///   - request: A stream of `IsomerWire.Wire_Command` messages.
+        ///   - response: A response stream of `IsomerWire.Wire_Answer` messages.
         ///   - context: Context providing information about the RPC.
         /// - Throws: Any error which occurred during the processing of the request. Thrown errors
         ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
         ///     to an internal error.
         func drive(
-            request: GRPCCore.RPCAsyncSequence<Wire_Command, any Swift.Error>,
-            response: GRPCCore.RPCWriter<Wire_Answer>,
+            request: GRPCCore.RPCAsyncSequence<IsomerWire.Wire_Command, any Swift.Error>,
+            response: GRPCCore.RPCWriter<IsomerWire.Wire_Answer>,
             context: GRPCCore.ServerContext
         ) async throws
     }
@@ -431,8 +431,8 @@ extension Wire_Headless.StreamingServiceProtocol {
     public func registerMethods<Transport>(with router: inout GRPCCore.RPCRouter<Transport>) where Transport: GRPCCore.ServerTransport {
         router.registerHandler(
             forMethod: Wire_Headless.Method.Drive.descriptor,
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Wire_Command>(),
-            serializer: GRPCProtobuf.ProtobufSerializer<Wire_Answer>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<IsomerWire.Wire_Command>(),
+            serializer: GRPCProtobuf.ProtobufSerializer<IsomerWire.Wire_Answer>(),
             handler: { request, context in
                 try await self.drive(
                     request: request,
@@ -452,10 +452,10 @@ extension Wire_Headless.ServiceProtocol {
 @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
 extension Wire_Headless.SimpleServiceProtocol {
     public func drive(
-        request: GRPCCore.StreamingServerRequest<Wire_Command>,
+        request: GRPCCore.StreamingServerRequest<IsomerWire.Wire_Command>,
         context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.StreamingServerResponse<Wire_Answer> {
-        return GRPCCore.StreamingServerResponse<Wire_Answer>(
+    ) async throws -> GRPCCore.StreamingServerResponse<IsomerWire.Wire_Answer> {
+        return GRPCCore.StreamingServerResponse<IsomerWire.Wire_Answer>(
             metadata: [:],
             producer: { writer in
                 try await self.drive(
@@ -481,20 +481,20 @@ extension Wire_Headless {
         /// Call the "Drive" method.
         ///
         /// - Parameters:
-        ///   - request: A streaming request producing `Wire_Command` messages.
-        ///   - serializer: A serializer for `Wire_Command` messages.
-        ///   - deserializer: A deserializer for `Wire_Answer` messages.
+        ///   - request: A streaming request producing `IsomerWire.Wire_Command` messages.
+        ///   - serializer: A serializer for `IsomerWire.Wire_Command` messages.
+        ///   - deserializer: A deserializer for `IsomerWire.Wire_Answer` messages.
         ///   - options: Options to apply to this RPC.
         ///   - handleResponse: A closure which handles the response and returns its result to
         ///       the caller. Returning from the closure will cancel the RPC if it hasn't
         ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func drive<Result>(
-            request: GRPCCore.StreamingClientRequest<Wire_Command>,
-            serializer: some GRPCCore.MessageSerializer<Wire_Command>,
-            deserializer: some GRPCCore.MessageDeserializer<Wire_Answer>,
+            request: GRPCCore.StreamingClientRequest<IsomerWire.Wire_Command>,
+            serializer: some GRPCCore.MessageSerializer<IsomerWire.Wire_Command>,
+            deserializer: some GRPCCore.MessageDeserializer<IsomerWire.Wire_Answer>,
             options: GRPCCore.CallOptions,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Wire_Answer>) async throws -> Result
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<IsomerWire.Wire_Answer>) async throws -> Result
         ) async throws -> Result where Result: Sendable
     }
 
@@ -517,20 +517,20 @@ extension Wire_Headless {
         /// Call the "Drive" method.
         ///
         /// - Parameters:
-        ///   - request: A streaming request producing `Wire_Command` messages.
-        ///   - serializer: A serializer for `Wire_Command` messages.
-        ///   - deserializer: A deserializer for `Wire_Answer` messages.
+        ///   - request: A streaming request producing `IsomerWire.Wire_Command` messages.
+        ///   - serializer: A serializer for `IsomerWire.Wire_Command` messages.
+        ///   - deserializer: A deserializer for `IsomerWire.Wire_Answer` messages.
         ///   - options: Options to apply to this RPC.
         ///   - handleResponse: A closure which handles the response and returns its result to
         ///       the caller. Returning from the closure will cancel the RPC if it hasn't
         ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func drive<Result>(
-            request: GRPCCore.StreamingClientRequest<Wire_Command>,
-            serializer: some GRPCCore.MessageSerializer<Wire_Command>,
-            deserializer: some GRPCCore.MessageDeserializer<Wire_Answer>,
+            request: GRPCCore.StreamingClientRequest<IsomerWire.Wire_Command>,
+            serializer: some GRPCCore.MessageSerializer<IsomerWire.Wire_Command>,
+            deserializer: some GRPCCore.MessageDeserializer<IsomerWire.Wire_Answer>,
             options: GRPCCore.CallOptions = .defaults,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Wire_Answer>) async throws -> Result
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<IsomerWire.Wire_Answer>) async throws -> Result
         ) async throws -> Result where Result: Sendable {
             try await self.client.bidirectionalStreaming(
                 request: request,
@@ -550,21 +550,21 @@ extension Wire_Headless.ClientProtocol {
     /// Call the "Drive" method.
     ///
     /// - Parameters:
-    ///   - request: A streaming request producing `Wire_Command` messages.
+    ///   - request: A streaming request producing `IsomerWire.Wire_Command` messages.
     ///   - options: Options to apply to this RPC.
     ///   - handleResponse: A closure which handles the response and returns its result to
     ///       the caller. Returning from the closure will cancel the RPC if it hasn't
     ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func drive<Result>(
-        request: GRPCCore.StreamingClientRequest<Wire_Command>,
+        request: GRPCCore.StreamingClientRequest<IsomerWire.Wire_Command>,
         options: GRPCCore.CallOptions = .defaults,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Wire_Answer>) async throws -> Result
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<IsomerWire.Wire_Answer>) async throws -> Result
     ) async throws -> Result where Result: Sendable {
         try await self.drive(
             request: request,
-            serializer: GRPCProtobuf.ProtobufSerializer<Wire_Command>(),
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Wire_Answer>(),
+            serializer: GRPCProtobuf.ProtobufSerializer<IsomerWire.Wire_Command>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<IsomerWire.Wire_Answer>(),
             options: options,
             onResponse: handleResponse
         )
@@ -588,10 +588,10 @@ extension Wire_Headless.ClientProtocol {
     public func drive<Result>(
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
-        requestProducer producer: @Sendable @escaping (GRPCCore.RPCWriter<Wire_Command>) async throws -> Void,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Wire_Answer>) async throws -> Result
+        requestProducer producer: @Sendable @escaping (GRPCCore.RPCWriter<IsomerWire.Wire_Command>) async throws -> Void,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<IsomerWire.Wire_Answer>) async throws -> Result
     ) async throws -> Result where Result: Sendable {
-        let request = GRPCCore.StreamingClientRequest<Wire_Command>(
+        let request = GRPCCore.StreamingClientRequest<IsomerWire.Wire_Command>(
             metadata: metadata,
             producer: producer
         )
@@ -615,9 +615,9 @@ public enum Wire_Driver: Sendable {
         /// Namespace for "Attach" metadata.
         public enum Attach: Sendable {
             /// Request type for "Attach".
-            public typealias Input = Wire_Answer
+            public typealias Input = IsomerWire.Wire_Answer
             /// Response type for "Attach".
-            public typealias Output = Wire_Command
+            public typealias Output = IsomerWire.Wire_Command
             /// Descriptor for "Attach".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "isomer.wire.Driver"),
@@ -662,16 +662,16 @@ extension Wire_Driver {
         /// Handle the "Attach" method.
         ///
         /// - Parameters:
-        ///   - request: A streaming request of `Wire_Answer` messages.
+        ///   - request: A streaming request of `IsomerWire.Wire_Answer` messages.
         ///   - context: Context providing information about the RPC.
         /// - Throws: Any error which occurred during the processing of the request. Thrown errors
         ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
         ///     to an internal error.
-        /// - Returns: A streaming response of `Wire_Command` messages.
+        /// - Returns: A streaming response of `IsomerWire.Wire_Command` messages.
         func attach(
-            request: GRPCCore.StreamingServerRequest<Wire_Answer>,
+            request: GRPCCore.StreamingServerRequest<IsomerWire.Wire_Answer>,
             context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Wire_Command>
+        ) async throws -> GRPCCore.StreamingServerResponse<IsomerWire.Wire_Command>
     }
 
     /// Service protocol for the "isomer.wire.Driver" service.
@@ -690,16 +690,16 @@ extension Wire_Driver {
         /// Handle the "Attach" method.
         ///
         /// - Parameters:
-        ///   - request: A streaming request of `Wire_Answer` messages.
+        ///   - request: A streaming request of `IsomerWire.Wire_Answer` messages.
         ///   - context: Context providing information about the RPC.
         /// - Throws: Any error which occurred during the processing of the request. Thrown errors
         ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
         ///     to an internal error.
-        /// - Returns: A streaming response of `Wire_Command` messages.
+        /// - Returns: A streaming response of `IsomerWire.Wire_Command` messages.
         func attach(
-            request: GRPCCore.StreamingServerRequest<Wire_Answer>,
+            request: GRPCCore.StreamingServerRequest<IsomerWire.Wire_Answer>,
             context: GRPCCore.ServerContext
-        ) async throws -> GRPCCore.StreamingServerResponse<Wire_Command>
+        ) async throws -> GRPCCore.StreamingServerResponse<IsomerWire.Wire_Command>
     }
 
     /// Simple service protocol for the "isomer.wire.Driver" service.
@@ -716,15 +716,15 @@ extension Wire_Driver {
         /// Handle the "Attach" method.
         ///
         /// - Parameters:
-        ///   - request: A stream of `Wire_Answer` messages.
-        ///   - response: A response stream of `Wire_Command` messages.
+        ///   - request: A stream of `IsomerWire.Wire_Answer` messages.
+        ///   - response: A response stream of `IsomerWire.Wire_Command` messages.
         ///   - context: Context providing information about the RPC.
         /// - Throws: Any error which occurred during the processing of the request. Thrown errors
         ///     of type `RPCError` are mapped to appropriate statuses. All other errors are converted
         ///     to an internal error.
         func attach(
-            request: GRPCCore.RPCAsyncSequence<Wire_Answer, any Swift.Error>,
-            response: GRPCCore.RPCWriter<Wire_Command>,
+            request: GRPCCore.RPCAsyncSequence<IsomerWire.Wire_Answer, any Swift.Error>,
+            response: GRPCCore.RPCWriter<IsomerWire.Wire_Command>,
             context: GRPCCore.ServerContext
         ) async throws
     }
@@ -736,8 +736,8 @@ extension Wire_Driver.StreamingServiceProtocol {
     public func registerMethods<Transport>(with router: inout GRPCCore.RPCRouter<Transport>) where Transport: GRPCCore.ServerTransport {
         router.registerHandler(
             forMethod: Wire_Driver.Method.Attach.descriptor,
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Wire_Answer>(),
-            serializer: GRPCProtobuf.ProtobufSerializer<Wire_Command>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<IsomerWire.Wire_Answer>(),
+            serializer: GRPCProtobuf.ProtobufSerializer<IsomerWire.Wire_Command>(),
             handler: { request, context in
                 try await self.attach(
                     request: request,
@@ -757,10 +757,10 @@ extension Wire_Driver.ServiceProtocol {
 @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
 extension Wire_Driver.SimpleServiceProtocol {
     public func attach(
-        request: GRPCCore.StreamingServerRequest<Wire_Answer>,
+        request: GRPCCore.StreamingServerRequest<IsomerWire.Wire_Answer>,
         context: GRPCCore.ServerContext
-    ) async throws -> GRPCCore.StreamingServerResponse<Wire_Command> {
-        return GRPCCore.StreamingServerResponse<Wire_Command>(
+    ) async throws -> GRPCCore.StreamingServerResponse<IsomerWire.Wire_Command> {
+        return GRPCCore.StreamingServerResponse<IsomerWire.Wire_Command>(
             metadata: [:],
             producer: { writer in
                 try await self.attach(
@@ -791,20 +791,20 @@ extension Wire_Driver {
         /// Call the "Attach" method.
         ///
         /// - Parameters:
-        ///   - request: A streaming request producing `Wire_Answer` messages.
-        ///   - serializer: A serializer for `Wire_Answer` messages.
-        ///   - deserializer: A deserializer for `Wire_Command` messages.
+        ///   - request: A streaming request producing `IsomerWire.Wire_Answer` messages.
+        ///   - serializer: A serializer for `IsomerWire.Wire_Answer` messages.
+        ///   - deserializer: A deserializer for `IsomerWire.Wire_Command` messages.
         ///   - options: Options to apply to this RPC.
         ///   - handleResponse: A closure which handles the response and returns its result to
         ///       the caller. Returning from the closure will cancel the RPC if it hasn't
         ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func attach<Result>(
-            request: GRPCCore.StreamingClientRequest<Wire_Answer>,
-            serializer: some GRPCCore.MessageSerializer<Wire_Answer>,
-            deserializer: some GRPCCore.MessageDeserializer<Wire_Command>,
+            request: GRPCCore.StreamingClientRequest<IsomerWire.Wire_Answer>,
+            serializer: some GRPCCore.MessageSerializer<IsomerWire.Wire_Answer>,
+            deserializer: some GRPCCore.MessageDeserializer<IsomerWire.Wire_Command>,
             options: GRPCCore.CallOptions,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Wire_Command>) async throws -> Result
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<IsomerWire.Wire_Command>) async throws -> Result
         ) async throws -> Result where Result: Sendable
     }
 
@@ -832,20 +832,20 @@ extension Wire_Driver {
         /// Call the "Attach" method.
         ///
         /// - Parameters:
-        ///   - request: A streaming request producing `Wire_Answer` messages.
-        ///   - serializer: A serializer for `Wire_Answer` messages.
-        ///   - deserializer: A deserializer for `Wire_Command` messages.
+        ///   - request: A streaming request producing `IsomerWire.Wire_Answer` messages.
+        ///   - serializer: A serializer for `IsomerWire.Wire_Answer` messages.
+        ///   - deserializer: A deserializer for `IsomerWire.Wire_Command` messages.
         ///   - options: Options to apply to this RPC.
         ///   - handleResponse: A closure which handles the response and returns its result to
         ///       the caller. Returning from the closure will cancel the RPC if it hasn't
         ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func attach<Result>(
-            request: GRPCCore.StreamingClientRequest<Wire_Answer>,
-            serializer: some GRPCCore.MessageSerializer<Wire_Answer>,
-            deserializer: some GRPCCore.MessageDeserializer<Wire_Command>,
+            request: GRPCCore.StreamingClientRequest<IsomerWire.Wire_Answer>,
+            serializer: some GRPCCore.MessageSerializer<IsomerWire.Wire_Answer>,
+            deserializer: some GRPCCore.MessageDeserializer<IsomerWire.Wire_Command>,
             options: GRPCCore.CallOptions = .defaults,
-            onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Wire_Command>) async throws -> Result
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<IsomerWire.Wire_Command>) async throws -> Result
         ) async throws -> Result where Result: Sendable {
             try await self.client.bidirectionalStreaming(
                 request: request,
@@ -865,21 +865,21 @@ extension Wire_Driver.ClientProtocol {
     /// Call the "Attach" method.
     ///
     /// - Parameters:
-    ///   - request: A streaming request producing `Wire_Answer` messages.
+    ///   - request: A streaming request producing `IsomerWire.Wire_Answer` messages.
     ///   - options: Options to apply to this RPC.
     ///   - handleResponse: A closure which handles the response and returns its result to
     ///       the caller. Returning from the closure will cancel the RPC if it hasn't
     ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func attach<Result>(
-        request: GRPCCore.StreamingClientRequest<Wire_Answer>,
+        request: GRPCCore.StreamingClientRequest<IsomerWire.Wire_Answer>,
         options: GRPCCore.CallOptions = .defaults,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Wire_Command>) async throws -> Result
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<IsomerWire.Wire_Command>) async throws -> Result
     ) async throws -> Result where Result: Sendable {
         try await self.attach(
             request: request,
-            serializer: GRPCProtobuf.ProtobufSerializer<Wire_Answer>(),
-            deserializer: GRPCProtobuf.ProtobufDeserializer<Wire_Command>(),
+            serializer: GRPCProtobuf.ProtobufSerializer<IsomerWire.Wire_Answer>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<IsomerWire.Wire_Command>(),
             options: options,
             onResponse: handleResponse
         )
@@ -903,10 +903,10 @@ extension Wire_Driver.ClientProtocol {
     public func attach<Result>(
         metadata: GRPCCore.Metadata = [:],
         options: GRPCCore.CallOptions = .defaults,
-        requestProducer producer: @Sendable @escaping (GRPCCore.RPCWriter<Wire_Answer>) async throws -> Void,
-        onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Wire_Command>) async throws -> Result
+        requestProducer producer: @Sendable @escaping (GRPCCore.RPCWriter<IsomerWire.Wire_Answer>) async throws -> Void,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<IsomerWire.Wire_Command>) async throws -> Result
     ) async throws -> Result where Result: Sendable {
-        let request = GRPCCore.StreamingClientRequest<Wire_Answer>(
+        let request = GRPCCore.StreamingClientRequest<IsomerWire.Wire_Answer>(
             metadata: metadata,
             producer: producer
         )

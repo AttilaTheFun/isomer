@@ -256,9 +256,9 @@ register_toolchains("@rust_toolchains//:all", dev_dependency = True)
 # (examples' //tests/sqlite_wasi, through //tools/wasm/wasi_run). C compiled for wasm needs the rules_swift
 # patch above (the SDK's clang resource directory).
 
-# protoc, for the render tree's checked-in Swift (shared/wire/tree.proto ->
-# shared/isomer_swift_ui/tree.pb.swift, //shared/wire:tree_swift_test): this
-# module's own check, so a dev dependency.
+# protoc and proto_library, for the wire protos' checked-in Swift, which
+# swift_proto_library generates (//shared/wire's diff tests): this module's own
+# check, so a dev dependency.
 bazel_dep(name = "protobuf", version = "34.0.bcr.1", dev_dependency = True)
 
 # swift_map (//swift_map/...) backs the SwiftUI `Map` view on Apple (Metal) and

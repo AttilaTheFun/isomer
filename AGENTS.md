@@ -169,8 +169,8 @@ a repository of its own):
   `target_deps`: Foundation's internationalization (a marker module Foundation
   checks with `canImport`, `--@isomer//foundation:internationalization`),
   nothing else. Generated sources the package compiles are checked in, with
-  diff_tests (shared/isomer_swift_ui/tree.pb.swift, protoc's;
-  shared/swift_ui_core/JSONInternal.swift).
+  diff_tests (the wire protos' Swift, which swift_proto_library generates in
+  //shared/wire; shared/swift_ui_core/JSONInternal.swift).
 - **The render tree's wire format is protobuf (0.45)**: shared/wire/tree.proto
   (FlatBuffers' tree.fbs before, field for field: a field's number is its old
   slot + 1). FlatTreeEncoder writes `Wire_Node`/`Wire_Patch`

@@ -153,3 +153,8 @@ build:android_release --//swift_ffi/rules:jni_exports_only
 # An app to drive from the iso CLI (docs/drive.md): built with its driver in
 # (examples/.bazelrc says how to run the Storybook so).
 build:cli --//drive:headful
+
+# The protos' comments in their descriptor sets, so the Swift that
+# swift_proto_library generates from them (//shared/wire) carries them as doc
+# comments, as the checked-in copies do.
+build --@protobuf//bazel/flags:experimental_proto_descriptor_sets_include_source_info

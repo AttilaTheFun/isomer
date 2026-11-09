@@ -5,9 +5,10 @@ package(default_visibility = ["//visibility:public"])
 exports_files(["tree.pb.swift"])
 
 # IsomerSwiftUI, isomer's Swift package's (Package.swift): what a host reads
-# of the runtime. tree.pb.swift is protoc's Swift for the render tree's wire
-# format (shared/wire/tree.proto), checked in so the package builds it without
-# protoc; //shared/wire:tree_swift_test keeps it protoc's.
+# of the runtime. tree.pb.swift is the render tree's wire format
+# (shared/wire/tree.proto) as swift_proto_library generates it, checked in so
+# the package builds it without protoc; //shared/wire:tree_swift_test keeps it
+# the generator's.
 one_configuration(
     name = "isomer_swift_ui",
     actual = "@swiftpkg_isomer//:IsomerSwiftUI",
