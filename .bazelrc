@@ -149,10 +149,3 @@ build:android_release -c opt
 build:android_release --@rules_swift//swift:copt=-Osize
 build:android_release --features=swift.no_embed_debug_module
 build:android_release --//swift_ffi/rules:jni_exports_only
-
-# No repository contents cache (Bazel 9 keeps one under the repository
-# cache by default): CI's shared repository cache is a mount that ran out
-# of file handles taking a whole extracted package (SwiftProtobuf with
-# protobuf and abseil) through it; the downloaded archives, all the shared
-# cache keeps, still go there.
-common --repo_contents_cache=
