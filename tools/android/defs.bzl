@@ -604,19 +604,30 @@ def isomer_android_app(
         version_attrs += '\n    android:versionCode="%d"' % version_code
     if version_name:
         version_attrs += '\n    android:versionName="%s"' % version_name
+    substitutions = {
+        "{PACKAGE}": package,
+        "{LABEL}": label,
+        "{EXTRA_INTENT_FILTERS}": intent_filters,
+        "{EXTRA_PERMISSIONS}": extra_permissions,
+        "{APPLICATION_ATTRS}": application_attrs,
+        "{VERSION_ATTRS}": version_attrs,
+        "{MIN_SDK}": str(min_sdk_version),
+        "{EXTRA_APPLICATION}": extra_application,
+    }
+    # A headful build (--@isomer//drive:headful, never a release) dials out
+    # to a test's hub over plain ws:// on the device's loopback (adb reverse),
+    # which the runtime's WebSocket client refuses unless the app allows
+    # cleartext: such a build does.
+    headful = dict(substitutions)
+    if not uses_cleartext_traffic:
+        headful["{APPLICATION_ATTRS}"] = '\n        android:usesCleartextTraffic="true"' + application_attrs
     expand_template(
         name = name + "_manifest",
         out = "generated/%s/AndroidManifest.xml" % name,
-        substitutions = {
-            "{PACKAGE}": package,
-            "{LABEL}": label,
-            "{EXTRA_INTENT_FILTERS}": intent_filters,
-            "{EXTRA_PERMISSIONS}": extra_permissions,
-            "{APPLICATION_ATTRS}": application_attrs,
-            "{VERSION_ATTRS}": version_attrs,
-            "{MIN_SDK}": str(min_sdk_version),
-            "{EXTRA_APPLICATION}": extra_application,
-        },
+        substitutions = select({
+            Label("//drive:headful_on"): headful,
+            "//conditions:default": substitutions,
+        }),
         template = Label("//tools/android:manifest.xml.tpl"),
     )
 

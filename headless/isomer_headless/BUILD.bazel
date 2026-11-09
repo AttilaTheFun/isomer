@@ -11,10 +11,16 @@ swift_library(
     srcs = ["HeadlessApp.swift"],
     module_name = "IsomerHeadless",
     deps = [
-        "//drive/process",
-        "//drive/remote",
         "//drive/serving",
         "//drive/websocket",
         "//shared/wire/swift",
-    ],
+    ] + select({
+        # Not on Windows (HeadlessApp.swift): the process transport, and
+        # IsomerRemote, whose gRPC brings swift-nio-ssl.
+        "@platforms//os:windows": [],
+        "//conditions:default": [
+            "//drive/process",
+            "//drive/remote",
+        ],
+    }),
 )

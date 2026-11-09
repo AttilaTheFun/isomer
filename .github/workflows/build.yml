@@ -26,9 +26,10 @@
 #     private copy on OS Server's leases instead); and beside them the
 #     proof: the Storybook on every tier-1 platform, built in CI's
 #     container, pictured on GitHub's own machines (a private copy's on OS
-#     Server's), each picture compared with the previous release's,
-#     uploaded as the `proof` artifact Reviews reads (proof, proof-shoot,
-#     proof-compare; tools/ci/proof.sh). The full set by default; `kind:
+#     Server's), written in Reviews' format 2 (each picture an item under
+#     a stable id; Reviews compares it with the previous release's, not
+#     CI), uploaded as the `proof` artifact and attached to a release's
+#     draft as proof.zip (proof, proof-shoot, proof-compare; tools/ci/proof.sh). The full set by default; `kind:
 #     quick` the core set. On a commit of main, or, to bisect a regression,
 #     on a branch pushed at an earlier one;
 #   - prerelease (main): alpha alone: its version asked of Applications
@@ -75,10 +76,6 @@ on:
         type: choice
         options: [full, quick]
         default: full
-      baseline_run:
-        description: A run whose proof to compare with (empty for the previous release's)
-        required: false
-        default: ""
 # A pull request's newer push (a rebase, an update with main) cancels its
 # branch's older run, whose result no longer counts. Every other run
 # (populate, a run by hand, a release) is a group of its own and never
@@ -188,6 +185,21 @@ jobs:
           name: windows-test-app
           path: .ci/platforms/windows
           retention-days: 3
+      # The same apps with their drivers built in, for the Storybook's tests
+      # run headful (tools/ci/hosted_headful_test.sh).
+      - uses: actions/upload-artifact@v4
+        if: ${{ !github.event.repository.private }}
+        with:
+          name: headful-apps
+          path: .ci/platforms/headful
+          retention-days: 3
+      # The Windows Storybook headful with its tests, built for Windows here.
+      - uses: actions/upload-artifact@v4
+        if: ${{ !github.event.repository.private }}
+        with:
+          name: windows-headful
+          path: .ci/platforms/windows-headful
+          retention-days: 3
       - uses: actions/upload-artifact@v4
         if: ${{ !github.event.repository.private }}
         with:
@@ -215,7 +227,7 @@ jobs:
     needs: verify
     if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release') && !github.event.repository.private }}
     runs-on: xcode-27
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
@@ -224,8 +236,26 @@ jobs:
           path: .ci/apple
       - name: The iPhone and Mac Storybooks' tests
         run: >-
-          exec tools/ci/hosted_apple_test.sh "$(ls .ci/apple/*storybook_ios*.ipa | head -1)"
+          tools/ci/hosted_apple_test.sh "$(ls .ci/apple/*storybook_ios*.ipa | head -1)"
           "$(ls .ci/apple/*storybook_macos*.zip | head -1)" .ci/platform-tests/apple
+      - uses: actions/download-artifact@v4
+        with:
+          name: headful-apps
+          path: .ci/headful
+      # Bazel's downloads kept between runs in GitHub's cache: GitHub's
+      # release downloads, where most of them come from, have failed for
+      # an hour at a time with 504s.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/isomer-bazel-repository
+          key: bazel-repository-${{ runner.os }}-${{ hashFiles('MODULE.bazel', 'examples/MODULE.bazel', 'examples/third_party/swift_packages/Package.resolved') }}
+          restore-keys: bazel-repository-${{ runner.os }}-
+      # The Storybook's tests (the headless source) against the apps headful:
+      # the test built here, the apps the container's.
+      - name: The Storybook's tests, headful on the iPhone and the Mac
+        run: >-
+          exec tools/ci/hosted_headful_test.sh apple "$(ls .ci/headful/*storybook_ios*.ipa | head -1)"
+          "$(ls .ci/headful/*storybook_macos*.zip | head -1)" .ci/platform-tests/apple/headful
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
@@ -241,7 +271,7 @@ jobs:
     needs: verify
     if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release') && !github.event.repository.private }}
     runs-on: windows-11-arm
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
@@ -251,6 +281,15 @@ jobs:
       - name: The Windows Storybook's tests
         shell: pwsh
         run: tools/ci/hosted_windows_test.ps1 .ci/windows .ci/platform-tests/windows
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-headful
+          path: .ci/windows-headful
+      # The Storybook's tests (the headless source) against the app headful,
+      # both built in the container, run here in Git's bash.
+      - name: The Storybook's tests, headful on Windows
+        shell: bash
+        run: exec tools/ci/hosted_headful_test.sh windows .ci/windows-headful .ci/platform-tests/windows/headful
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
@@ -266,7 +305,7 @@ jobs:
     needs: verify
     if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release') && !github.event.repository.private }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
@@ -274,7 +313,21 @@ jobs:
           name: android-test-apk
           path: .ci/android
       - name: The Android Storybook's tests
-        run: exec tools/ci/hosted_android_test.sh .ci/android/storybook.apk .ci/platform-tests/android
+        run: tools/ci/hosted_android_test.sh .ci/android/storybook.apk .ci/platform-tests/android
+      - uses: actions/download-artifact@v4
+        with:
+          name: headful-apps
+          path: .ci/headful
+      # Bazel's downloads kept between runs in GitHub's cache: GitHub's
+      # release downloads, where most of them come from, have failed for
+      # an hour at a time with 504s.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/isomer-bazel-repository
+          key: bazel-repository-${{ runner.os }}-${{ hashFiles('MODULE.bazel', 'examples/MODULE.bazel', 'examples/third_party/swift_packages/Package.resolved') }}
+          restore-keys: bazel-repository-${{ runner.os }}-
+      - name: The Storybook's tests, headful on Android
+        run: exec tools/ci/hosted_headful_test.sh android .ci/headful/storybook-x86_64.apk .ci/platform-tests/android/headful
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
@@ -297,20 +350,18 @@ jobs:
     timeout-minutes: 240
     permissions:
       contents: read
-      # The baseline: an earlier run's proof artifact.
       actions: read
     env:
       GH_TOKEN: ${{ github.token }}
       # The branch, for a pull request's head (its run's ref is GitHub's merge).
       PROOF_REF: ${{ github.event.pull_request && format('refs/heads/{0}', github.head_ref) || github.ref }}
       PROOF_KIND: ${{ inputs.kind || 'full' }}
-      PROOF_BASELINE_RUN: ${{ inputs.baseline_run }}
     steps:
       - uses: actions/checkout@v5
         with:
           # A pull request's own head, not GitHub's merge of it: the commit
-          # its proof is listed under. The whole history: the baseline is
-          # found along the base branch.
+          # its proof is of. The whole history: a quick proof's stories
+          # include those of the story files a branch touches.
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - name: The apps on every platform, pictured, and the proof
@@ -404,8 +455,10 @@ jobs:
           path: ${{ runner.temp }}/review
           retention-days: 7
 
-  # The parts compared with the baseline into the `proof` artifact Reviews
-  # reads, whichever came back (a missing platform's pictures fail it).
+  # The parts written into the `proof` artifact Reviews reads (format 2:
+  # proof.json and its files; tools/ci/proof_write.swift), whichever came
+  # back (a missing platform's pictures fail it). Nothing is compared: the
+  # job keeps its name, which verified.sh asks for.
   proof-compare:
     needs: [proof, proof-shoot]
     if: ${{ !cancelled() && !github.event.repository.private && needs.proof.result == 'success' }}
@@ -418,7 +471,6 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       PROOF_REF: ${{ github.event.pull_request && format('refs/heads/{0}', github.head_ref) || github.ref }}
       PROOF_KIND: ${{ inputs.kind || 'full' }}
-      PROOF_BASELINE_RUN: ${{ inputs.baseline_run }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -503,6 +555,17 @@ jobs:
         run: >-
           tools/ci/publish_from_ci.sh --notes-file "$RUNNER_TEMP/notes.md" --download "$RUNNER_TEMP/assets"
           .ci/packages/*.zip .ci/packages/*.ipa .ci/packages/*.apk
+      # A release's proof (this run's `proof`, Reviews' format 2), zipped
+      # among the draft's assets as proof.zip: the release keeps it, and
+      # Reviews compares the next release's with it.
+      - uses: actions/download-artifact@v4
+        if: inputs.run == 'release'
+        with:
+          name: proof
+          path: ${{ runner.temp }}/proof
+      - name: The proof, among the assets
+        if: inputs.run == 'release'
+        run: tools/ci/proof_zip.sh "$RUNNER_TEMP/proof" "$RUNNER_TEMP/assets/proof.zip"
       - name: The draft release, its builds attached
         env:
           GH_TOKEN: ${{ github.token }}
@@ -582,11 +645,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: tools/ci/verified.sh "$GITHUB_SHA"
-      # Its proof, which the release carries.
-      - name: Its proof
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: tools/ci/release_extras.sh proof "$GITHUB_REF_NAME" .ci/release
       # Untrusted text reaches the shell through env, never ${{ }} in run.
       - name: Notes
         env:
@@ -625,4 +683,4 @@ jobs:
       - name: The release's assets
         env:
           GH_TOKEN: ${{ github.token }}
-        run: tools/ci/release_extras.sh upload "$GITHUB_REF_NAME" .ci/release .ci/simulator
+        run: tools/ci/release_extras.sh upload "$GITHUB_REF_NAME" .ci/simulator

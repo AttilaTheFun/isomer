@@ -30,7 +30,13 @@ swift_library(
         # are the Mac's own on a Mac, Isomer's on Linux (a container's
         # host), as the Linux SwiftUI has them.
         "//frameworks:for_core",
-    ],
+    ] + select({
+        # ImageIO: the core's Image(_ cgImage:) imports it wherever it can,
+        # and a build beside (the Linux Storybook) leaves the package's
+        # module where this one finds it; linked, then, not just seen.
+        "@platforms//os:linux": ["//linux/libraries/image_io"],
+        "//conditions:default": [],
+    }),
     plugins = SWIFT_UI_MACROS_PLUGINS,
 )
 

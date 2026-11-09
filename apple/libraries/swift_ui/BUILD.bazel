@@ -24,6 +24,9 @@ swift_library(
     ],
     module_name = "Isomer",
     deps = [
+        # With --@isomer//drive:headful, the accessibility driver an app
+        # dials out with (ISO_DRIVER); nothing otherwise.
+        "//drive:headful_apple_driver",
         "//shared:map_engine_apple",
         "//swift_ffi/swift_ffi",
     ],

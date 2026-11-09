@@ -17,7 +17,19 @@
 // exceptions are printed either way. CHROME in the environment names Chrome
 // when `--chrome` doesn't. `--hold` keeps the last page open after its
 // picture, its console still printed, until the process is told to stop
-// (SIGTERM or SIGINT): a headful app a test drives, launched this way.
+// (SIGTERM or SIGINT): a headful app a test drives, launched this way. While
+// it holds, `--requests <dir>` takes a picture for each `<n>.request` file
+// that appears there (the file holds the picture's path; the request is
+// removed once the picture is written): a test's `picture`.
+//
+// For comparing two renderings of a site (the web's DOM renderer against
+// React's, story by story): `--dom` also writes each page's DOM beside its
+// picture (<out>.dom.txt: elements with their attributes and inline style
+// declarations sorted, and their text, one a line, indented by depth), and
+// `--reference <dir>` compares each picture with the one of the same name
+// there, in Chrome's own canvas, printing how many pixels differ
+// ("browser_check: <name>: N pixels differ"; a different size counts every
+// pixel) and writing <out>.diff.txt with the count. Neither fails the run.
 import Foundation
 #if canImport(Glibc)
 import Glibc
@@ -36,6 +48,9 @@ struct Options {
     var flags: [String] = []
     var allowErrors = false
     var hold = false
+    var requests = ""
+    var dom = false
+    var reference = ""
     var pages: [(path: String, out: String)] = []
 
     static func parse(_ arguments: [String]) -> Options {
@@ -60,6 +75,9 @@ struct Options {
             case "--settle": options.settle = Double(value(argument)) ?? options.settle
             case "--allow-errors": options.allowErrors = true
             case "--hold": options.hold = true
+            case "--requests": options.requests = value(argument)
+            case "--dom": options.dom = true
+            case "--reference": options.reference = value(argument)
             case "--page":
                 let page = value(argument)
                 guard let equals = page.lastIndex(of: "=") else { fail("--page wants <path>=<out.png>: \(page)") }
@@ -378,6 +396,77 @@ func drainConsole(_ name: String) -> [String] {
     return errors
 }
 
+/// The page's DOM as text, one line an element or text: the tag, its
+/// attributes sorted (the inline style apart, its declarations sorted), then
+/// its children indented. Scripts and the injected stylesheets' text are
+/// left out; what differs between two renderers of one tree shows as a line.
+let domDump = #"""
+(() => {
+  const out = [];
+  const walk = (node, depth) => {
+    const pad = "  ".repeat(depth);
+    if (node.nodeType === 3) {
+      const text = node.textContent.replace(/\s+/g, " ").trim();
+      if (text) out.push(pad + JSON.stringify(text));
+      return;
+    }
+    if (node.nodeType !== 1) return;
+    const tag = node.tagName.toLowerCase();
+    if (tag === "script" || tag === "style") { out.push(pad + "<" + tag + ">"); return; }
+    const attributes = [...node.attributes].filter(a => a.name !== "style")
+      .map(a => a.name + "=" + JSON.stringify(a.value)).sort();
+    const style = node.getAttribute("style");
+    if (style) {
+      const declarations = [];
+      for (let i = 0; i < node.style.length; i++) {
+        const name = node.style[i];
+        declarations.push(name + ": " + node.style.getPropertyValue(name));
+      }
+      attributes.push("style={" + declarations.sort().join("; ") + "}");
+    }
+    out.push(pad + "<" + tag + (attributes.length ? " " + attributes.join(" ") : "") + ">");
+    for (const child of node.childNodes) walk(child, depth + 1);
+  };
+  walk(document.body, 0);
+  return out.join("\n") + "\n";
+})()
+"""#
+
+/// How many pixels of two PNGs differ, counted in the page's canvas (no PNG
+/// decoder here off Apple's platforms); every pixel of the larger when their
+/// sizes differ.
+func differingPixels(_ a: Data, _ b: Data, session: String) -> Int? {
+    let expression = """
+    (async () => {
+      const load = (b64) => new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = reject;
+        image.src = "data:image/png;base64," + b64;
+      });
+      const [a, b] = await Promise.all([load("\(a.base64EncodedString())"), load("\(b.base64EncodedString())")]);
+      if (a.width !== b.width || a.height !== b.height) return Math.max(a.width * a.height, b.width * b.height);
+      const pixels = (image) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = image.width;
+        canvas.height = image.height;
+        const context = canvas.getContext("2d");
+        context.drawImage(image, 0, 0);
+        return context.getImageData(0, 0, image.width, image.height).data;
+      };
+      const pa = pixels(a), pb = pixels(b);
+      let changed = 0;
+      for (let i = 0; i < pa.length; i += 4) {
+        if (pa[i] !== pb[i] || pa[i + 1] !== pb[i + 1] || pa[i + 2] !== pb[i + 2] || pa[i + 3] !== pb[i + 3]) changed++;
+      }
+      return changed;
+    })()
+    """
+    let result = chrome.send("Runtime.evaluate", ["expression": expression, "awaitPromise": true, "returnByValue": true],
+                             session: session, timeout: 60)
+    return ((result?["result"] as? [String: Any])?["value"] as? NSNumber)?.intValue
+}
+
 for page in options.pages {
     let url = "http://127.0.0.1:\(server.port)/" + page.path.drop(while: { $0 == "/" })
     let name = URL(fileURLWithPath: page.out).deletingPathExtension().lastPathComponent
@@ -400,8 +489,26 @@ for page in options.pages {
         let out = URL(fileURLWithPath: page.out)
         try? FileManager.default.createDirectory(at: out.deletingLastPathComponent(), withIntermediateDirectories: true)
         do { try data.write(to: out) } catch { failures.append("\(name): \(error)") }
+        if !options.reference.isEmpty {
+            let reference = URL(fileURLWithPath: options.reference).appendingPathComponent(out.lastPathComponent)
+            if let other = try? Data(contentsOf: reference) {
+                let changed = differingPixels(data, other, session: session)
+                print("browser_check: \(name): \(changed.map(String.init) ?? "?") pixels differ")
+                try? Data("\(changed.map(String.init) ?? "?")\n".utf8).write(to: out.appendingPathExtension("diff.txt"))
+            } else {
+                print("browser_check: \(name): no reference \(reference.path)")
+            }
+        }
     } else {
         failures.append("\(name): no picture")
+    }
+    if options.dom {
+        let result = chrome.send("Runtime.evaluate", ["expression": domDump, "returnByValue": true], session: session)
+        if let text = (result?["result"] as? [String: Any])?["value"] as? String {
+            try? Data(text.utf8).write(to: URL(fileURLWithPath: page.out).appendingPathExtension("dom.txt"))
+        } else {
+            print("browser_check: \(name): no DOM")
+        }
     }
     let errors = drainConsole(name)
     let counted = errors.filter { options.allowErrors ? $0.hasPrefix("exception") : true }
@@ -412,6 +519,19 @@ if options.hold, let last = options.pages.last {
     log("\(name): held open until stopped")
     while Held.stopping == 0 {
         usleep(200_000)
+        // A test's pictures, as asked.
+        if !options.requests.isEmpty,
+           let names = try? FileManager.default.contentsOfDirectory(atPath: options.requests) {
+            for request in names.sorted() where request.hasSuffix(".request") {
+                let path = options.requests + "/" + request
+                guard let target = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
+                if let data = (chrome.send("Page.captureScreenshot", ["format": "png"], session: session)?["data"] as? String)
+                    .flatMap({ Data(base64Encoded: $0) }) {
+                    try? data.write(to: URL(fileURLWithPath: target.trimmingCharacters(in: .whitespacesAndNewlines)))
+                }
+                try? FileManager.default.removeItem(atPath: path)
+            }
+        }
         let errors = drainConsole(name)
         failures += errors.filter { options.allowErrors ? $0.hasPrefix("exception") : true }.map { "\(name): \($0)" }
     }

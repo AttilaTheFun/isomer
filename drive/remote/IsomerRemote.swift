@@ -29,6 +29,11 @@ public enum IsomerRemote {
     }
 
     public static func endpoint(_ url: String) throws -> Endpoint {
+        #if os(Windows)
+        if url.hasPrefix("unix:") || url.hasPrefix("exec:") {
+            throw IsomerCallError(.unimplemented, "no unix: or exec: transport on Windows (grpc, grpcs or ws)")
+        }
+        #else
         if url.hasPrefix("unix:") {
             return Endpoint(connection: IsomerProcessConnection(.unixSocket(String(url.dropFirst("unix:".count)))), metadata: [:])
         }
@@ -38,6 +43,7 @@ public enum IsomerRemote {
             let path = parts.removeFirst()
             return Endpoint(connection: IsomerProcessConnection(.executable(path, arguments: parts, environment: [:])), metadata: [:])
         }
+        #endif
         guard let components = URLComponents(string: url), let scheme = components.scheme, let host = components.host else {
             throw IsomerCallError(.invalidArgument, "not an app's URL: \(url)")
         }

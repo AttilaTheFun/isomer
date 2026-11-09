@@ -147,7 +147,10 @@ def main():
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         port = None
-        for _ in range(50):
+        page = None
+        # Up to a minute for Chrome to come up: a fresh runner's first start
+        # can take more than the fifteen seconds once allowed.
+        for _ in range(200):
             try:
                 if port is None:
                     port = int(open(active_port).read().split()[0])
@@ -157,6 +160,8 @@ def main():
                 break
             except Exception:
                 time.sleep(0.3)
+        if page is None:
+            sys.exit(f"cdp.py: Chrome ({CHROME}) gave no page to drive within a minute")
         ws = WS(page["webSocketDebuggerUrl"])
         ws.send("Page.enable")
         if os.environ.get("ISO_CDP_CONSOLE"):

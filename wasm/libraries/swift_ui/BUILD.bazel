@@ -174,6 +174,7 @@ exports_files([
     "runtime/flat_tree.js",
     "runtime/hot_host.js",
     "runtime/react_renderer.js",
+    "runtime/render_style.js",
     "runtime/react_embed.js",
     "runtime/raster.js",
     "runtime/remote.js",

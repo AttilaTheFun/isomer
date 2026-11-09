@@ -138,6 +138,7 @@ private func drawnSubtree(
     if node.expandsHeight { subtree.expandsHeight = true }
     if node.opacity != 1 { subtree.opacity *= node.opacity }
     if let identity = node.identityPath { subtree.identityPath = identity }
+    subtree.semanticNode = node
     return subtree
 }
 

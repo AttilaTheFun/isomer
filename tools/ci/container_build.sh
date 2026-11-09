@@ -84,12 +84,16 @@ if [ -z "$host" ] && [ -z "$inside" ]; then
 fi
 [ -n "$host" ] || { echo "container_build.sh: no host for OS Server's files: set OSS_FILES_HOST (or OSS_SERVERS)" >&2; exit 1; }
 
-# The placeholders in MODULE.bazel, to this Mac's OS Server.
+# The placeholders in MODULE.bazel, to this Mac's OS Server; and GitHub's
+# downloads tried at GitHub, then at Bazel's mirror (GitHub's release
+# downloads have failed with 504s for hours).
 mkdir -p "$ROOT/.ci"
 cat > "$ROOT/.ci/downloader.cfg" <<EOF
 rewrite apple-sdks\.invalid/.* http://$host:7490/files/sha256/$SDK_SHA256
 rewrite ported-tools\.invalid/sha256/(.*) http://$host:7490/files/sha256/\$1
 rewrite windows-sdks\.invalid/sha256/(.*) http://$host:7490/files/sha256/\$1
+rewrite (github\.com/.*) \$1
+rewrite (github\.com/.*) mirror.bazel.build/\$1
 EOF
 
 mode=build
@@ -170,6 +174,10 @@ fi
 windows=(--config=windows_on_linux --platforms=@isomer//tools/platforms:windows_arm64)
 bazel build "${flags[@]}" "${windows[@]}" //windows/storybook_windows_application
 built_windows=$?
+# And the Windows Storybook with its driver built in (its headful build),
+# with the Storybook tests built for Windows to drive it there.
+windows_headful=(//windows/storybook_windows_application //headless/storybook_headless_application:storybook_headful_windows_test)
+bazel build "${flags[@]}" "${windows[@]}" --@isomer//drive:headful "${windows_headful[@]}" || built_windows=1
 # The tier-1 platforms run (the web here); the Linux tests are built but,
 # for now (2026-11-05), not run.
 bazel build "${flags[@]}" //tests/platforms:all
@@ -185,9 +193,11 @@ run_tests "${flags[@]}" --@isomer//headless $(log_of headless) --test_output=err
 headless=$?
 # Headful apps driven: the web Storybook with its driver built in, in
 # Chrome, dialling out: to the isomer CLI hub, and to the hub of the
-# Storybook tests run headful (the same tests as //headless).
+# Storybook tests run headful (the same tests as //headless); and the Linux
+# Storybook under Xvfb, the same tests again.
 run_tests "${flags[@]}" --@isomer//drive:headful $(log_of headful) --test_output=errors //remote:headful_web_test \
-    //headless/storybook_headless_application:storybook_headful_web_test
+    //headless/storybook_headless_application:storybook_headful_web_test \
+    //headless/storybook_headless_application:storybook_headful_linux_test
 headful=$?
 [ $headless -ne 0 ] || headless=$headful
 cd "$root"
@@ -224,6 +234,29 @@ done
 cp "$(bazel info "${flags[@]}" output_base)"/external/+swift_windows_sdk_repository+swift_windows_sdk/swift-windows-sdk/runtime/aarch64/*.dll \
     "$platforms/windows/" 2>/dev/null
 cp -R "$root/examples/storybook/assets" "$platforms/windows/assets"
+# The headful Windows Storybook and its tests, for the windows job on a
+# GitHub VM (tools/ci/hosted_windows_test.ps1): both executables, the Swift
+# runtime and XCTest DLLs, the assets and the launcher.
+mkdir -p "$platforms/windows-headful"
+# The test where its build put it, and the headful app beside it in that
+# configuration (the headful flag names its output folder).
+test_exe="$(find -L "$exec_root/bazel-out" -path "*/bin/headless/storybook_headless_application/storybook_headful_windows_test.exe" 2>/dev/null | head -1)"
+if [ -n "$test_exe" ]; then
+    cp "$test_exe" "$platforms/windows-headful/"
+    cp "${test_exe%%/bin/*}/bin/windows/storybook_windows_application/storybook_windows_application.exe" "$platforms/windows-headful/" ||
+        echo "no headful Windows app beside $test_exe"
+else
+    echo "no storybook_headful_windows_test.exe under $exec_root/bazel-out"
+fi
+sdk="$(bazel info "${flags[@]}" output_base)/external/+swift_windows_sdk_repository+swift_windows_sdk/swift-windows-sdk"
+cp "$sdk"/runtime/aarch64/*.dll "$platforms/windows-headful/" 2>/dev/null
+# XCTest and Testing for arm64, with every DLL beside them (_TestingInterop
+# and the rest they load): bin64a in the SDK (bin64 is x64, bin32 x86).
+find -L "$sdk/Windows.platform" -path "*/bin64a/*" \( -iname "XCTest.dll" -o -iname "Testing.dll" \) 2>/dev/null |
+    while read -r dll; do cp "$(dirname "$dll")"/*.dll "$platforms/windows-headful/"; done
+cp -R "$root/examples/storybook/assets" "$platforms/windows-headful/assets"
+cp "$root/drive/launchers/windows_launcher.sh" "$platforms/windows-headful/"
+ls -l "$platforms/windows-headful"
 # The Android test APK for x86_64 too (ISOMER_ANDROID_X86_64), for the
 # x86_64 emulator on the GitHub runner (tools/ci/hosted_android_test.sh).
 built_x86=0
@@ -239,8 +272,29 @@ if [ -n "${ISOMER_ANDROID_X86_64:-}" ]; then
         built_x86=1
     fi
 fi
+# The same apps with their drivers built in (--@isomer//drive:headful), for
+# the Storybook tests the GUI jobs run headful on GitHub VMs
+# (tools/ci/hosted_headful_test.sh): the iPhone simulator app, the Mac app,
+# and (ISOMER_ANDROID_X86_64) the x86_64 APK.
+headful=(--@isomer//drive:headful)
+mkdir -p "$platforms/headful"
+bazel build "${flags[@]}" "${headful[@]}" --ios_multi_cpus=sim_arm64 \
+    //apple/storybook_ios_application:storybook_ios_sim_application //apple/storybook_macos_application || built_x86=1
+for f in $(files "${headful[@]}" --ios_multi_cpus=sim_arm64 //apple/storybook_ios_application:storybook_ios_sim_application) \
+         $(files "${headful[@]}" //apple/storybook_macos_application); do
+    case "$f" in *.ipa | *.zip) cp "$exec_root/$f" "$platforms/headful/" ;; esac
+done
+if [ -n "${ISOMER_ANDROID_X86_64:-}" ]; then
+    if bazel build "${flags[@]}" "${headful[@]}" "${x86[@]}" "$android"; then
+        for f in $(files "${headful[@]}" "${x86[@]}" "$android"); do
+            case "$f" in *_unsigned.apk) ;; *.apk) cp "$exec_root/$f" "$platforms/headful/storybook-x86_64.apk" ;; esac
+        done
+    else
+        built_x86=1
+    fi
+fi
 chmod -R a+rwX "$platforms"
-ls -l "$platforms"
+ls -l "$platforms" "$platforms/headful"
 for result in $built $built_windows $built_tests $tested_here $headless $built_gl $checked $built_x86; do [ "$result" -ne 0 ] && exit "$result"; done
 exit 0
 '

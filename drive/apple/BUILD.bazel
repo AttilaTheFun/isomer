@@ -1,0 +1,36 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The driver of an app on Apple's SwiftUI (AccessibilityDriver.swift; iOS's
+# UIKitAccessibility.swift, the Mac's AXClientAccessibility.swift): its
+# accessibility tree read and used in process, dialling out (ISO_DRIVER) as
+# the web's and Android's drivers do. Linked into an Apple app by
+# @isomer//apple/libraries/swift_ui with --@isomer//drive:headful
+# (//drive:headful_apple_driver picks it), started by the constructor in
+# iso_apple_drive_attach.c: the app calls nothing.
+swift_library(
+    name = "apple",
+    srcs = [
+        "AXClientAccessibility.swift",
+        "AccessibilityDriver.swift",
+        "UIKitAccessibility.swift",
+    ],
+    alwayslink = True,
+    module_name = "IsomerAppleDriver",
+    deps = [
+        ":attach",
+        "//drive/serving",
+        "//shared/wire/swift",
+    ],
+)
+
+cc_library(
+    name = "attach",
+    srcs = ["iso_apple_drive_attach.c"],
+    alwayslink = True,
+)
+
+# Its absence: nothing linked.
+cc_library(name = "none")

@@ -24,3 +24,13 @@ alias(
         "//conditions:default": "//drive/headful:none",
     }),
 )
+
+# What an app on Apple's SwiftUI links (@isomer//apple/libraries/swift_ui):
+# the accessibility driver, or nothing.
+alias(
+    name = "headful_apple_driver",
+    actual = select({
+        ":headful_on": "//drive/apple",
+        "//conditions:default": "//drive/apple:none",
+    }),
+)

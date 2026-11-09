@@ -14,6 +14,7 @@ assemble_directory(
         "//wasm/libraries/swift_ui:runtime/imported_files.js": "runtime/imported_files.js",
         "//wasm/libraries/swift_ui:runtime/raster.js": "runtime/raster.js",
         "//wasm/libraries/swift_ui:runtime/react_renderer.js": "runtime/react_renderer.js",
+        "//wasm/libraries/swift_ui:runtime/render_style.js": "runtime/render_style.js",
         "//wasm/libraries/swift_ui:runtime/remote.js": "runtime/remote.js",
         "//wasm/libraries/swift_ui:runtime/session_messages.js": "runtime/session_messages.js",
         "//wasm/libraries/swift_ui:runtime/symbols.js": "runtime/symbols.js",

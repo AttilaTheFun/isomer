@@ -125,6 +125,12 @@ package final class FlatTreeEncoder {
 
     public init() {}
 
+    /// Encode a drawn subtree as the semantic host view it replaced (its
+    /// `semanticNode`): the tree as the app means it, whatever the renderer
+    /// drew, for a driver reading the screen (drive/driver). Off for
+    /// renderers.
+    package var semantic = false
+
     /// Drop the retained tree so the next `encodePatch` re-sends the full tree as
     /// a single root op (e.g. after the consumer resets, or a bundle reload).
     public func resetRetainedTree() {
@@ -357,6 +363,7 @@ package final class FlatTreeEncoder {
     /// `anchor` is the nearest build path above, which children's keys are
     /// written relative to.
     private func flatten(_ node: RenderNode, ident: String, anchor: String?) -> FlatNode {
+        if semantic, let original = node.semanticNode { return flatten(original, ident: ident, anchor: anchor) }
         guard node.isReusedSubtreeRoot else { return flattenNode(node, ident: ident, anchor: anchor) }
         let id = ObjectIdentifier(node)
         if let entry = flattenCache[id], entry.ident == ident, entry.anchor == anchor, entry.stillLive {

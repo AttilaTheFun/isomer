@@ -37,16 +37,38 @@ swift_test(
     ],
 )
 
-# The same tests against the web Storybook headful: drawn by the React
-# renderer in headless Chrome (web_launcher.sh), the driver built into the
-# page, which dials out to the test's hub. In an invocation of its own, with
-# the driver's flag (manual: //headless/... takes --@isomer//headless; the
-# two flags in one build shadow swift-crypto's modules, AGENTS.md):
+# The same tests against the Storybook headful: each app built with
+# --@isomer//drive:headful (its driver dials out to the test's hub), started
+# by isomer's launcher for its platform (@isomer//drive/launchers), which
+# also takes the tests' pictures. In invocations of their own, with the
+# driver's flag (manual: //headless/... takes --@isomer//headless; the two
+# flags in one build shadow swift-crypto's modules, AGENTS.md).
 #
-#   bazel test --@isomer//drive:headful //headless/storybook_headless_application:storybook_headful_web_test
+# The web's and Linux's run where they are built (CI's container: headless
+# Chrome, Xvfb):
+#
+#   bazel test --@isomer//drive:headful :storybook_headful_web_test :storybook_headful_linux_test
+#
+# The iPhone's, the Mac's and Android's where the app runs, which the run's
+# --test_env names (GitHub's VMs in a run by hand, tools/ci/hosted_headful_test.sh):
+#
+#   bazel test --test_env=ISOMER_SIMULATOR=<booted udid> :storybook_headful_ios_test
+#   bazel test --test_env=ISOMER_MAC_APP=<Storybook.app> :storybook_headful_macos_test
+#   bazel test --test_env=ANDROID_SERIAL=<serial> --test_env=ADB=<adb> :storybook_headful_android_test
+#
+# Windows': the test cross-built in CI's container for Windows on Arm
+# (--config=windows_on_linux, which takes Bazel's legacy test toolchain:
+# no execution platform there can run a Windows test), with the app, then
+# run on GitHub's windows-11-arm (tools/ci/hosted_windows_test.ps1), which
+# names the app and Git's bash:
+#
+#   storybook_headful_windows_test.exe, with ISOMER_HEADFUL_LAUNCHER=<windows_launcher.sh>
+#   ISOMER_WINDOWS_APP=<storybook_windows_application.exe> ISOMER_BASH=<bash.exe>
+_STORYBOOK = "com.LoganShire.IsomerStorybook"
+
 _HEADFUL_WEB_ENV = {
     "ISOMER_BROWSER_CHECK": "$(rootpath @isomer//tools/testing/browser_check)",
-    "ISOMER_HEADFUL_LAUNCHER": "$(rootpath web_launcher.sh)",
+    "ISOMER_HEADFUL_LAUNCHER": "$(rootpath @isomer//drive/launchers:web_launcher.sh)",
     "ISOMER_WEB_SITE": "$(rootpath //web/storybook_web_application:storybook_web_application_site)",
 }
 
@@ -55,8 +77,9 @@ swift_test(
     size = "medium",
     srcs = ["StorybookHeadlessTests.swift"],
     data = [
-        "web_launcher.sh",
         "//web/storybook_web_application:storybook_web_application_site",
+        "@isomer//drive/launchers:web",
+        "@isomer//drive/launchers:web_launcher.sh",
         "@isomer//tools/testing/browser_check",
     ] + select({
         "//tests/platforms:linux_arm64": [
@@ -83,6 +106,96 @@ swift_test(
         "manual",
         "no-sandbox",
     ],
+    deps = [
+        "@isomer//headless/isomer_headless",
+        "@isomer//shared/wire/swift",
+    ],
+)
+
+swift_test(
+    name = "storybook_headful_linux_test",
+    size = "medium",
+    srcs = ["StorybookHeadlessTests.swift"],
+    data = [
+        "//linux/storybook_linux_application",
+        "@isomer//drive/launchers:linux",
+        "@isomer//drive/launchers:linux_launcher.sh",
+    ],
+    env = {
+        "ISOMER_HEADFUL_LAUNCHER": "$(rootpath @isomer//drive/launchers:linux_launcher.sh)",
+        "ISOMER_LINUX_APP": "$(rootpath //linux/storybook_linux_application)",
+    },
+    module_name = "StorybookHeadfulLinuxTests",
+    tags = [
+        "manual",
+        "no-sandbox",
+    ],
+    target_compatible_with = ["@platforms//os:linux"],
+    deps = [
+        "@isomer//headless/isomer_headless",
+        "@isomer//shared/wire/swift",
+    ],
+)
+
+[
+    swift_test(
+        name = "storybook_headful_%s_test" % platform,
+        size = "medium",
+        srcs = ["StorybookHeadlessTests.swift"],
+        data = [
+            "@isomer//drive/launchers:%s" % platform,
+            "@isomer//drive/launchers:%s_launcher.sh" % platform,
+        ],
+        env = {
+            "ISOMER_ANDROID_PACKAGE": _STORYBOOK,
+            "ISOMER_BUNDLE_ID": _STORYBOOK,
+            "ISOMER_HEADFUL_LAUNCHER": "$(rootpath @isomer//drive/launchers:%s_launcher.sh)" % platform,
+        },
+        module_name = "StorybookHeadful%sTests" % platform.capitalize(),
+        tags = [
+            "manual",
+            "no-sandbox",
+        ],
+        deps = [
+            "@isomer//headless/isomer_headless",
+            "@isomer//shared/wire/swift",
+        ],
+    )
+    for platform in ["ios", "macos", "android"]
+]
+
+# Its tests listed by hand rather than discovered: rules_swift's discovery
+# extracts a symbol graph, which the Windows cross-build can't (the
+# extractor isn't given the Windows SDK's headers), so XCTMain runs what
+# the test file's `func test…()` lines name.
+genrule(
+    name = "windows_test_main",
+    srcs = ["StorybookHeadlessTests.swift"],
+    outs = ["windows_test_main/main.swift"],
+    cmd = """
+{
+  echo 'import XCTest'
+  echo 'extension StorybookHeadlessTests {'
+  echo '    static let allTests: [(String, (StorybookHeadlessTests) -> () throws -> Void)] = ['
+  sed -n 's/^[[:space:]]*func \\(test[A-Za-z0-9_]*\\)() throws {.*/        ("\\1", \\1),/p' $<
+  echo '    ]'
+  echo '}'
+  echo 'XCTMain([testCase(StorybookHeadlessTests.allTests)])'
+} > $@
+""",
+)
+
+swift_test(
+    name = "storybook_headful_windows_test",
+    size = "medium",
+    srcs = [
+        "StorybookHeadlessTests.swift",
+        ":windows_test_main",
+    ],
+    discover_tests = False,
+    module_name = "StorybookHeadfulWindowsTests",
+    tags = ["manual"],
+    target_compatible_with = ["@platforms//os:windows"],
     deps = [
         "@isomer//headless/isomer_headless",
         "@isomer//shared/wire/swift",

@@ -13,9 +13,16 @@ swift_library(
     module_name = "IsomerHeadfulDriver",
     deps = [
         "//:foundation",
+        "//:os_log",
         "//drive/driver",
         "//drive/serving",
-    ],
+    ] + select({
+        # Linux and Windows dial out through SwiftNIO's WebSockets
+        # (IsomerWebSocketTransport): URLSession there may have none.
+        "@platforms//os:linux": ["//drive/websocket"],
+        "@platforms//os:windows": ["//drive/websocket"],
+        "//conditions:default": [],
+    }),
 )
 
 # Its absence: `iso_drive_attach` a no-op.

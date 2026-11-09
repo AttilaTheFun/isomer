@@ -76,7 +76,7 @@ public struct IsomerCallContext: Sendable {
 }
 
 /// Why a call failed, as gRPC's status codes name it.
-public struct IsomerCallError: Error, CustomStringConvertible, Sendable {
+public struct IsomerCallError: LocalizedError, CustomStringConvertible, Sendable {
     public enum Code: String, Sendable {
         case unimplemented, unauthenticated, invalidArgument, notFound, unavailable, `internal`
     }
@@ -90,6 +90,7 @@ public struct IsomerCallError: Error, CustomStringConvertible, Sendable {
     }
 
     public var description: String { "\(code.rawValue): \(message)" }
+    public var errorDescription: String? { description }
 }
 
 /// Messages into a call: a plain throwing stream (not `some AsyncSequence<…>`,

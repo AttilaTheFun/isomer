@@ -332,6 +332,7 @@ enum WindowsApp {
         }
         let host = windowsMakeHost()
         MainActor.assumeIsolated { Runtime.shared.start(host: host, width: width, height: height) }
+        _isoDriveAttach("Windows", "DirectX")
         var presentPaces = false
         #if canImport(SwiftGPU)
         presentPaces = windowsGPUSurface != nil
@@ -390,3 +391,9 @@ struct WindowsPlatformBridge: PlatformBridge {
         }
     }
 }
+
+/// The headful driver's start (drive/headful): dialling out when the app was
+/// launched with ISO_DRIVER, in a build with --@isomer//drive:headful; a no-op
+/// otherwise.
+@_silgen_name("iso_drive_attach")
+func _isoDriveAttach(_ platform: String, _ renderer: String)

@@ -347,6 +347,9 @@ public final class IsomerAppDriver {
     func screen() -> DriverScreen? {
         guard let tree = Runtime.shared.retainedTree else { return nil }
         encoder = FlatTreeEncoder()
+        // The tree as the app means it: a self-drawing renderer's drawn
+        // chrome read as the toggle, picker or bar it stands for.
+        encoder.semantic = true
         guard let root = try? IsoFlat_Node(treeBytes: encoder.encode(root: tree)) else { return nil }
         Runtime.shared.installTreeHandlers(encoder.handlers)
         return DriverScreen(root, compact: Runtime.shared.compactWidth)
@@ -375,12 +378,44 @@ public final class IsomerAppDriver {
         return current
     }
 
+    /// A target on no row built: each lazy list's rows built a page at a
+    /// time, as though its host scrolled there, until a screen has it (a
+    /// person scrolls to it; the runtime builds a list's rows near those
+    /// shown). Gives that screen and what puts the list back as its host
+    /// last showed it.
+    func reveal(_ target: String) async -> (screen: DriverScreen, restore: () -> Void)? {
+        let runtime = Runtime.shared
+        let page = 20
+        for (list, rows, shown) in runtime.listsWithUnbuiltRows {
+            var first = 0
+            while first < rows {
+                runtime.showListRows(list, first...min(rows - 1, first + page - 1))
+                if let screen = await settle(), screen.element(target) != nil {
+                    return (screen, { runtime.showListRows(list, shown) })
+                }
+                first += page
+            }
+            runtime.showListRows(list, shown)
+        }
+        return nil
+    }
+
     /// Runs one command and answers it.
     public func handle(_ command: Wire_Command) async -> Wire_Answer {
         var error: String?
         let target = command.target
-        let before = await settle()
+        var before = await settle()
         let runtime = Runtime.shared
+        // A target by label or identifier on no row built is looked for down
+        // the lists (a name, `button-3`, is this screen's own).
+        var restore: (() -> Void)?
+        if ["tap", "type", "set", "select", "inspect"].contains(command.cmd), !target.isEmpty,
+           DriverScreen.parseName(target) == nil, let screen = before, screen.element(target) == nil,
+           let (revealed, putBack) = await reveal(target) {
+            before = revealed
+            restore = putBack
+        }
+        defer { restore?() }
         switch command.cmd {
         case "ls", "quit":
             break
@@ -477,6 +512,9 @@ public final class IsomerAppDriver {
         default:
             error = "unknown command: \(command.cmd)"
         }
+        // The list as its host shows it again, for the answer's screen.
+        restore?()
+        restore = nil
         runtime.requestFrame()
         var answer = Wire_Answer()
         answer.ok = error == nil

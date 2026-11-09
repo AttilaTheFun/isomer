@@ -88,9 +88,10 @@ A headful app can't usually be reached (a simulator, an emulator, a phone, a
 browser tab), so it dials out instead. Built with `--@isomer//drive:headful`
 (off by default, and never in a release: such an app obeys whoever its
 launch names) and launched with `ISO_DRIVER=ws://host:port`, it connects to a
-hub and is driven over that connection, its screen read through its runtime
-as the headless host's is (the web's and Android's hosts; the iPhone and the
-Mac next, docs/drive_plan.md). The CLI is a hub:
+hub and is driven over that connection: an Isomer app's screen read through
+its runtime as the headless host's is (the web's, Android's, Linux's and
+Windows' hosts), an app on Apple's SwiftUI through its accessibility tree
+(below). The CLI is a hub:
 
 ```sh
 isomer hub --ws 7710                # a token with --token when not on the loopback
@@ -102,6 +103,19 @@ isomer --url ws://127.0.0.1:7710 ls
 With several apps attached, name one: `?target=<name>` (gRPC: the URL's
 path), the name being the app's or its `ISO_DRIVER_NAME`. A headless app
 dials out too (`ISO_DRIVER`), which is how the tests cover the hub on Linux.
+
+**Apps on Apple's SwiftUI** (the iPhone and Mac Storybooks, and any app on
+Apple's frameworks): with the flag, @isomer//apple/libraries/swift_ui links
+drive/apple, which a constructor starts (the app calls nothing). It answers
+the same commands from the app's accessibility tree, with the same names:
+on iOS it walks UIKit's accessibility containers once the app's
+accessibility is on, scrolls to what is off screen as a person would, waits
+out navigation transitions, and taps what takes no activation (a list's
+cell, a control) as a tap would; on the Mac it asks its own process as an
+accessibility client would (AXUIElement), on the main thread. A list's row
+of texts is a button, as Isomer's renderers give it. Launch with simctl's
+`SIMCTL_CHILD_ISO_DRIVER=…`, or a Mac app with `ISO_DRIVER` in its
+environment.
 
 ## Tests
 
@@ -121,11 +135,15 @@ try app.wait(for: "Taps: 1")
 test: the test holds a hub of its own (IsomerServing's `IsomerHub`, on a
 loopback WebSocket), and the launcher, run as `<launcher> <hub URL> <name>
 [KEY=VALUE…]`, starts the app dialling out to it (ISO_DRIVER,
-ISO_DRIVER_NAME) and ends it when stopped. A launcher a platform: the web's
-is the examples' headless/storybook_headless_application/web_launcher.sh
-(headless Chrome under browser_check `--hold`); Android's (an emulator's `am
-start` with the extras, the hub's port reversed with `adb reverse`) and the
-iPhone's come next.
+ISO_DRIVER_NAME) and ends it when stopped. A launcher a platform, beside the
+Storybook's tests (examples' headless/storybook_headless_application): the
+web's (headless Chrome under browser_check `--hold`), the iPhone's (simctl
+on a booted simulator), the Mac's, Android's (`am start` with the extras,
+the hub's port reversed with `adb reverse`) and Linux's (under Xvfb).
+:storybook_headful_{web,linux}_test run in CI's container;
+:storybook_headful_{ios,macos,android}_test on GitHub's macOS and Ubuntu VMs
+in a run by hand (tools/ci/hosted_headful_test.sh, the apps the container's
+with their drivers in, the test built there).
 
 The examples' //headless tests drive the Storybook built headless, and
 :storybook_headful_web_test runs the same source against the web Storybook

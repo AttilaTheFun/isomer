@@ -4,7 +4,9 @@
 // one call: an `Wire_CallHeader` first (the method, its metadata), then the
 // call's messages, each length-delimited (shared/wire/swift/Delimited.swift).
 
-#if !os(WASI)
+// Not on WASI (no processes or sockets) nor Windows (no Unix sockets or
+// POSIX descriptors as written here): IsomerRemote says so for its URLs.
+#if !os(WASI) && !os(Windows)
 
 import Foundation
 import IsomerServing

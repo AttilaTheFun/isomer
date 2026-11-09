@@ -331,17 +331,20 @@ and a draft marked pre-release), `run: release` (verify and the proof, then
 the Alphas and the draft proposed for release, tools/ci/draft_release.sh).
 Drafts are CI's; an agent proposes by running the workflow on main, never
 by making a draft or a tag. The proof is the full set by default (every
-story; `quick` the core set: a story from each area), each picture compared with the previous release's (never the
-change's own). To bisect
-a regression, prove earlier commits after the fact: push a branch at the
-commit and run the workflow on that branch (its proof is found by commit,
-and compared with the release before it). A release is cut only from a
-main commit whose proof is in by tools/ci/proof_compare.swift, and
-uploaded as the `proof` artifact Reviews reads (proof.json, screens/,
-before/, diffs/; 90 days). What a platform draws differently from run to run is held still
-at its source (proof.py: the iPhone's status bar, Android's cropped off,
-light appearance, window crops, the Mac's caret); only what can't be is listed, with why, in
-tools/ci/proof_ignore.txt. A release is approved by publishing its draft
+story; `quick` the core set: a story from each area). The proof is in
+Reviews' format 2 (the private AttilaTheFun/reviews' docs/PROOF_FORMAT.md,
+tools/ci/proof_write.swift, 0.48): proof.json and every picture an item
+under an id stable from release to release (ios/phone/<story>,
+ios/phone-isomer/<story>, macos/window/<story>, android/phone/<story>,
+web/desktop/<story>; the parity of the iPhone Storybook on Isomer's
+frameworks with Apple's a tests item, tests/parity-ios), the run's `proof`
+artifact, and proof.zip on a release's draft. CI compares nothing: Reviews
+compares a release's proof with the release before it, item by id. To
+bisect a regression, prove earlier commits after the fact: push a branch at
+the commit and run the workflow on that branch. What a platform draws
+differently from run to run is held still at its source (proof.py: the
+iPhone's status bar, Android's cropped off, light appearance, window crops,
+the Mac's caret). A release is approved by publishing its draft
 in Reviews (which makes its tag): the Build workflow's `release` job checks
 that its commit is main's and was verified (tools/ci/verified.sh), then promotes that commit's iPhone and Mac Alphas to
 production on Applications Server (tools/ci/promote_from_ci.sh: nothing
@@ -350,9 +353,8 @@ and attaches the release's assets: the signed builds as Applications reads
 them (tools/ci/attach_release.sh, from the private AttilaTheFun/applications'
 docs/RELEASE_ASSETS.md: <App>-<version>-<platform>.<ext> and builds.json,
 replacing the proposal's Alphas of the same names; the Mac's disk image too),
-then (tools/ci/release_extras.sh) proof.tar.gz (the commit's proof, which
-the next release's proof takes as its baseline before any artifact) and the
-iPhone app for the simulator, beside isomer-site.tar.gz (the web Storybook,
+then (tools/ci/release_extras.sh) the iPhone app for the simulator, beside
+the proposal's proof.zip and isomer-site.tar.gz (the web Storybook,
 //web/storybook_web_application:isomer_site), attached to the draft for
 pages.yml. A proposal's draft carries its Alphas the same way (alpha's
 attach_release.sh). Every job runs in CI's Linux container but the GUI

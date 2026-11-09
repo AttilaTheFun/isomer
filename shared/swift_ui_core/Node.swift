@@ -294,6 +294,11 @@ package final class RenderNode {
     /// Structural identity (set for nodes with persistent state of their
     /// own, e.g. scroll offsets, text-field focus).
     var identityPath: String?
+    /// The semantic host view a drawn subtree replaced (ChromeExpansion.swift:
+    /// a toggle drawn as a track and a knob on the self-drawing path), for
+    /// what reads the tree as the app means it (drive/driver, through
+    /// FlatTreeEncoder's `semantic`).
+    package var semanticNode: RenderNode?
     /// The build path of the view this node came from (structural identity
     /// with `ForEach` ids in it — SwiftUI's view identity). Set by
     /// `buildNode` on the node a view returns, innermost first; nodes the

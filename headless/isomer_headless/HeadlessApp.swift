@@ -17,8 +17,13 @@
 // when stopped (`HeadlessApp(launcher:environment:)`).
 
 import Foundation
+// Not on Windows: the process transport (Unix sockets, POSIX descriptors)
+// and IsomerRemote (its gRPC brings swift-nio-ssl, which has no Windows).
+// A test there drives a headful app through a launcher alone.
+#if !os(Windows)
 import IsomerProcessTransport
 import IsomerRemote
+#endif
 import IsomerServing
 import IsomerWebSocketTransport
 import IsomerWire
@@ -101,12 +106,18 @@ public final class HeadlessApp: @unchecked Sendable {
     private var answers: IsomerInbound<Wire_Answer>.AsyncIterator
     /// What ends a headful app's launcher, when one started the app.
     private var launched: Process?
+    /// Where `picture` asks the launcher for a picture (its
+    /// ISOMER_LAUNCHER_REQUESTS).
+    private var requests: URL?
+    /// How many pictures this app has had asked of it.
+    private var asked = 0
 
     /// Starts `executable` (an app built with --@isomer//headless), the call
     /// on its standard input and output. `environment` adds to the process's
     /// own: the app's launch hooks (ISO_STORYBOOK_STORY…), ISO_HEADLESS_WIDTH
     /// and ISO_HEADLESS_HEIGHT (the window, 390 by 844 by default: a lazy
     /// list builds the rows that fit).
+    #if !os(Windows)
     public convenience init(executable: String, environment: [String: String] = [:]) throws {
         try self.init(connection: IsomerProcessConnection(.executable(executable, arguments: [], environment: environment)))
     }
@@ -117,6 +128,7 @@ public final class HeadlessApp: @unchecked Sendable {
         let endpoint = try IsomerRemote.endpoint(url)
         try self.init(connection: endpoint.connection, context: endpoint.context(token: token, metadata: metadata))
     }
+    #endif
 
     /// An app reached through any connection: one in this process
     /// (`IsomerLocalConnection`), a transport's.
@@ -142,8 +154,21 @@ public final class HeadlessApp: @unchecked Sendable {
         let hub = try HeadfulHub.shared()
         let name = HeadfulHub.nextName()
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: launcher)
-        process.arguments = [hub.url, name] + environment.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }
+        let arguments = [hub.url, name] + environment.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }
+        #if os(Windows)
+        // A launcher script through Git's bash (ISOMER_BASH, else Git for
+        // Windows' own), as Windows runs no script by its #! line.
+        let bash = ProcessInfo.processInfo.environment["ISOMER_BASH"] ?? #"C:\Program Files\Git\bin\bash.exe"#
+        process.executableURL = URL(fileURLWithPath: bash)
+        process.arguments = [Self.resolve(launcher)] + arguments
+        #else
+        process.executableURL = URL(fileURLWithPath: Self.resolve(launcher))
+        process.arguments = arguments
+        #endif
+        // Where the test asks the launcher for pictures (`picture`).
+        let requests = FileManager.default.temporaryDirectory.appendingPathComponent("isomer-requests-\(name)")
+        try? FileManager.default.createDirectory(at: requests, withIntermediateDirectories: true)
+        process.environment = ProcessInfo.processInfo.environment.merging(["ISOMER_LAUNCHER_REQUESTS": requests.path]) { $1 }
         try process.run()
         let attached = try Self.blocking { () async -> Bool in
             let deadline = Date().addingTimeInterval(timeout)
@@ -161,6 +186,7 @@ public final class HeadlessApp: @unchecked Sendable {
         }
         try self.init(connection: IsomerLocalConnection(hub.hub), context: IsomerCallContext(metadata: ["iso-target": name]))
         launched = process
+        self.requests = requests
     }
 
     deinit {
@@ -189,6 +215,72 @@ public final class HeadlessApp: @unchecked Sendable {
                                 screen: answer.hasScreen ? HeadlessScreen(answer.screen) : nil)
         }
         return answer.inspection
+    }
+
+    /// A launcher's path as a test names it: a relative one (a Bazel test's
+    /// `$(rootpath …)`, `../<repository>/…` for another module's) against
+    /// its runfiles' workspace, collapsed in the text, as `..` through the
+    /// runfiles' symlinks would land elsewhere.
+    static func resolve(_ path: String) -> String {
+        let environment = ProcessInfo.processInfo.environment
+        guard !path.hasPrefix("/"), let runfiles = environment["TEST_SRCDIR"] else { return path }
+        let workspace = environment["TEST_WORKSPACE"] ?? "_main"
+        return (URL(fileURLWithPath: runfiles).appendingPathComponent(workspace).appendingPathComponent(path)).standardized.path
+    }
+
+    /// A picture of the screen as it stands once settled, kept as a proof's
+    /// screen (docs/drive.md, "Pictures"): its id is
+    /// `<platform>/<device>/<name>` (`ios/phone/chat`), the platform the
+    /// app's, the device `device` or the platform's own (ios: phone, or
+    /// phone-landscape in a landscape window; macos, linux, windows: window;
+    /// android: phone; web: desktop). The launcher takes it (simctl, the
+    /// Mac's window, adb, Chrome) into ISOMER_PROOF (else the test's
+    /// outputs' proof folder), screens/<id>.png. An app built headless has
+    /// nothing to picture, nor has a launcher that takes no pictures (it
+    /// answers the request with none): nil.
+    @discardableResult
+    public func picture(_ name: String, device: String? = nil) throws -> String? {
+        guard let requests, let launched, launched.isRunning else { return nil }
+        let info = try self.info()
+        let platform = info.platform.lowercased()
+        let landscape = info.width > info.height
+        let device = device ?? {
+            switch platform {
+            case "ios": landscape ? "phone-landscape" : "phone"
+            case "android": "phone"
+            case "web": "desktop"
+            default: "window"
+            }
+        }()
+        let id = "\(platform)/\(device)/\(name)"
+        guard id.allSatisfy({ $0.isLowercase || $0.isNumber || "-./".contains($0) }) else {
+            throw HeadlessError(message: "\(id): a picture's id is lowercase letters, digits, - . and /", screen: nil)
+        }
+        let environment = ProcessInfo.processInfo.environment
+        let proof = environment["ISOMER_PROOF"].map(URL.init(fileURLWithPath:))
+            ?? environment["TEST_UNDECLARED_OUTPUTS_DIR"].map { URL(fileURLWithPath: $0).appendingPathComponent("proof") }
+            ?? FileManager.default.temporaryDirectory.appendingPathComponent("isomer-proof")
+        let file = proof.appendingPathComponent("screens/\(id).png")
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? FileManager.default.removeItem(at: file)
+        // The screen settled first; then the launcher's picture (a request
+        // naming the file, which it writes).
+        _ = try screen()
+        asked += 1
+        let request = requests.appendingPathComponent("\(asked).request")
+        try Data(file.path.utf8).write(to: request.appendingPathExtension("part"))
+        try FileManager.default.moveItem(at: request.appendingPathExtension("part"), to: request)
+        let deadline = Date().addingTimeInterval(60)
+        while Date() < deadline {
+            // Answered: the request gone, with its picture, or without one
+            // (a launcher that can't picture its platform: nil).
+            if !FileManager.default.fileExists(atPath: request.path) {
+                return FileManager.default.fileExists(atPath: file.path) ? id : nil
+            }
+            if !launched.isRunning { break }
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+        throw HeadlessError(message: "the launcher took no picture of \(id)", screen: nil)
     }
 
     /// Taps a button, found by its name, identifier, label or the text in it.
@@ -254,10 +346,17 @@ public final class HeadlessApp: @unchecked Sendable {
         let call = call
         try? Self.blocking { await call.finish() }
         if let launched, launched.isRunning {
-            launched.terminate()
-            let deadline = Date().addingTimeInterval(10)
-            while launched.isRunning, Date() < deadline { usleep(100_000) }
+            // A `stop` file beside the picture requests first: a launcher on
+            // Windows, which has no SIGTERM to trap, ends its app on seeing it.
+            if let requests { try? Data().write(to: requests.appendingPathComponent("stop")) }
+            var deadline = Date().addingTimeInterval(10)
+            while launched.isRunning, Date() < deadline { Thread.sleep(forTimeInterval: 0.1) }
+            if launched.isRunning { launched.terminate() }
+            deadline = Date().addingTimeInterval(10)
+            while launched.isRunning, Date() < deadline { Thread.sleep(forTimeInterval: 0.1) }
+            #if !os(Windows)
             if launched.isRunning { kill(launched.processIdentifier, SIGKILL) }
+            #endif
         }
         launched = nil
     }

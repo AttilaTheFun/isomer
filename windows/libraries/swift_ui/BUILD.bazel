@@ -90,6 +90,9 @@ swift_library(
         ":gpu_renderer",
         ":core",
         ":renderer",
+        # With --@isomer//drive:headful, the driver an app dials out with
+        # (ISO_DRIVER); a no-op otherwise.
+        "//drive:headful_driver",
         "//windows/libraries/image_io",
         "//shared/isomer_swift_ui",
         "//swift_gpu/windows:swift_gpu",
