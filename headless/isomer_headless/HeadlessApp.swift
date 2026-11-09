@@ -220,7 +220,8 @@ public final class HeadlessApp: @unchecked Sendable {
     /// android: phone; web: desktop). The launcher takes it (simctl, the
     /// Mac's window, adb, Chrome) into ISOMER_PROOF (else the test's
     /// outputs' proof folder), screens/<id>.png. An app built headless has
-    /// nothing to picture: nil.
+    /// nothing to picture, nor has a launcher that takes no pictures (it
+    /// answers the request with none): nil.
     @discardableResult
     public func picture(_ name: String, device: String? = nil) throws -> String? {
         guard let requests, let launched, launched.isRunning else { return nil }
@@ -255,7 +256,11 @@ public final class HeadlessApp: @unchecked Sendable {
         try FileManager.default.moveItem(at: request.appendingPathExtension("part"), to: request)
         let deadline = Date().addingTimeInterval(60)
         while Date() < deadline {
-            if FileManager.default.fileExists(atPath: file.path), !FileManager.default.fileExists(atPath: request.path) { return id }
+            // Answered: the request gone, with its picture, or without one
+            // (a launcher that can't picture its platform: nil).
+            if !FileManager.default.fileExists(atPath: request.path) {
+                return FileManager.default.fileExists(atPath: file.path) ? id : nil
+            }
             if !launched.isRunning { break }
             usleep(100_000)
         }

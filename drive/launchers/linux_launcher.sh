@@ -9,6 +9,7 @@
 #
 # From the test's environment: ISOMER_LINUX_APP, the app.
 set -uo pipefail
+. "$(dirname "$0")/requests.sh"
 url="${1:?usage: linux_launcher.sh <hub url> <name> [KEY=VALUE…]}"
 name="${2:?<name>}"
 shift 2
@@ -34,4 +35,8 @@ else
 fi
 env "${environment[@]}" "$app" > "${TEST_UNDECLARED_OUTPUTS_DIR:-/tmp}/$name.log" 2>&1 &
 pids+=($!)
-wait "${pids[-1]}"
+# Pictures asked for are answered with none, for now.
+none() { return 1; }
+serve_requests none &
+pids+=($!)
+wait "${pids[-2]}"

@@ -347,6 +347,9 @@ public final class IsomerAppDriver {
     func screen() -> DriverScreen? {
         guard let tree = Runtime.shared.retainedTree else { return nil }
         encoder = FlatTreeEncoder()
+        // The tree as the app means it: a self-drawing renderer's drawn
+        // chrome read as the toggle, picker or bar it stands for.
+        encoder.semantic = true
         guard let root = try? IsoFlat_Node(treeBytes: encoder.encode(root: tree)) else { return nil }
         Runtime.shared.installTreeHandlers(encoder.handlers)
         return DriverScreen(root, compact: Runtime.shared.compactWidth)
