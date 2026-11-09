@@ -22,10 +22,16 @@ final class StorybookHeadlessTests: XCTestCase {
         if let launcher = environment["ISOMER_HEADFUL_LAUNCHER"], !launcher.isEmpty {
             return try HeadlessApp(launcher: launcher, environment: launchEnvironment)
         }
+        #if os(Windows)
+        // Windows runs these headful alone (HeadlessApp starts no headless
+        // app there: no process transport).
+        throw XCTSkip("ISOMER_HEADFUL_LAUNCHER names no launcher")
+        #else
         let root = "\(environment["TEST_SRCDIR"] ?? "")/\(environment["TEST_WORKSPACE"] ?? "_main")"
         return try HeadlessApp(
             executable: "\(root)/headless/storybook_headless_application/storybook_headless_application",
             environment: launchEnvironment)
+        #endif
     }
 
     func testObservableObjectCounts() throws {
