@@ -185,9 +185,11 @@ run_tests "${flags[@]}" --@isomer//headless $(log_of headless) --test_output=err
 headless=$?
 # Headful apps driven: the web Storybook with its driver built in, in
 # Chrome, dialling out: to the isomer CLI hub, and to the hub of the
-# Storybook tests run headful (the same tests as //headless).
+# Storybook tests run headful (the same tests as //headless); and the Linux
+# Storybook under Xvfb, the same tests again.
 run_tests "${flags[@]}" --@isomer//drive:headful $(log_of headful) --test_output=errors //remote:headful_web_test \
-    //headless/storybook_headless_application:storybook_headful_web_test
+    //headless/storybook_headless_application:storybook_headful_web_test \
+    //headless/storybook_headless_application:storybook_headful_linux_test
 headful=$?
 [ $headless -ne 0 ] || headless=$headful
 cd "$root"

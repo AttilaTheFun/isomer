@@ -117,3 +117,31 @@ swift_test(
     )
     for platform in ["ios", "macos", "android"]
 ]
+
+# And against the Linux Storybook (SDL2 and OpenGL) under Xvfb, where it is
+# built: CI's container runs it with the other headful tests.
+#
+#   bazel test --@isomer//drive:headful :storybook_headful_linux_test
+swift_test(
+    name = "storybook_headful_linux_test",
+    size = "medium",
+    srcs = ["StorybookHeadlessTests.swift"],
+    data = [
+        "linux_launcher.sh",
+        "//linux/storybook_linux_application",
+    ],
+    env = {
+        "ISOMER_HEADFUL_LAUNCHER": "$(rootpath linux_launcher.sh)",
+        "ISOMER_LINUX_APP": "$(rootpath //linux/storybook_linux_application)",
+    },
+    module_name = "StorybookHeadfulLinuxTests",
+    tags = [
+        "manual",
+        "no-sandbox",
+    ],
+    target_compatible_with = ["@platforms//os:linux"],
+    deps = [
+        "@isomer//headless/isomer_headless",
+        "@isomer//shared/wire/swift",
+    ],
+)
