@@ -1,6 +1,6 @@
 #!/bin/bash
 # Builds Isomer's Linux targets (and, with the Apple SDK, every platform's) in
-# a Linux container leased from OS Server: arm64 on Apple silicon, in the
+# a Linux container leased from Shireworks: arm64 on Apple silicon, in the
 # image a Visor session runs in (Visor's agent image, tools/ci/agent_image,
 # as CI's tools/ci/container_build.sh builds: Swift, clang, Bazel, the
 # libraries the Linux targets link, x86_64 glibc and Rosetta for Android's
@@ -41,14 +41,14 @@
 # archive (`oss machine upload`) and is unpacked into /work, the build runs
 # with `oss machine exec`, and what --out names comes back as an archive on
 # exec's output. Nothing of the Mac is mounted, so this works from any
-# client OS Server lends a container to (a Mac, a session's container), and
+# client Shireworks lends a container to (a Mac, a session's container), and
 # the checkout's own bazel-* links are left alone. Bazel's tree is the
 # volume, at /var/cache/bazel, kept (`:keep`) when the lease goes, so a run
 # builds only what changed; one build at a time uses it (a second, while
 # one runs, is refused the volume). Until 2026-10-31 this was a plain Apple
 # `container` this script made and kept itself (from 0.38; an oss one before).
 #
-# OS Server's client gives up when the server's hello is slow ("no oss
+# Shireworks' client gives up when the server's hello is slow ("no oss
 # server answered", a busy Mac's server): nothing was asked of it then, so
 # every oss command here is asked again, up to five times, ten seconds
 # apart (the lease itself is exec'd: the server is asked once just before
@@ -78,7 +78,7 @@ oss_() {
         status=${PIPESTATUS[0]}
         set -e
         if [ "$status" -ne 0 ] && [ "$try" -lt 5 ] && grep -q "no oss server answered" "$err"; then
-            echo "build.sh: no OS Server answered; asking again in 10 s (try $try of 5)" >&2
+            echo "build.sh: no Shireworks answered; asking again in 10 s (try $try of 5)" >&2
             try=$((try + 1))
             sleep 10
             continue
@@ -174,13 +174,13 @@ while [ $# -gt 0 ]; do
         --stop)
             # A lease of this script's that outlived its run (one is
             # reclaimed within five minutes anyway), then the volume, which
-            # OS Server deletes from its own Mac only.
+            # Shireworks deletes from its own Mac only.
             leases="$(oss_ machine list)"
             for lease in $(printf '%s\n' "$leases" | grep -F "  $LABEL" | awk '{print $1}'); do
                 oss_ machine release "$lease" || true
             done
             if ! oss_ volume delete "$VOLUME"; then
-                echo "build.sh: the volume $VOLUME is still there (oss volume list): delete it on OS Server's Mac with oss volume delete $VOLUME" >&2
+                echo "build.sh: the volume $VOLUME is still there (oss volume list): delete it on Shireworks' Mac with oss volume delete $VOLUME" >&2
                 exit 1
             fi
             exit 0 ;;

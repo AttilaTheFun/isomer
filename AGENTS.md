@@ -294,11 +294,11 @@ and every story is held to Apple's SwiftUI's same screen
 and Reviews' parity): they should match, and a difference is Isomer's (it
 found radial and angular gradients drawn linear, Grid's columns unaligned
 and text runs' `.primary` drawn at the Mac's 85% black in the tree view).
-The platforms run at once, each on its own oss lease (the Mac's a `mac`
-slot of OS Server's primary macOS VM, its apps run by `exec --gui` and
+The platforms run at once, each on its own Shireworks lease (the Mac's a `mac`
+slot of Shireworks' primary macOS VM, its apps run by `exec --gui` and
 pictured by `screenshot --window`; PROOF_MAC=vm a macOS VM of its own; the
-iPhone's an `ios` lease in that VM, driven by oss's simctl `--env`, upload,
-download and screenshot alone, OS Server's API 20; PROOF_IOS=local simctl on
+iPhone's an `ios` lease in that VM, driven by Shireworks' simctl `--env`, upload,
+download and screenshot alone, Shireworks' API 20; PROOF_IOS=local simctl on
 the server's Mac). CI makes it, and
 only CI's counts (the Build workflow's `proof` job, tools/ci/proof.sh, in
 CI's own Linux container after the build: the apps built there, the Apple
@@ -308,14 +308,14 @@ build|shoot|compare, proof.py --build-to/--from/--here): built in the
 container, then the iPhone (a
 simulator made for the run) and the Mac on `xcode-27` runners, the Android
 Storybook on an emulator under Ubuntu's KVM (tools/ci/hosted_android_emulator.sh,
-shaped as OS Server's phones: API 35, 1080×2400, 420 dpi, gesture
+shaped as Shireworks' phones: API 35, 1080×2400, 420 dpi, gesture
 navigation) and the web in Ubuntu's Chrome (the `proof-shoot` jobs), then
 compared in the container (`proof-compare`); a private copy pictures
-everything on OS Server's leases as above. CI follows the owner's policy
+everything on Shireworks' leases as above. CI follows the owner's policy
 for protected repositories (AttilaTheFun/reviews' docs/CI_POLICY.md) and
 the shape the owner set on 2026-11-08 (build.yml's header): the tests
 without a GUI before a merge, every build after one, the GUI tests and the
-proof by hand on GitHub's runners, never a slot of OS Server's primary VM
+proof by hand on GitHub's runners, never a slot of Shireworks' primary VM
 (those are for private repositories). A pull request gets `container`
 (every target built in one container, reading the Bazel cache, leasing
 nothing, then the core's tests, the web's in headless Chrome, and the
@@ -473,7 +473,7 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   tools by placeholders (`https://apple-sdks.invalid/…`,
   `https://ported-tools.invalid/sha256/{sha256}`): each builder's untracked
   .bazelrc.user resolves them, with `--distdir=<a folder with them>` or a
-  `--downloader_config` rewriting them to an OS Server's
+  `--downloader_config` rewriting them to a Shireworks server's
   `/files/sha256/<hex>` (its read token in ~/.netrc), and turns the
   toolchains on with `build:linux --config=apple_on_linux` (.bazelrc).
   Without that, Linux builds what runs on Linux, and nothing fetches the
@@ -538,8 +538,8 @@ bazel run //examples/electron/example_full_react_electron_application
 # android: example_partial_{compiled,wasm}_…; web/electron:
 # example_partial_{react,webgpu}_… — see README's tables.
 
-# Linux/Windows: Linux builds in an OS Server container (tools/linux/build.sh) and
-# runs on an oss VM, Windows builds and runs on the oss Windows VM (see
+# Linux/Windows: Linux builds in a Shireworks container (tools/linux/build.sh) and
+# runs on a Shireworks VM, Windows builds and runs on the Shireworks Windows VM (see
 # "Platform tiers").
 ```
 
@@ -549,12 +549,12 @@ Tier 1 is iOS, macOS, Android and the web (wasm: the browser and Electron);
 tier 2 is Linux and Windows. Building an iOS app for Android is Isomer's
 headline, and the project's other apps (Visor, Reviews) ship iOS, the Mac
 and Android, Android through Isomer. CI runs and pictures tier 1 on every
-change: the iPhone and the Mac on slots of OS Server's primary, Android on
-GitHub's Ubuntu runner (an OS Server emulator lease in a private copy), the
+change: the iPhone and the Mac on slots of Shireworks' primary, Android on
+GitHub's Ubuntu runner (a Shireworks emulator lease in a private copy), the
 web in headless Chrome. It builds tier 2 on every
 change, but runs it only by hand for now (until the build machine has the
 room): Linux in a container under Xvfb, Windows under Wine in a container
-or on an oss Windows VM, never on this Mac's own screen. Tier 2's pictures
+or on a Shireworks Windows VM, never on this Mac's own screen. Tier 2's pictures
 may differ from real hardware (Wine's fonts), which is acceptable.
 
 - **Every platform's tests in containers (2026-11-04).** CI's container
@@ -579,44 +579,44 @@ may differ from real hardware (Wine's fonts), which is acceptable.
     this public repository (the workflow's `android` job: an x86_64
     emulator on the runner's KVM, the x86_64 test APK built in the
     container, tools/ci/hosted_android_test.sh); in a private copy, and as
-    the fallback, an emulator leased from OS Server (`oss machine lease
+    the fallback, an emulator leased from Shireworks (`oss machine lease
     android`), on its Mac's own hypervisor, through `oss machine adb` and
     `screenshot` (tools/ci/android_test.sh). A Cuttlefish phone in a
-    container with its own KVM (`--virtualization`, OS Server's API 22;
+    container with its own KVM (`--virtualization`, Shireworks' API 22;
     tools/ci/android_device.sh) boots far on a Mac but doesn't finish:
     Virtualization's vCPU threads oversleep every timed wait (macOS's timer
     leeway), and WebView's zygote times out starting, restarting the system
     server. On a Linux host with KVM it would be the fast path (TODO.md);
   - the iPhone and the Mac: built in the container (rules_applecross), run
-    on an `ios` lease and a `mac` slot of OS Server's primary macOS VM
+    on an `ios` lease and a `mac` slot of Shireworks' primary macOS VM
     (tools/ci/apple_test.sh);
   - all of it after the build, at once: tools/ci/platform_tests.sh.
 - **Linux from a Mac**: `tools/linux/build.sh [targets]` builds in a
-  container leased from OS Server (`oss machine run container`, released
+  container leased from Shireworks (`oss machine run container`, released
   however the script ends) of Visor's agent image, CI's
   (tools/ci/agent_image: Bazel and the libraries the Linux targets link,
   SDL2, SDL2_ttf, GL/EGL, GTK 3, WebKitGTK, and x86_64 glibc for Android's
   tools, run under Rosetta). The checkout goes in and `--out` comes back
-  through oss (upload, exec), nothing mounted, so it runs from any oss
+  through Shireworks (upload, exec), nothing mounted, so it runs from any Shireworks
   client; Bazel's tree is the kept volume isomer-linux-build, warm between
   runs, one build at a time; `--stop` releases a lease left over and
-  deletes the volume (`oss volume delete`, on OS Server's Mac). It was a
+  deletes the volume (`oss volume delete`, on Shireworks' Mac). It was a
   plain Apple `container` it made itself from 0.38 until 2026-10-31. With
   `--apple-sdks <dir>` (the SDK archive and the ported tools' archives) it
   builds every platform: `tools/linux/build.sh --module examples
   --apple-sdks ~/… <the Storybook's iOS (sim), macOS, web, Android and Linux
   targets>` (3,168 actions from cold).
-- **Every platform in a session's container**: the same build runs in an
-  OS Server container lease of Visor's agent image (what a Visor session
+- **Every platform in a session's container**: the same build runs in a
+  Shireworks container lease of Visor's agent image (what a Visor session
   works in: Swift 6.4.0, clang, the Linux libraries, x86_64 glibc, Rosetta),
-  the SDK and tools from OS Server's files: 5 min 50 s from cold.
+  the SDK and tools from Shireworks' files: 5 min 50 s from cold.
   tools/ci/container_build.sh is CI's (.github/workflows/build.yml, on a
-  self-hosted runner whose Mac runs OS Server; branches of this repository
+  self-hosted runner whose Mac runs Shireworks; branches of this repository
   only). The container is arm64: MODULE.bazel registers swift.org's
   ubuntu24.04 toolchains for aarch64 as well as x86_64, wasm SDK included
   (the wasm cell's reactor). tools/proof/proof.py runs what it builds in
-  an oss Linux VM.
-- **Windows on the oss Windows VM** (`oss machine lease windows
+  a Shireworks Linux VM.
+- **Windows on the Shireworks Windows VM** (`oss machine lease windows
   --config=swift-6.3.2`, the build layer tools/ci/oss/windows-swift.ps1
   makes): Bazel in MSVC's environment (vcvarsall arm64) with
   `BAZEL_SH` Git's bash, Git's usr\bin on PATH (rules_swift_package_manager

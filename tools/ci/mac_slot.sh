@@ -1,6 +1,6 @@
 # Sourced by the CI scripts whose steps need a Mac (Xcode's xcresulttool,
 # assetutil) but run in a Linux container (the
-# isomer-jit runners): a slot of OS Server's primary Mac VM (`oss machine
+# isomer-jit runners): a slot of Shireworks' primary Mac VM (`oss machine
 # lease mac`: a macOS user of its own there, ready in seconds), renewed
 # while the script runs and released however it ends. As
 # AttilaTheFun/oss's tools/ci/mac_vm.sh leases one. A slot has no SSH: its

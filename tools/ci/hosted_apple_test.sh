@@ -1,7 +1,7 @@
 #!/bin/bash
 # The iPhone and Mac Storybooks' test stories on GitHub's own `xcode-27` Mac
 # runner (free for a public repository), the primary place CI runs them; a
-# private copy runs them on OS Server's leases instead (tools/ci/apple_test.sh,
+# private copy runs them on Shireworks' leases instead (tools/ci/apple_test.sh,
 # platform_tests.sh). The apps are the ones CI's container built
 # (tools/ci/container_build.sh): the iPhone's on a simulator made for the
 # run (an iPhone 17 of the newest iOS this Xcode has, its status bar held at

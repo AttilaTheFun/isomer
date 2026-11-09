@@ -33,9 +33,9 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
 ## Linux and Windows (T3)
 
 - **Both are built and run on oss machines (0.38).** Linux builds in a
-  Linux container leased from OS Server (`tools/linux/build.sh`)
-  and runs in an oss Linux VM; Windows
-  builds and runs on the oss Windows VM with the Swift build layer
+  Linux container leased from Shireworks (`tools/linux/build.sh`)
+  and runs in a Shireworks Linux VM; Windows
+  builds and runs on the Shireworks Windows VM with the Swift build layer
   (tools/ci/oss/windows-swift.ps1: Visual Studio's build tools, Swift,
   Python), in MSVC's environment with Git's bash and POSIX tools (the
   release proof, tools/proof/proof.py, says how): the Storybook drawn by

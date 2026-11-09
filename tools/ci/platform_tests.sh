@@ -4,11 +4,11 @@
 #   - Windows under arm64 Wine 10 in a Linux container (Ubuntu 26.04's Wine:
 #     tools/ci/windows_test.sh), only with PLATFORM_TESTS naming it: for now
 #     (2026-11-05) CI runs the tier-1 platforms and only builds Windows;
-#   - Android on an emulator leased from OS Server, on its Mac's own
+#   - Android on an emulator leased from Shireworks, on its Mac's own
 #     hypervisor (tools/ci/android_test.sh), when PLATFORM_TESTS names it:
 #     a private repository's CI, and the fallback; a public one's runs on
 #     GitHub's Ubuntu runner (tools/ci/hosted_android_test.sh);
-#   - the iPhone and the Mac on OS Server's primary macOS VM (an `ios` lease
+#   - the iPhone and the Mac on Shireworks' primary macOS VM (an `ios` lease
 #     and a `mac` slot: tools/ci/apple_test.sh), from this Mac.
 # All through oss's API, so it runs anywhere OS Server's command line does
 # (a CI job's container: the isomer-jit runners). Each opens the Storybook's
@@ -61,7 +61,7 @@ if [[ $platforms == *" windows "* ]]; then
     pids+=($!) names+=(windows)
 fi
 
-# Android: an emulator leased from OS Server, run on its Mac's own
+# Android: an emulator leased from Shireworks, run on its Mac's own
 # hypervisor (outside Apple's Virtualization, whose vCPU threads oversleep
 # every timed wait: a phone in a container takes over an hour to boot,
 # tools/ci/android_device.sh, so that stays a by-hand path).

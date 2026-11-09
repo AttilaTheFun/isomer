@@ -20,7 +20,7 @@ To AttilaTheFun/playground, at its root:
   tools/browser_toolchain), the canned projects (shared/sample_sources), its
   docs (AGENTS.md, docs/) and tests (templates, e2e);
 - tools/ci/stage_playground_compilers.sh, and the SHA-256s of the staged
-  compilers it names (the archives stay in OS Server's files);
+  compilers it names (the archives stay in Shireworks' files);
 - the Playground's half of the CI: its targets in build.yml's container build,
   its Alphas (com.LoganShire.IsomerPlayground, unchanged), its projects in the
   proof (2048 and the Pokédex built on each device), its builds among a
@@ -76,12 +76,12 @@ As isomer's, under the owner's policy (AttilaTheFun/reviews' CI_POLICY.md):
   the headless tests there;
 - by hand: `verify` (the tests needing a GUI, on GitHub's runners), the proof
   (the projects built on each device: the iPhone and the Mac on GitHub's
-  xcode-27 Macs, the web in Chrome; Android on an OS Server emulator until
+  xcode-27 Macs, the web in Chrome; Android on a Shireworks emulator until
   the arm64 compiler runs on GitHub's, an open question), `prerelease` and
   `release` (Alphas, the draft, CI's as isomer's).
 
 Before its first run: New Container Helper makes the repository and its
-runners' access (the isomer-jit labels, OS Server's files and cache); the
+runners' access (the isomer-jit labels, Shireworks' files and cache); the
 Applications session lets the repository publish
 com.LoganShire.IsomerPlayground (Applications Server's OIDC rules); the
 Reviews session lists it for proofs and releases.
