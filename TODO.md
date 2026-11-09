@@ -104,7 +104,7 @@ docs/drive_plan.md the order. Open:
   Linux and Apple's in an XCTest bundle.
 - **The DOM renderer** (owner, 2026-11-08): the web's React renderer replaced
   by one that applies the tree's patches to the DOM itself, held to the
-  Storybook's pictures (0.47).
+  Storybook's pictures (0.48, the owner's choice of 2026-11-08).
 - **The Playground over sessions** (owner, 2026-11-08): the hot reloader a
   head paired with a headless app, a rebuild swapping the app; Playgrounds
   peer to peer (headless wasm in a browser one Playground proxies, drawn by

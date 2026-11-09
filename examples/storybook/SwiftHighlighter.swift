@@ -3,8 +3,9 @@
 // attributes and directives (`@State`, `#if`), in Xcode's palettes, the
 // dark one in dark appearance. The Playground's lexer (AttilaTheFun/
 // playground's apple/playground_ios_application/CodeEditor.swift) in plain
-// Swift, so it runs on every platform: the result is a Text a line, its
-// tokens' coloured Texts interpolated into it (not an AttributedString,
+// Swift, so it runs on every platform: the result is one Text, the whole
+// listing, its tokens' coloured Texts interpolated into it with the line
+// breaks between them (not an AttributedString,
 // whose colours an app compiled against Isomer's frameworks on an Apple
 // platform reads through Apple's attribute scope, and Windows can't draw).
 
@@ -46,27 +47,21 @@ enum SwiftHighlighter {
     }
 
     /// `source`'s lines, each its tokens' coloured Texts in one Text.
-    static func lines(_ source: String, dark: Bool) -> [Text] {
-        var lines: [Text] = []
-        var line = Text(verbatim: "")
-        var empty = true
-        for (text, kind) in tokens(source) {
-            let parts = text.split(separator: "\n", omittingEmptySubsequences: false)
-            for (index, part) in parts.enumerated() {
-                if index > 0 {
-                    // An empty line is a space, so it keeps a line's height.
-                    lines.append(empty ? Text(verbatim: " ") : line)
-                    line = Text(verbatim: "")
-                    empty = true
-                }
-                guard !part.isEmpty else { continue }
-                let piece = Text(verbatim: String(part)).foregroundColor(color(kind, dark: dark))
-                line = empty ? piece : Text("\(line)\(piece)")
-                empty = false
+    /// The listing as one Text: a person, VoiceOver and a driver read it as
+    /// one text of many lines.
+    static func text(_ source: String, dark: Bool) -> Text {
+        var pieces = tokens(source).filter { !$0.0.isEmpty }.map { part, kind in
+            // Line breaks stay plain, inside the one text.
+            kind == .plain ? Text(verbatim: part) : Text(verbatim: part).foregroundColor(color(kind, dark: dark))
+        }
+        // Joined a pair at a time, so the text nests a few levels deep (the
+        // log of its pieces), not one level a piece.
+        while pieces.count > 1 {
+            pieces = stride(from: 0, to: pieces.count, by: 2).map { index in
+                index + 1 < pieces.count ? Text("\(pieces[index])\(pieces[index + 1])") : pieces[index]
             }
         }
-        lines.append(empty ? Text(verbatim: " ") : line)
-        return lines
+        return pieces.first ?? Text(verbatim: "")
     }
 
     /// `source` as (text, token) runs, in order.

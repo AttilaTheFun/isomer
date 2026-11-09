@@ -1,17 +1,28 @@
 // The Storybook driven headless: its UI read and its controls used through
 // the runtime (IsomerHeadless), nothing drawn. Each test launches the app
 // on a story (ISO_STORYBOOK_STORY) and works it as a person would.
+//
+// The same tests drive a headful Storybook when ISOMER_HEADFUL_LAUNCHER
+// names a launcher (IsomerHeadless's `HeadlessApp(launcher:environment:)`):
+// the app drawn by its platform's renderer, its driver built in
+// (--@isomer//drive:headful), dialling out to the test's hub. The web's is
+// web_launcher.sh (:storybook_headful_web_test).
 
 import IsomerHeadless
+import IsomerWire
 import XCTest
 
 final class StorybookHeadlessTests: XCTestCase {
-    /// The app built headless, from the test's runfiles.
+    /// The app built headless, from the test's runfiles; or headful, started
+    /// by the launcher the environment names.
     private func launch(story: String? = nil) throws -> HeadlessApp {
         let environment = ProcessInfo.processInfo.environment
-        let root = "\(environment["TEST_SRCDIR"] ?? "")/\(environment["TEST_WORKSPACE"] ?? "_main")"
         var launchEnvironment = ["ISO_HEADLESS_HEIGHT": "6000"]
         if let story { launchEnvironment["ISO_STORYBOOK_STORY"] = story }
+        if let launcher = environment["ISOMER_HEADFUL_LAUNCHER"], !launcher.isEmpty {
+            return try HeadlessApp(launcher: launcher, environment: launchEnvironment)
+        }
+        let root = "\(environment["TEST_SRCDIR"] ?? "")/\(environment["TEST_WORKSPACE"] ?? "_main")"
         return try HeadlessApp(
             executable: "\(root)/headless/storybook_headless_application/storybook_headless_application",
             environment: launchEnvironment)
@@ -21,6 +32,8 @@ final class StorybookHeadlessTests: XCTestCase {
         let app = try launch(story: "state.observableobject")
         defer { app.quit() }
         XCTAssertTrue(try app.screen().shows("Taps: 0"))
+        // The story's code is one element: one text of many lines.
+        XCTAssertTrue(try app.screen().texts.contains { $0.hasPrefix("final class StoryCounter") && $0.contains("\n") })
         try app.tap("Tap")
         try app.tap("Tap")
         try app.wait(for: "Taps: 2")
@@ -62,6 +75,54 @@ final class StorybookHeadlessTests: XCTestCase {
         defer { app.quit() }
         let screen = try app.tap("ObservableObject")
         XCTAssertTrue(screen.shows("Taps: 0"))
+    }
+
+    func testAStoryReplacesTheListAndBackReturns() throws {
+        let app = try launch()
+        defer { app.quit() }
+        // At compact width the split view shows one column: the story alone.
+        var screen = try app.tap("ObservableObject")
+        XCTAssertTrue(screen.shows("Taps: 0"))
+        XCTAssertNil(screen.element("Text styles"))
+        screen = try app.back()
+        XCTAssertNotNil(screen.element("Text styles"))
+        XCTAssertNil(screen.element("Reset"))
+    }
+
+    func testNamesTargetElementsAndInspectTellsMore() throws {
+        let app = try launch(story: "state.observableobject")
+        defer { app.quit() }
+        // Each element has a name: its role and its place among that role's.
+        let tap = try XCTUnwrap(app.screen().element("Tap"))
+        XCTAssertTrue(tap.name.hasPrefix("button-"))
+        try app.tap(tap.name)
+        let screen = try app.wait(for: "Taps: 1")
+        // A text by its place among the texts (text-<n>), its font as the tree
+        // has it.
+        let index = try XCTUnwrap(screen.texts.firstIndex(of: "Taps: 1"))
+        let text = try app.inspect("text-\(index + 1)")
+        XCTAssertEqual(text.role, "text")
+        XCTAssertEqual(text.label, "Taps: 1")
+        XCTAssertTrue(text.hasFontSize)
+        let field = try app.inspect("Title")
+        XCTAssertEqual(field.role, "textField")
+        XCTAssertTrue(field.actions.contains("edit"))
+        XCTAssertThrowsError(try app.inspect("button-999"))
+    }
+
+    func testAnAlertIsTheWholeScreen() throws {
+        let app = try launch(story: "presentation.alert")
+        defer { app.quit() }
+        var screen = try app.tap("Delete draft…")
+        // What is presented is all that can be used: the page behind is not
+        // listed.
+        XCTAssertEqual(screen.presented.last?.style, "alert")
+        XCTAssertNotNil(screen.element("Delete"))
+        XCTAssertNotNil(screen.element("Cancel"))
+        XCTAssertNil(screen.element("Delete draft…"))
+        screen = try app.tap("Cancel")
+        XCTAssertTrue(screen.presented.isEmpty)
+        XCTAssertNotNil(screen.element("Delete draft…"))
     }
 
     func testUnknownTargetFailsWithTheScreen() throws {

@@ -346,12 +346,20 @@ in Reviews (which makes its tag): the Build workflow's `release` job checks
 that its commit is main's and was verified (tools/ci/verified.sh), then promotes that commit's iPhone and Mac Alphas to
 production on Applications Server (tools/ci/promote_from_ci.sh: nothing
 Apple rebuilt, since 0.40), builds and publishes Android's for production,
-and attaches the release's assets (tools/ci/release_assets.sh):
-proof.tar.gz (the commit's proof, which the next release's proof takes as
-its baseline before any artifact), the Mac app's disk image, the Android
-app and the iPhone app for the simulator, beside isomer-site.tar.gz (the
-web Storybook, //web/storybook_web_application:isomer_site), attached to
-the draft for pages.yml.
+and attaches the release's assets: the signed builds as Applications reads
+them (tools/ci/attach_release.sh, from the private AttilaTheFun/applications'
+docs/RELEASE_ASSETS.md: <App>-<version>-<platform>.<ext> and builds.json,
+replacing the proposal's Alphas of the same names; the Mac's disk image too),
+then (tools/ci/release_extras.sh) proof.tar.gz (the commit's proof, which
+the next release's proof takes as its baseline before any artifact) and the
+iPhone app for the simulator, beside isomer-site.tar.gz (the web Storybook,
+//web/storybook_web_application:isomer_site), attached to the draft for
+pages.yml. A proposal's draft carries its Alphas the same way (alpha's
+attach_release.sh). Every job runs in CI's Linux container but the GUI
+tests and the proof's pictures (apple, windows, android, proof-shoot), on
+GitHub's own macOS, Windows and Ubuntu VMs: the Mac icon's dark appearance
+is read in the container (tools/ci/check_mac_icons.sh), and pages.yml and
+pins.yml run there too.
 
 **Adoption levels** (docs/adoption_levels.md): (1) rules_swift — raw Swift
 on the platform; (2) swift_ffi — idiomatic bindings; (3) embedded Isomer

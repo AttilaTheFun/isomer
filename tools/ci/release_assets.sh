@@ -1,89 +1,70 @@
 #!/bin/bash
-# A release's assets, from the Build workflow's `release` job (when the
-# owner publishes a GitHub release: a v0.40.N tag on a main commit), beside
-# the source GitHub archives itself and the site (isomer-site.tar.gz,
-# attached to the draft, which pages.yml deploys):
-#   - proof.tar.gz: its commit's proof (screens/, before/, diffs/,
-#     proof.json: the `proof` artifact of the newest run of this workflow on
-#     that commit), so that the next release's proof compares with it after
-#     the artifact's 90 days (tools/ci/proof.sh);
-#   - the Mac apps' production disk images, made by promotion
-#     (tools/ci/promote_from_ci.sh --dmg-dir): <App>-<version>.dmg;
-#   - the Android apps, built for production: <App>-<version>.apk;
-#   - the iPhone apps for the simulator (an ipa is a zip: unzip it and
-#     `xcrun simctl install booted Payload/<App>.app`):
-#     <App>-<version>-iOS-Simulator.zip. Until the apps are on the App
-#     Store, whose production ipa then goes here instead.
+# A signed build, saved as a GitHub release's asset (the private AttilaTheFun/applications' docs/RELEASE_ASSETS.md):
+# sourced by publish_from_ci.sh and promote_from_ci.sh, which call
+# `release_asset` with each build the server answered, for their
+# `--download <dir>`. The job then attaches the folder to its release
+# (attach_release.sh). bash, curl and openssl; sha256sum or shasum.
 #
-#   tools/ci/release_assets.sh proof <tag> <dir>   # <dir>/proof.tar.gz, or fails: no release without its proof
-#   tools/ci/release_assets.sh upload <tag> <dir>…  # each dir's packages, named as above, onto the release
+#   release_asset <build JSON> <dir> <server> <ca.pem> <file>
 #
-# With gh (installed when missing, as root or by sudo) and GH_TOKEN, the
-# job's: `contents: write` for the upload, `actions: read` for the proof.
-set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-mode="${1:?usage: release_assets.sh proof <tag> <dir> | upload <tag> <dir>…}"
-tag="${2:?<tag>}"
-shift 2
-repo="${GITHUB_REPOSITORY:-AttilaTheFun/isomer}"
-version="${tag#v}"
+# - <build JSON>: one build as the server lists it (its keys sorted), on
+#   one line;
+# - <file>: what to download of it: app.ipa, app.zip, app.apk or app.dmg.
+#
+# It downloads the file as <App>-<version>-<platform>.<ext>, and adds its
+# line to <dir>/builds.json, which it writes again whole each time: the
+# builds of every call into the folder, one a line.
 
-if ! command -v gh > /dev/null; then
-    root_do() { if [ "$(id -u)" = 0 ]; then "$@"; else sudo "$@"; fi; }
-    root_do env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends gh > /dev/null ||
-        { root_do apt-get update -qq > /dev/null &&
-          root_do env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends gh > /dev/null; }
-fi
+release_asset_field() {
+  printf '%s' "$1" | sed -n "s/.*\"$2\":\"\\([^\"]*\\)\".*/\\1/p"
+}
 
-case "$mode" in
-proof)
-    out="$(mkdir -p "${1:?<dir>}" && cd "$1" && pwd)"
-    commit="$(git -C "$ROOT" rev-list -n 1 "$tag")"
-    # The newest run of this workflow on the commit with a proof.
-    run="$(gh api --paginate "repos/$repo/actions/artifacts?name=proof&per_page=100" \
-        --jq ".artifacts[] | select(.expired | not) | select(.workflow_run.head_sha == \"$commit\") | .workflow_run.id" |
-        sort -nr | head -1)"
-    [ -n "$run" ] || { echo "::error::no proof of $tag's commit $commit (run the Build workflow on it by hand first)"; exit 1; }
-    work="$(mktemp -d)"
-    trap 'rm -rf "$work"' EXIT
-    gh run download "$run" --repo "$repo" --name proof --dir "$work/proof"
-    [ -f "$work/proof/proof.json" ] || { echo "::error::run $run's proof has no proof.json"; exit 1; }
-    tar -czf "$out/proof.tar.gz" -C "$work/proof" .
-    echo "release_assets: $tag's proof from run $run, $(ls "$work/proof/screens" | wc -l | tr -d ' ') pictures"
-    ;;
-upload)
-    [ $# -gt 0 ] || { echo "release_assets: upload takes the folders" >&2; exit 1; }
-    work="$(mktemp -d)"
-    trap 'rm -rf "$work"' EXIT
-    app() {
-        case "$1" in
-            *storybook*) echo Storybook ;;
-            *) echo "" ;;
-        esac
-    }
-    assets=()
-    for dir in "$@"; do
-        for file in "$dir"/*; do
-            [ -f "$file" ] || continue
-            name="$(basename "$file")"
-            lower="$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]')"
-            case "$name" in
-                proof.tar.gz | *.dmg) asset="$name" ;;
-                *.apk) asset="$(app "$lower")-$version.apk" ;;
-                *_sim_application.ipa) asset="$(app "$lower")-$version-iOS-Simulator.zip" ;;
-                *) echo "release_assets: $name isn't a release's asset, left out"; continue ;;
-            esac
-            case "$asset" in -*) echo "::error::$name: which app?"; exit 1 ;; esac
-            cp "$file" "$work/$asset"
-            assets+=("$work/$asset")
-        done
-    done
-    [ ${#assets[@]} -gt 0 ] || { echo "::error::no assets"; exit 1; }
-    gh release upload "$tag" --repo "$repo" --clobber "${assets[@]}"
-    for asset in "${assets[@]}"; do echo "release_assets: $tag: $(basename "$asset")"; done
-    ;;
-*)
-    echo "usage: release_assets.sh proof <tag> <dir> | upload <tag> <dir>…" >&2
-    exit 1
-    ;;
-esac
+# A JSON string's inside: backslashes and quotes escaped (the server's
+# values have no control characters).
+release_asset_json() {
+  printf '%s' "$1" | sed 's/[\\"]/\\&/g'
+}
+
+release_asset() {
+  local build="$1" dir="$2" server="$3" ca="$4" file="$5"
+  local id key name app version build_number platform bundle variant channel commit uuid ext asset status digest size
+  id="$(release_asset_field "$build" id)"
+  key="$(release_asset_field "$build" downloadKey)"
+  name="$(release_asset_field "$build" name)"
+  app="$(release_asset_field "$build" app)"
+  version="$(release_asset_field "$build" version)"
+  build_number="$(release_asset_field "$build" buildNumber)"
+  platform="$(release_asset_field "$build" platform)"
+  bundle="$(release_asset_field "$build" bundleID)"
+  variant="$(release_asset_field "$build" buildVariant)"
+  channel="$(release_asset_field "$build" channel)"
+  commit="$(release_asset_field "$build" commit)"
+  uuid="$(release_asset_field "$build" executableUUID)"
+  [ -n "$id" ] && [ -n "$key" ] && [ -n "$version" ] && [ -n "$platform" ] && [ -n "$bundle" ] ||
+    { echo "release_asset: the server's answer names no build" >&2; return 1; }
+  [ -n "$variant" ] || variant="$([ "$channel" = production ] && echo Production || echo Alpha)"
+  [ -n "$commit" ] || commit="${APPLICATIONS_COMMIT:-${GITHUB_SHA:-}}"
+  ext="${file##*.}"
+  # The app's name across platforms, else the build's own: no spaces or
+  # slashes in a file name.
+  asset="$(printf '%s' "${app:-$name}" | tr ' /' '--')-$version-$platform.$ext"
+
+  mkdir -p "$dir"
+  status="$(curl -sS --cacert "$ca" --connect-timeout 10 --max-time 1800 -o "$dir/$asset" -w '%{http_code}' \
+    "$server/builds/$id/$key/$file")" || { rm -f "$dir/$asset"; echo "release_asset: $asset was not downloaded" >&2; return 1; }
+  [ "$status" = 200 ] || { rm -f "$dir/$asset"; echo "release_asset: $asset was not downloaded ($status)" >&2; return 1; }
+  if command -v sha256sum > /dev/null; then digest="$(sha256sum "$dir/$asset" | cut -d' ' -f1)"
+  else digest="$(shasum -a 256 "$dir/$asset" | cut -d' ' -f1)"; fi
+  size="$(wc -c < "$dir/$asset" | tr -d ' ')"
+
+  # One line a file, the same file named again replacing its line.
+  touch "$dir/builds.lines"
+  grep -v "\"file\":\"$(release_asset_json "$asset")\"" "$dir/builds.lines" > "$dir/builds.lines.new" || true
+  printf '{"file":"%s","bundleID":"%s","app":"%s","platform":"%s","version":"%s","buildNumber":"%s","variant":"%s","commit":"%s","executableUUID":"%s","size":%s,"sha256":"%s"}\n' \
+    "$(release_asset_json "$asset")" "$(release_asset_json "$bundle")" "$(release_asset_json "${app:-$name}")" \
+    "$platform" "$(release_asset_json "$version")" "$(release_asset_json "$build_number")" "$variant" "$commit" "$uuid" \
+    "$size" "$digest" >> "$dir/builds.lines.new"
+  mv "$dir/builds.lines.new" "$dir/builds.lines"
+  { echo '['; sed '$!s/$/,/' "$dir/builds.lines"; echo ']'; } > "$dir/builds.json"
+  echo "Saved for the release: $asset"
+}

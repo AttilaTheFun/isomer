@@ -6,9 +6,8 @@
 # rules_applecross, whose actool compiles an Icon Composer icon's layers and
 # appearances as Xcode does (examples/.bazelrc's apple_on_linux accepts its
 # flattened images, which aren't Xcode's); this checks what it made with
-# Xcode's assetutil: on a Mac, there; elsewhere (CI's Linux containers, the
-# isomer-jit runners), on a slot of OS Server's primary Mac
-# (tools/ci/mac_slot.sh), where this same script runs on the zips, sent up.
+# Xcode's assetutil on a Mac, and in CI's Linux containers by the
+# appearance names the catalog stores (no Mac needed).
 # The Storybook's Mac app has an Icon Composer icon. Copied from AttilaTheFun/reviews' tools/ci/check_mac_icons.sh.
 #
 #   tools/ci/check_mac_icons.sh <dir>
@@ -16,28 +15,26 @@ set -euo pipefail
 dir="${1:?usage: tools/ci/check_mac_icons.sh <dir>}"
 work="$(mktemp -d)"
 
-if [ "$(uname -s)" != Darwin ]; then
-    ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-    OSS="$(command -v oss)" || { echo "::error::check_mac_icons: no Mac here and no oss to lease a slot of one"; exit 1; }
-    . "$ROOT/tools/ci/mac_slot.sh"
-    trap 'status=$?; mac_slot_release; rm -rf "$work"; exit $status' EXIT
-    zips=("$dir"/*.zip)
-    [ -e "${zips[0]}" ] || { echo "::error::no zip in $dir"; exit 1; }
-    mac_slot_lease
-    mac_slot_upload "$0" ci/icons/check_mac_icons.sh
-    for zip in "${zips[@]}"; do mac_slot_upload "$zip" "ci/icons/zips/$(basename "$zip")"; done
-    mac_slot_exec /bin/bash ci/icons/check_mac_icons.sh ci/icons/zips
-    exit
-fi
-
 trap 'rm -rf "$work"' EXIT
 status=0
 zips=0
+# A Mac's Xcode reads the asset catalog (assetutil); elsewhere (CI's Linux
+# containers) the catalog's appearance names are read as they are stored,
+# plain strings in Assets.car: a flat icon has no NSAppearanceNameDarkAqua.
+if [ "$(uname -s)" = Darwin ]; then
+    dark_renditions() { xcrun --sdk macosx assetutil --info "$1" | grep -c NSAppearanceNameDarkAqua; }
+    unpack() { ditto -x -k "$1" "$2"; }
+else
+    dark_renditions() { LC_ALL=C grep -a -c NSAppearanceNameDarkAqua "$1"; }
+    # unzip, or Python's where an image has none (only Assets.car is read).
+    unpack() { if command -v unzip > /dev/null; then unzip -q -o "$1" -d "$2"; else python3 -m zipfile -e "$1" "$2"; fi; }
+fi
+
 for zip in "$dir"/*.zip; do
     [ -e "$zip" ] || continue
     zips=$((zips + 1))
     rm -rf "$work/unzipped" && mkdir "$work/unzipped"
-    ditto -x -k "$zip" "$work/unzipped"
+    unpack "$zip" "$work/unzipped"
     apps=0
     for app in "$work/unzipped"/*.app; do
         [ -e "$app" ] || continue
@@ -49,7 +46,7 @@ for zip in "$dir"/*.zip; do
             status=1
             continue
         fi
-        dark="$(xcrun --sdk macosx assetutil --info "$car" | grep -c NSAppearanceNameDarkAqua)" || true
+        dark="$(dark_renditions "$car")" || true
         if [ "${dark:-0}" -gt 0 ]; then
             echo "$name: $dark renditions in the dark appearance (NSAppearanceNameDarkAqua)"
         else

@@ -7,8 +7,8 @@
 # //web/storybook_web_application:isomer_site (in the examples), attached
 # to the draft release it makes. Compiled output never goes into git.
 #
-# On GitHub's own runner for this public repository (OS Server's single-use
-# Linux containers for a private copy), with curl and tar alone: the asset comes from the
+# In CI's Linux container, as every job but the GUI tests (OS Server's
+# single-use containers), with curl and tar alone: the asset comes from the
 # release's public download URL (no gh), and the Pages artifact is made
 # here, the plain tar upload-pages-artifact would make. The site is already
 # dereferenced (its genrule's tar -h), so tar archives it as is.
@@ -40,7 +40,7 @@ concurrency:
   group: pages
 jobs:
   deploy:
-    runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted", "isomer-jit"]') || 'ubuntu-24.04' }}
+    runs-on: [self-hosted, isomer-jit]
     timeout-minutes: 30
     environment:
       name: github-pages

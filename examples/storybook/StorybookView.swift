@@ -172,11 +172,7 @@ struct CodeCard: View {
 
     var body: some View {
         ScrollView(.horizontal) {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(SwiftHighlighter.lines(code, dark: colorScheme == .dark).enumerated()), id: \.offset) { _, line in
-                    line
-                }
-            }
+            SwiftHighlighter.text(code, dark: colorScheme == .dark)
             .font(.system(size: 12, design: .monospaced))
             .fixedSize(horizontal: true, vertical: true)
             .padding(12)

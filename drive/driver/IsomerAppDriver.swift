@@ -39,16 +39,70 @@ struct DriverScreen {
         var options: [String] = []
         /// The handler a tap or an edit goes to.
         var handler: String?
+        /// Its name on the screen: its role and its place among that role's,
+        /// from 1 (`button-3`).
+        var name = ""
+        /// Its node, for `inspect`; and the element it is inside, if any.
+        var node: IsoFlat_Node?
+        var container: Int?
     }
 
     var texts: [String] = []
+    /// Each text's node and the element it is inside (`text-<n>`, the n-th).
+    var textNodes: [(node: IsoFlat_Node, container: Int?)] = []
     var elements: [Element] = []
     /// The views a swipe drags, by the texts in them: (texts, id, drag handler).
     var draggables: [(label: String, id: String?, handler: String)] = []
     var presented: [(style: String, title: String, message: String, dismiss: String?)] = []
 
-    init(_ root: IsoFlat_Node) {
-        walk(root, around: [])
+    /// Whether the width is compact: a split view then shows one column.
+    let compact: Bool
+    /// A compact split view showing a column after its first: its handler
+    /// and the column before, where `back` goes (as a host reports it,
+    /// "compact:<column>:back").
+    var splitBack: (handler: String, column: String)?
+    /// The topmost presentation's node (the last one walked), if any.
+    private var topPresentation: IsoFlat_Node?
+
+    init(_ root: IsoFlat_Node, compact: Bool = false) {
+        self.compact = compact
+        walk(root, around: [], inside: nil)
+        // Something presented (a sheet, an alert, a popover) is all that can
+        // be used: the screen is the topmost presentation's, as a person
+        // sees it, with every presentation still listed.
+        if let top = topPresentation {
+            let shown = presented
+            texts = []
+            textNodes = []
+            elements = []
+            draggables = []
+            splitBack = nil
+            walk(top, around: [], inside: nil)
+            presented = shown
+        }
+        var counts: [String: Int] = [:]
+        for index in elements.indices {
+            let role = elements[index].role
+            counts[role, default: 0] += 1
+            elements[index].name = "\(role)-\(counts[role]!)"
+        }
+    }
+
+    /// The columns a split view shows: at compact width the one its
+    /// `compact` parameter names (the sidebar until it says otherwise), as the
+    /// hosts collapse it; every column at regular width.
+    private func shownColumns(_ node: IsoFlat_Node, _ p: [String: String]) -> [IsoFlat_Node] {
+        guard compact else { return node.ch }
+        let names = p["columns"] == "2" ? ["sidebar", "detail"] : ["sidebar", "content", "detail"]
+        guard let index = names.firstIndex(of: p["compact"] ?? "sidebar"), index < node.ch.count else { return node.ch }
+        return [node.ch[index]]
+    }
+
+    /// The column before the one a compact split view shows, if any.
+    private func previousColumn(_ p: [String: String]) -> String? {
+        let names = p["columns"] == "2" ? ["sidebar", "detail"] : ["sidebar", "content", "detail"]
+        guard let index = names.firstIndex(of: p["compact"] ?? "sidebar"), index > 0 else { return nil }
+        return names[index - 1]
     }
 
     private static func params(_ node: IsoFlat_Node) -> [String: String] {
@@ -70,13 +124,32 @@ struct DriverScreen {
 
     /// `around`: the texts of the node's parent, a control's label when it
     /// has none of its own (a Toggle's label stands beside its switch).
-    private mutating func walk(_ node: IsoFlat_Node, around: [String]) {
+    /// `inside`: the element the node is in (its index), for a text's
+    /// container.
+    /// `combined`: inside an element made one (`.accessibilityElement(children:
+    /// .combine)`), whose texts were taken as one.
+    private mutating func walk(_ node: IsoFlat_Node, around: [String], inside: Int?, combined: Bool = false) {
         let p = Self.params(node)
         if p["a11yHidden"] == "1" { return }
         let id = p["a11yId"]
+        let count = elements.count
+        // A view made one accessibility element of its children: its texts
+        // are one text, a line each (a code listing reads as one), as
+        // VoiceOver reads it as one element.
+        let combines = !combined && p["a11yChildren"] == "combine"
+        if combines {
+            let merged = Self.textsUnder(node).joined(separator: "\n")
+            if !merged.isEmpty {
+                texts.append(merged)
+                textNodes.append((node, inside))
+            }
+        }
         switch node.kind {
         case .text:
-            if let text = node.v, !text.isEmpty { texts.append(text) }
+            if !combined, !combines, let text = node.v, !text.isEmpty {
+                texts.append(text)
+                textNodes.append((node, inside))
+            }
         case .textfield:
             elements.append(Element(role: "textField", label: p["a11yLabel"] ?? node.placeholder ?? "", id: id,
                                     value: node.v ?? "", handler: node.edit ?? node.id.map { "\($0).text" }))
@@ -91,6 +164,7 @@ struct DriverScreen {
             default: style = "sheet"
             }
             presented.append((style, node.title ?? "", node.message ?? "", node.dismiss))
+            topPresentation = node
         case .hostview:
             let kind = node.view ?? "view"
             if ["toggle", "picker", "segmented", "stepper", "datepicker", "colorpicker"].contains(kind) {
@@ -111,12 +185,49 @@ struct DriverScreen {
             draggables.append((p["a11yLabel"] ?? Self.textsUnder(node).joined(separator: " "), id, drag))
         }
         let texts = Self.textsUnder(node)
-        for child in node.ch { walk(child, around: texts) }
+        let split = node.kind == .hostview && node.view == "navsplit"
+        // The innermost split showing a later column takes `back`.
+        if split, compact, let handler = node.edit, let previous = previousColumn(p) {
+            splitBack = (handler, previous)
+        }
+        // What this node added is its children's container (the innermost).
+        for index in count..<elements.count {
+            elements[index].node = node
+            elements[index].container = inside
+        }
+        let within = elements.count > count ? elements.count - 1 : inside
+        let children = split ? shownColumns(node, p) : node.ch
+        for child in children { walk(child, around: texts, inside: within, combined: combined || combines) }
     }
 
-    /// The element a target names: its accessibility identifier, then its
-    /// label exactly, then the last (innermost) whose label holds it.
+    /// A name on the screen (`button-3`, `text-2`): its role and place.
+    static func parseName(_ target: String) -> (role: String, number: Int)? {
+        guard let dash = target.lastIndex(of: "-"), let number = Int(target[target.index(after: dash)...]), number > 0 else {
+            return nil
+        }
+        let role = String(target[..<dash])
+        guard !role.isEmpty, role.allSatisfy(\.isLetter) else { return nil }
+        return (role, number)
+    }
+
+    /// The element a name gives (`button-3`); for `text-<n>`, the element
+    /// the text is in.
+    func named(_ target: String) -> Element? {
+        guard let (role, number) = Self.parseName(target) else { return nil }
+        if role.lowercased() == "text" {
+            guard number <= textNodes.count, let container = textNodes[number - 1].container else { return nil }
+            return elements[container]
+        }
+        return elements.filter { $0.role.lowercased() == role.lowercased() }.dropFirst(number - 1).first
+    }
+
+    /// The element a target names: its name on the screen, its accessibility
+    /// identifier, then its label exactly, then the last (innermost) whose
+    /// label holds it.
     func element(_ target: String, roles: Set<String>? = nil) -> Element? {
+        if let element = named(target) {
+            return roles == nil || roles!.contains(element.role) ? element : nil
+        }
         let candidates = elements.filter { roles == nil || roles!.contains($0.role) }
         return candidates.first { $0.id == target }
             ?? candidates.last { $0.label == target }
@@ -132,6 +243,50 @@ struct DriverScreen {
             ?? draggables.last { $0.label.contains(target) })?.handler
     }
 
+    /// `inspect`: an element or a text in full, as the tree has it.
+    func inspection(_ target: String) -> Wire_Inspection? {
+        var inspection = Wire_Inspection()
+        let node: IsoFlat_Node
+        var container: Int?
+        if let (role, number) = Self.parseName(target), role.lowercased() == "text" {
+            guard number <= textNodes.count else { return nil }
+            node = textNodes[number - 1].node
+            container = textNodes[number - 1].container
+            inspection.name = "text-\(number)"
+            inspection.role = "text"
+            // The text as listed: a combined element's, its texts as one.
+            inspection.label = texts[number - 1]
+        } else {
+            guard let element = element(target), let elementNode = element.node else { return nil }
+            node = elementNode
+            container = element.container
+            inspection.name = element.name
+            inspection.role = element.role
+            inspection.label = element.label
+            if let id = element.id { inspection.id = id }
+            if let value = element.value { inspection.value = value }
+            inspection.options = element.options
+        }
+        if let container { inspection.container = elements[container].name }
+        inspection.texts = Self.textsUnder(node)
+        switch node.kind {
+        case .hostview: inspection.kind = node.view ?? "hostView"
+        case .textfield: inspection.kind = "textField"
+        default: inspection.kind = "\(node.kind)"
+        }
+        inspection.actions = [node.tap.map { _ in "tap" }, node.edit.map { _ in "edit" }, node.drag.map { _ in "drag" }]
+            .compactMap { $0 }
+        inspection.params = Self.params(node)
+        if let size = node.size { inspection.fontSize = size }
+        if let weight = node.weight { inspection.fontWeight = weight }
+        if let lines = node.lines { inspection.lines = lines }
+        if let color = node.color {
+            func hex(_ channel: Float32) -> String { String(format: "%02x", Int((max(0, min(1, channel)) * 255).rounded())) }
+            inspection.color = "#" + hex(color.r) + hex(color.g) + hex(color.b) + hex(color.a)
+        }
+        return inspection
+    }
+
     var wire: Wire_Screen {
         var screen = Wire_Screen()
         screen.texts = texts
@@ -142,6 +297,7 @@ struct DriverScreen {
             if let id = element.id { entry.id = id }
             if let value = element.value { entry.value = value }
             entry.options = element.options
+            entry.name = element.name
             return entry
         }
         screen.presented = presented.map { presentation in
@@ -193,7 +349,7 @@ public final class IsomerAppDriver {
         encoder = FlatTreeEncoder()
         guard let root = try? IsoFlat_Node(treeBytes: encoder.encode(root: tree)) else { return nil }
         Runtime.shared.installTreeHandlers(encoder.handlers)
-        return DriverScreen(root)
+        return DriverScreen(root, compact: Runtime.shared.compactWidth)
     }
 
     /// Frames until the screen holds still (three readings in a row the same,
@@ -230,6 +386,15 @@ public final class IsomerAppDriver {
             break
         case "info":
             break
+        case "inspect":
+            if let inspection = before?.inspection(target) {
+                var answer = Wire_Answer()
+                answer.ok = true
+                answer.inspection = inspection
+                if let before { answer.screen = before.wire }
+                return answer
+            }
+            error = "no element \(target)"
         case "tap":
             if let handler = before?.element(target, roles: ["button"])?.handler {
                 runtime.hostViewEvent(id: handler, value: "")
@@ -282,7 +447,15 @@ public final class IsomerAppDriver {
                 error = target.isEmpty ? "nothing on the screen takes a swipe" : "\(target) takes no swipe"
             }
         case "back":
-            if !runtime.handleBackButton() { error = "nothing to go back from" }
+            // A navigation stack's page first; then a compact split view's
+            // column, as its host goes back to the column before.
+            if !runtime.handleBackButton() {
+                if let back = before?.splitBack {
+                    runtime.hostViewEvent(id: back.handler, value: "compact:\(back.column):back")
+                } else {
+                    error = "nothing to go back from"
+                }
+            }
         case "dismiss":
             if let dismiss = before?.presented.last?.dismiss {
                 runtime.hostViewEvent(id: dismiss, value: "")

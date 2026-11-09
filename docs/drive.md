@@ -57,8 +57,11 @@ isomer application add staging grpc://build-host:7701 --token-file ~/.staging-to
 isomer application select storybook
 isomer application list
 
-isomer ls                          # the screen
+isomer ls                          # the screen, a line an element: button-1 "Tap", text-3 "Taps: 0"
+isomer ls text                     # one role: text, button, textField, toggle…
 isomer info                        # name, platform, renderer, window
+isomer inspect text-3              # one element in full: kind, actions, font, colour, its parameters
+isomer tap button-1                # by name (role and place), identifier or label
 isomer tap Tap
 isomer type Title "Hits"
 isomer set Wi-Fi 0
@@ -69,7 +72,11 @@ isomer wait "Taps: 1" --timeout 10
 isomer drive                       # JSON lines on standard input
 ```
 
-`--app <name>` drives another than the selected one, `--url <url>` one with
+An element's name is its role and its place among that role's on the
+screen, from 1 (`button-3`, `textField-1`; `text-2` the second text): any
+command takes it as its target, resolved by the app against the screen
+as it stands, so a name from one `ls` holds until the screen changes. A
+text names the button it is in for `tap`. `--app <name>` drives another than the selected one, `--url <url>` one with
 no name, `--json` prints protobuf's JSON. An `exec:` application is started
 on its first command and kept running on a Unix socket, so its state lasts
 between commands, until `isomer application stop <name>`. Applications are
@@ -105,10 +112,24 @@ target:
 let app = try HeadlessApp(executable: path, environment: ["ISO_STORYBOOK_STORY": "state.observableobject"])
 let app = try HeadlessApp(url: "grpc://127.0.0.1:7701", token: token)
 let app = try HeadlessApp(connection: IsomerLocalConnection(server))
+let app = try HeadlessApp(launcher: launcher, environment: ["ISO_STORYBOOK_STORY": "state.observableobject"])
 try app.tap("Tap")
 try app.wait(for: "Taps: 1")
 ```
 
-The examples' //remote tests drive the Storybook over each transport, with
-tokens, a head's session, the hub and the CLI; //remote:headful_web_test the
-web Storybook in Chrome through the hub.
+`HeadlessApp(launcher:environment:)` drives a headful app with the same
+test: the test holds a hub of its own (IsomerServing's `IsomerHub`, on a
+loopback WebSocket), and the launcher, run as `<launcher> <hub URL> <name>
+[KEY=VALUE…]`, starts the app dialling out to it (ISO_DRIVER,
+ISO_DRIVER_NAME) and ends it when stopped. A launcher a platform: the web's
+is the examples' headless/storybook_headless_application/web_launcher.sh
+(headless Chrome under browser_check `--hold`); Android's (an emulator's `am
+start` with the extras, the hub's port reversed with `adb reverse`) and the
+iPhone's come next.
+
+The examples' //headless tests drive the Storybook built headless, and
+:storybook_headful_web_test runs the same source against the web Storybook
+headful (ISOMER_HEADFUL_LAUNCHER names the launcher; CI's container runs
+both on every pull request). The //remote tests drive it over each
+transport, with tokens, a head's session, the hub and the CLI;
+//remote:headful_web_test the web Storybook in Chrome through the CLI's hub.

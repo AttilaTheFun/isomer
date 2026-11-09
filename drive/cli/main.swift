@@ -8,8 +8,10 @@
 //   isomer application list
 //   isomer application stop <name>          an exec: app started in the background
 //
-//   isomer ls | info
-//   isomer tap <element>
+//   isomer ls [<role>…] | info              (ls text, ls button: one role)
+//   isomer inspect <element>                everything the app knows of one
+//   isomer tap <element>                    an element: its name (button-3,
+//                                           text-2), identifier or label
 //   isomer type <element> <text>
 //   isomer set <element> <value>
 //   isomer select <element> <option>
@@ -182,8 +184,18 @@ func command(_ verb: String, _ rest: [String], _ options: Options) -> Wire_Comma
         return rest[index]
     }
     switch verb {
-    case "ls", "info", "back", "dismiss", "quit": break
+    case "ls":
+        // `ls <role>…`: only those roles (the filter is the CLI's own: the
+        // app answers with the whole screen).
+        if !rest.isEmpty {
+            shownRoles = Set(rest.map { role in
+                let lower = role.lowercased()
+                return lower.hasSuffix("s") && lower.count > 1 ? String(lower.dropLast()) : lower
+            })
+        }
+    case "info", "back", "dismiss", "quit": break
     case "tap": command.target = argument(0, "tap <element>")
+    case "inspect": command.target = argument(0, "inspect <element>")
     case "type":
         command.target = argument(0, "type <element> <text>")
         command.text = argument(1, "type <element> <text>")
@@ -208,28 +220,82 @@ func command(_ verb: String, _ rest: [String], _ options: Options) -> Wire_Comma
     return command
 }
 
-/// An answer as a person reads it.
+/// The roles `ls <role>` shows (button, text, textField, toggle, picker,
+/// slider, sheet, alert…; a plural as its singular), every one when nil.
+nonisolated(unsafe) var shownRoles: Set<String>?
+
+/// A label or a text as Swift writes a string: in double quotes, its quotes
+/// and backslashes escaped; one of several lines as a multiline literal
+/// ("""), its lines as they are, only backslashes and a triple quote
+/// escaped.
+func quoted(_ text: String) -> String {
+    let backslashed = text.replacingOccurrences(of: "\\", with: "\\\\")
+    if text.contains("\n") {
+        let body = backslashed.replacingOccurrences(of: "\"\"\"", with: "\\\"\"\"")
+        return "\"\"\"\n" + body + "\n\"\"\""
+    }
+    return "\"" + backslashed.replacingOccurrences(of: "\"", with: "\\\"") + "\""
+}
+
+/// An answer as a person reads it: a line an element, in the screen's order
+/// (what is presented, the controls, then the texts).
 func describe(_ answer: Wire_Answer) -> String {
     var lines: [String] = []
     if answer.hasError { lines.append("error: \(answer.error)") }
+    // `info`: what the app is, not its screen (`ls` for that).
     if answer.hasInfo {
         let info = answer.info
-        lines.append("\(info.name) \(info.version) (\(info.bundleIdentifier))")
+        var first = info.name
+        if !info.version.isEmpty { first += " \(info.version)" }
+        if !info.bundleIdentifier.isEmpty { first += " (\(info.bundleIdentifier))" }
+        lines.append(first)
         lines.append("\(info.platform), \(info.renderer), \(Int(info.width))×\(Int(info.height))")
+        return lines.joined(separator: "\n")
+    }
+    func shown(_ role: String) -> Bool {
+        shownRoles.map { $0.contains(role.lowercased()) } ?? true
     }
     let screen = answer.screen
-    for presentation in screen.presented {
-        lines.append("[\(presentation.style)] \(presentation.title)\(presentation.message.isEmpty ? "" : ": \(presentation.message)")")
-    }
-    for element in screen.elements {
-        var line = "\(element.role) \"\(element.label)\""
-        if element.hasID { line += " #\(element.id)" }
-        if element.hasValue { line += " = \(element.value)" }
-        if !element.options.isEmpty { line += " [\(element.options.joined(separator: ", "))]" }
+    for presentation in screen.presented where shown(presentation.style) {
+        var line = "\(presentation.style) \(quoted(presentation.title))"
+        if !presentation.message.isEmpty { line += ": \(quoted(presentation.message))" }
         lines.append(line)
     }
-    if !screen.texts.isEmpty {
-        lines.append("texts: " + screen.texts.joined(separator: " | "))
+    for element in screen.elements where shown(element.role) {
+        var line = "\(element.name.isEmpty ? element.role : element.name) \(quoted(element.label))"
+        if element.hasID { line += " #\(element.id)" }
+        if element.hasValue { line += " = \(quoted(element.value))" }
+        if !element.options.isEmpty { line += " [\(element.options.map(quoted).joined(separator: ", "))]" }
+        lines.append(line)
+    }
+    if shown("text") {
+        for (index, text) in screen.texts.enumerated() { lines.append("text-\(index + 1) \(quoted(text))") }
+    }
+    return lines.joined(separator: "\n")
+}
+
+/// `inspect`'s answer: a field a line.
+func describe(_ inspection: Wire_Inspection) -> String {
+    var lines = ["\(inspection.name) \(quoted(inspection.label))", "role: \(inspection.role)", "kind: \(inspection.kind)"]
+    if inspection.hasID { lines.append("id: \(inspection.id)") }
+    if inspection.hasValue { lines.append("value: \(quoted(inspection.value))") }
+    if !inspection.options.isEmpty { lines.append("options: " + inspection.options.map(quoted).joined(separator: ", ")) }
+    if inspection.hasContainer { lines.append("in: \(inspection.container)") }
+    if !inspection.actions.isEmpty { lines.append("actions: " + inspection.actions.joined(separator: ", ")) }
+    if inspection.hasFontSize || inspection.hasFontWeight {
+        var font = "font:"
+        if inspection.hasFontSize { font += " \(inspection.fontSize)pt" }
+        if inspection.hasFontWeight { font += " weight \(inspection.fontWeight)" }
+        lines.append(font)
+    }
+    if inspection.hasColor { lines.append("color: \(inspection.color)") }
+    if inspection.hasLines { lines.append("lines: \(inspection.lines)") }
+    if !inspection.texts.isEmpty, inspection.texts != [inspection.label],
+       inspection.texts.joined(separator: "\n") != inspection.label {
+        lines.append("texts: " + inspection.texts.map(quoted).joined(separator: ", "))
+    }
+    for key in inspection.params.keys.sorted() {
+        lines.append("\(key): \(quoted(inspection.params[key]!))")
     }
     return lines.joined(separator: "\n")
 }
@@ -247,7 +313,13 @@ func run(_ commands: [Wire_Command], _ options: Options) async throws -> Bool {
     for command in commands {
         try await call.write(command)
         guard let answer = try await answers.next() else { fail("the app ended the call") }
-        print(options.json ? json(answer) : describe(answer))
+        if options.json {
+            print(json(answer))
+        } else if command.cmd == "inspect", answer.hasInspection {
+            print(describe(answer.inspection))
+        } else {
+            print(describe(answer))
+        }
         if !answer.ok { ok = false }
     }
     await call.finish()
@@ -278,89 +350,6 @@ func driveInteractively(_ options: Options) async throws {
 
 // MARK: - The hub headful apps dial out to
 
-/// Apps that dialled out (Driver.Attach), driven by name (Headless.Drive
-/// with `iso-target`, or the only one attached).
-actor Hub: IsomerServer {
-    struct Attached {
-        let commands: IsomerOutbound<Wire_Command>
-        var answers: AsyncThrowingStream<Wire_Answer, any Error>.AsyncIterator
-    }
-
-    let authorization: IsomerAuthorization
-    var attached: [String: Attached] = [:]
-    var waiting: [String: CheckedContinuation<Void, Never>] = [:]
-
-    init(authorization: IsomerAuthorization) {
-        self.authorization = authorization
-    }
-
-    nonisolated func attach(_ answers: IsomerInbound<Wire_Answer>, _ commands: IsomerOutbound<Wire_Command>, context: IsomerCallContext) async throws {
-        try authorization.check(context)
-        var iterator = answers.makeAsyncIterator()
-        guard let hello = try await iterator.next(), hello.hasInfo else {
-            throw IsomerCallError(.invalidArgument, "an app attaching says who it is first")
-        }
-        let name = context.target ?? hello.info.name
-        print("attached: \(name) (\(hello.info.platform), \(hello.info.renderer))")
-        fflush(stdout)
-        await register(name, Attached(commands: commands, answers: iterator))
-        // Held open until the app goes: the call ends when its answers do.
-        await held(name)
-    }
-
-    func register(_ name: String, _ app: Attached) {
-        attached[name] = app
-    }
-
-    func held(_ name: String) async {
-        await withCheckedContinuation { waiting[name] = $0 }
-    }
-
-    func release(_ name: String) {
-        attached[name] = nil
-        waiting.removeValue(forKey: name)?.resume()
-        print("detached: \(name)")
-        fflush(stdout)
-    }
-
-    /// One command to an attached app, and its answer.
-    func send(_ command: Wire_Command, to name: String) async throws -> Wire_Answer {
-        guard var app = attached[name] else { throw IsomerCallError(.notFound, "no app attached as \(name)") }
-        try await app.commands.write(command)
-        let answer: Wire_Answer?
-        do {
-            answer = try await app.answers.next()
-        } catch {
-            release(name)
-            throw error
-        }
-        guard let answer else {
-            release(name)
-            throw IsomerCallError(.unavailable, "\(name) has gone")
-        }
-        attached[name] = app
-        return answer
-    }
-
-    func target(for context: IsomerCallContext) throws -> String {
-        if let target = context.target { return target }
-        guard attached.count == 1, let only = attached.keys.first else {
-            throw IsomerCallError(.notFound, attached.isEmpty
-                ? "no app has attached" : "several apps attached (\(attached.keys.sorted().joined(separator: ", "))): name one")
-        }
-        return only
-    }
-
-    nonisolated func drive(_ commands: IsomerInbound<Wire_Command>, _ answers: IsomerOutbound<Wire_Answer>, context: IsomerCallContext) async throws {
-        try authorization.check(context)
-        let name = try await target(for: context)
-        for try await command in commands {
-            try await answers.write(try await send(command, to: name))
-            if command.cmd == "quit" { return }
-        }
-    }
-}
-
 func hub(_ arguments: [String]) async throws {
     var grpcPort: Int?
     var wsPort: Int?
@@ -379,7 +368,11 @@ func hub(_ arguments: [String]) async throws {
     if host != "127.0.0.1" && host != "localhost" && tokens.isEmpty {
         fail("a hub on \(host) needs a --token: apps and drivers on the network present it")
     }
-    let server = Hub(authorization: IsomerAuthorization(tokens: tokens))
+    // Apps that dialled out (Driver.Attach), driven by name (IsomerHub).
+    let server = IsomerHub(authorization: IsomerAuthorization(tokens: tokens)) { event in
+        print(event)
+        fflush(stdout)
+    }
     try await withThrowingTaskGroup(of: Void.self) { group in
         if grpcPort != nil || wsPort == nil {
             guard #available(macOS 15.0, *) else { fail("the gRPC hub needs macOS 15: use --ws") }

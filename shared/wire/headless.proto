@@ -16,11 +16,13 @@ option java_package = "dev.isomer.wire";
 option java_multiple_files = true;
 
 message Command {
-  // ls, info, tap, type, set, select, swipe, back, dismiss, wait or quit
-  // (headless/libraries/swift_ui/HeadlessHost.swift says each).
+  // ls, info, inspect, tap, type, set, select, swipe, back, dismiss, wait or
+  // quit (drive/driver/IsomerAppDriver.swift says each).
   string cmd = 1;
-  // The element: its accessibility identifier, its label, or the last whose
-  // label holds it.
+  // The element: its name on the screen (`button-3`, `text-2`: its role and
+  // its place among that role's, from 1), its accessibility identifier, its
+  // label, or the last whose label holds it. A text taps or inspects as
+  // itself; `tap` on a text taps the button holding it.
   string target = 2;
   // `type`'s text; `wait`'s text to wait for.
   string text = 3;
@@ -42,6 +44,8 @@ message Answer {
   // What the app is: `info`'s answer, and the first message an app that
   // dials out sends (session_service.proto's Driver.Attach).
   Info info = 4;
+  // `inspect`'s answer: one element or text in full.
+  Inspection inspection = 5;
 }
 
 message Info {
@@ -77,6 +81,37 @@ message Element {
   optional string value = 4;
   // A picker's or a segmented control's options, by label.
   repeated string options = 5;
+  // Its name on this screen: its role and its place among that role's, from
+  // 1 (`button-3`). A text's is `text-<n>`, its place in Screen.texts.
+  string name = 6;
+}
+
+// An element or a text as the app's tree has it: what `inspect` answers.
+message Inspection {
+  // Its name on the screen (`button-3`, `text-2`) and its role.
+  string name = 1;
+  string role = 2;
+  string label = 3;
+  optional string id = 4;
+  optional string value = 5;
+  repeated string options = 6;
+  // The texts inside it, in order.
+  repeated string texts = 7;
+  // What the tree has it as: text, box, stack, textField, slider, a host
+  // view's kind (toggle, picker, navstack…).
+  string kind = 8;
+  // What it does with input: tap, edit, drag.
+  repeated string actions = 9;
+  // Its node's parameters: accessibility (a11yLabel, a11yValue, a11yHint…),
+  // a control's title and style, disabled, and what its host reads.
+  map<string, string> params = 10;
+  // A text's font size and weight, its colour (#rrggbbaa), its line limit.
+  optional double font_size = 11;
+  optional int32 font_weight = 12;
+  optional string color = 13;
+  optional int32 lines = 14;
+  // The element it is in (a text in a button: the button's name).
+  optional string container = 15;
 }
 
 message Presentation {
