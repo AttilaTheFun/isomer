@@ -25,6 +25,9 @@ public final class IsomerLocalServer {
         current = server
     }
 
+    // Where a test can be hosted: a run loop to turn (not the web's wasm,
+    // nor Android's Foundation, where registering is all there is).
+    #if !os(WASI) && !os(Android)
     /// One command and its answer, on the main thread, where the caller is:
     /// the driver runs as the main actor's work does while this turns the
     /// main run loop, as XCUITest's waits do, so the app keeps drawing and
@@ -48,6 +51,7 @@ public final class IsomerLocalServer {
         }
         return current
     }
+    #endif
 
     private final class Answer {
         var value: Wire_Answer?
