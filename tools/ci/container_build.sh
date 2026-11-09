@@ -205,7 +205,7 @@ cd "$root"
 # here does).
 bazel build //swift_gpu/linux:gl_backend_test //linux/libraries/swift_ui_wasm
 built_gl=$?
-run_tests --test_output=errors //tests/renderer:mock_renderer_test //tests/snapshot:snapshot_test
+run_tests --test_output=errors //tests/renderer:mock_renderer_test //tests/snapshot:snapshot_test //tests/hub:hub_test
 checked=$?
 echo "container_build.sh: the tests took $((SECONDS - start)) s"
 
