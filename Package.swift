@@ -128,7 +128,7 @@ let package = Package(
         ),
         // The modules SwiftUI stands on, off Apple: what Isomer's SwiftUI
         // reads of its host and runtime (IsomerSwiftUI: the render tree's wire
-        // format, tree.pb.swift being protoc's, checked in), CoreTransferable,
+        // format, shared/wire/tree.proto, generated as it builds), CoreTransferable,
         // UniformTypeIdentifiers and ImageIO under Apple's names.
         .target(
             name: "IsomerSwiftUI",
@@ -137,7 +137,10 @@ let package = Package(
                 .target(name: "Foundation", condition: .when(platforms: [.android, .wasi])),
             ],
             path: "shared/isomer_swift_ui",
-            exclude: ["BUILD.bazel"]
+            exclude: ["BUILD.bazel"],
+            // tree.proto's Swift, generated as it builds (swift-protobuf-config.json);
+            // Bazel's, which runs no plugin: //shared/isomer_swift_ui:tree_messages.
+            plugins: [.plugin(name: "SwiftProtobufPlugin", package: "swift-protobuf")]
         ),
         .target(
             name: "CoreTransferable",
@@ -217,7 +220,7 @@ let package = Package(
             exclude: ["BUILD.bazel"]
         ),
         // Driving and serving an app (drive/, docs/drive_plan.md): the
-        // messages (shared/wire: protoc's Swift, checked in), the services
+        // messages (shared/wire's protos, generated as they build), the services
         // apart from any transport (IsomerServing: builds wherever Isomer
         // does), the transports (standard input and output or a Unix socket;
         // WebSockets; gRPC Swift 2), a client by URL (IsomerRemote), the
@@ -229,7 +232,10 @@ let package = Package(
                 .target(name: "Foundation", condition: .when(platforms: [.android, .wasi])),
             ],
             path: "shared/wire/swift",
-            exclude: ["BUILD.bazel"]
+            exclude: ["BUILD.bazel"],
+            // session.proto's and headless.proto's Swift, generated as it builds
+            // (swift-protobuf-config.json); Bazel's: //shared/wire/swift:messages.
+            plugins: [.plugin(name: "SwiftProtobufPlugin", package: "swift-protobuf")]
         ),
         .target(
             name: "IsomerServing",
@@ -263,9 +269,7 @@ let package = Package(
             name: "IsomerGRPCTransport",
             dependencies: [
                 "IsomerServing",
-                "IsomerWire",
                 .product(name: "GRPCCore", package: "grpc-swift-2"),
-                .product(name: "GRPCProtobuf", package: "grpc-swift-protobuf"),
                 .product(name: "GRPCNIOTransportHTTP2", package: "grpc-swift-nio-transport"),
             ],
             path: "drive/grpc",

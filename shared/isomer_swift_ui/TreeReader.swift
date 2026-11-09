@@ -1,10 +1,17 @@
 // The render tree as a reader sees it (Apple's tree view, the GPU renderer's
 // decoder, the headless host, the tests): the wire format's messages
-// (tree.pb.swift, from shared/wire/tree.proto) with an optional where a field
-// may be absent, under the names the tree's readers have always used
+// (shared/wire/tree.proto's, generated as it builds) with an optional where
+// a field may be absent, under the names the tree's readers have always used
 // (IsoFlat_*, from when the wire format was FlatBuffers).
 
 import SwiftProtobuf
+// tree.proto's messages: generated into this module by swift-protobuf's
+// plugin in a SwiftPM build; a module of their own under Bazel
+// (//shared/wire:tree_messages), re-exported, so `import IsomerSwiftUI` gives
+// them either way.
+#if canImport(IsomerTreeMessages)
+@_exported import IsomerTreeMessages
+#endif
 
 /// A tree (or a patch) that doesn't parse as the wire format's message.
 public struct IsoFlatDecodingError: Error {}

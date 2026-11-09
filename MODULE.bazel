@@ -152,7 +152,15 @@ swift_deps.configure_package(
 # @isomer by the application's inject_repo (README: "Consuming isomer").
 swift_deps.configure_package(
     name = "isomer",
-    target_deps = {"Foundation": ["@isomer//foundation/internationalization"]},
+    # And the wire protos' Swift, which the package generates with
+    # swift-protobuf's build plugin, a plugin rules_swift_package_manager
+    # doesn't run: swift_proto_library's modules, which IsomerSwiftUI and
+    # IsomerWire re-export (//shared/wire).
+    target_deps = {
+        "Foundation": ["@isomer//foundation/internationalization"],
+        "IsomerSwiftUI": ["@isomer//shared/wire:tree_messages"],
+        "IsomerWire": ["@isomer//shared/wire:wire_messages"],
+    },
 )
 # SwiftProtobuf (the render tree's wire format, shared/wire/tree.proto):
 # where Isomer's Foundation is the Foundation (the web, Android), its
@@ -256,10 +264,11 @@ register_toolchains("@rust_toolchains//:all", dev_dependency = True)
 # (examples' //tests/sqlite_wasi, through //tools/wasm/wasi_run). C compiled for wasm needs the rules_swift
 # patch above (the SDK's clang resource directory).
 
-# protoc, for the render tree's checked-in Swift (shared/wire/tree.proto ->
-# shared/isomer_swift_ui/tree.pb.swift, //shared/wire:tree_swift_test): this
-# module's own check, so a dev dependency.
-bazel_dep(name = "protobuf", version = "34.0.bcr.1", dev_dependency = True)
+# protoc and proto_library: the wire protos' Swift (shared/wire) is generated
+# as it builds, by swift_proto_library (rules_swift), for every application
+# that links IsomerSwiftUI or IsomerWire (a SwiftPM build generates it with
+# swift-protobuf's plugin instead).
+bazel_dep(name = "protobuf", version = "34.0.bcr.1")
 
 # swift_map (//swift_map/...) backs the SwiftUI `Map` view on Apple (Metal) and
 # on every SwiftGPURenderer platform; the platform SwiftUI modules reference

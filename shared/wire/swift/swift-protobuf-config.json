@@ -1,0 +1,9 @@
+{
+    "invocations": [
+        {
+            "protoPath": "..",
+            "protoFiles": ["session.proto", "headless.proto"],
+            "visibility": "public"
+        }
+    ]
+}

@@ -168,9 +168,16 @@ a repository of its own):
   package can't express comes from the Bazel module through configure_package
   `target_deps`: Foundation's internationalization (a marker module Foundation
   checks with `canImport`, `--@isomer//foundation:internationalization`),
-  nothing else. Generated sources the package compiles are checked in, with
-  diff_tests (shared/isomer_swift_ui/tree.pb.swift, protoc's;
-  shared/swift_ui_core/JSONInternal.swift).
+  and the wire protos' Swift (shared/wire): the package generates it as it
+  builds with swift-protobuf's build plugin (each target's
+  swift-protobuf-config.json), a plugin rules_swift_package_manager doesn't
+  run, so under Bazel swift_proto_library generates it as modules of their
+  own (IsomerTreeMessages, IsomerWireMessages), which configure_package's
+  target_deps hand IsomerSwiftUI and IsomerWire and they re-export. No
+  generated protobuf code is checked in; IsomerGRPCTransport registers and
+  calls session_service.proto's methods by name, its messages as bytes.
+  Other generated sources the package compiles are checked in, with
+  diff_tests (shared/swift_ui_core/JSONInternal.swift).
 - **The render tree's wire format is protobuf (0.45)**: shared/wire/tree.proto
   (FlatBuffers' tree.fbs before, field for field: a field's number is its old
   slot + 1). FlatTreeEncoder writes `Wire_Node`/`Wire_Patch`

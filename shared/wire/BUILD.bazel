@@ -1,11 +1,22 @@
-load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
+load("@protobuf//bazel:proto_library.bzl", "proto_library")
+load("@rules_swift//proto:proto.bzl", "swift_proto_compiler", "swift_proto_library")
 
-# The render tree's wire format (tree.proto). Its Swift is checked in
-# (shared/isomer_swift_ui/tree.pb.swift, so isomer's Swift package builds it
-# without protoc); the JavaScript and Kotlin readers are hand-written
+package(default_visibility = ["//visibility:public"])
+
+# The render tree's wire format (tree.proto), the remote session's
+# (session.proto), the headless driver's (headless.proto) and their services
+# (session_service.proto, which IsomerGRPCTransport serves and calls by hand:
+# its messages go through as bytes, so it needs no generated code).
+#
+# Their Swift is generated as they build, never checked in: by
+# swift-protobuf's build plugin in a SwiftPM build (Package.swift, each
+# target's swift-protobuf-config.json), and here, where
+# rules_swift_package_manager runs no plugin, by swift_proto_library. The
+# package's IsomerSwiftUI and IsomerWire take these modules
+# (MODULE.bazel's configure_package target_deps) and re-export them, so
+# `import IsomerWire` gives Wire_Command either way. The JavaScript and
+# Kotlin readers of the tree are hand-written
 # (wasm/libraries/swift_ui/runtime/flat_tree.js, android/…/FlatTree.kt).
-# The remote session's (session.proto) and the headless driver's
-# (headless.proto) Swift is checked in too, in ./swift (IsomerWire).
 exports_files([
     "headless.proto",
     "session.proto",
@@ -13,73 +24,68 @@ exports_files([
     "tree.proto",
 ])
 
-genrule(
-    name = "tree_swift",
-    srcs = ["tree.proto"],
-    outs = ["tree.pb.swift"],
-    cmd = "$(location @protobuf//:protoc) --plugin=protoc-gen-swift=$(location @swiftpkg_swift_protobuf//:protoc-gen-swift) " +
-          "--swift_out=$(RULEDIR) --swift_opt=Visibility=Public -I $$(dirname $(location tree.proto)) $(location tree.proto)",
-    tools = [
-        "@protobuf//:protoc",
-        "@swiftpkg_swift_protobuf//:protoc-gen-swift",
-    ],
-)
-
-diff_test(
-    name = "tree_swift_test",
-    failure_message = "Regenerate shared/isomer_swift_ui/tree.pb.swift: bazel build //shared/wire:tree_swift, and copy its output over it.",
-    file1 = "//shared/isomer_swift_ui:tree.pb.swift",
-    file2 = ":tree_swift",
-)
+# --- The protos, imported by their names alone (`import "session.proto"`) --
 
 [
-    genrule(
-        name = name + "_swift",
+    proto_library(
+        name = name + "_proto",
         srcs = [name + ".proto"],
-        outs = [name + ".pb.swift"],
-        cmd = "$(location @protobuf//:protoc) --plugin=protoc-gen-swift=$(location @swiftpkg_swift_protobuf//:protoc-gen-swift) " +
-              "--swift_out=$(RULEDIR) --swift_opt=Visibility=Public -I $$(dirname $(location " + name + ".proto)) $(location " + name + ".proto)",
-        tools = [
-            "@protobuf//:protoc",
-            "@swiftpkg_swift_protobuf//:protoc-gen-swift",
-        ],
+        strip_import_prefix = "/shared/wire",
     )
-    for name in ["session", "headless"]
+    for name in [
+        "headless",
+        "session",
+        "tree",
+    ]
 ]
 
-[
-    diff_test(
-        name = name + "_swift_test",
-        failure_message = "Regenerate shared/wire/swift/" + name + ".pb.swift: bazel build //shared/wire:" + name + "_swift, and copy its output over it.",
-        file1 = "//shared/wire/swift:" + name + ".pb.swift",
-        file2 = ":" + name + "_swift",
-    )
-    for name in ["session", "headless"]
-]
-
-# The services' gRPC Swift 2 code, client and server (protoc-gen-grpc-swift-2),
-# checked in as drive/grpc/session_service.grpc.swift (IsomerGRPCTransport):
-# its messages are IsomerWire's.
-genrule(
-    name = "session_service_grpc_swift",
-    srcs = [
-        "headless.proto",
-        "session.proto",
-        "session_service.proto",
-    ],
-    outs = ["session_service.grpc.swift"],
-    cmd = "$(location @protobuf//:protoc) --plugin=protoc-gen-grpc-swift=$(location @swiftpkg_grpc_swift_protobuf//:protoc-gen-grpc-swift-2) " +
-          "--grpc-swift_out=$(RULEDIR) --grpc-swift_opt=Visibility=Public,Server=true,Client=true,ExtraModuleImports=IsomerWire " +
-          "-I $$(dirname $(location session_service.proto)) $(location session_service.proto)",
-    tools = [
-        "@protobuf//:protoc",
-        "@swiftpkg_grpc_swift_protobuf//:protoc-gen-grpc-swift-2",
+# Compiled, and so checked, though nothing generates from it.
+proto_library(
+    name = "session_service_proto",
+    srcs = ["session_service.proto"],
+    strip_import_prefix = "/shared/wire",
+    deps = [
+        ":headless_proto",
+        ":session_proto",
     ],
 )
 
-diff_test(
-    name = "session_service_grpc_swift_test",
-    failure_message = "Regenerate drive/grpc/session_service.grpc.swift: bazel build //shared/wire:session_service_grpc_swift, and copy its output over it.",
-    file1 = "//drive/grpc:session_service.grpc.swift",
-    file2 = ":session_service_grpc_swift",
+# --- Their Swift: protoc from the protobuf module, protoc-gen-swift and
+# SwiftProtobuf from the SwiftPM graph (the package's own) ---
+
+swift_proto_compiler(
+    name = "swift_proto",
+    plugin = "@swiftpkg_swift_protobuf//:protoc-gen-swift",
+    plugin_name = "swift",
+    plugin_option_allowlist = [
+        "FileNaming",
+        "Visibility",
+    ],
+    plugin_options = {"Visibility": "Public"},
+    protoc = "@protobuf//:protoc",
+    suffixes = [".pb.swift"],
+    deps = ["@swiftpkg_swift_protobuf//:SwiftProtobuf"],
+)
+
+# The render tree's messages: IsomerSwiftUI's (it re-exports them).
+swift_proto_library(
+    name = "tree_messages",
+    additional_compiler_deps = ["//:foundation"],
+    compilers = [":swift_proto"],
+    module_name = "IsomerTreeMessages",
+    package_name = "isomer",
+    protos = [":tree_proto"],
+)
+
+# The session's and the driver's messages: IsomerWire's (it re-exports them).
+swift_proto_library(
+    name = "wire_messages",
+    additional_compiler_deps = ["//:foundation"],
+    compilers = [":swift_proto"],
+    module_name = "IsomerWireMessages",
+    package_name = "isomer",
+    protos = [
+        ":headless_proto",
+        ":session_proto",
+    ],
 )

@@ -32,10 +32,11 @@ recorded:
 In a stream of bytes (a pipe, a file) each message is length-delimited, as
 protobuf's `writeDelimitedTo` writes them, so a session can be recorded and
 replayed. Over a WebSocket each binary message is one message, and an empty
-one ends its sender's messages. The Swift is generated and checked in
-(`IsomerSwiftUI`'s tree.pb.swift, `IsomerWire` in shared/wire/swift,
-drive/grpc's session_service.grpc.swift), kept current by //shared/wire's
-diff tests; the JavaScript and Kotlin readers and writers are written by
+one ends its sender's messages. The Swift is generated as it builds
+(`IsomerSwiftUI`'s tree messages and `IsomerWire`'s: swift-protobuf's build
+plugin in a SwiftPM build, swift_proto_library under Bazel); drive/grpc serves
+and calls session_service.proto's methods by name, its messages as bytes, so
+nothing is generated for it; the JavaScript and Kotlin readers and writers are written by
 hand against protobuf's wire format, so the web and Android need no protobuf
 library (flat_tree.js and session_messages.js, FlatTree.kt and
 RemoteIsomer.kt).
