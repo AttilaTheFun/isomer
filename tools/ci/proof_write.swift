@@ -128,13 +128,17 @@ for folder in folders {
             var parity: [(String, Int)] = []
             var compared = 0
             for entry in items {
+                // The item's name is the story's title ("Text styles"); its
+                // capture is named by the story's id (text.styles.png), which
+                // is the proof's id.
                 guard let name = entry["name"] as? String, let capture = entry["capture"] as? String else { continue }
                 let picture = cellFolder.appendingPathComponent(capture)
                 guard files.fileExists(atPath: picture.path) else { continue }
-                add(id: "\(device)/\(name.lowercased())", title: entry["title"] as? String, picture: picture)
+                let story = URL(fileURLWithPath: capture).deletingPathExtension().lastPathComponent
+                add(id: "\(device)/\(story.lowercased())", title: name, picture: picture)
                 if entry["parity"] != nil {
                     compared += 1
-                    if let changed = entry["changed_px"] as? Int, changed > 0 { parity.append((name, changed)) }
+                    if let changed = entry["changed_px"] as? Int, changed > 0 { parity.append((story, changed)) }
                 }
             }
             // The iPhone Storybook on Isomer's frameworks held to Apple's:

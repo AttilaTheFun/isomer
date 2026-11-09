@@ -66,6 +66,13 @@ android)
     out="$(cd "$2" && pwd)"
     sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:?no Android SDK on this runner}}"
     adb="$sdk/platform-tools/adb"
+    # The test links swift.org's Foundation, whose networking wants libcurl's
+    # and libxml2's development libraries, which Ubuntu's runner lacks.
+    sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
+        libcurl4-openssl-dev libxml2-dev > /dev/null ||
+        { sudo apt-get update -qq > /dev/null &&
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
+              libcurl4-openssl-dev libxml2-dev > /dev/null; }
     # The job's phone if one is up already (the picture tests leave theirs
     # running), else one booted here.
     serial="$("$adb" devices | awk '$2 == "device" && $1 ~ /^emulator-/ { print $1; exit }')"
