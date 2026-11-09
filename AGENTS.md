@@ -1287,11 +1287,16 @@ screen through the runtime in any host. Headful apps dial out
 (ISO_DRIVER) when built with --@isomer//drive:headful (off by default: never
 in a release). The `iso` CLI (xplat/iso; `drive/cli`'s `isomer` until 0.49)
 keeps apps by name with tokens, drives the selected one, and is the hub apps
-dial out to; with none selected it drives the app on this machine built with
-`--config=cli`, which on Apple's SwiftUI listens at ws://127.0.0.1:7700
-(a simulator's apps share the Mac's loopback): `bazel run
-//apple/storybook_ios_application --config=cli`, then `bazel run //xplat/iso
--- ls`, in the examples. The same SwiftUI
+dial out to. With none selected it drives the apps attached to the hub on its
+machine (ws://127.0.0.1:7710, started in the background if none runs), which
+an app built with `--config=cli` dials when launched without ISO_DRIVER (an
+Android emulator's as 10.0.2.2), retrying until it's there, under its
+platform's name: several at once with `--app ios,android,web` or `--all`
+(drive/serving/IsomerDriving.swift). In the examples: `bazel run
+//apple/storybook_ios_application --config=cli` (and the Android and web
+Storybooks the same way), then `bazel run //xplat/iso -- tap Tap`. Isomer's
+driver scrolls what it uses into sight first (Runtime.reveal), as the Apple
+one does. The same SwiftUI
 source still builds against Apple's SwiftUI with none of it. Tests: the
 examples' //remote (with the headless flag) beside the headless ones, and
 //remote:headful_web_test (with the headful flag) on its own.

@@ -22,7 +22,6 @@ swift_library(
     deps = [
         ":attach",
         "//drive/serving",
-        "//drive/websocket",
         "//shared/wire/swift",
     ],
 )

@@ -11,7 +11,7 @@
 //   iso ls [<role>…] | info              (ls text, ls button: one role)
 //   iso inspect <element>                everything the app knows of one
 //   iso tap <element>                    an element: its name (button-3,
-//                                           text-2), identifier or label
+//                                        text-2), identifier or label
 //   iso type <element> <text>
 //   iso set <element> <value>
 //   iso select <element> <option>
@@ -21,17 +21,26 @@
 //   iso drive                            commands as JSON lines on standard input
 //
 //   iso hub [--grpc <port>] [--ws <port>] [--host <address>] [--token <token>]
-//                                           where headful apps dial out to
-//                                           (ISO_DRIVER=grpc://host:port), each
-//                                           then an app: grpc://host:port/<name>
+//                                        a hub of your own, where headful apps
+//                                        dial out to (ISO_DRIVER=grpc://host:port),
+//                                        each then an app: grpc://host:port/<name>
+//   iso apps                             the apps attached to the hub on this machine
+//   iso hub stop                         ends the hub iso started
 //
-// Options for the commands: --app <name> (not the selected one), --url <url>
-// (no name at all), --json (each answer as protobuf's JSON). With none, and no
-// application selected, the app on this machine built to be driven: one built
-// with --config=cli (--@isomer//drive:headful) listens on ws://127.0.0.1:7700
-// (a simulator's apps share this machine's loopback address). URLs: grpc://,
-// grpcs://, ws://, unix:<socket>, exec:<an app built headless> (started on
-// the first command, kept running on a Unix socket until `stop`).
+// Options for the commands: --url <url> (an app by its URL), --app <name> (an
+// application kept by name, not the selected one), --json (each answer as
+// protobuf's JSON). URLs: grpc://, grpcs://, ws://, unix:<socket>, exec:<an
+// app built headless> (started on the first command, kept running on a Unix
+// socket until `stop`).
+//
+// With no application named or selected, the commands go to the apps
+// attached to the hub on this machine (ws://127.0.0.1:7710), started in the
+// background if none is running. Apps built with --config=cli
+// (--@isomer//drive:headful) dial it when launched without ISO_DRIVER, each
+// under its platform's name: `--app ios,android` names some, `--all` (or no
+// --app, with several attached) every one, each driven at once and its
+// answers printed under its name. A command waits for the apps it names to
+// attach, so the apps and the CLI start in either order.
 //
 // The applications are kept in $XDG_CONFIG_HOME/isomer (~/.config/isomer),
 // readable only by their user.
@@ -149,6 +158,7 @@ func reachableURL(_ name: String, _ application: Application) throws -> String {
 struct Options {
     var app: String?
     var url: String?
+    var all = false
     var json = false
     var timeout: Double = 0
     var rest: [String] = []
@@ -160,6 +170,7 @@ struct Options {
             switch argument {
             case "--app": app = arguments.isEmpty ? nil : arguments.removeFirst()
             case "--url": url = arguments.isEmpty ? nil : arguments.removeFirst()
+            case "--all": all = true
             case "--json": json = true
             case "--timeout": timeout = Double(arguments.isEmpty ? "" : arguments.removeFirst()) ?? 0
             default: rest.append(argument)
@@ -168,25 +179,102 @@ struct Options {
     }
 }
 
-/// Where an app built with --@isomer//drive:headful listens when it's
-/// launched without ISO_DRIVER or ISO_DRIVE_LISTEN (drive/apple).
-let defaultAppURL = "ws://127.0.0.1:7700"
-/// Whether this command went to `defaultAppURL` (nothing named or selected).
-nonisolated(unsafe) var drivingDefaultApp = false
+/// Where the commands go: a URL, an application of the registry, or apps
+/// attached to the hub on this machine.
+enum Destination {
+    case endpoint(IsomerRemote.Endpoint, token: String?)
+    /// Apps attached to the local hub: these names, or (nil) every one.
+    case hub([String]?)
+}
 
-func endpoint(_ options: Options) throws -> (IsomerRemote.Endpoint, String?) {
-    if let url = options.url { return (try IsomerRemote.endpoint(url), ProcessInfo.processInfo.environment["ISO_DRIVE_TOKEN"]) }
+/// The local hub, where apps built with --config=cli (--@isomer//drive:headful)
+/// dial when launched without ISO_DRIVER (IsomerDriving).
+let hubURL = "ws://127.0.0.1:\(IsomerDriving.hubPort)"
+
+func destination(_ options: Options) throws -> Destination {
+    if let url = options.url { return .endpoint(try IsomerRemote.endpoint(url), token: ProcessInfo.processInfo.environment["ISO_DRIVE_TOKEN"]) }
     let registry = Registry.load()
-    // Nothing named or selected: the app on this machine built to be driven
-    // (--config=cli: --@isomer//drive:headful), listening where such an app
-    // listens unless told otherwise (ISO_DRIVE_LISTEN). A simulator's apps
-    // share this machine's loopback address.
-    guard let name = options.app ?? registry.selected else {
-        drivingDefaultApp = true
-        return (try IsomerRemote.endpoint(defaultAppURL), ProcessInfo.processInfo.environment["ISO_DRIVE_TOKEN"])
+    if !options.all, let name = options.app ?? registry.selected, let application = registry.applications[name] {
+        return .endpoint(try IsomerRemote.endpoint(try reachableURL(name, application)), token: application.resolvedToken)
     }
-    guard let application = registry.applications[name] else { fail("no application \(name)") }
-    return (try IsomerRemote.endpoint(try reachableURL(name, application)), application.resolvedToken)
+    if options.all { return .hub(nil) }
+    // `--app ios,android`: apps attached to the hub by those names.
+    return .hub(options.app.map { $0.split(separator: ",").map(String.init) })
+}
+
+/// The apps attached to the local hub, or nil when no hub answers there.
+func attachedApps() async -> [Wire_Attachment]? {
+    do {
+        let endpoint = try IsomerRemote.endpoint(hubURL)
+        let call = try await endpoint.connection.drive(context: endpoint.context(token: nil))
+        var command = Wire_Command()
+        command.cmd = "apps"
+        try await call.write(command)
+        var answers = call.inbound.makeAsyncIterator()
+        let answer = try await answers.next()
+        await call.finish()
+        return answer?.apps ?? []
+    } catch {
+        return nil
+    }
+}
+
+/// The local hub, started in the background (`iso hub stop` ends it) when
+/// none answers; true when it was started now.
+func ensureHub() async -> Bool {
+    if await attachedApps() != nil { return false }
+    let files = runFiles("hub")
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: Bundle.main.executablePath ?? CommandLine.arguments[0])
+    process.arguments = ["hub", "--ws", String(IsomerDriving.hubPort), "--detach"]
+    FileManager.default.createFile(atPath: files.log.path, contents: nil)
+    guard let log = try? FileHandle(forWritingTo: files.log) else { fail("can't write \(files.log.path)") }
+    process.standardInput = FileHandle.nullDevice
+    process.standardOutput = log
+    process.standardError = log
+    do { try process.run() } catch { fail("can't start a hub: \(error)") }
+    try? String(process.processIdentifier).write(to: files.pid, atomically: true, encoding: .utf8)
+    for _ in 0..<100 {
+        if await attachedApps() != nil {
+            FileHandle.standardError.write(Data("iso: started a hub at \(hubURL), where apps built with --config=cli attach (iso hub stop ends it)\n".utf8))
+            return true
+        }
+        if !process.isRunning { fail("the hub ended starting (\(files.log.path))") }
+        try? await Task.sleep(nanoseconds: 50_000_000)
+    }
+    fail("the hub didn't start listening (\(files.log.path))")
+}
+
+/// The names of the apps the commands go to, once they have attached: those
+/// named, waited for; or every app attached (a moment's wait first when the
+/// hub has just started, for the apps dialling it to attach).
+func hubTargets(_ names: [String]?) async -> [String] {
+    let started = await ensureHub()
+    let deadline = Date().addingTimeInterval(20)
+    var said = false
+    if started, names == nil { try? await Task.sleep(nanoseconds: 2_500_000_000) }
+    while true {
+        let attached = (await attachedApps() ?? []).map(\.name)
+        if let names {
+            if names.allSatisfy(attached.contains) { return names }
+        } else if !attached.isEmpty {
+            return attached
+        }
+        if Date() > deadline {
+            let missing = names.map { $0.filter { !attached.contains($0) } } ?? []
+            fail("""
+                \(names == nil ? "no app has attached" : "not attached: \(missing.joined(separator: ", "))") to the hub at \(hubURL)\
+                \(attached.isEmpty ? "" : " (attached: \(attached.joined(separator: ", ")))"). Run apps built with --config=cli, \
+                for example `bazel run //apple/storybook_ios_application --config=cli` in isomer's examples, or name one \
+                elsewhere: iso application add <name> <url>
+                """)
+        }
+        if !said {
+            FileHandle.standardError.write(Data("iso: waiting for \(names?.joined(separator: ", ") ?? "an app") to attach to \(hubURL)…\n".utf8))
+            said = true
+        }
+        try? await Task.sleep(nanoseconds: 250_000_000)
+    }
 }
 
 /// The command the arguments name, as headless.proto's.
@@ -318,32 +406,83 @@ func json(_ answer: Wire_Answer) -> String {
     (try? answer.jsonString()) ?? "{}"
 }
 
-/// Sends `commands`, printing each answer; false if one failed.
-func run(_ commands: [Wire_Command], _ options: Options) async throws -> Bool {
-    let (endpoint, token) = try endpoint(options)
-    let call = try await endpoint.connection.drive(context: endpoint.context(token: token))
-    var answers = call.inbound.makeAsyncIterator()
-    var ok = true
-    for command in commands {
-        try await call.write(command)
-        guard let answer = try await answers.next() else { fail("the app ended the call") }
-        if options.json {
-            print(json(answer))
-        } else if command.cmd == "inspect", answer.hasInspection {
-            print(describe(answer.inspection))
-        } else {
-            print(describe(answer))
+/// An answer as the CLI prints it.
+func render(_ answer: Wire_Answer, for command: Wire_Command, _ options: Options) -> String {
+    if options.json { return json(answer) }
+    if command.cmd == "inspect", answer.hasInspection { return describe(answer.inspection) }
+    return describe(answer)
+}
+
+/// Sends `commands` over one call, answers in order; the answers so far and
+/// the error that ended them early, if one did.
+func send(_ commands: [Wire_Command], over endpoint: IsomerRemote.Endpoint, context: IsomerCallContext) async -> ([Wire_Answer], String?) {
+    var answers: [Wire_Answer] = []
+    do {
+        let call = try await endpoint.connection.drive(context: context)
+        var inbound = call.inbound.makeAsyncIterator()
+        for command in commands {
+            try await call.write(command)
+            guard let answer = try await inbound.next() else { return (answers, "the app ended the call") }
+            answers.append(answer)
         }
-        if !answer.ok { ok = false }
+        await call.finish()
+        return (answers, nil)
+    } catch {
+        return (answers, "\(error)")
     }
-    await call.finish()
-    return ok
+}
+
+/// Sends `commands`, printing each answer; false if one failed. To several
+/// apps on the hub at once, each app's answers under its name, in the order
+/// the apps were named.
+func run(_ commands: [Wire_Command], _ options: Options) async throws -> Bool {
+    switch try destination(options) {
+    case .endpoint(let endpoint, let token):
+        let (answers, error) = await send(commands, over: endpoint, context: endpoint.context(token: token))
+        for (command, answer) in zip(commands, answers) { print(render(answer, for: command, options)) }
+        if let error { fail(error) }
+        return answers.allSatisfy(\.ok)
+    case .hub(let names):
+        let targets = await hubTargets(names)
+        let endpoint = try IsomerRemote.endpoint(hubURL)
+        let results = await withTaskGroup(of: (String, [Wire_Answer], String?).self) { group in
+            for target in targets {
+                group.addTask {
+                    let (answers, error) = await send(commands, over: endpoint, context: endpoint.context(token: nil, metadata: ["iso-target": target]))
+                    return (target, answers, error)
+                }
+            }
+            var results: [String: ([Wire_Answer], String?)] = [:]
+            for await (target, answers, error) in group { results[target] = (answers, error) }
+            return results
+        }
+        var ok = true
+        for target in targets {
+            let (answers, error) = results[target]!
+            if targets.count > 1 { print("── \(target) ──") }
+            for (command, answer) in zip(commands, answers) { print(render(answer, for: command, options)) }
+            if let error { print("error: \(error)") }
+            if error != nil || !answers.allSatisfy(\.ok) { ok = false }
+        }
+        return ok
+    }
 }
 
 /// Commands as JSON lines on standard input, each answer a line of JSON.
 func driveInteractively(_ options: Options) async throws {
-    let (endpoint, token) = try endpoint(options)
-    let call = try await endpoint.connection.drive(context: endpoint.context(token: token))
+    let endpoint: IsomerRemote.Endpoint
+    let context: IsomerCallContext
+    switch try destination(options) {
+    case .endpoint(let given, let token):
+        (endpoint, context) = (given, given.context(token: token))
+    case .hub(let names):
+        // One app: JSON lines are one conversation.
+        let targets = await hubTargets(names)
+        guard targets.count == 1 else { fail("iso drive drives one app: name it with --app (attached: \(targets.joined(separator: ", ")))") }
+        endpoint = try IsomerRemote.endpoint(hubURL)
+        context = endpoint.context(token: nil, metadata: ["iso-target": targets[0]])
+    }
+    let call = try await endpoint.connection.drive(context: context)
     var answers = call.inbound.makeAsyncIterator()
     var decoding = JSONDecodingOptions()
     decoding.ignoreUnknownFields = true
@@ -365,6 +504,17 @@ func driveInteractively(_ options: Options) async throws {
 // MARK: - The hub headful apps dial out to
 
 func hub(_ arguments: [String]) async throws {
+    if arguments.first == "stop" {
+        let files = runFiles("hub")
+        if let pid = running(files.pid) {
+            kill(pid, SIGTERM)
+            print("stopped the hub at \(hubURL)")
+        } else {
+            print("no hub of iso's running")
+        }
+        try? FileManager.default.removeItem(at: files.pid)
+        return
+    }
     var grpcPort: Int?
     var wsPort: Int?
     var host = "127.0.0.1"
@@ -376,7 +526,10 @@ func hub(_ arguments: [String]) async throws {
         case "--ws": wsPort = Int(rest.popFirst() ?? "")
         case "--host": host = rest.popFirst() ?? host
         case "--token": if let token = rest.popFirst() { tokens.insert(token) }
-        default: fail("usage: iso hub [--grpc <port>] [--ws <port>] [--host <address>] [--token <token>]")
+        // Started by `iso` itself: a session of its own, so the terminal's
+        // signals to the command that started it don't reach it.
+        case "--detach": _ = setsid()
+        default: fail("usage: iso hub [--grpc <port>] [--ws <port>] [--host <address>] [--token <token>] | iso hub stop")
         }
     }
     if host != "127.0.0.1" && host != "localhost" && tokens.isEmpty {
@@ -416,7 +569,7 @@ func hub(_ arguments: [String]) async throws {
 let parsed = Options(CommandLine.arguments.dropFirst())
 let arguments = parsed.rest[...]
 guard let verb = arguments.first else {
-    print("iso application add|remove|select|list|stop …, then iso ls|info|tap|type|set|select|swipe|back|dismiss|wait|drive, or iso hub")
+    print("iso ls|info|tap|type|set|select|swipe|back|dismiss|wait|drive [--app <name>[,<name>…] | --all], iso apps, iso hub [stop], iso application add|remove|select|list|stop …")
     exit(2)
 }
 
@@ -460,6 +613,11 @@ do {
         }
     case "hub":
         try await hub(Array(arguments.dropFirst()))
+    case "apps":
+        _ = await ensureHub()
+        for app in await attachedApps() ?? [] {
+            print("\(app.name)  \(app.info.name) (\(app.info.platform), \(app.info.renderer))")
+        }
     case "drive":
         try await driveInteractively(parsed)
     case "help", "--help", "-h":
@@ -468,12 +626,5 @@ do {
         exit(try await run([command(verb, Array(arguments.dropFirst()), parsed)], parsed) ? 0 : 1)
     }
 } catch {
-    if drivingDefaultApp, "\(error)".contains("refused") {
-        fail("""
-            no app is listening at \(defaultAppURL). Run one built to be driven, for example \
-            `bazel run //apple/storybook_ios_application --config=cli` in isomer's examples, \
-            or name one: iso application add <name> <url>
-            """)
-    }
     fail("\(error)")
 }

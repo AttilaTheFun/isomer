@@ -131,6 +131,19 @@ package final class FlatTreeEncoder {
     /// renderers.
     package var semantic = false
 
+    /// The runtime's `revealEpoch` this encoder last flattened for.
+    private var revealEpoch = 0
+
+    /// A driver's reveal since the last pass: the cached subtrees, flattened
+    /// without its mark, are flattened again.
+    private func noteReveal() {
+        let epoch = Runtime.shared.revealEpoch
+        if epoch != revealEpoch {
+            revealEpoch = epoch
+            flattenCache = [:]
+        }
+    }
+
     /// Drop the retained tree so the next `encodePatch` re-sends the full tree as
     /// a single root op (e.g. after the consumer resets, or a bundle reload).
     public func resetRetainedTree() {
@@ -143,6 +156,7 @@ package final class FlatTreeEncoder {
     /// Encodes `root` (with any pending presentations layered over it) as a
     /// `Node` root. Unchanged from the pre-diff wire format.
     public func encode(root: RenderNode) -> [UInt8] {
+        noteReveal()
         handlers = [:]
         appearances = []
         disappearances = [:]
@@ -162,6 +176,7 @@ package final class FlatTreeEncoder {
     /// op at path "n" carrying the whole tree. Ships over the same transport as
     /// `encode` — the host distinguishes them because it opted into diffs.
     public func encodePatch(root: RenderNode) -> [UInt8] {
+        noteReveal()
         handlers = [:]
         appearances = []
         disappearances = [:]
@@ -561,6 +576,12 @@ package final class FlatTreeEncoder {
         // V8's stack in a page's first frames (before the optimizing tier
         // took over): a story opened by link at launch did (isomer#56).
         describe(node, into: &out, scrollTargets: scrollTargets, handle: handle)
+        // The view a driver is about to use: a scroll target its scroll
+        // brings into sight (Runtime.reveal).
+        if let reveal = Runtime.shared.revealHandle, handleCache == reveal {
+            collectTargets([Runtime.revealTarget])
+            out.params = (out.params ?? []) + [("vid", Runtime.revealTarget)]
+        }
         return out
     }
 

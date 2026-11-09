@@ -416,6 +416,15 @@ public final class IsomerAppDriver {
             restore = putBack
         }
         defer { restore?() }
+        // The element used is brought into sight first, as a person scrolls
+        // to what they tap, so a headful app is seen to be driven; a headless
+        // one draws nothing to scroll.
+        if info.platform != "Headless", ["tap", "type", "set", "select"].contains(command.cmd), !target.isEmpty,
+           let handler = before?.element(target)?.handler {
+            runtime.reveal(handler: handler)
+            before = await settle() ?? before
+            try? await Task.sleep(nanoseconds: 350_000_000)
+        }
         switch command.cmd {
         case "ls", "quit":
             break

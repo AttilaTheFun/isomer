@@ -326,6 +326,23 @@ package final class Runtime {
     /// does. The tick makes repeats distinct.
     var pendingScroll: (target: String, anchor: String, tick: Int, animated: Bool)?
 
+    /// A driver about to use a view (drive/driver): the handle its handlers
+    /// are named from (`<handle>.tap`), marked on the wire as the scroll
+    /// target `revealTarget` until the next, and a scroll request for it, so
+    /// the scroll holding it brings it into sight, as a person scrolls to what
+    /// they tap. `revealEpoch` changes with it, so encoders flatten again the
+    /// subtrees they cached without the mark.
+    package var revealHandle: String?
+    package private(set) var revealEpoch = 0
+    package static let revealTarget = "iso-driver-reveal"
+
+    package func reveal(handler: String) {
+        revealHandle = String(handler.prefix { $0 != "." })
+        revealEpoch += 1
+        pendingScroll = (Self.revealTarget, "auto", (pendingScroll?.tick ?? 0) + 1, true)
+        requestFrame()
+    }
+
     // MARK: Shutdown
 
     /// Tasks the framework started for views (`.task {}` / `.task(id:)`),

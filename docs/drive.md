@@ -53,24 +53,35 @@ ISO_HEADLESS_PROTOCOL=serve ./app
 binary it builds, which `bazel build` leaves at bazel-bin/xplat/iso/iso to run
 in place or copy anywhere. It was `isomer` (drive/cli) until 0.49.
 
-The quickest way to see it: the iPhone Storybook in a simulator, driven from
-a terminal, in the examples:
+The quickest way to see it: the Storybook on the iPhone's simulator, the
+Android emulator and the web, driven from one terminal at once, in the
+examples:
 
 ```sh
-bazel run //apple/storybook_ios_application --config=cli   # builds, installs, launches; listens
-bazel run //xplat/iso -- ls                                # in another shell: its screen
-bazel run //xplat/iso -- tap ObservableObject              # a story, scrolled to and opened
+bazel run //apple/storybook_ios_application --config=cli       # builds, installs, launches in a simulator
+bazel run //android/storybook_android_application --config=cli # boots the emulator, installs, launches
+bazel run //web/storybook_web_application --config=cli         # serves it and opens a browser
+bazel run //xplat/iso -- apps                                  # in another shell: ios, android, web
+bazel run //xplat/iso -- tap ObservableObject                  # a story, scrolled to and opened, on each
 bazel run //xplat/iso -- tap Tap
 bazel run //xplat/iso -- wait "Taps: 1"
+bazel run //xplat/iso -- --app ios ls                          # one of them
 ```
 
-`--config=cli` is `--@isomer//drive:headful`: an app on Apple's SwiftUI
-built so, launched without `ISO_DRIVER`, listens for the CLI at
-ws://127.0.0.1:7700 (`ISO_DRIVE_LISTEN` another address, `none` not at all;
-`ISO_DRIVE_TOKEN` a token, for an address other than the loopback). A
-simulator's apps share the Mac's loopback address, and with no application
-selected the CLI drives that address. The Mac Storybook
-(`//apple/storybook_macos_application`) listens the same way.
+`--config=cli` is `--@isomer//drive:headful`. An app built so and launched
+without `ISO_DRIVER` dials the hub on its machine, ws://127.0.0.1:7710 (an
+Android emulator's 10.0.2.2, its name for the machine it runs on), under its
+platform's name (`ios`, `macos`, `android`, `web`; `ISO_DRIVER_NAME` another),
+and again a second later whenever it isn't attached, so the apps and the CLI
+start in either order (drive/serving/IsomerDriving.swift; `ISO_DRIVER=none`:
+no dialling). With no application selected, the CLI drives the apps attached
+to that hub, starting it in the background when none is running (`iso hub
+stop` ends it): one attached, that one; several, every one at once, each
+app's answers under its name; `--app ios,web` some; `--all` every one. A
+command waits up to 20 seconds for the apps it names to attach. Before it
+taps, types into or sets an element, a driver scrolls it into sight, as a
+person would: the iPhone's through its accessibility tree, Isomer's through
+the scroll holding it (Runtime.reveal).
 
 Apps elsewhere are kept by name:
 
@@ -100,8 +111,8 @@ screen, from 1 (`button-3`, `textField-1`; `text-2` the second text): any
 command takes it as its target, resolved by the app against the screen
 as it stands, so a name from one `ls` holds until the screen changes. A
 text names the button it is in for `tap`. `--app <name>` drives another than the selected one, `--url <url>` one with
-no name, `--json` prints protobuf's JSON; with neither and none selected,
-ws://127.0.0.1:7700. An `exec:` application is started
+no name, `--json` prints protobuf's JSON; with neither and none selected, the
+hub's apps (above). An `exec:` application is started
 on its first command and kept running on a Unix socket, so its state lasts
 between commands, until `iso application stop <name>`. Applications are
 kept in `~/.config/isomer/applications.json`, readable only by their user.
@@ -139,8 +150,7 @@ cell, a control) as a tap would; on the Mac it asks its own process as an
 accessibility client would (AXUIElement), on the main thread. A list's row
 of texts is a button, as Isomer's renderers give it. Launch with simctl's
 `SIMCTL_CHILD_ISO_DRIVER=…`, or a Mac app with `ISO_DRIVER` in its
-environment, to dial out; launched without it, the app listens for the CLI
-(above).
+environment, to dial out somewhere else than the CLI's hub (above).
 
 ## Tests
 

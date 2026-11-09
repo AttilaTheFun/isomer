@@ -46,6 +46,16 @@ message Answer {
   Info info = 4;
   // `inspect`'s answer: one element or text in full.
   Inspection inspection = 5;
+  // A hub's answer to `apps`: the apps attached to it, each under the name
+  // it is driven by.
+  repeated Attachment apps = 6;
+}
+
+// An app attached to a hub: the name it is driven by (`iso-target`) and what
+// it said it is when it attached.
+message Attachment {
+  string name = 1;
+  Info info = 2;
 }
 
 message Info {

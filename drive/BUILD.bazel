@@ -3,11 +3,11 @@ load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 package(default_visibility = ["//visibility:public"])
 
 # --@isomer//drive:headful (--config=cli): apps built with it carry a driver
-# they dial out to be driven by (ISO_DRIVER; docs/drive_plan.md); an app on
-# Apple's SwiftUI launched without ISO_DRIVER listens for the iso CLI instead
-# (ws://127.0.0.1:7700). Off by default, and never in a release: an app with
-# it obeys whoever its launch names (an Android intent's extras become its
-# environment) or reaches it.
+# they dial out to be driven by: ISO_DRIVER (docs/drive_plan.md), else the iso
+# CLI's hub on their machine (drive/serving/IsomerDriving.swift). Off by
+# default, and never in a release: an app with it obeys whoever its launch
+# names (an Android intent's extras become its environment), or the hub on
+# its machine.
 bool_flag(
     name = "headful",
     build_setting_default = False,

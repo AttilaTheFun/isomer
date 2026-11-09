@@ -58,7 +58,7 @@ xcode_provisioning_profile(
 # `bazel run //apple/storybook_ios_application` installs and
 # launches the app in the iOS simulator; add `--ios_multi_cpus=arm64` to
 # install and launch on an attached device instead. With --config=cli it
-# listens for the iso CLI: `bazel run //xplat/iso -- ls` (docs/drive.md).
+# dials the iso CLI's hub: `bazel run //xplat/iso -- ls` (docs/drive.md).
 ios_application(
     name = "storybook_ios_application",
     app_icons = ["//storybook/artwork/storybook_icon:app_icon"],
