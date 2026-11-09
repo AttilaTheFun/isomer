@@ -477,6 +477,15 @@ jobs:
         env:
           APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
         run: tools/ci/stamp_apps.sh
+      # The owner's line rule: no proposal on a line that already has a
+      # published release (tools/ci/check_version_line.sh), before anything
+      # is built.
+      - name: The version's line is open
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          tools/ci/check_version_line.sh
+          "$(sed -n '/CFBundleShortVersionString/{n;s/.*<string>\(.*\)<\/string>.*/\1/p;}' examples/apple/storybook_ios_application/Info.plist)"
       # Bazel's tree a volume of the publishing jobs' own, kept between runs.
       # exec: the runner's cancel reaches oss, which ends the build.
       - name: Build

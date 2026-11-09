@@ -11,6 +11,7 @@
 /examples/tools/stamp_storybook.py @AttilaTheFun
 /examples/tools/signing/ @AttilaTheFun
 /tools/ci/check_mac_icons.sh @AttilaTheFun
+/tools/ci/check_version_line.sh @AttilaTheFun
 /tools/ci/attach_release.sh @AttilaTheFun
 /tools/ci/connect_from_ci.sh @AttilaTheFun
 /tools/ci/next_version.sh @AttilaTheFun
