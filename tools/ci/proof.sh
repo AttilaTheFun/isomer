@@ -218,7 +218,7 @@ build() {
     echo "::group::The apps, built (tools/proof/proof.py --build-to)"
     background "$python" -u "$ROOT/tools/proof/proof.py" ios macos web --build-to "$apps" --review "$review" \
         --commit "$commit" || { echo "::error::the apps didn't build"; exit 1; }
-    background "$python" -u "$ROOT/tools/proof/proof.py" android --apps storybook --android-abi x86_64 \
+    background "$python" -u "$ROOT/tools/proof/proof.py" android --android-abi x86_64 \
         --build-to "$apps/hosted" --review "$review" --commit "$commit" ||
         { echo "::error::the Android Storybook (x86_64) didn't build"; exit 1; }
     echo "::endgroup::"

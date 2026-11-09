@@ -1335,7 +1335,7 @@ def keep(built, folder):
 
 
 def kept(folder):
-    """--from: what --build-to kept in `folder`, of the apps --apps names
+    """--from: what --build-to kept in `folder`, of the apps proof.py pictures
     (the iPhone's Storybook on Isomer's frameworks goes with the Storybook)."""
     built = {}
     for entry in sorted(os.listdir(folder)):
