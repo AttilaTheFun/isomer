@@ -30,9 +30,17 @@ for pair in "$@"; do
         *) extras+=(-e "${pair%%=*}" "${pair#*=}") ;;
     esac
 done
-stop() { "$adb" shell am force-stop "$package" > /dev/null 2>&1 || true; exit 0; }
+# The device's log since the launch, kept with the test's outputs when this
+# stops (an app that never attached says why there).
+logs="${TEST_UNDECLARED_OUTPUTS_DIR:-}"
+stop() {
+    [ -z "$logs" ] || "$adb" logcat -d > "$logs/$name.logcat" 2> /dev/null
+    "$adb" shell am force-stop "$package" > /dev/null 2>&1 || true
+    exit 0
+}
 trap stop TERM INT
 "$adb" shell am force-stop "$package" > /dev/null 2>&1 || true
+"$adb" logcat -c > /dev/null 2>&1 || true
 "$adb" shell am start -W -n "$package/$activity" "${extras[@]}" > /dev/null || exit 1
 take() { "$adb" exec-out screencap -p > "$1" && [ -s "$1" ]; }
 serve_requests take

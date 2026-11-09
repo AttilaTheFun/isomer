@@ -238,12 +238,20 @@ cp -R "$root/examples/storybook/assets" "$platforms/windows/assets"
 # GitHub VM (tools/ci/hosted_windows_test.ps1): both executables, the Swift
 # runtime and XCTest DLLs, the assets and the launcher.
 mkdir -p "$platforms/windows-headful"
-for f in $(files "${windows[@]}" --@isomer//drive:headful "${windows_headful[@]}"); do
-    case "$f" in *.exe) cp "$exec_root/$f" "$platforms/windows-headful/" ;; esac
-done
+# The test where its build put it, and the headful app beside it in that
+# configuration (the headful flag names its output folder).
+test_exe="$(find -L "$exec_root/bazel-out" -path "*/bin/headless/storybook_headless_application/storybook_headful_windows_test.exe" 2>/dev/null | head -1)"
+if [ -n "$test_exe" ]; then
+    cp "$test_exe" "$platforms/windows-headful/"
+    cp "${test_exe%%/bin/*}/bin/windows/storybook_windows_application/storybook_windows_application.exe" "$platforms/windows-headful/" ||
+        echo "no headful Windows app beside $test_exe"
+else
+    echo "no storybook_headful_windows_test.exe under $exec_root/bazel-out"
+fi
 sdk="$(bazel info "${flags[@]}" output_base)/external/+swift_windows_sdk_repository+swift_windows_sdk/swift-windows-sdk"
 cp "$sdk"/runtime/aarch64/*.dll "$platforms/windows-headful/" 2>/dev/null
-find -L "$sdk" -ipath "*aarch64*" \( -iname "XCTest.dll" -o -iname "Testing.dll" -o -iname "_Testing_*.dll" \) \
+# XCTest and Testing for arm64: bin64a in the SDK (bin64 is x64, bin32 x86).
+find -L "$sdk/Windows.platform" -path "*/bin64a/*" \( -iname "XCTest.dll" -o -iname "Testing.dll" -o -iname "_Testing_*.dll" \) \
     -exec cp {} "$platforms/windows-headful/" \; 2>/dev/null
 cp -R "$root/examples/storybook/assets" "$platforms/windows-headful/assets"
 cp "$root/drive/launchers/windows_launcher.sh" "$platforms/windows-headful/"
