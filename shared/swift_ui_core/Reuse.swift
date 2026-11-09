@@ -750,6 +750,28 @@ extension Runtime {
         index < range.lowerBound ? range.lowerBound - index : index - range.upperBound
     }
 
+    /// The lazy lists with rows they haven't built, each with its row count
+    /// and what its host last showed: what a driver (drive/driver) pages
+    /// through for a target on no row built.
+    package var listsWithUnbuiltRows: [(list: String, rows: Int, shown: ClosedRange<Int>?)] {
+        listRowPaths.compactMap { list, paths in
+            (listBuiltPaths[list]?.count ?? 0) < paths.count ? (list, paths.count, listVisibleRows[list]) : nil
+        }.sorted { $0.list < $1.list }
+    }
+
+    /// Builds rows `rows` of `list` as though its host showed them (a driver
+    /// reaching a row off screen); given nil, what it showed before any.
+    package func showListRows(_ list: String, _ rows: ClosedRange<Int>?) {
+        if let rows, let count = listRowCounts[list] {
+            listWindowReported(list: list, value: "\(rows.lowerBound),\(rows.upperBound),\(count)")
+        } else {
+            listVisibleRows[list] = nil
+            listVisibleAnchor[list] = nil
+        }
+        stateDidChange(key: list + "#window")
+        requestFrame()
+    }
+
     /// The host shows rows `first,last` of the list: rebuild when that
     /// comes near the edge of what was built.
     func listWindowReported(list: String, value: String) {

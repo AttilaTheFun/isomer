@@ -17,7 +17,7 @@ final class StorybookHeadlessTests: XCTestCase {
     /// by the launcher the environment names.
     private func launch(story: String? = nil) throws -> HeadlessApp {
         let environment = ProcessInfo.processInfo.environment
-        var launchEnvironment = ["ISO_HEADLESS_HEIGHT": "6000"]
+        var launchEnvironment: [String: String] = [:]
         if let story { launchEnvironment["ISO_STORYBOOK_STORY"] = story }
         if let launcher = environment["ISOMER_HEADFUL_LAUNCHER"], !launcher.isEmpty {
             return try HeadlessApp(launcher: launcher, environment: launchEnvironment)
