@@ -9,14 +9,18 @@
 #       (xcode-27) a simulator made for the run, then the Mac's own screen
 #   tools/ci/hosted_headful_test.sh android <the x86_64 .apk> <out>
 #       (Ubuntu with KVM) tools/ci/hosted_android_emulator.sh's phone
+#   tools/ci/hosted_headful_test.sh windows <the windows-headful folder> <out>
+#       (windows-11-arm, Git's bash) the app and its tests as CI's container
+#       built them, the tests run here as they are
 #
-# Only the tests are built here, by Bazel with its hermetic toolchains (the
-# test and IsomerHeadless: no app); their outputs (the launchers' logs) are
-# kept in <out>.
+# On the Apple and Android VMs only the tests are built here, by Bazel with
+# its hermetic toolchains (the test and IsomerHeadless: no app); no Swift
+# toolchain builds for Windows on Windows here, so CI's container builds
+# Windows' tests too. Their outputs (the launchers' logs) are kept in <out>.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 absolute() { printf '%s/%s' "$(cd "$(dirname "$1")" && pwd)" "$(basename "$1")"; }
-platform="${1:?usage: hosted_headful_test.sh apple <.ipa> <.zip> <out> | android <.apk> <out>}"
+platform="${1:?usage: hosted_headful_test.sh apple <.ipa> <.zip> <out> | android <.apk> <out> | windows <dir> <out>}"
 shift
 work="$(mktemp -d)"
 udid=""
@@ -89,8 +93,28 @@ android)
     "$adb" -s "$serial" install -r "$apk" > /dev/null || exit 1
     run storybook_headful_android_test "$out" --test_env=ADB="$adb" --test_env=ANDROID_SERIAL="$serial"
     ;;
+windows)
+    dir="$(cd "${1:?<the windows-headful folder>}" && pwd)"
+    mkdir -p "${2:?<out>}"
+    out="$(cd "$2" && pwd)"
+    # Paths as Windows writes them with forward slashes (C:/...): MSYS would
+    # rewrite a /c/... path in the environment of the native test, which
+    # hands it back to bash in the launcher.
+    mixed() { cygpath -m "$1"; }
+    test="$(ls "$dir"/*storybook_headful_windows_test*.exe | head -1)"
+    app="$(ls "$dir"/storybook_windows_application*.exe | head -1)"
+    [ -f "$test" ] && [ -f "$app" ] || { echo "hosted_headful_test: no test or app in $dir" >&2; exit 1; }
+    mkdir -p "$out/storybook_headful_windows_test"
+    (cd "$dir" && env ISOMER_HEADFUL_LAUNCHER="$(mixed "$dir/windows_launcher.sh")" \
+        ISOMER_WINDOWS_APP="$(mixed "$app")" ISOMER_BASH="$(cygpath -w "$(command -v bash)")" \
+        TEST_UNDECLARED_OUTPUTS_DIR="$(mixed "$out/storybook_headful_windows_test")" \
+        "$test" > "$out/storybook_headful_windows_test/test.log" 2>&1)
+    status=$?
+    cat "$out/storybook_headful_windows_test/test.log"
+    [ "$status" -eq 0 ] || failures=$((failures + 1))
+    ;;
 *)
-    echo "hosted_headful_test: apple or android, not $platform" >&2
+    echo "hosted_headful_test: apple, android or windows, not $platform" >&2
     exit 2
     ;;
 esac

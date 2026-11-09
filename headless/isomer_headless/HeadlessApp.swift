@@ -17,8 +17,13 @@
 // when stopped (`HeadlessApp(launcher:environment:)`).
 
 import Foundation
+// Not on Windows: the process transport (Unix sockets, POSIX descriptors)
+// and IsomerRemote (its gRPC brings swift-nio-ssl, which has no Windows).
+// A test there drives a headful app through a launcher alone.
+#if !os(Windows)
 import IsomerProcessTransport
 import IsomerRemote
+#endif
 import IsomerServing
 import IsomerWebSocketTransport
 import IsomerWire
@@ -112,6 +117,7 @@ public final class HeadlessApp: @unchecked Sendable {
     /// own: the app's launch hooks (ISO_STORYBOOK_STORY…), ISO_HEADLESS_WIDTH
     /// and ISO_HEADLESS_HEIGHT (the window, 390 by 844 by default: a lazy
     /// list builds the rows that fit).
+    #if !os(Windows)
     public convenience init(executable: String, environment: [String: String] = [:]) throws {
         try self.init(connection: IsomerProcessConnection(.executable(executable, arguments: [], environment: environment)))
     }
@@ -122,6 +128,7 @@ public final class HeadlessApp: @unchecked Sendable {
         let endpoint = try IsomerRemote.endpoint(url)
         try self.init(connection: endpoint.connection, context: endpoint.context(token: token, metadata: metadata))
     }
+    #endif
 
     /// An app reached through any connection: one in this process
     /// (`IsomerLocalConnection`), a transport's.
@@ -147,8 +154,17 @@ public final class HeadlessApp: @unchecked Sendable {
         let hub = try HeadfulHub.shared()
         let name = HeadfulHub.nextName()
         let process = Process()
+        let arguments = [hub.url, name] + environment.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }
+        #if os(Windows)
+        // A launcher script through Git's bash (ISOMER_BASH, else Git for
+        // Windows' own), as Windows runs no script by its #! line.
+        let bash = ProcessInfo.processInfo.environment["ISOMER_BASH"] ?? #"C:\Program Files\Git\bin\bash.exe"#
+        process.executableURL = URL(fileURLWithPath: bash)
+        process.arguments = [Self.resolve(launcher)] + arguments
+        #else
         process.executableURL = URL(fileURLWithPath: Self.resolve(launcher))
-        process.arguments = [hub.url, name] + environment.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }
+        process.arguments = arguments
+        #endif
         // Where the test asks the launcher for pictures (`picture`).
         let requests = FileManager.default.temporaryDirectory.appendingPathComponent("isomer-requests-\(name)")
         try? FileManager.default.createDirectory(at: requests, withIntermediateDirectories: true)
@@ -262,7 +278,7 @@ public final class HeadlessApp: @unchecked Sendable {
                 return FileManager.default.fileExists(atPath: file.path) ? id : nil
             }
             if !launched.isRunning { break }
-            usleep(100_000)
+            Thread.sleep(forTimeInterval: 0.1)
         }
         throw HeadlessError(message: "the launcher took no picture of \(id)", screen: nil)
     }
@@ -330,10 +346,17 @@ public final class HeadlessApp: @unchecked Sendable {
         let call = call
         try? Self.blocking { await call.finish() }
         if let launched, launched.isRunning {
-            launched.terminate()
-            let deadline = Date().addingTimeInterval(10)
-            while launched.isRunning, Date() < deadline { usleep(100_000) }
+            // A `stop` file beside the picture requests first: a launcher on
+            // Windows, which has no SIGTERM to trap, ends its app on seeing it.
+            if let requests { try? Data().write(to: requests.appendingPathComponent("stop")) }
+            var deadline = Date().addingTimeInterval(10)
+            while launched.isRunning, Date() < deadline { Thread.sleep(forTimeInterval: 0.1) }
+            if launched.isRunning { launched.terminate() }
+            deadline = Date().addingTimeInterval(10)
+            while launched.isRunning, Date() < deadline { Thread.sleep(forTimeInterval: 0.1) }
+            #if !os(Windows)
             if launched.isRunning { kill(launched.processIdentifier, SIGKILL) }
+            #endif
         }
         launched = nil
     }

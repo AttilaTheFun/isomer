@@ -214,6 +214,10 @@ build:apple_on_linux --action_env=RULES_APPLECROSS_RELAX_ACTOOL_ICON_COMPOSER=1
 # here alone, so no other build fetches them. Build a Windows target with
 # `--config=windows_on_linux --platforms=@isomer//tools/platforms:windows_arm64`.
 build:windows_on_linux --extra_toolchains=@swift_windows_sdk//:all
+# A Windows test builds here to run on Windows: Bazel's default test toolchain
+# wants an execution platform that is the target's (none here can run it),
+# its legacy one doesn't.
+build:windows_on_linux --@bazel_tools//tools/test:incompatible_use_default_test_toolchain=false
 
 # Which of an app's builds (the private AttilaTheFun/applications' docs/VARIANTS.md):
 # Alpha, the default (every main and pull request build), Beta (TestFlight's,

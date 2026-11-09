@@ -174,8 +174,10 @@ fi
 windows=(--config=windows_on_linux --platforms=@isomer//tools/platforms:windows_arm64)
 bazel build "${flags[@]}" "${windows[@]}" //windows/storybook_windows_application
 built_windows=$?
-# And the Windows Storybook with its driver built in (its headful build).
-bazel build "${flags[@]}" "${windows[@]}" --@isomer//drive:headful //windows/storybook_windows_application || built_windows=1
+# And the Windows Storybook with its driver built in (its headful build),
+# with the Storybook tests built for Windows to drive it there.
+windows_headful=(//windows/storybook_windows_application //headless/storybook_headless_application:storybook_headful_windows_test)
+bazel build "${flags[@]}" "${windows[@]}" --@isomer//drive:headful "${windows_headful[@]}" || built_windows=1
 # The tier-1 platforms run (the web here); the Linux tests are built but,
 # for now (2026-11-05), not run.
 bazel build "${flags[@]}" //tests/platforms:all
@@ -232,6 +234,20 @@ done
 cp "$(bazel info "${flags[@]}" output_base)"/external/+swift_windows_sdk_repository+swift_windows_sdk/swift-windows-sdk/runtime/aarch64/*.dll \
     "$platforms/windows/" 2>/dev/null
 cp -R "$root/examples/storybook/assets" "$platforms/windows/assets"
+# The headful Windows Storybook and its tests, for the windows job on a
+# GitHub VM (tools/ci/hosted_windows_test.ps1): both executables, the Swift
+# runtime and XCTest DLLs, the assets and the launcher.
+mkdir -p "$platforms/windows-headful"
+for f in $(files "${windows[@]}" --@isomer//drive:headful "${windows_headful[@]}"); do
+    case "$f" in *.exe) cp "$exec_root/$f" "$platforms/windows-headful/" ;; esac
+done
+sdk="$(bazel info "${flags[@]}" output_base)/external/+swift_windows_sdk_repository+swift_windows_sdk/swift-windows-sdk"
+cp "$sdk"/runtime/aarch64/*.dll "$platforms/windows-headful/" 2>/dev/null
+find -L "$sdk" -ipath "*aarch64*" \( -iname "XCTest.dll" -o -iname "Testing.dll" -o -iname "_Testing_*.dll" \) \
+    -exec cp {} "$platforms/windows-headful/" \; 2>/dev/null
+cp -R "$root/examples/storybook/assets" "$platforms/windows-headful/assets"
+cp "$root/drive/launchers/windows_launcher.sh" "$platforms/windows-headful/"
+ls -l "$platforms/windows-headful"
 # The Android test APK for x86_64 too (ISOMER_ANDROID_X86_64), for the
 # x86_64 emulator on the GitHub runner (tools/ci/hosted_android_test.sh).
 built_x86=0

@@ -193,6 +193,13 @@ jobs:
           name: headful-apps
           path: .ci/platforms/headful
           retention-days: 3
+      # The Windows Storybook headful with its tests, built for Windows here.
+      - uses: actions/upload-artifact@v4
+        if: ${{ !github.event.repository.private }}
+        with:
+          name: windows-headful
+          path: .ci/platforms/windows-headful
+          retention-days: 3
       - uses: actions/upload-artifact@v4
         if: ${{ !github.event.repository.private }}
         with:
@@ -264,7 +271,7 @@ jobs:
     needs: verify
     if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release') && !github.event.repository.private }}
     runs-on: windows-11-arm
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
@@ -274,6 +281,15 @@ jobs:
       - name: The Windows Storybook's tests
         shell: pwsh
         run: tools/ci/hosted_windows_test.ps1 .ci/windows .ci/platform-tests/windows
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-headful
+          path: .ci/windows-headful
+      # The Storybook's tests (the headless source) against the app headful,
+      # both built in the container, run here in Git's bash.
+      - name: The Storybook's tests, headful on Windows
+        shell: bash
+        run: exec tools/ci/hosted_headful_test.sh windows .ci/windows-headful .ci/platform-tests/windows/headful
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
