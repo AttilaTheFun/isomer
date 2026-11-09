@@ -26,13 +26,6 @@ shift 2
 repo="${GITHUB_REPOSITORY:-AttilaTheFun/isomer}"
 version="${tag#v}"
 
-if ! command -v gh > /dev/null; then
-    root_do() { if [ "$(id -u)" = 0 ]; then "$@"; else sudo "$@"; fi; }
-    root_do env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends gh > /dev/null ||
-        { root_do apt-get update -qq > /dev/null &&
-          root_do env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends gh > /dev/null; }
-fi
-
 case "$mode" in
 upload)
     [ $# -gt 0 ] || { echo "release_extras: upload takes the folders" >&2; exit 1; }
