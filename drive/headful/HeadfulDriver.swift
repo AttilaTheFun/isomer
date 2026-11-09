@@ -6,8 +6,9 @@
 // started; without this library they reach drive/headful's no-op.
 //
 // Over a WebSocket, through Foundation's URLSession: the transport every host
-// has (the web's and Android's through Isomer's Foundation); on Linux and
-// Windows through IsomerRemote (SwiftNIO), as a headless app dials out.
+// has (the web's and Android's through Isomer's Foundation); on Linux
+// through IsomerRemote (SwiftNIO), as a headless app dials out. (Windows
+// keeps URLSession: SwiftNIO's NIOPosix doesn't build for it yet.)
 // ISO_DRIVER_TOKEN is the hub's token, if it wants one.
 
 import Foundation
@@ -27,7 +28,7 @@ func _isoDriveAttach(_ platform: String, _ renderer: String) {
             do {
                 let metadata = environment["ISO_DRIVER_NAME"].map { ["iso-target": $0] } ?? [:]
                 #if canImport(IsomerRemote)
-                // Linux and Windows: SwiftNIO's WebSocket client (or gRPC),
+                // Linux: SwiftNIO's WebSocket client (or gRPC),
                 // as a headless app dials out; Foundation's URLSession there
                 // takes its WebSockets from a libcurl that may have none.
                 let endpoint = try IsomerRemote.endpoint(address)
