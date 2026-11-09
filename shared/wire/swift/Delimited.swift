@@ -14,6 +14,8 @@ import Musl
 import Android
 #elseif canImport(WASILibc)
 import WASILibc
+#elseif canImport(ucrt)
+import ucrt
 #endif
 
 public enum WireDelimited {
@@ -74,5 +76,7 @@ private func systemRead(_ descriptor: Int32, _ buffer: UnsafeMutableRawPointer, 
     Android.read(descriptor, buffer, count)
     #elseif canImport(WASILibc)
     WASILibc.read(descriptor, buffer, count)
+    #elseif canImport(ucrt)
+    Int(ucrt._read(descriptor, buffer, UInt32(clamping: count)))
     #endif
 }
