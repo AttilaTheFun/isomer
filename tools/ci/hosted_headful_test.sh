@@ -34,7 +34,9 @@ failures=0
 run() {
     local target="$1" out="$2"
     shift 2
-    (cd "$ROOT/examples" && bazel test --test_output=errors "$@" "$package:$target") || failures=$((failures + 1))
+    # Downloads retried: a GitHub release's 504 once failed a whole job.
+    (cd "$ROOT/examples" && bazel test --test_output=errors --experimental_repository_downloader_retries=5 \
+        "$@" "$package:$target") || failures=$((failures + 1))
     local logs
     logs="$(cd "$ROOT/examples" && bazel info bazel-testlogs 2> /dev/null)/headless/storybook_headless_application/$target"
     mkdir -p "$out/$target" && cp -R "$logs/." "$out/$target/" 2> /dev/null
