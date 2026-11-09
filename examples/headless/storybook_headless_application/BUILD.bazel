@@ -239,6 +239,6 @@ ios_unit_test(
     minimum_os_version = "17.0",
     runner = ":iphone_17",
     tags = ["manual"],
-    test_host = "//apple/storybook_ios_application:storybook_ios_sim_application",
+    test_host = "//apple/storybook_ios_application:storybook_test_host",
     deps = [":storybook_hosted_tests"],
 )

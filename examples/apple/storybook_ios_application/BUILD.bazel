@@ -136,3 +136,27 @@ xcodeproj(
         ),
     ],
 )
+
+# The hosted tests' host (examples/headless:storybook_hosted_ios_test): the
+# simulator variant again, its bundle named as the target is, because rules_apple's
+# test runner looks for Payload/<the host target's name>.app.
+ios_application(
+    name = "storybook_test_host",
+    app_icons = ["//storybook/artwork/storybook_icon:app_icon"],
+    bundle_id = BUNDLE_ID,
+    bundle_name = "storybook_test_host",
+    entitlements = "Storybook.simulator.entitlements",
+    families = [
+        "ipad",
+        "iphone",
+    ],
+    infoplists = [
+        "Info.plist",
+        ":variant_plist",
+    ],
+    minimum_os_version = "17.0",
+    resources = ["//storybook:fonts"],
+    tags = ["manual"],
+    visibility = ["//visibility:public"],
+    deps = [":storybook_ios_application_lib"],
+)
