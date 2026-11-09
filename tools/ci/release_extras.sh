@@ -17,6 +17,9 @@
 # job's: `contents: write` for the upload.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# gh, installed where the image lacks it.
+# shellcheck source=tools/ci/gh_ready.sh
+. "$ROOT/tools/ci/gh_ready.sh"
 mode="${1:?usage: release_extras.sh upload <tag> <dir>…}"
 tag="${2:?<tag>}"
 shift 2
