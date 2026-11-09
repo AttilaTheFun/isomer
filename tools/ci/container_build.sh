@@ -170,10 +170,8 @@ fi
 windows=(--config=windows_on_linux --platforms=@isomer//tools/platforms:windows_arm64)
 bazel build "${flags[@]}" "${windows[@]}" //windows/storybook_windows_application
 built_windows=$?
-# And, with the driver built in, the Windows Storybook and its headful test
-# (the Storybook tests, for the windows-11-arm VM of GitHub).
-bazel build "${flags[@]}" "${windows[@]}" --@isomer//drive:headful //windows/storybook_windows_application \
-    //headless/storybook_headless_application:storybook_headful_windows_test || built_windows=1
+# And the Windows Storybook with its driver built in (its headful build).
+bazel build "${flags[@]}" "${windows[@]}" --@isomer//drive:headful //windows/storybook_windows_application || built_windows=1
 # The tier-1 platforms run (the web here); the Linux tests are built but,
 # for now (2026-11-05), not run.
 bazel build "${flags[@]}" //tests/platforms:all

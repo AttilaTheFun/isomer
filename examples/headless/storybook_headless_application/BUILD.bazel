@@ -56,9 +56,9 @@ swift_test(
 #   bazel test --test_env=ISOMER_MAC_APP=<Storybook.app> :storybook_headful_macos_test
 #   bazel test --test_env=ANDROID_SERIAL=<serial> --test_env=ADB=<adb> :storybook_headful_android_test
 #
-# Windows' test is built for Windows on Arm in CI's container
-# (--config=windows_on_linux) and run on GitHub's windows-11-arm VM, with
-# ISOMER_WINDOWS_APP naming the app.
+# Windows: the app builds with its driver in CI's container (Windows on
+# Arm), and @isomer//drive/launchers:windows starts it; the tests aren't run
+# there yet (a swift_test doesn't cross-build for Windows).
 _STORYBOOK = "com.LoganShire.IsomerStorybook"
 
 _HEADFUL_WEB_ENV = {
@@ -156,5 +156,5 @@ swift_test(
             "@isomer//shared/wire/swift",
         ],
     )
-    for platform in ["ios", "macos", "android", "windows"]
+    for platform in ["ios", "macos", "android"]
 ]

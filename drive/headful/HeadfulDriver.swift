@@ -6,12 +6,16 @@
 // started; without this library they reach drive/headful's no-op.
 //
 // Over a WebSocket, through Foundation's URLSession: the transport every host
-// has (the web's and Android's through Isomer's Foundation). ISO_DRIVER_TOKEN
-// is the hub's token, if it wants one.
+// has (the web's and Android's through Isomer's Foundation); on Linux and
+// Windows through IsomerRemote (SwiftNIO), as a headless app dials out.
+// ISO_DRIVER_TOKEN is the hub's token, if it wants one.
 
 import Foundation
 import IsomerDriver
 import IsomerServing
+#if canImport(IsomerRemote)
+import IsomerRemote
+#endif
 
 @_silgen_name("iso_drive_attach")
 func _isoDriveAttach(_ platform: String, _ renderer: String) {
@@ -21,10 +25,20 @@ func _isoDriveAttach(_ platform: String, _ renderer: String) {
         let driver = IsomerAppDriver(info: IsomerAppDriver.bundleInfo(platform: platform, renderer: renderer))
         Task { @MainActor in
             do {
+                let metadata = environment["ISO_DRIVER_NAME"].map { ["iso-target": $0] } ?? [:]
+                #if canImport(IsomerRemote)
+                // Linux and Windows: SwiftNIO's WebSocket client (or gRPC),
+                // as a headless app dials out; Foundation's URLSession there
+                // takes its WebSockets from a libcurl that may have none.
+                let endpoint = try IsomerRemote.endpoint(address)
+                try await driver.dialOut(endpoint.connection,
+                                         context: endpoint.context(token: environment["ISO_DRIVER_TOKEN"], metadata: metadata))
+                #else
                 try await driver.dialOut(
                     IsomerURLSessionConnection(url),
-                    context: .authorized(environment["ISO_DRIVER_TOKEN"], metadata: environment["ISO_DRIVER_NAME"].map { ["iso-target": $0] } ?? [:])
+                    context: .authorized(environment["ISO_DRIVER_TOKEN"], metadata: metadata)
                 )
+                #endif
             } catch {
                 print("[iso] driver at \(address): \(error)")
             }

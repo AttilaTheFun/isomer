@@ -15,7 +15,13 @@ swift_library(
         "//:foundation",
         "//drive/driver",
         "//drive/serving",
-    ],
+    ] + select({
+        # Linux and Windows dial out through SwiftNIO (IsomerRemote), as a
+        # headless app does.
+        "@platforms//os:linux": ["//drive/remote"],
+        "@platforms//os:windows": ["//drive/remote"],
+        "//conditions:default": [],
+    }),
 )
 
 # Its absence: `iso_drive_attach` a no-op.
