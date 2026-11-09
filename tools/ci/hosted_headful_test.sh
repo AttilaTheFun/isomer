@@ -28,6 +28,7 @@ cleanup() {
     rm -rf "$work"
 }
 trap cleanup EXIT
+printf '%s\n' 'rewrite (github\.com/.*) $1' 'rewrite (github\.com/.*) mirror.bazel.build/$1' > "$work/downloader.cfg"
 package=//headless/storybook_headless_application
 failures=0
 # One test target, its outputs kept.
@@ -35,9 +36,10 @@ run() {
     local target="$1" out="$2"
     shift 2
     # Downloads retried: a GitHub release's 504 once failed a whole job.
-    # The repository cache the job keeps in GitHub's cache (build.yml).
+    # The repository cache the job keeps in GitHub's cache (build.yml), and
+    # GitHub's downloads tried at Bazel's mirror after GitHub.
     (cd "$ROOT/examples" && bazel test --test_output=errors --experimental_repository_downloader_retries=5 \
-        --repository_cache="$HOME/.cache/isomer-bazel-repository" \
+        --repository_cache="$HOME/.cache/isomer-bazel-repository" --downloader_config="$work/downloader.cfg" \
         "$@" "$package:$target") || failures=$((failures + 1))
     local logs
     logs="$(cd "$ROOT/examples" && bazel info bazel-testlogs 2> /dev/null)/headless/storybook_headless_application/$target"

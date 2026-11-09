@@ -84,12 +84,16 @@ if [ -z "$host" ] && [ -z "$inside" ]; then
 fi
 [ -n "$host" ] || { echo "container_build.sh: no host for OS Server's files: set OSS_FILES_HOST (or OSS_SERVERS)" >&2; exit 1; }
 
-# The placeholders in MODULE.bazel, to this Mac's OS Server.
+# The placeholders in MODULE.bazel, to this Mac's OS Server; and GitHub's
+# downloads tried at GitHub, then at Bazel's mirror (GitHub's release
+# downloads have failed with 504s for hours).
 mkdir -p "$ROOT/.ci"
 cat > "$ROOT/.ci/downloader.cfg" <<EOF
 rewrite apple-sdks\.invalid/.* http://$host:7490/files/sha256/$SDK_SHA256
 rewrite ported-tools\.invalid/sha256/(.*) http://$host:7490/files/sha256/\$1
 rewrite windows-sdks\.invalid/sha256/(.*) http://$host:7490/files/sha256/\$1
+rewrite (github\.com/.*) \$1
+rewrite (github\.com/.*) mirror.bazel.build/\$1
 EOF
 
 mode=build
