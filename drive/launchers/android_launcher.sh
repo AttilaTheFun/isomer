@@ -30,17 +30,23 @@ for pair in "$@"; do
         *) extras+=(-e "${pair%%=*}" "${pair#*=}") ;;
     esac
 done
-# The device's log since the launch, kept with the test's outputs when this
-# stops (an app that never attached says why there).
+# The device's log from the launch on, kept with the test's outputs (an app
+# that never attached says why there), streamed as it comes: the device's
+# buffer turns over in minutes.
 logs="${TEST_UNDECLARED_OUTPUTS_DIR:-}"
+logcat=""
 stop() {
-    [ -z "$logs" ] || "$adb" logcat -d > "$logs/$name.logcat" 2> /dev/null
+    [ -z "$logcat" ] || kill "$logcat" 2> /dev/null
     "$adb" shell am force-stop "$package" > /dev/null 2>&1 || true
     exit 0
 }
 trap stop TERM INT
 "$adb" shell am force-stop "$package" > /dev/null 2>&1 || true
 "$adb" logcat -c > /dev/null 2>&1 || true
+if [ -n "$logs" ]; then
+    "$adb" logcat > "$logs/$name.logcat" 2> /dev/null &
+    logcat=$!
+fi
 "$adb" shell am start -W -n "$package/$activity" "${extras[@]}" > /dev/null || exit 1
 take() { "$adb" exec-out screencap -p > "$1" && [ -s "$1" ]; }
 serve_requests take
