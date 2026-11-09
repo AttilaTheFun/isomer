@@ -7,14 +7,16 @@
 //
 // Over a WebSocket, through Foundation's URLSession: the transport every host
 // has (the web's and Android's through Isomer's Foundation); on Linux and
-// Windows through IsomerRemote (SwiftNIO), as a headless app dials out.
+// Windows through SwiftNIO's (IsomerWebSocketTransport), as Foundation's
+// URLSession there takes its WebSockets from a libcurl that may have none.
+// (Not IsomerRemote: its gRPC brings swift-nio-ssl, which has no Windows.)
 // ISO_DRIVER_TOKEN is the hub's token, if it wants one.
 
 import Foundation
 import IsomerDriver
 import IsomerServing
-#if canImport(IsomerRemote)
-import IsomerRemote
+#if canImport(IsomerWebSocketTransport)
+import IsomerWebSocketTransport
 #endif
 
 @_silgen_name("iso_drive_attach")
@@ -26,13 +28,18 @@ func _isoDriveAttach(_ platform: String, _ renderer: String) {
         Task { @MainActor in
             do {
                 let metadata = environment["ISO_DRIVER_NAME"].map { ["iso-target": $0] } ?? [:]
-                #if canImport(IsomerRemote)
-                // Linux and Windows: SwiftNIO's WebSocket client (or gRPC),
-                // as a headless app dials out; Foundation's URLSession there
-                // takes its WebSockets from a libcurl that may have none.
-                let endpoint = try IsomerRemote.endpoint(address)
-                try await driver.dialOut(endpoint.connection,
-                                         context: endpoint.context(token: environment["ISO_DRIVER_TOKEN"], metadata: metadata))
+                #if canImport(IsomerWebSocketTransport)
+                // Linux and Windows: SwiftNIO's WebSocket client.
+                guard url.scheme == "ws", let host = url.host else {
+                    print("[iso] driver at \(address): a ws:// URL, here")
+                    return
+                }
+                var base = url.path
+                while base.hasSuffix("/") { base.removeLast() }
+                try await driver.dialOut(
+                    IsomerWebSocketConnection(host: host, port: url.port ?? 80, base: base),
+                    context: .authorized(environment["ISO_DRIVER_TOKEN"], metadata: metadata)
+                )
                 #else
                 try await driver.dialOut(
                     IsomerURLSessionConnection(url),
