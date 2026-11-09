@@ -1,0 +1,24 @@
+package(default_visibility = ["//visibility:public"])
+
+# A launcher a platform for a test's HeadlessApp(launcher:environment:)
+# (headless/isomer_headless, docs/drive.md): each starts an app built with
+# --@isomer//drive:headful so that it dials out to the test's hub, takes the
+# test's pictures, and ends the app when stopped. The app is the test's
+# environment's (ISOMER_SIMULATOR and ISOMER_BUNDLE_ID, ISOMER_MAC_APP,
+# ISOMER_ANDROID_PACKAGE, ISOMER_WEB_SITE, ISOMER_LINUX_APP). A test lists one
+# in its data, with requests.sh, which it sources:
+#
+#   data = ["@isomer//drive/launchers:ios"],
+#   env = {"ISOMER_HEADFUL_LAUNCHER": "$(rootpath @isomer//drive/launchers:ios_launcher.sh)"},
+[
+    filegroup(
+        name = platform,
+        srcs = [
+            "%s_launcher.sh" % platform,
+            "requests.sh",
+        ],
+    )
+    for platform in ["ios", "macos", "android", "web", "linux"]
+]
+
+exports_files(glob(["*.sh"]))

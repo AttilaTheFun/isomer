@@ -41,6 +41,8 @@ final class StorybookHeadlessTests: XCTestCase {
         let screen = try app.tap("Reset")
         XCTAssertTrue(screen.shows("Taps: 0"))
         XCTAssertTrue(screen.shows("Reset 1 times"))
+        // The proof's picture of it, headful (headless: none).
+        try app.picture("state.observableobject")
     }
 
     func testTextFieldBindsTheModel() throws {

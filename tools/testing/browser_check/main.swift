@@ -17,7 +17,10 @@
 // exceptions are printed either way. CHROME in the environment names Chrome
 // when `--chrome` doesn't. `--hold` keeps the last page open after its
 // picture, its console still printed, until the process is told to stop
-// (SIGTERM or SIGINT): a headful app a test drives, launched this way.
+// (SIGTERM or SIGINT): a headful app a test drives, launched this way. While
+// it holds, `--requests <dir>` takes a picture for each `<n>.request` file
+// that appears there (the file holds the picture's path; the request is
+// removed once the picture is written): a test's `picture`.
 import Foundation
 #if canImport(Glibc)
 import Glibc
@@ -36,6 +39,7 @@ struct Options {
     var flags: [String] = []
     var allowErrors = false
     var hold = false
+    var requests = ""
     var pages: [(path: String, out: String)] = []
 
     static func parse(_ arguments: [String]) -> Options {
@@ -60,6 +64,7 @@ struct Options {
             case "--settle": options.settle = Double(value(argument)) ?? options.settle
             case "--allow-errors": options.allowErrors = true
             case "--hold": options.hold = true
+            case "--requests": options.requests = value(argument)
             case "--page":
                 let page = value(argument)
                 guard let equals = page.lastIndex(of: "=") else { fail("--page wants <path>=<out.png>: \(page)") }
@@ -412,6 +417,19 @@ if options.hold, let last = options.pages.last {
     log("\(name): held open until stopped")
     while Held.stopping == 0 {
         usleep(200_000)
+        // A test's pictures, as asked.
+        if !options.requests.isEmpty,
+           let names = try? FileManager.default.contentsOfDirectory(atPath: options.requests) {
+            for request in names.sorted() where request.hasSuffix(".request") {
+                let path = options.requests + "/" + request
+                guard let target = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
+                if let data = (chrome.send("Page.captureScreenshot", ["format": "png"], session: session)?["data"] as? String)
+                    .flatMap({ Data(base64Encoded: $0) }) {
+                    try? data.write(to: URL(fileURLWithPath: target.trimmingCharacters(in: .whitespacesAndNewlines)))
+                }
+                try? FileManager.default.removeItem(atPath: path)
+            }
+        }
         let errors = drainConsole(name)
         failures += errors.filter { options.allowErrors ? $0.hasPrefix("exception") : true }.map { "\(name): \($0)" }
     }

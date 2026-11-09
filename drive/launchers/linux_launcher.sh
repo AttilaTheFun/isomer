@@ -1,9 +1,9 @@
 #!/bin/bash
-# The Linux Storybook, headful, for StorybookHeadlessTests: the app (SDL2
-# and OpenGL, built with --@isomer//drive:headful) under a display of its
-# own (Xvfb with Mesa's software OpenGL, else SDL's offscreen driver), run
-# with ISO_DRIVER and ISO_DRIVER_NAME in its environment until this is
-# stopped.
+# A Linux app (SDL2 and OpenGL), headful, for a test's HeadlessApp
+# (docs/drive.md): built with --@isomer//drive:headful, under a display of
+# its own (Xvfb with Mesa's software OpenGL, else SDL's offscreen driver),
+# run with ISO_DRIVER and ISO_DRIVER_NAME in its environment until this is
+# stopped. No pictures yet (a test's `picture` gets none).
 #
 #   linux_launcher.sh <the hub's ws:// URL> <the app's name> [KEY=VALUE…]
 #
