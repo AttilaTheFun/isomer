@@ -52,6 +52,9 @@ public actor IsomerHub: IsomerServer {
     }
 
     func register(_ name: String, _ app: Attached, _ info: Wire_Info) {
+        // An app attaching again under its name (relaunched) replaces the
+        // one before, whose call ends.
+        holding.removeValue(forKey: name)?.resume()
         attached[name] = app
         report("attached: \(name) (\(info.platform), \(info.renderer))")
     }

@@ -289,6 +289,7 @@ enum LinuxApp {
             DispatchQueue.main.async { withUTF8Pointer(source) { iso_forget_image($0, $1) } }
         }
         MainActor.assumeIsolated { Runtime.shared.start(host: linuxMakeHost(), width: width, height: height) }
+        _isoDriveAttach("Linux", "OpenGL")
         while true {
             // While a render is pending (animation / fresh input) don't block,
             // so animations run at the full frame rate; otherwise sleep until an
@@ -356,3 +357,9 @@ struct LinuxPlatformBridge: PlatformBridge {
         }
     }
 }
+
+/// The headful driver's start (drive/headful): dialling out when the app was
+/// launched with ISO_DRIVER, in a build with --@isomer//drive:headful; a no-op
+/// otherwise.
+@_silgen_name("iso_drive_attach")
+func _isoDriveAttach(_ platform: String, _ renderer: String)

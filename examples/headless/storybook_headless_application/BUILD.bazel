@@ -88,3 +88,32 @@ swift_test(
         "@isomer//shared/wire/swift",
     ],
 )
+
+# The same tests against the Storybook headful on Apple's SwiftUI (iOS, the
+# Mac) and on Android: each app built with --@isomer//drive:headful (its
+# driver dials out to the test's hub), started by its launcher. Where the
+# app runs is the run's: --test_env names it (manual: a simulator, a Mac's
+# screen or an emulator, never a container's build).
+#
+#   bazel test --test_env=ISOMER_SIMULATOR=<booted udid> :storybook_headful_ios_test
+#   bazel test --test_env=ISOMER_MAC_APP=<Storybook.app> :storybook_headful_macos_test
+#   bazel test --test_env=ANDROID_SERIAL=<serial> --test_env=ADB=<adb> :storybook_headful_android_test
+[
+    swift_test(
+        name = "storybook_headful_%s_test" % platform,
+        size = "medium",
+        srcs = ["StorybookHeadlessTests.swift"],
+        data = ["%s_launcher.sh" % platform],
+        env = {"ISOMER_HEADFUL_LAUNCHER": "$(rootpath %s_launcher.sh)" % platform},
+        module_name = "StorybookHeadful%sTests" % platform.capitalize(),
+        tags = [
+            "manual",
+            "no-sandbox",
+        ],
+        deps = [
+            "@isomer//headless/isomer_headless",
+            "@isomer//shared/wire/swift",
+        ],
+    )
+    for platform in ["ios", "macos", "android"]
+]
