@@ -120,8 +120,6 @@ docs/drive_plan.md the order. Open:
 - **TLS for WebSockets.** gRPC serves TLS (`grpcs`, IsomerGRPCServer's
   `tls`); the WebSocket listener is plaintext, for a local network or behind
   a proxy that terminates TLS.
-- **The hub's apps leaving.** An attached app that goes is noticed at the
-  next command sent to it.
 - **The client's measurements.** Text is measured on the server as the
   headless host measures it; a client could send its fonts' metrics in
   `start` (a table per size and weight) for what the app computes from them.

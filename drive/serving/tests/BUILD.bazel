@@ -1,0 +1,12 @@
+load("@rules_swift//swift:swift.bzl", "swift_test")
+
+# IsomerHub's apps attaching, answering, going and attaching again, with
+# fake apps of the test's own (in CI's container).
+swift_test(
+    name = "hub_test",
+    srcs = ["HubTests.swift"],
+    deps = [
+        "//drive/serving",
+        "//shared/wire/swift",
+    ],
+)

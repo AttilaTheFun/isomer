@@ -6,11 +6,19 @@
 import Foundation
 import IsomerWire
 
-/// Apps that dialled out, each driven a command at a time.
+/// Apps that dialled out, each driven a command at a time. Each app's
+/// answers are read as they come, so an app that goes (quit, crashed, its
+/// connection dropped) is detached then, not at the next command sent it.
 public actor IsomerHub: IsomerServer {
     struct Attached {
+        /// Which attachment under the name this is (an app relaunched under
+        /// it is a newer one).
+        let id: Int
         let commands: IsomerOutbound<Wire_Command>
-        var answers: IsomerInbound<Wire_Answer>.AsyncIterator
+        /// Commands sent, waiting for their answers, in order.
+        var waiting: [CheckedContinuation<Wire_Answer, any Error>] = []
+        /// Answers come before a command was waiting for them.
+        var pending: [Wire_Answer] = []
     }
 
     public let authorization: IsomerAuthorization
@@ -18,7 +26,7 @@ public actor IsomerHub: IsomerServer {
     /// <renderer>)", "detached: <name>").
     private let report: @Sendable (String) -> Void
     var attached: [String: Attached] = [:]
-    var holding: [String: CheckedContinuation<Void, Never>] = [:]
+    var attachments = 0
 
     public init(authorization: IsomerAuthorization = .init(), report: @escaping @Sendable (String) -> Void = { _ in }) {
         self.authorization = authorization
@@ -46,46 +54,65 @@ public actor IsomerHub: IsomerServer {
             throw IsomerCallError(.invalidArgument, "an app attaching says who it is first")
         }
         let name = context.target ?? hello.info.name
-        await register(name, Attached(commands: commands, answers: iterator), hello.info)
-        // Held open until the app goes: the call ends when its answers do.
-        await held(name)
+        let id = await register(name, commands, hello.info)
+        // The call lasts as long as the app's answers do, each handed to the
+        // command waiting for it; when they end the app is detached.
+        do {
+            while let answer = try await iterator.next() { await deliver(answer, to: name, id) }
+            await gone(name, id, nil)
+        } catch {
+            await gone(name, id, error)
+        }
     }
 
-    func register(_ name: String, _ app: Attached, _ info: Wire_Info) {
+    func register(_ name: String, _ commands: IsomerOutbound<Wire_Command>, _ info: Wire_Info) -> Int {
         // An app attaching again under its name (relaunched) replaces the
-        // one before, whose call ends.
-        holding.removeValue(forKey: name)?.resume()
-        attached[name] = app
+        // one before: commands go to the new one, and the old one's call
+        // ends with its connection, detaching nothing.
+        attachments += 1
+        if let old = attached[name] { fail(old, "\(name) attached again") }
+        attached[name] = Attached(id: attachments, commands: commands)
         report("attached: \(name) (\(info.platform), \(info.renderer))")
+        return attachments
     }
 
-    func held(_ name: String) async {
-        await withCheckedContinuation { holding[name] = $0 }
+    func deliver(_ answer: Wire_Answer, to name: String, _ id: Int) {
+        guard var app = attached[name], app.id == id else { return }
+        if app.waiting.isEmpty {
+            app.pending.append(answer)
+        } else {
+            app.waiting.removeFirst().resume(returning: answer)
+        }
+        attached[name] = app
     }
 
-    func release(_ name: String) {
+    func gone(_ name: String, _ id: Int, _ error: (any Error)?) {
+        guard let app = attached[name], app.id == id else { return }
         attached[name] = nil
-        holding.removeValue(forKey: name)?.resume()
+        fail(app, "\(name) has gone" + (error.map { ": \($0)" } ?? ""))
         report("detached: \(name)")
+    }
+
+    private func fail(_ app: Attached, _ message: String) {
+        for waiting in app.waiting { waiting.resume(throwing: IsomerCallError(.unavailable, message)) }
     }
 
     /// One command to an attached app, and its answer.
     public func send(_ command: Wire_Command, to name: String) async throws -> Wire_Answer {
-        guard var app = attached[name] else { throw IsomerCallError(.notFound, "no app attached as \(name)") }
+        guard let app = attached[name] else { throw IsomerCallError(.notFound, "no app attached as \(name)") }
         try await app.commands.write(command)
-        let answer: Wire_Answer?
-        do {
-            answer = try await app.answers.next()
-        } catch {
-            release(name)
-            throw error
-        }
-        guard let answer else {
-            release(name)
+        // The app may have gone, or answered, while the command was sent.
+        guard var current = attached[name], current.id == app.id else {
             throw IsomerCallError(.unavailable, "\(name) has gone")
         }
-        attached[name] = app
-        return answer
+        if !current.pending.isEmpty {
+            let answer = current.pending.removeFirst()
+            attached[name] = current
+            return answer
+        }
+        return try await withCheckedThrowingContinuation { continuation in
+            attached[name]?.waiting.append(continuation)
+        }
     }
 
     func target(for context: IsomerCallContext) throws -> String {
