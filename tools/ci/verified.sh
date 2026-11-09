@@ -12,6 +12,10 @@
 #
 # GH_TOKEN: the job's token (`actions: read`). Prints the verified run.
 set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# gh, installed where the image lacks it.
+# shellcheck source=tools/ci/gh_ready.sh
+. "$ROOT/tools/ci/gh_ready.sh"
 sha="${1:?usage: verified.sh <commit>}"
 repo="${GITHUB_REPOSITORY:?}"
 # Which jobs ran depends on it: a public repository's tests and proof are

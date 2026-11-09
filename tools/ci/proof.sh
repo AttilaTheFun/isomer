@@ -82,6 +82,9 @@
 # here) every lease labelled with this job.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# gh, installed where the image lacks it.
+# shellcheck source=tools/ci/gh_ready.sh
+. "$ROOT/tools/ci/gh_ready.sh"
 IMAGE="$(cat "$ROOT/tools/ci/agent_image")"
 # Tier 1 only for now (2026-11-05: the runs take the time; Linux and
 # Windows are still built by every CI run, in container_build.sh). proof.py
