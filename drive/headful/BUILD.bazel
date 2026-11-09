@@ -13,6 +13,7 @@ swift_library(
     module_name = "IsomerHeadfulDriver",
     deps = [
         "//:foundation",
+        "//:os_log",
         "//drive/driver",
         "//drive/serving",
     ] + select({

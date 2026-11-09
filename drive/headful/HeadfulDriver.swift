@@ -13,9 +13,10 @@
 // ISO_DRIVER_TOKEN is the hub's token, if it wants one.
 
 import Foundation
+import OSLog
 import IsomerDriver
 import IsomerServing
-#if canImport(IsomerWebSocketTransport)
+#if os(Linux) || os(Windows)
 import IsomerWebSocketTransport
 #endif
 
@@ -23,15 +24,19 @@ import IsomerWebSocketTransport
 func _isoDriveAttach(_ platform: String, _ renderer: String) {
     let environment = ProcessInfo.processInfo.environment
     guard let address = environment["ISO_DRIVER"], let url = URL(string: address) else { return }
+    // Said where a device's log shows it (logcat on Android, where standard
+    // output goes nowhere).
+    let log = Logger(subsystem: "dev.isomer", category: "drive")
+    log.info("[iso] driver: dialling \(address, privacy: .public) as \(environment["ISO_DRIVER_NAME"] ?? "", privacy: .public)")
     MainActor.assumeIsolated {
         let driver = IsomerAppDriver(info: IsomerAppDriver.bundleInfo(platform: platform, renderer: renderer))
         Task { @MainActor in
             do {
                 let metadata = environment["ISO_DRIVER_NAME"].map { ["iso-target": $0] } ?? [:]
-                #if canImport(IsomerWebSocketTransport)
+                #if os(Linux) || os(Windows)
                 // Linux and Windows: SwiftNIO's WebSocket client.
                 guard url.scheme == "ws", let host = url.host else {
-                    print("[iso] driver at \(address): a ws:// URL, here")
+                    log.error("[iso] driver at \(address, privacy: .public): a ws:// URL, here")
                     return
                 }
                 var base = url.path
@@ -46,8 +51,9 @@ func _isoDriveAttach(_ platform: String, _ renderer: String) {
                     context: .authorized(environment["ISO_DRIVER_TOKEN"], metadata: metadata)
                 )
                 #endif
+                log.info("[iso] driver at \(address, privacy: .public): the call ended")
             } catch {
-                print("[iso] driver at \(address): \(error)")
+                log.error("[iso] driver at \(address, privacy: .public): \(String(describing: error), privacy: .public)")
             }
         }
     }

@@ -250,9 +250,10 @@ else
 fi
 sdk="$(bazel info "${flags[@]}" output_base)/external/+swift_windows_sdk_repository+swift_windows_sdk/swift-windows-sdk"
 cp "$sdk"/runtime/aarch64/*.dll "$platforms/windows-headful/" 2>/dev/null
-# XCTest and Testing for arm64: bin64a in the SDK (bin64 is x64, bin32 x86).
-find -L "$sdk/Windows.platform" -path "*/bin64a/*" \( -iname "XCTest.dll" -o -iname "Testing.dll" -o -iname "_Testing_*.dll" \) \
-    -exec cp {} "$platforms/windows-headful/" \; 2>/dev/null
+# XCTest and Testing for arm64, with every DLL beside them (_TestingInterop
+# and the rest they load): bin64a in the SDK (bin64 is x64, bin32 x86).
+find -L "$sdk/Windows.platform" -path "*/bin64a/*" \( -iname "XCTest.dll" -o -iname "Testing.dll" \) 2>/dev/null |
+    while read -r dll; do cp "$(dirname "$dll")"/*.dll "$platforms/windows-headful/"; done
 cp -R "$root/examples/storybook/assets" "$platforms/windows-headful/assets"
 cp "$root/drive/launchers/windows_launcher.sh" "$platforms/windows-headful/"
 ls -l "$platforms/windows-headful"
