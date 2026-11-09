@@ -1285,8 +1285,13 @@ drivers and to heads that draw it (docs/remote_sessions.md: the web's
 web/remote_client, Android's `IsomerRemote(url)`); drive/driver reads the
 screen through the runtime in any host. Headful apps dial out
 (ISO_DRIVER) when built with --@isomer//drive:headful (off by default: never
-in a release). The `isomer` CLI (drive/cli) keeps apps by name with tokens,
-drives the selected one, and is the hub apps dial out to. The same SwiftUI
+in a release). The `iso` CLI (xplat/iso; `drive/cli`'s `isomer` until 0.49)
+keeps apps by name with tokens, drives the selected one, and is the hub apps
+dial out to; with none selected it drives the app on this machine built with
+`--config=cli`, which on Apple's SwiftUI listens at ws://127.0.0.1:7700
+(a simulator's apps share the Mac's loopback): `bazel run
+//apple/storybook_ios_application --config=cli`, then `bazel run //xplat/iso
+-- ls`, in the examples. The same SwiftUI
 source still builds against Apple's SwiftUI with none of it. Tests: the
 examples' //remote (with the headless flag) beside the headless ones, and
 //remote:headful_web_test (with the headful flag) on its own.

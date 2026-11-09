@@ -47,29 +47,52 @@ ISO_HEADLESS_PROTOCOL=serve ./app
   output (a command a line); `ISO_HEADLESS_PROTOCOL=binary` serves one call
   there (what `exec:` URLs use).
 
-## The isomer CLI
+## The iso CLI
 
-`bazel run @isomer//drive/cli:isomer -- …`, or the binary it builds:
+`bazel run @isomer//xplat/iso -- …` (`//xplat/iso` in the examples), or the
+binary it builds, which `bazel build` leaves at bazel-bin/xplat/iso/iso to run
+in place or copy anywhere. It was `isomer` (drive/cli) until 0.49.
+
+The quickest way to see it: the iPhone Storybook in a simulator, driven from
+a terminal, in the examples:
 
 ```sh
-isomer application add storybook exec:/path/to/storybook_headless_application
-isomer application add staging grpc://build-host:7701 --token-file ~/.staging-token
-isomer application select storybook
-isomer application list
+bazel run //apple/storybook_ios_application --config=cli   # builds, installs, launches; listens
+bazel run //xplat/iso -- ls                                # in another shell: its screen
+bazel run //xplat/iso -- tap ObservableObject              # a story, scrolled to and opened
+bazel run //xplat/iso -- tap Tap
+bazel run //xplat/iso -- wait "Taps: 1"
+```
 
-isomer ls                          # the screen, a line an element: button-1 "Tap", text-3 "Taps: 0"
-isomer ls text                     # one role: text, button, textField, toggle…
-isomer info                        # name, platform, renderer, window
-isomer inspect text-3              # one element in full: kind, actions, font, colour, its parameters
-isomer tap button-1                # by name (role and place), identifier or label
-isomer tap Tap
-isomer type Title "Hits"
-isomer set Wi-Fi 0
-isomer select Flavor Chocolate
-isomer swipe Board left
-isomer back | dismiss
-isomer wait "Taps: 1" --timeout 10
-isomer drive                       # JSON lines on standard input
+`--config=cli` is `--@isomer//drive:headful`: an app on Apple's SwiftUI
+built so, launched without `ISO_DRIVER`, listens for the CLI at
+ws://127.0.0.1:7700 (`ISO_DRIVE_LISTEN` another address, `none` not at all;
+`ISO_DRIVE_TOKEN` a token, for an address other than the loopback). A
+simulator's apps share the Mac's loopback address, and with no application
+selected the CLI drives that address. The Mac Storybook
+(`//apple/storybook_macos_application`) listens the same way.
+
+Apps elsewhere are kept by name:
+
+```sh
+iso application add storybook exec:/path/to/storybook_headless_application
+iso application add staging grpc://build-host:7701 --token-file ~/.staging-token
+iso application select storybook
+iso application list
+
+iso ls                          # the screen, a line an element: button-1 "Tap", text-3 "Taps: 0"
+iso ls text                     # one role: text, button, textField, toggle…
+iso info                        # name, platform, renderer, window
+iso inspect text-3              # one element in full: kind, actions, font, colour, its parameters
+iso tap button-1                # by name (role and place), identifier or label
+iso tap Tap
+iso type Title "Hits"
+iso set Wi-Fi 0
+iso select Flavor Chocolate
+iso swipe Board left
+iso back | dismiss
+iso wait "Taps: 1" --timeout 10
+iso drive                       # JSON lines on standard input
 ```
 
 An element's name is its role and its place among that role's on the
@@ -77,9 +100,10 @@ screen, from 1 (`button-3`, `textField-1`; `text-2` the second text): any
 command takes it as its target, resolved by the app against the screen
 as it stands, so a name from one `ls` holds until the screen changes. A
 text names the button it is in for `tap`. `--app <name>` drives another than the selected one, `--url <url>` one with
-no name, `--json` prints protobuf's JSON. An `exec:` application is started
+no name, `--json` prints protobuf's JSON; with neither and none selected,
+ws://127.0.0.1:7700. An `exec:` application is started
 on its first command and kept running on a Unix socket, so its state lasts
-between commands, until `isomer application stop <name>`. Applications are
+between commands, until `iso application stop <name>`. Applications are
 kept in `~/.config/isomer/applications.json`, readable only by their user.
 
 ## Headful apps
@@ -94,10 +118,10 @@ Windows' hosts), an app on Apple's SwiftUI through its accessibility tree
 (below). The CLI is a hub:
 
 ```sh
-isomer hub --ws 7710                # a token with --token when not on the loopback
+iso hub --ws 7710                # a token with --token when not on the loopback
 # then launch the app with ISO_DRIVER=ws://<this machine>:7710
 #   (the web: ?ISO_DRIVER=…; Android: -e ISO_DRIVER …)
-isomer --url ws://127.0.0.1:7710 ls
+iso --url ws://127.0.0.1:7710 ls
 ```
 
 With several apps attached, name one: `?target=<name>` (gRPC: the URL's
@@ -115,7 +139,8 @@ cell, a control) as a tap would; on the Mac it asks its own process as an
 accessibility client would (AXUIElement), on the main thread. A list's row
 of texts is a button, as Isomer's renderers give it. Launch with simctl's
 `SIMCTL_CHILD_ISO_DRIVER=…`, or a Mac app with `ISO_DRIVER` in its
-environment.
+environment, to dial out; launched without it, the app listens for the CLI
+(above).
 
 ## Tests
 

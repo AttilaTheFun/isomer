@@ -57,7 +57,8 @@ xcode_provisioning_profile(
 
 # `bazel run //apple/storybook_ios_application` installs and
 # launches the app in the iOS simulator; add `--ios_multi_cpus=arm64` to
-# install and launch on an attached device instead.
+# install and launch on an attached device instead. With --config=cli it
+# listens for the iso CLI: `bazel run //xplat/iso -- ls` (docs/drive.md).
 ios_application(
     name = "storybook_ios_application",
     app_icons = ["//storybook/artwork/storybook_icon:app_icon"],
@@ -72,6 +73,7 @@ ios_application(
     entitlements = select({
         "//tools/ci_device": "Storybook.entitlements",
         "@apple_support//constraints:device": "Storybook.wildcard.entitlements",
+        "@apple_support//constraints:simulator": "Storybook.simulator.entitlements",
         "//conditions:default": "Storybook.entitlements",
     }),
     families = [
@@ -84,9 +86,11 @@ ios_application(
     ],
     minimum_os_version = "17.0",
     # CI's device build (--config=ci_device) signs ad hoc with a placeholder
-    # profile, which Applications Server replaces with the bundle id's own.
+    # profile, which Applications Server replaces with the bundle id's own; the
+    # simulator's (`bazel run`'s default) takes none, so it builds anywhere.
     provisioning_profile = select({
         "//tools/ci_device": "//tools/ci_device:ci_placeholder_profile",
+        "@apple_support//constraints:simulator": None,
         "//conditions:default": ":_development_profile",
     }),
     # Font.custom's fonts (the text.custom story), named in UIAppFonts.

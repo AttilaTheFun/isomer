@@ -1,32 +1,35 @@
-// isomer: drive Isomer apps from a terminal, an agent or a script, wherever
+// iso: drive Isomer apps from a terminal, an agent or a script, wherever
 // they run (docs/drive_plan.md). Apps are kept by name with their URL and
 // token; one is selected, and commands go to it:
 //
-//   isomer application add <name> <url> [--token <token> | --token-file <path>]
-//   isomer application remove <name>
-//   isomer application select <name>
-//   isomer application list
-//   isomer application stop <name>          an exec: app started in the background
+//   iso application add <name> <url> [--token <token> | --token-file <path>]
+//   iso application remove <name>
+//   iso application select <name>
+//   iso application list
+//   iso application stop <name>          an exec: app started in the background
 //
-//   isomer ls [<role>…] | info              (ls text, ls button: one role)
-//   isomer inspect <element>                everything the app knows of one
-//   isomer tap <element>                    an element: its name (button-3,
+//   iso ls [<role>…] | info              (ls text, ls button: one role)
+//   iso inspect <element>                everything the app knows of one
+//   iso tap <element>                    an element: its name (button-3,
 //                                           text-2), identifier or label
-//   isomer type <element> <text>
-//   isomer set <element> <value>
-//   isomer select <element> <option>
-//   isomer swipe [<element>] <up|down|left|right>
-//   isomer back | dismiss
-//   isomer wait <text> [--timeout <seconds>]
-//   isomer drive                            commands as JSON lines on standard input
+//   iso type <element> <text>
+//   iso set <element> <value>
+//   iso select <element> <option>
+//   iso swipe [<element>] <up|down|left|right>
+//   iso back | dismiss
+//   iso wait <text> [--timeout <seconds>]
+//   iso drive                            commands as JSON lines on standard input
 //
-//   isomer hub [--grpc <port>] [--ws <port>] [--host <address>] [--token <token>]
+//   iso hub [--grpc <port>] [--ws <port>] [--host <address>] [--token <token>]
 //                                           where headful apps dial out to
 //                                           (ISO_DRIVER=grpc://host:port), each
 //                                           then an app: grpc://host:port/<name>
 //
 // Options for the commands: --app <name> (not the selected one), --url <url>
-// (no name at all), --json (each answer as protobuf's JSON). URLs: grpc://,
+// (no name at all), --json (each answer as protobuf's JSON). With none, and no
+// application selected, the app on this machine built to be driven: one built
+// with --config=cli (--@isomer//drive:headful) listens on ws://127.0.0.1:7700
+// (a simulator's apps share this machine's loopback address). URLs: grpc://,
 // grpcs://, ws://, unix:<socket>, exec:<an app built headless> (started on
 // the first command, kept running on a Unix socket until `stop`).
 //
@@ -89,7 +92,7 @@ struct Registry: Codable {
 }
 
 func fail(_ message: String) -> Never {
-    FileHandle.standardError.write(Data("isomer: \(message)\n".utf8))
+    FileHandle.standardError.write(Data("iso: \(message)\n".utf8))
     exit(1)
 }
 
@@ -165,11 +168,22 @@ struct Options {
     }
 }
 
+/// Where an app built with --@isomer//drive:headful listens when it's
+/// launched without ISO_DRIVER or ISO_DRIVE_LISTEN (drive/apple).
+let defaultAppURL = "ws://127.0.0.1:7700"
+/// Whether this command went to `defaultAppURL` (nothing named or selected).
+nonisolated(unsafe) var drivingDefaultApp = false
+
 func endpoint(_ options: Options) throws -> (IsomerRemote.Endpoint, String?) {
     if let url = options.url { return (try IsomerRemote.endpoint(url), ProcessInfo.processInfo.environment["ISO_DRIVE_TOKEN"]) }
     let registry = Registry.load()
+    // Nothing named or selected: the app on this machine built to be driven
+    // (--config=cli: --@isomer//drive:headful), listening where such an app
+    // listens unless told otherwise (ISO_DRIVE_LISTEN). A simulator's apps
+    // share this machine's loopback address.
     guard let name = options.app ?? registry.selected else {
-        fail("no application selected: isomer application add <name> <url>, then select <name>")
+        drivingDefaultApp = true
+        return (try IsomerRemote.endpoint(defaultAppURL), ProcessInfo.processInfo.environment["ISO_DRIVE_TOKEN"])
     }
     guard let application = registry.applications[name] else { fail("no application \(name)") }
     return (try IsomerRemote.endpoint(try reachableURL(name, application)), application.resolvedToken)
@@ -180,7 +194,7 @@ func command(_ verb: String, _ rest: [String], _ options: Options) -> Wire_Comma
     var command = Wire_Command()
     command.cmd = verb
     func argument(_ index: Int, _ usage: String) -> String {
-        guard index < rest.count else { fail("usage: isomer \(usage)") }
+        guard index < rest.count else { fail("usage: iso \(usage)") }
         return rest[index]
     }
     switch verb {
@@ -215,7 +229,7 @@ func command(_ verb: String, _ rest: [String], _ options: Options) -> Wire_Comma
     case "wait":
         command.text = argument(0, "wait <text> [--timeout <seconds>]")
         command.timeout = options.timeout
-    default: fail("unknown command \(verb) (isomer help)")
+    default: fail("unknown command \(verb) (iso help)")
     }
     return command
 }
@@ -362,7 +376,7 @@ func hub(_ arguments: [String]) async throws {
         case "--ws": wsPort = Int(rest.popFirst() ?? "")
         case "--host": host = rest.popFirst() ?? host
         case "--token": if let token = rest.popFirst() { tokens.insert(token) }
-        default: fail("usage: isomer hub [--grpc <port>] [--ws <port>] [--host <address>] [--token <token>]")
+        default: fail("usage: iso hub [--grpc <port>] [--ws <port>] [--host <address>] [--token <token>]")
         }
     }
     if host != "127.0.0.1" && host != "localhost" && tokens.isEmpty {
@@ -378,7 +392,7 @@ func hub(_ arguments: [String]) async throws {
             guard #available(macOS 15.0, *) else { fail("the gRPC hub needs macOS 15: use --ws") }
             group.addTask {
                 try await IsomerGRPCServer(server, host: host, port: grpcPort ?? 7700).run { port in
-                    print("isomer hub: grpc://\(host):\(port) (apps dial out with ISO_DRIVER=grpc://\(host):\(port))")
+                    print("iso hub: grpc://\(host):\(port) (apps dial out with ISO_DRIVER=grpc://\(host):\(port))")
                     fflush(stdout)
                 }
             }
@@ -387,7 +401,7 @@ func hub(_ arguments: [String]) async throws {
             guard #available(macOS 14, *) else { fail("the WebSocket hub needs macOS 14") }
             group.addTask {
                 try await IsomerWebSocketServer(server, host: host, port: wsPort).run { port in
-                    print("isomer hub: ws://\(host):\(port)")
+                    print("iso hub: ws://\(host):\(port)")
                     fflush(stdout)
                 }
             }
@@ -402,7 +416,7 @@ func hub(_ arguments: [String]) async throws {
 let parsed = Options(CommandLine.arguments.dropFirst())
 let arguments = parsed.rest[...]
 guard let verb = arguments.first else {
-    print("isomer application add|remove|select|list|stop …, then isomer ls|info|tap|type|set|select|swipe|back|dismiss|wait|drive, or isomer hub")
+    print("iso application add|remove|select|list|stop …, then iso ls|info|tap|type|set|select|swipe|back|dismiss|wait|drive, or iso hub")
     exit(2)
 }
 
@@ -413,7 +427,7 @@ do {
         let rest = Array(arguments.dropFirst())
         switch rest.first ?? "list" {
         case "add":
-            guard rest.count >= 3 else { fail("usage: isomer application add <name> <url> [--token <token> | --token-file <path>]") }
+            guard rest.count >= 3 else { fail("usage: iso application add <name> <url> [--token <token> | --token-file <path>]") }
             var application = Application(url: rest[2])
             if let index = rest.firstIndex(of: "--token"), index + 1 < rest.count { application.token = rest[index + 1] }
             if let index = rest.firstIndex(of: "--token-file"), index + 1 < rest.count { application.tokenFile = rest[index + 1] }
@@ -431,7 +445,7 @@ do {
             registry.selected = rest[1]
             try registry.save()
         case "stop":
-            guard rest.count >= 2 else { fail("usage: isomer application stop <name>") }
+            guard rest.count >= 2 else { fail("usage: iso application stop <name>") }
             let files = runFiles(rest[1])
             if let pid = running(files.pid) { kill(pid, SIGTERM) }
             try? FileManager.default.removeItem(at: files.pid)
@@ -442,17 +456,24 @@ do {
                 print("\(name == registry.selected ? "*" : " ") \(name)  \(application.url)\(application.token != nil || application.tokenFile != nil ? "  (token)" : "")")
             }
         default:
-            fail("usage: isomer application add|remove|select|list|stop")
+            fail("usage: iso application add|remove|select|list|stop")
         }
     case "hub":
         try await hub(Array(arguments.dropFirst()))
     case "drive":
         try await driveInteractively(parsed)
     case "help", "--help", "-h":
-        print("See drive/cli/main.swift's header, or docs/drive.md.")
+        print("See xplat/iso/main.swift's header, or docs/drive.md.")
     default:
         exit(try await run([command(verb, Array(arguments.dropFirst()), parsed)], parsed) ? 0 : 1)
     }
 } catch {
+    if drivingDefaultApp, "\(error)".contains("refused") {
+        fail("""
+            no app is listening at \(defaultAppURL). Run one built to be driven, for example \
+            `bazel run //apple/storybook_ios_application --config=cli` in isomer's examples, \
+            or name one: iso application add <name> <url>
+            """)
+    }
     fail("\(error)")
 }

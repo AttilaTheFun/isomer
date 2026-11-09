@@ -10,7 +10,10 @@
 // once it runs (iso_apple_drive_attach.c starts it) and is driven over that
 // connection (session_service.proto's Driver.Attach), through Foundation's
 // URLSession. ISO_DRIVER_TOKEN is the hub's token, if it wants one;
-// ISO_DRIVER_NAME the name the hub knows the app by.
+// ISO_DRIVER_NAME the name the hub knows the app by. Launched without it, the
+// app listens instead (ISO_DRIVE_LISTEN, ws://127.0.0.1:7700 by default), for
+// the iso CLI on the same machine: a Mac app, or a simulator's, whose
+// loopback address is its Mac's.
 //
 // Each platform reads the tree its way (an extension of the driver a file):
 // iOS walks UIKit's accessibility containers (UIKitAccessibility.swift) once
@@ -22,6 +25,7 @@
 
 import Foundation
 import IsomerServing
+import IsomerWebSocketTransport
 import IsomerWire
 
 /// One frame as the accessibility tree has it.
@@ -315,7 +319,11 @@ final class AccessibilityDriver {
 
 /// Started once the app runs (iso_apple_drive_attach.c): the app's own
 /// driver, for a test bundle hosted in it (IsomerLocalServer, synchronous);
-/// and, when ISO_DRIVER names where to dial, attached there too.
+/// attached where ISO_DRIVER names (a hub, a test) when it names one, and
+/// otherwise listening for a driver (the iso CLI, `bazel run //xplat/iso`) at
+/// ISO_DRIVE_LISTEN, by default ws://127.0.0.1:7700 (`none`: not at all). A
+/// simulator's apps share their Mac's loopback address, so the CLI reaches
+/// one there as it reaches a Mac app.
 @_cdecl("iso_apple_drive_attach")
 public func isoAppleDriveAttach() {
     let environment = ProcessInfo.processInfo.environment
@@ -324,18 +332,51 @@ public func isoAppleDriveAttach() {
         IsomerLocalServer.register(IsomerLocalServer { await driver.handle($0) })
         return driver
     }
-    guard let address = environment["ISO_DRIVER"], let url = URL(string: address) else { return }
-    MainActor.assumeIsolated {
-        Task { @MainActor in
-            do {
-                try await driver.dialOut(
-                    IsomerURLSessionConnection(url),
-                    context: .authorized(environment["ISO_DRIVER_TOKEN"],
-                                         metadata: environment["ISO_DRIVER_NAME"].map { ["iso-target": $0] } ?? [:])
-                )
-            } catch {
-                print("[iso] driver at \(address): \(error)")
+    if let address = environment["ISO_DRIVER"] {
+        guard let url = URL(string: address) else { return }
+        MainActor.assumeIsolated {
+            Task { @MainActor in
+                do {
+                    try await driver.dialOut(
+                        IsomerURLSessionConnection(url),
+                        context: .authorized(environment["ISO_DRIVER_TOKEN"],
+                                             metadata: environment["ISO_DRIVER_NAME"].map { ["iso-target": $0] } ?? [:])
+                    )
+                } catch {
+                    print("[iso] driver at \(address): \(error)")
+                }
             }
+        }
+        return
+    }
+    let listen = environment["ISO_DRIVE_LISTEN"] ?? "ws://127.0.0.1:7700"
+    if listen == "none" { return }
+    guard let url = URL(string: listen), url.scheme == "ws", let port = url.port else {
+        print("[iso] ISO_DRIVE_LISTEN=\(listen): not ws://<host>:<port>, so nothing listens")
+        return
+    }
+    let host = url.host ?? "127.0.0.1"
+    // A token (ISO_DRIVE_TOKEN) is for an address other than the loopback.
+    let server = IsomerAuthorizedServer(AccessibilityServer(driver: driver), authorization: .fromEnvironment(environment))
+    Task.detached {
+        do {
+            try await IsomerWebSocketServer(server, host: host, port: port).run { bound in
+                print("[iso] drivable at ws://\(host):\(bound): bazel run //xplat/iso -- ls")
+            }
+        } catch {
+            print("[iso] listening at \(listen): \(error)")
+        }
+    }
+}
+
+/// The driver as an `IsomerServer`'s `drive`, for a driver that connects (the
+/// iso CLI, a test): commands answered one at a time, in order.
+struct AccessibilityServer: IsomerServer {
+    let driver: AccessibilityDriver
+
+    func drive(_ commands: IsomerInbound<Wire_Command>, _ answers: IsomerOutbound<Wire_Answer>, context: IsomerCallContext) async throws {
+        for try await command in commands {
+            try await answers.write(await driver.handle(command))
         }
     }
 }
