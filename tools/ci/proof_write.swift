@@ -111,9 +111,12 @@ func add(id: String, title: String?, picture: URL) {
     screens[id] = item
 }
 
+// Each file once, however the folders given overlap (a folder and those in it).
+var seen: Set<String> = []
 for folder in folders {
     guard let walker = files.enumerator(at: folder, includingPropertiesForKeys: nil) else { continue }
     for case let url as URL in walker {
+        guard seen.insert(url.resolvingSymlinksInPath().standardizedFileURL.path).inserted else { continue }
         // A review folder: its manifest's items.
         if url.lastPathComponent == "manifest.json", url.deletingLastPathComponent().lastPathComponent.hasPrefix("review-") {
             let cellFolder = url.deletingLastPathComponent()

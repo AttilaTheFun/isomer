@@ -35,7 +35,9 @@ run() {
     local target="$1" out="$2"
     shift 2
     # Downloads retried: a GitHub release's 504 once failed a whole job.
+    # The repository cache the job keeps in GitHub's cache (build.yml).
     (cd "$ROOT/examples" && bazel test --test_output=errors --experimental_repository_downloader_retries=5 \
+        --repository_cache="$HOME/.cache/isomer-bazel-repository" \
         "$@" "$package:$target") || failures=$((failures + 1))
     local logs
     logs="$(cd "$ROOT/examples" && bazel info bazel-testlogs 2> /dev/null)/headless/storybook_headless_application/$target"

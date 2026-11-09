@@ -235,6 +235,14 @@ jobs:
         with:
           name: headful-apps
           path: .ci/headful
+      # Bazel's downloads kept between runs in GitHub's cache: GitHub's
+      # release downloads, where most of them come from, have failed for
+      # an hour at a time with 504s.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/isomer-bazel-repository
+          key: bazel-repository-${{ runner.os }}-${{ hashFiles('MODULE.bazel', 'examples/MODULE.bazel', 'examples/third_party/swift_packages/Package.resolved') }}
+          restore-keys: bazel-repository-${{ runner.os }}-
       # The Storybook's tests (the headless source) against the apps headful:
       # the test built here, the apps the container's.
       - name: The Storybook's tests, headful on the iPhone and the Mac
@@ -294,6 +302,14 @@ jobs:
         with:
           name: headful-apps
           path: .ci/headful
+      # Bazel's downloads kept between runs in GitHub's cache: GitHub's
+      # release downloads, where most of them come from, have failed for
+      # an hour at a time with 504s.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/isomer-bazel-repository
+          key: bazel-repository-${{ runner.os }}-${{ hashFiles('MODULE.bazel', 'examples/MODULE.bazel', 'examples/third_party/swift_packages/Package.resolved') }}
+          restore-keys: bazel-repository-${{ runner.os }}-
       - name: The Storybook's tests, headful on Android
         run: exec tools/ci/hosted_headful_test.sh android .ci/headful/storybook-x86_64.apk .ci/platform-tests/android/headful
       - uses: actions/upload-artifact@v4
