@@ -96,10 +96,15 @@ container with its own KVM, the iPhone and the Mac on slots. Left:
 docs/drive.md and docs/remote_sessions.md say what there is,
 docs/drive_plan.md the order. Open:
 
-- **Headful iOS and the Mac** (the plan's step 3): the Isomer-compiled build
-  dialling out first; a hosted XCTest transport (the driver in process);
-  runs on a leased simulator from Linux; then an in-process accessibility
-  driver for apps on Apple's SwiftUI (step 5).
+- **Headful iOS and the Mac** (the plan's step 3): apps on Apple's SwiftUI
+  are driven by drive/apple's in-process accessibility driver (0.48, step
+  5); the Isomer-compiled build dialling out and a hosted XCTest transport
+  are still open.
+- **Headful Windows' pictures**: windows_launcher.sh answers a test's
+  pictures with none (Linux's renderer writes its frame since 0.48).
+- **TLS on Windows**: swift-nio-ssl has no Windows yet (its #567), so
+  IsomerRemote (gRPC) and `exec:`/`unix:` are left out there; a Windows app
+  dials out and a Windows test drives over plain WebSockets.
 - **`isomer_test`** (step 4): one test source against Isomer's frameworks on
   Linux and Apple's in an XCTest bundle.
 - **The DOM renderer** (owner, 2026-11-08): the web's React renderer replaced
