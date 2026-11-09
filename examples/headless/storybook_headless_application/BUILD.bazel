@@ -164,10 +164,35 @@ swift_test(
     for platform in ["ios", "macos", "android"]
 ]
 
+# Its tests listed by hand rather than discovered: rules_swift's discovery
+# extracts a symbol graph, which the Windows cross-build can't (the
+# extractor isn't given the Windows SDK's headers), so XCTMain runs what
+# the test file's `func test…()` lines name.
+genrule(
+    name = "windows_test_main",
+    srcs = ["StorybookHeadlessTests.swift"],
+    outs = ["windows_test_main/main.swift"],
+    cmd = """
+{
+  echo 'import XCTest'
+  echo 'extension StorybookHeadlessTests {'
+  echo '    static let allTests: [(String, (StorybookHeadlessTests) -> () throws -> Void)] = ['
+  sed -n 's/^[[:space:]]*func \\(test[A-Za-z0-9_]*\\)() throws {.*/        ("\\1", \\1),/p' $<
+  echo '    ]'
+  echo '}'
+  echo 'XCTMain([testCase(StorybookHeadlessTests.allTests)])'
+} > $@
+""",
+)
+
 swift_test(
     name = "storybook_headful_windows_test",
     size = "medium",
-    srcs = ["StorybookHeadlessTests.swift"],
+    srcs = [
+        "StorybookHeadlessTests.swift",
+        ":windows_test_main",
+    ],
+    discover_tests = False,
     module_name = "StorybookHeadfulWindowsTests",
     tags = ["manual"],
     target_compatible_with = ["@platforms//os:windows"],
