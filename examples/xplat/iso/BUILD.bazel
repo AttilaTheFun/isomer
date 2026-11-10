@@ -1,0 +1,13 @@
+load("@isomer//xplat/iso:defs.bzl", "executable_copy")
+
+# isomer's CLI where the examples are built, so the apps here and the CLI that
+# drives them come from one place:
+#
+#   bazel run //apple/storybook_ios_application --config=cli    the iPhone Storybook, drivable
+#   bazel run //xplat/iso -- ls                                 its screen
+#
+# `bazel build //xplat/iso` leaves it at bazel-bin/xplat/iso/iso.
+executable_copy(
+    name = "iso",
+    src = "@isomer//xplat/iso",
+)

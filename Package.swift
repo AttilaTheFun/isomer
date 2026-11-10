@@ -48,7 +48,7 @@ let package = Package(
         .library(name: "IsomerGRPCTransport", targets: ["IsomerGRPCTransport"]),
         .library(name: "IsomerRemote", targets: ["IsomerRemote"]),
         .library(name: "IsomerDriver", targets: ["IsomerDriver"]),
-        .executable(name: "isomer", targets: ["isomer"]),
+        .executable(name: "iso", targets: ["iso"]),
     ],
     dependencies: [
         // swift-6.4.2-RELEASE's commit: the swift-foundation the Swift SDKs'
@@ -290,7 +290,7 @@ let package = Package(
             exclude: ["BUILD.bazel"]
         ),
         .executableTarget(
-            name: "isomer",
+            name: "iso",
             dependencies: [
                 "IsomerGRPCTransport",
                 "IsomerRemote",
@@ -299,7 +299,7 @@ let package = Package(
                 "IsomerWire",
                 .product(name: "SwiftProtobuf", package: "swift-protobuf"),
             ],
-            path: "drive/cli",
+            path: "xplat/iso",
             exclude: ["BUILD.bazel"]
         ),
     ],

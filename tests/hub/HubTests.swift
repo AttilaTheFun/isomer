@@ -102,4 +102,38 @@ final class HubTests: XCTestCase {
         second.answers.finish()
         try await second.call.value
     }
+
+    /// `apps`, sent to the hub with no target, answers with every app
+    /// attached by name (the iso CLI's `iso apps`, and what `--all` drives);
+    /// with several attached, a command with no target names none.
+    func testAppsAnswersWithEveryAppAttached() async throws {
+        let hub = IsomerHub()
+        let ios = attach("ios", to: hub)
+        let web = attach("web", to: hub)
+        defer { ios.app.cancel(); web.app.cancel() }
+        let iosAttached = await hub.waitUntilAttached("ios", timeout: 5)
+        let webAttached = await hub.waitUntilAttached("web", timeout: 5)
+        XCTAssertTrue(iosAttached && webAttached)
+        let (commands, commandWriter) = AsyncThrowingStream<Wire_Command, any Error>.makeStream()
+        let (answers, answerWriter) = AsyncThrowingStream<Wire_Answer, any Error>.makeStream()
+        let drive = Task {
+            try await hub.drive(commands, IsomerOutbound { answerWriter.yield($0) }, context: IsomerCallContext())
+        }
+        var apps = Wire_Command()
+        apps.cmd = "apps"
+        commandWriter.yield(apps)
+        var iterator = answers.makeAsyncIterator()
+        let answer = try await iterator.next()
+        XCTAssertEqual(answer?.apps.map(\.name), ["ios", "web"])
+        XCTAssertEqual(answer?.apps.map(\.info.name), ["ios", "web"])
+        var ls = Wire_Command()
+        ls.cmd = "ls"
+        commandWriter.yield(ls)
+        do {
+            try await drive.value
+            XCTFail("a command with no target went somewhere with two apps attached")
+        } catch {
+            XCTAssertTrue("\(error)".contains("several apps attached"), "\(error)")
+        }
+    }
 }

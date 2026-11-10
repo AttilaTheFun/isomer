@@ -14,9 +14,9 @@ swift_test(
     srcs = ["RemoteTests.swift"],
     data = [
         "//headless/storybook_headless_application",
-        "@isomer//drive/cli:isomer",
+        "@isomer//xplat/iso",
     ],
-    env = {"ISOMER_CLI": "$(rootpath @isomer//drive/cli:isomer)"},
+    env = {"ISOMER_CLI": "$(rootpath @isomer//xplat/iso)"},
     module_name = "RemoteTests",
     deps = [
         "@isomer//drive/remote",
@@ -27,7 +27,7 @@ swift_test(
     ],
 )
 
-# The `isomer` CLI driving the Storybook: an exec: application added,
+# The `iso` CLI driving the Storybook: an exec: application added,
 # selected, driven a command at a time (the app kept running between them on
 # a Unix socket), and stopped (cli_test.sh).
 sh_test(
@@ -35,12 +35,12 @@ sh_test(
     size = "small",
     srcs = ["cli_test.sh"],
     args = [
-        "$(rootpath @isomer//drive/cli:isomer)",
+        "$(rootpath @isomer//xplat/iso)",
         "$(rootpath //headless/storybook_headless_application)",
     ],
     data = [
         "//headless/storybook_headless_application",
-        "@isomer//drive/cli:isomer",
+        "@isomer//xplat/iso",
     ],
 )
 
@@ -94,7 +94,7 @@ sh_test(
     size = "medium",
     srcs = ["headful_web_test.sh"],
     args = [
-        "$(rootpath @isomer//drive/cli:isomer)",
+        "$(rootpath @isomer//xplat/iso)",
         "$(rootpath @isomer//tools/testing/browser_check)",
         "$(rootpath //web/storybook_web_application:storybook_web_application_site)",
     ] + select({
@@ -104,7 +104,7 @@ sh_test(
     }),
     data = [
         "//web/storybook_web_application:storybook_web_application_site",
-        "@isomer//drive/cli:isomer",
+        "@isomer//xplat/iso",
         "@isomer//tools/testing/browser_check",
     ] + select({
         "//tests/platforms:linux_arm64": [

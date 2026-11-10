@@ -1,0 +1,14 @@
+load("//xplat/iso:defs.bzl", "executable_copy")
+
+package(default_visibility = ["//visibility:public"])
+
+# iso, the CLI (main.swift says its commands): an executable product of
+# isomer's Swift package, copied here so that `bazel build` leaves it at
+# bazel-bin/xplat/iso/iso, to run in place or move anywhere (it carries no
+# runfiles).
+#
+#   bazel run @isomer//xplat/iso -- ls       an app built with --config=cli
+executable_copy(
+    name = "iso",
+    src = "@swiftpkg_isomer//:iso",
+)

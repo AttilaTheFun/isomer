@@ -173,7 +173,10 @@ enum HeadlessApp {
             Task { @MainActor in
                 do {
                     let endpoint = try IsomerRemote.endpoint(url)
-                    try await driver.dialOut(endpoint.connection, context: endpoint.context(token: environment["ISO_DRIVER_TOKEN"]))
+                    // ISO_DRIVER_NAME: the name the hub drives it by, as a headful app's.
+                    try await driver.dialOut(endpoint.connection, context: endpoint.context(
+                        token: environment["ISO_DRIVER_TOKEN"],
+                        metadata: environment["ISO_DRIVER_NAME"].map { ["iso-target": $0] } ?? [:]))
                 } catch {
                     logLine("isomer: dialling out to \(url): \(error)")
                 }

@@ -1,6 +1,7 @@
 // A hub headful apps dial out to (session_service.proto's Driver.Attach),
 // driven by name (Headless.Drive with `iso-target`, or the only one
-// attached). The `isomer hub` command serves one on a transport; a test
+// attached). `apps`, sent to the hub with no target, answers with the apps
+// attached (Answer.apps). The `iso hub` command serves one on a transport; a test
 // driving headful apps holds one in its own process (IsomerHeadless).
 
 import Foundation
@@ -15,6 +16,8 @@ public actor IsomerHub: IsomerServer {
         /// it is a newer one).
         let id: Int
         let commands: IsomerOutbound<Wire_Command>
+        /// What the app said it is when it attached.
+        let info: Wire_Info
         /// Commands sent, waiting for their answers, in order.
         var waiting: [CheckedContinuation<Wire_Answer, any Error>] = []
         /// Answers come before a command was waiting for them.
@@ -71,7 +74,7 @@ public actor IsomerHub: IsomerServer {
         // ends with its connection, detaching nothing.
         attachments += 1
         if let old = attached[name] { fail(old, "\(name) attached again") }
-        attached[name] = Attached(id: attachments, commands: commands)
+        attached[name] = Attached(id: attachments, commands: commands, info: info)
         report("attached: \(name) (\(info.platform), \(info.renderer))")
         return attachments
     }
@@ -124,11 +127,30 @@ public actor IsomerHub: IsomerServer {
         return only
     }
 
+    /// The hub's own answer to `apps`: every app attached, by name.
+    public func apps() -> Wire_Answer {
+        var answer = Wire_Answer()
+        answer.ok = true
+        answer.apps = attached.keys.sorted().map { name in
+            var attachment = Wire_Attachment()
+            attachment.name = name
+            attachment.info = attached[name]!.info
+            return attachment
+        }
+        return answer
+    }
+
     public nonisolated func drive(_ commands: IsomerInbound<Wire_Command>, _ answers: IsomerOutbound<Wire_Answer>, context: IsomerCallContext) async throws {
         try authorization.check(context)
-        let name = try await target(for: context)
+        // The app is named once a command needs one: `apps` asks the hub.
+        var name: String?
         for try await command in commands {
-            try await answers.write(try await send(command, to: name))
+            if command.cmd == "apps", context.target == nil {
+                try await answers.write(await apps())
+                continue
+            }
+            if name == nil { name = try await target(for: context) }
+            try await answers.write(try await send(command, to: name!))
             if command.cmd == "quit" { return }
         }
     }

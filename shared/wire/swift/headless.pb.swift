@@ -117,11 +117,43 @@ public nonisolated struct Wire_Answer: @unchecked Sendable {
   /// Clears the value of `inspection`. Subsequent reads from it will return its default value.
   public mutating func clearInspection() {_uniqueStorage()._inspection = nil}
 
+  /// A hub's answer to `apps`: the apps attached to it, each under the name
+  /// it is driven by.
+  public var apps: [Wire_Attachment] {
+    get {_storage._apps}
+    set {_uniqueStorage()._apps = newValue}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
+}
+
+/// An app attached to a hub: the name it is driven by (`iso-target`) and what
+/// it said it is when it attached.
+public nonisolated struct Wire_Attachment: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var name: String = String()
+
+  public var info: Wire_Info {
+    get {_info ?? Wire_Info()}
+    set {_info = newValue}
+  }
+  /// Returns true if `info` has been explicitly set.
+  public var hasInfo: Bool {self._info != nil}
+  /// Clears the value of `info`. Subsequent reads from it will return its default value.
+  public mutating func clearInfo() {self._info = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _info: Wire_Info? = nil
 }
 
 public nonisolated struct Wire_Info: Sendable {
@@ -401,7 +433,7 @@ nonisolated extension Wire_Command: SwiftProtobuf.Message, SwiftProtobuf._Messag
 
 nonisolated extension Wire_Answer: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Answer"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}ok\0\u{1}error\0\u{1}screen\0\u{1}info\0\u{1}inspection\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}ok\0\u{1}error\0\u{1}screen\0\u{1}info\0\u{1}inspection\0\u{1}apps\0")
 
   fileprivate class _StorageClass {
     var _ok: Bool? = nil
@@ -409,6 +441,7 @@ nonisolated extension Wire_Answer: SwiftProtobuf.Message, SwiftProtobuf._Message
     var _screen: Wire_Screen? = nil
     var _info: Wire_Info? = nil
     var _inspection: Wire_Inspection? = nil
+    var _apps: [Wire_Attachment] = []
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -424,6 +457,7 @@ nonisolated extension Wire_Answer: SwiftProtobuf.Message, SwiftProtobuf._Message
       _screen = source._screen
       _info = source._info
       _inspection = source._inspection
+      _apps = source._apps
     }
   }
 
@@ -447,6 +481,7 @@ nonisolated extension Wire_Answer: SwiftProtobuf.Message, SwiftProtobuf._Message
         case 3: try { try decoder.decodeSingularMessageField(value: &_storage._screen) }()
         case 4: try { try decoder.decodeSingularMessageField(value: &_storage._info) }()
         case 5: try { try decoder.decodeSingularMessageField(value: &_storage._inspection) }()
+        case 6: try { try decoder.decodeRepeatedMessageField(value: &_storage._apps) }()
         default: break
         }
       }
@@ -474,6 +509,9 @@ nonisolated extension Wire_Answer: SwiftProtobuf.Message, SwiftProtobuf._Message
       try { if let v = _storage._inspection {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
       } }()
+      if !_storage._apps.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._apps, fieldNumber: 6)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -488,10 +526,50 @@ nonisolated extension Wire_Answer: SwiftProtobuf.Message, SwiftProtobuf._Message
         if _storage._screen != rhs_storage._screen {return false}
         if _storage._info != rhs_storage._info {return false}
         if _storage._inspection != rhs_storage._inspection {return false}
+        if _storage._apps != rhs_storage._apps {return false}
         return true
       }
       if !storagesAreEqual {return false}
     }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Wire_Attachment: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".Attachment"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}info\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._info) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
+    }
+    try { if let v = self._info {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Wire_Attachment, rhs: Wire_Attachment) -> Bool {
+    if lhs.name != rhs.name {return false}
+    if lhs._info != rhs._info {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

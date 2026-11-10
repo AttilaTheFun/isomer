@@ -10,7 +10,9 @@
 // once it runs (iso_apple_drive_attach.c starts it) and is driven over that
 // connection (session_service.proto's Driver.Attach), through Foundation's
 // URLSession. ISO_DRIVER_TOKEN is the hub's token, if it wants one;
-// ISO_DRIVER_NAME the name the hub knows the app by.
+// ISO_DRIVER_NAME the name the hub knows the app by. Launched without it, the
+// app dials the iso CLI's hub on its machine (IsomerDriving), as `ios` or
+// `macos`.
 //
 // Each platform reads the tree its way (an extension of the driver a file):
 // iOS walks UIKit's accessibility containers (UIKitAccessibility.swift) once
@@ -314,8 +316,10 @@ final class AccessibilityDriver {
 }
 
 /// Started once the app runs (iso_apple_drive_attach.c): the app's own
-/// driver, for a test bundle hosted in it (IsomerLocalServer, synchronous);
-/// and, when ISO_DRIVER names where to dial, attached there too.
+/// driver, for a test bundle hosted in it (IsomerLocalServer, synchronous),
+/// and dialled out (IsomerDriving: ISO_DRIVER, else the iso CLI's hub on this
+/// machine, which a simulator's apps share), attached again whenever the
+/// call ends.
 @_cdecl("iso_apple_drive_attach")
 public func isoAppleDriveAttach() {
     let environment = ProcessInfo.processInfo.environment
@@ -324,17 +328,12 @@ public func isoAppleDriveAttach() {
         IsomerLocalServer.register(IsomerLocalServer { await driver.handle($0) })
         return driver
     }
-    guard let address = environment["ISO_DRIVER"], let url = URL(string: address) else { return }
+    guard let (url, name) = IsomerDriving.destination(environment, platform: AccessibilityDriver.platform) else { return }
+    let context = IsomerCallContext.authorized(environment["ISO_DRIVER_TOKEN"], metadata: name.map { ["iso-target": $0] } ?? [:])
     MainActor.assumeIsolated {
         Task { @MainActor in
-            do {
-                try await driver.dialOut(
-                    IsomerURLSessionConnection(url),
-                    context: .authorized(environment["ISO_DRIVER_TOKEN"],
-                                         metadata: environment["ISO_DRIVER_NAME"].map { ["iso-target": $0] } ?? [:])
-                )
-            } catch {
-                print("[iso] driver at \(address): \(error)")
+            await IsomerDriving.keepAttached(to: url.absoluteString, report: { print("[iso] \($0)") }) {
+                try await driver.dialOut(IsomerURLSessionConnection(url), context: context)
             }
         }
     }
