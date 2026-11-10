@@ -104,16 +104,8 @@ def _swift_windows_sdk_impl(rctx):
     for tool, name in [("clang-cl", "clang-cl"), ("lld-link", "lld-link"), ("llvm-ar", "llvm-lib")]:
         rctx.symlink(usr.get_child("bin", tool), "bin/" + name)
 
-    # Swift Testing beside XCTest (Library/Testing-<version>), whose module
-    # and import libraries rules_swift adds no path for (it adds XCTest's).
-    library = rctx.path("swift-windows-sdk/Windows.platform/Developer/Library")
-    testing = [entry.basename for entry in library.readdir() if entry.basename.startswith("Testing-")]
-    if not testing:
-        fail("The Windows Swift SDK has no Library/Testing-*: Swift Testing can't be built for Windows.")
-
     root = "external/" + rctx.name
     rctx.template("BUILD.bazel", rctx.attr._build_template, substitutions = {
-        "{testing}": "swift-windows-sdk/Windows.platform/Developer/Library/" + testing[0],
         "{execroot_repo}": root,
         "{msvc}": versions["msvc"],
         "{sdk_version}": versions["sdk"],
