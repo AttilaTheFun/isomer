@@ -104,8 +104,9 @@ def _swift_windows_sdk_impl(rctx):
     for tool, name in [("clang-cl", "clang-cl"), ("lld-link", "lld-link"), ("llvm-ar", "llvm-lib")]:
         rctx.symlink(usr.get_child("bin", tool), "bin/" + name)
 
-    # Swift Testing beside XCTest (Library/Testing-<version>), whose module
-    # and import libraries rules_swift adds no path for (it adds XCTest's).
+    # Swift Testing beside XCTest (Library/Testing-<version>): its module and
+    # import libraries, which rules_swift adds no path for (it adds XCTest's),
+    # are the BUILD's :testing.
     library = rctx.path("swift-windows-sdk/Windows.platform/Developer/Library")
     testing = [entry.basename for entry in library.readdir() if entry.basename.startswith("Testing-")]
     if not testing:
