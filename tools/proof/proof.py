@@ -350,6 +350,16 @@ def mask(path, regions):
         log(f"mask {os.path.basename(path)}: {error}")
 
 
+def masked(cell, out, picture):
+    """A cell's picture masked where masks.txt says, by the picture's file
+    (`<story id>.png`: a cell's items are named by the stories' titles)."""
+    story = os.path.splitext(picture)[0]
+    story = story[: -len(".reference")] if story.endswith(".reference") else story
+    regions = MASKS.get(f"{cell}-{story}")
+    if regions and os.path.exists(os.path.join(out, picture)):
+        mask(os.path.join(out, picture), regions)
+
+
 class Review:
     def __init__(self, folder, commit, version, quick=False):
         self.folder, self.commit, self.version, self.quick = folder, commit, version, quick
@@ -382,8 +392,7 @@ class Review:
                 continue
             # Both sides of the parity masked alike.
             for picture in (capture, reference):
-                if os.path.exists(os.path.join(out, picture)) and f"{name}-{item}" in MASKS:
-                    mask(os.path.join(out, picture), MASKS[f"{name}-{item}"])
+                masked(name, out, picture)
             entry = {"name": item, "status": "new", "capture": capture}
             if os.path.exists(os.path.join(out, reference)):
                 entry["reference"] = reference
@@ -409,8 +418,7 @@ class Review:
         """`shots`: (item name, capture file) pairs; a missing capture is a failure."""
         out = self.dir(name)
         for item, capture in shots:
-            if os.path.exists(os.path.join(out, capture)) and f"{name}-{item}" in MASKS:
-                mask(os.path.join(out, capture), MASKS[f"{name}-{item}"])
+            masked(name, out, capture)
         items = [{"name": item, "status": "new", "capture": capture} for item, capture in shots
                  if os.path.exists(os.path.join(out, capture))]
         missing = [item for item, capture in shots if not os.path.exists(os.path.join(out, capture))]
