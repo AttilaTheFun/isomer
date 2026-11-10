@@ -175,8 +175,8 @@ windows=(--config=windows_on_linux --platforms=@isomer//tools/platforms:windows_
 bazel build "${flags[@]}" "${windows[@]}" //windows/storybook_windows_application
 built_windows=$?
 # And the Windows Storybook with its driver built in (its headful build),
-# with the Storybook tests built for Windows to drive it there.
-windows_headful=(//windows/storybook_windows_application //headless/storybook_headless_application:storybook_headful_windows_test)
+# the Storybook tests not built for Windows until Swift Testing is (TODO.md).
+windows_headful=(//windows/storybook_windows_application)
 bazel build "${flags[@]}" "${windows[@]}" --@isomer//drive:headful "${windows_headful[@]}" || built_windows=1
 # The tier-1 platforms run (the web here); the Linux tests are built but,
 # for now (2026-11-05), not run.

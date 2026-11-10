@@ -167,39 +167,12 @@ swift_test(
     for platform in ["ios", "macos", "android"]
 ]
 
-# Its own main, Swift Testing's entry point, rather than rules_swift's
-# discovered one: discovery extracts a symbol graph, which the Windows
-# cross-build can't (the extractor isn't given the Windows SDK's headers).
-# Swift Testing finds its tests itself at run time.
-genrule(
-    name = "windows_test_main",
-    outs = ["windows_test_main/main.swift"],
-    cmd = """
-{
-  echo 'import Testing'
-  echo '@main struct WindowsTestMain {'
-  echo '    static func main() async { await Testing.__swiftPMEntryPoint() as Never }'
-  echo '}'
-} > $@
-""",
-)
-
-swift_test(
-    name = "storybook_headful_windows_test",
-    size = "medium",
-    srcs = [
-        "StorybookHeadlessTests.swift",
-        ":windows_test_main",
-    ],
-    discover_tests = False,
-    module_name = "StorybookHeadfulWindowsTests",
-    tags = ["manual"],
-    target_compatible_with = ["@platforms//os:windows"],
-    deps = [
-        "@isomer//headless/isomer_headless",
-        "@isomer//shared/wire/swift",
-    ],
-)
+# No Windows UI test for now: the tests are Swift Testing's, and the Windows
+# SDK carries Testing as a textual interface alone, which the Windows
+# cross-build can't compile (rules_swift's interface action gets neither the
+# toolchain's resource directory nor its SDK: "no such module 'Swift'").
+# TODO.md, "Swift Testing on Windows". Windows' picture tests still run
+# (tools/ci/hosted_windows_test.ps1).
 
 # The same tests hosted in the app (the plan's fourth way): an XCTest bundle
 # whose host is the iPhone Storybook built with --@isomer//drive:headful,
