@@ -66,7 +66,6 @@ let package = Package(
         // minimum, so this package keeps macOS 13 and iOS 16; the gRPC
         // transport's API carries the same marks.
         .package(url: "https://github.com/grpc/grpc-swift-2.git", from: "2.4.3"),
-        .package(url: "https://github.com/grpc/grpc-swift-protobuf.git", from: "2.4.1"),
         .package(url: "https://github.com/grpc/grpc-swift-nio-transport.git", from: "2.10.0"),
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.81.0"),
     ],
