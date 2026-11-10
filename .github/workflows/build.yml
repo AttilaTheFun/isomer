@@ -538,11 +538,8 @@ jobs:
         run: >-
           tools/ci/check_version_line.sh
           "$(sed -n '/CFBundleShortVersionString/{n;s/.*<string>\(.*\)<\/string>.*/\1/p;}' examples/apple/storybook_ios_application/Info.plist)"
-      # Bazel's tree a volume of the publishing jobs' own, kept between runs.
-      # exec: the runner's cancel reaches oss, which ends the build.
+      # exec: the runner's cancel reaches the build.
       - name: Build
-        env:
-          ISOMER_CI_VOLUME: isomer-ci-publish
         run: exec tools/ci/container_build.sh package .ci/packages --config=alpha $PUBLISHED_APPS
       # Nothing is published if the Mac app's icon has no dark appearance.
       - name: The icon's dark appearance
@@ -596,8 +593,6 @@ jobs:
           APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
         run: tools/ci/stamp_apps.sh
       - name: Build
-        env:
-          ISOMER_CI_VOLUME: isomer-ci-publish
         run: exec tools/ci/container_build.sh package .ci/packages --config=adhoc $PUBLISHED_APPS
       - name: The icon's dark appearance
         run: tools/ci/check_mac_icons.sh .ci/packages
@@ -661,8 +656,6 @@ jobs:
           APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
         run: tools/ci/stamp_apps.sh
       - name: Android's, for production
-        env:
-          ISOMER_CI_VOLUME: isomer-ci-publish
         run: >-
           tools/ci/container_build.sh package .ci/android --config=prod --compilation_mode=opt
           //android/storybook_android_application:storybook_android_application_apk
@@ -675,8 +668,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: tools/ci/attach_release.sh "$GITHUB_REF_NAME" "$RUNNER_TEMP/assets"
       - name: The iPhone's, for the simulator
-        env:
-          ISOMER_CI_VOLUME: isomer-ci-publish
         run: >-
           tools/ci/container_build.sh package .ci/simulator --compilation_mode=opt --ios_multi_cpus=sim_arm64
           //apple/storybook_ios_application:storybook_ios_sim_application

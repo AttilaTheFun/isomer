@@ -47,8 +47,8 @@
 # runners: the Apple apps with rules_applecross, the SDK archive from OS
 # Server's files; Android's, the web's, its pictures in Chrome for Testing
 # there), or on a Mac with its Xcode and Chrome when run by hand there.
-# Linux's (when PROOF_PLATFORMS names it) are packaged in a container leased
-# from Shireworks; Windows' are built on its VM.
+# Linux's (when PROOF_PLATFORMS names it) are packaged in the same container;
+# Windows' are built on its VM.
 #
 #   PROOF_REF           the ref the proof is of (default: GITHUB_REF, else the branch)
 #   PROOF_PYTHON        the python3 that runs proof.py, with Pillow, which crops
@@ -57,8 +57,8 @@
 #                       committed MAJOR.MINOR.0)
 #   PROOF_MAC           vm: the Mac's pictures on a macOS VM of their own, as
 #                       before 2026-11-03 (default: a slot of Shireworks' primary)
-#   OSS_FILES_HOST      the name Shireworks' files are reached by (default: the
-#                       first of OSS_SERVERS, else this Mac's tailnet name)
+#   SHIREWORKS_FILES_HOST  the name Shireworks' files are reached by (default:
+#                       the server tools/ci/shireworks.sh files-url names)
 #   GH_TOKEN            gh's token (the job's)
 #
 # Every lease is released however the script ends: proof.py's own as it
@@ -69,7 +69,6 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # gh, installed where the image lacks it.
 # shellcheck source=tools/ci/gh_ready.sh
 . "$ROOT/tools/ci/gh_ready.sh"
-IMAGE="$(cat "$ROOT/tools/ci/agent_image")"
 # Tier 1 only for now (2026-11-05: the runs take the time; Linux and
 # Windows are still built by every CI run, in container_build.sh). proof.py
 # still pictures them when named: add them back here.
@@ -145,8 +144,11 @@ kill_tree() {
 release_ours() {
     # This job's leases, by the label Shireworks gives a CI job's ("… #<run> · <job>").
     [ -n "${GITHUB_RUN_ID:-}" ] && [ -n "${GITHUB_JOB:-}" ] || return 0
-    { oss machine list 2> /dev/null | grep -F " #$GITHUB_RUN_ID · $GITHUB_JOB" || true; } | awk '{ print $1 }' | while read -r id; do
-        oss machine release "$id" > /dev/null 2>&1 && echo "proof.sh: released $id" || true
+    # None where there is no Shireworks (GitHub's own machines).
+    [ -n "${SHIREWORKS_GRANT:-}${SHIREWORKS_SERVERS:-}" ] || return 0
+    { "$ROOT/tools/ci/shireworks.sh" list --label=" #$GITHUB_RUN_ID · $GITHUB_JOB" 2> /dev/null || true; } | cut -d' ' -f1 | while read -r id; do
+        [ -n "$id" ] || continue
+        "$ROOT/tools/ci/shireworks.sh" release "$id" > /dev/null 2>&1 && echo "proof.sh: released $id" || true
     done
 }
 cleanup() {
@@ -260,21 +262,19 @@ shoot() {
 inside=""
 [ "$(uname -s)" = Darwin ] || inside=1
 stages shoot && inside=""
-host="${OSS_FILES_HOST:-}"
-if [ -z "$host" ] && [ -n "${OSS_SERVERS:-}" ]; then
-    # The first of the servers' addresses (a URL, or host:port).
-    host="${OSS_SERVERS%%[ ,]*}"
-    host="${host#*://}"
-    host="${host%%[:/]*}"
-fi
-if [ -z "$host" ] && [ -z "$inside" ] && ! stages shoot; then
-    host="$(/Applications/Tailscale.app/Contents/MacOS/Tailscale status --json | plutil -extract Self.DNSName raw -o - -)"
-    host="${host%.}"
-fi
 if stages shoot; then
     shoot_setup
 elif [ -n "$inside" ]; then
-    [ -n "$host" ] || { echo "::error::no host for Shireworks' files: set OSS_FILES_HOST (or OSS_SERVERS)"; exit 1; }
+    # Where Shireworks' files are: the URL shireworks.sh gives a file (its
+    # server and port), or SHIREWORKS_FILES_HOST's port 7490.
+    sdk="$(sed -n 's/^SDK_SHA256="\(.*\)"/\1/p' "$ROOT/tools/ci/container_build.sh")"
+    if [ -n "${SHIREWORKS_FILES_HOST:-}" ]; then
+        files="http://$SHIREWORKS_FILES_HOST:7490/files/sha256"
+    else
+        files="$("$ROOT/tools/ci/shireworks.sh" files-url "$sdk")" ||
+            { echo "::error::no Shireworks to take files from: set SHIREWORKS_FILES_HOST (or SHIREWORKS_GRANT or SHIREWORKS_SERVERS)"; exit 1; }
+        files="${files%/*}"
+    fi
     echo "::group::The container's tools"
     root_do() { if [ "$(id -u)" = 0 ]; then "$@"; else sudo "$@"; fi; }
     # gh; Python with Pillow for proof.py;
@@ -286,11 +286,10 @@ elif [ -n "$inside" ]; then
           root_do env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends "${packages[@]}" > /dev/null; }
     # The Apple targets' toolchains and SDK archive (Shireworks' files),
     # for every Bazel command in the examples (proof.py's).
-    sdk="$(sed -n 's/^SDK_SHA256="\(.*\)"/\1/p' "$ROOT/tools/ci/container_build.sh")"
     cat > "$work/downloader.cfg" <<EOF2
-rewrite apple-sdks\.invalid/.* http://$host:7490/files/sha256/$sdk
-rewrite ported-tools\.invalid/sha256/(.*) http://$host:7490/files/sha256/\$1
-rewrite windows-sdks\.invalid/sha256/(.*) http://$host:7490/files/sha256/\$1
+rewrite apple-sdks\.invalid/.* $files/$sdk
+rewrite ported-tools\.invalid/sha256/(.*) $files/\$1
+rewrite windows-sdks\.invalid/sha256/(.*) $files/\$1
 EOF2
     printf 'build --config=apple_on_linux\ncommon --downloader_config=%s\n' "$work/downloader.cfg" > "$ROOT/examples/.bazelrc.user"
     # The web's pictures in Chrome for Testing (MODULE.bazel), for cdp.py,
@@ -333,11 +332,11 @@ if stages compare; then
     exit "$status"
 fi
 
-echo "::group::The Linux apps, packaged in a container"
-# Bazel's tree in a volume of the lease's, the checkout mounted (the
-# packages come out under .ci/, in it).
+echo "::group::The Linux apps, packaged"
+# In the job's own Linux container (the packages come out under .ci/).
 linux_packages=()
 if [[ " $PLATFORMS " == *" linux "* ]]; then
+    [ -n "$inside" ] || { echo "::error::the Linux apps are packaged in a Linux container (CI's): not on a Mac"; exit 1; }
     linux="$ROOT/.ci/proof-linux"
     rm -rf "$linux" && mkdir -p "$linux"
     steps='
@@ -349,9 +348,7 @@ if [[ " $PLATFORMS " == *" linux "* ]]; then
     linux/storybook_linux_application/package.sh /root/storybook-linux -c opt
     tar -czf "$out/storybook-linux.tgz" -C /root storybook-linux
     '
-    background oss machine run container --image="$IMAGE" --cpus=6 --memory=16 \
-        --mount="$ROOT:$ROOT" --volume="isomer-proof-${GITHUB_RUN_ID:-$$}:/var/cache/bazel:128" --inside --cache="$host" -- \
-        bash -c "$steps" proof "$ROOT" "$linux" || { echo "::error::the Linux apps didn't build"; exit 1; }
+    background bash -c "$steps" proof "$ROOT" "$linux" || { echo "::error::the Linux apps didn't build"; exit 1; }
     echo "::endgroup::"
     phase "Linux packaged"
     linux_packages=(--linux-packages "$linux")

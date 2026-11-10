@@ -18,7 +18,7 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
 |---|---|---|
 | T1 | iOS, macOS | simulators, the Mac |
 | T2 | wasm (web, Electron), Android | headless Chrome, the hermetic emulator |
-| T3 | Linux, Windows | built and run on oss machines from the Mac: Linux in a container (`tools/linux/build.sh`) and run in a Linux VM, Windows on the Windows VM with the Swift build layer (`tools/proof/proof.py`) |
+| T3 | Linux, Windows | built and run on Shireworks' machines from the Mac: Linux in a container (`tools/linux/build.sh`) and run in a Linux VM, Windows on the Windows VM with the Swift build layer (`tools/proof/proof.py`) |
 
 ## Releases
 
@@ -32,11 +32,11 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
 
 ## Linux and Windows (T3)
 
-- **Both are built and run on oss machines (0.38).** Linux builds in a
+- **Both are built and run on Shireworks' machines (0.38).** Linux builds in a
   Linux container leased from Shireworks (`tools/linux/build.sh`)
   and runs in a Shireworks Linux VM; Windows
   builds and runs on the Shireworks Windows VM with the Swift build layer
-  (tools/ci/oss/windows-swift.ps1: Visual Studio's build tools, Swift,
+  (tools/ci/shireworks/windows-swift.ps1: Visual Studio's build tools, Swift,
   Python), in MSVC's environment with Git's bash and POSIX tools (the
   release proof, tools/proof/proof.py, says how): the Storybook drawn by
   each platform's renderer (the Playground's, AttilaTheFun/playground's
