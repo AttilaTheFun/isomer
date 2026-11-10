@@ -2,31 +2,31 @@
 # (AttilaTheFun/reviews' docs/CI_POLICY.md) and the shape the owner set on
 # 2026-11-08: the tests without a GUI before a merge, every build after
 # one, the GUI tests and the proof by hand to propose a release, on
-# GitHub's own runners. No slot of OS Server's primary VM: those are for
+# GitHub's own runners. No slot of Shireworks' primary VM: those are for
 # private repositories' GUI tests.
 #
 # - container (every pull request from a branch of this repository: a
 #   self-hosted runner never runs a fork's code): every platform's
-#   Storybook built in one Linux container on OS Server's on-demand runners
+#   Storybook built in one Linux container on Shireworks' on-demand runners
 #   (tools/ci/container_build.sh pr: the Apple ones with rules_applecross),
 #   then every test without a GUI: the core's, the web's in headless Chrome,
 #   the Storybook's headless UI tests and the remote-driving tests. It reads
-#   OS Server's Bazel cache, never writes it, and leases nothing. The
+#   Shireworks' Bazel cache, never writes it, and leases nothing. The
 #   required check. A newer push cancels its run.
 # - populate (each commit on main): the merged tree built (container_build.sh
 #   all), and what a release builds (the published apps as alpha builds
-#   them, the proof's apps): the one job that writes OS Server's Bazel cache
-#   (OS Server's ci.populate names it), so a later pull request's build, and
+#   them, the proof's apps): the one job that writes Shireworks' Bazel cache
+#   (Shireworks' ci.populate names it), so a later pull request's build, and
 #   a release's, is mostly hits.
 # - By hand (workflow_dispatch, `run:`):
 #   - verify: the GUI tests: everything built in the container, then the
 #     Storybook's test stories on GitHub's own runners (apple: the iPhone's
 #     simulator and the Mac on `xcode-27`; android: an emulator under
 #     Ubuntu's KVM; windows: windows-11-arm, tier 2, not waited for; a
-#     private copy on OS Server's leases instead); and beside them the
+#     private copy on Shireworks' leases instead); and beside them the
 #     proof: the Storybook on every tier-1 platform, built in CI's
-#     container, pictured on GitHub's own machines (a private copy's on Shireworks'
-#     ), written in Reviews' format 2 (each picture an item under
+#     container, pictured on GitHub's own machines (a private copy's on
+#     Shireworks'), written in Reviews' format 2 (each picture an item under
 #     a stable id; Reviews compares it with the previous release's, not
 #     CI), uploaded as the `proof` artifact and attached to a release's
 #     draft as proof.zip (proof, proof-shoot, proof-compare; tools/ci/proof.sh). The full set by default; `kind:
@@ -127,7 +127,7 @@ jobs:
 
   populate:
     # Each commit on main: the merged tree built as container builds it,
-    # nothing run or published. OS Server grants this job alone the cache's
+    # nothing run or published. Shireworks grants this job alone the cache's
     # write (its ci.populate).
     if: github.event_name == 'push'
     runs-on: [self-hosted, isomer-jit]
@@ -157,7 +157,7 @@ jobs:
   verify:
     # By hand: every platform built, and the container's own tests; a public
     # repository's iPhone, Mac and Android tests then run on GitHub's own
-    # runners (apple, android, below), a private copy's here on OS Server's
+    # runners (apple, android, below), a private copy's here on Shireworks'
     # leases. The proof runs beside it (proof, proof-shoot, proof-compare).
     if: github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release')
     runs-on: [self-hosted, isomer-jit]
@@ -209,7 +209,7 @@ jobs:
             .ci/platforms/*storybook_macos*.zip
           retention-days: 3
       # exec: the runner's cancel reaches the script, which releases its leases.
-      - name: The tests on OS Server's leases
+      - name: The tests on Shireworks' leases
         if: github.event.repository.private
         run: exec tools/ci/platform_tests.sh .ci/platform-tests
       - uses: actions/upload-artifact@v4
@@ -223,11 +223,14 @@ jobs:
     # The iPhone and Mac Storybooks' tests on GitHub's own `xcode-27` Mac (a
     # simulator made for the run, and the Mac's own screen:
     # tools/ci/hosted_apple_test.sh), for a public repository's verify; a
-    # private one runs them in verify itself, on OS Server's leases.
+    # private one runs them in verify itself, on Shireworks' leases. Two
+    # hours: its builds (the headful iPhone app, the tests hosted in it, the
+    # Mac's) took 85 minutes of 0.50's run where Bazel's cache was cold, and
+    # the Mac's tests were cut off at 90.
     needs: verify
     if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release') && !github.event.repository.private }}
     runs-on: xcode-27
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
@@ -300,8 +303,8 @@ jobs:
   android:
     # The Android Storybook's tests on GitHub's own Ubuntu runner, the
     # emulator on its KVM (tools/ci/hosted_android_test.sh), for a public
-    # repository's verify; a private one runs them in verify itself, on an
-    # OS Server emulator.
+    # repository's verify; a private one runs them in verify itself, on a
+    # Shireworks emulator.
     needs: verify
     if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release') && !github.event.repository.private }}
     runs-on: ubuntu-24.04
@@ -338,7 +341,7 @@ jobs:
   proof:
     # By hand, with verify: never a pull request's or a push's.
     if: github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release')
-    # OS Server's single-use Linux containers, as the build's: the apps built
+    # Shireworks' single-use Linux containers, as the build's: the apps built
     # in it (rules_applecross for the Apple ones). A public repository's are
     # then pictured on GitHub's own machines (the proof-* jobs below). A
     # private copy pictures everything here, on machines it leases, the web
