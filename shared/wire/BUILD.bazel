@@ -70,10 +70,21 @@ swift_proto_compiler(
     deps = ["@swiftpkg_swift_protobuf//:SwiftProtobuf"],
 )
 
+# What the messages compile against: Isomer's Foundation where it is the
+# Foundation (wasm, Android). In a compiled feature (apple/compiled) the
+# messages take Apple's, and //:foundation there is Isomer's Observation and
+# Synchronization, which they don't use: built in the package's
+# configuration (its iOS 16) beside the app's, those would be a second copy
+# of each, and the app's modules would see `Observation` aliased twice.
+_FOUNDATION = select({
+    "//apple/compiled:feature_on": [],
+    "//conditions:default": ["//:foundation"],
+})
+
 # The render tree's messages: IsomerSwiftUI's (it re-exports them).
 swift_proto_library(
     name = "tree_messages",
-    additional_compiler_deps = ["//:foundation"],
+    additional_compiler_deps = _FOUNDATION,
     compilers = [":swift_proto"],
     module_name = "IsomerTreeMessages",
     package_name = "isomer",
@@ -83,7 +94,7 @@ swift_proto_library(
 # The session's and the driver's messages: IsomerWire's (it re-exports them).
 swift_proto_library(
     name = "wire_messages",
-    additional_compiler_deps = ["//:foundation"],
+    additional_compiler_deps = _FOUNDATION,
     compilers = [":swift_proto"],
     module_name = "IsomerWireMessages",
     package_name = "isomer",
