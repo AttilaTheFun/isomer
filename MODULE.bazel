@@ -177,7 +177,6 @@ use_repo(
     swift_deps,
     "swiftpkg_grpc_swift_2",
     "swiftpkg_grpc_swift_nio_transport",
-    "swiftpkg_grpc_swift_protobuf",
     "swiftpkg_isomer",
     "swiftpkg_swift_foundation",
     "swiftpkg_swift_nio",
