@@ -7,6 +7,3 @@ one_configuration(
     name = "grpc",
     actual = "@swiftpkg_isomer//:IsomerGRPCTransport",
 )
-
-# protoc-gen-grpc-swift-2's code, checked in (//shared/wire's diff test).
-exports_files(["session_service.grpc.swift"])

@@ -40,6 +40,7 @@ swift_module_mapping(
         "IsomerFoundation": "IsomerCompiledFoundationHost",
         "IsomerNetworkHost": "IsomerCompiledNetworkHost",
         "IsomerSwiftUI": "IsomerCompiledIsomerSwiftUI",
+        "IsomerTreeMessages": "IsomerCompiledTreeMessages",
         "Observation": "IsomerCompiledObservation",
         "PhotosUI": "IsomerCompiledPhotosUI",
         "QuickLook": "IsomerCompiledQuickLook",

@@ -1,0 +1,9 @@
+{
+    "invocations": [
+        {
+            "protoPath": "../wire",
+            "protoFiles": ["tree.proto"],
+            "visibility": "public"
+        }
+    ]
+}

@@ -4,6 +4,13 @@
 
 import Foundation
 import SwiftProtobuf
+// The messages (session.proto, headless.proto): generated into this module
+// by swift-protobuf's plugin in a SwiftPM build; a module of their own under
+// Bazel (//shared/wire:wire_messages), re-exported, so `import IsomerWire`
+// gives them either way.
+#if canImport(IsomerWireMessages)
+@_exported import IsomerWireMessages
+#endif
 #if canImport(Darwin)
 import Darwin
 #elseif canImport(Glibc)
