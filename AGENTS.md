@@ -363,7 +363,9 @@ bisect a regression, prove earlier commits after the fact: push a branch at
 the commit and run the workflow on that branch. What a platform draws
 differently from run to run is held still at its source (proof.py: the
 iPhone's status bar, Android's cropped off, light appearance, window crops,
-the Mac's caret). A release is approved by publishing its draft
+the Mac's caret), or, where it can't be yet (a spinner, the map's live
+tiles, a remote video), painted grey as it is taken (tools/proof/masks.txt).
+A release is approved by publishing its draft
 in Reviews (which makes its tag): the Build workflow's `release` job checks
 that its commit is main's and was verified (tools/ci/verified.sh), then promotes that commit's iPhone and Mac Alphas to
 production on Applications Server (tools/ci/promote_from_ci.sh: nothing

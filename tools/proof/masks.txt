@@ -1,0 +1,33 @@
+# Regions of the proof's pictures painted flat grey as they are taken
+# (tools/proof/proof.py), so a release's proof shows them the same from run
+# to run: `<cell>-<item> <x> <y> <width> <height>` in the picture's pixels,
+# and why. Only what a platform draws differently however the proof holds
+# it still. The grey shows where it is: what's under it isn't proved.
+
+# An indeterminate ProgressView spins for as long as it's on screen: each
+# picture catches it at another angle. Its box on each platform (Android's
+# below the status bar, which its pictures crop off).
+ios-storybook-controls.progress 100 1524 80 80
+ios-storybook-isomer-controls.progress 100 1524 80 80
+macos-storybook-controls.progress 176 364 44 44
+android-storybook-controls.progress 90 1196 82 82
+web-storybook-controls.progress 280 366 30 30
+# Apple's SwiftUI draws a ProgressView with a value in the .circular style as
+# the same spinner on iOS (the determinate ring is the Mac's).
+ios-storybook-controls.progressstyle 100 2128 80 80
+
+# The Map story's map: OpenStreetMap's live tiles, which change with the
+# map's data and the order they arrive in. Until the proof serves the story
+# tiles of its own (TODO.md), the map's frame is painted over; its markers
+# too.
+ios-storybook-isomer.map 108 2028 992 594
+macos-storybook-isomer.map 176 520 696 298
+
+# The VideoPlayer story's video: a remote video, its frame whatever has
+# loaded by the picture. Its frame is painted over; the controls around it
+# still count.
+ios-storybook-isomer.video 108 1313 990 556
+
+# The web's VideoPlayer of a remote video: Chrome's controls draw how much of
+# it is buffered, which is how much the network delivered by the picture.
+web-storybook-isomer.video 296 494 664 10

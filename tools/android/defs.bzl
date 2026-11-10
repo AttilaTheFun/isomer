@@ -261,6 +261,9 @@ def apk_install_run(name, apk, activity, extras = "", **kwargs):
         content = [
             "#!/bin/bash",
             "set -euo pipefail",
+            # adb shell copies stdin to a device without adb's shell protocol
+            # (Android 6.0, API 23) until it closes: a terminal's never does.
+            "exec < /dev/null",
             'RUNFILES_ROOT="$PWD/.."',
             'APK="$RUNFILES_ROOT/$1"',
             'ADB="$RUNFILES_ROOT/$2"',

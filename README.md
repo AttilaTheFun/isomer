@@ -715,6 +715,29 @@ your rules_swift_package_manager graph reads) left this module at 0.34; the
 examples use it. C compiled for wasm, swift_sql's included, needs
 rules_swift#1989, which the registry's rules_swift carries.
 
+**Protocol buffers.** Isomer's wire protos are compiled as you build
+(`swift_proto_library`, shared/wire), against your graph's SwiftProtobuf
+(the swift-protobuf package your Package.swift resolves). Isomer asks for
+protobuf 27.0 or newer, the oldest with the `proto_library` it loads;
+rules_swift itself asks for 34.0.bcr.1, so that is what an app on
+rules_swift resolves. Your own `swift_proto_library` targets should use the
+same SwiftProtobuf, or the app links two: rules_swift's default compiler
+brings its own, swift-protobuf 1.20.2 (a repository of rules_swift's own,
+which no override reaches). Name isomer's compiler, whose runtime is your
+graph's:
+
+```starlark
+swift_proto_library(
+    name = "messages",
+    compilers = ["@isomer//shared/wire:swift_proto"],
+    protos = [":messages_proto"],
+)
+```
+
+(or a `swift_proto_compiler` of your own over
+`@swiftpkg_swift_protobuf//:protoc-gen-swift` and `:SwiftProtobuf`, as
+shared/wire/BUILD.bazel's is, for other plugin options).
+
 **The complete, always-current reference is
 [`examples/MODULE.bazel`](examples/MODULE.bazel)** — the examples are
 themselves an external consumer (a standalone module over
@@ -833,8 +856,28 @@ Nothing else: the registry's rules_swift (rules_swift#2000) links Android
 libraries below API 28 without RELR relocations, which Android's loader
 reads only from 28, and fails an Android target below the Swift SDK's own
 minimum; Isomer's Android runtime calls newer APIs only behind version
-checks. Not below 26: Swift's C++ interop (libc++'s `std` module and
-bionic's older headers clash).
+checks. Swift's C++ interop works there too: with NDK r30 and Swift 6.4.2
+it builds and runs at API 23.
+
+To run it on the hermetic emulator at that level, give the emulator
+Google's API 23 image in the app's MODULE.bazel (it boots on Apple
+silicon; `tools/android/emulator/run_emulator.sh` reads the image's API
+level and keeps an AVD per level):
+
+```starlark
+android_tools = use_extension("@isomer//tools/android:extensions.bzl", "android_tools")
+android_tools.system_image(
+    host = "mac",
+    url = "https://dl.google.com/android/repository/sys-img/android/arm64-v8a-23_r07.zip",
+    sha256 = "74427db25e4b56a424d4f7d874a253bcd43c0db7be2c7b0b5dbb142e860131a4",
+)
+```
+
+Android 6.0 has no adb shell protocol: `adb shell` copies its standard
+input to the device until it closes, so a call left with an open one (a
+pipe, a terminal) hangs. Isomer's scripts run adb with standard input
+closed, and hand the device files with `adb push`, never through a pipe;
+do the same in an app's own tooling.
 
 ### Android release size
 

@@ -19,31 +19,37 @@ case "$(uname -m)" in
   *) ABI=arm64-v8a; CPU_ARCH=arm64 ;;
 esac
 SYSIMG_DIR="$(cd "$(dirname "$SYSIMG_MARKER")" && pwd)"
+# Its API level, from the image itself (an app's MODULE.bazel may choose
+# another image: android_tools.system_image), 34 by default.
+API="$(sed -n 's/^ro\.build\.version\.sdk=//p' "$SYSIMG_DIR/build.prop" 2> /dev/null | head -1)"
+API="${API:-34}"
 
 STATE="${TMPDIR:-/tmp}/isomer_emulator"
 SDK="$STATE/sdk"
 AVD_HOME="$STATE/avd"
-AVD_DIR="$AVD_HOME/isomer.avd"
-mkdir -p "$SDK/system-images/android-34/default" "$AVD_DIR" "$SDK/platforms" "$SDK/platform-tools"
+# An AVD per API level: one made for another image isn't reused.
+AVD="isomer-$API"
+AVD_DIR="$AVD_HOME/$AVD.avd"
+mkdir -p "$SDK/system-images/android-$API/default" "$AVD_DIR" "$SDK/platforms" "$SDK/platform-tools"
 
 ln -sfn "$EMULATOR_DIR" "$SDK/emulator"
-ln -sfn "$SYSIMG_DIR" "$SDK/system-images/android-34/default/$ABI"
+ln -sfn "$SYSIMG_DIR" "$SDK/system-images/android-$API/default/$ABI"
 ln -sfn "$ADB" "$SDK/platform-tools/adb"
 
-cat > "$AVD_HOME/isomer.ini" <<EOF
+cat > "$AVD_HOME/$AVD.ini" <<EOF
 avd.ini.encoding=UTF-8
 path=$AVD_DIR
-target=android-34
+target=android-$API
 EOF
 
 if [[ ! -f "$AVD_DIR/config.ini" ]]; then
   cat > "$AVD_DIR/config.ini" <<EOF
-AvdId=isomer
-avd.ini.displayname=Isomer
+AvdId=$AVD
+avd.ini.displayname=Isomer (API $API)
 avd.ini.encoding=UTF-8
 abi.type=$ABI
 hw.cpu.arch=$CPU_ARCH
-image.sysdir.1=system-images/android-34/default/$ABI/
+image.sysdir.1=system-images/android-$API/default/$ABI/
 tag.id=default
 tag.display=Default
 hw.ramSize=2048
@@ -66,5 +72,5 @@ export ANDROID_HOME="$SDK"
 export ANDROID_SDK_ROOT="$SDK"
 export ANDROID_AVD_HOME="$AVD_HOME"
 
-echo "Starting Android emulator (AVD state in $STATE)"
-exec "$SDK/emulator/emulator" -avd isomer -no-audio -no-boot-anim -no-snapshot "$@"
+echo "Starting Android emulator, API $API (AVD state in $STATE)"
+exec "$SDK/emulator/emulator" -avd "$AVD" -no-audio -no-boot-anim -no-snapshot "$@"
