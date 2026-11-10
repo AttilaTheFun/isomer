@@ -44,8 +44,8 @@
 # build or a picture doesn't come back.
 #
 # The builds: proof.py's, in CI's own Linux container (the isomer-jit
-# runners: the Apple apps with rules_applecross, the SDK archive from OS
-# Server's files; Android's, the web's, its pictures in Chrome for Testing
+# runners: the Apple apps with rules_applecross, the SDK archive from Shireworks'
+#  files; Android's, the web's, its pictures in Chrome for Testing
 # there), or on a Mac with its Xcode and Chrome when run by hand there.
 # Linux's (when PROOF_PLATFORMS names it) are packaged in the same container;
 # Windows' are built on its VM.
