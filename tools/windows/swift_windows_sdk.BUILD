@@ -3,7 +3,6 @@
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc/private/toolchain:windows_cc_toolchain_config.bzl", "cc_toolchain_config")
 load("@rules_cc//cc/toolchains:cc_toolchain.bzl", "cc_toolchain")
-load("@rules_swift//swift:swift_import.bzl", "swift_import")
 load("@rules_swift//swift/toolchains:swift_toolchain.bzl", "swift_toolchain")
 load("@rules_swift//swift/toolchains:swift_tools.bzl", "swift_tools")
 
@@ -19,9 +18,6 @@ _KITS = _REPO + "/winsysroot/Windows Kits/10"
 
 # Swift Testing's module and import libraries (the SDK's Library/Testing-*).
 _TESTING = _REPO + "/{testing}"
-
-# The same, as this package's paths.
-_TESTING_FILES = "{testing}"
 
 _ARCHS = {
     # Bazel's cpu: (Windows' name, rules_cc's cpu)
@@ -81,6 +77,9 @@ swift_tools(
             "-Xclang",
             "-Xcc",
             "-fbuiltin-headers-in-system-modules",
+            # Swift Testing's module (rules_swift adds XCTest's alone).
+            "-I",
+            _TESTING + "/usr/lib/swift/windows",
         ],
         # rules_swift puts XCTest's DLLs on a Windows test's Path, which it
         # takes from here (a host's; on Linux nothing reads it).
@@ -227,27 +226,11 @@ filegroup(
     for cpu in _ARCHS
 ]
 
-# Swift Testing for a test that uses it. The SDK carries its module as text
-# alone (Testing.swiftinterface; XCTest's is compiled), and the compiler's
-# own rebuild of an interface met on its search path doesn't see the Windows
-# SDK's headers ('setjmp.h' file not found building SwiftShims): so it is
-# compiled here, as an action with this toolchain's flags, and not put on
-# the search path. Its cross-import overlays (Foundation's, WinSDK's) aren't
-# loaded. rules_swift gives the linker XCTest's import libraries alone:
-# Testing's directory too. Its DLLs go beside the test
+# Swift Testing's import libraries for a test that uses it: rules_swift
+# gives the linker XCTest's directory alone. Its DLLs go beside the test
 # (tools/ci/container_build.sh).
-swift_import(
-    name = "testing",
-    module_name = "Testing",
-    swiftinterface = select({
-        "@platforms//cpu:" + cpu: _TESTING_FILES + "/usr/lib/swift/windows/Testing.swiftmodule/" + cpu + "-unknown-windows-msvc.swiftinterface"
-        for cpu in _ARCHS
-    }),
-    deps = [":testing_libraries"],
-)
-
 cc_library(
-    name = "testing_libraries",
+    name = "testing",
     linkopts = select({
         "@platforms//cpu:" + cpu: ["-LIBPATH:" + _TESTING + "/usr/lib/swift/windows/" + cpu]
         for cpu in _ARCHS
