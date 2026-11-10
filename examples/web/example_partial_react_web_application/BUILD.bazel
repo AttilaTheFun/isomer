@@ -24,5 +24,10 @@ isomer_web_app(
     site_visibility = [
         "//electron/example_partial_react_electron_application:__pkg__",
     ],
+    # The host page's own React, served from assets/.
+    assets = [
+        "@react_dom_umd//:umd/react-dom.production.min.js",
+        "@react_umd//:umd/react.production.min.js",
+    ],
     swift_library = ":app_lib",
 )

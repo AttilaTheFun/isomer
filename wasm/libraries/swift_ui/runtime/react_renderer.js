@@ -9,9 +9,11 @@
 // layout and reconciliation — the runtime never computes frames or emits
 // draw commands under this binding.
 //
-// Uses the React 18 UMD globals (window.React / window.ReactDOM), served
-// from the hermetic @react_umd repositories next to this bundle.
+// Its components are React's kind (elements, hooks, a root), run by
+// Isomer's DOM core (dom_react.js), which makes the DOM React DOM 18 made for
+// them before 0.49, when React itself was removed from the web.
 
+import { React as R, ReactDOM as RD } from "./dom_react.js";
 import { resolveImageSource } from "./raster.js";
 import { SYMBOLS } from "./symbols.js";
 import { storeFiles } from "./imported_files.js";
@@ -103,9 +105,8 @@ function symbolSVG(h, name, size, color, weight, extraStyle, secondary) {
 }
 
 export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, value) => { sendEvent(id, value); return false; }, assetBase = "assets/", mapSurface = null, metalViews = null, documentScroll = false, readFile = null }) {
-  const R = window.React;
   const h = R.createElement;
-  const root = window.ReactDOM.createRoot(container);
+  const root = RD.createRoot(container);
 
   // `.keyboardShortcut`: a key press finds the view marked with it on the
   // page now and presses the button in it (⌘ is Ctrl off the Mac).
@@ -2123,7 +2124,7 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
     }, []);
     return h(R.Fragment, null,
       h("div", { ref: anchor, style: { position: "absolute", inset: 0, pointerEvents: "none", visibility: "hidden" } }),
-      rect ? window.ReactDOM.createPortal(h("div", {
+      rect ? RD.createPortal(h("div", {
         style: { position: "fixed", left: rect.left, top: rect.top, width: rect.width, height: rect.height, zIndex: 10,
                  display: "flex", alignItems, justifyContent, pointerEvents: "none" },
       }, h("div", {
@@ -3255,7 +3256,7 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
     // centred on it, everything behind dimmed — drawn at the root, not in
     // the column that presented it (whose own containing block, a column
     // with a transform or a filter, would hold a fixed layer to itself).
-    return compact ? sheet : window.ReactDOM.createPortal(sheet, container, n.dismiss);
+    return compact ? sheet : RD.createPortal(sheet, container, n.dismiss);
   }
 
   /// The sheet panel with its entrance animation, detents and drag-to-dismiss.
@@ -4348,7 +4349,7 @@ export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, v
     // `now`: committed before this returns (layout effects included), as a
     // reader's gesture needs; otherwise whenever React schedules it.
     render(tree, now = false) {
-      if (now) window.ReactDOM.flushSync(() => root.render(render(tree, "root", "v")));
+      if (now) RD.flushSync(() => root.render(render(tree, "root", "v")));
       else root.render(render(tree, "root", "v"));
     },
   };

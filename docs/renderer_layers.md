@@ -88,7 +88,8 @@ web, DirectX on Windows and OpenGL on Linux.
   `Runtime.drawTree(root:)` for the layout + draw walk.
 - Platform wiring: the host bridges have a `renderTree(treeJSON: String)`
   method on their swift_ffi host interfaces; each consumer implements it
-  (React interpreter in boot.js, Compose interpreter in Kotlin). The
+  (React interpreter in react_renderer.js, run by Isomer's DOM core
+  dom_react.js since 0.49, no React; Compose interpreter in Kotlin). The
   renderer is chosen by the consumer at start (the `renderer: String`
   parameter of `isoStart`/`nativeStart`).
 - `Renderer.usesDrawnChrome` (= `!usesNativeComponents`): self-drawing
