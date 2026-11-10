@@ -112,22 +112,6 @@ def _swift_windows_sdk_impl(rctx):
     if not testing:
         fail("The Windows Swift SDK has no Library/Testing-*: Swift Testing can't be built for Windows.")
 
-    # Swift 6.4.2's frontend crashes type-checking one inlinable body of
-    # Testing's interface (`__xcTestCompatibleSelector`, returning `nil` as
-    # `Never?` on Windows) when it compiles the interface (:testing): the
-    # declaration is kept without its body, so a call goes to Testing.dll,
-    # which exports it as it exports every inlinable function.
-    interfaces = "swift-windows-sdk/Windows.platform/Developer/Library/" + testing[0] + "/usr/lib/swift/windows/Testing.swiftmodule"
-    for entry in rctx.path(interfaces).readdir():
-        if entry.basename.endswith(".swiftinterface"):
-            text = rctx.read(entry)
-            patched = text.replace(
-                "@inlinable public func __xcTestCompatibleSelector(_ selector: Swift::String) -> Testing::__XCTestCompatibleSelector? {\n  nil\n}",
-                "public func __xcTestCompatibleSelector(_ selector: Swift::String) -> Testing::__XCTestCompatibleSelector?",
-            )
-            if patched != text:
-                rctx.file(entry, patched, executable = False)
-
     root = "external/" + rctx.name
     rctx.template("BUILD.bazel", rctx.attr._build_template, substitutions = {
         "{testing}": "swift-windows-sdk/Windows.platform/Developer/Library/" + testing[0],
