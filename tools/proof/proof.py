@@ -320,6 +320,36 @@ def machine_shot(env, path):
 
 # --- The review store
 
+def load_masks():
+    """tools/proof/masks.txt: `<cell>-<item>` to its (x, y, width, height)
+    regions."""
+    masks = {}
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "masks.txt")
+    for line in open(path) if os.path.exists(path) else []:
+        fields = line.split("#", 1)[0].split()
+        if len(fields) == 5:
+            masks.setdefault(fields[0], []).append(tuple(int(number) for number in fields[1:]))
+    return masks
+
+
+MASKS = load_masks()
+
+
+def mask(path, regions):
+    """A picture with `regions` painted flat grey: what changes from run to
+    run without the app changing (masks.txt). Kept as it is without Pillow."""
+    try:
+        from PIL import Image, ImageDraw
+        image = Image.open(path)
+        draw = ImageDraw.Draw(image)
+        grey = (128, 128, 128, 255) if image.mode == "RGBA" else (128, 128, 128)
+        for x, y, width, height in regions:
+            draw.rectangle((x, y, x + width - 1, y + height - 1), fill=grey)
+        image.save(path)
+    except Exception as error:
+        log(f"mask {os.path.basename(path)}: {error}")
+
+
 class Review:
     def __init__(self, folder, commit, version, quick=False):
         self.folder, self.commit, self.version, self.quick = folder, commit, version, quick
@@ -350,6 +380,10 @@ class Review:
             if not os.path.exists(os.path.join(out, capture)):
                 missing.append(item)
                 continue
+            # Both sides of the parity masked alike.
+            for picture in (capture, reference):
+                if os.path.exists(os.path.join(out, picture)) and f"{name}-{item}" in MASKS:
+                    mask(os.path.join(out, picture), MASKS[f"{name}-{item}"])
             entry = {"name": item, "status": "new", "capture": capture}
             if os.path.exists(os.path.join(out, reference)):
                 entry["reference"] = reference
@@ -374,6 +408,9 @@ class Review:
     def cell(self, name, app, device, orientation, shots):
         """`shots`: (item name, capture file) pairs; a missing capture is a failure."""
         out = self.dir(name)
+        for item, capture in shots:
+            if os.path.exists(os.path.join(out, capture)) and f"{name}-{item}" in MASKS:
+                mask(os.path.join(out, capture), MASKS[f"{name}-{item}"])
         items = [{"name": item, "status": "new", "capture": capture} for item, capture in shots
                  if os.path.exists(os.path.join(out, capture))]
         missing = [item for item, capture in shots if not os.path.exists(os.path.join(out, capture))]
