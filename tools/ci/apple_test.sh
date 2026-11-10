@@ -1,5 +1,5 @@
 #!/bin/bash
-# The iPhone and Mac Storybooks on OS Server's primary macOS VM, as CI tests
+# The iPhone and Mac Storybooks on Shireworks' primary macOS VM, as CI tests
 # them: built in the Linux container (rules_applecross), each run where it
 # runs: the iPhone app on an `ios` lease (a simulator inside the primary,
 # its status bar held at 9:41), the Mac app on a `mac` slot of the primary
@@ -52,10 +52,10 @@ failures=0
 # The iPhone.
 ios="$(lease_id ios --kind=ci --label="Isomer: the iPhone Storybook's tests")"
 if [ -z "$ios" ]; then echo "apple_test: no ios lease" >&2; exit 1; fi
-# Installed from OS Server's storage, which unpacks the .ipa itself: simctl
+# Installed from Shireworks' storage, which unpacks the .ipa itself: simctl
 # install of a local .app would zip it here with ditto, which only a Mac has.
 object="$(oss storage put "$ipa" --ttl=2h --json | sed -n 's/.*"sha256" *: *"\([0-9a-f]*\)".*/\1/p' | head -1)"
-if [ -z "$object" ]; then echo "apple_test: the .ipa didn't reach OS Server's storage" >&2; exit 1; fi
+if [ -z "$object" ]; then echo "apple_test: the .ipa didn't reach Shireworks' storage" >&2; exit 1; fi
 oss machine install "$ios" "$object" || exit 1
 oss machine simctl "$ios" ui booted appearance light >/dev/null 2>&1
 ios_shot() { oss machine screenshot "$ios" "$1" >/dev/null; }

@@ -10,7 +10,7 @@ one is needed once, to make Microsoft's half of the toolchain (below).
 `swift_windows_sdk_repository` (defs.bzl), which pairs the host's Swift (the
 same release) with two archives, named in MODULE.bazel by SHA-256 behind a
 placeholder URL (`https://windows-sdks.invalid/sha256/<hex>`) that each
-builder resolves: CI's tools/ci/container_build.sh to OS Server's files, as
+builder resolves: CI's tools/ci/container_build.sh to Shireworks' files, as
 it resolves the Apple SDK archive's.
 
 ## The Windows Swift SDK
@@ -30,7 +30,7 @@ The Windows SDK's and MSVC's headers and import libraries. Microsoft's
 license lets them be used, not redistributed: the archive is made by its
 builder and kept on their own server, never published.
 
-1. On a Windows machine with the Visual Studio Build Tools (OS Server's
+1. On a Windows machine with the Visual Studio Build Tools (Shireworks'
    `windows --config=swift-6.3.2` lease has them):
    `powershell -File make_msvc_sysroot.ps1` writes `C:\winsysroot.tar.gz`
    (clang's /winsysroot layout).

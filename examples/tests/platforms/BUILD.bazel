@@ -3,7 +3,7 @@ load(":stories.bzl", "SMOKE_STORIES")
 
 # Each platform's Storybook opened on the same stories and pictured, where CI
 # builds it: the web, Linux, Windows (under Wine) and Android (an emulator)
-# in its Linux container, iOS and the Mac on slots of OS Server's primary
+# in its Linux container, iOS and the Mac on slots of Shireworks' primary
 # macOS VM. A story that doesn't draw, or crashes, fails its platform's
 # test; the pictures are the tests' outputs. These are checks, not the proof
 # (tools/proof/proof.py), which compares every story with a release's.

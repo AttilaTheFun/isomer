@@ -1,5 +1,5 @@
 # Microsoft's half of building for Windows on Linux, made on a Windows machine
-# with the Visual Studio Build Tools (OS Server's `windows --config=swift-6.3.2`
+# with the Visual Studio Build Tools (Shireworks' `windows --config=swift-6.3.2`
 # lease has them): the Windows SDK's headers (ucrt, um, shared, winrt) and its
 # arm64 and x64 import libraries, and MSVC's headers and libraries, in
 # clang's /winsysroot layout (VC/Tools/MSVC/<version>, Windows Kits/10), as
