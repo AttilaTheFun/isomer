@@ -70,7 +70,7 @@ apple)
     # took over a minute to boot on GitHub's runner, xcodebuild hung, and the
     # Mac's tests after it timed out.
     run storybook_hosted_ios_test "$out" --@isomer//drive:headful --ios_multi_cpus=sim_arm64 \
-        --test_arg=--destination=platform=ios_simulator,id="$udid"
+        --test_env=ISOMER_SIMULATOR="$udid"
     xcrun simctl shutdown "$udid" > /dev/null 2>&1
     # The Mac: this VM's own screen.
     ditto -x -k "$zip" "$work/mac" || exit 1

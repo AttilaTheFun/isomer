@@ -1,5 +1,5 @@
 load("@build_bazel_rules_apple//apple:ios.bzl", "ios_unit_test")
-load("@build_bazel_rules_apple//apple/testing/default_runner:ios_test_runner.bzl", "ios_test_runner")
+load("@build_bazel_rules_apple//apple/testing/default_runner:ios_xctestrun_runner.bzl", "ios_xctestrun_runner")
 load("@rules_swift//swift:swift.bzl", "swift_library")
 load("@rules_swift//swift:swift_binary.bzl", "swift_binary")
 load("@rules_swift//swift:swift_test.bzl", "swift_test")
@@ -228,8 +228,15 @@ swift_library(
 
 # rules_apple's default runner makes an iPhone 15, which iOS 27 doesn't run:
 # an iPhone 17 of the newest iOS the Xcode has, as hosted_apple_test.sh's.
-ios_test_runner(
+# xcodebuild's runner, not xctestrunner's: xctestrunner reads the result
+# bundle after every run, and a Swift Testing run's tests have no
+# `subtests._values` (KeyError: the run failed with every test passed). Its
+# simulator is the job's (ISOMER_SIMULATOR, :simulator): the runner takes a
+# --destination's id for a device, not a simulator.
+ios_xctestrun_runner(
     name = "iphone_17",
+    clean_up_simulator_action = "//headless/storybook_headless_application/simulator:keep_simulator",
+    create_simulator_action = "//headless/storybook_headless_application/simulator:job_simulator",
     device_type = "iPhone 17",
     tags = ["manual"],
 )
