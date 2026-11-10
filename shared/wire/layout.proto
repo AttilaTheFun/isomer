@@ -1,0 +1,45 @@
+// The headless head's layout, for tests (IsomerLayoutServer): where each
+// view of an app built headless was laid out, as the self-drawing renderer
+// lays it out (shared/swift_ui_core/Runtime.swift's layoutTree), in the
+// window's points. Apart from the driver's protocol (headless.proto), which
+// stays frameless: the CLI drives by names and labels, never coordinates.
+
+syntax = "proto3";
+
+package isomer.wire;
+
+option swift_prefix = "Wire_";
+option java_package = "dev.isomer.wire";
+option java_multiple_files = true;
+
+// The layout as it stands (once the frame the app asked for is drawn).
+message LayoutRequest {}
+
+message Layout {
+  // The window, in points.
+  double width = 1;
+  double height = 2;
+  // The views a test looks for, in the tree's order (a parent before what
+  // it holds; the presented layers, sheets and alerts, after the window's).
+  repeated LaidOut items = 3;
+}
+
+message LaidOut {
+  // text, button, textField, image, scroll, slider, progress, toggle,
+  // picker, … (a host view by its kind).
+  string kind = 1;
+  // What it says: a text's string, a button's or a field's label (its
+  // accessibility label, else the texts it holds), a field's placeholder.
+  string label = 2;
+  // `.accessibilityIdentifier`, when it has one.
+  string identifier = 3;
+  // Its frame in the window, in points.
+  double x = 4;
+  double y = 5;
+  double width = 6;
+  double height = 7;
+  // How deep in the tree it is (the window's root 0), and the presented
+  // layer it is in (0 the window's own, 1 the first sheet or alert, …).
+  int32 depth = 8;
+  int32 layer = 9;
+}

@@ -25,6 +25,9 @@ public enum IsomerMethod: String, Sendable, CaseIterable {
     case drive = "Headless.Drive"
     /// A headful app that dialled out is driven: answers in, commands out.
     case attach = "Driver.Attach"
+    /// The headless head's layout, for tests: requests in, layouts out
+    /// (layout.proto; the driver's protocol stays frameless).
+    case layout = "Layout.Frames"
 
     /// A WebSocket's path for the call.
     public var path: String {
@@ -32,6 +35,7 @@ public enum IsomerMethod: String, Sendable, CaseIterable {
         case .connect: "/session"
         case .drive: "/headless"
         case .attach: "/driver"
+        case .layout: "/layout"
         }
     }
 
@@ -130,6 +134,14 @@ public protocol IsomerServer: Sendable {
         _ commands: IsomerOutbound<Wire_Command>,
         context: IsomerCallContext
     ) async throws
+
+    /// The headless head's layout (an IsomerLayoutServer): one `Layout` for
+    /// each request.
+    func layout(
+        _ requests: IsomerInbound<Wire_LayoutRequest>,
+        _ layouts: IsomerOutbound<Wire_Layout>,
+        context: IsomerCallContext
+    ) async throws
 }
 
 extension IsomerServer {
@@ -157,6 +169,14 @@ extension IsomerServer {
         throw IsomerCallError(.unimplemented, "nothing attaches here")
     }
 
+    public func layout(
+        _ requests: IsomerInbound<Wire_LayoutRequest>,
+        _ layouts: IsomerOutbound<Wire_Layout>,
+        context: IsomerCallContext
+    ) async throws {
+        throw IsomerCallError(.unimplemented, "this app has no layout to show (an app built headless has)")
+    }
+
     /// One call with its messages as bytes (each a serialized message): what
     /// the transports without types of their own (a WebSocket, a pipe) carry.
     public func serve(
@@ -172,6 +192,8 @@ extension IsomerServer {
             try await drive(Self.decoding(inbound), Self.encoding(outbound), context: context)
         case .attach:
             try await attach(Self.decoding(inbound), Self.encoding(outbound), context: context)
+        case .layout:
+            try await layout(Self.decoding(inbound), Self.encoding(outbound), context: context)
         }
     }
 
@@ -256,5 +278,10 @@ public struct IsomerAuthorizedServer: IsomerServer {
     public func attach(_ answers: IsomerInbound<Wire_Answer>, _ commands: IsomerOutbound<Wire_Command>, context: IsomerCallContext) async throws {
         try authorization.check(context)
         try await server.attach(answers, commands, context: context)
+    }
+
+    public func layout(_ requests: IsomerInbound<Wire_LayoutRequest>, _ layouts: IsomerOutbound<Wire_Layout>, context: IsomerCallContext) async throws {
+        try authorization.check(context)
+        try await server.layout(requests, layouts, context: context)
     }
 }

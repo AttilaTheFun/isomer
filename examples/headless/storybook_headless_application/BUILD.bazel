@@ -31,7 +31,11 @@ swift_binary(
 #   bazel test --@isomer//headless //headless/...
 swift_test(
     name = "storybook_headless_test",
-    srcs = ["StorybookHeadlessTests.swift"],
+    srcs = [
+        "StorybookHeadlessTests.swift",
+        # The headless head's layout (its IsomerLayoutServer): headless alone.
+        "StorybookLayoutTests.swift",
+    ],
     data = [":storybook_headless_application"],
     module_name = "StorybookHeadlessTests",
     deps = [

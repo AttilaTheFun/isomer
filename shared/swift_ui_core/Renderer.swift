@@ -107,8 +107,18 @@ package enum Renderer {
 
     public static func bind(_ renderer: any TreeRenderer) {
         current = renderer
-        hostRendersNavigation = navigationOverride ?? renderer.semanticNavigation
+        let semantic = navigationOverride ?? renderer.semanticNavigation
+        // A renderer of the other kind (semantic navigation for drawn
+        // chrome, or back: the headless head and a remote head, one after
+        // the other): the tree kept for resizes, and every subtree kept for
+        // reuse, were built for the one before (Runtime.forgetTreeIfRendererChanged).
+        if semantic != hostRendersNavigation { navigationChanged = true }
+        hostRendersNavigation = semantic
     }
+
+    /// Set by `bind` when the navigation the trees are built for changed;
+    /// the runtime builds afresh before its next frame or resize.
+    nonisolated(unsafe) static var navigationChanged = false
 
     /// A host's declared navigation kind (set before `bind` runs at start).
     private nonisolated(unsafe) static var navigationOverride: Bool?

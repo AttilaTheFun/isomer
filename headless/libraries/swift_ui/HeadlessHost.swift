@@ -117,6 +117,22 @@ struct HeadlessServer: IsomerServer {
     func connect(_ messages: IsomerInbound<Wire_ClientMessage>, _ frames: IsomerOutbound<Wire_ServerMessage>, context: IsomerCallContext) async throws {
         try await RemoteSession.serve(messages, frames)
     }
+
+    /// The IsomerLayoutServer: the headless head's layout for each request,
+    /// once the frame the app asked for is drawn. None while a remote head is
+    /// drawing the app (its renderer lays nothing out here).
+    func layout(_ requests: IsomerInbound<Wire_LayoutRequest>, _ layouts: IsomerOutbound<Wire_Layout>, context: IsomerCallContext) async throws {
+        for try await _ in requests {
+            let layout = await MainActor.run { () -> Wire_Layout? in
+                HeadlessApp.renderIfNeeded()
+                return HeadlessHead.current?.layout
+            }
+            guard let layout else {
+                throw IsomerCallError(.unavailable, "a remote head is drawing this app: its layout is the head's")
+            }
+            try await layouts.write(layout)
+        }
+    }
 }
 
 /// Not Apple's, so not public: `App.main()` calls it (`iso_process_host_run`, below).

@@ -56,13 +56,39 @@ builds the rows that fit).
 ## Tests
 
 IsomerHeadless (`@isomer//headless/isomer_headless`) launches the app's
-binary and speaks the protocol (binary):
+binary, listening on a Unix socket of its own, and speaks the protocol
+(binary):
 
 ```swift
 let app = try HeadlessApp(executable: path, environment: ["ISO_STORYBOOK_STORY": "state.observableobject"])
 try app.tap("Tap")
 try app.wait(for: "Taps: 1")
 ```
+
+## The headless head and its layout (0.49)
+
+With no remote head drawing it, an app built headless renders through the
+headless head (headless/libraries/swift_ui/HeadlessHead.swift): it renders
+without rendering. Each frame is laid out as the self-drawing renderer lays
+it out (its drawn chrome, measured and placed: `Runtime.layoutTree`, the
+layout the GPU renderer draws from), and nothing is drawn; `GeometryReader`
+gets its real size. Text is measured by the headless host's fixed estimate
+(0.55 of the font's size a character), the same on every machine.
+
+Tests read the layout through the app's IsomerLayoutServer
+(shared/wire/layout.proto: `Layout.Frames`, beside the driver's calls on
+the same transports): every text, button, field, image, scroll and host
+view, with its label, identifier and frame in the window's points, the
+presented layers (sheets, alerts) after the window's. The driver's protocol
+and the CLI stay frameless: they drive by names and labels.
+
+```swift
+let layout = try app.layout()
+let tap = try #require(layout.frame(of: "Tap", kind: "button"))
+#expect(tap.maxX <= layout.width)
+```
+
+A headful app has no layout server (its layout is its platform's).
 
 The Storybook's are examples/headless/storybook_headless_application
 (`bazel test --@isomer//headless //headless/...`). CI runs them in every

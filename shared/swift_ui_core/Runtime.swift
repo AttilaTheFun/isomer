@@ -546,8 +546,21 @@ package final class Runtime {
         renderFrame()
     }
 
+    /// After `Renderer.bind` switched between semantic navigation and drawn
+    /// chrome: the retained tree and the reusable subtrees, built for the
+    /// renderer before, are dropped, so the next frame builds every view for
+    /// this one (its handler ids then hold from its first frame on).
+    @MainActor
+    func forgetTreeIfRendererChanged() {
+        guard Renderer.navigationChanged else { return }
+        Renderer.navigationChanged = false
+        resetBuildCache()
+        retainedTree = nil
+    }
+
     @MainActor
     public func resize(width: Double, height: Double) {
+        forgetTreeIfRendererChanged()
         // The size classes come from the size: a resize across them (a host
         // that starts the app before it knows its size, an iPad window made
         // narrow) changes what views build, as SwiftUI's trait change does.
@@ -835,6 +848,7 @@ package final class Runtime {
         // thread flashing empty as its rows came in). A few passes at most;
         // what is still queued then runs after the frame, as other deferred
         // work does.
+        forgetTreeIfRendererChanged()
         buildingFrame = true
         var root = buildFrameTree(makeRootView)
         var passes = 1
@@ -885,6 +899,51 @@ package final class Runtime {
         }
     }
 
+    /// Lays the frame's tree out as the self-drawing renderer draws it: its
+    /// semantic chrome host views (nav and tab bars, toggles, pickers,
+    /// search, media, images) replaced by their drawn implementations, then
+    /// measured and placed, every node's `frame` in the window's points. The
+    /// GPU renderer draws from it (`drawTree`); the headless head keeps it,
+    /// for tests to read (IsomerLayoutServer). Returns the decoded tree's
+    /// geometry readers' reports, to run once the frame is done (a report can
+    /// make its guest draw again).
+    @MainActor
+    package func layoutTree(root: RenderNode) -> [() -> Void] {
+        expandDrawnChrome(root)
+        let layoutCtx = layoutContext()
+        let proposal = ProposedSize(width: width, height: height)
+        let size = measure(root, proposal: proposal, ctx: layoutCtx)
+        let screen = CGRect(x: 0, y: 0, width: width, height: height)
+        let frame = alignedRect(size: size, container: screen, alignment: .center)
+        place(root, in: frame, ctx: layoutCtx)
+        var reports: [() -> Void] = []
+        func collect(_ node: RenderNode) {
+            if let report = node.layoutReport {
+                let laid = node.frame
+                reports.append { report(laid) }
+            }
+            for child in node.children { collect(child) }
+        }
+        collect(root)
+        return reports
+    }
+
+    /// The presented layers (sheets, alerts, menus) over the window, each
+    /// laid out fully presented, as `drawTree` lays them out once their
+    /// transition is over: the headless head's, which draws no transition.
+    @MainActor
+    package func layoutPresentations() -> [RenderNode] {
+        let layoutCtx = layoutContext()
+        let screen = CGRect(x: 0, y: 0, width: width, height: height)
+        return pendingPresentations.map { presentation in
+            let overlay = buildPresentationNode(presentation, screen: screen.size, progress: 1)
+            expandDrawnChrome(overlay)
+            _ = measure(overlay, proposal: ProposedSize(width: width, height: height), ctx: layoutCtx)
+            place(overlay, in: screen, ctx: layoutCtx)
+            return overlay
+        }
+    }
+
     /// Lay the tree out and draw it through the platform `HostBridge`'s
     /// draw-command surface — the self-drawing renderer's path
     /// (SwiftGPURenderer). Also reconciles native host views, hit-test
@@ -896,28 +955,10 @@ package final class Runtime {
         // drawn chrome and window background must match the scheme the
         // feature resolved its colors in (`setSystemColorScheme`).
         colorScheme = systemColorScheme
-        // Replace semantic chrome host views (nav/tab bars, toggles, pickers,
-        // search, media, images) with their drawn implementations before
-        // layout — the display list draws all chrome itself.
-        expandDrawnChrome(root)
-        let layoutCtx = layoutContext()
-        let proposal = ProposedSize(width: width, height: height)
-        let size = measure(root, proposal: proposal, ctx: layoutCtx)
-        let screen = CGRect(x: 0, y: 0, width: width, height: height)
-        let frame = alignedRect(size: size, container: screen, alignment: .center)
-        place(root, in: frame, ctx: layoutCtx)
-        // A decoded tree's geometry readers, told where they were laid out
-        // (after this frame: a report can make its guest draw again).
-        var reports: [() -> Void] = []
-        func collect(_ node: RenderNode) {
-            if let report = node.layoutReport {
-                let laid = node.frame
-                reports.append { report(laid) }
-            }
-            for child in node.children { collect(child) }
-        }
-        collect(root)
+        let reports = layoutTree(root: root)
         defer { for report in reports { report() } }
+        let layoutCtx = layoutContext()
+        let screen = CGRect(x: 0, y: 0, width: width, height: height)
 
         let pass = RenderPass(host: host)
         host.beginFrame(width: width, height: height)
