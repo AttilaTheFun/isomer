@@ -177,9 +177,7 @@ genrule(
     cmd = """
 {
   echo 'import Testing'
-  echo '@main struct WindowsTestMain {'
-  echo '    static func main() async { await Testing.__swiftPMEntryPoint() as Never }'
-  echo '}'
+  echo 'await Testing.__swiftPMEntryPoint() as Never'
 } > $@
 """,
 )
