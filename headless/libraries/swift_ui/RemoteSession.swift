@@ -34,12 +34,14 @@ enum RemoteSession {
         sink.yield(message)
     }
 
-    /// No head: frames still go through a component-system renderer (its
-    /// encoding installs the tree's handlers and fires `onAppear`), to
-    /// nowhere.
+    /// No head: frames go through the headless head (HeadlessHead.swift),
+    /// which lays each out as the self-drawing renderer does, draws nothing,
+    /// and keeps the layout for tests.
     @MainActor
     static func bindIdle() {
-        Renderer.bind(ReactRenderer(send: { _ in }))
+        let head = HeadlessHead()
+        HeadlessHead.current = head
+        Renderer.bind(head)
         rendererName = "None"
     }
 
@@ -79,6 +81,7 @@ enum RemoteSession {
     static func begin(_ start: Wire_Start) {
         let compose = start.renderer == "compose"
         rendererName = compose ? "Compose" : "React"
+        HeadlessHead.current = nil
         let send: ([UInt8]) -> Void = { patch in RemoteSession.send { $0.patch = Data(patch) } }
         Renderer.bind(compose ? JetpackComposeRenderer(send: send) : ReactRenderer(send: send))
         let runtime = Runtime.shared

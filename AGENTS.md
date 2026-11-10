@@ -1278,7 +1278,13 @@ its UI read and used over standard input and output
 default, length-delimited binary with ISO_HEADLESS_PROTOCOL=binary);
 IsomerHeadless (headless/isomer_headless) drives it from tests. The
 Storybook's headless tests (examples' //headless) run in every CI build, in
-seconds.
+seconds. Since 0.49 an app built headless renders through the headless head
+(HeadlessHead.swift): each frame laid out as the GPU renderer lays it out
+(`Runtime.layoutTree`, which drawTree now calls), nothing drawn, and its
+layout served for tests by its IsomerLayoutServer (shared/wire/layout.proto,
+`HeadlessApp.layout()`); the driver and the CLI stay frameless. A renderer
+of the other navigation kind bound after it (a remote head) makes the
+runtime build afresh (`Renderer.bind`, `forgetTreeIfRendererChanged`).
 
 **Driving apps** (docs/drive.md, 0.46; docs/drive_plan.md the design): one
 driver protocol (headless.proto) and one session protocol (session.proto),

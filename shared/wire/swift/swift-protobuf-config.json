@@ -2,7 +2,7 @@
     "invocations": [
         {
             "protoPath": "..",
-            "protoFiles": ["session.proto", "headless.proto"],
+            "protoFiles": ["session.proto", "headless.proto", "layout.proto"],
             "visibility": "public"
         }
     ]

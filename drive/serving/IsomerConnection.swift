@@ -47,6 +47,11 @@ extension IsomerConnection {
         try await typed(.drive, context: context)
     }
 
+    /// The headless head's layout (IsomerLayoutServer): a request, a layout.
+    public func layout(context: IsomerCallContext = .init()) async throws -> IsomerCall<Wire_LayoutRequest, Wire_Layout> {
+        try await typed(.layout, context: context)
+    }
+
     public func attach(context: IsomerCallContext = .init()) async throws -> IsomerCall<Wire_Answer, Wire_Command> {
         try await typed(.attach, context: context)
     }

@@ -30,6 +30,7 @@ swift_library(
     name = "host",
     package_name = "isomer",
     srcs = [
+        "HeadlessHead.swift",
         "HeadlessHost.swift",
         "RemoteSession.swift",
     ],

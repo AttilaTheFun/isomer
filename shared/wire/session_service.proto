@@ -15,6 +15,7 @@ package isomer.wire;
 
 import "headless.proto";
 import "session.proto";
+import "layout.proto";
 
 option swift_prefix = "Wire_";
 option java_package = "dev.isomer.wire";
@@ -32,4 +33,10 @@ service Headless {
 // commands, the app the answers, its first one carrying `info` (who it is).
 service Driver {
   rpc Attach(stream Answer) returns (stream Command);
+}
+
+// The headless head's layout, for tests (layout.proto): served by an app
+// built headless, never by the CLI's hub (the CLI drives without frames).
+service Layout {
+  rpc Frames(stream LayoutRequest) returns (stream Layout);
 }

@@ -19,6 +19,7 @@ package(default_visibility = ["//visibility:public"])
 # (wasm/libraries/swift_ui/runtime/flat_tree.js, android/…/FlatTree.kt).
 exports_files([
     "headless.proto",
+    "layout.proto",
     "session.proto",
     "session_service.proto",
     "tree.proto",
@@ -34,6 +35,7 @@ exports_files([
     )
     for name in [
         "headless",
+        "layout",
         "session",
         "tree",
     ]
@@ -46,6 +48,7 @@ proto_library(
     strip_import_prefix = "/shared/wire",
     deps = [
         ":headless_proto",
+        ":layout_proto",
         ":session_proto",
     ],
 )
@@ -86,6 +89,7 @@ swift_proto_library(
     package_name = "isomer",
     protos = [
         ":headless_proto",
+        ":layout_proto",
         ":session_proto",
     ],
 )

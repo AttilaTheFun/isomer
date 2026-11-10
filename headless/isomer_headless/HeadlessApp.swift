@@ -30,6 +30,61 @@ import IsomerWire
 
 /// The screen as the app's runtime shows it: no pixels, what a person sees
 /// and can do.
+/// An app's layout, from its IsomerLayoutServer (`HeadlessApp.layout()`):
+/// each view a test looks for and where it was laid out, in the window's
+/// points, a parent before what it holds and the presented layers after the
+/// window's.
+public struct HeadlessLayout: Sendable {
+    /// A view's frame in the window, in points.
+    public struct Frame: Sendable, Equatable {
+        public let x: Double
+        public let y: Double
+        public let width: Double
+        public let height: Double
+        public var minX: Double { x }
+        public var minY: Double { y }
+        public var maxX: Double { x + width }
+        public var maxY: Double { y + height }
+    }
+
+    public struct Item: Sendable {
+        /// text, button, textField, image, scroll, slider, progress, view, or
+        /// a host view's kind (toggle, picker, …).
+        public let kind: String
+        public let label: String
+        public let identifier: String
+        public let frame: Frame
+        public let depth: Int
+        /// 0 the window's own; 1 the first presented layer, …
+        public let layer: Int
+    }
+
+    public let width: Double
+    public let height: Double
+    public let items: [Item]
+
+    init(_ layout: Wire_Layout) {
+        width = layout.width
+        height = layout.height
+        items = layout.items.map {
+            Item(kind: $0.kind, label: $0.label, identifier: $0.identifier,
+                 frame: Frame(x: $0.x, y: $0.y, width: $0.width, height: $0.height),
+                 depth: Int($0.depth), layer: Int($0.layer))
+        }
+    }
+
+    /// The last item with this label or identifier (of `kind`, if given): the
+    /// topmost, as the presented layers come last.
+    public func item(_ target: String, kind: String? = nil) -> Item? {
+        items.last { ($0.label == target || $0.identifier == target) && (kind == nil || $0.kind == kind) }
+    }
+
+    /// Its frame, if there is one by that label or identifier.
+    public func frame(of target: String, kind: String? = nil) -> Frame? {
+        item(target, kind: kind)?.frame
+    }
+}
+
 public struct HeadlessScreen: Sendable {
     public struct Element: Sendable {
         /// button, textField, toggle, picker, segmented, slider, …
@@ -126,15 +181,45 @@ public final class HeadlessApp: @unchecked Sendable {
     private var requests: URL?
     /// How many pictures this app has had asked of it.
     private var asked = 0
+    /// Where the app answers calls other than the driver's (its layout):
+    /// nil for the app this test is hosted in.
+    private let connection: (any IsomerConnection)?
+    private let context: IsomerCallContext
+    /// The socket an app this object started listens on, removed when it goes.
+    private var socket: String?
 
-    /// Starts `executable` (an app built with --@isomer//headless), the call
-    /// on its standard input and output. `environment` adds to the process's
-    /// own: the app's launch hooks (ISO_STORYBOOK_STORY…), ISO_HEADLESS_WIDTH
-    /// and ISO_HEADLESS_HEIGHT (the window, 390 by 844 by default: a lazy
-    /// list builds the rows that fit).
+    /// Starts `executable` (an app built with --@isomer//headless), listening
+    /// on a Unix socket of its own (ISO_DRIVE_LISTEN), so the driver's call
+    /// and its layout's (`layout()`) reach the same app. `environment` adds to
+    /// the process's own: the app's launch hooks (ISO_STORYBOOK_STORY…),
+    /// ISO_HEADLESS_WIDTH and ISO_HEADLESS_HEIGHT (the window, 390 by 844 by
+    /// default: a lazy list builds the rows that fit).
     #if !os(Windows) && !(os(iOS) || os(tvOS) || os(watchOS) || os(visionOS))
     public convenience init(executable: String, environment: [String: String] = [:]) throws {
-        try self.init(connection: IsomerProcessConnection(.executable(executable, arguments: [], environment: environment)))
+        // In /tmp: a test's own temporary folder is too deep for a socket's
+        // path (about a hundred bytes at most).
+        let socket = "/tmp/isomer-headless-\(UUID().uuidString.prefix(8)).sock"
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.environment = ProcessInfo.processInfo.environment
+            .merging(environment) { $1 }
+            .merging(["ISO_DRIVE_LISTEN": "unix:" + socket, "ISO_HEADLESS_PROTOCOL": "serve"]) { $1 }
+        process.standardInput = FileHandle.nullDevice
+        try process.run()
+        let deadline = Date().addingTimeInterval(30)
+        while !FileManager.default.fileExists(atPath: socket) {
+            guard process.isRunning else {
+                throw HeadlessError(message: "\(executable) ended before it listened", screen: nil)
+            }
+            guard Date() < deadline else {
+                process.terminate()
+                throw HeadlessError(message: "\(executable) didn't listen on \(socket) in 30 s", screen: nil)
+            }
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+        try self.init(connection: IsomerProcessConnection(.unixSocket(socket)))
+        launched = process
+        self.socket = socket
     }
     #endif
 
@@ -155,12 +240,16 @@ public final class HeadlessApp: @unchecked Sendable {
         call = opened
         answers = opened.inbound.makeAsyncIterator()
         local = nil
+        self.connection = connection
+        self.context = context
     }
 
     private init(local: IsomerLocalServer) {
         call = nil
         answers = nil
         self.local = local
+        connection = nil
+        context = IsomerCallContext()
     }
 
     /// The app this test bundle is hosted in, when it is one with a driver
@@ -429,6 +518,29 @@ public final class HeadlessApp: @unchecked Sendable {
             #endif
         }
         launched = nil
+        if let socket { try? FileManager.default.removeItem(atPath: socket) }
+        socket = nil
+    }
+
+    /// The app's layout, from its IsomerLayoutServer: where each view was
+    /// laid out, in the window's points (an app built headless has one; the
+    /// driver's commands stay frameless). It answers once the frame the app
+    /// asked for is drawn.
+    public func layout() throws -> HeadlessLayout {
+        guard let connection else {
+            throw HeadlessError(message: "the app this test is hosted in has no layout to ask for", screen: nil)
+        }
+        let context = context
+        let layout = try Self.blocking { () -> Wire_Layout? in
+            let call = try await connection.layout(context: context)
+            try await call.write(Wire_LayoutRequest())
+            var inbound = call.inbound.makeAsyncIterator()
+            let layout = try await inbound.next()
+            await call.finish()
+            return layout
+        }
+        guard let layout else { throw HeadlessError(message: "the app ended without its layout", screen: nil) }
+        return HeadlessLayout(layout)
     }
 
     private func send(_ cmd: String, _ fill: (inout Wire_Command) -> Void = { _ in }) throws -> HeadlessScreen {
