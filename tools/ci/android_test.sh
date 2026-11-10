@@ -11,6 +11,10 @@
 #   tools/ci/android_test.sh <adb> <serial> <storybook .apk> <out> <story>…
 #   tools/ci/android_test.sh shireworks <lease id> <storybook .apk> <out> <story>…
 set -uo pipefail
+# Nothing here reads standard input, and adb mustn't either: on a device
+# without adb's shell protocol (Android 6.0, API 23) `adb shell` copies
+# stdin to the device until it closes, so one left open hangs the call.
+exec < /dev/null
 adb="$1" serial="$2" apk="$3" out="$4"
 shift 4
 mkdir -p "$out"
