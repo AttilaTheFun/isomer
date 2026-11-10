@@ -266,8 +266,11 @@ register_toolchains("@rust_toolchains//:all", dev_dependency = True)
 # protoc and proto_library: the wire protos' Swift (shared/wire) is generated
 # as it builds, by swift_proto_library (rules_swift), for every application
 # that links IsomerSwiftUI or IsomerWire (a SwiftPM build generates it with
-# swift-protobuf's plugin instead).
-bazel_dep(name = "protobuf", version = "34.0.bcr.1")
+# swift-protobuf's plugin instead). The oldest protobuf with what that uses
+# (bazel/proto_library.bzl, 27.0), so isomer raises no consumer's: rules_swift
+# itself asks for 34.0.bcr.1 (4.2.2, as 4.1.1 and 3.6.0 in the BCR), which is
+# what a consumer on rules_swift resolves whatever isomer declares.
+bazel_dep(name = "protobuf", version = "27.0")
 
 # swift_map (//swift_map/...) backs the SwiftUI `Map` view on Apple (Metal) and
 # on every SwiftGPURenderer platform; the platform SwiftUI modules reference

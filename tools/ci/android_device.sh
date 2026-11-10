@@ -22,6 +22,10 @@
 # (WebRTC) and radio simulator (netsim) are off: both want services a
 # container doesn't run, and either ending ends the device.
 set -euo pipefail
+# Nothing here reads standard input, and adb mustn't either: on a device
+# without adb's shell protocol (Android 6.0, API 23) `adb shell` copies
+# stdin to the device until it closes, so one left open hangs the call.
+exec < /dev/null
 command="$1" cache="$2"
 build="${CUTTLEFISH_BUILD:-aosp-android-latest-release/aosp_cf_arm64_only_phone-userdebug}"
 export PATH="/usr/lib/cuttlefish-common/bin:$PATH" HOME="$cache/device"

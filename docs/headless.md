@@ -76,7 +76,7 @@ gets its real size. Text is measured by the headless host's fixed estimate
 (0.55 of the font's size a character), the same on every machine.
 
 Tests read the layout through the app's IsomerLayoutServer
-(shared/wire/layout.proto: `Layout.Frames`, beside the driver's calls on
+(shared/wire/layout.proto: `LayoutServer.Frames`, beside the driver's calls on
 the same transports): every text, button, field, image, scroll and host
 view, with its label, identifier and frame in the window's points, the
 presented layers (sheets, alerts) after the window's. The driver's protocol

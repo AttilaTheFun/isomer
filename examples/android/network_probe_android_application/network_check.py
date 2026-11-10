@@ -238,7 +238,9 @@ def serve(port):
 
 
 def run(adb, serial, *args, check=True):
-    result = subprocess.run([adb, "-s", serial, *args], capture_output=True, text=True)
+    # stdin closed: adb shell copies it to a device without the shell
+    # protocol (API 23) until it closes.
+    result = subprocess.run([adb, "-s", serial, *args], capture_output=True, text=True, stdin=subprocess.DEVNULL)
     if check and result.returncode != 0:
         raise SystemExit(f"adb {' '.join(args)} failed: {result.stderr.strip() or result.stdout.strip()}")
     return result.stdout

@@ -135,7 +135,20 @@ _HOST_ARCHIVES = {
 }
 
 def _android_tools_impl(mctx):
-    host = _HOST_ARCHIVES["linux" if mctx.os.name == "linux" else "mac"]
+    host_name = "linux" if mctx.os.name == "linux" else "mac"
+    host = dict(_HOST_ARCHIVES[host_name])
+
+    # The root module's `system_image` tag for this host, if any, replaces
+    # its default (Android 14, API 34): another API level, Google's API 23
+    # arm64 image for a minSdk 23 app, say.
+    for module in mctx.modules:
+        if not module.is_root:
+            continue
+        for image in module.tags.system_image:
+            if image.host == host_name:
+                host["system_image"] = (image.url, image.sha256)
+                if image.strip_prefix:
+                    host["abi"] = image.strip_prefix
 
     http_archive(
         name = "hermetic_jdk",
@@ -200,8 +213,22 @@ def _android_tools_impl(mctx):
 # host's, and the system image its architecture's): a consumer's
 # MODULE.bazel.lock then records a result per OS and architecture instead of
 # handing a Linux CI runner the Mac's emulator ("Exec format error").
+_system_image = tag_class(
+    doc = """The emulator's system image on one host, instead of the default
+    (AOSP Android 14, API 34, in the host's architecture). Only the root
+    module's tags count. run_emulator.sh reads the image's API level from
+    its build.prop and keeps an AVD per level.""",
+    attrs = {
+        "host": attr.string(mandatory = True, values = ["mac", "linux"], doc = "a Mac on Apple silicon (arm64 images) or Linux on x86_64"),
+        "url": attr.string(mandatory = True, doc = "the image's zip, e.g. https://dl.google.com/android/repository/sys-img/android/arm64-v8a-23_r07.zip"),
+        "sha256": attr.string(mandatory = True),
+        "strip_prefix": attr.string(doc = "the zip's top folder (its ABI: arm64-v8a, x86_64), if not the host's default ABI"),
+    },
+)
+
 android_tools = module_extension(
     implementation = _android_tools_impl,
     os_dependent = True,
     arch_dependent = True,
+    tag_classes = {"system_image": _system_image},
 )

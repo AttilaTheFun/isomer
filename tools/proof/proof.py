@@ -106,6 +106,9 @@ def failed(command, result):
 
 
 def sh(command, check=True, cwd=ISOMER, **kwargs):
+    # No command reads stdin: `adb shell` would copy it to a device without
+    # adb's shell protocol (Android 6.0, API 23) until it closed.
+    kwargs.setdefault("stdin", subprocess.DEVNULL)
     result = subprocess.run(command, shell=isinstance(command, str), cwd=cwd, capture_output=True, text=True, **kwargs)
     if check and result.returncode != 0:
         raise failed(command, result)

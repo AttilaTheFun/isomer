@@ -140,6 +140,9 @@ Isomer's Kotlin calls above 23 are behind version checks (#96).
 
 - Open: Shireworks' api23 emulator config doesn't boot yet (Shireworks),
   so CI tests at 28+; draft isomer#92 ran the Storybook on Android 6.0.
+  The hermetic emulator boots Google's arm64 API 23 image on Apple silicon
+  (`android_tools.system_image`, README, "Android below API 28"), a way to
+  test there meanwhile.
 - Later: 32-bit ARM (armeabi-v7a), if an app needs it.
 
 ## SwiftUI's next gaps (after 0.42's)

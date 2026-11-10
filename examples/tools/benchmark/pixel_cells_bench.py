@@ -17,6 +17,7 @@ if not SERIAL:
 LONG_MAX = 9223372036854775807
 
 def adb(*a, **kw):
+    kw.setdefault("stdin", subprocess.DEVNULL)  # adb shell on API 23 waits for stdin to close
     return subprocess.run([ADB, "-s", SERIAL, *a], capture_output=True, text=True, **kw).stdout
 
 def shell(cmd):
