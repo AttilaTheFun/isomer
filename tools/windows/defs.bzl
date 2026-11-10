@@ -104,8 +104,64 @@ def _swift_windows_sdk_impl(rctx):
     for tool, name in [("clang-cl", "clang-cl"), ("lld-link", "lld-link"), ("llvm-ar", "llvm-lib")]:
         rctx.symlink(usr.get_child("bin", tool), "bin/" + name)
 
+    # Swift Testing, compiled. The SDK carries it as a textual interface
+    # alone (XCTest's module is compiled), and Swift 6.4.2 can't rebuild an
+    # interface for Windows during a build: an interface compile drops the
+    # Windows SDK's settings (-windows-sdk-root, -visualc-tools-root and the
+    # -Xcc flags), so SwiftShims can't find ucrt's and MSVC's headers
+    # ("'setjmp.h' file not found"). Here, once, the toolchain's frontend
+    # compiles it with those headers named through CPATH, which it doesn't
+    # drop, for each architecture; the module's directory holds the compiled
+    # module alone, so nothing rebuilds the interface (and its cross-import
+    # overlays aren't loaded). The BUILD's :testing adds the import libraries.
+    testing = [
+        entry
+        for entry in rctx.path("swift-windows-sdk/Windows.platform/Developer/Library").readdir()
+        if entry.basename.startswith("Testing-")
+    ]
+    if not testing:
+        fail("The Windows Swift SDK has no Library/Testing-*: Swift Testing can't be built for Windows.")
+    include = rctx.path(kits)
+    cpath = ":".join([str(include.get_child(area)) for area in ["ucrt", "um", "shared"]] + [str(rctx.path(msvc_include))])
+    for cpu in ["aarch64", "x86_64"]:
+        triple = cpu + "-unknown-windows-msvc"
+        interface = testing[0].get_child("usr", "lib", "swift", "windows", "Testing.swiftmodule", triple + ".swiftinterface")
+        output = "testing/usr/lib/swift/windows/Testing.swiftmodule/" + triple + ".swiftmodule"
+        rctx.file(output, "", executable = False)
+        result = rctx.execute([
+            usr.get_child("bin", "swift-frontend"),
+            "-frontend",
+            "-compile-module-from-interface",
+            interface,
+            "-module-name",
+            "Testing",
+            "-o",
+            rctx.path(output),
+            "-target",
+            triple,
+            "-disable-objc-interop",
+            "-sdk",
+            rctx.path(sdk),
+            "-resource-dir",
+            rctx.path("resource"),
+            "-module-cache-path",
+            rctx.path("testing-module-cache"),
+            "-Xcc",
+            "-Xclang",
+            "-Xcc",
+            "-fbuiltin-headers-in-system-modules",
+            "-Xcc",
+            "-D_MT",
+            "-Xcc",
+            "-D_DLL",
+        ], environment = {"CPATH": cpath}, timeout = 1200)
+        if result.return_code != 0:
+            fail("Compiling Swift Testing's interface for {} failed:\n{}{}".format(triple, result.stdout, result.stderr))
+    rctx.delete("testing-module-cache")
+
     root = "external/" + rctx.name
     rctx.template("BUILD.bazel", rctx.attr._build_template, substitutions = {
+        "{testing}": "swift-windows-sdk/Windows.platform/Developer/Library/" + testing[0].basename,
         "{execroot_repo}": root,
         "{msvc}": versions["msvc"],
         "{sdk_version}": versions["sdk"],
