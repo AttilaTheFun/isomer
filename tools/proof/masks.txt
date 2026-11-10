@@ -1,6 +1,6 @@
 # Regions of the proof's pictures painted flat grey as they are taken
 # (tools/proof/proof.py), so a release's proof shows them the same from run
-# to run: `<cell>-<item> <x> <y> <width> <height>` in the picture's pixels,
+# to run: `<cell>-<story id> <x> <y> <width> <height>` in the picture's pixels,
 # and why. Only what a platform draws differently however the proof holds
 # it still. The grey shows where it is: what's under it isn't proved.
 
