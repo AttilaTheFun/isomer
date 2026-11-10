@@ -15,6 +15,9 @@ _MSVC = _REPO + "/winsysroot/VC/Tools/MSVC/{msvc}"
 
 _KITS = _REPO + "/winsysroot/Windows Kits/10"
 
+# Swift Testing's module and import libraries (the SDK's Library/Testing-*).
+_TESTING = _REPO + "/{testing}"
+
 _ARCHS = {
     # Bazel's cpu: (Windows' name, rules_cc's cpu)
     "aarch64": ("arm64", "arm64_windows"),
@@ -73,6 +76,9 @@ swift_tools(
             "-Xclang",
             "-Xcc",
             "-fbuiltin-headers-in-system-modules",
+            # Swift Testing's module (rules_swift adds XCTest's alone).
+            "-I",
+            _TESTING + "/usr/lib/swift/windows",
         ],
         # rules_swift puts XCTest's DLLs on a Windows test's Path, which it
         # takes from here (a host's; on Linux nothing reads it).
@@ -218,3 +224,14 @@ filegroup(
     )
     for cpu in _ARCHS
 ]
+
+# Swift Testing's import libraries for a test that uses it: rules_swift
+# gives the linker XCTest's directory alone. Its DLLs go beside the test
+# (tools/ci/container_build.sh).
+cc_library(
+    name = "testing",
+    linkopts = select({
+        "@platforms//cpu:" + cpu: ["-LIBPATH:" + _TESTING + "/usr/lib/swift/windows/" + cpu]
+        for cpu in _ARCHS
+    }),
+)

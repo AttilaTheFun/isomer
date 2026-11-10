@@ -198,6 +198,8 @@ swift_test(
     deps = [
         "@isomer//headless/isomer_headless",
         "@isomer//shared/wire/swift",
+        # Swift Testing's import libraries (the SDK's Library/Testing-*).
+        "@swift_windows_sdk//:testing",
     ],
 )
 
