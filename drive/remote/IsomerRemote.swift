@@ -29,9 +29,9 @@ public enum IsomerRemote {
     }
 
     public static func endpoint(_ url: String) throws -> Endpoint {
-        #if os(Windows)
+        #if os(Windows) || os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
         if url.hasPrefix("unix:") || url.hasPrefix("exec:") {
-            throw IsomerCallError(.unimplemented, "no unix: or exec: transport on Windows (grpc, grpcs or ws)")
+            throw IsomerCallError(.unimplemented, "no unix: or exec: transport here (grpc, grpcs or ws)")
         }
         #else
         if url.hasPrefix("unix:") {

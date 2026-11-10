@@ -6,7 +6,9 @@
 
 // Not on WASI (no processes or sockets) nor Windows (no Unix sockets or
 // POSIX descriptors as written here): IsomerRemote says so for its URLs.
-#if !os(WASI) && !os(Windows)
+// Nor on iOS and its kin, whose Foundation has no Process (a test there
+// drives the app it is hosted in: HeadlessApp.hosted).
+#if !os(WASI) && !os(Windows) && !(os(iOS) || os(tvOS) || os(watchOS) || os(visionOS))
 
 import Foundation
 import IsomerServing

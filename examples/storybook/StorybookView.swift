@@ -5,7 +5,8 @@
 // Launch hooks (the process environment natively, a reactor's WASI
 // environment, an Android intent's ISO_ extras, the web page's ISO_ query):
 // ISO_STORYBOOK_STORY=<id> opens that story; ISO_STORYBOOK_CONTROL=<file>
-// opens whichever story the file names, read four times a second, and
+// opens whichever story the file names ("stories": the list, as at
+// launch), read four times a second, and
 // writes `<file>.shown` with the story once it is open; and the URL
 // iso://story/<id> opens one too (Android's VIEW intents): the proof's ways
 // through every page without a launch each.
@@ -80,6 +81,7 @@ public struct StorybookView: View {
         .onAppear { openFirstStoryIfWide() }
         .onChange(of: sizeClass) { openFirstStoryIfWide() }
         .task { await followControl() }
+        .task { await followOpenRequests() }
         .onOpenURL { url in
             let id = url.path.split(separator: "/").last.map(String.init) ?? ""
             if url.host == "story" { open(id) }
@@ -99,9 +101,9 @@ public struct StorybookView: View {
         while !Task.isCancelled {
             let named = (try? String(contentsOfFile: path, encoding: .utf8))?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            if let id = named, id != shown, StoryCatalog.story(id) != nil {
+            if let id = named, id != shown, id == "stories" || StoryCatalog.story(id) != nil {
                 shown = id
-                open(id)
+                show(id)
                 try? await Task.sleep(for: .milliseconds(300))
                 // Atomically where it can be; Wine's file replacement fails
                 // on its Unix drive, so plainly there (whoever reads it
@@ -111,6 +113,34 @@ public struct StorybookView: View {
                 }
             }
             try? await Task.sleep(for: .milliseconds(250))
+        }
+    }
+
+    /// A test hosted in the app (HeadlessApp.hosted) opens a story the
+    /// same way, in-process: it posts `storybookOpenStory` with the story's
+    /// id ("stories": the list, as at launch), and is told by
+    /// `storybookShownStory` once the page has had a moment to build. Its
+    /// own environment it can't set, so not the control file.
+    private func followOpenRequests() async {
+        let token = NotificationCenter.default.addObserver(forName: storybookOpenStory, object: nil, queue: .main) { note in
+            guard let id = note.object as? String else { return }
+            MainActor.assumeIsolated { show(id) }
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(300))
+                NotificationCenter.default.post(name: storybookShownStory, object: id)
+            }
+        }
+        while !Task.isCancelled { try? await Task.sleep(for: .seconds(3600)) }
+        NotificationCenter.default.removeObserver(token)
+    }
+
+    /// The list (as at launch) or a story.
+    private func show(_ id: String) {
+        if id == "stories" {
+            selection = nil
+            openFirstStoryIfWide()
+        } else {
+            open(id)
         }
     }
 
@@ -127,6 +157,11 @@ public struct StorybookView: View {
         selection = first.id
     }
 }
+
+/// What a test hosted in the app posts to open a story, and is told back
+/// (StorybookView's followOpenRequests).
+let storybookOpenStory = Notification.Name("IsomerStorybookOpenStory")
+let storybookShownStory = Notification.Name("IsomerStorybookShownStory")
 
 /// A story's page: its code, what it does, and the code running.
 struct StoryPage: View {

@@ -14,9 +14,20 @@ import XCTest
 
 final class StorybookHeadlessTests: XCTestCase {
     /// The app built headless, from the test's runfiles; or headful, started
-    /// by the launcher the environment names.
+    /// by the launcher the environment names; or the app this bundle is
+    /// hosted in (a story opened in-process, with no launch).
     private func launch(story: String? = nil) throws -> HeadlessApp {
         let environment = ProcessInfo.processInfo.environment
+        if let app = HeadlessApp.hostedIfAny() {
+            // Back to the list, then the story: each test starts as at launch.
+            try Self.show("stories")
+            if let story { try Self.show(story) }
+            return app
+        }
+        #if os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
+        // On a phone these run hosted alone: no processes to launch.
+        throw XCTSkip("not hosted in an app with a driver (--@isomer//drive:headful)")
+        #else
         var launchEnvironment: [String: String] = [:]
         if let story { launchEnvironment["ISO_STORYBOOK_STORY"] = story }
         if let launcher = environment["ISOMER_HEADFUL_LAUNCHER"], !launcher.isEmpty {
@@ -32,6 +43,30 @@ final class StorybookHeadlessTests: XCTestCase {
             executable: "\(root)/headless/storybook_headless_application/storybook_headless_application",
             environment: launchEnvironment)
         #endif
+        #endif
+    }
+
+    /// Opens `story` in the app this test is hosted in, as the Storybook
+    /// takes a request in-process (StorybookView's followOpenRequests), and
+    /// waits, turning the main run loop as the app runs on it, until it says
+    /// the story is shown.
+    private static func show(_ story: String) throws {
+        var shown = false
+        let token = NotificationCenter.default.addObserver(
+            forName: Notification.Name("IsomerStorybookShownStory"), object: nil, queue: nil
+        ) { note in
+            if note.object as? String == story { shown = true }
+        }
+        defer { NotificationCenter.default.removeObserver(token) }
+        NotificationCenter.default.post(name: Notification.Name("IsomerStorybookOpenStory"), object: story)
+        let deadline = Date(timeIntervalSinceNow: 15)
+        while !shown {
+            if Date() > deadline {
+                throw NSError(domain: "StorybookHeadlessTests", code: 1, userInfo: [
+                    NSLocalizedDescriptionKey: "the Storybook never showed \(story)"])
+            }
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+        }
     }
 
     func testObservableObjectCounts() throws {

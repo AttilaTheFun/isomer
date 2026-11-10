@@ -64,6 +64,13 @@ apple)
     xcrun simctl ui "$udid" appearance light
     mkdir -p "$work/ios" && unzip -q "$ipa" -d "$work/ios" && xcrun simctl install "$udid" "$work/ios/Payload/"*.app || exit 1
     run storybook_headful_ios_test "$out" --test_env=ISOMER_SIMULATOR="$udid"
+    # The same tests hosted in the app: an XCTest bundle in the headful
+    # iPhone Storybook, built here, driving it in its own process with no
+    # network. On this simulator: one rules_apple's runner made beside it
+    # took over a minute to boot on GitHub's runner, xcodebuild hung, and the
+    # Mac's tests after it timed out.
+    run storybook_hosted_ios_test "$out" --@isomer//drive:headful --ios_multi_cpus=sim_arm64 \
+        --test_arg=--destination=platform=ios_simulator,id="$udid"
     xcrun simctl shutdown "$udid" > /dev/null 2>&1
     # The Mac: this VM's own screen.
     ditto -x -k "$zip" "$work/mac" || exit 1
