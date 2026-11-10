@@ -90,18 +90,6 @@ container with its own KVM, the iPhone and the Mac on slots. Left:
 
 ## Driving and remote sessions: what's left
 
-- **Swift Testing on Windows** (2026-11-10): the Storybook's UI tests are
-  Swift Testing's, and the Windows Swift SDK carries Testing as a textual
-  interface alone (XCTest's is compiled). Under the Windows cross-build the
-  compiler's own rebuild of it misses the Windows SDK's headers ("'setjmp.h'
-  file not found" building SwiftShims), and rules_swift's interface action
-  (swift_import's swiftinterface) gets neither the toolchain's resource
-  directory nor its SDK ("no such module 'Swift'"; with a body, a frontend
-  crash). Ways on: compile Testing.swiftmodule from the interface in the SDK
-  repository rule with the toolchain's flags, or have rules_swift pass the
-  toolchain's copts and SDK to its interface action (upstream). Until then no
-  Windows UI test is built; Windows' picture tests still run.
-
 docs/drive.md and docs/remote_sessions.md say what there is,
 docs/drive_plan.md the order. Open:
 

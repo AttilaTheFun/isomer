@@ -108,13 +108,8 @@ windows)
     # rewrite a /c/... path in the environment of the native test, which
     # hands it back to bash in the launcher.
     mixed() { cygpath -m "$1"; }
-    test="$(ls "$dir"/*storybook_headful_windows_test*.exe 2>/dev/null | head -1)"
-    app="$(ls "$dir"/storybook_windows_application*.exe 2>/dev/null | head -1)"
-    # None built until Swift Testing builds for Windows (TODO.md).
-    if [ -z "$test" ]; then
-        echo "hosted_headful_test: no Windows UI test built (Swift Testing on Windows, TODO.md)"
-        exit 0
-    fi
+    test="$(ls "$dir"/*storybook_headful_windows_test*.exe | head -1)"
+    app="$(ls "$dir"/storybook_windows_application*.exe | head -1)"
     [ -f "$test" ] && [ -f "$app" ] || { echo "hosted_headful_test: no test or app in $dir" >&2; exit 1; }
     mkdir -p "$out/storybook_headful_windows_test"
     (cd "$dir" && env ISOMER_HEADFUL_LAUNCHER="$(mixed "$dir/windows_launcher.sh")" \
