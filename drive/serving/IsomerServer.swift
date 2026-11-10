@@ -27,7 +27,7 @@ public enum IsomerMethod: String, Sendable, CaseIterable {
     case attach = "Driver.Attach"
     /// The headless head's layout, for tests: requests in, layouts out
     /// (layout.proto; the driver's protocol stays frameless).
-    case layout = "Layout.Frames"
+    case layout = "LayoutServer.Frames"
 
     /// A WebSocket's path for the call.
     public var path: String {
