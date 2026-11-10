@@ -1,22 +1,24 @@
 #!/bin/bash
-# The Android Storybook's stories on a phone: an emulator leased from OS
-# Server (`oss <lease id>`: its adb and screenshots through oss; CI's), or
-# one in this container (android_device.sh, by adb). Installed, each story
+# The Android Storybook's stories on a phone: an emulator leased from
+# Shireworks (`shireworks <lease id>`: its adb and screenshots through
+# tools/ci/shireworks.sh; CI's), or one by adb (GitHub's runner's, or one in
+# this container: android_device.sh). Installed, each story
 # opened by its link
 # (iso://story/<id>, a VIEW intent to the running app, as the proof does),
 # pictured by screencap once two pictures in a row agree, and checked for
 # having drawn; the pictures kept in <out>.
 #
 #   tools/ci/android_test.sh <adb> <serial> <storybook .apk> <out> <story>…
-#   tools/ci/android_test.sh oss <lease id> <storybook .apk> <out> <story>…
+#   tools/ci/android_test.sh shireworks <lease id> <storybook .apk> <out> <story>…
 set -uo pipefail
 adb="$1" serial="$2" apk="$3" out="$4"
 shift 4
 mkdir -p "$out"
 BUNDLE=com.LoganShire.IsomerStorybook
-if [ "$adb" = oss ]; then
-    a() { oss machine adb "$serial" -- "$@"; }
-    shot() { oss machine screenshot "$serial" "$1" >/dev/null; }
+if [ "$adb" = shireworks ]; then
+    shireworks="$(cd "$(dirname "$0")" && pwd)/shireworks.sh"
+    a() { "$shireworks" adb "$serial" "$@"; }
+    shot() { "$shireworks" screenshot "$serial" "$1" >/dev/null; }
 else
     a() { "$adb" -s "$serial" "$@"; }
     shot() { a exec-out screencap -p >"$1"; }

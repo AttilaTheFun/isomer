@@ -207,7 +207,7 @@ swift_test(
 # XCUITest drives its app (HeadlessApp.hosted, IsomerLocalServer). A story
 # opens in-process (a notification the Storybook takes), with no launch
 # between tests and nothing in the environment, which a runner such as
-# `oss machine xctest` doesn't pass on.
+# Shireworks' xctest doesn't pass on.
 #
 #   bazel test --@isomer//drive:headful --ios_multi_cpus=sim_arm64 :storybook_hosted_ios_test
 swift_library(

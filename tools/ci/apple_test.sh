@@ -7,7 +7,8 @@
 # Each story opened at launch (ISO_STORYBOOK_STORY), pictured once two
 # pictures in a row agree, and checked for having drawn something; the
 # pictures kept in <out>. Both leases released however it ends. All through
-# oss's API: it runs in a CI job's Linux container as on a Mac.
+# Shireworks' API (tools/ci/shireworks.sh): it runs in a CI job's Linux
+# container as on a Mac.
 #
 #   tools/ci/apple_test.sh <storybook_ios_sim_application .ipa> <storybook_macos_application .zip> <out> <story>…
 set -uo pipefail
@@ -17,18 +18,19 @@ mkdir -p "$3"
 out="$(cd "$3" && pwd)"
 shift 3
 work="$(mktemp -d)"
+sw="$(cd "$(dirname "$0")" && pwd)/shireworks.sh"
 ios="" mac="" run=""
 BUNDLE=com.LoganShire.IsomerStorybook
 cleanup() {
-    [ -n "$ios" ] && oss machine release "$ios" >/dev/null 2>&1
+    [ -n "$ios" ] && "$sw" release "$ios" >/dev/null 2>&1
     if [ -n "$mac" ]; then
         command -v mac_stop >/dev/null && mac_stop
-        oss machine release "$mac" >/dev/null 2>&1
+        "$sw" release "$mac" >/dev/null 2>&1
     fi
     rm -rf "$work"
 }
 trap cleanup EXIT
-lease_id() { oss machine lease "$@" --wait --json | sed -n 's/.*"id" *: *"\([^"]*\)".*/\1/p' | head -1; }
+lease_id() { (eval "$("$sw" lease "$@")" && printf '%s' "${SHIREWORKS_ID:-}"); }
 # A picture of almost nothing (one colour compresses to a few KB): nothing drawn.
 drawn() {
     [ -s "$1" ] && [ "$(wc -c <"$1")" -gt 20000 ]
@@ -54,14 +56,14 @@ ios="$(lease_id ios --kind=ci --label="Isomer: the iPhone Storybook's tests")"
 if [ -z "$ios" ]; then echo "apple_test: no ios lease" >&2; exit 1; fi
 # Installed from Shireworks' storage, which unpacks the .ipa itself: simctl
 # install of a local .app would zip it here with ditto, which only a Mac has.
-object="$(oss storage put "$ipa" --ttl=2h --json | sed -n 's/.*"sha256" *: *"\([0-9a-f]*\)".*/\1/p' | head -1)"
+object="$("$sw" storage-put "$ipa" --ttl=2h | sed -n 's/.*"sha256" *: *"\([0-9a-f]*\)".*/\1/p' | head -1)"
 if [ -z "$object" ]; then echo "apple_test: the .ipa didn't reach Shireworks' storage" >&2; exit 1; fi
-oss machine install "$ios" "$object" || exit 1
-oss machine simctl "$ios" ui booted appearance light >/dev/null 2>&1
-ios_shot() { oss machine screenshot "$ios" "$1" >/dev/null; }
+"$sw" install "$ios" "$object" || exit 1
+"$sw" simctl "$ios" ui booted appearance light >/dev/null 2>&1
+ios_shot() { "$sw" screenshot "$ios" "$1" >/dev/null; }
 for story in "$@"; do
-    oss machine simctl "$ios" terminate booted "$BUNDLE" >/dev/null 2>&1
-    oss machine simctl "$ios" --env=ISO_STORYBOOK_STORY="$story" -- launch booted "$BUNDLE" >/dev/null ||
+    "$sw" simctl "$ios" terminate booted "$BUNDLE" >/dev/null 2>&1
+    "$sw" simctl "$ios" --env=ISO_STORYBOOK_STORY="$story" launch booted "$BUNDLE" >/dev/null ||
         { echo "apple_test: ios $story: didn't launch" >&2; failures=$((failures + 1)); continue; }
     sleep 4
     if steady ios_shot "$out/ios-$story.png" && drawn "$out/ios-$story.png"; then
@@ -71,23 +73,23 @@ for story in "$@"; do
         failures=$((failures + 1))
     fi
 done
-oss machine release "$ios" >/dev/null 2>&1
+"$sw" release "$ios" >/dev/null 2>&1
 ios=""
 
 # The Mac.
 mac="$(lease_id mac --kind=ci --label="Isomer: the Mac Storybook's tests")"
 if [ -z "$mac" ]; then echo "apple_test: no mac slot" >&2; exit 1; fi
-oss machine upload "$mac" "$macos_zip" storybook.zip >/dev/null || exit 1
-oss machine exec "$mac" -- /bin/sh -c 'rm -rf Storybook.app && /usr/bin/ditto -x -k storybook.zip . && rm storybook.zip' || exit 1
-home="$(oss machine exec "$mac" -- /bin/sh -c 'printf %s "$HOME"')"
+"$sw" put "$mac" "$macos_zip" storybook.zip >/dev/null || exit 1
+"$sw" run "$mac" -- /bin/sh -c 'rm -rf Storybook.app && /usr/bin/ditto -x -k storybook.zip . && rm storybook.zip' || exit 1
+home="$("$sw" run "$mac" -- /bin/sh -c 'printf %s "$HOME"')"
 # One GUI run for every story, as the proof's (the primary's screen is one
 # `--gui` run at a time, and an app left running holds it): stories are
 # switched through the Storybook's control file, and the app is ended by
 # its own launcher when `stop` appears, whether or not the server ends the
 # exec's processes when its client goes. The slot's user makes the folder;
 # the console user's app writes in it (its home, the control's `.shown`).
-dir="/tmp/oss-test-$mac"
-oss machine exec "$mac" -- /bin/sh -c 'rm -rf "$1" && mkdir -p "$1/home" && chmod 777 "$1" "$1/home"' dir "$dir" || exit 1
+dir="/tmp/isomer-test-$mac"
+"$sw" run "$mac" -- /bin/sh -c 'rm -rf "$1" && mkdir -p "$1/home" && chmod 777 "$1" "$1/home"' dir "$dir" || exit 1
 launch='app=$1; dir=$2; shift 2
 "$app/Contents/MacOS/Storybook" "$@" &
 pid=$!
@@ -99,11 +101,11 @@ while kill -0 "$pid" 2> /dev/null; do
 done
 wait "$pid"'
 mac_stop() {
-    oss machine exec "$mac" -- /bin/sh -c 'touch "$1/stop"' stop "$dir" >/dev/null 2>&1
+    "$sw" run "$mac" -- /bin/sh -c 'touch "$1/stop"' stop "$dir" >/dev/null 2>&1
     [ -n "$run" ] && { sleep 3; kill "$run" 2>/dev/null; wait "$run" 2>/dev/null; run=""; }
 }
-mac_shot() { oss machine screenshot "$mac" "$1" --window="$BUNDLE" >/dev/null; }
-oss machine exec "$mac" --gui --env=ISO_STORYBOOK_CONTROL="$dir/control" --env=CFFIXED_USER_HOME="$dir/home" -- \
+mac_shot() { "$sw" screenshot "$mac" "$1" --window="$BUNDLE" >/dev/null; }
+"$sw" run "$mac" --gui --env=ISO_STORYBOOK_CONTROL="$dir/control" --env=CFFIXED_USER_HOME="$dir/home" -- \
     /bin/sh -c "$launch" launch "$home/Storybook.app" "$dir" -AppleInterfaceStyle Light -NSRequiresAquaSystemAppearance YES \
     -AppleShowScrollBars WhenScrolling -ApplePersistenceIgnoreState YES >"$work/mac.log" 2>&1 &
 run=$!
@@ -114,11 +116,11 @@ for _ in $(seq 1 180); do
     sleep 5
 done
 for story in "$@"; do
-    oss machine exec "$mac" -- /bin/sh -c 'printf %s "$2" > "$1/control"' request "$dir" "$story" >/dev/null
+    "$sw" run "$mac" -- /bin/sh -c 'printf %s "$2" > "$1/control"' request "$dir" "$story" >/dev/null
     shown=""
     for _ in $(seq 1 30); do
         sleep 1
-        shown="$(oss machine exec "$mac" -- /bin/sh -c 'cat "$1/control.shown" 2>/dev/null' shown "$dir")"
+        shown="$("$sw" run "$mac" -- /bin/sh -c 'cat "$1/control.shown" 2>/dev/null' shown "$dir")"
         [ "$shown" = "$story" ] && break
     done
     sleep 2

@@ -1,8 +1,8 @@
 #!/bin/bash
 # An Android phone in a Linux container: Cuttlefish, AOSP's virtual device
 # (arm64, the build Android's CI publishes as
-# aosp_cf_arm64_only_phone-userdebug), under the container's own KVM (an OS
-# Server container lease with --virtualization: /dev/kvm, vhost-vsock),
+# aosp_cf_arm64_only_phone-userdebug), under the container's own KVM (a Shireworks
+# server container lease with --virtualization: /dev/kvm, vhost-vsock),
 # drawn in software (SwiftShader). Its host tools come from Cuttlefish's apt
 # repository, the device from Android's CI by `cvd fetch`, both kept in
 # <cache> (a kept volume) between runs. Prints the adb serial once the phone

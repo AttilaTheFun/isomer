@@ -39,7 +39,8 @@ builder and kept on their own server, never published.
    system needs (case_links.swift: Windows' headers include each other, and
    Swift's module maps name them, in casings other than the files'), and a
    VERSIONS file naming MSVC's and the SDK's versions.
-3. `oss files add <out.tar.gz>`, and its SHA-256 into MODULE.bazel.
+3. Added to Shireworks' files (by its maintainers), and its SHA-256 into
+   MODULE.bazel.
 
 (xwin, which downloads Microsoft's packages directly, gave a Universal CRT
 without the headers Swift's module maps need, `corecrt_math.h` among them.)

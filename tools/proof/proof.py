@@ -37,7 +37,7 @@ iso://story/<id>): a second or two a story where a launch each took five
 to fourteen. A story that doesn't open so is launched to on its own.
 
 What changes between runs without the apps changing is held still or left
-out: the iPhone's status bar (oss's simctl override from an ios lease's
+out: the iPhone's status bar (Shireworks' simctl override from an ios lease's
 start: 9:41), Android's cropped off (its demo mode held it still one run
 and not the next), and on the desktops
 everything but the app's window (a Mac's and Windows' screenshots are
@@ -49,15 +49,15 @@ Each platform's apps are folders of the review store's snapshots,
 <dir>/review-<platform>-<app>/manifest.json (reviews/MANIFEST.md). CI runs
 it (tools/ci/proof.sh), which makes the `proof` artifact of those folders'
 pictures; only CI's proof counts. The launch hooks reach each
-platform as it passes a process environment: simctl's SIMCTL_CHILD_ (`oss
-machine simctl --env`), `open --env`, an Android intent's ISO_ extras, the
+platform as it passes a process environment: simctl's SIMCTL_CHILD_
+(`shireworks.sh simctl --env`), `open --env`, an Android intent's ISO_ extras, the
 web page's ISO_ query, the desktops' environment.
 
 The builds are this checkout's, made here (-c opt) before the platforms
 start, except Linux's (a Linux container: tools/linux/build.sh) and
 Windows' (on its VM). Then the platforms run at once, each on a lease of
 its own (an iOS simulator, in Shireworks' primary macOS VM, driven through
-oss alone (PROOF_IOS=local: simctl on this Mac, for a server whose
+Shireworks' API alone (PROOF_IOS=local: simctl on this Mac, for a server whose
 simulators are its Mac's), an Android emulator, a slot of Shireworks'
 primary macOS VM (PROOF_MAC=vm: a macOS VM of its own), Linux and Windows
 VMs; the web in this Mac's headless Chrome), released however the run
@@ -99,8 +99,8 @@ def log(message):
 
 def failed(command, result):
     """A command's failure, for the log: its output, less any password
-    (oss prints a lease it fails to reach, its passwords too, and CI's log
-    is public)."""
+    (a failed lease's answer may carry its passwords, and CI's log is
+    public)."""
     text = f"{command}\n{result.stdout[-3000:]}{result.stderr[-3000:]}"
     return RuntimeError(re.sub(r'("\w*[Pp]assword"\s*:\s*")[^"]*"', r'\1***"', text))
 
@@ -254,53 +254,65 @@ class Switcher:
         return True
 
 
-# --- oss
+# --- Shireworks (its API through tools/ci/shireworks.sh)
 
+SHIREWORKS = os.path.join(ISOMER, "tools", "ci", "shireworks.sh")
 held = {}
 
 
+def exports(text):
+    """A lease's SHIREWORKS_* exports (`export SHIREWORKS_ID=…` lines)."""
+    env = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("export "):
+            line = line[len("export "):]
+        name, sep, value = line.partition("=")
+        if sep and re.fullmatch(r"SHIREWORKS_[A-Z0-9_]+", name):
+            env[name] = shlex.split(value)[0] if value else ""
+    return env
+
+
 def lease(platform, *flags):
-    """An oss lease's exports (OSS_ID, OSS_SSH_PORT, OSS_UDID…)."""
+    """A lease's exports (SHIREWORKS_ID, SHIREWORKS_SSH, SHIREWORKS_UDID…)."""
     if platform in held:
-        env = dict(re.findall(r"(OSS_[A-Z_]+)='([^']*)'", open(held[platform]).read()))
+        env = exports(open(held[platform]).read())
         env["held"] = True
-        log(f"using held {platform} {env['OSS_ID']}")
+        log(f"using held {platform} {env['SHIREWORKS_ID']}")
         return env
-    # --wait: CI's leases queue for a machine other runs hold.
-    out = sh(["oss", "machine", "lease", platform, "--exports", "--minutes=180", "--wait", *flags]).stdout
-    env = dict(re.findall(r"(OSS_[A-Z_]+)='([^']*)'", out))
+    # It waits: CI's leases queue for a machine other runs hold.
+    out = sh([SHIREWORKS, "lease", platform, "--minutes=180", *flags]).stdout
+    env = exports(out)
     # Its VNC password never in CI's log (a workflow command; the line itself isn't shown).
-    if os.environ.get("GITHUB_ACTIONS") and env.get("OSS_VNC_PASSWORD"):
-        print(f"::add-mask::{env['OSS_VNC_PASSWORD']}", flush=True)
-    log(f"leased {platform} {env['OSS_ID']}")
+    if os.environ.get("GITHUB_ACTIONS") and env.get("SHIREWORKS_VNC_PASSWORD"):
+        print(f"::add-mask::{env['SHIREWORKS_VNC_PASSWORD']}", flush=True)
+    log(f"leased {platform} {env['SHIREWORKS_ID']}")
     return env
 
 
 def release(env):
     if env and not env.get("held"):
-        sh(["oss", "machine", "release", env["OSS_ID"]], check=False)
+        sh([SHIREWORKS, "release", env["SHIREWORKS_ID"]], check=False)
 
 
 def ssh(env, command, check=True):
-    command_line = ["oss", "machine", "ssh", env["OSS_ID"], "--", command]
+    command_line = shlex.split(env["SHIREWORKS_SSH"]) + [command]
     result = sh(command_line, check=False)
-    if result.returncode != 0 and result.stderr.startswith("oss:"):
-        # oss failed before ssh ran (looking the lease up: once, a Windows
-        # build's packaging step), so the command never did: once more.
-        time.sleep(5)
-        result = sh(command_line, check=False)
     if check and result.returncode != 0:
         raise failed(command_line, result)
     return result
 
 
 def scp(env, source, destination):
-    sh(["scp", "-q", "-P", env["OSS_SSH_PORT"], "-o", f"UserKnownHostsFile={os.path.expanduser('~/.local/state/oss/known_hosts-' + env['OSS_ID'])}",
-        "-o", "StrictHostKeyChecking=accept-new", source, f"{env.get('OSS_SSH_USER', 'runner')}@127.0.0.1:{destination}"])
+    # The known-hosts file the lease's ssh command names.
+    known = re.search(r"UserKnownHostsFile=(\S+)", env["SHIREWORKS_SSH"])
+    sh(["scp", "-q", "-P", env["SHIREWORKS_SSH_PORT"], "-o", f"UserKnownHostsFile={known.group(1) if known else '/dev/null'}",
+        "-o", "StrictHostKeyChecking=accept-new", source,
+        f"{env.get('SHIREWORKS_SSH_USER', 'runner')}@{env['SHIREWORKS_HOST']}:{destination}"])
 
 
-def oss_shot(env, path):
-    sh(["oss", "machine", "screenshot", env["OSS_ID"], path])
+def machine_shot(env, path):
+    sh([SHIREWORKS, "screenshot", env["SHIREWORKS_ID"], path])
 
 
 # --- The review store
@@ -424,10 +436,10 @@ def shoot_apps(review, platform, device, orientation, launcher, story_list, wait
         review.cell(f"{platform}-storybook", "storybook", device, orientation, shots)
 
 
-# --- iOS (an oss simulator lease: since Shireworks put its `ios` leases in
+# --- iOS (a simulator lease: since Shireworks put its `ios` leases in
 # its primary macOS VM, the simulator isn't on this Mac, so everything goes
-# through oss's verbs: simctl, upload, download, screenshot. PROOF_IOS=local:
-# simctl here, against the lease's OSS_UDID, for a server whose simulators
+# through Shireworks' API: simctl, put, get, screenshot. PROOF_IOS=local:
+# simctl here, against the lease's SHIREWORKS_UDID, for a server whose simulators
 # are its own Mac's, primary.macos.simulators 0.)
 
 def build_ios():
@@ -439,14 +451,14 @@ def build_ios():
     }
 
 
-def oss_api():
-    """The oss server's API level (`oss capabilities`)."""
-    return json.loads(sh(["oss", "capabilities"]).stdout).get("api", 0)
+def shireworks_api():
+    """The Shireworks server's API level (`shireworks.sh capabilities`)."""
+    return json.loads(sh([SHIREWORKS, "capabilities"]).stdout).get("api", 0)
 
 
 class LeasedSimulator:
-    """An oss `ios` lease's simulator, wherever Shireworks runs it (its
-    primary macOS VM since 0.14), through oss alone: `simctl` (a local .app
+    """An `ios` lease's simulator, wherever Shireworks runs it (its primary
+    macOS VM since 0.14), through Shireworks' API alone: `simctl` (a local .app
     uploaded first; `--env=NAME=VALUE` its SIMCTL_CHILD_NAME, `@name` a file
     of the lease's own folder), `upload`/`download` for that folder's files,
     `screenshot` (masked, the status bar held at 9:41 since the lease began).
@@ -456,9 +468,9 @@ class LeasedSimulator:
         self.id = lease_id
 
     def simctl(self, *arguments, environment=None, check=True):
-        command = ["oss", "machine", "simctl", self.id]
+        command = [SHIREWORKS, "simctl", self.id]
         if environment:
-            command += [f"--env={key}={value}" for key, value in environment.items()] + ["--"]
+            command += [f"--env={key}={value}" for key, value in environment.items()]
         return sh(command + list(arguments), check=check)
 
     def install(self, app):
@@ -468,12 +480,12 @@ class LeasedSimulator:
         # Through Shireworks' storage, which unpacks the .ipa itself: simctl
         # install of a local .app zips it here first, with ditto, which only
         # a Mac has (the proof runs in a Linux container).
-        put = json.loads(sh(["oss", "storage", "put", ipa, "--ttl=2h", "--json"]).stdout)
-        sh(["oss", "machine", "install", self.id, put["object"]["sha256"]])
+        put = json.loads(sh([SHIREWORKS, "storage-put", ipa, "--ttl=2h"]).stdout)
+        sh([SHIREWORKS, "install", self.id, (put.get("object") or put)["sha256"]])
 
     def prepare(self):
-        # Light, as every platform's shots are. (The status bar: oss holds
-        # every ios lease's at 9:41 from the start.)
+        # Light, as every platform's shots are. (The status bar: Shireworks
+        # holds every ios lease's at 9:41 from the start.)
         self.simctl("ui", "booted", "appearance", "light", check=False)
 
     def terminate(self, bundle):
@@ -485,7 +497,7 @@ class LeasedSimulator:
             log(f"launch {bundle}: {result.stdout[-500:]}{result.stderr[-500:]}")
 
     def screenshot(self, path):
-        sh(["oss", "machine", "screenshot", self.id, path])
+        sh([SHIREWORKS, "screenshot", self.id, path])
 
     def control(self, app):
         """The Storybook's control file, `<app>-control` in the lease's
@@ -497,13 +509,13 @@ class LeasedSimulator:
         def request(story):
             with open(local, "w") as file:
                 file.write(story)
-            sh(["oss", "machine", "upload", self.id, local, name])
+            sh([SHIREWORKS, "put", self.id, local, name])
 
         def shown():
             got = local + ".shown"
             if os.path.exists(got):
                 os.remove(got)
-            if sh(["oss", "machine", "download", self.id, f"{name}.shown", got], check=False).returncode != 0:
+            if sh([SHIREWORKS, "get", self.id, f"{name}.shown", got], check=False).returncode != 0:
                 return None   # none yet
             return open(got).read().strip() if os.path.exists(got) else None
         # There before the app starts, naming no story (it follows the file
@@ -514,7 +526,7 @@ class LeasedSimulator:
 
 class LocalSimulator:
     """PROOF_IOS=local: the lease's simulator on this Mac, by simctl here
-    (OSS_UDID), its control file this Mac's."""
+    (SHIREWORKS_UDID), its control file this Mac's."""
 
     def __init__(self, udid):
         self.udid = udid
@@ -574,17 +586,17 @@ def here_simulator():
     sh(["xcrun", "simctl", "boot", udid])
     sh(["xcrun", "simctl", "bootstatus", udid, "-b"])
     log(f"made {device}, iOS {runtime['version']}: {udid}")
-    return {"OSS_ID": udid, "OSS_UDID": udid, "here": True}
+    return {"SHIREWORKS_ID": udid, "SHIREWORKS_UDID": udid, "here": True}
 
 
 def ios(review, story_list, builds):
-    local = HERE or os.environ.get("PROOF_IOS", "oss") == "local"
-    if not local and (api := oss_api()) < 20:
+    local = HERE or os.environ.get("PROOF_IOS", "lease") == "local"
+    if not local and (api := shireworks_api()) < 20:
         raise RuntimeError(f"the iPhone's proof needs Shireworks' API 20 (an ios lease's launch environment and its "
                            f"folder's files); this server's is {api}. PROOF_IOS=local for a server whose simulators are its Mac's")
     env = here_simulator() if HERE else lease("ios")
     try:
-        simulator = LocalSimulator(env["OSS_UDID"]) if local else LeasedSimulator(env["OSS_ID"])
+        simulator = LocalSimulator(env["SHIREWORKS_UDID"]) if local else LeasedSimulator(env["SHIREWORKS_ID"])
         for app, ipa in builds.items():
             if local:
                 work = tempfile.mkdtemp(prefix=f"proof-ios-{app}-")
@@ -631,8 +643,8 @@ def ios(review, story_list, builds):
             simulator.terminate(app["bundle"])
     finally:
         if env.get("here"):
-            sh(["xcrun", "simctl", "shutdown", env["OSS_UDID"]], check=False)
-            sh(["xcrun", "simctl", "delete", env["OSS_UDID"]], check=False)
+            sh(["xcrun", "simctl", "shutdown", env["SHIREWORKS_UDID"]], check=False)
+            sh(["xcrun", "simctl", "delete", env["SHIREWORKS_UDID"]], check=False)
         else:
             release(env)
 
@@ -657,7 +669,7 @@ def build_macos():
 MAC_ARGUMENTS = ["-AppleInterfaceStyle", "Light", "-NSRequiresAquaSystemAppearance", "YES",
                  "-NSTextInsertionPointBlinkPeriodOn", "100000000", "-NSTextInsertionPointBlinkPeriodOff", "0"]
 
-# A slot's app, run by `oss machine exec --gui` in the primary's console
+# A slot's app, run by `shireworks.sh run --gui` in the primary's console
 # session (its user's, not the slot's). Started by its binary, so that it is
 # the exec's child and ends with it (the server signals the exec's process
 # group when the client goes, and this script ends the app then). Started by
@@ -821,11 +833,11 @@ def macos_slot(review, story_list, builds):
     fresh VM; and the scroll bars are set in
     the apps' argument domain rather than the session's defaults."""
     env = lease("mac")
-    slot = env["OSS_ID"]
+    slot = env["SHIREWORKS_ID"]
     running = []
 
     def run(*command, check=True):
-        return sh(["oss", "machine", "exec", slot, "--", *command], check=check)
+        return sh([SHIREWORKS, "run", slot, "--", *command], check=check)
 
     def stop():
         # The exec's client ended: the server ends its process group (TERM,
@@ -840,13 +852,13 @@ def macos_slot(review, story_list, builds):
                     process.kill()
                     process.wait()
 
-    work = f"/tmp/oss-proof-{slot}"
+    work = f"/tmp/isomer-proof-{slot}"
     home = f"{work}/home"
     control = f"{work}/storybook-control"
     try:
         apps = run("/bin/sh", "-c", 'printf %s "$HOME"').stdout.strip()
         for app, archive in builds.items():
-            sh(["oss", "machine", "upload", slot, archive, f"{app}.zip"])
+            sh([SHIREWORKS, "put", slot, archive, f"{app}.zip"])
             run("/bin/sh", "-c", 'rm -rf "$1.app" && /usr/bin/ditto -x -k "$2.zip" . && rm "$2.zip"', "unzip",
                 APPS[app]["name"], app)
         # The slot's user makes it; the console user's apps write in it
@@ -859,7 +871,7 @@ def macos_slot(review, story_list, builds):
             # ones (0.41.0's full proof, layout.grid): a flat picture is
             # taken again.
             for attempt in range(3):
-                sh(["oss", "machine", "screenshot", slot, path, f"--window={APPS[app]['bundle']}"])
+                sh([SHIREWORKS, "screenshot", slot, path, f"--window={APPS[app]['bundle']}"])
                 if not flat(path):
                     break
                 log(f"macos {os.path.basename(path)}: a flat capture (try {attempt + 1} of 3)")
@@ -870,7 +882,7 @@ def macos_slot(review, story_list, builds):
             stop()
             name = APPS[app]["name"]
             variables = {"CFFIXED_USER_HOME": home, **HELD_ENVIRONMENT, **environment}
-            command = ["oss", "machine", "exec", slot, "--gui", *(f"--env={k}={v}" for k, v in variables.items()), "--",
+            command = [SHIREWORKS, "run", slot, "--gui", *(f"--env={k}={v}" for k, v in variables.items()), "--",
                        "/bin/sh", "-c", SLOT_LAUNCH, "launch", f"{apps}/{name}.app",
                        *MAC_ARGUMENTS, "-AppleShowScrollBars", "WhenScrolling", "-ApplePersistenceIgnoreState", "YES"]
             output = open(os.path.join(logs, f"{app}.log"), "ab")
@@ -880,7 +892,7 @@ def macos_slot(review, story_list, builds):
             # may hold it): until then the screenshot is refused.
             probe = os.path.join(logs, "window.png")
             deadline = time.time() + 900
-            while subprocess.run(["oss", "machine", "screenshot", slot, probe, f"--window={APPS[app]['bundle']}"],
+            while subprocess.run([SHIREWORKS, "screenshot", slot, probe, f"--window={APPS[app]['bundle']}"],
                                  capture_output=True).returncode != 0:
                 if process.poll() is not None:
                     raise RuntimeError(f"{name} ended ({process.returncode}) before its window showed: {output.name}")
@@ -901,7 +913,7 @@ def macos_slot(review, story_list, builds):
         # The proof's folder outlives the slot (it's the primary's /tmp, not
         # the slot's home): the console user's files in it removed by that
         # user (a GUI turn), then the folder by the slot's.
-        sh(["oss", "machine", "exec", slot, "--gui", "--", "/bin/rm", "-rf", home], check=False)
+        sh([SHIREWORKS, "run", slot, "--gui", "--", "/bin/rm", "-rf", home], check=False)
         run("/bin/rm", "-rf", work, check=False)
         release(env)
 
@@ -929,7 +941,7 @@ def macos_vm(review, story_list, builds):
             raise RuntimeError(f"AppleShowScrollBars is {shown!r}, not WhenScrolling")
 
         def shoot(path):
-            oss_shot(env, path)
+            machine_shot(env, path)
             rect = ssh(env, f"sudo launchctl asuser $(id -u runner) /tmp/window_rect {names}", check=False).stdout.split()
             if len(rect) == 4:
                 x, y, w, h = map(int, rect)
@@ -958,7 +970,7 @@ def macos_vm(review, story_list, builds):
         release(env)
 
 
-# --- Android (an oss emulator lease)
+# --- Android (an emulator lease)
 
 def build_android(abi=None):
     """The Storybook, for `abi` if given (x86_64, for GitHub's Ubuntu
@@ -979,7 +991,7 @@ def android(review, story_list, builds):
         if HERE:
             adb = [os.environ.get("PROOF_ADB", "adb"), "-s", os.environ["PROOF_ANDROID_SERIAL"]]
         else:
-            adb = ["oss", "machine", "adb", env["OSS_ID"], "--"]
+            adb = [SHIREWORKS, "adb", env["SHIREWORKS_ID"]]
         for app, apk in builds.items():
             sh(adb + ["install", "-r", apk])
             sh(adb + ["shell", "pm", "clear", APPS[app]["bundle"]], check=False)
@@ -1015,7 +1027,7 @@ def android(review, story_list, builds):
                 with open(path, "wb") as file:
                     subprocess.run(adb + ["exec-out", "screencap", "-p"], stdout=file, check=True)
             else:
-                oss_shot(env, path)
+                machine_shot(env, path)
             from PIL import Image
             image = Image.open(path)
             image.crop((0, status_bar, image.width, image.height)).save(path)
@@ -1089,7 +1101,7 @@ def web(review, story_list, builds):
         shutil.rmtree(profile, ignore_errors=True)
 
 
-# --- Linux (built in a Linux container here, run on an oss VM)
+# --- Linux (built in a Linux container here, run on a leased VM)
 
 def build_linux(packaged=None):
     """The Storybook built and packaged in the container, one directory;
@@ -1124,7 +1136,7 @@ def linux(review, story_list, builds):
         kill = "for p in $(pgrep -x storybook); do kill $p; done"
 
         def shoot(path):
-            oss_shot(env, path)
+            machine_shot(env, path)
             # Below GNOME's top bar (its clock) and right of its dock: the
             # maximized window, its title bar included.
             from PIL import Image
@@ -1151,7 +1163,7 @@ def linux(review, story_list, builds):
         release(env)
 
 
-# --- Windows (built and run on an oss VM with the Swift build layer)
+# --- Windows (built and run on a leased VM with the Swift build layer)
 
 def build_windows():
     """What the Windows VM takes from here: this checkout's source, which
@@ -1193,7 +1205,7 @@ def windows(review, story_list, builds):
             scp(env, path, f"C:/Users/runner/{os.path.basename(path)}")
         ps = lambda command, check=True: ssh(env, command, check)
         # Python for rules_swift's autoconfiguration (the build layer carries
-        # it from tools/ci/oss/windows-swift.ps1; older ones don't).
+        # it from tools/ci/shireworks/windows-swift.ps1; older ones don't).
         ps("if (-not (Test-Path 'C:\\Program Files\\Python312-arm64\\python.exe')) { winget install --id Python.Python.3.12 --silent --scope machine "
            "--accept-package-agreements --accept-source-agreements | Out-Null }; "
            "Remove-Item -Recurse -Force C:\\isomer-src -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force C:\\isomer-src | Out-Null; "
@@ -1293,7 +1305,7 @@ def windows(review, story_list, builds):
             shoot(path)
 
         def shoot(path):
-            oss_shot(env, path)
+            machine_shot(env, path)
             box = window_box()
             if box:
                 # Less the window's outer pixel, its border, which blends
@@ -1361,7 +1373,7 @@ def main():
     parser.add_argument("--linux-packages", default=None,
                         help="the Linux app packaged already (<dir>/storybook-linux.tgz): CI's, from a container")
     parser.add_argument("--held", action="append", default=[], metavar="PLATFORM=FILE",
-                        help="a lease you hold, its `oss machine lease --exports` output in FILE: used, not released")
+                        help="a lease you hold, its `shireworks.sh lease` output in FILE: used, not released")
     parser.add_argument("--here", action="store_true",
                         help="picture on this machine, nothing leased (CI's proof on GitHub's runners)")
     parser.add_argument("--android-abi", default=None, help="the Android apps built for this ABI (x86_64)")

@@ -1,7 +1,8 @@
-# Isomer's Windows build base for oss: Visual Studio's C++ build tools (ARM64
-# and x64 MSVC, the Windows 11 SDK) and swift.org's toolchain at the version
-# isomer pins, and Python 3, on top of a dev base (Git, Bazelisk). Built on the oss server:
-#   oss image build windows swift-6.3.2 --from=dev --script=tools/ci/oss/windows-swift.ps1
+# Isomer's Windows build base for Shireworks: Visual Studio's C++ build tools
+# (ARM64 and x64 MSVC, the Windows 11 SDK) and swift.org's toolchain at the
+# version isomer pins, and Python 3, on top of a dev base (Git, Bazelisk).
+# Built on the Shireworks server as its windows image swift-6.3.2, from dev,
+# with this script.
 # A stopgap: hermetic toolchains are to replace it.
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'

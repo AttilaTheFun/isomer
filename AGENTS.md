@@ -586,9 +586,10 @@ may differ from real hardware (Wine's fonts), which is acceptable.
     this public repository (the workflow's `android` job: an x86_64
     emulator on the runner's KVM, the x86_64 test APK built in the
     container, tools/ci/hosted_android_test.sh); in a private copy, and as
-    the fallback, an emulator leased from Shireworks (`oss machine lease
-    android`), on its Mac's own hypervisor, through `oss machine adb` and
-    `screenshot` (tools/ci/android_test.sh). A Cuttlefish phone in a
+    the fallback, an emulator leased from Shireworks (`shireworks.sh lease
+    android`), on its Mac's own hypervisor, through `shireworks.sh adb` and
+    `screenshot` (tools/ci/android_test.sh, tools/ci/shireworks.sh: Shireworks'
+    API, copied byte for byte from AttilaTheFun/shireworks). A Cuttlefish phone in a
     container with its own KVM (`--virtualization`, Shireworks' API 22;
     tools/ci/android_device.sh) boots far on a Mac but doesn't finish:
     Virtualization's vCPU threads oversleep every timed wait (macOS's timer
@@ -599,15 +600,15 @@ may differ from real hardware (Wine's fonts), which is acceptable.
     (tools/ci/apple_test.sh);
   - all of it after the build, at once: tools/ci/platform_tests.sh.
 - **Linux from a Mac**: `tools/linux/build.sh [targets]` builds in a
-  container leased from Shireworks (`oss machine run container`, released
+  container leased from Shireworks (`shireworks.sh lease container`, released
   however the script ends) of Visor's agent image, CI's
   (tools/ci/agent_image: Bazel and the libraries the Linux targets link,
   SDL2, SDL2_ttf, GL/EGL, GTK 3, WebKitGTK, and x86_64 glibc for Android's
   tools, run under Rosetta). The checkout goes in and `--out` comes back
-  through Shireworks (upload, exec), nothing mounted, so it runs from any Shireworks
+  through Shireworks (put, run, get), nothing mounted, so it runs from any Shireworks
   client; Bazel's tree is the kept volume isomer-linux-build, warm between
   runs, one build at a time; `--stop` releases a lease left over and
-  deletes the volume (`oss volume delete`, on Shireworks' Mac). It was a
+  deletes the volume (`shireworks.sh volume-delete`, with a token or a key). It was a
   plain Apple `container` it made itself from 0.38 until 2026-10-31. With
   `--apple-sdks <dir>` (the SDK archive and the ported tools' archives) it
   builds every platform: `tools/linux/build.sh --module examples
@@ -623,8 +624,8 @@ may differ from real hardware (Wine's fonts), which is acceptable.
   ubuntu24.04 toolchains for aarch64 as well as x86_64, wasm SDK included
   (the wasm cell's reactor). tools/proof/proof.py runs what it builds in
   a Shireworks Linux VM.
-- **Windows on the Shireworks Windows VM** (`oss machine lease windows
-  --config=swift-6.3.2`, the build layer tools/ci/oss/windows-swift.ps1
+- **Windows on the Shireworks Windows VM** (`shireworks.sh lease windows
+  --config=swift-6.3.2`, the build layer tools/ci/shireworks/windows-swift.ps1
   makes): Bazel in MSVC's environment (vcvarsall arm64) with
   `BAZEL_SH` Git's bash, Git's usr\bin on PATH (rules_swift_package_manager
   runs find, cp and od), `--output_user_root=C:/b` (short paths) and
