@@ -264,6 +264,18 @@ Metal on iOS and macOS, Compose and OpenGL on Android, React and WebGPU on
 the web, DirectX on Windows, OpenGL on Linux. The UIKit and Android Views
 renderers (and their baseline benchmark cells) and the WinUI stub are gone.
 
+**The web's React renderer has no React (0.49).** Its components
+(wasm/libraries/swift_ui/runtime/react_renderer.js) are React's kind,
+elements and hooks, run by Isomer's DOM core (runtime/dom_react.js: the
+part of React DOM 18 they use, making the DOM React DOM made). It replaced
+React once every Storybook page was the same with it, picture and DOM, at
+desktop and phone widths (tools/testing/renderer_compare.sh, which with
+BASELINE holds a change to the renderer to its pictures before). Pages load
+no React; `?renderer=react` still names it, as the guest's `ReactRenderer`
+does. Only a page that is a React app of its own (the `<Isomer/>`
+component, runtime/react_embed.js; examples' example_partial_react) brings
+React, as its own asset.
+
 **Design goal** (see docs/renderer_layers.md + docs/renderer_parity_plan.md):
 - **Component-system renderers** (React, Jetpack Compose) build the UI from the
   platform's *native components* and should feel native to that platform —

@@ -3,13 +3,15 @@
 # page pictured with `?renderer=<base>` and with `?renderer=<candidate>`, at
 # desktop width (1280×800, the Mac's look) and a phone's (390×844, iOS's),
 # with its DOM (browser_check's --dom), and each candidate picture compared
-# with its base's (--reference). Made for the DOM renderer replacing React's
-# (0.48): a story whose pictures or DOM differ is one still to port.
+# with its base's (--reference). Made for Isomer's DOM core replacing React
+# under the web's renderer (0.49: every page the same); now it holds a change
+# to the renderer to its pictures before (BASELINE below).
 #
 #   tools/testing/renderer_compare.sh <site dir> <out dir> [<base> <candidate>] [<story>…]
 #
-# <base> and <candidate> are renderer names (react and dom by default; react
-# and react measures the noise of a story that moves on its own). The
+# <base> and <candidate> are renderer names (react and react by default:
+# with BASELINE, the change against the pictures before it; without, the
+# noise of a story that moves on its own). The
 # stories are the Storybook's (examples/storybook), all of them unless
 # named. CHROME names Chrome; BROWSER_CHECK the browser_check binary (else
 # bazel builds it). Writes <out>/<width>/<renderer>/<story>.png, its
@@ -26,7 +28,7 @@ mkdir -p "${2:?<out dir>}"
 out="$(cd "$2" && pwd)"
 shift 2
 base=react
-candidate=dom
+candidate=react
 if [ $# -ge 2 ] && [[ "$1" != *.* ]] && [[ "$2" != *.* ]]; then
     base="$1" candidate="$2"
     shift 2

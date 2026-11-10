@@ -54,9 +54,9 @@
       except the order panel, which is SwiftUI.</footer>
   </main>
 
-  <!-- The host app's React (also used by the embedded surface's renderer). -->
-  <script src="./runtime/react.production.min.js"></script>
-  <script src="./runtime/react-dom.production.min.js"></script>
+  <!-- The host app's own React (its <Isomer/> component uses it). -->
+  <script src="./assets/react.production.min.js"></script>
+  <script src="./assets/react-dom.production.min.js"></script>
   <script type="module">
     import { Isomer } from "./runtime/react_embed.js";
 

@@ -11,8 +11,9 @@
 // delivery), and the component re-instantiates the surface on each update. A
 // bare `wasmURL` is sugar for `packagedBundleProvider(wasmURL)`.
 //
-// Uses the page's React (`window.React`, the same UMD global the tree renderer
-// uses), so the host app and the embedded surface share one React.
+// Uses the page's own React (`window.React`): the component is the host's.
+// What it shows inside its div is drawn by Isomer's renderer, which needs
+// no React (dom_react.js).
 //
 //   const { Isomer } = await import("./runtime/react_embed.js");
 //   <Isomer wasmURL="./app.wasm" renderer="react" style={{ height: 480 }} />

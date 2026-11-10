@@ -28,17 +28,3 @@ py_binary(
     srcs = ["icu_data.py"],
 )
 
-# The React 18 UMD runtime files, re-exported so CONSUMER workspaces (the
-# Playground's web-run site) can bundle them without declaring the
-# @react_umd repos themselves.
-filegroup(
-    name = "react_umd_js",
-    srcs = ["@react_umd//:umd/react.production.min.js"],
-    visibility = ["//visibility:public"],
-)
-
-filegroup(
-    name = "react_dom_umd_js",
-    srcs = ["@react_dom_umd//:umd/react-dom.production.min.js"],
-    visibility = ["//visibility:public"],
-)

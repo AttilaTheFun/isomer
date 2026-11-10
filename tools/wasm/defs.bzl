@@ -256,6 +256,8 @@ _ISO_RUNTIME_JS = [
     Label("//wasm/libraries/swift_ui:runtime/bundle_provider.js"),
     Label("//wasm/libraries/swift_ui:runtime/flat_tree.js"),
     Label("//wasm/libraries/swift_ui:runtime/react_renderer.js"),
+    # The DOM core the renderer's components run on (React DOM's part it uses).
+    Label("//wasm/libraries/swift_ui:runtime/dom_react.js"),
     # The web renderers' shared styling (react_renderer.js imports it).
     Label("//wasm/libraries/swift_ui:runtime/render_style.js"),
     Label("//wasm/libraries/swift_ui:runtime/react_embed.js"),
@@ -406,10 +408,7 @@ def isomer_web_app(
         # runtime it imports (it runs feature bundles compiled outside bazel —
         # the web Playground's user builds).
         root_js = [":app_bridge", Label("//wasm/libraries/swift_ui:runtime/hot_host.js")],
-        runtime_js = _ISO_RUNTIME_JS + [
-            Label("@react_dom_umd//:umd/react-dom.production.min.js"),
-            Label("@react_umd//:umd/react.production.min.js"),
-        ],
+        runtime_js = _ISO_RUNTIME_JS,
         visibility = site_visibility,
         wasm = ":app_bridge.wasm",
     )

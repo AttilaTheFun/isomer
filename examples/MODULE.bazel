@@ -412,3 +412,34 @@ swift_windows_sdk(
     swift_version = "6.4.2",
     swiftc = "@swift_toolchain_ubuntu24.04-aarch64//:usr/bin/swiftc",
 )
+
+# React 18 (its UMD builds) for the React host page of
+# //web/example_partial_react_web_application: a page of the host's own
+# React embedding SwiftUI with <Isomer/> (runtime/react_embed.js). Isomer's
+# renderer draws without React (runtime/dom_react.js, since 0.49); only a
+# page that is a React app of its own brings it.
+react_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+react_archive(
+    name = "react_umd",
+    build_file_content = """\
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["umd/react.production.min.js"])
+""",
+    sha256 = "8d9bed01a672e7eaf387942d781ad47c6a43089a30a0306060f9fd5ac7870347",
+    strip_prefix = "package",
+    url = "https://registry.npmjs.org/react/-/react-18.3.1.tgz",
+)
+
+react_archive(
+    name = "react_dom_umd",
+    build_file_content = """\
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["umd/react-dom.production.min.js"])
+""",
+    sha256 = "031d4427a99f2f3f6cac18bbbf308594a67e4f47d10f4896fdec446505b040e0",
+    strip_prefix = "package",
+    url = "https://registry.npmjs.org/react-dom/-/react-dom-18.3.1.tgz",
+)
