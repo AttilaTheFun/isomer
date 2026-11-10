@@ -33,11 +33,14 @@ Playground's proof is AttilaTheFun/playground's.
 
 - **Reviews' Publish waits for the proof** of the release's commit (a
   change in Reviews).
-- **The full set's live stories:** `controls.progress`'s spinner and
-  `isomer.map`'s tiles are regions in proof_ignore.txt (2026-11-06);
-  `isomer.webview` shows its own page (#80). Still to hold still at the
-  source: the map's tiles (tiles served to the story under the proof, so
-  its markers count again), `isomer.video` (a remote video) and
+- **The full set's live stories:** the spinners, the map's tiles and the
+  video's frame and buffering bar are painted grey as they are taken
+  (tools/proof/masks.txt, proof.py's `mask`, since 0.50: CI compared with
+  proof_ignore.txt's regions until 0.48 moved the comparison to Reviews,
+  which compares every pixel); `isomer.webview` shows its own page (#80).
+  Still to hold still at the source, so that nothing is masked: the map's
+  tiles (tiles served to the story under the proof, so its markers count
+  again), `isomer.video` (a video of the Storybook's own) and
   `images.async` (a remote image). After each release, compare its proof
   with the release before AND a second run of the same commit: whatever
   moves without the app changing gets fixed before the next.
