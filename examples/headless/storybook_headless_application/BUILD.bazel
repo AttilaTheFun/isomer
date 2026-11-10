@@ -230,9 +230,13 @@ swift_library(
 # an iPhone 17 of the newest iOS the Xcode has, as hosted_apple_test.sh's.
 # xcodebuild's runner, not xctestrunner's: xctestrunner reads the result
 # bundle after every run, and a Swift Testing run's tests have no
-# `subtests._values` (KeyError: the run failed with every test passed).
+# `subtests._values` (KeyError: the run failed with every test passed). Its
+# simulator is the job's (ISOMER_SIMULATOR, :simulator): the runner takes a
+# --destination's id for a device, not a simulator.
 ios_xctestrun_runner(
     name = "iphone_17",
+    clean_up_simulator_action = "//headless/storybook_headless_application/simulator:keep_simulator",
+    create_simulator_action = "//headless/storybook_headless_application/simulator:job_simulator",
     device_type = "iPhone 17",
     tags = ["manual"],
 )

@@ -1,0 +1,16 @@
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+# The hosted iPhone test's simulator (../BUILD.bazel's :iphone_17): the job's
+# own, booted with the headful Storybook in it, rather than one rules_apple
+# makes beside it.
+sh_binary(
+    name = "job_simulator",
+    srcs = ["job_simulator.sh"],
+    visibility = ["//headless/storybook_headless_application:__pkg__"],
+)
+
+sh_binary(
+    name = "keep_simulator",
+    srcs = ["keep_simulator.sh"],
+    visibility = ["//headless/storybook_headless_application:__pkg__"],
+)
