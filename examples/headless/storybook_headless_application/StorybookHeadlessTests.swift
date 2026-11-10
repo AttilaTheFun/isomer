@@ -7,12 +7,38 @@
 // the app drawn by its platform's renderer, its driver built in
 // (--@isomer//drive:headful), dialling out to the test's hub. The web's is
 // web_launcher.sh (:storybook_headful_web_test).
+//
+// Swift Testing's: a swift_test runs them on macOS, Linux and Windows, and an
+// iPhone's test bundle hosts them. One at a time: a headful test drives the
+// one app its launcher started. Off the main thread, as Swift Testing runs
+// them: a hosted test's app works on its main thread meanwhile.
 
+import Foundation
 import IsomerHeadless
 import IsomerWire
-import XCTest
+import Testing
 
-final class StorybookHeadlessTests: XCTestCase {
+/// Whether there's an app to drive: on a phone, the one this bundle is
+/// hosted in (with a driver); on Windows, one a launcher starts; anywhere
+/// else, the Storybook built headless if no launcher is named.
+func storybookToDrive() -> Bool {
+    #if os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
+    return HeadlessApp.hostedIfAny() != nil
+    #elseif os(Windows)
+    return !(ProcessInfo.processInfo.environment["ISOMER_HEADFUL_LAUNCHER"] ?? "").isEmpty
+    #else
+    return true
+    #endif
+}
+
+@Suite(.serialized, .enabled("an app to drive here") { storybookToDrive() })
+struct StorybookHeadlessTests {
+
+    /// Why a test doesn't run here (Swift Testing has no skip from inside a
+    /// test: the app is launched before each test can know).
+    struct NotHere: Error, CustomStringConvertible {
+        let description: String
+    }
     /// The app built headless, from the test's runfiles; or headful, started
     /// by the launcher the environment names; or the app this bundle is
     /// hosted in (a story opened in-process, with no launch).
@@ -26,7 +52,7 @@ final class StorybookHeadlessTests: XCTestCase {
         }
         #if os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
         // On a phone these run hosted alone: no processes to launch.
-        throw XCTSkip("not hosted in an app with a driver (--@isomer//drive:headful)")
+        throw NotHere(description: "not hosted in an app with a driver (--@isomer//drive:headful)")
         #else
         var launchEnvironment: [String: String] = [:]
         if let story { launchEnvironment["ISO_STORYBOOK_STORY"] = story }
@@ -36,7 +62,7 @@ final class StorybookHeadlessTests: XCTestCase {
         #if os(Windows)
         // Windows runs these headful alone (HeadlessApp starts no headless
         // app there: no process transport).
-        throw XCTSkip("ISOMER_HEADFUL_LAUNCHER names no launcher")
+        throw NotHere(description: "ISOMER_HEADFUL_LAUNCHER names no launcher")
         #else
         let root = "\(environment["TEST_SRCDIR"] ?? "")/\(environment["TEST_WORKSPACE"] ?? "_main")"
         return try HeadlessApp(
@@ -47,135 +73,132 @@ final class StorybookHeadlessTests: XCTestCase {
     }
 
     /// Opens `story` in the app this test is hosted in, as the Storybook
-    /// takes a request in-process (StorybookView's followOpenRequests), and
-    /// waits, turning the main run loop as the app runs on it, until it says
-    /// the story is shown.
+    /// takes a request in-process (StorybookView's followOpenRequests): the
+    /// request posted on the main queue, where the app takes it, and waited
+    /// for until the Storybook says the story is shown.
     private static func show(_ story: String) throws {
-        var shown = false
+        let shown = DispatchSemaphore(value: 0)
         let token = NotificationCenter.default.addObserver(
             forName: Notification.Name("IsomerStorybookShownStory"), object: nil, queue: nil
         ) { note in
-            if note.object as? String == story { shown = true }
+            if note.object as? String == story { shown.signal() }
         }
         defer { NotificationCenter.default.removeObserver(token) }
-        NotificationCenter.default.post(name: Notification.Name("IsomerStorybookOpenStory"), object: story)
-        let deadline = Date(timeIntervalSinceNow: 15)
-        while !shown {
-            if Date() > deadline {
-                throw NSError(domain: "StorybookHeadlessTests", code: 1, userInfo: [
-                    NSLocalizedDescriptionKey: "the Storybook never showed \(story)"])
-            }
-            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: Notification.Name("IsomerStorybookOpenStory"), object: story)
+        }
+        guard shown.wait(timeout: .now() + 15) == .success else {
+            throw NotHere(description: "the Storybook never showed \(story)")
         }
     }
 
-    func testObservableObjectCounts() throws {
+    @Test func observableObjectCounts() throws {
         let app = try launch(story: "state.observableobject")
         defer { app.quit() }
-        XCTAssertTrue(try app.screen().shows("Taps: 0"))
+        #expect(try app.screen().shows("Taps: 0"))
         // The story's code is one element: one text of many lines.
-        XCTAssertTrue(try app.screen().texts.contains { $0.hasPrefix("final class StoryCounter") && $0.contains("\n") })
+        #expect(try app.screen().texts.contains { $0.hasPrefix("final class StoryCounter") && $0.contains("\n") })
         try app.tap("Tap")
         try app.tap("Tap")
         try app.wait(for: "Taps: 2")
         // Reset sends on the model's subject: onReceive counts it.
         let screen = try app.tap("Reset")
-        XCTAssertTrue(screen.shows("Taps: 0"))
-        XCTAssertTrue(screen.shows("Reset 1 times"))
+        #expect(screen.shows("Taps: 0"))
+        #expect(screen.shows("Reset 1 times"))
         // The proof's picture of it, headful (headless: none).
         try app.picture("state.observableobject")
     }
 
-    func testTextFieldBindsTheModel() throws {
+    @Test func textFieldBindsTheModel() throws {
         let app = try launch(story: "state.observableobject")
         defer { app.quit() }
-        XCTAssertEqual(try app.screen().element("Title")?.value, "Taps")
+        #expect(try app.screen().element("Title")?.value == "Taps")
         let screen = try app.type("Title", "Hits")
-        XCTAssertTrue(screen.shows("Hits: 0"))
+        #expect(screen.shows("Hits: 0"))
     }
 
-    func testToggles() throws {
+    @Test func toggles() throws {
         let app = try launch(story: "controls.toggle")
         defer { app.quit() }
-        XCTAssertTrue(try app.screen().shows("Wi-Fi on, Bluetooth off"))
+        #expect(try app.screen().shows("Wi-Fi on, Bluetooth off"))
         try app.set("Wi-Fi", "0")
         let screen = try app.set("Bluetooth", "1")
-        XCTAssertTrue(screen.shows("Wi-Fi off, Bluetooth on"))
+        #expect(screen.shows("Wi-Fi off, Bluetooth on"))
     }
 
-    func testSheetPresentsAndDismisses() throws {
+    @Test func sheetPresentsAndDismisses() throws {
         let app = try launch(story: "presentation.sheet")
         defer { app.quit() }
         var screen = try app.tap("Show sheet")
-        XCTAssertEqual(screen.presented.first?.style, "sheet")
-        XCTAssertTrue(screen.shows("A sheet"))
+        #expect(screen.presented.first?.style == "sheet")
+        #expect(screen.shows("A sheet"))
         screen = try app.tap("Done")
-        XCTAssertTrue(screen.presented.isEmpty)
+        #expect(screen.presented.isEmpty)
     }
 
-    func testOpensAStoryFromTheList() throws {
+    @Test func opensAStoryFromTheList() throws {
         let app = try launch()
         defer { app.quit() }
         let screen = try app.tap("ObservableObject")
-        XCTAssertTrue(screen.shows("Taps: 0"))
+        #expect(screen.shows("Taps: 0"))
     }
 
-    func testAStoryReplacesTheListAndBackReturns() throws {
+    @Test func aStoryReplacesTheListAndBackReturns() throws {
         let app = try launch()
         defer { app.quit() }
         // A compact width's: at regular width (a Mac's window) the list and
         // the story stand side by side.
-        try XCTSkipIf(try app.info().width >= 700, "the split view shows both columns at this width")
+        // (At regular width the split view shows both columns: nothing to check.)
+        guard try app.info().width < 700 else { return }
         // At compact width the split view shows one column: the story alone.
         var screen = try app.tap("ObservableObject")
-        XCTAssertTrue(screen.shows("Taps: 0"))
-        XCTAssertNil(screen.element("Text styles"))
+        #expect(screen.shows("Taps: 0"))
+        #expect(screen.element("Text styles") == nil)
         screen = try app.back()
         // The list again, at the row it opened (a phone keeps the list where
         // it was scrolled).
-        XCTAssertNotNil(screen.element("ObservableObject"))
-        XCTAssertNil(screen.element("Reset"))
+        #expect(screen.element("ObservableObject") != nil)
+        #expect(screen.element("Reset") == nil)
     }
 
-    func testNamesTargetElementsAndInspectTellsMore() throws {
+    @Test func namesTargetElementsAndInspectTellsMore() throws {
         let app = try launch(story: "state.observableobject")
         defer { app.quit() }
         // Each element has a name: its role and its place among that role's.
-        let tap = try XCTUnwrap(app.screen().element("Tap"))
-        XCTAssertTrue(tap.name.hasPrefix("button-"))
+        let tap = try #require(app.screen().element("Tap"))
+        #expect(tap.name.hasPrefix("button-"))
         try app.tap(tap.name)
         let screen = try app.wait(for: "Taps: 1")
         // A text by its place among the texts (text-<n>).
-        let index = try XCTUnwrap(screen.texts.firstIndex(of: "Taps: 1"))
+        let index = try #require(screen.texts.firstIndex(of: "Taps: 1"))
         let text = try app.inspect("text-\(index + 1)")
-        XCTAssertEqual(text.role, "text")
-        XCTAssertEqual(text.label, "Taps: 1")
+        #expect(text.role == "text")
+        #expect(text.label == "Taps: 1")
         let field = try app.inspect("Title")
-        XCTAssertEqual(field.role, "textField")
-        XCTAssertTrue(field.actions.contains("edit"))
-        XCTAssertThrowsError(try app.inspect("button-999"))
+        #expect(field.role == "textField")
+        #expect(field.actions.contains("edit"))
+        #expect(throws: (any Error).self) { try app.inspect("button-999") }
     }
 
-    func testAnAlertIsTheWholeScreen() throws {
+    @Test func anAlertIsTheWholeScreen() throws {
         let app = try launch(story: "presentation.alert")
         defer { app.quit() }
         var screen = try app.tap("Delete draft…")
         // What is presented is all that can be used: the page behind is not
         // listed.
-        XCTAssertEqual(screen.presented.last?.style, "alert")
-        XCTAssertNotNil(screen.element("Delete"))
-        XCTAssertNotNil(screen.element("Cancel"))
-        XCTAssertNil(screen.element("Delete draft…"))
+        #expect(screen.presented.last?.style == "alert")
+        #expect(screen.element("Delete") != nil)
+        #expect(screen.element("Cancel") != nil)
+        #expect(screen.element("Delete draft…") == nil)
         screen = try app.tap("Cancel")
-        XCTAssertTrue(screen.presented.isEmpty)
-        XCTAssertNotNil(screen.element("Delete draft…"))
+        #expect(screen.presented.isEmpty)
+        #expect(screen.element("Delete draft…") != nil)
     }
 
-    func testUnknownTargetFailsWithTheScreen() throws {
+    @Test func unknownTargetFailsWithTheScreen() throws {
         let app = try launch(story: "state.observableobject")
         defer { app.quit() }
-        XCTAssertThrowsError(try app.tap("No such button")) { error in
-            XCTAssertTrue("\(error)".contains("no button No such button"))
-        }
+        let error = try #require(throws: (any Error).self) { try app.tap("No such button") }
+        #expect("\(error)".contains("no button No such button"))
     }
 }

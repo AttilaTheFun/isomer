@@ -20,6 +20,13 @@ public final class IsomerLocalServer {
         self.handle = handle
     }
 
+    /// One command and its answer, for a caller off the main thread (a Swift
+    /// Testing test, which runs on the cooperative pool): the driver runs on
+    /// the main actor while the caller awaits it.
+    public func answer(_ command: Wire_Command) async -> Wire_Answer {
+        await handle(command)
+    }
+
     /// Makes `server` the app's own (a host's driver, as it starts).
     public static func register(_ server: IsomerLocalServer) {
         current = server

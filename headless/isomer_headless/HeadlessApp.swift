@@ -163,29 +163,47 @@ public final class HeadlessApp: @unchecked Sendable {
         self.local = local
     }
 
-    /// The app this test bundle is hosted in (an XCTest bundle whose host is
-    /// the app, built with --@isomer//drive:headful): driven in its own
-    /// process, synchronously, with no network, as an XCUITest drives its
-    /// app. Called on the main thread, where XCTest runs a test; waits up to
-    /// `timeout` seconds for the app's host to have started its driver.
     /// The app this test bundle is hosted in, when it is one with a driver
-    /// (an XCTest bundle in an app built with --@isomer//drive:headful);
-    /// nil otherwise, at once outside an app (a test binary of its own),
-    /// so the same tests run hosted or launch their app. Main thread.
+    /// (a test bundle in an app built with --@isomer//drive:headful); nil
+    /// otherwise, at once outside an app (a test binary of its own), so the
+    /// same tests run hosted or launch their app.
     public static func hostedIfAny(timeout: Double = 30) -> HeadlessApp? {
-        guard Thread.isMainThread, Bundle.main.bundlePath.hasSuffix(".app") else { return nil }
+        guard Bundle.main.bundlePath.hasSuffix(".app") else { return nil }
         return try? hosted(timeout: timeout)
     }
 
+    /// The app this test bundle is hosted in (its host built with
+    /// --@isomer//drive:headful): driven in its own process with no network,
+    /// as an XCUITest drives its app. From the main thread (an XCTest method)
+    /// synchronously, the main run loop turned while the driver works; from
+    /// another (a Swift Testing test) with a hop to the main actor. Waits up
+    /// to `timeout` seconds for the app's host to have started its driver.
     public static func hosted(timeout: Double = 30) throws -> HeadlessApp {
-        guard Thread.isMainThread else {
-            throw HeadlessError(message: "a hosted app is driven from the main thread (a test method)", screen: nil)
+        let server: IsomerLocalServer?
+        #if !os(WASI) && !os(Android)
+        if Thread.isMainThread {
+            server = MainActor.assumeIsolated { IsomerLocalServer.waitForCurrent(timeout: timeout) }
+        } else {
+            server = try blocking { try await waitForLocal(timeout: timeout) }
         }
-        let server = MainActor.assumeIsolated { IsomerLocalServer.waitForCurrent(timeout: timeout) }
+        #else
+        server = try blocking { try await waitForLocal(timeout: timeout) }
+        #endif
         guard let server else {
             throw HeadlessError(message: "no driver in this process in \(Int(timeout)) s: is the host app built with --@isomer//drive:headful?", screen: nil)
         }
         return HeadlessApp(local: server)
+    }
+
+    /// The app's own driver, once its host has started it, from off the
+    /// main thread.
+    private static func waitForLocal(timeout: Double) async throws -> IsomerLocalServer? {
+        let deadline = Date(timeIntervalSinceNow: timeout)
+        while true {
+            if let current = await MainActor.run(body: { IsomerLocalServer.current }) { return current }
+            if Date() > deadline { return nil }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
     }
 
     #if !(os(iOS) || os(tvOS) || os(watchOS) || os(visionOS))
@@ -429,7 +447,15 @@ public final class HeadlessApp: @unchecked Sendable {
         let sent = command
         let answer: Wire_Answer?
         if let local {
-            answer = MainActor.assumeIsolated { local.send(sent) }
+            #if !os(WASI) && !os(Android)
+            if Thread.isMainThread {
+                answer = MainActor.assumeIsolated { local.send(sent) }
+            } else {
+                answer = try Self.blocking { await local.answer(sent) }
+            }
+            #else
+            answer = try Self.blocking { await local.answer(sent) }
+            #endif
         } else if let call {
             answer = try Self.blocking { [self] in
                 try await call.write(sent)
