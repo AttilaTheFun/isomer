@@ -28,10 +28,14 @@ import IsomerWasmRuntime
 
 public enum JSCRuntimeError: Error, CustomStringConvertible {
     case launchFailed(String)
+    /// An export call that threw in JS (a trap in the guest, an import
+    /// missing), with its message.
+    case callFailed(String, String)
 
     public var description: String {
         switch self {
         case .launchFailed(let message): return "JSCRuntime launch failed: \(message)"
+        case .callFailed(let name, let message): return "JSCRuntime: \(name) threw: \(message)"
         }
     }
 }
@@ -39,6 +43,8 @@ public enum JSCRuntimeError: Error, CustomStringConvertible {
 @MainActor
 public final class JSCRuntime: WasmRuntime {
     private let context: JSContext
+    /// The last exception JS raised, read and cleared by each call.
+    private var pendingException: String?
 
     public init() {
         context = JSContext()!
@@ -48,8 +54,10 @@ public final class JSCRuntime: WasmRuntime {
     public func launch(wasm: [UInt8], hostImports: WasmHostImports) throws {
         // Surface JS exceptions as Swift errors instead of silent nils.
         var jsError: String?
-        context.exceptionHandler = { _, exception in
-            jsError = exception?.toString() ?? "unknown JS exception"
+        context.exceptionHandler = { [weak self] _, exception in
+            let message = exception?.toString() ?? "unknown JS exception"
+            jsError = message
+            self?.pendingException = message
         }
 
         // The Swift half of the iso_hot imports. render_tree copies out of
@@ -118,9 +126,16 @@ public final class JSCRuntime: WasmRuntime {
             case .f64(let x): return NSNumber(value: x)
             }
         }
+        pendingException = nil
         guard let iso = context.objectForKeyedSubscript("__iso"),
             let result = iso.invokeMethod("call", withArguments: [name, jsArgs])
         else { return nil }
+        // A trap or a throw surfaces as an error, not as a call that answered
+        // nothing.
+        if let message = pendingException {
+            pendingException = nil
+            throw JSCRuntimeError.callFailed(name, message)
+        }
         return result.isUndefined || result.isNull ? nil : .i32(result.toInt32())
     }
 
