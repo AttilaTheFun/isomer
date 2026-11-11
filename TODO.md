@@ -107,9 +107,15 @@ docs/drive_plan.md the order. Open:
   dials out and a Windows test drives over plain WebSockets.
 - **`isomer_test`** (step 4): one test source against Isomer's frameworks on
   Linux and Apple's in an XCTest bundle.
-- **The DOM renderer** (owner, 2026-11-08): the web's React renderer replaced
-  by one that applies the tree's patches to the DOM itself, held to the
-  Storybook's pictures (0.48, the owner's choice of 2026-11-08).
+- **The DOM renderer** (owner, 2026-11-08): React itself is gone since 0.49
+  (runtime/dom_react.js runs the renderer's components, the DOM held to
+  React's on every story). Still to do:
+  - name it the DOM renderer (`ReactRenderer`, `?renderer=react`,
+    react_renderer.js), `react` kept as an alias for a release;
+  - apply the tree's patches to the DOM directly, not a virtual tree
+    rebuilt and diffed each frame, held to the Storybook's pictures and DOM
+    (renderer_compare.sh with BASELINE) and timed on a long list and on
+    Visor's transcript.
 - **The Playground over sessions** (owner, 2026-11-08): the hot reloader a
   head paired with a headless app, a rebuild swapping the app; Playgrounds
   peer to peer (headless wasm in a browser one Playground proxies, drawn by
@@ -126,6 +132,71 @@ docs/drive_plan.md the order. Open:
 - **Reconnecting.** A dropped connection ends its session (the app's run);
   resuming one (the app kept for a while, the client given the whole tree
   again) is open, as are recording a session and replaying it.
+
+## WebAssembly on the platforms' own engines (owner, 2026-11-11)
+
+The Playground's web-view engine ran 2048 on an iPhone at a mean of 3.5 ms
+from event to frame against WasmKit's 11.7 (first frame 158 ms against
+119): WebKit's JIT. So outside the web a reactor runs on each platform's own
+JavaScript engine, and WasmKit goes:
+
+- `WasmRuntime` is the engine, apart from any view; `WasmView` is a native
+  view that embeds a wasm-drawn subtree and owns its own runtime. A whole
+  wasm app (an `App` built for wasm) has one runtime, at its root.
+- Engines:
+  - Apple: WebKit, a web view in a ZStack behind the drawn content (on
+    screen and in the app's window, so WebKit never throttles it);
+  - Android: JavaScriptSandbox (androidx.javascriptengine, the system
+    WebView's V8, no view), falling back to a covered WebView where the
+    system WebView has no wasm in the sandbox;
+  - Linux: JavaScriptCore's GLib API (WebKitGTK), in process, no view;
+  - Windows: WebView2 (V8), a covered child window; JavaScriptCore bundled
+    only if WebView2 benchmarks badly.
+- Compiled builds keep the same two shapes (an app embedding compiled
+  Isomer, or written in it), with no runtime.
+- The web: a whole app drives the page (`boot`); an embedded one is a
+  custom element, `<isomer-view src=… dependencies=…>`, over `mountIsomer`,
+  the dependencies module building the table from the generated bindings.
+- The headless side is identical on every engine: the same build and the
+  same inputs give byte-identical patches. examples' //tests/wasm_engines
+  compares every engine's patches; the Playground's e2e runs one script
+  under both iPhone engines and compares their trees.
+- Benchmarks: first frame and event to frame on each engine. On Apple also
+  where the web view lives: the 1x1 view in the key window, a transparent
+  click-through window above or behind the app's, a never-shown window,
+  each with and without `WKPreferences.inactiveSchedulingPolicy = .none`.
+  WebKit's own rule (its main, 2026-11-11): iOS counts a web view visible
+  when it is in a window whose scene is in the foreground; the Mac also
+  needs the window on screen and not occluded.
+- The wasm unit tests (//tools/wasm/wasi_run's: Foundation, the Metal
+  translator, Combine, OSLog, SQLite on WASI) run in headless Chrome in
+  CI's container over the web runtime's own WASI layer (file_system.js).
+- An ad-hoc Visor built as a whole wasm app, compared with the native one
+  (Applications' experiments: `adhoc-<slug>-<n>` drafts, ids under
+  `com.LoganShire.Experiments.`).
+- Then WasmKit leaves (its fork's Isomer-only pull requests closed by the
+  Upstream session; general fixes still contributed upstream).
+
+## wasi-threads (Swift 6.5)
+
+Swift 6.5 is the first release with swiftlang/swift#92018 (multi-threaded
+Concurrency on `wasm32-unknown-wasip1-threads`). When it is out: register its
+threads SDK, build the threaded reactors and their tests again, and serve a
+web view's page cross-origin isolated (`Cross-Origin-Opener-Policy` and
+`Cross-Origin-Embedder-Policy`), which `SharedArrayBuffer`, and so a shared
+memory, needs.
+
+## Linux and Windows on x86-64 and arm64 (owner, 2026-11-11)
+
+Both architectures on both, as Android has both:
+
+- Windows: x64 beside arm64. The Windows Swift SDK archive gets 6.4.2's x64
+  runtime (swift.org's x64 installer); CI's container builds both; the
+  tests run on GitHub's `windows-latest` (x64) and `windows-11-arm`; the
+  Storybook ships both.
+- Linux: x86_64 beside aarch64, cross-built in CI's arm64 container (the
+  x86_64 toolchain under Rosetta, or Swift's static Linux SDK); tested on
+  GitHub's `ubuntu-24.04` and `ubuntu-24.04-arm`; shipped both.
 
 ## Android below API 28 (2026-11-06)
 
