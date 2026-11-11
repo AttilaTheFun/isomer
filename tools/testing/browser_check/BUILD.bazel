@@ -13,4 +13,5 @@ swift_binary(
     name = "browser_check",
     package_name = "isomer",
     srcs = ["main.swift"],
+    deps = ["//tools/testing/browser_driving"],
 )

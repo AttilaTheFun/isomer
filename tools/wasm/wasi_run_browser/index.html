@@ -1,0 +1,19 @@
+<!doctype html>
+<!-- wasi_run_browser's page: runs run.json's command in a worker (worker.js)
+     and keeps what it writes for the driver (main.swift) to read. -->
+<meta charset="utf-8">
+<title>wasi_run_browser</title>
+<script type="module">
+  // The guest's output in order, as [fd, text], taken by the driver as it
+  // reads; its exit code once it has ended.
+  window.__wasiOutput = [];
+  const worker = new Worker("./worker.js", { type: "module" });
+  worker.onmessage = ({ data }) => {
+    if (data.kind === "output") window.__wasiOutput.push([data.fd, data.text]);
+    else if (data.kind === "exit") window.__wasiExit = data.code;
+  };
+  worker.onerror = (event) => {
+    window.__wasiOutput.push([2, `wasi_run_browser: the worker failed: ${event.message}\n`]);
+    window.__wasiExit = 1;
+  };
+</script>

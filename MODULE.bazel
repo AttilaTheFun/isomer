@@ -230,6 +230,31 @@ wasmkit_archive(
     url = "https://github.com/AttilaTheFun/WasmKit/archive/5fbb9db8a130edf2971fc57b25186a62b689a693.tar.gz",
 )
 
+# Chrome for Testing: the browser //tools/wasm/wasi_run_browser runs WASI
+# commands in (the wasm checks: //foundation/tests and the rest), on Linux,
+# Google's own build for each architecture, pinned by version (the
+# examples' web tests pin the same). A Mac uses its own Chrome. Not a dev
+# dependency, so the examples' checks run it through @isomer; fetched only
+# by what runs it. It needs the system libraries a desktop Chrome does (NSS,
+# ATK, GBM, …): tools/ci/container_build.sh installs them in the container.
+chrome_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+chrome_archive(
+    name = "chrome_linux_arm64",
+    build_file_content = 'exports_files(["chrome"])\nfilegroup(name = "files", srcs = glob(["**"]), visibility = ["//visibility:public"])',
+    sha256 = "5517510e61657ff43ee9ab804ecd1a499b3d5bd3caf72f097516bd6565ba5a17",
+    strip_prefix = "chrome-linux-arm64",
+    url = "https://storage.googleapis.com/chrome-for-testing-public/157.0.8103.38/linux-arm64/chrome-linux-arm64.zip",
+)
+
+chrome_archive(
+    name = "chrome_linux_x86_64",
+    build_file_content = 'exports_files(["chrome"])\nfilegroup(name = "files", srcs = glob(["**"]), visibility = ["//visibility:public"])',
+    sha256 = "8cdeb344e9b2cefe59f4aea8d1d93d5d93054c03cde217665c16fc1f62e72a66",
+    strip_prefix = "chrome-linux64",
+    url = "https://storage.googleapis.com/chrome-for-testing-public/157.0.8103.38/linux64/chrome-linux64.zip",
+)
+
 # TypeScript: ts_swift_library wraps a real ts_project, so aspect_rules_ts
 # (+ rules_js and the hermetic node toolchain) are full dependencies.
 bazel_dep(name = "aspect_rules_js", version = "3.2.2")
@@ -259,9 +284,10 @@ register_toolchains("@rust_toolchains//:all", dev_dependency = True)
 # An app's SQLite is swift_sql's (AttilaTheFun/swift_sql, public: the C
 # API as CSwiftSQL, the Swift layer SwiftSQL), a Swift package an app takes
 # through rules_swift_package_manager; it left isomer at 0.34. The
-# examples consume it, and check SQLite's WebAssembly builds under WasmKit
-# (examples' //tests/sqlite_wasi, through //tools/wasm/wasi_run). C compiled for wasm needs the rules_swift
-# patch above (the SDK's clang resource directory).
+# examples consume it, and check SQLite's WebAssembly builds in headless
+# Chrome (examples' //tests/sqlite_wasi, through //tools/wasm/wasi_run_browser;
+# the threaded one under WasmKit's //tools/wasm/wasi_run). C compiled for wasm
+# needs the rules_swift patch above (the SDK's clang resource directory).
 
 # protoc and proto_library: the wire protos' Swift (shared/wire) is generated
 # as it builds, by swift_proto_library (rules_swift), for every application
