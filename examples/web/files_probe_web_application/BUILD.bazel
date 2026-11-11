@@ -29,6 +29,6 @@ swift_library(
 isomer_web_app(
     name = "files_probe_web_application",
     index = "index.html",
-    query = "renderer=react",
+    query = "renderer=dom",
     swift_library = ":app_lib",
 )

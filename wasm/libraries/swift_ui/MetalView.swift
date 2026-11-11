@@ -3,7 +3,7 @@
 // frame (device, command queue, drawable, render pass descriptor) and
 // encodes, presents and commits as with an MTKView's delegate.
 //
-// In a browser the view is a host view ("metal"): under the React renderer
+// In a browser the view is a host view ("metal"): under the DOM renderer
 // the page gives it a canvas, a surface of the page's Metal executor, and
 // asks for a frame each animation frame (`isoMetalViewFrame`); under the
 // GPU renderer the frame is drawn into a texture the renderer composites in
@@ -118,7 +118,7 @@ enum MetalViews {
         return descriptor
     }
 
-    /// A frame into the view's canvas (the React renderer's path).
+    /// A frame into the view's canvas (the DOM renderer's path).
     static func drawToSurface(_ token: String, surface: Int32) {
         guard let entry = entries[token], let device = entry.device ?? MTLCreateSystemDefaultDevice(),
               let queue = queue(for: device) else { return }

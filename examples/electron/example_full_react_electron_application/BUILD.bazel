@@ -1,11 +1,11 @@
 load("@isomer//tools/wasm:defs.bzl", "electron_application", "windows_electron_package")
 
 # The Level 4 example in a desktop Electron window under the React
-# ReactRenderer (docs/renderer_layers.md) — the same site as
+# DOMRenderer (docs/renderer_layers.md) — the same site as
 # //web/storybook_web_application.
 electron_application(
     name = "example_full_react_electron_application",
-    env = {"ISO_RENDERER": "react"},
+    env = {"ISO_RENDERER": "dom"},
     main_js = "//electron:main.js",
     package_json = "//electron:package.json",
     site = "//web/storybook_web_application:site",

@@ -122,7 +122,7 @@ def web_server(name, site, port = "8080", query = "", **kwargs):
 
     Serves on localhost and opens the default browser (append `-- --no-open`
     to suppress). `query` is appended to the opened URL (e.g.
-    "renderer=react" selects the layered renderer binding).
+    "renderer=dom" selects the layered renderer binding).
     """
     py_binary(
         name = name,
@@ -255,10 +255,10 @@ _ISO_RUNTIME_JS = [
     Label("//wasm/libraries/swift_ui:runtime/boot.js"),
     Label("//wasm/libraries/swift_ui:runtime/bundle_provider.js"),
     Label("//wasm/libraries/swift_ui:runtime/flat_tree.js"),
-    Label("//wasm/libraries/swift_ui:runtime/react_renderer.js"),
+    Label("//wasm/libraries/swift_ui:runtime/dom_renderer.js"),
     # The DOM core the renderer's components run on (React DOM's part it uses).
-    Label("//wasm/libraries/swift_ui:runtime/dom_react.js"),
-    # The web renderers' shared styling (react_renderer.js imports it).
+    Label("//wasm/libraries/swift_ui:runtime/dom_core.js"),
+    # The web renderers' shared styling (dom_renderer.js imports it).
     Label("//wasm/libraries/swift_ui:runtime/render_style.js"),
     Label("//wasm/libraries/swift_ui:runtime/react_embed.js"),
     Label("//wasm/libraries/swift_ui:runtime/raster.js"),
@@ -338,7 +338,7 @@ def isomer_web_app(
         assets = [],
         fonts = [],
         extra_pages = [],
-        query = "renderer=react",
+        query = "renderer=dom",
         icu_locales = None,
         site_visibility = None,
         check_site_imports = True,

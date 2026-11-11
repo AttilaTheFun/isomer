@@ -67,7 +67,7 @@ app.whenReady().then(() => {
     // A hidden window still paints and runs its frames at full rate.
     webPreferences: { backgroundThrottling: !screenshotPath },
   });
-  // ISO_RENDERER selects the layered renderer binding (e.g. "react");
+  // ISO_RENDERER selects the layered renderer binding (e.g. "dom");
   // defaults to the SwiftGPU (WebGPU) path.
   const renderer = process.env.ISO_RENDERER ? `?renderer=${process.env.ISO_RENDERER}` : "";
   window.loadURL(`isomer://app/${renderer}`);

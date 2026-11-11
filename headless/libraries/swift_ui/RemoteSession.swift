@@ -1,5 +1,5 @@
 // A head drawing the headless app (shared/wire/session.proto's Session.Connect,
-// over whichever transport the app is served on): the head (a browser's React,
+// over whichever transport the app is served on): the head (a browser's DOM renderer,
 // an Android phone's Compose: nothing of the app but its renderer) sends what
 // the person does; the app answers with each frame as a tree.proto Patch, the
 // same patches the component-system renderers take in process, and what it
@@ -80,10 +80,10 @@ enum RemoteSession {
     @MainActor
     static func begin(_ start: Wire_Start) {
         let compose = start.renderer == "compose"
-        rendererName = compose ? "Compose" : "React"
+        rendererName = compose ? "Compose" : "DOM"
         HeadlessHead.current = nil
         let send: ([UInt8]) -> Void = { patch in RemoteSession.send { $0.patch = Data(patch) } }
-        Renderer.bind(compose ? JetpackComposeRenderer(send: send) : ReactRenderer(send: send))
+        Renderer.bind(compose ? JetpackComposeRenderer(send: send) : DOMRenderer(send: send))
         let runtime = Runtime.shared
         runtime.setSystemColorScheme(dark: start.dark)
         if start.displayScale > 0 { runtime.displayScale = CGFloat(start.displayScale) }

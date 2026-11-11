@@ -25,7 +25,7 @@ swift_library(
 )
 
 # The Storybook on the web: `bazel run //web/storybook_web_application`
-# serves the site and opens it under the ReactRenderer
+# serves the site and opens it under the DOMRenderer
 # (docs/renderer_layers.md).
 isomer_web_app(
     name = "storybook_web_application",
@@ -36,7 +36,7 @@ isomer_web_app(
     # Font.custom's fonts (the text.custom story), served from fonts/.
     fonts = ["//storybook:fonts"],
     index = "index.html",
-    query = "renderer=react",
+    query = "renderer=dom",
     site_visibility = [
         "//electron/example_full_react_electron_application:__pkg__",
         "//electron/example_full_webgpu_electron_application:__pkg__",

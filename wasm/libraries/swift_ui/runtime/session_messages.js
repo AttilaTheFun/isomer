@@ -47,7 +47,7 @@ const event = (id, value) => writer().string(1, id).string(2, value);
 
 // session.proto's ClientMessage, one per field of its oneof.
 export const clientMessage = {
-  start({ width, height, displayScale, dark, environment = {}, renderer = "react" }) {
+  start({ width, height, displayScale, dark, environment = {}, renderer = "dom" }) {
     const start = writer().message(1, size(width, height)).double(2, displayScale).bool(3, dark);
     for (const [key, value] of Object.entries(environment)) {
       start.message(4, writer().string(1, key).string(2, String(value)));

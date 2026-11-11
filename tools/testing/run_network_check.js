@@ -86,7 +86,7 @@ async function finish(code) {
   await send("Runtime.enable");
   await send("Network.enable");
 
-  // The probe's lines (its Texts, drawn as DOM text by the React renderer)
+  // The probe's lines (its Texts, drawn as DOM text by the DOM renderer)
   // once it says "done", or what there is after a minute.
   const run = async (what) => {
     let lines = [];

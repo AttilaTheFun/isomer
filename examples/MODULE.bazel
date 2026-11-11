@@ -416,7 +416,7 @@ swift_windows_sdk(
 # React 18 (its UMD builds) for the React host page of
 # //web/example_partial_react_web_application: a page of the host's own
 # React embedding SwiftUI with <Isomer/> (runtime/react_embed.js). Isomer's
-# renderer draws without React (runtime/dom_react.js, since 0.49); only a
+# renderer draws without React (runtime/dom_core.js, since 0.49); only a
 # page that is a React app of its own brings it.
 react_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 

@@ -1124,7 +1124,7 @@ def web(review, story_list, builds):
         def launcher(app, environment, wait, path):
             app_port = servers[app][0]
             page = ""
-            query = "&".join(["renderer=react"] + [f"{k}={urllib.parse.quote(v)}" for k, v in environment.items()])
+            query = "&".join(["renderer=dom"] + [f"{k}={urllib.parse.quote(v)}" for k, v in environment.items()])
             url = f"http://127.0.0.1:{app_port}/{page}?{query}"
             # The page drawn (the renderer's first tree committed) before the
             # wait, which is then the settling: a fixed wait alone shot a blank

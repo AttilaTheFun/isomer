@@ -58,7 +58,7 @@ message Start {
   // The app's launch environment (ISO_STORYBOOK_STORY, ISO_OPEN_APP …):
   // a server passes on only the ISO_ ones.
   map<string, string> environment = 4;
-  // The renderer drawing the tree ("react", "compose"), which the app's
+  // The renderer drawing the tree ("dom", "react" until 0.51, "compose"), which the app's
   // `Bridge.rendererName` reports.
   string renderer = 5;
 }

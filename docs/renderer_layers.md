@@ -39,7 +39,7 @@ event exports; state changes produce a new tree. They all subclass
 JSON:
 
 ```swift
-Renderer.bind(ReactRenderer { webHost?.renderTree(treeJSON: $0) })          // web
+Renderer.bind(DOMRenderer { webHost?.renderTree(tree: $0) })          // web
 Renderer.bind(JetpackComposeRenderer { androidHost?.renderTree(treeJSON: $0) }) // android
 // SwiftUIRenderer (real SwiftUI on Apple platforms, e.g. driven from wasm)
 // is the same shape.
@@ -70,7 +70,7 @@ swift_gpu. The initial/default binding is the core-private `NullRenderer`
 Custom renderers: conform to `TreeRenderer` directly (self-drawing), or
 subclass `ComponentSystemRenderer` with your own `send`, and `Renderer.bind`
 it. Isomer itself keeps at most two per platform (2026-10-15): SwiftUI
-and Metal on Apple, Compose and OpenGL on Android, React and WebGPU on the
+and Metal on Apple, Compose and OpenGL on Android, DOM and WebGPU on the
 web, DirectX on Windows and OpenGL on Linux.
 
 ## Mechanics
@@ -88,8 +88,8 @@ web, DirectX on Windows and OpenGL on Linux.
   `Runtime.drawTree(root:)` for the layout + draw walk.
 - Platform wiring: the host bridges have a `renderTree(treeJSON: String)`
   method on their swift_ffi host interfaces; each consumer implements it
-  (React interpreter in react_renderer.js, run by Isomer's DOM core
-  dom_react.js since 0.49, no React; Compose interpreter in Kotlin). The
+  (DOM interpreter in dom_renderer.js, run by Isomer's DOM core
+  dom_core.js since 0.49, no React; Compose interpreter in Kotlin). The
   renderer is chosen by the consumer at start (the `renderer: String`
   parameter of `isoStart`/`nativeStart`).
 - `Renderer.usesDrawnChrome` (= `!usesNativeComponents`): self-drawing
@@ -104,9 +104,9 @@ Component-system renderers are the default run targets; each has a
 SwiftGPU-drawn twin:
 
 ```sh
-bazel run //examples/web/storybook_web_application            # React (browser)
+bazel run //examples/web/storybook_web_application            # DOM (browser)
 bazel run //examples/web/example_full_webgpu_web_application           # SwiftGPU/WebGPU (browser)
-bazel run //examples/electron/example_full_react_electron_application  # React (Electron)
+bazel run //examples/electron/example_full_react_electron_application  # DOM (Electron)
 bazel run //examples/electron/example_full_webgpu_electron_application # SwiftGPU/WebGPU (Electron)
 bazel run //examples/android/storybook_android_application # Jetpack Compose (emulator)
 ```
@@ -124,7 +124,7 @@ an example run target — see [adoption_levels.md](adoption_levels.md).
 | SwiftGPURenderer (OpenGL ES backend) | android | verified on emulator |
 | SwiftGPURenderer (OpenGL backend, SDL2 window) | linux | verified on a Linux host (WSL/Mesa): catalog + real SwiftMap tiles |
 | SwiftGPURenderer (D3D11 backend) | windows | verified on a Windows host: catalog + real SwiftMap tiles; SwiftGPU is required (no host-drawn fallback) |
-| ReactRenderer | web | web-native components (inputs/selects/modals), verified headless via CDP |
+| DOMRenderer | web | web-native components (inputs/selects/modals), verified headless via CDP |
 | JetpackComposeRenderer | android | Material 3 (TopAppBar/NavigationBar/Switch/DropdownMenu/ModalBottomSheet), verified on the emulator |
 | SwiftUIRenderer | apple | real SwiftUI (`IsomerTreeView`, //apple/libraries/swift_ui_tree); verified via the wasm hot-reload host (below) |
 
@@ -159,7 +159,7 @@ the env var at the Mac's LAN address) — none of them run a compiler, and there
 is no filesystem-sharing assumption. The macOS host also has a built-in
 watcher for a zero-config single-process run.
 
-The React/Compose interpreters cover the node kinds the serializer emits
+The DOM/Compose interpreters cover the node kinds the serializer emits
 (box/text/stack/spacer/divider/scroll/image/textField/slider/gradient/
 progress/shape) plus the semantic chrome host views (navbar/tabbar/search/
 picker/menu/datepicker/toggle) and presentation layers (sheet/alert), so the

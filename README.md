@@ -18,7 +18,7 @@ It is a set of pieces, and none of them requires the others:
 
 | Piece | What it is | Where |
 | --- | --- | --- |
-| SwiftUI everywhere | One SwiftUI source: Apple's SwiftUI on Apple platforms, Isomer's implementation on the web (React or WebGPU), Android (Jetpack Compose), Linux (OpenGL) and Windows (Direct3D) | this module (`isomer`) |
+| SwiftUI everywhere | One SwiftUI source: Apple's SwiftUI on Apple platforms, Isomer's implementation on the web (DOM or WebGPU), Android (Jetpack Compose), Linux (OpenGL) and Windows (Direct3D) | this module (`isomer`) |
 | SQLite everywhere | SQLite's C API and a thin, strict-concurrency-safe Swift layer over it, the same SQLite on every platform (WebAssembly included) | [swift_sql](https://github.com/AttilaTheFun/swift_sql) |
 | Swift on every platform | Cross-compilation to WebAssembly, Android and Windows in Bazel | [rules_swift](https://github.com/bazelbuild/rules_swift) (upstream) |
 | Bridges to each platform's own language | Generated Kotlin, TypeScript and C bindings | [`swift_ffi/`](swift_ffi/) |
@@ -61,7 +61,7 @@ On Apple the example links against the real SwiftUI, so everything in the
 subset behaves exactly as Apple ships it. Android, Web, Windows, and Linux run
 the shared SwiftUI **reimplementation** (`shared/swift_ui_core`) and aim to match
 that behavior as closely as each renderer can — native components under the
-component-system renderers (Compose, React), everything drawn through
+component-system renderers (Compose, DOM), everything drawn through
 SwiftGPU under the self-drawing `SwiftGPURenderer`. See
 [docs/renderer_layers.md](docs/renderer_layers.md).
 
@@ -155,7 +155,7 @@ bazel run //shared/example_application:run_all
 A **full** application is entirely SwiftUI: one `@main App`, with the
 platform entry points generated around it. It runs under a **component-system
 renderer** (native components: real SwiftUI on Apple, Jetpack Compose on
-Android, React on web) or the self-drawing **`SwiftGPURenderer`** (everything
+Android, DOM on web) or the self-drawing **`SwiftGPURenderer`** (everything
 drawn at the GPU layer — identical across backends). See
 [docs/renderer_layers.md](docs/renderer_layers.md) and
 [docs/adoption_levels.md](docs/adoption_levels.md).
@@ -170,9 +170,9 @@ Web and Electron are separate platforms (they share the wasm build under
 | ios | native | `//examples/apple/storybook_ios_application` |
 | android | compiled | `//examples/android/storybook_android_application` |
 | android | wasm | `//examples/android/example_full_wasm_android_application` \*\* |
-| web | react | `//examples/web/storybook_web_application` |
+| web | dom | `//examples/web/storybook_web_application` |
 | web | webgpu | `//examples/web/example_full_webgpu_web_application` |
-| electron | react | `//examples/electron/example_full_react_electron_application` |
+| electron | dom | `//examples/electron/example_full_react_electron_application` |
 | electron | webgpu | `//examples/electron/example_full_webgpu_electron_application` |
 | windows | directx | `//examples/windows/storybook_windows_application` \* |
 | linux | opengl | `//examples/linux/storybook_linux_application` \* |
@@ -226,7 +226,7 @@ and it renders its bundled wasm (static). See
 [docs/renderer_layers.md](docs/renderer_layers.md#wasm-hot-reload-example-swiftuirenderer).
 
 Switching renderers without switching targets: any served web instance takes
-`?renderer=react` / `?renderer=webGPU` in the URL. On Android, Compose is the
+`?renderer=dom` (`react`, its name until 0.51, still works) / `?renderer=webGPU` in the URL. On Android, Compose is the
 only supported renderer (the self-drawing SwiftGPU renderer still works as a
 library — `--es renderer openGL` — but is not an endorsed app path).
 
@@ -282,7 +282,7 @@ and forms, layout, scrolling, navigation, presentation, shapes and color,
 animation, gestures, state and data, and the Isomer module's own views). A
 story's page shows its code, what the API does, and the code running on the
 platform, drawn by the platform's renderer: Apple's SwiftUI on iOS and the
-Mac, React on the web, Compose on Android, OpenGL on Linux, DirectX on
+Mac, DOM on the web, Compose on Android, OpenGL on Linux, DirectX on
 Windows. The shell is a `NavigationSplitView`: the stories beside the page
 on a wide window, one column at a time on a phone. Each Storybook app
 (com.LoganShire.IsomerStorybook) is released with Isomer, and its proof is
@@ -439,7 +439,7 @@ in portable shared code.
 | `DatePicker` | ✅ | ✅ | ✅ | ✅ | ✅ | Native widget: dialog (Android), `<input type=date>` (Web), `SysDateTimePick32` (**Windows**); **Linux** opens a host-drawn month calendar (prev/next month, tap a day) |
 | `Menu` | ✅ | ✅ | ✅ | ✅ | ✅ | Native pop-up: `Spinner` (Android), `<select>` (Web), a Win32 `COMBOBOX` (**Windows**); **Linux** opens a host-drawn drop-down list |
 | `ProgressView` | ✅ | ✅ | ✅ | ✅ | ✅ | Determinate bar + indeterminate spinner |
-| `GeometryReader` | ✅ | ✅ | ✅ | ✅ | ✅ | Container-relative everywhere: component-system renderers (React, Compose, SwiftUI) measure the reader's box and report it back, so `proxy.size` is the CONTAINER's size, not the canvas. Until the first measurement lands the content builds against the canvas size |
+| `GeometryReader` | ✅ | ✅ | ✅ | ✅ | ✅ | Container-relative everywhere: component-system renderers (DOM, Compose, SwiftUI) measure the reader's box and report it back, so `proxy.size` is the CONTAINER's size, not the canvas. Until the first measurement lands the content builds against the canvas size |
 | `WebView` | ✅ | ✅ | ✅ | ✅ | ✅¹ | `WKWebView` (Apple), `android.webkit.WebView` (Android), `<iframe>` (Web), embedded WebBrowser (Trident) control via OLE (**Windows**); **Linux** embeds a real **WebKitGTK** browser as an X11 child window over the GL surface — ¹**X11 only**: on Wayland (or if `webkit2gtk` isn't installed) it falls back to an inline card that opens the page in the system browser (`xdg-open`) |
 | `PlatformViewRepresentable` (bridge a native widget) | ✅¹ | ✅ | ✅ | ✅ | ✅ | Reimplementation's portable analogue of `UIViewRepresentable`; on **Windows** each built-in kind maps to a native child window (`COMBOBOX`/`SysDateTimePick32`/WebBrowser); on **Linux** the built-in kinds are host-drawn (drop-down / calendar) and `LinuxViewRepresentable` kinds are drawn over the GL surface |
 | `WasmViewRepresentable` / `AndroidViewRepresentable` / `WindowsViewRepresentable` / `LinuxViewRepresentable` | n/a² | ✅ | ✅ | ✅ | ✅ | Conditionally compiled (each its own platform); refine `PlatformViewRepresentable`. `WindowsViewRepresentable` maps to a native Win32 control (`NativeSlider` → `msctls_trackbar32`); `LinuxViewRepresentable` maps to a host-drawn control (`NativeSlider` → a drawn `linux:trackbar` slider) |
@@ -627,7 +627,7 @@ swift_ffi → partial → full):
 * **Apple** — use the real `UIHostingController` / `NSHostingController`.
 * **Web** — the `<Isomer wasmURL renderer />` React component
   (`runtime/react_embed.js`) for React host apps, or
-  `mountIsomer(container, { renderer })` for any DOM element ("react"
+  `mountIsomer(container, { renderer })` for any DOM element ("dom"
   builds real components inside it; "webGPU" draws into a canvas). See
   `examples/web/example_partial_react_web_application` for a plain host page with
   one SwiftUI card, and `examples/web/example_partial_webgpu_web_application` for the canvas mount.
@@ -1043,7 +1043,7 @@ and paste the printed blocks.
 An app built with `--@isomer//headless` runs with nothing drawn, its UI read
 and used through the runtime: tests drive it in seconds
 ([docs/headless.md](docs/headless.md)). The same build serves the app to a
-client that holds only a renderer (a browser's React, an Android phone's
+client that holds only a renderer (a browser's DOM renderer, an Android phone's
 Compose) over a WebSocket or gRPC, its frames as protobuf patches of the
 render tree ([docs/remote_sessions.md](docs/remote_sessions.md)). The `isomer`
 CLI and the tests drive an app headless or headful, here or on another
@@ -1078,7 +1078,7 @@ shared/
 wasm/
   libraries/swift_ui/ module `SwiftUI` for wasm (core + wasm host bridge),
                       module `IsomerBridge`, JS runtime (WASI shim,
-                      WebGPU + React renderers, embed APIs, boot glue)
+                      WebGPU + DOM renderers, embed APIs, boot glue)
 web/
   applications/example_{full|partial}_{react|webgpu}_web_application/
                       per-app wasm binary + static site + dev server

@@ -5,7 +5,7 @@
 // matches one: its PostScript name ("Karla-Regular"), its full name, its
 // family name ("Karla"; under that one with its own weight and slant, so a
 // family's faces are told apart), and its file's name with and without the
-// extension. The renderers name the family in CSS (react_renderer.js's
+// extension. The renderers name the family in CSS (dom_renderer.js's
 // fontFamilyCSS), which matches without regard to case, as Android's
 // HostServices.bundledTypeface does.
 //

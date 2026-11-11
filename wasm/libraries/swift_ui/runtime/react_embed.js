@@ -13,7 +13,7 @@
 //
 // Uses the page's own React (`window.React`): the component is the host's.
 // What it shows inside its div is drawn by Isomer's renderer, which needs
-// no React (dom_react.js).
+// no React (dom_core.js).
 //
 //   const { Isomer } = await import("./runtime/react_embed.js");
 //   <Isomer wasmURL="./app.wasm" renderer="react" style={{ height: 480 }} />
@@ -27,7 +27,7 @@ import { packagedBundleProvider } from "./bundle_provider.js";
 // kept under it, and a new bundle finds them as the last one left them.
 // `fetch` and `WebSocket`, when given, are what the app's URLSession sends
 // through instead of the browser's (boot.js).
-export function Isomer({ provider, wasmURL = "./app.wasm", renderer = "react", bundleIdentifier, fetch, WebSocket, style }) {
+export function Isomer({ provider, wasmURL = "./app.wasm", renderer = "dom", bundleIdentifier, fetch, WebSocket, style }) {
   const R = window.React;
   const ref = R.useRef(null);
   R.useEffect(() => {

@@ -19,7 +19,7 @@
 // `dependencies[...]` runs exactly as it does under a host without DI.
 
 import { BlobWriter, Runtime, Tags, Types, decoder as ffiDecoder, encodeErrorBlob, foreignObjects, pendingCalls, registerForeign, wasiShim } from "./swift_ffi_runtime.js";
-import { createReactTreeRenderer } from "./runtime/react_renderer.js";
+import { createDOMTreeRenderer } from "./runtime/dom_renderer.js";
 import { applyPatch } from "./runtime/flat_tree.js";
 import { appFilesKey, openAppFiles } from "./runtime/file_system.js";
 import { playHaptic } from "./runtime/haptics.js";
@@ -90,7 +90,7 @@ export async function runHotBundle({ wasm, container, dependencies = {}, bundleI
     return (BigInt(bytes.length) << 32n) | BigInt(ptr >>> 0);
   };
 
-  const renderer = createReactTreeRenderer({ container, sendEvent, readFile: (path) => files.read(path) });
+  const renderer = createDOMTreeRenderer({ container, sendEvent, readFile: (path) => files.read(path) });
   window.__isoSendEvent = sendEvent; // headless smoke-test hook
 
   let renderQueued = false;

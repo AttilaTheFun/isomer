@@ -1,5 +1,5 @@
-// The web half of the ReactRenderer (the component-system renderer
-// bound by isoStart when the page asks for "react").
+// The web half of the DOMRenderer (the component-system renderer
+// bound by isoStart when the page asks for "dom", or "react", its name until 0.51).
 //
 // Interprets the runtime's serialized view tree (docs/renderer_layers.md) as
 // React elements built from web-native components: flex layout, real inputs
@@ -10,10 +10,10 @@
 // draw commands under this binding.
 //
 // Its components are React's kind (elements, hooks, a root), run by
-// Isomer's DOM core (dom_react.js), which makes the DOM React DOM 18 made for
+// Isomer's DOM core (dom_core.js), which makes the DOM React DOM 18 made for
 // them before 0.49, when React itself was removed from the web.
 
-import { React as R, ReactDOM as RD } from "./dom_react.js";
+import { React as R, ReactDOM as RD } from "./dom_core.js";
 import { resolveImageSource } from "./raster.js";
 import { SYMBOLS } from "./symbols.js";
 import { storeFiles } from "./imported_files.js";
@@ -104,7 +104,7 @@ function symbolSVG(h, name, size, color, weight, extraStyle, secondary) {
      entry.inner && !cut ? h("path", { key: "i", d: entry.inner, fill: closedGlyph ? "currentColor" : "none", stroke: "currentColor", strokeWidth: 2.2 }) : null);
 }
 
-export function createReactTreeRenderer({ container, sendEvent, sendKey = (id, value) => { sendEvent(id, value); return false; }, assetBase = "assets/", mapSurface = null, metalViews = null, documentScroll = false, readFile = null }) {
+export function createDOMTreeRenderer({ container, sendEvent, sendKey = (id, value) => { sendEvent(id, value); return false; }, assetBase = "assets/", mapSurface = null, metalViews = null, documentScroll = false, readFile = null }) {
   const h = R.createElement;
   const root = RD.createRoot(container);
 

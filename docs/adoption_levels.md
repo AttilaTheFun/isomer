@@ -84,6 +84,6 @@ content
 ```
 
 The full example (`example_full_*_application` per platform: compose/opengl
-on Android, react/webgpu on web and Electron, native on Apple) is a Level 4 app; both renderers of each platform (Material 3
-Compose / React component systems, SwiftGPU-drawn OpenGL / WebGPU,
+on Android, dom/webgpu on web and Electron, native on Apple) is a Level 4 app; both renderers of each platform (Material 3
+Compose / DOM component systems, SwiftGPU-drawn OpenGL / WebGPU,
 docs/renderer_layers.md) run the same `@main App`.
