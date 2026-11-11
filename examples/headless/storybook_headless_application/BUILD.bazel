@@ -239,6 +239,9 @@ ios_xctestrun_runner(
     create_simulator_action = "//headless/storybook_headless_application/simulator:job_simulator",
     device_type = "iPhone 17",
     tags = ["manual"],
+    # The Safari driver's too (tests/safari_probe), on the simulator its
+    # caller made (the Playground's e2e, ISOMER_SIMULATOR).
+    visibility = ["//tests/safari_probe:__pkg__"],
 )
 
 ios_unit_test(
