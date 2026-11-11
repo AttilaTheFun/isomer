@@ -371,6 +371,19 @@ jobs:
         if: github.event.repository.private
         # exec: the runner's cancel reaches the script's trap, which releases its leases.
         run: exec tools/ci/proof.sh --kind "$PROOF_KIND" --proof "$RUNNER_TEMP/proof"
+      # The proof's comparison with the release before's (proof-diff.json,
+      # the private AttilaTheFun/reviews' docs/PROOF_FORMAT.md, "The
+      # comparison: proof-diff.json"; tools/ci/proof_diff.py, copied from
+      # there), made once here and kept in the proof's folder, so the
+      # artifact carries it and a release attaches it beside proof.zip.
+      # Never fails the job.
+      - name: The proof's comparison
+        if: ${{ !cancelled() && github.event.repository.private }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [ -f "$RUNNER_TEMP/proof/proof.json" ] || exit 0
+          python3 -I tools/ci/proof_diff.py make "$RUNNER_TEMP/proof" || echo "::warning::the proof's comparison wasn't made"
       # The proof whether every picture came or not: a broken screen is what it's for.
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() && github.event.repository.private }}
@@ -485,6 +498,19 @@ jobs:
           path: ${{ runner.temp }}/parts
       - name: The proof
         run: exec tools/ci/proof.sh --stage compare --kind "$PROOF_KIND" --parts "$RUNNER_TEMP/parts" --proof "$RUNNER_TEMP/proof"
+      # The proof's comparison with the release before's (proof-diff.json,
+      # the private AttilaTheFun/reviews' docs/PROOF_FORMAT.md, "The
+      # comparison: proof-diff.json"; tools/ci/proof_diff.py, copied from
+      # there), made once here and kept in the proof's folder, so the
+      # artifact carries it and a release attaches it beside proof.zip.
+      # Never fails the job.
+      - name: The proof's comparison
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [ -f "$RUNNER_TEMP/proof/proof.json" ] || exit 0
+          python3 -I tools/ci/proof_diff.py make "$RUNNER_TEMP/proof" || echo "::warning::the proof's comparison wasn't made"
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
@@ -563,9 +589,15 @@ jobs:
         with:
           name: proof
           path: ${{ runner.temp }}/proof
+      # Its comparison (proof-diff.json) beside it when the proof job made
+      # one, not in it.
       - name: The proof, among the assets
         if: inputs.run == 'release'
-        run: tools/ci/proof_zip.sh "$RUNNER_TEMP/proof" "$RUNNER_TEMP/assets/proof.zip"
+        run: |
+          if [ -f "$RUNNER_TEMP/proof/proof-diff.json" ]; then
+            mv "$RUNNER_TEMP/proof/proof-diff.json" "$RUNNER_TEMP/assets/proof-diff.json"
+          fi
+          tools/ci/proof_zip.sh "$RUNNER_TEMP/proof" "$RUNNER_TEMP/assets/proof.zip"
       - name: The draft release, its builds attached
         env:
           GH_TOKEN: ${{ github.token }}

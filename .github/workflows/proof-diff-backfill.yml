@@ -1,0 +1,36 @@
+# The one-off backfill of proof-diff.json (docs/PROOF_FORMAT.md, "Releases
+# made before it"): every published release with a proof.zip and no
+# proof-diff.json gets its comparison with the release before it, made by
+# tools/ci/proof_diff.py and uploaded beside its proof.zip. By hand only,
+# with the job's own token (contents: write), never one copied by hand.
+# A dry run (the default) makes each manifest and says its counts, and
+# uploads nothing.
+name: Proof diff backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Make and count each manifest, upload nothing"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  backfill:
+    runs-on: [self-hosted, isomer-jit]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - name: The releases' comparisons
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ "$DRY_RUN" = true ]; then
+            tools/ci/backfill_proof_diff.sh "$GITHUB_REPOSITORY" --dry-run
+          else
+            tools/ci/backfill_proof_diff.sh "$GITHUB_REPOSITORY"
+          fi
