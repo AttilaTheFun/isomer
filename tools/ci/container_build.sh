@@ -174,7 +174,7 @@ bazel build "${flags[@]}" "${windows[@]}" --@isomer//drive:headful "${windows_he
 bazel build "${flags[@]}" //tests/platforms:all
 built_tests=$?
 run_tests "${flags[@]}" --test_output=errors //tests/platforms:storybook_web_test //tests/foundation_networking:networking_test \
-    //tests/cxx_interop:cxx_interop_test
+    //tests/cxx_interop:cxx_interop_test //tests/sqlite_wasi:sqlite_file_test
 tested_here=$?
 # The headless tests: the Storybook built for the headless host and driven
 # through its runtime (//headless in the examples), nothing drawn, and served
@@ -196,7 +196,13 @@ cd "$root"
 # here does).
 bazel build //swift_gpu/linux:gl_backend_test //linux/libraries/swift_ui_wasm
 built_gl=$?
-run_tests --test_output=errors //tests/renderer:mock_renderer_test //tests/snapshot:snapshot_test //tests/hub:hub_test
+# And the checks built for wasm, each a WASI command run in headless Chrome
+# (//tools/wasm/wasi_run_browser): Foundation, Combine, OSLog, the Metal
+# translator.
+run_tests --test_output=errors //tests/renderer:mock_renderer_test //tests/snapshot:snapshot_test //tests/hub:hub_test \
+    //foundation/tests:foundation_test //foundation/tests:internationalization_test \
+    //foundation/tests:internationalization_trimmed_test //frameworks/combine/tests:combine_test \
+    //frameworks/os_log/tests:os_log_test //metal/isomer_metal/tests:translator_test
 checked=$?
 echo "container_build.sh: the tests took $((SECONDS - start)) s"
 
