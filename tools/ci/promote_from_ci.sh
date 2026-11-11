@@ -5,7 +5,7 @@
 # BuildVariant) and signs again for production, the Mac's notarized. Nothing
 # is built. The release job's OIDC token is the permission: its release
 # branch's push (or a v* tag's) by a releaser, of a repository configured
-# there (the private AttilaTheFun/applications' docs/CI.md).
+# there (docs/CI.md).
 # Any repository's workflow copies this file and connect_from_ci.sh beside
 # it; it needs bash, curl and openssl, on a Mac or Linux.
 #
@@ -18,7 +18,7 @@
 #
 # --download: each promoted build, and each Mac app's disk image,
 # downloaded into <dir> as its release's assets, with builds.json describing
-# them (the private AttilaTheFun/applications' docs/RELEASE_ASSETS.md; release_assets.sh, beside this file), for
+# them (docs/RELEASE_ASSETS.md; release_assets.sh, beside this file), for
 # the job to attach to the release (attach_release.sh).
 #
 # From the job's environment, as publish_from_ci.sh has them: the job's
@@ -60,7 +60,7 @@ connect_from_ci
   [ -z "$notes_file" ] || printf 'X-Applications-Notes: %s\n' "$(base64 < "$notes_file" | tr -d '\n')"
 } > "$work/headers"
 
-echo "Promoting ${GITHUB_SHA:-the commit}'s Alphas on ${server}…"
+echo "Promoting ${GITHUB_SHA:-the commit}'s Alphas on Applications Server…"
 # Signing and notarizing take minutes; the answer waits for them.
 status="$(curl -sS --cacert "$work/ca.pem" --connect-timeout 10 --max-time 3600 -H @"$work/headers" -X POST --data-binary '' \
   -o "$work/answer" -w '%{http_code}' "$server/api/promote")" || fail "the server was not reached"
