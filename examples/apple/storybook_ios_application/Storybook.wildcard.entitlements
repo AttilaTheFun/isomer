@@ -4,7 +4,9 @@
 <dict>
 	<!-- The local device build's, under the team's wildcard profile, which
 	     can grant no app group: Storybook.entitlements less Applications'
-	     group. Signed as itself, not as the wildcard profile's TEAM.* -->
+	     group. Signed as itself, not as the wildcard profile's TEAM.* Also
+	     the experiment's (storybook_experiment_ios_application), which the
+	     experiments' wildcard profile signs: no app group, push or iCloud. -->
 	<key>application-identifier</key>
 	<string>$(AppIdentifierPrefix)$(CFBundleIdentifier)</string>
 	<key>keychain-access-groups</key>

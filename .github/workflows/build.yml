@@ -67,9 +67,9 @@ on:
   workflow_dispatch:
     inputs:
       run:
-        description: "What to run: verify, prerelease or release on main (verify on a branch to bisect); adhoc on another branch"
+        description: "What to run: verify, prerelease or release on main (verify on a branch to bisect); adhoc on another branch; experiment on any but a release branch"
         type: choice
-        options: [verify, prerelease, release, adhoc]
+        options: [verify, prerelease, release, adhoc, experiment]
         default: verify
       kind:
         description: The proof's kind
@@ -607,6 +607,51 @@ jobs:
         env:
           APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
         run: tools/ci/publish_from_ci.sh --notes-file "$RUNNER_TEMP/notes.md" .ci/packages/*.zip .ci/packages/*.ipa .ci/packages/*.apk
+
+  # An experiment (the private AttilaTheFun/applications' docs/EXPERIMENTS.md):
+  # by hand, with run: experiment, on any branch but a release branch. The
+  # experiment's app built AdHoc, its bundle id under
+  # com.LoganShire.Experiments. (the Storybook's, Storybook Lab, until the
+  # whole wasm apps), published (Applications Server signs it with the
+  # experiments' wildcard profile), and its draft release made
+  # (tools/ci/experiment_release.sh: adhoc-<slug>-<n>, the next n), which
+  # Applications lists in its Ad hoc section until the owner deletes it.
+  experiment:
+    if: >
+      github.event_name == 'workflow_dispatch' && inputs.run == 'experiment' &&
+      !startsWith(github.ref, 'refs/heads/release-')
+    runs-on: [self-hosted, isomer-jit]
+    timeout-minutes: 120
+    permissions:
+      # The draft and its assets.
+      contents: write
+      # The OIDC token Applications Server checks.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Version
+        env:
+          APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
+        run: tools/ci/stamp_apps.sh
+      - name: Build
+        run: >-
+          exec tools/ci/container_build.sh package .ci/packages --config=adhoc --config=ci_device
+          --compilation_mode=opt //apple/storybook_ios_application:storybook_experiment_ios_application
+      - name: Notes
+        run: git log -1 --format=%B > "$RUNNER_TEMP/notes.md"
+      - name: Publish
+        env:
+          APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
+        run: >-
+          tools/ci/publish_from_ci.sh --app "Storybook Lab" --notes-file "$RUNNER_TEMP/notes.md"
+          --download "$RUNNER_TEMP/assets" .ci/packages/*.ipa
+      - name: The experiment's draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          tools/ci/experiment_release.sh storybook-lab
+          "The Storybook as an experiment: the publishing path for experiments, before the whole wasm apps"
+          "$RUNNER_TEMP/assets" "$RUNNER_TEMP/notes.md"
 
   # A release: when the owner publishes a GitHub release (its v0.40.N tag on
   # a main commit, whose proof is in). Nothing Apple is rebuilt: the
