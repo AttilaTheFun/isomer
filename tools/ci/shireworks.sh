@@ -3,6 +3,7 @@
 # machine, in place of the `oss` command. Every repository's CI copies this
 # file byte for byte from AttilaTheFun/shireworks, so there is one place to
 # fix it. It needs python3 alone (no curl, no jq): the program is below.
+# Linux CI images have it; a Mac has it with the Command Line Tools.
 #
 # Whom it asks, as what:
 #   SHIREWORKS_GRANT      a CI job's grant URL (in its runner's environment):
@@ -10,7 +11,8 @@
 #   SHIREWORKS_SERVERS    else the first of these (http://host:7480, …), with
 #   SHIREWORKS_API_KEY    an application's key, or
 #   SHIREWORKS_TOKEN      the server's token and SHIREWORKS_HOLDER (else $USER)
-# Until Shireworks 0.3 the OSS_ names of the first two are read too.
+#   SHIREWORKS_ADMIN_KEY  the admin key (its owner's shell): the admin commands use it
+# Until Shireworks 0.4 the OSS_ names of the first two are read too.
 #
 #   shireworks.sh lease <platform> [--config=…] [--minutes=N] [--label=…] [--kind=…]
 #                 [--key=<public key file>] [--image=…] [--cpus=N] [--memory=GB] [--disk=GB]
@@ -42,7 +44,24 @@
 #   shireworks.sh cache-token     the Bazel cache's read token (for .netrc: never log it)
 #   shireworks.sh files-url <sha256>                        a served file's URL
 #   shireworks.sh capabilities
-#   shireworks.sh volume-delete <name>         a kept container volume (the token or a key; not a job's grant)
+#
+# With SHIREWORKS_ADMIN_KEY (and SHIREWORKS_SERVERS), the admin's:
+#   shireworks.sh secret-remove <account>           (admin) a secret forgotten, its Keychain item and its file:
+#                                  client/works-builder-app.json|.pem, client/ci-github-app.json|.pem
+#   shireworks.sh restart [--hold | --now | --cancel] [--reason=…]
+#                                  alone: the restart's status; --hold or --now ask for one
+#   shireworks.sh files | files-add <sha256> [--name=…] | files-remove <sha256>
+#                                  the files every build's downloader trusts, served by their hash
+#   shireworks.sh volumes | volume-delete <name>
+#   shireworks.sh keys | key-create <application> | key-rotate <application> | key-revoke <application>
+#                                  a made or rotated key is printed once (rotated: the old stops at once)
+#   shireworks.sh image-build <platform> <config> [--from=<base config>] [--script=<file | sha256>]
+#                 [--copy=<file | sha256>:<path in the machine>]… [--device=…] [--runtime=…] [--api=N] [--tag=…]
+#                 [--no-wait]          a layer built on a base, in the server (was `oss image build`; a file
+#                                      here is stored first); waited for unless --no-wait
+#   shireworks.sh image-builds [<id>]  the builds asked for, or one
+#   shireworks.sh components | component-install <id> [--file=<file | sha256>] | component-remove <id>
+#                                  what the server's Mac lends, a component at a time (was `oss component`)
 #
 # A refusal is printed with its status and the script exits 1.
 
@@ -64,7 +83,7 @@ grant = env("GRANT")
 # The API level this script speaks: a server shows an older client only
 # what it knows (no containers below 6, no Mac slots below 17).
 API = "22"
-headers = {"Shireworks-API": API, "OSS-API": API}
+headers = {"Shireworks-API": API}
 if grant:
     url = urllib.parse.urlsplit(grant)
     token = dict(urllib.parse.parse_qsl(url.query)).get("grant", "")
@@ -77,13 +96,13 @@ else:
     if not first:
         die("no server: set SHIREWORKS_GRANT (a CI job has it) or SHIREWORKS_SERVERS")
     server = urllib.parse.urlsplit(first if "://" in first else "http://" + first)
-    key = os.environ.get("SHIREWORKS_API_KEY", "").strip()
+    key = os.environ.get("SHIREWORKS_API_KEY", "").strip() or os.environ.get("SHIREWORKS_ADMIN_KEY", "").strip()
     secret = os.environ.get("SHIREWORKS_TOKEN", "").strip()
     if key:
         headers["Authorization"] = "Bearer " + key
     elif secret:
         headers["Authorization"] = "Bearer " + secret
-        headers["OSS-Holder"] = os.environ.get("SHIREWORKS_HOLDER") or os.environ.get("USER", "")
+        headers["Shireworks-Holder"] = os.environ.get("SHIREWORKS_HOLDER") or os.environ.get("USER", "")
     else:
         die("no credential: set SHIREWORKS_GRANT, SHIREWORKS_API_KEY or SHIREWORKS_TOKEN")
 host = server.hostname
@@ -159,8 +178,8 @@ def lease_path(lease):
 def lease(arguments):
     (platform,) = positional(arguments, 1, "lease <platform> [--config=…] [--minutes=N] …")
     body = {"platform": platform}
-    if os.environ.get("SHIREWORKS_TOKEN") and not grant and "OSS-Holder" in headers:
-        body["holder"] = headers["OSS-Holder"]
+    if os.environ.get("SHIREWORKS_TOKEN") and not grant and "Shireworks-Holder" in headers:
+        body["holder"] = headers["Shireworks-Holder"]
     for name in ("config", "label", "kind", "device", "runtime"):
         if option(arguments, name):
             body[name] = option(arguments, name)
@@ -263,7 +282,155 @@ def list_leases(arguments):
 
 def volume_delete(arguments):
     (name,) = positional(arguments, 1, "volume-delete <name>")
+    as_admin()
     request("DELETE", "/v1/volumes/" + urllib.parse.quote(name, safe="")).read()
+
+# The admin's commands: the admin key when it's set (a job's grant never is).
+def as_admin(required=False):
+    admin = os.environ.get("SHIREWORKS_ADMIN_KEY", "").strip()
+    if admin:
+        headers["Authorization"] = "Bearer " + admin
+    elif required:
+        die("this is the admin's: set SHIREWORKS_ADMIN_KEY (and SHIREWORKS_SERVERS)", 2)
+
+def secret_remove(arguments):
+    (account,) = positional(arguments, 1, "secret-remove <account>")
+    as_admin(required=True)
+    print(json.dumps(call("DELETE", "/v1/server/secrets/" + account), indent=2))
+
+def restart(arguments):
+    as_admin(required=True)
+    if flag(arguments, "cancel"):
+        print(json.dumps(call("DELETE", "/v1/server/restart"), indent=2))
+        return
+    # Alone, only the status: a restart is asked for by --hold or --now (a
+    # bare one restarted CI by accident once: `oss restart status`'s habit).
+    if not (flag(arguments, "hold") or flag(arguments, "now")):
+        print(json.dumps(call("GET", "/v1/server/restart"), indent=2))
+        return
+    body = {}
+    if flag(arguments, "hold"):
+        body["hold"] = True
+    if flag(arguments, "now"):
+        body["now"] = True
+    if option(arguments, "reason"):
+        body["reason"] = option(arguments, "reason")
+    print(json.dumps(call("POST", "/v1/server/restart", body), indent=2))
+
+def files(arguments):
+    as_admin(required=True)
+    for entry in call("GET", "/v1/files") or []:
+        print(f"{entry['sha256']}  {entry['bytes']}  {entry['name']}")
+
+def files_add(arguments):
+    (sha256,) = positional(arguments, 1, "files-add <sha256> [--name=…]")
+    as_admin(required=True)
+    body = {"sha256": sha256}
+    if option(arguments, "name"):
+        body["name"] = option(arguments, "name")
+    entry = call("POST", "/v1/files", body)
+    print(f"{entry['name']}: {files_url_for(entry['sha256'])}")
+
+def files_remove(arguments):
+    (sha256,) = positional(arguments, 1, "files-remove <sha256>")
+    as_admin(required=True)
+    request("DELETE", "/v1/files/" + sha256).read()
+
+def image_build(arguments):
+    platform, config = positional(arguments, 2, "image-build <platform> <config> [--from=…] [--script=<file | sha256>] "
+                                                "[--copy=<file | sha256>:<path>]… [--device=…] [--runtime=…] [--api=N] [--tag=…] [--no-wait]")
+    as_admin(required=True)
+    body = {"platform": platform, "config": config}
+    for name in ("from", "device", "runtime", "tag"):
+        if option(arguments, name):
+            body[name] = option(arguments, name)
+    if option(arguments, "api"):
+        body["api"] = int(option(arguments, "api"))
+    if option(arguments, "script"):
+        body["script"] = stored(option(arguments, "script"))
+    copies = []
+    for given in (a[len("--copy="):] for a in arguments if a.startswith("--copy=")):
+        source, _, path = given.rpartition(":")
+        if not source or not path:
+            die(f"--copy={given}: <file | sha256>:<path in the machine>", 2)
+        copies.append({"object": stored(source), "path": path})
+    if copies:
+        body["copies"] = copies
+    build = call("POST", "/v1/images", body)
+    print(f"image build {build['id']}: {platform} {config} {build['state']}", flush=True)
+    if flag(arguments, "no-wait"):
+        return
+    # Waited for: a build takes minutes to an hour (its place in the limits first).
+    while build["state"] == "running":
+        time.sleep(15)
+        build = call("GET", f"/v1/images/builds/{build['id']}")
+    print(f"image build {build['id']}: {build['state']}" + (f": {build['error']}" if build.get("error") else ""))
+    if build["state"] != "succeeded":
+        sys.exit(1)
+
+def image_builds(arguments):
+    as_admin(required=True)
+    given = [a for a in arguments if not a.startswith("--")]
+    if given:
+        print(json.dumps(call("GET", f"/v1/images/builds/{given[0]}"), indent=2))
+        return
+    for build in call("GET", "/v1/images/builds") or []:
+        line = f"{build['id']} {build['platform']} {build['config']} {build['state']} {build['started']}"
+        print(line + (f" {build['error']}" if build.get("error") else ""))
+
+def components(arguments):
+    as_admin(required=True)
+    for component in call("GET", "/v1/components") or []:
+        print(f"{component['id']}\t{component['name']}: {component['state']}" + (f" ({component['detail']})" if component.get("detail") else ""))
+
+def component_install(arguments):
+    (component,) = positional(arguments, 1, "component-install <id> [--file=<file | sha256>]")
+    as_admin(required=True)
+    body = {"file": stored(option(arguments, "file"))} if option(arguments, "file") else {}
+    answer = call("POST", "/v1/components/" + urllib.parse.quote(component, safe=""), body)
+    # Waited for: it installs in the server.
+    while answer["state"] == "installing":
+        time.sleep(5)
+        answer = next((c for c in call("GET", "/v1/components") or [] if c["id"] == component), answer)
+    print(f"{answer['id']}: {answer['state']}" + (f" ({answer['detail']})" if answer.get("detail") else ""))
+    if answer["state"] != "installed":
+        sys.exit(1)
+
+def component_remove(arguments):
+    (component,) = positional(arguments, 1, "component-remove <id>")
+    as_admin(required=True)
+    print(call("DELETE", "/v1/components/" + urllib.parse.quote(component, safe=""))["state"])
+
+def volumes(arguments):
+    as_admin()
+    for volume in call("GET", "/v1/volumes") or []:
+        print(" ".join(str(volume.get(k, "")) for k in ("name", "kind", "sizeBytes", "lease")).rstrip())
+
+def keys(arguments):
+    as_admin(required=True)
+    for key in call("GET", "/v1/keys") or []:
+        print(f"{key['application']}  {key.get('created', '')}")
+
+def key_create(arguments):
+    (application,) = positional(arguments, 1, "key-create <application>")
+    as_admin(required=True)
+    # Never over a key that's there (POST /v1/keys replaces it: the admin's
+    # own, made again by mistake, would end at once): that's key-rotate's.
+    if any(key.get("application") == application for key in call("GET", "/v1/keys") or []):
+        die(f"{application} has a key already: key-rotate {application} makes a new one (the old stops at once)", 2)
+    # Shown once: the caller keeps it (never logged).
+    print(call("POST", "/v1/keys", {"application": application})["key"])
+
+def key_rotate(arguments):
+    (application,) = positional(arguments, 1, "key-rotate <application>")
+    as_admin(required=True)
+    # Shown once: the caller keeps it (never logged).
+    print(call("POST", f"/v1/keys/{urllib.parse.quote(application, safe='')}/rotate")["key"])
+
+def key_revoke(arguments):
+    (application,) = positional(arguments, 1, "key-revoke <application>")
+    as_admin(required=True)
+    request("DELETE", f"/v1/keys/{urllib.parse.quote(application, safe='')}").read()
 
 def renew(arguments):
     (lease,) = positional(arguments, 1, "renew <id> [--minutes=N]")
@@ -395,6 +562,8 @@ def device(tool):
         rest = arguments[1:]
         # Leading --env=NAME=VALUE: the launched app's environment (simctl's SIMCTL_CHILD_*).
         environment = {}
+        if tool != "simctl" and rest and rest[0].startswith("--env="):
+            die("--env is simctl's (a launched app's environment); adb takes none", 2)
         while rest and rest[0].startswith("--env=") and "=" in rest[0][len("--env="):]:
             name, value = rest[0][len("--env="):].split("=", 1)
             environment[name] = value
@@ -429,7 +598,7 @@ def store(file, query):
         for block in iter(lambda: body.read(1 << 20), b""):
             digest.update(block)
     sha256 = digest.hexdigest()
-    sent = {"Content-Type": "application/octet-stream", "Shireworks-SHA256": sha256, "OSS-SHA256": sha256}
+    sent = {"Content-Type": "application/octet-stream", "Shireworks-SHA256": sha256}
     # Stored already: its hash alone.
     try:
         request("HEAD", f"/v1/storage/objects/{sha256}").read()
@@ -451,14 +620,21 @@ def files_url(arguments):
     (sha256,) = positional(arguments, 1, "files-url <sha256>")
     if not re.fullmatch(r"[0-9a-f]{64}", sha256):
         die("files-url: a SHA-256 is 64 lowercase hex digits", 2)
-    print(f"http://{host}:{call('GET', '/v1/cache')['port']}/files/sha256/{sha256}")
+    print(files_url_for(sha256))
+
+def files_url_for(sha256):
+    return f"http://{host}:{call('GET', '/v1/cache')['port']}/files/sha256/{sha256}"
 
 def capabilities(arguments):
     print(json.dumps(call("GET", "/v1/capabilities"), indent=2))
 
-commands = {"lease": lease, "release": release, "list": list_leases, "volume-delete": volume_delete, "renew": renew, "run": run, "put": put, "get": get,
+commands = {"lease": lease, "release": release, "list": list_leases, "volume-delete": volume_delete, "renew": renew,
+            "restart": restart, "secret-remove": secret_remove, "files": files, "files-add": files_add, "files-remove": files_remove, "volumes": volumes,
+            "keys": keys, "key-create": key_create, "key-rotate": key_rotate, "key-revoke": key_revoke, "run": run, "put": put, "get": get,
             "simctl": device("simctl"), "adb": device("adb"), "install": install, "screenshot": screenshot, "xctest": xctest,
-            "storage-put": storage_put, "cache-token": cache_token, "files-url": files_url, "capabilities": capabilities}
+            "storage-put": storage_put, "cache-token": cache_token, "files-url": files_url, "capabilities": capabilities,
+            "image-build": image_build, "image-builds": image_builds, "components": components,
+            "component-install": component_install, "component-remove": component_remove}
 
 if len(sys.argv) < 2 or sys.argv[1] not in commands:
     die("usage: shireworks.sh <" + "|".join(commands) + "> … (the file's head says more)", 2)
