@@ -255,29 +255,32 @@ each platform directory wraps it with a native renderer/host:
 | `apple/`   | iOS / macOS         | the real SwiftUI via rules_apple (local Xcode)    |
 | `android/` | Android             | Swift cross-compiled; Jetpack Compose (component system) or SwiftGPU/OpenGL ES (self-drawing), Kotlin host via JNI |
 | `wasm/`    | shared wasm build   | Swift → wasm32-unknown-wasip1 libraries; apps live in `web/` + `electron/` |
-| `web/` + `electron/` | Web / Electron | React (component system) or SwiftGPU/WebGPU (self-drawing) over the wasm libraries |
+| `web/` + `electron/` | Web / Electron | the DOM renderer (component system) or SwiftGPU/WebGPU (self-drawing) over the wasm libraries |
 | `linux/`   | Linux (SteamOS etc.)| native swift_binary, SwiftGPU/OpenGL over SDL2 (self-drawing) |
 | `windows/` | Windows             | native swift_binary, SwiftGPU/D3D11 (self-drawing) |
 
 **At most two renderers a platform** (2026-10-15): SwiftUI and
-Metal on iOS and macOS, Compose and OpenGL on Android, React and WebGPU on
+Metal on iOS and macOS, Compose and OpenGL on Android, DOM and WebGPU on
 the web, DirectX on Windows, OpenGL on Linux. The UIKit and Android Views
 renderers (and their baseline benchmark cells) and the WinUI stub are gone.
 
-**The web's React renderer has no React (0.49).** Its components
-(wasm/libraries/swift_ui/runtime/react_renderer.js) are React's kind,
-elements and hooks, run by Isomer's DOM core (runtime/dom_react.js: the
-part of React DOM 18 they use, making the DOM React DOM made). It replaced
-React once every Storybook page was the same with it, picture and DOM, at
-desktop and phone widths (tools/testing/renderer_compare.sh, which with
-BASELINE holds a change to the renderer to its pictures before). Pages load
-no React; `?renderer=react` still names it, as the guest's `ReactRenderer`
-does. Only a page that is a React app of its own (the `<Isomer/>`
-component, runtime/react_embed.js; examples' example_partial_react) brings
-React, as its own asset.
+**The web's DOM renderer (0.51; the React renderer until then, with no
+React since 0.49).** Its components (wasm/libraries/swift_ui/runtime/
+dom_renderer.js) are React's kind, elements and hooks, run by Isomer's DOM
+core (runtime/dom_core.js: the part of React DOM 18 they use, making the DOM
+React DOM made). It replaced React once every Storybook page was the same
+with it, picture and DOM, at desktop and phone widths
+(tools/testing/renderer_compare.sh, which with BASELINE holds a change to
+the renderer to its pictures before; it asks for `react`, which builds from
+before 0.51 know too). Pages load no React and ask for `?renderer=dom`
+(the guest's `DOMRenderer`, `Bridge.rendererName` "DOM"); `react`, its name
+before 0.51, still binds it (boot.js's `isDOMRenderer`, WebBridge.swift).
+Only a page that is a React app of its own (the `<Isomer/>` component,
+runtime/react_embed.js; examples' example_partial_react) brings React, as
+its own asset.
 
 **Design goal** (see docs/renderer_layers.md + docs/renderer_parity_plan.md):
-- **Component-system renderers** (React, Jetpack Compose) build the UI from the
+- **Component-system renderers** (the DOM renderer, Jetpack Compose) build the UI from the
   platform's *native components* and should feel native to that platform —
   Material on Android, web-idiomatic on the web — even where that differs
   from iOS.
@@ -302,7 +305,7 @@ SwiftUI (iOS 17, macOS 14) and Isomer's have: the web build is the check.
 **The release proof** (tools/proof/proof.py, since 0.38): the Storybook
 (alone since 0.47, when the Playground moved to AttilaTheFun/playground,
 which proves its own) on Isomer's tier-1 platforms, one renderer each (SwiftUI on iOS and the Mac,
-Compose on Android, React on the web; since 2026-11-05 CI pictures only
+Compose on Android, the DOM renderer on the web; since 2026-11-05 CI pictures only
 these, to save its time, and builds Linux and Windows without running them;
 proof.py still pictures Linux with OpenGL and Windows with DirectX when
 tools/ci/proof.sh's PROOF_PLATFORMS names them): every story. On the iPhone the
@@ -549,7 +552,7 @@ bazel run //examples/apple/storybook_ios_application:storybook_ios_application_p
 # library (--es renderer openGL) but is not an endorsed Android app path.
 bazel run //examples/android/storybook_android_application
 
-# Web (wasm) — serves via hermetic Python; ReactRenderer,
+# Web (wasm) — serves via hermetic Python; DOMRenderer,
 # …example_full_webgpu_web_application is the SwiftGPU-drawn twin.
 bazel run //examples/web/storybook_web_application
 # Electron desktop wrapper (…webgpu_electron… = SwiftGPU-drawn twin)
@@ -1055,7 +1058,7 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
     back. Textures come back only after a blit's `synchronize(resource:)`.
     Shader buffer offsets must be multiples of 256 (WebGPU).
   - `MetalView` (Isomer module): an MTKView on Apple; on the web a "metal"
-    host view, its own canvas under the React renderer (a surface of the
+    host view, its own canvas under the DOM renderer (a surface of the
     page's one executor, a frame per animation frame through
     `isoMetalViewFrame`), composited into the frame under the GPU renderer
     (`SwiftGPURenderer.metalViewFrame`). examples/{shared,web,apple}/
@@ -1347,7 +1350,7 @@ emulator or desktop browser.
   - `tools/testing/cdp.py` — stdlib-only headless-Chrome CDP driver (navigate /
     trusted clicks / type / eval / screenshot). Use it instead of synthetic-event
     or `--virtual-time-budget` harnesses, which are unreliable against React 18.
-    The React renderer exposes committed smoke hooks: `data-tap` ids on tappables,
+    The DOM renderer exposes committed smoke hooks: `data-tap` ids on tappables,
     `window.__isoSendEvent`, `window.__isoLastTree`. Serve the site first
     (`bazel run //examples/web/<app> -- --no-open`, defaults to :8080), then
     point cdp.py at `http://localhost:8080/`.
@@ -1366,7 +1369,7 @@ emulator or desktop browser.
     headless Chrome, then one offline.
   - **Electron** — the same wasm build in Electron's Chromium, screenshotted
     headlessly via a `ISO_SCREENSHOT` hook in `examples/electron/main.js`:
-    `ISO_SCREENSHOT=/abs/out.png [ISO_SCREENSHOT_DELAY=7000] [ISO_RENDERER=react]
+    `ISO_SCREENSHOT=/abs/out.png [ISO_SCREENSHOT_DELAY=7000] [ISO_RENDERER=dom]
     bazel run //examples/electron/<app>` loads the site in a hidden window,
     waits for the wasm to render, writes the PNG, and quits. Good for a true
     end-to-end visual check of the packaged site (main.js serves it from the

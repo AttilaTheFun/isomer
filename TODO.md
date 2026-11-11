@@ -108,10 +108,9 @@ docs/drive_plan.md the order. Open:
 - **`isomer_test`** (step 4): one test source against Isomer's frameworks on
   Linux and Apple's in an XCTest bundle.
 - **The DOM renderer** (owner, 2026-11-08): React itself is gone since 0.49
-  (runtime/dom_react.js runs the renderer's components, the DOM held to
-  React's on every story). Still to do:
-  - name it the DOM renderer (`ReactRenderer`, `?renderer=react`,
-    react_renderer.js), `react` kept as an alias for a release;
+  (runtime/dom_core.js runs the renderer's components, the DOM held to
+  React's on every story), and it is named the DOM renderer since 0.51
+  (`react` still binds it). Still to do:
   - apply the tree's patches to the DOM directly, not a virtual tree
     rebuilt and diffed each frame, held to the Storybook's pictures and DOM
     (renderer_compare.sh with BASELINE) and timed on a long list and on

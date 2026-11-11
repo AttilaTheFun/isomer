@@ -3,7 +3,7 @@ load("//tools/wasm:defs.bzl", "assemble_directory", "site_imports_test")
 package(default_visibility = ["//visibility:public"])
 
 # The web's thin client for a remote session (wasm/libraries/swift_ui/
-# runtime/remote.js): the React renderer and a WebSocket, no wasm. A gateway
+# runtime/remote.js): the DOM renderer and a WebSocket, no wasm. A gateway
 # serves it beside the session (the examples' //remote:gateway, --site).
 assemble_directory(
     name = "remote_client",
@@ -13,8 +13,8 @@ assemble_directory(
         "//wasm/libraries/swift_ui:runtime/file_system.js": "runtime/file_system.js",
         "//wasm/libraries/swift_ui:runtime/imported_files.js": "runtime/imported_files.js",
         "//wasm/libraries/swift_ui:runtime/raster.js": "runtime/raster.js",
-        "//wasm/libraries/swift_ui:runtime/react_renderer.js": "runtime/react_renderer.js",
-        "//wasm/libraries/swift_ui:runtime/dom_react.js": "runtime/dom_react.js",
+        "//wasm/libraries/swift_ui:runtime/dom_renderer.js": "runtime/dom_renderer.js",
+        "//wasm/libraries/swift_ui:runtime/dom_core.js": "runtime/dom_core.js",
         "//wasm/libraries/swift_ui:runtime/render_style.js": "runtime/render_style.js",
         "//wasm/libraries/swift_ui:runtime/remote.js": "runtime/remote.js",
         "//wasm/libraries/swift_ui:runtime/session_messages.js": "runtime/session_messages.js",

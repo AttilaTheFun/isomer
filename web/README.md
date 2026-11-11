@@ -1,13 +1,13 @@
 # Web targets
 
 The app ships as a wasm bundle the browser JIT-compiles; the renderer is
-pluggable — **React** (DOM components) or the self-drawing **SwiftGPU**
+pluggable — the **DOM** renderer (DOM components, React's kind, no React) or the self-drawing **SwiftGPU**
 (WebGPU). Every app is one `bazel run`: a dev server starts and the browser
 opens itself (append `-- --no-open` to suppress).
 
 | App | `bazel run` target | Renderer |
 | --- | --- | --- |
-| full · React | `//examples/web/storybook_web_application` | React (DOM) |
+| full · DOM | `//examples/web/storybook_web_application` | DOM |
 | full · WebGPU | `//examples/web/example_full_webgpu_web_application` | SwiftGPU (WebGPU) |
 | partial · React | `//examples/web/example_partial_react_web_application` | one feature embedded in a React page |
 | partial · WebGPU | `//examples/web/example_partial_webgpu_web_application` | one feature drawn by SwiftGPU |
@@ -18,7 +18,7 @@ by the Electron wrappers — see
 `:example_windows_package`, which zips the site with the Windows x64 Electron
 runtime for machines without a toolchain.
 
-The renderer binding is a **URL query** (`?renderer=react` vs the SwiftGPU
+The renderer binding is a **URL query** (`?renderer=dom` vs the SwiftGPU
 default) — the run targets pass the right one; switch live by editing the URL.
 
 ## Configs

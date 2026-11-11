@@ -6,7 +6,7 @@
 // it to the bound renderer whenever it may have changed; how the tree
 // becomes pixels is entirely the renderer's business — the core neither
 // knows nor asks what kind of renderer is bound. The concrete renderers
-// (ReactRenderer, JetpackComposeRenderer, SwiftUIRenderer, SwiftGPURenderer,
+// (DOMRenderer, JetpackComposeRenderer, SwiftUIRenderer, SwiftGPURenderer,
 // …) live OUTSIDE the core, in shared/renderers/, and are constructed and
 // bound by each platform's bridge.
 //

@@ -144,7 +144,7 @@ final class RemoteTests: XCTestCase {
                     $0.width = 390
                     $0.height = 6000
                 }
-                $0.renderer = "react"
+                $0.renderer = "dom"
             }
         })
         var seen: [String] = []

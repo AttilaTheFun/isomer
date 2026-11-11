@@ -38,8 +38,8 @@ package class ComponentSystemRenderer: TreeRenderer {
     }
 }
 
-/// React components on the web.
-package final class ReactRenderer: ComponentSystemRenderer {}
+/// DOM components on the web (React's kind, run by Isomer's DOM core: runtime/dom_core.js).
+package final class DOMRenderer: ComponentSystemRenderer {}
 
 /// Jetpack Compose composables on Android.
 package final class JetpackComposeRenderer: ComponentSystemRenderer {}

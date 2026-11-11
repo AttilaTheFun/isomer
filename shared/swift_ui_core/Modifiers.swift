@@ -894,7 +894,7 @@ extension View {
     /// `.fixedSize(horizontal: false, vertical: true)` already holds and
     /// stays the view as it was. The wrapper carries `fixed` ("h" or "hv")
     /// for every renderer: the Swift layout proposes nothing on those axes,
-    /// the React renderer sizes the box at `max-content`, Compose wraps
+    /// the DOM renderer sizes the box at `max-content`, Compose wraps
     /// the content unbounded.
     nonisolated public func fixedSize(horizontal: Bool = true, vertical: Bool = true) -> some View {
         _ModifiedView(child: self, descend: "fixed", pure: true) { inner, _ in

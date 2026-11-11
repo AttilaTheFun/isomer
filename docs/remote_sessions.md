@@ -2,7 +2,7 @@
 
 An app's SwiftUI can run on a server, built headless, and be drawn on a
 client that holds nothing of the app but a renderer: a browser with the
-React renderer, an Android phone with the Compose renderer. The client
+DOM renderer, an Android phone with the Compose renderer. The client
 sends what the person does; the app answers with each frame as a patch of
 its render tree. A low-end phone needs only the renderer and a WebSocket:
 no Swift, no wasm, no native library.
@@ -10,7 +10,7 @@ no Swift, no wasm, no native library.
 ```
  head (renderer only)                    server
  ┌───────────────────────┐   WebSocket   ┌──────────────────────────────┐
- │ React / Compose       │ ────────────▶ │ the app, headless, serving    │
+ │ DOM / Compose         │ ────────────▶ │ the app, headless, serving    │
  │ tree reader (patches) │ ◀──────────── │ itself (ISO_DRIVE_LISTEN)     │
  └───────────────────────┘   or gRPC     └──────────────────────────────┘
 ```
@@ -46,7 +46,7 @@ RemoteIsomer.kt).
 An app built headless (`--@isomer//headless`) serves itself on whatever
 `ISO_DRIVE_LISTEN` names (docs/drive.md): gRPC, WebSockets, a Unix socket.
 A head's `Session.Connect` starts with `start` (its size, scale, appearance
-and renderer); the app binds that renderer (React's or Compose's tree),
+and renderer); the app binds that renderer (the DOM renderer's or Compose's tree),
 resizes to the head, and sends a frame whenever the app asks for one, the
 first the whole tree (headless/libraries/swift_ui/RemoteSession.swift). One
 head at a time; a driver keeps working while it draws, on the same screen.
@@ -64,7 +64,7 @@ ISO_STORYBOOK_STORY=state.observableobject \
 ## The heads
 
 - **The web**: `connectIsomer({ url, container })`
-  (wasm/libraries/swift_ui/runtime/remote.js): the React renderer,
+  (wasm/libraries/swift_ui/runtime/remote.js): the DOM renderer,
   flat_tree.js and a WebSocket. web/remote_client is a page of it, served by
   the app beside its session (`ISO_DRIVE_SITE`), or `?session=ws://…`.
 - **Android**: `IsomerRemote(url)` (dev.isomer.runtime, with the

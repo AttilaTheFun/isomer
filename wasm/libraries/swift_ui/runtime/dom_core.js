@@ -1,5 +1,5 @@
 // Isomer's DOM renderer core: the part of React DOM 18 the web's tree
-// renderer (react_renderer.js) stands on, written here so the web carries no
+// renderer (dom_renderer.js) stands on, written here so the web carries no
 // React. Elements (`createElement`, `Fragment`, `Children.toArray`, `memo`),
 // function components with their hooks (`useState`, `useRef`,
 // `useLayoutEffect`, `useEffect`), a root that commits asynchronously as
@@ -932,6 +932,6 @@ function dispatch(fiber, dom, type, event) {
   }
 }
 
-// What react_renderer.js imports, under React's names.
+// What dom_renderer.js imports, under React's names.
 export const React = { createElement, Fragment, Children, memo, useState, useRef, useLayoutEffect, useEffect };
 export const ReactDOM = { createRoot, createPortal, flushSync };

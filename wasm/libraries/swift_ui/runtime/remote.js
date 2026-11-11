@@ -1,6 +1,6 @@
 // The web's thin client for a remote session (shared/wire/session.proto):
 // the app's SwiftUI runs on a server, built headless; the page holds only
-// the React renderer, the tree reader and a WebSocket. No wasm, no Swift:
+// the DOM renderer, the tree reader and a WebSocket. No wasm, no Swift:
 // what the person does goes to the server as a ClientMessage, each frame
 // comes back as a tree.proto Patch.
 //
@@ -11,7 +11,7 @@
 // (`?ISO_STORYBOOK_STORY=controls.toggle`), as boot.js's are. The messages
 // are session_messages.js's.
 
-import { createReactTreeRenderer } from "./react_renderer.js";
+import { createDOMTreeRenderer } from "./dom_renderer.js";
 import { applyPatch } from "./flat_tree.js";
 import { registerImageBytes } from "./raster.js";
 import { clientMessage, readServerMessage } from "./session_messages.js";
@@ -40,7 +40,7 @@ export function connectIsomer({
   const socket = new Socket(url);
   socket.binaryType = "arraybuffer";
   const send = (bytes) => { if (socket.readyState === 1) socket.send(bytes); };
-  const reactTree = createReactTreeRenderer({
+  const reactTree = createDOMTreeRenderer({
     container: surface,
     sendEvent: (id, value) => send(clientMessage.event(id, value)),
     // The app's answer comes too late to keep a key from its field.

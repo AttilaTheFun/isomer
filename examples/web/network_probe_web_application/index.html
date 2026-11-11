@@ -25,7 +25,7 @@
     boot({
       canvas: document.getElementById("canvas"),
       wasmURL: "./app.wasm",
-      rendererName: params.get("renderer") || "react",
+      rendererName: params.get("renderer") || "dom",
       bundleIdentifier: "dev.isomer.examples.network-probe",
     }).catch((error) => {
       console.error(error);
