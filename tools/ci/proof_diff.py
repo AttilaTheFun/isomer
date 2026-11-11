@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A proof's comparison with the prior release's, made once: proof-diff.json.
 
-docs/PROOF_FORMAT.md, "The comparison: proof-diff.json" (Logan, 2026-11-11).
+docs/PROOF_FORMAT.md, "The comparison: proof-diff.json" (the owner, 2026-11-11).
 One script, copied byte for byte into every repository's tools/ci (as
 shireworks.sh is), Python's standard library alone: the pictures are PNGs
 decoded here, so no Mac is needed.
