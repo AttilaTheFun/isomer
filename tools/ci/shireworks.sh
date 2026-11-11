@@ -83,7 +83,7 @@ grant = env("GRANT")
 # The API level this script speaks: a server shows an older client only
 # what it knows (no containers below 6, no Mac slots below 17).
 API = "22"
-headers = {"Shireworks-API": API, "OSS-API": API}
+headers = {"Shireworks-API": API}
 if grant:
     url = urllib.parse.urlsplit(grant)
     token = dict(urllib.parse.parse_qsl(url.query)).get("grant", "")
@@ -102,7 +102,7 @@ else:
         headers["Authorization"] = "Bearer " + key
     elif secret:
         headers["Authorization"] = "Bearer " + secret
-        headers["OSS-Holder"] = os.environ.get("SHIREWORKS_HOLDER") or os.environ.get("USER", "")
+        headers["Shireworks-Holder"] = os.environ.get("SHIREWORKS_HOLDER") or os.environ.get("USER", "")
     else:
         die("no credential: set SHIREWORKS_GRANT, SHIREWORKS_API_KEY or SHIREWORKS_TOKEN")
 host = server.hostname
@@ -178,8 +178,8 @@ def lease_path(lease):
 def lease(arguments):
     (platform,) = positional(arguments, 1, "lease <platform> [--config=…] [--minutes=N] …")
     body = {"platform": platform}
-    if os.environ.get("SHIREWORKS_TOKEN") and not grant and "OSS-Holder" in headers:
-        body["holder"] = headers["OSS-Holder"]
+    if os.environ.get("SHIREWORKS_TOKEN") and not grant and "Shireworks-Holder" in headers:
+        body["holder"] = headers["Shireworks-Holder"]
     for name in ("config", "label", "kind", "device", "runtime"):
         if option(arguments, name):
             body[name] = option(arguments, name)
@@ -598,7 +598,7 @@ def store(file, query):
         for block in iter(lambda: body.read(1 << 20), b""):
             digest.update(block)
     sha256 = digest.hexdigest()
-    sent = {"Content-Type": "application/octet-stream", "Shireworks-SHA256": sha256, "OSS-SHA256": sha256}
+    sent = {"Content-Type": "application/octet-stream", "Shireworks-SHA256": sha256}
     # Stored already: its hash alone.
     try:
         request("HEAD", f"/v1/storage/objects/{sha256}").read()
