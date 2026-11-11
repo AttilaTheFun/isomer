@@ -99,6 +99,44 @@ ios_application(
     deps = [":storybook_ios_application_lib"],
 )
 
+# The Storybook as an experiment (Applications' Ad hoc section, the private
+# AttilaTheFun/applications' docs/EXPERIMENTS.md): its own bundle id under
+# com.LoganShire.Experiments., signed by Applications Server with the
+# experiments' wildcard profile, which grants no app group, push or iCloud;
+# a name of its own and no link scheme, so it installs beside the Storybook
+# and never answers its links. Built by the Build workflow's `experiment`
+# job (--config=ci_device --config=adhoc). The experiments of whole wasm
+# apps (the WebKit runtime) are built as this is.
+variant_infoplist(
+    name = "experiment_variant_plist",
+    display_name = "Storybook Lab",
+)
+
+ios_application(
+    name = "storybook_experiment_ios_application",
+    app_icons = ["//storybook/artwork/storybook_icon:app_icon"],
+    bundle_id = "com.LoganShire.Experiments.Storybook",
+    bundle_name = "Storybook Lab",
+    entitlements = "Storybook.wildcard.entitlements",
+    families = [
+        "ipad",
+        "iphone",
+    ],
+    infoplists = [
+        "Info.plist",
+        ":experiment_variant_plist",
+    ],
+    minimum_os_version = "17.0",
+    provisioning_profile = select({
+        "//tools/ci_device": "//tools/ci_device:ci_placeholder_profile",
+        "@apple_support//constraints:simulator": None,
+        "//conditions:default": ":_development_profile",
+    }),
+    resources = ["//storybook:fonts"],
+    tags = ["manual"],
+    deps = [":storybook_ios_application_lib"],
+)
+
 # Simulator-only variant: no provisioning profile, so it builds on machines
 # without the Xcode-managed profile above. Build with
 # --ios_multi_cpus=sim_arm64, then `xcrun simctl install` the Payload .app.
