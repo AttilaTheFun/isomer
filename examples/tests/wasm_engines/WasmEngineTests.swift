@@ -4,7 +4,9 @@
 // what "pluggable" means operationally; a new engine passes this suite or it
 // isn't an engine. Timing is printed (startup / tap medians) for a rough
 // cross-engine comparison; treat it as a smell test, not a benchmark (see
-// docs/benchmarks.md for methodology-grade numbers).
+// docs/benchmarks.md for methodology-grade numbers). And every engine's
+// patches are the same, byte for byte: the headless side doesn't depend on
+// the engine running it.
 
 import ApplePlatformServices
 import PlatformServicesHost
@@ -31,13 +33,75 @@ final class WasmEngineTests: XCTestCase {
     func testEveryEngineRunsTheReactor() throws {
         try MainActor.assumeIsolated {
             let wasm = try Self.reactorBytes()
+            var trees: [(name: String, frames: Frames)] = []
             for engine in Self.engines {
                 do {
-                    try Self.exercise(engine.make(), name: engine.name, wasm: wasm)
+                    trees.append((engine.name, try Self.exercise(engine.make(), name: engine.name, wasm: wasm)))
                 } catch {
                     XCTFail("\(engine.name): \(error)")
                 }
             }
+            Self.assertIdentical(trees)
+        }
+    }
+
+    /// The headless side is the same on every engine: one build and the same
+    /// inputs give byte-identical patches, whichever engine runs it. Renderers
+    /// may draw a tree differently; the tree mustn't differ. The full app (a
+    /// gallery of views and colors), light then dark, on each engine.
+    func testEveryEngineMakesTheSameTree() throws {
+        try MainActor.assumeIsolated {
+            let wasm = try Self.artifactBytes("wasm/example_full_feature/example_full.wasm")
+            var trees: [(name: String, frames: Frames)] = []
+            for engine in Self.engines {
+                do {
+                    var stream: [UInt8] = []
+                    let runtime = engine.make()
+                    try runtime.launch(wasm: wasm, hostImports: Self.heldImports { stream.append(contentsOf: $0) })
+                    _ = try runtime.call("iso_hot_start", [.f64(390), .f64(680)])
+                    _ = try runtime.call("iso_hot_render", [])
+                    let light = stream
+                    stream.removeAll()
+                    _ = try runtime.call("iso_hot_set_color_scheme", [.i32(1)])
+                    _ = try runtime.call("iso_hot_render", [])
+                    trees.append((engine.name, Frames(first: light, next: stream)))
+                } catch {
+                    XCTFail("\(engine.name): \(error)")
+                }
+            }
+            Self.assertIdentical(trees)
+        }
+    }
+
+    /// What a run emitted: its first frame's patches, then the next ones.
+    struct Frames: Equatable {
+        var first: [UInt8]
+        var next: [UInt8]
+    }
+
+    /// Imports that hold still what isn't the app's: a fixed clock (no
+    /// guest reads the time into its tree here, but none may differ by it).
+    @MainActor
+    private static func heldImports(_ onRenderTree: @escaping ([UInt8]) -> Void) -> WasmHostImports {
+        WasmHostImports(
+            onRenderTree: onRenderTree,
+            onLog: { _ in },
+            epochMillis: { 1_700_000_000_000 },
+            onScheduleRender: {}
+        )
+    }
+
+    /// Every engine's patches equal the first engine's, byte for byte.
+    private static func assertIdentical(_ trees: [(name: String, frames: Frames)]) {
+        guard let reference = trees.first else { return }
+        for other in trees.dropFirst() {
+            XCTAssertFalse(reference.frames.first.isEmpty, "\(reference.name): no first frame")
+            XCTAssertEqual(
+                other.frames.first, reference.frames.first,
+                "\(other.name)'s first frame (\(other.frames.first.count) B) differs from \(reference.name)'s (\(reference.frames.first.count) B)")
+            XCTAssertEqual(
+                other.frames.next, reference.frames.next,
+                "\(other.name)'s next frame (\(other.frames.next.count) B) differs from \(reference.name)'s (\(reference.frames.next.count) B)")
         }
     }
 
@@ -197,16 +261,12 @@ final class WasmEngineTests: XCTestCase {
     @MainActor private static var keptRuntimes: [(any WasmRuntime, RecordingHTTP)] = []
 
     @MainActor
+    @discardableResult
     private static func exercise(
         _ runtime: any WasmRuntime, name: String, wasm: [UInt8]
-    ) throws {
+    ) throws -> Frames {
         var stream: [UInt8] = []
-        let imports = WasmHostImports(
-            onRenderTree: { stream.append(contentsOf: $0) },
-            onLog: { _ in },
-            epochMillis: { Date().timeIntervalSince1970 * 1000 },
-            onScheduleRender: {}
-        )
+        let imports = heldImports { stream.append(contentsOf: $0) }
 
         let launchStart = Date()
         try runtime.launch(wasm: wasm, hostImports: imports)
@@ -220,8 +280,9 @@ final class WasmEngineTests: XCTestCase {
 
         // A tap: send the button's tap event by node id (the exact path a
         // host takes — IsomerTreeView sends the tree node's `tap` id).
+        let first = stream
         guard let tapID = Self.firstTapID(in: stream) else {
-            XCTFail("\(name): no tap id in the first frame"); return
+            XCTFail("\(name): no tap id in the first frame"); return Frames(first: first, next: [])
         }
         stream.removeAll()
         let tapStart = Date()
@@ -238,6 +299,7 @@ final class WasmEngineTests: XCTestCase {
             "\(name): tap did not produce the incremented label")
 
         print("[wasm-engine] \(name): startup=\(Int(startupMs))ms tap=\(String(format: "%.2f", tapMs))ms")
+        return Frames(first: first, next: stream)
     }
 
     // MARK: - Benchmark (opt-in)
