@@ -107,7 +107,7 @@ async function finish(code) {
   await send("Runtime.enable");
 
   // The probe's lines once a new page shows `launch <n>` (its text: the
-  // React renderer draws each Text as DOM text). A page read once is marked,
+  // DOM renderer draws each Text as DOM text). A page read once is marked,
   // so the one before a navigation isn't taken for the next.
   const launch = async (n, what) => {
     let lines = [];

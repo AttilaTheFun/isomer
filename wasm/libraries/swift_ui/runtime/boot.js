@@ -9,14 +9,19 @@ import { appFilesKey, openAppFiles } from "./file_system.js";
 import { Dependencies, load } from "../app_bridge.js";
 import { browserNetworkHosts } from "./network.js";
 import { createRasterHost, registerImageBytes } from "./raster.js";
-import { createReactTreeRenderer } from "./react_renderer.js";
+import { createDOMTreeRenderer } from "./dom_renderer.js";
 import { applyPatch } from "./flat_tree.js";
 import { loadBundledFonts } from "./fonts.js";
 
 // `rendererName` picks the renderer (docs/renderer_layers.md): "webGPU"
-// (default) binds the self-drawing SwiftGPURenderer; "react" binds the
-// ReactRenderer, which mounts the serialized view tree as React components
-// and owns layout itself.
+// (default) binds the self-drawing SwiftGPURenderer; "dom" ("react", its
+// name until 0.51, still works) binds the DOMRenderer, which mounts the
+// serialized view tree as DOM components and owns layout itself.
+// The DOM renderer by its name or its name until 0.51 ("react").
+export function isDOMRenderer(name) {
+  return name === "dom" || name === "react";
+}
+
 // The page's clipboard, written during the tap that asked for it.
 function copyText(text) {
   const fallback = () => {
@@ -66,7 +71,7 @@ export async function boot({
   bundleVersion = undefined,
   bundleBuild = undefined,
   // Document scrolling on a phone-width page (react only): the screen's
-  // scroll is the page's own, its bars fixed over it (react_renderer.js).
+  // scroll is the page's own, its bars fixed over it (dom_renderer.js).
   // Also `?scroll=document` in the page's URL.
   documentScroll = new URLSearchParams(location.search).get("scroll") === "document",
   // Where the app's own fonts are (`isomer_web_app(fonts = ...)`: a
@@ -74,7 +79,7 @@ export async function boot({
   // page brings its own.
   fonts = embedded ? null : "./fonts/",
 } = {}) {
-  const react = rendererName === "react";
+  const dom = isDOMRenderer(rendererName);
   // `Font.custom`'s fonts, loaded while the rest starts and before the
   // first frame: text is measured and drawn with them from the start.
   const fontsLoading = fonts ? loadBundledFonts(fonts) : null;
@@ -86,8 +91,8 @@ export async function boot({
   // runs it on WebGPU; this page supplies measurement + rasterization.
   let gpuHost = null;
   let raster = null;
-  if (!react) {
-    // Imported lazily: the ReactRenderer path never touches WebGPU, and a
+  if (!dom) {
+    // Imported lazily: the DOMRenderer path never touches WebGPU, and a
     // static import would put the Metal executor on EVERY page's critical
     // module graph (an unresolved ES module import evaluates NOTHING —
     // rendering as a silent blank page when the file isn't served).
@@ -107,7 +112,7 @@ export async function boot({
   let mapSurface = null;
   let metalViews = null;
   // The page's one Metal executor (surface 1 is the page canvas, which the
-  // GPU renderer or a React-path map draws into), made on first use and
+  // GPU renderer or a DOM-path map draws into), made on first use and
   // connected to the app.
   let metalHostStarting = null;
   async function ensureMetalHost() {
@@ -121,7 +126,7 @@ export async function boot({
     })();
     return metalHostStarting;
   }
-  if (react) {
+  if (dom) {
     // React owns the surface: mount a root container where the canvas was.
     treeContainer = document.createElement("div");
     treeContainer.style.cssText =
@@ -224,7 +229,7 @@ export async function boot({
       }
       fit();
     }
-    // React-path `Map` host views: the wasm module draws real SwiftMap tiles
+    // DOM-path `Map` host views: the wasm module draws real SwiftMap tiles
     // (when swift_map is linked, `--config=map`) into the page canvas through
     // swift_gpu's WebGPU executor; the canvas is parked INSIDE the map
     // element so later ZStack layers (the map's DOM controls) stack above
@@ -262,7 +267,7 @@ export async function boot({
         this.starting = true;
         try {
           // Tiles ride the image machinery (imageInfo/rasterize), which the
-          // React path otherwise never needs — create it with the surface.
+          // DOM path otherwise never needs — create it with the surface.
           if (!raster) {
             raster = createRasterHost({
               scale: window.devicePixelRatio || 1,
@@ -305,7 +310,7 @@ export async function boot({
           rect.width, rect.height);
       },
     };
-    // React-path `MetalView`s: each a canvas of its own, a surface of the
+    // DOM-path `MetalView`s: each a canvas of its own, a surface of the
     // page's Metal executor, asked for a frame every animation frame while
     // mounted (`isoMetalViewFrame`), as an MTKView draws by default.
     metalViews = {
@@ -356,7 +361,7 @@ export async function boot({
         view.frame = requestAnimationFrame(tick);
       },
     };
-    reactTree = createReactTreeRenderer({
+    reactTree = createDOMTreeRenderer({
       container: treeContainer,
       sendEvent: hostEvent,
       sendKey: (id, value) => bridge.isoKeyEvent(id, value),
@@ -435,7 +440,7 @@ export async function boot({
   // UIViewRepresentable analogue) positioned over the canvas, reconciled each
   // frame by id. Framework chrome (navbar/tabbar/search/picker/menu/date/
   // media) is drawn at the GPU layer under the SwiftGPURenderer and built
-  // from React components under the ReactRenderer — no DOM widgets here.
+  // from React components under the DOMRenderer — no DOM widgets here.
   const hostViews = new Map(); // id -> { el, kind }
   let darkMode = false;
   function sendHostEvent(id, value) {
@@ -497,7 +502,7 @@ export async function boot({
   const host = {
     measureText(text, fontSize, weight, wrapWidth) {
       if (!raster) {
-        // ReactRenderer: the component system owns layout; a rough
+        // DOMRenderer: the component system owns layout; a rough
         // estimate satisfies any stray build-time queries.
         return { width: text.length * fontSize * 0.6, height: fontSize * 1.3 };
       }
@@ -651,7 +656,7 @@ export async function boot({
     if (event.detail) bridge.isoOpenURL(String(event.detail));
   });
 
-  if (react) {
+  if (dom) {
     window.addEventListener("resize", () => {
       bridge.isoResize(window.innerWidth, window.innerHeight);
     });
@@ -689,8 +694,8 @@ export async function boot({
 // existing web page — the web analogue of dropping a `UIHostingController`'s
 // view into a UIKit hierarchy. Boots the runtime into the host-provided
 // `container` (the Swift side decides the root via its `@main` App or a
-// `IsomerHostingController`) under the chosen renderer: "react" builds
-// real DOM/React components inside the container; "webGPU" draws into a
+// `IsomerHostingController`) under the chosen renderer: "dom" builds
+// DOM components inside the container; "webGPU" draws into a
 // canvas that fills it. Container resizes re-lay-out the embedded view
 // independently of the window. Returns { bridge, unmount }.
 export async function mountIsomer(container, { wasmURL, bundle, renderer = "webGPU", dependencies = {}, wasi = undefined, bundleIdentifier = undefined, fetch = undefined, WebSocket = undefined } = {}) {
@@ -707,7 +712,7 @@ export async function mountIsomer(container, { wasmURL, bundle, renderer = "webG
     bundle, rendererName: renderer, embedded: true, dependencies, wasi, bundleIdentifier, fetch, WebSocket,
   });
 
-  if (renderer !== "react" && typeof ResizeObserver !== "undefined") {
+  if (!isDOMRenderer(renderer) && typeof ResizeObserver !== "undefined") {
     const scale = window.devicePixelRatio || 1;
     const observer = new ResizeObserver(() => {
       canvas.width = Math.max(1, Math.round(canvas.clientWidth * scale));

@@ -22,7 +22,7 @@
     boot({
       canvas: document.getElementById("canvas"),
       wasmURL: "./app.wasm",
-      rendererName: params.get("renderer") || "react",
+      rendererName: params.get("renderer") || "dom",
       // The app's files are kept under its identifier; `?bundle=` names
       // another app, with a home of its own.
       bundleIdentifier: params.get("bundle") || "dev.isomer.examples.files-probe",

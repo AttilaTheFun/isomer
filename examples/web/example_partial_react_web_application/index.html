@@ -63,7 +63,7 @@
     // The host app renders its React tree; the SwiftUI surface is just
     // another component in it.
     ReactDOM.createRoot(document.getElementById("order-panel")).render(
-      React.createElement(Isomer, { wasmURL: "./app.wasm", renderer: "react" }),
+      React.createElement(Isomer, { wasmURL: "./app.wasm", renderer: "dom" }),
     );
   </script>
 </body>

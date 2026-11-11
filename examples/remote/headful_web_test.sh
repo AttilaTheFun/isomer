@@ -32,7 +32,7 @@ url="$(sed -n 's/^iso hub: \(ws:[^ ]*\).*/\1/p' "$log")"
 driver=$!
 "$check" --site "$site" --chrome "$chrome" --until 'window.__isoLastTree && window.__isoLastTree.includes("Taps: 2")' \
     --settle 1 --timeout 90 --allow-errors \
-    --page "?renderer=react&ISO_STORYBOOK_STORY=state.observableobject&ISO_DRIVER=$url=$out/headful-web.png"
+    --page "?renderer=dom&ISO_STORYBOOK_STORY=state.observableobject&ISO_DRIVER=$url=$out/headful-web.png"
 wait $driver
 grep -q "Taps: 1" "$driven"
 grep -q "attached:" "$log"

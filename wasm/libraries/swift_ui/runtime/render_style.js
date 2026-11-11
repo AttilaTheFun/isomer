@@ -1,9 +1,9 @@
-// The web renderers' styling, shared by the React renderer and the DOM
-// renderer that replaces it (0.48): fonts, a view's base style, gradients,
+// The DOM renderer's styling (dom_renderer.js; 0.48, shared then with the
+// React renderer it replaced): fonts, a view's base style, gradients,
 // the named grounds and colours in each look (the Mac's at desktop width,
 // the iPhone's at a phone's), and text sizes. Pure functions of a node and,
 // where the walk's place matters (a split view's sidebar), a `ctx` with
-// `inSidebar`; moved from react_renderer.js as they were.
+// `inSidebar`; moved from dom_renderer.js as they were.
 
 const SYSTEM_FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif";
 const MONO_FONT = "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace";

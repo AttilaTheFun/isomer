@@ -17,7 +17,7 @@ JS expression to be truthy (the page drawn: `until=window.__isoLastTree`),
 `click` sends a real mouse
 press+release, `drag` presses, moves in steps, and releases, `wheel` scrolls
 by DY at (X,Y) — all trusted input events.
-Handy evals against the React renderer (committed hooks in react_renderer.js):
+Handy evals against the DOM renderer (committed hooks in dom_renderer.js):
   eval=window.__isoLastTree            # serialized tree JSON
   eval=document.querySelector('[data-tap]')…  # tap targets carry data-tap ids
 """

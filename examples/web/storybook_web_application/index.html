@@ -33,12 +33,12 @@
     boot({
       canvas: document.getElementById("canvas"),
       wasmURL: "./app.wasm",
-      rendererName: new URLSearchParams(location.search).get("renderer") || "react",
+      rendererName: new URLSearchParams(location.search).get("renderer") || "dom",
       dependencies,
     }).then((result) => {
       // Dev hooks for headless-browser smoke tests, renderer-agnostic (real
       // DOM events at coordinates — the canvas renderer listens for pointer
-      // events, the React renderer for clicks on its components):
+      // events, the DOM renderer for clicks on its components):
       //   ?clicks=x,y;x,y   synthetic taps (down+up+click)
       //   ?wheel=x,y,dy;... synthetic wheel scrolls
       const params = new URLSearchParams(location.search);

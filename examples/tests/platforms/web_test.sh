@@ -10,7 +10,7 @@ shift 3
 out="${TEST_UNDECLARED_OUTPUTS_DIR:-$(mktemp -d)}"
 pages=()
 for story in "$@"; do
-    pages+=(--page "?renderer=react&ISO_STORYBOOK_STORY=$story=$out/web-$story.png")
+    pages+=(--page "?renderer=dom&ISO_STORYBOOK_STORY=$story=$out/web-$story.png")
 done
 # The renderer's first tree committed, then a few seconds for fonts and
 # images. Console errors are printed but don't fail it (a story's remote

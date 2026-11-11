@@ -12,7 +12,7 @@ aggressively — `rm -rf` it if you see a stale build.
 Usage:
   cdp.py <url> <out.png> [wait=SECONDS] [click=X,Y ...] [type=TEXT] [eval=JS] [width=W] [height=H]
 Steps run in argv order; `wait` sleeps, `click` sends a real mouse press+release.
-Handy evals against the React renderer (committed hooks in react_renderer.js):
+Handy evals against the DOM renderer (committed hooks in dom_renderer.js):
   eval=window.__isoLastTree            # serialized tree JSON
   eval=document.querySelector('[data-tap]')…  # tap targets carry data-tap ids
 """

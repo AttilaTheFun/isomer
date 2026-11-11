@@ -3,7 +3,7 @@ load("@isomer//tools/wasm:defs.bzl", "isomer_web_app")
 
 # The Metal triangle (//shared/metal_triangle_application) on the web:
 # MetalView's canvas, drawn by Isomer's Metal on WebGPU. Opens under the
-# React renderer; `?renderer=webgpu` draws it inside the GPU renderer's
+# DOM renderer; `?renderer=webgpu` draws it inside the GPU renderer's
 # frame instead.
 swift_library(
     name = "app_lib",
@@ -22,6 +22,6 @@ swift_library(
 isomer_web_app(
     name = "metal_triangle_web_application",
     index = "index.html",
-    query = "renderer=react",
+    query = "renderer=dom",
     swift_library = ":app_lib",
 )

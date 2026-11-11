@@ -23,7 +23,7 @@ def main() -> None:
     open_browser = "--no-open" not in sys.argv[1:]
     site_rootpath = args[0]
     port = int(args[1]) if len(args) > 1 else 8080
-    # Optional query string for the opened URL (e.g. "renderer=react" picks
+    # Optional query string for the opened URL (e.g. "renderer=dom" picks
     # the layered renderer binding; see docs/renderer_layers.md).
     query = f"?{args[2]}" if len(args) > 2 and args[2] else ""
 

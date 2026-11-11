@@ -32,7 +32,7 @@ package struct ImageInfoValue {
 
 /// The browser side of the host bridge. Under the SwiftGPURenderer drawing
 /// stays in Swift and this object supplies services (measurement,
-/// rasterization, IME, host views); under the ReactRenderer it receives the
+/// rasterization, IME, host views); under the DOMRenderer it receives the
 /// serialized tree through `renderTree`.
 @ExportedInterface
 package protocol WebHost {
@@ -54,7 +54,7 @@ package protocol WebHost {
     func openURL(url: String)
     func platformCommand(key: String, value: String)
     func epochMillis() -> Double
-    /// ReactRenderer path: render the serialized view tree (the tree.proto
+    /// DOMRenderer path: render the serialized view tree (the tree.proto
     /// protobuf) as React components. Unused under the SwiftGPURenderer.
     func renderTree(tree: [UInt8])
     /// An encoded picture's bytes for `source` (`IsomerImages`): the browser
@@ -138,9 +138,10 @@ package func isoStart(host: any WebHost, renderer: String, width: Double, height
         if Runtime.shared.host == nil {
             _ = _application_main(0, nil)
         }
-        if renderer == "react" {
-            _boundRendererName = "React"
-            Renderer.bind(ReactRenderer { webHost?.renderTree(tree: $0) })
+        // The DOM renderer, by its name or its name until 0.51.
+        if renderer == "dom" || renderer == "react" {
+            _boundRendererName = "DOM"
+            Renderer.bind(DOMRenderer { webHost?.renderTree(tree: $0) })
             #if canImport(SwiftGPU) && canImport(SwiftMap)
             // The component system renders the tree as DOM, but the `Map` host
             // view still draws real SwiftMap tiles: the tree carries the map
@@ -149,7 +150,7 @@ package func isoStart(host: any WebHost, renderer: String, width: Double, height
             Renderer.hostRendersMaps = true
             #endif
             Runtime.shared.start(host: WasmHostBridge(), width: width, height: height)
-            _isoDriveAttach("Web", "React")
+            _isoDriveAttach("Web", "DOM")
             return
         }
         #if canImport(SwiftGPU)
@@ -188,7 +189,7 @@ package func isoRender() {
 }
 
 #if canImport(SwiftGPU) && canImport(SwiftMap)
-/// The ReactRenderer path's map surface: one SwiftGPU renderer reserved for
+/// The DOMRenderer path's map surface: one SwiftGPU renderer reserved for
 /// `Map` host views, drawing into the page's WebGPU canvas (which the page
 /// positions inside the map's DOM element). The page passes the serialized
 /// map node's fields back verbatim; `id` (the node's host-event id) keys the
