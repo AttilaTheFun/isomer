@@ -1,0 +1,66 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+# A WASI command module run in headless Chrome (main.swift says how), with
+# //tools/wasm/wasi_run's command line: the wasm checks run by the browser's
+# own engine, as apps' modules are, rather than by WasmKit.
+#   bazel run //tools/wasm/wasi_run_browser -- --map-dir=/tmp::/tmp module.wasm args...
+swift_binary(
+    name = "wasi_run_browser",
+    package_name = "isomer",
+    srcs = ["main.swift"],
+    data = [
+        ":chrome_path",
+        "index.html",
+        "worker.js",
+        "//wasm/libraries/swift_ui:runtime/file_system.js",
+    ] + select({
+        ":linux_arm64": [
+            "@chrome_linux_arm64//:chrome",
+            "@chrome_linux_arm64//:files",
+        ],
+        ":linux_x86_64": [
+            "@chrome_linux_x86_64//:chrome",
+            "@chrome_linux_x86_64//:files",
+        ],
+        "//conditions:default": [],
+    }),
+    deps = [
+        "//tools/testing/browser_driving",
+        "@rules_swift//swift/runfiles",
+    ],
+)
+
+# Which Chrome: Chrome for Testing's, by its runfiles path, on Linux; the
+# Mac's own elsewhere (an absolute path). CHROME or --chrome overrides it.
+genrule(
+    name = "chrome_path",
+    srcs = select({
+        ":linux_arm64": ["@chrome_linux_arm64//:chrome"],
+        ":linux_x86_64": ["@chrome_linux_x86_64//:chrome"],
+        "//conditions:default": [],
+    }),
+    outs = ["chrome_path.txt"],
+    cmd = select({
+        ":linux_arm64": "echo '$(rlocationpath @chrome_linux_arm64//:chrome)' > $@",
+        ":linux_x86_64": "echo '$(rlocationpath @chrome_linux_x86_64//:chrome)' > $@",
+        "//conditions:default": "echo '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' > $@",
+    }),
+)
+
+config_setting(
+    name = "linux_arm64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
+config_setting(
+    name = "linux_x86_64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)

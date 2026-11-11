@@ -28,12 +28,12 @@ sh_test(
     size = "small",
     srcs = ["os_log_test.sh"],
     args = [
-        "$(rootpath //tools/wasm/wasi_run)",
+        "$(rootpath //tools/wasm/wasi_run_browser)",
         "$(rootpath :os_log_check_wasm)",
     ],
     data = [
         ":os_log_check_wasm",
-        "//tools/wasm/wasi_run",
+        "//tools/wasm/wasi_run_browser",
     ],
 )
 

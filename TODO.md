@@ -167,9 +167,11 @@ JavaScript engine, and WasmKit goes:
   WebKit's own rule (its main, 2026-11-11): iOS counts a web view visible
   when it is in a window whose scene is in the foreground; the Mac also
   needs the window on screen and not occluded.
-- The wasm unit tests (//tools/wasm/wasi_run's: Foundation, the Metal
-  translator, Combine, OSLog, SQLite on WASI) run in headless Chrome in
-  CI's container over the web runtime's own WASI layer (file_system.js).
+- The wasm unit tests run in headless Chrome in CI's container since 0.51
+  (//tools/wasm/wasi_run_browser, over the web runtime's own WASI layer,
+  file_system.js), but the threaded SQLite check, which needs a page's
+  shared memory: a cross-origin isolated page (COOP and COEP headers from
+  browser_driving's server), or WasmKit until it goes.
 - An ad-hoc Visor built as a whole wasm app, compared with the native one
   (Applications' experiments: `adhoc-<slug>-<n>` drafts, ids under
   `com.LoganShire.Experiments.`).

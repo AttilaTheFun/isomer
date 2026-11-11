@@ -4,10 +4,12 @@ load("@isomer//tools/platforms:transition.bzl", "transition_binary")
 
 # swift_sql's SQLite as a guest links it (SwiftSQL over CSwiftSQL, the
 # amalgamation built for WASI, from the Swift package through
-# rules_swift_package_manager) in a WASI file: built for wasm and run under
-# WasmKit's command runner (@isomer//tools/wasm/wasi_run) with the test's
-# temporary directory as the guest's /tmp (SQLiteFileCheck.swift says what it
-# checks). It was the typed SQL library's
+# rules_swift_package_manager) in a WASI file: built for wasm and run in
+# headless Chrome (@isomer//tools/wasm/wasi_run_browser, the guest's /tmp the
+# page's, in memory; SQLiteFileCheck.swift says what it checks). The
+# threaded build stays under WasmKit's command runner
+# (@isomer//tools/wasm/wasi_run): a page's shared memory needs it served
+# cross-origin isolated. It was the typed SQL library's
 # until that left Isomer (0.34), then isomer's own //tests/sqlite_wasi.
 swift_binary(
     name = "sqlite_file_check",
@@ -46,12 +48,12 @@ sh_test(
     size = "small",
     srcs = ["@isomer//foundation/tests:run_foundation_check.sh"],
     args = [
-        "$(rootpath @isomer//tools/wasm/wasi_run)",
+        "$(rootpath @isomer//tools/wasm/wasi_run_browser)",
         "$(rootpath :sqlite_file_check_wasm)",
     ],
     data = [
         ":sqlite_file_check_wasm",
-        "@isomer//tools/wasm/wasi_run",
+        "@isomer//tools/wasm/wasi_run_browser",
     ],
 )
 

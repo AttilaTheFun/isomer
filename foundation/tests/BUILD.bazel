@@ -37,7 +37,7 @@ sh_test(
     size = "small",
     srcs = ["run_foundation_check.sh"],
     args = [
-        "$(rootpath //tools/wasm/wasi_run)",
+        "$(rootpath //tools/wasm/wasi_run_browser)",
         "$(rootpath :foundation_check_wasm)",
         # UserDefaults' argument domain (ClassesCheck.swift): one from the
         # program's arguments, one from ISO_ARGUMENTS.
@@ -49,7 +49,7 @@ sh_test(
     ],
     data = [
         ":foundation_check_wasm",
-        "//tools/wasm/wasi_run",
+        "//tools/wasm/wasi_run_browser",
     ],
 )
 
@@ -81,12 +81,12 @@ sh_test(
     size = "small",
     srcs = ["run_foundation_check.sh"],
     args = [
-        "$(rootpath //tools/wasm/wasi_run)",
+        "$(rootpath //tools/wasm/wasi_run_browser)",
         "$(rootpath :internationalization_check_wasm)",
     ],
     data = [
         ":internationalization_check_wasm",
-        "//tools/wasm/wasi_run",
+        "//tools/wasm/wasi_run_browser",
     ],
 )
 
@@ -158,12 +158,12 @@ sh_test(
     size = "small",
     srcs = ["run_foundation_check.sh"],
     args = [
-        "$(rootpath //tools/wasm/wasi_run)",
+        "$(rootpath //tools/wasm/wasi_run_browser)",
         "$(rootpath :internationalization_trimmed_check_wasm)",
     ],
     data = [
         ":internationalization_trimmed_check_wasm",
-        "//tools/wasm/wasi_run",
+        "//tools/wasm/wasi_run_browser",
     ],
 )
 
