@@ -4,7 +4,7 @@
 # where the builds came from with its OIDC token, which the server checks
 # against GitHub's keys and its own settings (its repository's bundle ids;
 # a release's tag, published by a releaser, for production) before it
-# signs and publishes them (the private AttilaTheFun/applications' docs/CI.md). Any repository's workflow copies
+# signs and publishes them (docs/CI.md). Any repository's workflow copies
 # this file and connect_from_ci.sh beside it (the token and the server,
 # which next_version.sh takes too); it needs bash, curl and openssl, on a
 # Mac or Linux.
@@ -13,7 +13,7 @@
 #
 # --download: each build, as the server signed it, downloaded into <dir> as
 # its release's asset, with builds.json describing them
-# (the private AttilaTheFun/applications' docs/RELEASE_ASSETS.md; release_assets.sh, beside this file), for the
+# (docs/RELEASE_ASSETS.md; release_assets.sh, beside this file), for the
 # job to attach to its release (attach_release.sh).
 #
 # Each package is an .ipa, a Mac app's .zip or .dmg, or an .apk, as CI
@@ -68,7 +68,6 @@ connect_from_ci
 # What each publish says besides the token: the notes and the app's name
 # (base64, as `applications-server publish` sends them) and the commit.
 {
-  printf 'Authorization: Bearer %s\n' "$token"
   printf 'X-Applications-Commit: %s\n' "${APPLICATIONS_COMMIT:-${GITHUB_SHA:-}}"
   [ -z "$notes_file" ] || printf 'X-Applications-Notes: %s\n' "$(base64 < "$notes_file" | tr -d '\n')"
   [ -z "$app" ] || printf 'X-Applications-App: %s\n' "$(printf '%s' "$app" | base64 | tr -d '\n')"
@@ -77,10 +76,14 @@ connect_from_ci
 } > "$work/headers"
 
 for package in "${packages[@]}"; do
+  # A fresh token for each package: one lasts minutes, and the build before
+  # may have taken longer (a Mac app's signing and notarizing).
+  ci_oidc_token
+  { printf 'Authorization: Bearer %s\n' "$token"; cat "$work/headers"; } > "$work/request-headers"
   # Braces: bash 3.2 reads a byte of "…" as part of the name.
-  echo "Publishing $(basename "$package") to ${server}…"
+  echo "Publishing $(basename "$package") to Applications Server…"
   # Signing and notarizing take minutes; the answer waits for them.
-  status="$(curl -sS --cacert "$work/ca.pem" --connect-timeout 10 --max-time 3600 -H @"$work/headers" -X POST -T "$package" \
+  status="$(curl -sS --cacert "$work/ca.pem" --connect-timeout 10 --max-time 3600 -H @"$work/request-headers" -X POST -T "$package" \
     -o "$work/answer" -w '%{http_code}' "$server/api/publish")" || fail "$(basename "$package") was not sent"
   if [ "$status" != "201" ]; then
     said="$(sed -n 's/.*"error":"\(.*\)"}.*/\1/p' "$work/answer")"
