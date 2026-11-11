@@ -4,7 +4,7 @@
 # in development; a release may not, and Reviews holds a release until its
 # commit's `pins` check passes.
 #
-# The script is sh, git, grep and awk, in CI's Linux container (OS Server's
+# The script is sh, git, grep and awk, in CI's Linux container (Shireworks'
 # single-use containers), as every job but the GUI tests.
 name: Pins
 on:

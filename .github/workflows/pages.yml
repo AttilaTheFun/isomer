@@ -7,7 +7,7 @@
 # //web/storybook_web_application:isomer_site (in the examples), attached
 # to the draft release it makes. Compiled output never goes into git.
 #
-# In CI's Linux container, as every job but the GUI tests (OS Server's
+# In CI's Linux container, as every job but the GUI tests (Shireworks'
 # single-use containers), with curl and tar alone: the asset comes from the
 # release's public download URL (no gh), and the Pages artifact is made
 # here, the plain tar upload-pages-artifact would make. The site is already
