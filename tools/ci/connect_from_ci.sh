@@ -1,9 +1,8 @@
 # Sourced by tools/ci/publish_from_ci.sh and tools/ci/next_version.sh: a
 # GitHub Actions job's way to Applications Server, with its OIDC token in
-# place of a password (the private AttilaTheFun/applications' docs/CI.md). A repository
-# that copies either script copies this file beside it. bash (3.2 or
-# later), curl and openssl, on a Mac or Linux. Copied from
-# AttilaTheFun/reviews' tools/ci/connect_from_ci.sh.
+# place of a password (docs/CI.md). A repository that copies either script
+# copies this file beside it. bash (3.2 or later), curl and openssl, on a
+# Mac or Linux.
 #
 # connect_from_ci sets
 # - `token`: the job's token, for the server's audience, masked in the log;
@@ -19,6 +18,22 @@
 #   fingerprint, which the authority the server presents must match;
 # - APPLICATIONS_AUDIENCE: the audience the server takes, if not
 #   `applications-server` (`applications-server oidc`).
+# A fresh token of the job's, for the server's audience, from GitHub's
+# endpoint, in `token`. A token lasts minutes and a Mac build's signing and
+# notarizing can take longer, so a script that sends more than one request
+# asks again before each (publish_from_ci.sh). The request's token and the
+# job's are kept in files this job alone reads, never on a command line, and
+# the job's is masked in the log.
+ci_oidc_token() {
+  local audience="${APPLICATIONS_AUDIENCE:-applications-server}"
+  printf 'Authorization: bearer %s\n' "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" > "$work/request"
+  curl -sS --fail --max-time 30 -H @"$work/request" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$audience" -o "$work/token.json" \
+    || fail "GitHub gave no OIDC token"
+  token="$(sed -n 's/.*"value" *: *"\([^"]*\)".*/\1/p' "$work/token.json")"
+  [ -n "$token" ] || fail "GitHub's answer has no token"
+  echo "::add-mask::$token"
+}
+
 connect_from_ci() {
   local ci_code json ca addresses audience address host_port fingerprint
   [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] && [ -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ] \
@@ -33,22 +48,17 @@ connect_from_ci() {
   addresses="$(printf '%s' "$json" | sed -n 's/.*"addresses":\[\([^]]*\)\].*/\1/p' | tr ',' '\n' | tr -d '"')"
   [ -n "$ca" ] && [ -n "$addresses" ] || fail "APPLICATIONS_CI_CODE is not a CI code"
 
-  # The job's token, for the server's audience, from GitHub's endpoint. The
-  # request's token and the job's are kept in files this job alone reads,
-  # never on a command line, and the job's is masked in the log.
-  audience="${APPLICATIONS_AUDIENCE:-applications-server}"
-  printf 'Authorization: bearer %s\n' "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" > "$work/request"
-  curl -sS --fail --max-time 30 -H @"$work/request" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$audience" -o "$work/token.json" \
-    || fail "GitHub gave no OIDC token"
-  token="$(sed -n 's/.*"value" *: *"\([^"]*\)".*/\1/p' "$work/token.json")"
-  [ -n "$token" ] || fail "GitHub's answer has no token"
-  echo "::add-mask::$token"
+  ci_oidc_token
 
   # The first address that answers, and the certificate authority it
   # presents (the last certificate of its chain), held to the code's
   # fingerprint: from then on curl trusts that authority alone.
+  # The addresses are never printed (the logs name no host): an address is
+  # said by its place in the code's list.
   server=""
+  place=0
   for address in $addresses; do
+    place=$((place + 1))
     curl -sk --connect-timeout 5 --max-time 10 -o /dev/null "$address/api/hello" || continue
     host_port="${address#https://}"
     host_port="${host_port%%/*}"
@@ -60,7 +70,7 @@ connect_from_ci() {
              inside { block = block $0 "\n" }
              /-----END CERTIFICATE-----/ { inside = 0; last = block }
              END { printf "%s", last }' > "$work/ca.pem" || [ ! -s "$work/ca.pem" ]; then
-      echo "$(basename "$0" .sh): $address presents no certificate to openssl; not used" >&2
+      echo "$(basename "$0" .sh): the code's address $place presents no certificate to openssl; not used" >&2
       continue
     fi
     fingerprint="$( { openssl x509 -in "$work/ca.pem" -outform DER 2>/dev/null || true; } | openssl dgst -sha256 | sed 's/.*= *//' | tr 'A-F' 'a-f')"
@@ -68,7 +78,7 @@ connect_from_ci() {
       server="$address"
       break
     fi
-    echo "$(basename "$0" .sh): $address presents another certificate authority than the code's; not used" >&2
+    echo "$(basename "$0" .sh): the code's address $place presents another certificate authority than the code's; not used" >&2
   done
-  [ -n "$server" ] || fail "Applications Server answers at none of its addresses ($(echo $addresses))"
+  [ -n "$server" ] || fail "Applications Server answers at none of the code's $place addresses"
 }
