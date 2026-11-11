@@ -683,12 +683,21 @@ how Isomer runs it.
   thread's instance and each swift_ffi import with the thread it came on.
   The engine tests (examples //tests/wasm_engines) run it beside JSC and
   WasmEdge.
-- **WASI commands**: //tools/wasm/wasi_run runs a command module under
-  WasmKit with `iwasm`'s options (`--dir=`, `--map-dir=<guest>::<host>`,
-  `--env=`; also `--stack-size=`), the guest's stdout, stderr and exit
-  code, and WASI Threads for a module that imports a shared memory. The
-  checks built for wasm run under it (//foundation/tests, the Metal
-  translator's, the examples' //tests/sqlite_wasi).
+- **WASI commands**: the checks built for wasm (//foundation/tests,
+  //frameworks/*/tests, the Metal translator's, the examples'
+  //tests/sqlite_wasi) run in headless Chrome (0.51):
+  //tools/wasm/wasi_run_browser runs a command module in a page's worker,
+  by the browser's own engine, over the web's own WASI files
+  (runtime/file_system.js: /tmp in memory, so `--map-dir=/tmp::<dir>` is
+  that /tmp and no other directory is mapped), the guest's stdout, stderr
+  and exit code its own; Chrome for Testing on Linux (MODULE.bazel), the
+  Mac's own Chrome there, CHROME or `--chrome=` otherwise. It shares
+  browser_check's server and Chrome driver (//tools/testing/browser_driving).
+  //tools/wasm/wasi_run runs one under WasmKit with `iwasm`'s options
+  (`--dir=`, `--map-dir=<guest>::<host>`, `--env=`; also `--stack-size=`),
+  and WASI Threads for a module that imports a shared memory: the threaded
+  SQLite check's (a page's shared memory needs it served cross-origin
+  isolated), until WasmKit goes.
 - **The threads SDK beside the stock one (none until Swift 6.5).**
   rules_swift takes one `swift.wasm_sdk`; rules_swift#1990 (on #1860; in
   the registry's rules_swift) takes two, the
@@ -969,8 +978,9 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
     no WAL or mmap, and is thread-safe in a threaded reactor. A database in
     Application Support persists on every host: the web's files above, the
     app container under WasmKit, the files directory on Android.
-    The examples' //tests/sqlite_wasi:sqlite_file_test runs it under
-    WasmKit (//tools/wasm/wasi_run), and :sqlite_file_threads_test the
+    The examples' //tests/sqlite_wasi:sqlite_file_test runs it in
+    headless Chrome (//tools/wasm/wasi_run_browser), and
+    :sqlite_file_threads_test under WasmKit (//tools/wasm/wasi_run) the
     threaded build with WASI Threads (it compiles SQLite with THREADSAFE=1,
     the single-threaded one with 0);
     examples/web/files_probe_web_application checks it in Chrome across
