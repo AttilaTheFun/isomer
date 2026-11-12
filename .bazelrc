@@ -153,3 +153,6 @@ build:android_release --//swift_ffi/rules:jni_exports_only
 # An app to drive from the iso CLI (docs/drive.md): built with its driver in
 # (examples/.bazelrc says how to run the Storybook so).
 build:cli --//drive:headful
+# The same, under the name apps use for their debug and test builds
+# (docs/driver_in_apps.md): never with a release's config.
+build:drive --//drive:headful
