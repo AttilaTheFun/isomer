@@ -126,6 +126,42 @@ struct StorybookHeadlessTests {
         #expect(screen.shows("Wi-Fi off, Bluetooth on"))
     }
 
+    /// A Menu opens to its items, as a person's tap does; one is chosen.
+    @Test func menuOpensAndChooses() throws {
+        let app = try launch(story: "buttons.menu")
+        defer { app.quit() }
+        try app.tap("Actions")
+        try app.tap("Rename")
+        try app.wait(for: "Chose: Rename")
+        // A Label's menu, by its title.
+        try app.tap("More")
+        let screen = try app.tap("Pin")
+        #expect(screen.shows("Chose: Pin"))
+    }
+
+    /// `.searchable`'s field, by its prompt.
+    @Test func searchFieldFilters() throws {
+        let app = try launch(story: "lists.search")
+        defer { app.quit() }
+        // A city is a text of its own (the story's code names them too).
+        #expect(try app.screen().texts.contains("Paris"))
+        let screen = try app.type("Search cities", "lis")
+        #expect(screen.texts.contains("Lisbon"))
+        #expect(!screen.texts.contains("Paris"))
+    }
+
+    /// The navigation bar's items, an icon item by its Label's title.
+    @Test func toolbarItemsTap() throws {
+        let app = try launch(story: "navigation.toolbar")
+        defer { app.quit() }
+        try app.tap("Add")
+        try app.tap("Add")
+        try app.wait(for: "Added 2, last tapped: add")
+        // By its accessibility identifier.
+        let screen = try app.tap("settings")
+        #expect(screen.shows("last tapped: settings"))
+    }
+
     @Test func sheetPresentsAndDismisses() throws {
         let app = try launch(story: "presentation.sheet")
         defer { app.quit() }

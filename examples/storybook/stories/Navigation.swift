@@ -98,15 +98,16 @@ struct ToolbarStory: View {
                         count += 1
                         last = "add"
                     } label: {
-                        Image(systemName: "plus")
+                        Label("Add", systemImage: "plus")
                     }
                 }
                 ToolbarItem(placement: .navigation) {
                     Button {
                         last = "settings"
                     } label: {
-                        Image(systemName: "gearshape")
+                        Label("Settings", systemImage: "gearshape")
                     }
+                    .accessibilityIdentifier("settings")
                 }
             }
     }
