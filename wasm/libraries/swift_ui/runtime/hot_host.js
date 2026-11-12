@@ -193,6 +193,13 @@ export async function runHotBundle({ wasm, container, dependencies = {}, bundleI
 
   const module =
     wasm instanceof WebAssembly.Module ? wasm : await WebAssembly.compile(wasm);
+  // An import module nobody supplies (a package's own `@_extern(wasm,
+  // module: …)`) fails here by name, not as a bare LinkError.
+  const missing = [...new Set(WebAssembly.Module.imports(module).map((entry) => entry.module))]
+    .filter((name) => !(name in imports));
+  if (missing.length > 0) {
+    throw new Error(`the bundle imports ${missing.join(", ")}, which this host doesn't supply`);
+  }
   const instance = await WebAssembly.instantiate(module, imports);
   memory = instance.exports.memory;
   instance.exports._initialize();
