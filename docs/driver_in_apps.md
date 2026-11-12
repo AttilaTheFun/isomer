@@ -157,10 +157,22 @@ func launch(_ fixture: String) throws -> HeadlessApp {
 - **The Mac:** the same shape with `macos_unit_test` and the Mac app as host
   (the driver reads its own process's accessibility tree); isomer's own
   tests don't exercise it yet.
-- **Pictures:** not yet in-process. `app.picture` is the launcher's (simctl,
-  the Mac's window), so a hosted test takes none: a proof's pictures come
-  from a launcher's run for now. Taking them in-process (the key window
-  rendered to a PNG) is planned for 0.51.
+- **Pictures:** `app.picture(name)` draws the app's own key window in
+  process (UIKit's `drawHierarchy`, without the status bar; AppKit's
+  `cacheDisplay`, the window with its title bar), saves it under the proof's
+  id (`ios/phone/<name>`, `ios/phone-landscape/<name>`, `macos/window/<name>`)
+  and hands it to `HeadlessApp.onPicture`, which the test sets once to keep
+  it where the run's results come home, a Swift Testing attachment:
+
+  ```swift
+  HeadlessApp.onPicture = { id, png in
+      Attachment.record(png, named: id.replacingOccurrences(of: "/", with: "~") + ".png")
+  }
+  ```
+
+  The xcresult carries the attachments; `~` back to `/` gives the proof's
+  ids. Landscape is the app's: a test turns it (`requestGeometryUpdate`),
+  being in its process.
 
 ## In CI
 
