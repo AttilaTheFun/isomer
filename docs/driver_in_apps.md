@@ -85,6 +85,83 @@ source runs headless on Linux on every pull request and headful against the
 `--config=drive` build for the proof (examples' headless/storybook_headless_application
 does both).
 
+## Headful on iOS and the Mac: tests inside the app (XCTest)
+
+On the iPhone's simulator and the Mac, the headful tests run in an XCTest
+bundle whose host is the app built with `--config=drive`: the test beside the
+app in one process, driven synchronously with no network, as an XCUITest
+drives its app (on Shireworks' primary macOS VM, or a macOS runner). The same
+test source as the headless and launcher runs; only `launch` differs.
+
+```starlark
+load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application", "ios_unit_test")
+
+# The host: the app for the simulator (no provisioning profile). rules_apple's
+# runner looks for Payload/<this target's name>.app, so its bundle_name is
+# the target's name.
+ios_application(
+    name = "my_app_test_host",
+    bundle_id = "com.example.MyApp",
+    bundle_name = "my_app_test_host",
+    minimum_os_version = "17.0",
+    deps = [":app_lib", "@isomer//:isomer"],
+    ...
+)
+
+swift_library(
+    name = "hosted_tests",
+    testonly = True,
+    srcs = ["Tests/ChatTests.swift"],
+    deps = ["@isomer//headless/isomer_headless"],
+)
+
+ios_unit_test(
+    name = "hosted_ios_test",
+    minimum_os_version = "17.0",
+    runner = ":iphone_17",          # an ios_xctestrun_runner, below
+    test_host = ":my_app_test_host",
+    deps = [":hosted_tests"],
+)
+```
+
+```sh
+bazel test --config=drive --ios_multi_cpus=sim_arm64 //:hosted_ios_test
+```
+
+In the test, `launch` takes the app it is hosted in first:
+
+```swift
+func launch(_ fixture: String) throws -> HeadlessApp {
+    if let app = HeadlessApp.hostedIfAny() {
+        // One app for every test: reset it to the fixture in-process (the
+        // test can call the app's own code: it is in the same process).
+        try openFixture(fixture)
+        return app
+    }
+    // Headless on Linux, or a launcher's app (above).
+    ...
+}
+```
+
+- **The runner:** iOS 27's simulators don't run rules_apple's default
+  iPhone 15; examples' headless/storybook_headless_application has an
+  `ios_xctestrun_runner` for an iPhone 17 (`:iphone_17`) whose simulator is
+  the job's (`ISOMER_SIMULATOR`), else one made for the run, and whose
+  results suit Swift Testing. Copy it.
+- **No environment:** a runner (Shireworks' xctest among them) may pass the
+  test no environment, so fixtures open in-process: the Storybook posts a
+  notification its app takes (StorybookHeadlessTests.swift's `show`); an app
+  can as well call its own fixture code.
+- **Speed:** the app launches once; nine Storybook tests take about 80 s
+  on a hosted macOS runner, against about 190 s relaunched by a launcher.
+- **The Mac:** the same shape with `macos_unit_test` and the Mac app as host
+  (the driver reads its own process's accessibility tree); isomer's own
+  tests don't exercise it yet.
+- **Pictures:** not yet in-process. `app.picture` is the launcher's (simctl,
+  the Mac's window), so a hosted test takes none: a proof's pictures come
+  from a launcher's run for now. Taking them in-process (the key window
+  rendered to a PNG) is planned for 0.51.
+
 ## In CI
 
 Release and alpha builds never take `--config=drive`. The proof's apps and
