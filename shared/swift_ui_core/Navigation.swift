@@ -498,6 +498,8 @@ extension NavigationStack: _PrimitiveView {
                 // Accessibility labels per item (empty when none), same order.
                 "leadingLabels": leadingItems.map { $0.accessibilityLabel ?? "" }.joined(separator: "\n"),
                 "trailingLabels": trailingItems.map { $0.accessibilityLabel ?? "" }.joined(separator: "\n"),
+                "leadingIds": leadingItems.map { $0.accessibilityIdentifier ?? "" }.joined(separator: "\n"),
+                "trailingIds": trailingItems.map { $0.accessibilityIdentifier ?? "" }.joined(separator: "\n"),
                 "leadingSymbols": leadingItems.map { $0.symbolName ?? "" }.joined(separator: "\n"),
                 "trailingSymbols": trailingItems.map { $0.symbolName ?? "" }.joined(separator: "\n"),
                 // Segmented toolbar items (a `.segmented` Picker in a
@@ -632,6 +634,8 @@ extension NavigationStack {
             "trailingItems": nav.trailingItems.map(\.title).joined(separator: "\n"),
             "leadingLabels": nav.leadingItems.map { $0.accessibilityLabel ?? "" }.joined(separator: "\n"),
             "trailingLabels": nav.trailingItems.map { $0.accessibilityLabel ?? "" }.joined(separator: "\n"),
+            "leadingIds": nav.leadingItems.map { $0.accessibilityIdentifier ?? "" }.joined(separator: "\n"),
+            "trailingIds": nav.trailingItems.map { $0.accessibilityIdentifier ?? "" }.joined(separator: "\n"),
             "leadingSymbols": nav.leadingItems.map { $0.symbolName ?? "" }.joined(separator: "\n"),
             "trailingSymbols": nav.trailingItems.map { $0.symbolName ?? "" }.joined(separator: "\n"),
             "segments": _segmentsParam(nav.trailingItems),
@@ -1996,6 +2000,7 @@ extension ToolbarItem: _PrimitiveView {
             // words of a `Button("Settings", systemImage:)` name it.
             item = _BarItem(title: words ?? symbolGlyphIn(node) ?? "•", action: action,
                             accessibilityLabel: firstAccessibilityLabel(node) ?? (words == nil ? nil : (symbol != nil ? words : nil)),
+                            accessibilityIdentifier: firstAccessibilityIdentifier(node),
                             symbolName: words == nil ? symbol : nil,
                             prominent: firstButtonRole(node) == .confirm,
                             disabled: firstButtonDisabled(node))
@@ -2185,6 +2190,9 @@ struct _BarItem {
     var action: () -> Void
     /// `.accessibilityLabel` on the item's button (icon-only items).
     var accessibilityLabel: String? = nil
+    /// `.accessibilityIdentifier` on the item's button: what a driver finds
+    /// it by (params "leadingIds" / "trailingIds").
+    var accessibilityIdentifier: String? = nil
     /// The SF Symbol name when the item's label is an `Image(systemName:)`
     /// (its `title` is the stand-in glyph).
     var symbolName: String? = nil
@@ -2256,6 +2264,14 @@ func firstSymbolName(_ node: RenderNode) -> String? {
 }
 
 /// First `.accessibilityLabel` in a subtree (a bar item's icon-only button).
+func firstAccessibilityIdentifier(_ node: RenderNode) -> String? {
+    if let identifier = node.accessibilityIdentifier { return identifier }
+    for child in node.children {
+        if let identifier = firstAccessibilityIdentifier(child) { return identifier }
+    }
+    return nil
+}
+
 func firstAccessibilityLabel(_ node: RenderNode) -> String? {
     if let label = node.accessibilityLabel { return label }
     for child in node.children {

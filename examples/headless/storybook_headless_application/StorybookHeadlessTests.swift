@@ -157,7 +157,8 @@ struct StorybookHeadlessTests {
         try app.tap("Add")
         try app.tap("Add")
         try app.wait(for: "Added 2, last tapped: add")
-        let screen = try app.tap("Settings")
+        // By its accessibility identifier.
+        let screen = try app.tap("settings")
         #expect(screen.shows("last tapped: settings"))
     }
 

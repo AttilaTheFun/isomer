@@ -213,20 +213,22 @@ struct DriverScreen {
                 // navigation stack): a button each, named by its
                 // accessibility label (an icon item's title) or its title, a
                 // tap sending its place.
-                func items(_ titles: String?, _ labels: String?, _ disabled: String?, tap: (Int) -> String) {
+                func items(_ titles: String?, _ labels: String?, _ ids: String?, _ disabled: String?, tap: (Int) -> String) {
                     guard let titles, !titles.isEmpty else { return }
                     let labelList = (labels ?? "").components(separatedBy: "\n")
+                    let idList = (ids ?? "").components(separatedBy: "\n")
                     let disabledList = (disabled ?? "").components(separatedBy: "\n")
                     for (index, title) in titles.components(separatedBy: "\n").enumerated() {
                         if disabledList.indices.contains(index), disabledList[index] == "1" { continue }
                         let label = labelList.indices.contains(index) && !labelList[index].isEmpty ? labelList[index] : title
-                        var item = Element(role: "button", label: label, handler: handler)
+                        let id = idList.indices.contains(index) && !idList[index].isEmpty ? idList[index] : nil
+                        var item = Element(role: "button", label: label, id: id, handler: handler)
                         item.tapValue = tap(index)
                         elements.append(item)
                     }
                 }
-                items(p["leading"], p["leadingLabels"], p["leadingDisabled"]) { "leading:\($0)" }
-                items(p["trailingItems"], p["trailingLabels"], p["trailingDisabled"]) { "trailingItem:\($0)" }
+                items(p["leading"], p["leadingLabels"], p["leadingIds"], p["leadingDisabled"]) { "leading:\($0)" }
+                items(p["trailingItems"], p["trailingLabels"], p["trailingIds"], p["trailingDisabled"]) { "trailingItem:\($0)" }
                 // A component renderer's `.searchable` field, the stack's own.
                 if kind == "navstack", let prompt = p["searchPrompt"] {
                     var field = Element(role: "textField", label: prompt, value: p["searchValue"] ?? "", handler: handler)

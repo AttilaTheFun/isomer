@@ -107,6 +107,7 @@ struct ToolbarStory: View {
                     } label: {
                         Label("Settings", systemImage: "gearshape")
                     }
+                    .accessibilityIdentifier("settings")
                 }
             }
     }
