@@ -390,6 +390,14 @@ public final class HeadlessApp: @unchecked Sendable {
         return (URL(fileURLWithPath: runfiles).appendingPathComponent(workspace).appendingPathComponent(path)).standardized.path
     }
 
+    /// Told of each picture a hosted test takes (its id and its PNG): a test
+    /// records it where its run's results keep it, such as a Swift Testing
+    /// attachment, which an XCTest run's result bundle carries home:
+    /// `HeadlessApp.onPicture = { id, png in Attachment.record(png, named: id.replacingOccurrences(of: "/", with: "~") + ".png") }`.
+    /// (This library doesn't import Testing: a library that isn't testonly
+    /// can't, on Apple's platforms.)
+    nonisolated(unsafe) public static var onPicture: ((_ id: String, _ png: [UInt8]) -> Void)?
+
     /// A picture of the screen as it stands once settled, kept as a proof's
     /// screen (docs/drive.md, "Pictures"): its id is
     /// `<platform>/<device>/<name>` (`ios/phone/chat`), the platform the
@@ -397,12 +405,15 @@ public final class HeadlessApp: @unchecked Sendable {
     /// phone-landscape in a landscape window; macos, linux, windows: window;
     /// android: phone; web: desktop). The launcher takes it (simctl, the
     /// Mac's window, adb, Chrome) into ISOMER_PROOF (else the test's
-    /// outputs' proof folder), screens/<id>.png. An app built headless has
-    /// nothing to picture, nor has a launcher that takes no pictures (it
-    /// answers the request with none): nil.
+    /// outputs' proof folder), screens/<id>.png; a test hosted in its app
+    /// draws the app's own window there (HostedPicture.swift) and hands it
+    /// to `onPicture`. An app built headless has nothing to picture, nor
+    /// has a launcher that takes no pictures (it answers the request with
+    /// none): nil.
     @discardableResult
     public func picture(_ name: String, device: String? = nil) throws -> String? {
-        guard let requests, let launched, launched.isRunning else { return nil }
+        let hosted = local != nil
+        guard hosted || (requests != nil && launched?.isRunning == true) else { return nil }
         let info = try self.info()
         let platform = info.platform.lowercased()
         let landscape = info.width > info.height
@@ -425,9 +436,20 @@ public final class HeadlessApp: @unchecked Sendable {
         let file = proof.appendingPathComponent("screens/\(id).png")
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? FileManager.default.removeItem(at: file)
-        // The screen settled first; then the launcher's picture (a request
-        // naming the file, which it writes).
+        // The screen settled first.
         _ = try screen()
+        if hosted {
+            // A test hosted in its app: the app's own window, drawn here.
+            let png = Thread.isMainThread
+                ? MainActor.assumeIsolated { hostedWindowPNG() }
+                : try Self.blocking { await MainActor.run { hostedWindowPNG() } }
+            guard let png else { return nil }
+            try png.write(to: file)
+            Self.onPicture?(id, Array(png))
+            return id
+        }
+        guard let requests, let launched else { return nil }
+        // The launcher's picture: a request naming the file, which it writes.
         asked += 1
         let request = requests.appendingPathComponent("\(asked).request")
         try Data(file.path.utf8).write(to: request.appendingPathExtension("part"))
