@@ -39,6 +39,13 @@ struct DriverScreen {
         var options: [String] = []
         /// The handler a tap or an edit goes to.
         var handler: String?
+        /// What a tap sends its handler: nothing for a button; a bar item's
+        /// place (`trailingItem:2`) or a menu's item (`3`) for the chrome a
+        /// host draws from one node.
+        var tapValue = ""
+        /// A `Menu`'s button: a tap opens it, and its items are buttons
+        /// until one is tapped (`select` chooses one directly).
+        var menu = false
         /// Its name on the screen: its role and its place among that role's,
         /// from 1 (`button-3`).
         var name = ""
@@ -64,8 +71,12 @@ struct DriverScreen {
     /// The topmost presentation's node (the last one walked), if any.
     private var topPresentation: IsoFlat_Node?
 
-    init(_ root: IsoFlat_Node, compact: Bool = false) {
+    /// The menu a tap opened (its handler), whose items are buttons.
+    let openMenu: String?
+
+    init(_ root: IsoFlat_Node, compact: Bool = false, openMenu: String? = nil) {
         self.compact = compact
+        self.openMenu = openMenu
         walk(root, around: [], inside: nil)
         // Something presented (a sheet, an alert, a popover) is all that can
         // be used: the screen is the topmost presentation's, as a person
@@ -173,6 +184,44 @@ struct DriverScreen {
                 let role = kind == "picker" && p["style"] == "segmented" ? "segmented" : kind
                 elements.append(Element(role: role, label: label, id: id, value: node.v,
                                         options: node.options.compactMap { $0 }, handler: node.edit))
+            } else if kind == "menu" {
+                // A Menu: a button named by its label (options[0]); its
+                // actions are options[1...], sent by their 1-based place.
+                let options = node.options.compactMap { $0 }
+                let label = p["a11yLabel"] ?? options.first ?? "Menu"
+                var button = Element(role: "button", label: label, id: id, options: Array(options.dropFirst()),
+                                     handler: node.edit)
+                button.menu = true
+                elements.append(button)
+                if let handler = node.edit, handler == openMenu {
+                    for (index, option) in options.enumerated().dropFirst() {
+                        var item = Element(role: "button", label: option, handler: handler)
+                        item.tapValue = String(index)
+                        elements.append(item)
+                    }
+                }
+            } else if kind == "search" {
+                // `.searchable`'s field, named by its prompt.
+                elements.append(Element(role: "textField", label: p["a11yLabel"] ?? p["prompt"] ?? "Search", id: id,
+                                        value: node.v ?? "", handler: node.edit))
+            } else if kind == "navbar", let handler = node.edit {
+                // The bar's items, drawn by the host from this one node: a
+                // button each, named by its accessibility label (an icon
+                // item's title) or its title, a tap sending its place.
+                func items(_ titles: String?, _ labels: String?, _ disabled: String?, tap: (Int) -> String) {
+                    guard let titles, !titles.isEmpty else { return }
+                    let labelList = (labels ?? "").components(separatedBy: "\n")
+                    let disabledList = (disabled ?? "").components(separatedBy: "\n")
+                    for (index, title) in titles.components(separatedBy: "\n").enumerated() {
+                        if disabledList.indices.contains(index), disabledList[index] == "1" { continue }
+                        let label = labelList.indices.contains(index) && !labelList[index].isEmpty ? labelList[index] : title
+                        var item = Element(role: "button", label: label, handler: handler)
+                        item.tapValue = tap(index)
+                        elements.append(item)
+                    }
+                }
+                items(p["leading"], p["leadingLabels"], p["leadingDisabled"]) { "leading:\($0)" }
+                items(p["trailingItems"], p["trailingLabels"], p["trailingDisabled"]) { "trailingItem:\($0)" }
             }
         default:
             break
@@ -321,6 +370,9 @@ public final class IsomerAppDriver {
     /// come only from here); nil where the host draws on its own.
     private let renderIfNeeded: (@MainActor () -> Void)?
     private var encoder = FlatTreeEncoder()
+    /// The `Menu` a tap opened (its handler): its items are buttons on the
+    /// next screens, until one is tapped or something else is.
+    private var openMenu: String?
 
     public init(info: Wire_Info, renderIfNeeded: (@MainActor () -> Void)? = nil) {
         self.info = info
@@ -352,7 +404,7 @@ public final class IsomerAppDriver {
         encoder.semantic = true
         guard let root = try? IsoFlat_Node(treeBytes: encoder.encode(root: tree)) else { return nil }
         Runtime.shared.installTreeHandlers(encoder.handlers)
-        return DriverScreen(root, compact: Runtime.shared.compactWidth)
+        return DriverScreen(root, compact: Runtime.shared.compactWidth, openMenu: openMenu)
     }
 
     /// Frames until the screen holds still (three readings in a row the same,
@@ -440,8 +492,14 @@ public final class IsomerAppDriver {
             }
             error = "no element \(target)"
         case "tap":
-            if let handler = before?.element(target, roles: ["button"])?.handler {
-                runtime.hostViewEvent(id: handler, value: "")
+            if let element = before?.element(target, roles: ["button"]), let handler = element.handler {
+                if element.menu {
+                    // Opened: its items are buttons now.
+                    openMenu = handler
+                } else {
+                    openMenu = nil
+                    runtime.hostViewEvent(id: handler, value: element.tapValue)
+                }
             } else {
                 error = "no button \(target)"
             }
@@ -458,7 +516,17 @@ public final class IsomerAppDriver {
                 error = "no control \(target)"
             }
         case "select":
-            if let element = before?.element(target, roles: ["picker", "segmented"]), let handler = element.handler {
+            if let element = before?.element(target, roles: ["button"]), element.menu, let handler = element.handler {
+                // A Menu's item, chosen directly (1-based: its label is 0).
+                let wanted = command.value
+                if let index = element.options.firstIndex(of: wanted)
+                    ?? element.options.firstIndex(where: { $0.localizedCaseInsensitiveCompare(wanted) == .orderedSame }) {
+                    openMenu = nil
+                    runtime.hostViewEvent(id: handler, value: String(index + 1))
+                } else {
+                    error = "\(target) has no item \(wanted) (it has \(element.options.joined(separator: ", ")))"
+                }
+            } else if let element = before?.element(target, roles: ["picker", "segmented"]), let handler = element.handler {
                 let wanted = command.value
                 if let index = element.options.firstIndex(of: wanted)
                     ?? element.options.firstIndex(where: { $0.localizedCaseInsensitiveCompare(wanted) == .orderedSame }) {
