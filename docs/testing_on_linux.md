@@ -101,6 +101,11 @@ struct ChatTests {
 }
 ```
 
+Fixtures opened by launch arguments open the same way:
+`HeadlessApp(executable: path, arguments: ["-fixture", "YES"])` puts them
+in UserDefaults' argument domain, which Linux's Foundation reads as Apple's
+does.
+
 `HeadlessApp` finds elements by name, label or accessibility identifier, and
 has `tap`, `type`, `set`, `select`, `swipe`, `back`, `dismiss`, `wait(for:)`,
 `inspect`, `screen()` and `layout()` (frames, as the GPU renderer lays them
