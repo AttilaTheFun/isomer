@@ -119,6 +119,8 @@ kept in `~/.config/isomer/applications.json`, readable only by their user.
 
 ## Headful apps
 
+Which builds carry the driver, and how an app embeds it: docs/driver_in_apps.md.
+
 A headful app can't usually be reached (a simulator, an emulator, a phone, a
 browser tab), so it dials out instead. Built with `--@isomer//drive:headful`
 (off by default, and never in a release: such an app obeys whoever its
