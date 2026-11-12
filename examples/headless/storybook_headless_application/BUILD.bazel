@@ -82,6 +82,8 @@ _HEADFUL_WEB_ENV = {
 swift_test(
     name = "storybook_headful_web_test",
     size = "medium",
+    # A launch each test: past medium's five minutes as the tests grow.
+    timeout = "long",
     srcs = ["StorybookHeadlessTests.swift"],
     data = [
         "//web/storybook_web_application:storybook_web_application_site",
@@ -122,6 +124,8 @@ swift_test(
 swift_test(
     name = "storybook_headful_linux_test",
     size = "medium",
+    # A launch each test: past medium's five minutes as the tests grow.
+    timeout = "long",
     srcs = ["StorybookHeadlessTests.swift"],
     data = [
         "//linux/storybook_linux_application",
@@ -148,6 +152,8 @@ swift_test(
     swift_test(
         name = "storybook_headful_%s_test" % platform,
         size = "medium",
+        # A launch each test: past medium's five minutes as the tests grow.
+        timeout = "long",
         srcs = ["StorybookHeadlessTests.swift"],
         data = [
             "@isomer//drive/launchers:%s" % platform,
@@ -189,6 +195,8 @@ genrule(
 swift_test(
     name = "storybook_headful_windows_test",
     size = "medium",
+    # A launch each test: past medium's five minutes as the tests grow.
+    timeout = "long",
     srcs = [
         "StorybookHeadlessTests.swift",
         ":windows_test_main",
