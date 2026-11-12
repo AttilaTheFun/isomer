@@ -65,6 +65,11 @@ try app.tap("Tap")
 try app.wait(for: "Taps: 1")
 ```
 
+`arguments` are the app's launch arguments: `-key value` pairs land in
+UserDefaults' argument domain, as on Apple's platforms (Linux's Foundation
+reads them too), so an app whose fixtures open by arguments opens them the
+same way: `HeadlessApp(executable: path, arguments: ["-fixture", "YES"])`.
+
 ## The headless head and its layout (0.49)
 
 With no remote head drawing it, an app built headless renders through the

@@ -193,14 +193,18 @@ public final class HeadlessApp: @unchecked Sendable {
     /// and its layout's (`layout()`) reach the same app. `environment` adds to
     /// the process's own: the app's launch hooks (ISO_STORYBOOK_STORY…),
     /// ISO_HEADLESS_WIDTH and ISO_HEADLESS_HEIGHT (the window, 390 by 844 by
-    /// default: a lazy list builds the rows that fit).
+    /// default: a lazy list builds the rows that fit). `arguments` are its
+    /// launch arguments: `-key value` pairs are UserDefaults' argument domain,
+    /// as on Apple's platforms (`["-fixture", "YES"]`), so an app's fixtures
+    /// opened by arguments open the same way here.
     #if !os(Windows) && !(os(iOS) || os(tvOS) || os(watchOS) || os(visionOS))
-    public convenience init(executable: String, environment: [String: String] = [:]) throws {
+    public convenience init(executable: String, environment: [String: String] = [:], arguments: [String] = []) throws {
         // In /tmp: a test's own temporary folder is too deep for a socket's
         // path (about a hundred bytes at most).
         let socket = "/tmp/isomer-headless-\(UUID().uuidString.prefix(8)).sock"
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
         process.environment = ProcessInfo.processInfo.environment
             .merging(environment) { $1 }
             .merging(["ISO_DRIVE_LISTEN": "unix:" + socket, "ISO_HEADLESS_PROTOCOL": "serve"]) { $1 }
