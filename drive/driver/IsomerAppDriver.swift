@@ -46,6 +46,9 @@ struct DriverScreen {
         /// A `Menu`'s button: a tap opens it, and its items are buttons
         /// until one is tapped (`select` chooses one directly).
         var menu = false
+        /// What leads text typed into it: a component renderer's search
+        /// field is its navigation stack's (`search:<text>`).
+        var typePrefix = ""
         /// Its name on the screen: its role and its place among that role's,
         /// from 1 (`button-3`).
         var name = ""
@@ -204,10 +207,12 @@ struct DriverScreen {
                 // `.searchable`'s field, named by its prompt.
                 elements.append(Element(role: "textField", label: p["a11yLabel"] ?? p["prompt"] ?? "Search", id: id,
                                         value: node.v ?? "", handler: node.edit))
-            } else if kind == "navbar", let handler = node.edit {
-                // The bar's items, drawn by the host from this one node: a
-                // button each, named by its accessibility label (an icon
-                // item's title) or its title, a tap sending its place.
+            } else if kind == "navbar" || kind == "navstack", let handler = node.edit {
+                // The bar's items, drawn by the host from this one node (the
+                // self-drawing renderer's bar, a component renderer's
+                // navigation stack): a button each, named by its
+                // accessibility label (an icon item's title) or its title, a
+                // tap sending its place.
                 func items(_ titles: String?, _ labels: String?, _ disabled: String?, tap: (Int) -> String) {
                     guard let titles, !titles.isEmpty else { return }
                     let labelList = (labels ?? "").components(separatedBy: "\n")
@@ -222,6 +227,12 @@ struct DriverScreen {
                 }
                 items(p["leading"], p["leadingLabels"], p["leadingDisabled"]) { "leading:\($0)" }
                 items(p["trailingItems"], p["trailingLabels"], p["trailingDisabled"]) { "trailingItem:\($0)" }
+                // A component renderer's `.searchable` field, the stack's own.
+                if kind == "navstack", let prompt = p["searchPrompt"] {
+                    var field = Element(role: "textField", label: prompt, value: p["searchValue"] ?? "", handler: handler)
+                    field.typePrefix = "search:"
+                    elements.append(field)
+                }
             }
         default:
             break
@@ -504,8 +515,8 @@ public final class IsomerAppDriver {
                 error = "no button \(target)"
             }
         case "type":
-            if let handler = before?.element(target, roles: ["textField"])?.handler {
-                runtime.hostViewEvent(id: handler, value: command.text)
+            if let element = before?.element(target, roles: ["textField"]), let handler = element.handler {
+                runtime.hostViewEvent(id: handler, value: element.typePrefix + command.text)
             } else {
                 error = "no text field \(target)"
             }
