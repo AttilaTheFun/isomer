@@ -6,6 +6,9 @@ runtime. Tests drive it in seconds, with no simulator, emulator or browser.
 Built so, it can also be served to clients that hold only a renderer
 (docs/remote_sessions.md): the same binary, another protocol.
 
+An app repository's guide to running its UI tests this way on Linux, with
+Swift Testing: docs/testing_on_linux.md.
+
 ## Building an app headless
 
 `--@isomer//headless` points `@isomer//:swift_ui` and `@isomer//:isomer` at
