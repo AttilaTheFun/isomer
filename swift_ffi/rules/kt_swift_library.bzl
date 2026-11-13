@@ -24,6 +24,7 @@ def kt_swift_library(
         shared_platform_when = None,
         platform = Label("//swift_ffi/rules:android-aarch64"),
         visibility = None,
+        testonly = False,
         **kwargs):
     """Android bridge: a JNI shared library (`:lib<name>.so`) + a real
     `kt_jvm_library` named `:<name>` compiling the generated Kotlin bindings
@@ -40,7 +41,7 @@ def kt_swift_library(
     shared `swiftffi` runtime is added automatically). `module_name` defaults
     to `swift`'s own Swift module name; `java_class` (the Kotlin facade
     object) defaults to `<Module>Bridge`. Only `java_package` is the
-    consumer's to choose.
+    consumer's to choose. `testonly` applies to every target it makes.
 
     `link_deps` are linked into the `.so` beside `swift`. `shared_platform`
     (a `kt_swift_platform`) links it against that shared library instead
@@ -52,6 +53,7 @@ def kt_swift_library(
     """
     ffi_generate(
         name = name + "_header_src",
+        testonly = testonly,
         dep = swift,
         platform = platform,
         kind = "c-header",
@@ -60,6 +62,7 @@ def kt_swift_library(
     )
     ffi_generate(
         name = name + "_adapter_src",
+        testonly = testonly,
         dep = swift,
         platform = platform,
         kind = "jni-adapter",
@@ -71,6 +74,7 @@ def kt_swift_library(
     )
     cc_library(
         name = name + "_adapter",
+        testonly = testonly,
         srcs = [
             ":" + name + "_adapter_src",
             ":" + name + "_header_src",
@@ -85,22 +89,27 @@ def kt_swift_library(
     # which is exactly what `System.loadLibrary("<name>")` looks up.
     # (Swift Concurrency's dispatch libraries are linked by the rules_swift
     # Android toolchain itself since bazelbuild/rules_swift#1830.)
-    # Shipped (--//swift_ffi/rules:jni_exports_only): the JNI entry points
-    # alone exported, the rest local, so --gc-sections drops what they
-    # don't reach, and the symbol tables stripped.
-    jni_linkopts = linkopts + select({
-            Label("//swift_ffi/rules:jni_exports_only_on"): [
-                "-Wl,--version-script=$(location %s)" % Label("//swift_ffi/rules:jni_exports.lds"),
-                # The script names JNI_OnLoad, which a library may not have.
-                "-Wl,--undefined-version",
-                "-Wl,--gc-sections",
-                "-Wl,--strip-all",
-            ],
-            "//conditions:default": [],
-        })
+    # The JNI entry points alone exported, the rest local: what the library
+    # links statically (the Swift runtime, Foundation, libc++) is its own,
+    # never another library's in the process (a host app's libc++_shared.so
+    # among them). Shipped (--//swift_ffi/rules:jni_exports_only) too:
+    # --gc-sections drops what the entry points don't reach, and the symbol
+    # tables are stripped.
+    jni_linkopts = linkopts + [
+        "-Wl,--version-script=$(location %s)" % Label("//swift_ffi/rules:jni_exports.lds"),
+        # The script names JNI_OnLoad, which a library may not have.
+        "-Wl,--undefined-version",
+    ] + select({
+        Label("//swift_ffi/rules:jni_exports_only_on"): [
+            "-Wl,--gc-sections",
+            "-Wl,--strip-all",
+        ],
+        "//conditions:default": [],
+    })
     if shared_platform:
         swift_shared_library(
             name = name + "_shared_native",
+            testonly = testonly,
             deps = [swift, ":" + name + "_adapter"] + link_deps,
             platform = _platform_link(shared_platform),
             additional_linker_inputs = [Label("//swift_ffi/rules:jni_exports.lds")],
@@ -110,6 +119,7 @@ def kt_swift_library(
     if not shared_platform or shared_platform_when:
         swift_binary(
             name = name + "_native",
+            testonly = testonly,
             srcs = [REACTOR_STUB],
             module_name = name + "_native",
             deps = [swift, ":" + name + "_adapter"] + link_deps,
@@ -122,6 +132,7 @@ def kt_swift_library(
     shared = ":" + name + "_shared_native"
     transition_binary(
         name = "lib" + name + ".so",
+        testonly = testonly,
         binary = _pick(shared_platform, shared_platform_when, shared, whole),
         platform = platform,
         tags = ["manual"],
@@ -133,6 +144,7 @@ def kt_swift_library(
     # to match declarations) and the facade object inside is `java_class`.
     ffi_generate(
         name = name + "_gen_kt",
+        testonly = testonly,
         dep = swift,
         platform = platform,
         kind = "kotlin",
@@ -151,6 +163,7 @@ def kt_swift_library(
 
     kt_jvm_library(
         name = name,
+        testonly = testonly,
         srcs = [":" + name + "_gen_kt"],
         visibility = visibility,
         deps = [_RUNTIME_KOTLIN] + deps,
@@ -195,7 +208,12 @@ def kt_swift_platform(
         # Shipped (--//swift_ffi/rules:jni_exports_only), stripped as the
         # JNI libraries are: the dynamic symbol table, what they link
         # against, stays.
-        linkopts = ["-Wl,-soname,lib%s.so" % name] + linkopts + select({
+        # Its libc++ (linked statically, as in every JNI library) stays its
+        # own: exported, it would meet a host app's libc++_shared.so.
+        linkopts = [
+            "-Wl,-soname,lib%s.so" % name,
+            "-Wl,--exclude-libs,libc++_static.a:libc++abi.a",
+        ] + linkopts + select({
             Label("//swift_ffi/rules:jni_exports_only_on"): ["-Wl,--strip-all"],
             "//conditions:default": [],
         }),
