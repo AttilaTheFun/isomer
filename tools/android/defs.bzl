@@ -386,13 +386,8 @@ def isomer_android_library(name, swift_library, extra_kotlin_srcs = [], extra_de
         visibility = visibility,
         deps = [
             ":%s_bindings" % name,
-            Label("@rules_android_maven//:androidx_activity_activity_compose"),
-            Label("@rules_android_maven//:androidx_compose_foundation_foundation"),
-            Label("@rules_android_maven//:androidx_compose_material3_material3"),
-            Label("@rules_android_maven//:androidx_compose_runtime_runtime"),
-            Label("@rules_android_maven//:androidx_compose_ui_ui"),
-            Label("@rules_android_maven//:androidx_fragment_fragment"),
-            Label("@rules_android_maven//:androidx_lifecycle_lifecycle_common"),
+            # Isomer's AndroidX, or the app's own (//android/maven).
+            Label("//android/maven:androidx"),
         ] + extra_deps,
     )
 
@@ -449,15 +444,8 @@ def isomer_wasm_android_library(name, swift_library, visibility = None):
         deps = [
             ":%s_bindings" % name,
             ":%s_wasm_bindings" % name,
-            Label("@rules_android_maven//:androidx_activity_activity_compose"),
-            Label("@rules_android_maven//:androidx_compose_foundation_foundation"),
-            Label("@rules_android_maven//:androidx_compose_material3_material3"),
-            Label("@rules_android_maven//:androidx_compose_runtime_runtime"),
-            Label("@rules_android_maven//:androidx_compose_ui_ui"),
-            Label("@rules_android_maven//:androidx_fragment_fragment"),
-            Label("@rules_android_maven//:androidx_lifecycle_lifecycle_common"),
-            Label("@rules_android_maven//:org_jetbrains_kotlinx_kotlinx_coroutines_core"),
-            Label("@rules_android_maven//:org_jetbrains_kotlinx_kotlinx_coroutines_android"),
+            # Isomer's AndroidX, or the app's own (//android/maven).
+            Label("//android/maven:androidx"),
         ],
     )
 
@@ -662,8 +650,8 @@ def isomer_android_app(
         tags = ["manual"],
         deps = [
             ":%s_runtime" % name,
-            Label("@rules_android_maven//:androidx_activity_activity_compose"),
-            Label("@rules_android_maven//:androidx_compose_runtime_runtime"),
+            # Isomer's AndroidX, or the app's own (//android/maven).
+            Label("//android/maven:androidx"),
         ],
         **kt_kwargs
     )
@@ -675,8 +663,10 @@ def isomer_android_app(
         deps = [
             ":%s_app_lib" % name,
             ":%s_runtime_native" % name,
-            # Macrobenchmark's DROP_SHADER_CACHE broadcast target.
-            Label("@rules_android_maven//:androidx_profileinstaller_profileinstaller"),
+            # Isomer's AndroidX, or the app's own (//android/maven):
+            # ProfileInstaller among it, Macrobenchmark's DROP_SHADER_CACHE
+            # broadcast target.
+            Label("//android/maven:androidx"),
         ] + extra_binary_deps,
     )
 
@@ -814,8 +804,8 @@ def isomer_android_aar(
         tags = ["manual"],
         deps = [
             ":%s_runtime" % name,
-            Label("@rules_android_maven//:androidx_activity_activity_compose"),
-            Label("@rules_android_maven//:androidx_compose_runtime_runtime"),
+            # Isomer's AndroidX, or the app's own (//android/maven).
+            Label("//android/maven:androidx"),
         ],
     )
     _isomer_aar(

@@ -79,13 +79,7 @@ kt_android_library(
     tags = ["manual"],
     deps = [
         "@isomer//android/libraries/wasm_view:wasm_engine_bindings",
-        "@isomer//tools/android:maven_androidx_activity_activity_compose",
-        "@isomer//tools/android:maven_androidx_compose_foundation_foundation",
-        "@isomer//tools/android:maven_androidx_compose_material3_material3",
-        "@isomer//tools/android:maven_androidx_compose_runtime_runtime",
-        "@isomer//tools/android:maven_androidx_compose_ui_ui",
-        "@isomer//tools/android:maven_org_jetbrains_kotlinx_kotlinx_coroutines_android",
-        "@isomer//tools/android:maven_org_jetbrains_kotlinx_kotlinx_coroutines_core",
+        "@isomer//android/maven:androidx",
     ],
 )
 

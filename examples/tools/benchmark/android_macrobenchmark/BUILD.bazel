@@ -15,14 +15,14 @@ kt_android_library(
     deps = [
         # benchmark-common + wire explicitly: their wire-generated
         # perfetto.protos classes get dropped from the transitive aar chain.
-        "@isomer//tools/android:maven_androidx_benchmark_benchmark_common",
-        "@isomer//tools/android:maven_androidx_benchmark_benchmark_macro",
-        "@isomer//tools/android:maven_androidx_benchmark_benchmark_macro_junit4",
-        "@isomer//tools/android:maven_com_squareup_wire_wire_runtime_jvm",
-        "@isomer//tools/android:maven_androidx_test_ext_junit",
-        "@isomer//tools/android:maven_androidx_test_runner",
-        "@isomer//tools/android:maven_androidx_test_uiautomator_uiautomator",
-        "@isomer//tools/android:maven_junit_junit",
+        "@examples_maven//:androidx_benchmark_benchmark_common",
+        "@examples_maven//:androidx_benchmark_benchmark_macro",
+        "@examples_maven//:androidx_benchmark_benchmark_macro_junit4",
+        "@examples_maven//:com_squareup_wire_wire_runtime_jvm",
+        "@examples_maven//:androidx_test_ext_junit",
+        "@examples_maven//:androidx_test_runner",
+        "@examples_maven//:androidx_test_uiautomator_uiautomator",
+        "@examples_maven//:junit_junit",
     ],
 )
 

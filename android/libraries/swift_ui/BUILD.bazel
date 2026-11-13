@@ -276,12 +276,11 @@ filegroup(
 exports_files(["RuntimeManifest.xml"])
 
 # The Compose compiler (matching rules_kotlin's kotlinc release), shared by
-# every kt_android_library the macros declare.
+# every kt_android_library the macros declare: Isomer's, or the app's
+# (//android/maven:compose_compiler).
 kt_compiler_plugin(
     name = "compose_compiler_plugin",
     id = "androidx.compose.compiler",
     target_embedded_compiler = True,
-    deps = [
-        "@rules_android_maven//:org_jetbrains_kotlin_kotlin_compose_compiler_plugin_embeddable",
-    ],
+    deps = ["//android/maven:compose_compiler"],
 )

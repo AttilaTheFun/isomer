@@ -16,13 +16,7 @@ kt_android_library(
     plugins = ["@isomer//android/libraries/swift_ui:compose_compiler_plugin"],
     tags = ["manual"],
     deps = [
-        "@isomer//tools/android:maven_androidx_activity_activity_compose",
-        "@isomer//tools/android:maven_androidx_compose_foundation_foundation",
-        "@isomer//tools/android:maven_androidx_compose_material3_material3",
-        "@isomer//tools/android:maven_androidx_compose_runtime_runtime",
-        "@isomer//tools/android:maven_androidx_compose_ui_ui",
-        "@isomer//tools/android:maven_org_jetbrains_kotlinx_kotlinx_coroutines_android",
-        "@isomer//tools/android:maven_org_jetbrains_kotlinx_kotlinx_coroutines_core",
+        "@isomer//android/maven:androidx",
     ],
 )
 
@@ -30,7 +24,6 @@ android_binary(
     name = "remote_android_application_apk",
     manifest = "AndroidManifest.xml",
     deps = [
-        "@isomer//tools/android:maven_androidx_profileinstaller_profileinstaller",
         ":remote_app",
     ],
 )
