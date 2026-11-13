@@ -914,9 +914,10 @@ struct NativeStepper: View {
     let pnode: PatchedNode
     let send: (String, String) -> Void
 
+    private func param(_ key: String) -> String? { pnode.flat.params.first { $0.key == key }?.value }
+
     var body: some View {
         let taps = Self.taps(in: pnode)
-        func param(_ key: String) -> String? { pnode.flat.params.first { $0.key == key }?.value }
         let can = Array(param("stepperCan") ?? "11")
         let decrement: (() -> Void)? = taps.count == 2 && can.first == "1" ? { send(taps[0], "") } : nil
         let increment: (() -> Void)? = taps.count == 2 && can.last == "1" ? { send(taps[1], "") } : nil
