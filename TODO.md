@@ -251,23 +251,38 @@ JavaScript engine, and WasmKit goes:
   `com.LoganShire.Experiments.`).
 - Then WasmKit leaves (its fork's Isomer-only pull requests closed by the
   Upstream session; general fixes still contributed upstream).
-- **The seam** (owner, 2026-11-13: "protobuf with pluggable transports"):
-  a web view runs the reactor's whole runtime (the guest), and the native
-  app is its head over the session protocol (shared/wire/session.proto,
-  drive/serving's transports), as a remote head is today, rather than a
-  synchronous `WasmRuntime` whose host imports a web view can't answer at
-  once. Inside the web view the guest has the web's own host (boot.js:
-  text measured and rasterized by the page, synchronously), so nothing on
-  the wire waits on the native side. To settle:
-  - images: a bundled asset by name (the head loads it), a remote one by URL
-    (the head fetches it), and pixels the guest made (`Image(data:)`,
-    ImageIO, a CGImage) sent once as a blob keyed by its source, which the
-    tree then names; the GPU renderer's own rasters stay in the web view;
-  - platform services the page lacks or does differently (files, the
-    keychain, the clipboard, networking without CORS): over the session,
-    asynchronous as they are;
-  - what a head measures (a component head lays text out itself; the
-    guest's own layout, `GeometryReader`, asks the page).
+- **The seam** (owner, 2026-11-13): synchronous protobuf between the body
+  (the app's runtime, an IsomerServer answering `handle(request) ->
+  response`) and the head (what draws, its client), with no thread hop;
+  the asynchronous adapters (gRPC, WebSockets: drive/) compiled in only when
+  wanted, for the CLI, tests and remote headless apps. In process (compiled
+  Swift, WasmKit, JavaScriptCore on Linux) a call is a function call on the
+  same thread (IsomerLocalServer is that path today).
+  - A web view is another process (iOS gives JIT to WebKit's WebContent
+    process alone): the app can reach the page only asynchronously
+    (`evaluateJavaScript`, `postMessage`), but the page can call the app
+    synchronously (a synchronous XHR to a `WKURLSchemeHandler`, or
+    `prompt()`). So the body drives: once a frame the guest calls
+    `exchange(patches) -> events`, one round trip between the processes, no
+    hop within either; the app's main thread never waits on the page (or
+    they deadlock). Android's WebView (`addJavascriptInterface`) is
+    synchronous from the page but answers on a binder thread (a hop to the
+    UI thread); JavaScriptSandbox is asynchronous only; WebView2's
+    synchronous host objects are cross-process COM onto the UI thread.
+  - Inside the web view the guest has the web's own host (boot.js: text
+    measured and rasterized by the page, synchronously), so layout and
+    drawing never wait on the app. Images: a bundled asset by name (the head
+    loads it), a remote one by URL (the head fetches it), pixels the guest
+    made (`Image(data:)`, ImageIO, a CGImage) sent once as a blob keyed by its
+    source, which the tree then names; the GPU renderer's rasters stay in
+    the page. Platform services the page lacks (files, the keychain, the
+    clipboard, networking without CORS) over the session.
+  - The decider, the benchmark above, one reactor four ways on an iPhone:
+    WasmKit in process; the web view with the body-driven synchronous
+    exchange; the web view with asynchronous messages; `JSContext` in
+    process (no JIT for an app's own JavaScriptCore on iOS; whether it runs
+    wasm there without JIT, to check; the Mac's can JIT with the allow-JIT
+    entitlement). First frame and event to frame.
 - Order: the WebKit runtime on Apple with its benchmark against WasmKit
   (0.53); Android's JavaScriptSandbox, Linux's JavaScriptCore and Windows'
   WebView2 (0.54); then WasmKit, its fork, `WasmKitRuntime` and
