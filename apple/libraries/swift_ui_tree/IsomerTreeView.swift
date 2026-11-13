@@ -918,8 +918,8 @@ struct NativeStepper: View {
         let taps = Self.taps(in: pnode)
         func param(_ key: String) -> String? { pnode.flat.params.first { $0.key == key }?.value }
         let can = Array(param("stepperCan") ?? "11")
-        let decrement = taps.count == 2 && can.first == "1" ? { send(taps[0], "") } : nil
-        let increment = taps.count == 2 && can.last == "1" ? { send(taps[1], "") } : nil
+        let decrement: (() -> Void)? = taps.count == 2 && can.first == "1" ? { send(taps[0], "") } : nil
+        let increment: (() -> Void)? = taps.count == 2 && can.last == "1" ? { send(taps[1], "") } : nil
         Stepper(onIncrement: increment, onDecrement: decrement) { Text(verbatim: param("stepperTitle") ?? "") }
     }
 
