@@ -446,9 +446,13 @@ extension GradientPaint {
             fields.append("\"a0\":\(num(startAngle.radians))")
             fields.append("\"a1\":\(num(endAngle.radians))")
         }
+        // A system colour's stop also carries its name ("n", as `fillName`
+        // names a fill): hosts with the system's colours draw those (Apple's
+        // change from release to release; the RGBA is Isomer's table's).
         let stopJSON = stops.map { stop in
             let c = stop.color
-            return "{\"c\":[\(num(c.red)),\(num(c.green)),\(num(c.blue)),\(num(c.alpha))],\"l\":\(num(stop.location))}"
+            let name = systemColorName(c).map { ",\"n\":\(jsonString($0))" } ?? ""
+            return "{\"c\":[\(num(c.red)),\(num(c.green)),\(num(c.blue)),\(num(c.alpha))],\"l\":\(num(stop.location))\(name)}"
         }.joined(separator: ",")
         fields.append("\"stops\":[\(stopJSON)]")
         if let material { fields.append("\"material\":\(jsonString(material))") }

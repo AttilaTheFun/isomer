@@ -1467,15 +1467,22 @@ extension NavigationLink: _PrimitiveView {
         }
         let labelNode = buildNode(view: label, ctx: &sub)
 
-        let chevron = RenderNode(kind: .text("›"))
-        chevron.font = .body
-        chevron.color = Color(white: 0, opacity: 0.3)
+        // The chevron is a row's (a List's or a Form's), as in SwiftUI; a
+        // link elsewhere is its label alone, as a button is.
+        let content: RenderNode
+        if ctx.env.formRow {
+            let chevron = RenderNode(kind: .text("›"))
+            chevron.font = .body
+            chevron.color = Color(white: 0, opacity: 0.3)
+            let row = RenderNode(kind: .stack(.horizontal))
+            row.stackSpacing = 6
+            row.children = [labelNode, chevron]
+            content = row
+        } else {
+            content = labelNode
+        }
 
-        let row = RenderNode(kind: .stack(.horizontal))
-        row.stackSpacing = 6
-        row.children = [labelNode, chevron]
-
-        let box = RenderNode.box(child: row)
+        let box = RenderNode.box(child: content)
         if ctx.env.isEnabled, let nav = ctx.navigation {
             switch value {
             case .some(.some(let value)):

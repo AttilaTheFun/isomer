@@ -168,10 +168,15 @@ struct NodeView: View, Equatable {
         case .slider:
             sliderBody
         case .progress:
-            if let value = node.num {
-                ProgressView(value: value)
-            } else {
-                ProgressView()
+            // `.progressViewStyle`: the guest's choice ("pstyle"), else the
+            // platform's.
+            switch (node.num, nodeParam("pstyle")) {
+            case (let value?, "circular"): ProgressView(value: value).progressViewStyle(.circular)
+            case (let value?, "linear"): ProgressView(value: value).progressViewStyle(.linear)
+            case (let value?, _): ProgressView(value: value)
+            case (nil, "circular"): ProgressView().progressViewStyle(.circular)
+            case (nil, "linear"): ProgressView().progressViewStyle(.linear)
+            case (nil, _): ProgressView()
             }
         case .hostview:
             switch node.view {
@@ -366,12 +371,27 @@ struct NodeView: View, Equatable {
         // Only apply an EXPLICIT limit: `.lineLimit(nil)` would override the
         // environment default a native container sets (a List's sidebar rows
         // truncate at one line; unlimited text there wraps mid-word).
+        // `.tracking` / `.kerning`: points between characters.
+        if let tracking = nodeParam("tracking").flatMap(Double.init) {
+            if #available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *) {
+                text = text.tracking(CGFloat(tracking))
+            } else {
+                text = text.kerning(CGFloat(tracking))
+            }
+        }
         var truncated = AnyView(text)
-        if let spacing = nodeParam("lineSpacing").flatMap(Double.init) { truncated = AnyView(truncated.lineSpacing(CGFloat(spacing))) }
         switch nodeParam("truncation") {
         case "head": truncated = AnyView(text.truncationMode(.head))
         case "middle": truncated = AnyView(text.truncationMode(.middle))
         case "tail": truncated = AnyView(text.truncationMode(.tail))
+        default: break
+        }
+        if let spacing = nodeParam("lineSpacing").flatMap(Double.init) { truncated = AnyView(truncated.lineSpacing(CGFloat(spacing))) }
+        // `.multilineTextAlignment`: the paragraph's lines.
+        switch nodeParam("textAlign") {
+        case "leading": truncated = AnyView(truncated.multilineTextAlignment(.leading))
+        case "center": truncated = AnyView(truncated.multilineTextAlignment(.center))
+        case "trailing": truncated = AnyView(truncated.multilineTextAlignment(.trailing))
         default: break
         }
         if let lines = node.lines {
@@ -465,7 +485,13 @@ struct NodeView: View, Equatable {
         if let family = nodeParam("family") {
             return Font.custom(family, fixedSize: node.size.map { CGFloat($0) } ?? 15).weight(weight)
         }
-        let design: Font.Design = nodeParam("mono") == "1" ? .monospaced : .default
+        let design: Font.Design
+        switch nodeParam("design") {
+        case _ where nodeParam("mono") == "1": design = .monospaced
+        case "serif": design = .serif
+        case "rounded": design = .rounded
+        default: design = .default
+        }
         if let style = nodeParam("textStyle").flatMap(hostTextStyle) {
             if #available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *) {
                 return .system(style, design: design, weight: weight)
@@ -525,10 +551,12 @@ struct NodeView: View, Equatable {
         node.flat.params.contains { $0.key == "gridRow" && $0.value == "1" }
     }
 
+    /// A stack with no spacing of its own gets the system's (nil: adaptive,
+    /// by what is either side), as the app's stack does in SwiftUI.
     @ViewBuilder private func plainStackBody(spacing: CGFloat?) -> some View {
         switch node.axis {
         case .horizontal:
-            HStack(alignment: verticalAlignment, spacing: spacing ?? 8) { childViews }
+            HStack(alignment: verticalAlignment, spacing: spacing) { childViews }
         case .depth:
             if nodeParam("form") == "form" {
                 FormBody(pnode: pnode, send: send)
@@ -536,7 +564,7 @@ struct NodeView: View, Equatable {
                 ZStack(alignment: alignment) { childViews }
             }
         default:
-            VStack(alignment: horizontalAlignment, spacing: spacing ?? 8) { childViews }
+            VStack(alignment: horizontalAlignment, spacing: spacing) { childViews }
         }
     }
 
@@ -705,11 +733,21 @@ struct NodeView: View, Equatable {
 // MARK: - Shapes & gradients
 
 /// The node's shape as one type (SwiftUI's own `AnyShape` is iOS 16).
+/// An app's own shape (`Ellipse`, a `Path`, a custom `Shape`, a rotated
+/// one) is its parts in the unit square, scaled to the frame: replayed
+/// with the system's path calls where the tree has them exactly
+/// (`pathExact`: curves and arcs as the app drew them), else its outline
+/// (`path`: curves as lines).
 struct NodeShape: Shape {
     let kind: IsoFlat_Shape?
     let radius: CGFloat
+    var exact: String? = nil
+    var outline: String? = nil
 
     func path(in rect: CGRect) -> Path {
+        let toRect = CGAffineTransform(a: rect.width, b: 0, c: 0, d: rect.height, tx: rect.minX, ty: rect.minY)
+        if let exact, let unit = Self.exactPath(exact) { return unit.applying(toRect) }
+        if let outline, let unit = Self.outlinePath(outline) { return unit.applying(toRect) }
         switch kind {
         case .circle: return Circle().path(in: rect)
         case .capsule: return Capsule().path(in: rect)
@@ -718,6 +756,81 @@ struct NodeShape: Shape {
                 ? RoundedRectangle(cornerRadius: radius).path(in: rect)
                 : Rectangle().path(in: rect)
         }
+    }
+
+    /// The `pathExact` param (Shapes.swift's `exactSerialized`).
+    static func exactPath(_ text: String) -> Path? {
+        let tokens = text.split(separator: " ")
+        var i = 0
+        func n() -> CGFloat? {
+            guard i < tokens.count, let v = Double(tokens[i]) else { return nil }
+            i += 1
+            return CGFloat(v)
+        }
+        func point() -> CGPoint? { guard let x = n(), let y = n() else { return nil }; return CGPoint(x: x, y: y) }
+        func rect() -> CGRect? {
+            guard let x = n(), let y = n(), let w = n(), let h = n() else { return nil }
+            return CGRect(x: x, y: y, width: w, height: h)
+        }
+        func transform() -> CGAffineTransform? {
+            guard let a = n(), let b = n(), let c = n(), let d = n(), let tx = n(), let ty = n() else { return nil }
+            return CGAffineTransform(a: a, b: b, c: c, d: d, tx: tx, ty: ty)
+        }
+        var path = Path()
+        while i < tokens.count {
+            let op = tokens[i]
+            i += 1
+            switch op {
+            case "M": guard let p = point() else { return nil }; path.move(to: p)
+            case "L": guard let p = point() else { return nil }; path.addLine(to: p)
+            case "Q": guard let p = point(), let c = point() else { return nil }; path.addQuadCurve(to: p, control: c)
+            case "C": guard let p = point(), let c1 = point(), let c2 = point() else { return nil }; path.addCurve(to: p, control1: c1, control2: c2)
+            case "Z": path.closeSubpath()
+            case "R": guard let r = rect(), let t = transform() else { return nil }; path.addRect(r, transform: t)
+            case "O":
+                guard let r = rect(), let w = n(), let h = n(), let continuous = n(), let t = transform() else { return nil }
+                path.addRoundedRect(in: r, cornerSize: CGSize(width: w, height: h), style: continuous == 1 ? .continuous : .circular, transform: t)
+            case "E": guard let r = rect(), let t = transform() else { return nil }; path.addEllipse(in: r, transform: t)
+            case "A":
+                guard let c = point(), let radius = n(), let start = n(), let end = n(), let clockwise = n(), let t = transform() else { return nil }
+                path.addArc(center: c, radius: radius, startAngle: .radians(Double(start)), endAngle: .radians(Double(end)),
+                            clockwise: clockwise == 1, transform: t)
+            case "N":
+                guard let p1 = point(), let p2 = point(), let radius = n(), let t = transform() else { return nil }
+                path.addArc(tangent1End: p1, tangent2End: p2, radius: radius, transform: t)
+            default: return nil
+            }
+        }
+        return path
+    }
+
+    /// The `path` param (Shapes.swift's `serialized`): lines and whole
+    /// shapes, curves already as lines.
+    static func outlinePath(_ text: String) -> Path? {
+        let tokens = text.split(separator: " ")
+        var i = 0
+        func n() -> CGFloat? {
+            guard i < tokens.count, let v = Double(tokens[i]) else { return nil }
+            i += 1
+            return CGFloat(v)
+        }
+        var path = Path()
+        while i < tokens.count {
+            let op = tokens[i]
+            i += 1
+            switch op {
+            case "M": guard let x = n(), let y = n() else { return nil }; path.move(to: CGPoint(x: x, y: y))
+            case "L": guard let x = n(), let y = n() else { return nil }; path.addLine(to: CGPoint(x: x, y: y))
+            case "R": guard let x = n(), let y = n(), let w = n(), let h = n() else { return nil }; path.addRect(CGRect(x: x, y: y, width: w, height: h))
+            case "Q":
+                guard let x = n(), let y = n(), let w = n(), let h = n(), let r = n() else { return nil }
+                path.addRoundedRect(in: CGRect(x: x, y: y, width: w, height: h), cornerSize: CGSize(width: r, height: r))
+            case "E": guard let x = n(), let y = n(), let w = n(), let h = n() else { return nil }; path.addEllipse(in: CGRect(x: x, y: y, width: w, height: h))
+            case "Z": path.closeSubpath()
+            default: return nil
+            }
+        }
+        return path
     }
 }
 
@@ -764,7 +877,11 @@ struct AnyShapeView: View {
     }
 
     private func shape(radius: CGFloat) -> NodeShape {
-        NodeShape(kind: node.shape, radius: radius)
+        func param(_ key: String) -> String? {
+            for kv in node.params where kv.key == key { return kv.value }
+            return nil
+        }
+        return NodeShape(kind: node.shape, radius: radius, exact: param("pathExact"), outline: param("path"))
     }
 }
 
@@ -778,8 +895,10 @@ func gradientPaint(_ json: String) -> AnyShapeStyle? {
           let stops = object["stops"] as? [[String: Any]] else { return nil }
     let colors: [Gradient.Stop] = stops.compactMap { stop in
         guard let c = stop["c"] as? [Double], c.count == 4 else { return nil }
+        // The system's colour by name where the stop names one ("n"), as a
+        // fill's `fillName`, else its RGBA.
         return Gradient.Stop(
-            color: Color(red: c[0], green: c[1], blue: c[2], opacity: c[3]),
+            color: (stop["n"] as? String).flatMap(hostSystemColor) ?? Color(red: c[0], green: c[1], blue: c[2], opacity: c[3]),
             location: CGFloat(stop["l"] as? Double ?? 0))
     }
     guard !colors.isEmpty else { return nil }
@@ -2221,6 +2340,10 @@ struct Decorations: ViewModifier {
                 view = AnyView(view.clipShape(RoundedRectangle(cornerRadius: CGFloat(radius))))
             }
         }
+        // `.blur(radius:)`.
+        if let radius = paramValue("blur").flatMap(Double.init) {
+            view = AnyView(view.blur(radius: CGFloat(radius)))
+        }
         // Always applied, at 1 when the guest sent none: a value that comes
         // and goes (a fade in, a row revealed) must not change what wraps
         // the view, or SwiftUI takes it for another view and builds it anew
@@ -2259,6 +2382,10 @@ struct Decorations: ViewModifier {
         // Visual transforms (`.offset` / `.scaleEffect`): the guest ships the
         // animator's per-frame values, so these are plain modifiers here.
         // Animated values, always applied (see opacity above).
+        // `.rotationEffect`, about the centre (where the guest sent one).
+        if let radians = paramValue("rotation").flatMap(Double.init) {
+            view = AnyView(view.rotationEffect(.radians(radians)))
+        }
         view = AnyView(view
             .scaleEffect(CGFloat(node.scale ?? 1))
             .offset(x: CGFloat(node.offsetX ?? 0), y: CGFloat(node.offsetY ?? 0)))
@@ -2305,6 +2432,10 @@ struct Decorations: ViewModifier {
         }
         if let popover = paramValue("popover") {
             view = AnyView(view.modifier(AnchoredPopover(id: popover, send: send)))
+        }
+        // `.layoutPriority`: what its stack gives it first, so outermost.
+        if let priority = paramValue("layoutPriority").flatMap(Double.init) {
+            view = AnyView(view.layoutPriority(priority))
         }
         return view
     }
@@ -2369,13 +2500,19 @@ func swiftColor(_ value: IsoFlat_ColorRGBA) -> Color {
         opacity: Double(value.a))
 }
 
+/// The guest's weight (100...900, CSS's scale: ultraLight 100 to black
+/// 900) as the system's, each of the nine its own.
 func flatFontWeight(_ weight: Int32) -> Font.Weight {
     switch weight {
-    case ..<300: return .light
-    case ..<500: return .regular
-    case ..<600: return .medium
-    case ..<700: return .semibold
-    default: return .bold
+    case ..<150: return .ultraLight
+    case ..<250: return .thin
+    case ..<350: return .light
+    case ..<450: return .regular
+    case ..<550: return .medium
+    case ..<650: return .semibold
+    case ..<750: return .bold
+    case ..<850: return .heavy
+    default: return .black
     }
 }
 
