@@ -1,6 +1,7 @@
 // SwiftNIO under Wine (BUILD.bazel): an event loop, a loopback echo, and a
-// shutdown, each step said on standard error (unbuffered, so a crash
-// still shows the last one). Exits 0 when every step passed.
+// shutdown, each step said on standard output and flushed (so a crash still
+// shows the last one; ucrt's `stderr` is a macro Swift can't import). Exits
+// 0 when every step passed.
 
 import NIOCore
 import NIOPosix
@@ -11,7 +12,8 @@ import Glibc
 #endif
 
 func say(_ line: String) {
-    fputs("nio_probe: \(line)\n", stderr)
+    print("nio_probe: \(line)")
+    fflush(nil)
 }
 
 final class Echo: ChannelInboundHandler {

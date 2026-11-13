@@ -4,7 +4,7 @@ load("@rules_swift//swift:swift.bzl", "swift_binary")
 # through an AF_UNIX socket pair (SelectorWSAPoll), which Wine has only in
 # Wine Staging (11.16 and later); the headful driver and its tests are NIO's
 # on Windows. The probe starts an event loop, echoes a message over loopback
-# TCP and shuts down, saying each step on standard error. Built for Windows
+# TCP and shuts down, saying each step on standard output. Built for Windows
 # on Arm in CI's container:
 #   bazel build --config=windows_on_linux \
 #     --platforms=@isomer//tools/platforms:windows_arm64 //tests/wine_nio:nio_probe
