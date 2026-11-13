@@ -132,6 +132,80 @@ docs/drive_plan.md the order. Open:
   resuming one (the app kept for a while, the client given the whole tree
   again) is open, as are recording a session and replaying it.
 
+## iPhone parity with Apple's SwiftUI (owner, 2026-11-13)
+
+The same Storybook source, compiled against Isomer's SwiftUI and drawn by
+Apple's tree renderer (apple/libraries/swift_ui_tree), should match the
+build against Apple's SwiftUI pixel for pixel (the proof's
+`tests/parity-ios`). 40 of 98 stories differed at 0.51.1, 9 at 0.52.1;
+docs/parity/apple_tree.md has every cause and fix. Left:
+
+- lists.empty: the system's ContentUnavailableView drawn right but 9 pt
+  lower; likely the second one below it (with an action, off screen) is
+  18 pt shorter than Apple's.
+- lists.outline: DisclosureGroup and OutlineGroup in a List are rows of
+  their own (separators, the trailing chevron) in Apple's; the core draws
+  its composite in one row.
+- controls.toggle: `.disabled` dims a subtree's colours in the core
+  (`env.opacity *= 0.45`), where SwiftUI dims only its controls: a change
+  of every platform's look.
+- state.environment: a dark-scheme badge's border (`Color.secondary` under
+  `.environment(\.colorScheme, .dark)`) drawn in the light scheme's
+  secondary; the `scheme` hint doesn't reach it, cause not found.
+- navigation.links: a NavigationLink outside a row should be drawn as a
+  system button (glyph spacing).
+- images.symbols, state.appstorage: 1 px offsets left after #189.
+- shapes.arcs, shapes.rotation: antialiasing (a CGPath ellipse replayed as
+  curves; a rotated rounded rect as a path).
+- Regenerate docs/parity after 0.52's new API (tools/parity/parity.py, in a
+  container).
+
+## The `apple` CI job: its tests built in the container (owner, 2026-11-13)
+
+The job's four parts run on GitHub's Macs at once since #185 (96 minutes on
+one Mac to 71); most of what is left is Bazel building the headful tests
+from cold on each Mac. CI's container should build them (rules_applecross)
+and hand them on, as it does Windows' tests: about 15 minutes in all.
+Apple Cross (2026-11-13): the SDK archive carries XCTest and Swift Testing,
+XCTest bundles build there; Swift Testing is untried (the TestingMacros
+plugin, lib_TestingInterop's weak link). First: one small Swift Testing
+macOS target in a leased container, failures to Apple Cross; on the Mac
+run with DYLD_FRAMEWORK_PATH and DYLD_LIBRARY_PATH at Xcode's platform
+Developer folders.
+
+## What the apps asked for (Logan's "as few platform conditionals as possible", 2026-11-13)
+
+In 0.52: SecureStore, Commands, menuStyle, imageScale, presentationSizing,
+windowResizability, the Mac's stand-ins. Owed:
+
+- `PasteButton(payloadType:onPaste:)` (Monitor): a paste control per
+  renderer (the web's clipboard read is asynchronous and asks permission);
+  headless pastes a test's value.
+- `Platform.idiom` and `@Environment(\.platformIdiom)` (phone, pad,
+  desktop, web, tv; settable for previews and tests) (Visor).
+- `.windowMinSize(width:height:)` in the Isomer module: a frame minimum on
+  the Mac, the host window's on Linux and Windows, nothing elsewhere
+  (Monitor).
+- `HeadlessApp.setAppearance(_:)` and `setOrientation(_:)`, hosted and
+  headless (Monitor).
+- Foundation: `AttributedString(markdown:)` over Text's inline markdown;
+  `URL.startAccessingSecurityScopedResource()`/`stop…` as no-ops (Visor).
+- `ToolbarContent.hidden(_:)` (a "not yet" stub now) (Visor).
+- `presentationDetents` sizing a sheet on desktop hosts (Visor).
+- The Mac's stand-in for `horizontalSizeClass` (`.regular`) (Visor).
+- The Isomer module re-exporting FoundationNetworking where it exists, so
+  `import Isomer` gives URLSession everywhere (Applications).
+- An "app became active" signal readable outside views (Applications).
+- `isomer_android_app` accepting `@isomer//android/maven:androidx` in an
+  app's deps beside its own (today: "duplicated in the deps attribute").
+- `imageScale` and `menuStyle` on the web's and Android's renderers (Apple's
+  tree renderer has them).
+- SecureStore: a real store on Linux (a file only the user reads) and
+  Windows (DPAPI), and inside wasm features hosted by WasmView (memory
+  today).
+- Issues' gaps: a Menu in a ToolbarItem, and a NavigationSplitView detail
+  column's toolbar items, drawn.
+
 ## WebAssembly on the platforms' own engines (owner, 2026-11-11)
 
 The Playground's web-view engine ran 2048 on an iPhone at a mean of 3.5 ms
@@ -177,6 +251,52 @@ JavaScript engine, and WasmKit goes:
   `com.LoganShire.Experiments.`).
 - Then WasmKit leaves (its fork's Isomer-only pull requests closed by the
   Upstream session; general fixes still contributed upstream).
+- **The seam** (owner, 2026-11-13): synchronous protobuf between the body
+  (the app's runtime, an IsomerServer answering `handle(request) ->
+  response`) and the head (what draws, its client), with no thread hop;
+  the asynchronous adapters (gRPC, WebSockets: drive/) compiled in only when
+  wanted, for the CLI, tests and remote headless apps. In process (compiled
+  Swift, WasmKit, JavaScriptCore on Linux) a call is a function call on the
+  same thread (IsomerLocalServer is that path today).
+  - A web view is another process (iOS gives JIT to WebKit's WebContent
+    process alone): the app can reach the page only asynchronously
+    (`evaluateJavaScript`, `postMessage`), but the page can call the app
+    synchronously (a synchronous XHR to a `WKURLSchemeHandler`, or
+    `prompt()`). So the body drives: once a frame the guest calls
+    `exchange(patches) -> events`, one round trip between the processes, no
+    hop within either; the app's main thread never waits on the page (or
+    they deadlock). Android's WebView (`addJavascriptInterface`) is
+    synchronous from the page but answers on a binder thread (a hop to the
+    UI thread); JavaScriptSandbox is asynchronous only; WebView2's
+    synchronous host objects are cross-process COM onto the UI thread.
+  - Inside the web view the guest has the web's own host (boot.js: text
+    measured and rasterized by the page, synchronously), so layout and
+    drawing never wait on the app. Images: a bundled asset by name (the head
+    loads it), a remote one by URL (the head fetches it), pixels the guest
+    made (`Image(data:)`, ImageIO, a CGImage) sent once as a blob keyed by its
+    source, which the tree then names; the GPU renderer's rasters stay in
+    the page. Platform services the page lacks (files, the keychain, the
+    clipboard, networking without CORS) over the session.
+  - The decider, the benchmark above, one reactor four ways on an iPhone:
+    WasmKit in process; the web view with the body-driven synchronous
+    exchange; the web view with asynchronous messages; `JSContext` in
+    process (no JIT for an app's own JavaScriptCore on iOS; whether it runs
+    wasm there without JIT, to check; the Mac's can JIT with the allow-JIT
+    entitlement). First frame and event to frame.
+- Order: the WebKit runtime on Apple with its benchmark against WasmKit
+  (0.53); Android's JavaScriptSandbox, Linux's JavaScriptCore and Windows'
+  WebView2 (0.54); then WasmKit, its fork, `WasmKitRuntime` and
+  //tools/wasm/wasi_run go (0.55), the threaded SQLite check moved to a
+  cross-origin isolated page.
+- isomer#188 (an outside contributor's): features as wasm side modules
+  over one runtime the app has once (the Storybook 226 KB gzip against
+  5.4 MB). Worth keeping engine-neutral (the linker apart from WasmKit, a web
+  view adapter), upstream first (its WasmKit commits; its wasm-ld fix to
+  LLVM), with tests in-tree; New Container Helper's review is drafted.
+- The Playground: an end-to-end test of the web-view engine; caching a
+  feature's compiled module; "BE…" (a score truncated, seen on the
+  owner's iPhone 15 Pro at the standard text size, not reproduced on an
+  iPhone 15 Pro simulator: Display Zoom, or an older build, to rule out).
 
 ## wasi-threads (Swift 6.5)
 
