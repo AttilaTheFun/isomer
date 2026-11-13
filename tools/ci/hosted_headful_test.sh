@@ -6,7 +6,10 @@
 # each started by its launcher and dialling out to the test's own hub.
 #
 #   tools/ci/hosted_headful_test.sh apple <the iPhone simulator .ipa> <the Mac .zip> <out>
-#       (xcode-27) a simulator made for the run, then the Mac's own screen
+#       (xcode-27) a simulator made for the run, then the Mac's own screen;
+#       HEADFUL_APPLE_PARTS picks some of them (default "ios hosted macos":
+#       the tests driving the iPhone app, the tests hosted in it, the Mac's),
+#       so CI runs them on Macs of their own at once
 #   tools/ci/hosted_headful_test.sh android <the x86_64 .apk> <out>
 #       (Ubuntu with KVM) tools/ci/hosted_android_emulator.sh's phone
 #   tools/ci/hosted_headful_test.sh windows <the windows-headful folder> <out>
@@ -56,26 +59,35 @@ apple)
     zip="$(absolute "${2:?<.zip>}")"
     mkdir -p "${3:?<out>}"
     out="$(cd "$3" && pwd)"
-    # The iPhone: a simulator of the run's own, the app installed.
-    runtime="$(xcrun simctl list runtimes iOS available | sed -n 's/^iOS .* - \(com\.apple\.CoreSimulator\.SimRuntime\.iOS-[0-9-]*\)$/\1/p' | tail -1)"
-    [ -n "$runtime" ] || { echo "hosted_headful_test: no iOS runtime" >&2; exit 1; }
-    udid="$(xcrun simctl create "isomer-headful-$$" "${HOSTED_IOS_DEVICE:-iPhone 17}" "$runtime")" || exit 1
-    xcrun simctl boot "$udid" && xcrun simctl bootstatus "$udid" -b > /dev/null || exit 1
-    xcrun simctl ui "$udid" appearance light
-    mkdir -p "$work/ios" && unzip -q "$ipa" -d "$work/ios" && xcrun simctl install "$udid" "$work/ios/Payload/"*.app || exit 1
-    run storybook_headful_ios_test "$out" --test_env=ISOMER_SIMULATOR="$udid"
-    # The same tests hosted in the app: an XCTest bundle in the headful
-    # iPhone Storybook, built here, driving it in its own process with no
-    # network. On this simulator: one rules_apple's runner made beside it
-    # took over a minute to boot on GitHub's runner, xcodebuild hung, and the
-    # Mac's tests after it timed out.
-    run storybook_hosted_ios_test "$out" --@isomer//drive:headful --ios_multi_cpus=sim_arm64 \
-        --test_env=ISOMER_SIMULATOR="$udid"
-    xcrun simctl shutdown "$udid" > /dev/null 2>&1
-    # The Mac: this VM's own screen.
-    ditto -x -k "$zip" "$work/mac" || exit 1
-    defaults write com.apple.CrashReporter DialogType -string none
-    run storybook_headful_macos_test "$out" --test_env=ISOMER_MAC_APP="$(ls -d "$work/mac/"*.app | head -1)"
+    parts=" ${HEADFUL_APPLE_PARTS:-ios hosted macos} "
+    if [[ $parts == *" ios "* || $parts == *" hosted "* ]]; then
+        # The iPhone: a simulator of the run's own, the app installed.
+        runtime="$(xcrun simctl list runtimes iOS available | sed -n 's/^iOS .* - \(com\.apple\.CoreSimulator\.SimRuntime\.iOS-[0-9-]*\)$/\1/p' | tail -1)"
+        [ -n "$runtime" ] || { echo "hosted_headful_test: no iOS runtime" >&2; exit 1; }
+        udid="$(xcrun simctl create "isomer-headful-$$" "${HOSTED_IOS_DEVICE:-iPhone 17}" "$runtime")" || exit 1
+        xcrun simctl boot "$udid" && xcrun simctl bootstatus "$udid" -b > /dev/null || exit 1
+        xcrun simctl ui "$udid" appearance light
+        mkdir -p "$work/ios" && unzip -q "$ipa" -d "$work/ios" && xcrun simctl install "$udid" "$work/ios/Payload/"*.app || exit 1
+    fi
+    if [[ $parts == *" ios "* ]]; then
+        run storybook_headful_ios_test "$out" --test_env=ISOMER_SIMULATOR="$udid"
+    fi
+    if [[ $parts == *" hosted "* ]]; then
+        # The same tests hosted in the app: an XCTest bundle in the headful
+        # iPhone Storybook, built here, driving it in its own process with no
+        # network. On this simulator: one rules_apple's runner made beside it
+        # took over a minute to boot on GitHub's runner, xcodebuild hung, and
+        # the Mac's tests after it timed out.
+        run storybook_hosted_ios_test "$out" --@isomer//drive:headful --ios_multi_cpus=sim_arm64 \
+            --test_env=ISOMER_SIMULATOR="$udid"
+    fi
+    [ -z "$udid" ] || xcrun simctl shutdown "$udid" > /dev/null 2>&1
+    if [[ $parts == *" macos "* ]]; then
+        # The Mac: this VM's own screen.
+        ditto -x -k "$zip" "$work/mac" || exit 1
+        defaults write com.apple.CrashReporter DialogType -string none
+        run storybook_headful_macos_test "$out" --test_env=ISOMER_MAC_APP="$(ls -d "$work/mac/"*.app | head -1)"
+    fi
     ;;
 android)
     apk="$(absolute "${1:?<.apk>}")"
