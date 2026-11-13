@@ -216,6 +216,7 @@ public func iso_hot_start(_ width: Double, _ height: Double) {
         // Foundation's networking over what the host injected (the hot
         // bridge links IsomerNetworkHost on the slim SwiftUI too).
         installInjectedNetworkHosts()
+        installInjectedSecureStore()
         #endif
         if Runtime.shared.host == nil {
             _ = _hot_application_main(0, nil)
