@@ -15,7 +15,8 @@
 // - anywhere else (headless, tests, Linux and Windows for now): memory, for
 //   the process.
 //
-// `accessGroup` is Apple's alone; elsewhere each app's store is its own.
+// `accessGroup` (and `sharedGroup`, the same without its team prefix) is
+// Apple's alone; elsewhere each app's store is its own.
 
 import Foundation
 #if canImport(Security)
@@ -31,10 +32,25 @@ public struct SecureStore: Sendable {
     /// Apple's keychain access group the items are in, shared by the apps
     /// whose entitlements name it; nil, the app's own. Ignored elsewhere.
     public let accessGroup: String?
+    /// The group without its team ID prefix ("com.example.shared"), which
+    /// the store prefixes with the app's own team, found at run time (so a
+    /// repository needn't carry the team ID). Ignored elsewhere.
+    let sharedGroup: String?
 
     public init(service: String, accessGroup: String? = nil) {
         self.service = service
         self.accessGroup = accessGroup
+        self.sharedGroup = nil
+    }
+
+    /// Items in the keychain access group `sharedGroup` names without its
+    /// team ID prefix (the entitlement's `$(AppIdentifierPrefix)` part): the
+    /// app's own team's, found at run time from the group the keychain gives
+    /// an item of the app's own.
+    public init(service: String, sharedGroup: String) {
+        self.service = service
+        self.accessGroup = nil
+        self.sharedGroup = sharedGroup
     }
 
     /// The item's value, nil when there is none.
@@ -75,19 +91,59 @@ public struct SecureStoreError: Error, CustomStringConvertible, Sendable {
 
 #if canImport(Security)
 enum _SecureStoreBackend {
-    private static func query(_ store: SecureStore, _ key: String) -> [String: Any] {
+    /// The keychain's own parts of every query: generic passwords, never
+    /// synchronized, and on the Mac the iOS-style keychain, where access
+    /// groups are honoured.
+    private static func base(service: String, account: String) -> [String: Any] {
         var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: store.service,
-            kSecAttrAccount as String: key,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
             kSecAttrSynchronizable as String: false,
         ]
-        if let group = store.accessGroup { query[kSecAttrAccessGroup as String] = group }
         #if os(macOS)
-        // The Mac's iOS-style keychain, where access groups are honoured.
         query[kSecUseDataProtectionKeychain as String] = true
         #endif
         return query
+    }
+
+    private static func query(_ store: SecureStore, _ key: String) throws -> [String: Any] {
+        var query = base(service: store.service, account: key)
+        if let group = store.accessGroup {
+            query[kSecAttrAccessGroup as String] = group
+        } else if let shared = store.sharedGroup {
+            query[kSecAttrAccessGroup as String] = try teamPrefix() + "." + shared
+        }
+        return query
+    }
+
+    nonisolated(unsafe) private static var foundTeamPrefix: String?
+    private static let teamLock = NSLock()
+
+    /// The app's team ID: the first part of the access group the keychain
+    /// gives an item the app writes without one (its default group, the
+    /// entitlements' first, "<team>.<…>"), found once.
+    private static func teamPrefix() throws -> String {
+        teamLock.lock()
+        defer { teamLock.unlock() }
+        if let found = foundTeamPrefix { return found }
+        var probe = base(service: "dev.isomer.secure-store.team", account: "team")
+        probe[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        probe[kSecReturnAttributes as String] = true
+        var result: CFTypeRef?
+        var status = SecItemAdd(probe as CFDictionary, &result)
+        if status == errSecDuplicateItem {
+            probe[kSecAttrAccessible as String] = nil
+            probe[kSecMatchLimit as String] = kSecMatchLimitOne
+            status = SecItemCopyMatching(probe as CFDictionary, &result)
+        }
+        guard status == errSecSuccess else { throw failure(status) }
+        guard let group = (result as? [String: Any])?[kSecAttrAccessGroup as String] as? String,
+              let prefix = group.split(separator: ".").first, !prefix.isEmpty else {
+            throw SecureStoreError("the app's keychain access group names no team")
+        }
+        foundTeamPrefix = String(prefix)
+        return String(prefix)
     }
 
     private static func failure(_ status: OSStatus) -> SecureStoreError {
@@ -96,7 +152,7 @@ enum _SecureStoreBackend {
     }
 
     static func read(_ store: SecureStore, _ key: String) throws -> Data? {
-        var query = query(store, key)
+        var query = try query(store, key)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: CFTypeRef?
@@ -107,7 +163,7 @@ enum _SecureStoreBackend {
     }
 
     static func write(_ store: SecureStore, _ key: String, _ data: Data) throws {
-        let query = query(store, key)
+        let query = try query(store, key)
         let attributes: [String: Any] = [
             kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
@@ -120,7 +176,7 @@ enum _SecureStoreBackend {
     }
 
     static func remove(_ store: SecureStore, _ key: String) throws {
-        let status = SecItemDelete(query(store, key) as CFDictionary)
+        let status = SecItemDelete(try query(store, key) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else { throw failure(status) }
     }
 }
