@@ -18,7 +18,35 @@ extension AccessibilityScreen {
     init(roots: [NSObject], presented: [(style: String, title: String, message: String)]) {
         self.presented = presented
         for root in roots { visit(root) }
+        recoverIdentifiers(roots)
         name()
+    }
+
+    /// An element UIKit stands in for a view with (a navigation bar's button,
+    /// as SwiftUI's toolbar makes it) may lack the identifier the view itself
+    /// carries: it takes it from an identified view of the same label where
+    /// the element is, so a toolbar item is found by its identifier as by
+    /// its label.
+    @MainActor
+    private mutating func recoverIdentifiers(_ roots: [NSObject]) {
+        guard elements.contains(where: { $0.id == nil }) else { return }
+        var identified: [(id: String, label: String, frame: CGRect)] = []
+        func walk(_ view: UIView) {
+            if let id = view.accessibilityIdentifier, !id.isEmpty, view.isAccessibilityElement {
+                identified.append((id, view.accessibilityLabel ?? "", view.accessibilityFrame))
+            }
+            for subview in view.subviews where !subview.isHidden { walk(subview) }
+        }
+        for root in roots { if let view = root as? UIView { walk(view) } }
+        guard !identified.isEmpty else { return }
+        for index in elements.indices where elements[index].id == nil {
+            guard let object = elements[index].object as? NSObject else { continue }
+            let frame = object.accessibilityFrame
+            let center = CGPoint(x: frame.midX, y: frame.midY)
+            if let match = identified.first(where: { $0.label == elements[index].label && $0.frame.contains(center) }) {
+                elements[index].id = match.id
+            }
+        }
     }
 
     /// A list's or a table's row that holds only texts is a button to a
@@ -79,7 +107,9 @@ extension AccessibilityScreen {
                 add("toggle", label, value)
             } else if traits.contains(.adjustable) {
                 add("slider", label, value)
-            } else if traits.contains(.button) || traits.contains(.link) || traits.contains(.keyboardKey) {
+            } else if traits.contains(.button) || traits.contains(.link) || traits.contains(.keyboardKey)
+                        || kind.contains("ContextMenuCell") {
+                // A menu's item is a button, whatever its traits.
                 add("button", label, value)
             } else if !label.isEmpty {
                 add("text", label, nil)
@@ -124,6 +154,22 @@ extension AccessibilityDriver {
         AccessibilityScreen.screenBounds = window.screen.bounds
         info.width = Double(window.bounds.width)
         info.height = Double(window.bounds.height)
+        // An open menu (a Menu, a picker's menu): UIKit's context menu, a view
+        // of the window's own beside its content, which the window's
+        // accessibility containers don't lead to. While it's open it is all
+        // that can be used, as a person sees it.
+        // A menu that has closed can leave its container behind a moment,
+        // empty: only one still showing its menu counts.
+        func showsMenu(_ view: UIView) -> Bool {
+            if view.isHidden || view.alpha < 0.01 { return false }
+            if String(describing: Swift.type(of: view)).contains("ContextMenuListView") { return view.window != nil }
+            return view.subviews.contains(where: showsMenu)
+        }
+        if let menu = window.subviews.last(where: {
+            String(describing: Swift.type(of: $0)).contains("ContextMenuContainer") && showsMenu($0)
+        }) {
+            return ([menu], [])
+        }
         var presented: [(style: String, title: String, message: String)] = []
         var top = window.rootViewController
         while let next = top?.presentedViewController, !next.isBeingDismissed {
@@ -231,7 +277,18 @@ extension AccessibilityDriver {
         while let current = view {
             if let cell = current as? UICollectionViewCell, let collection = Self.enclosing(UICollectionView.self, cell),
                let path = collection.indexPath(for: cell) {
-                if collection.delegate?.collectionView?(collection, shouldSelectItemAt: path) == false { return false }
+                let should = collection.delegate?.collectionView?(collection, shouldSelectItemAt: path)
+                if should == false {
+                    // A list whose cells don't select (a menu's) takes a tap
+                    // as its primary action, as UIKit's menus do.
+                    guard let delegate = collection.delegate else { return false }
+                    if delegate.responds(to: #selector(UICollectionViewDelegate.collectionView(_:performPrimaryActionForItemAt:))) {
+                        delegate.collectionView?(collection, performPrimaryActionForItemAt: path)
+                        return true
+                    }
+                    guard String(describing: Swift.type(of: delegate)).contains("ContextMenu") else { return false }
+                    return Self.performMenuItem(element.label, list: delegate as AnyObject, in: window)
+                }
                 collection.selectItem(at: path, animated: false, scrollPosition: [])
                 collection.delegate?.collectionView?(collection, didSelectItemAt: path)
                 return true
@@ -308,6 +365,39 @@ extension AccessibilityDriver {
         default:
             return "\(element.name) can't be set"
         }
+    }
+
+    /// A UIKit menu's item, chosen: its menu cells take no activation and no
+    /// selection (UIKit's menu acts on a touch alone), so the item's action
+    /// is found in the menu the list shows, by title, and performed, and the
+    /// menu dismissed, as a touch on it does. UIKit's own SPI
+    /// (`displayedMenu`, `performWithSender:target:`): the driver is linked
+    /// into debug and test builds only (docs/driver_in_apps.md).
+    @MainActor
+    static func performMenuItem(_ title: String, list: AnyObject, in window: UIWindow) -> Bool {
+        guard let object = list as? NSObject, object.responds(to: NSSelectorFromString("displayedMenu")),
+              let menu = object.value(forKey: "displayedMenu") as? UIMenu
+        else { return false }
+        func find(_ menu: UIMenu) -> UIAction? {
+            for child in menu.children {
+                if let action = child as? UIAction, action.title == title { return action }
+                if let submenu = child as? UIMenu, let found = find(submenu) { return found }
+            }
+            return nil
+        }
+        guard let action = find(menu) else { return false }
+        let perform = NSSelectorFromString("performWithSender:target:")
+        guard action.responds(to: perform) else { return false }
+        action.perform(perform, with: nil, with: nil)
+        // Closed, as a touch on the item closes it.
+        func dismiss(_ view: UIView) {
+            for interaction in view.interactions {
+                (interaction as? UIContextMenuInteraction)?.dismissMenu()
+            }
+            for subview in view.subviews { dismiss(subview) }
+        }
+        dismiss(window)
+        return true
     }
 
     func select(_ element: AccessibilityScreen.Element, _ option: String) async -> String? {
