@@ -5,6 +5,9 @@
 #     image (tools/ci/windows_test.sh), only with PLATFORM_TESTS naming it:
 #     for now (2026-11-05) CI runs the tier-1 platforms and only builds
 #     Windows;
+#   - Linux under Xvfb with Mesa's software OpenGL in a container of
+#     Shireworks' linux-gui image (examples/tests/platforms/linux_test.sh),
+#     only with PLATFORM_TESTS naming it, as Windows;
 #   - Android on an emulator leased from Shireworks, on its Mac's own
 #     hypervisor (tools/ci/android_test.sh), when PLATFORM_TESTS names it:
 #     a private repository's CI, and the fallback; a public one's runs on
@@ -24,7 +27,7 @@ out="$(mkdir -p "$1" && cd "$1" && pwd)"
 apps="$ROOT/.ci/platforms"
 stories=($(sed -n 's/^ *"\([a-z]*\.[a-z]*\)",$/\1/p' "$ROOT/examples/tests/platforms/stories.bzl"))
 [ ${#stories[@]} -gt 0 ] || { echo "platform_tests.sh: no stories" >&2; exit 1; }
-mkdir -p "$out/windows" "$out/android" "$out/apple"
+mkdir -p "$out/windows" "$out/linux" "$out/android" "$out/apple"
 chmod -R 777 "$out"
 pids=() names=()
 shireworks="$ROOT/tools/ci/shireworks.sh"
@@ -62,6 +65,38 @@ if [[ $platforms == *" windows "* ]]; then
         exit $status
     ) >"$out/windows.log" 2>&1 &
     pids+=($!) names+=(windows)
+fi
+
+# Linux: Shireworks' linux-gui image (Ubuntu 26.04: Xvfb, Mesa, GTK, SDL2,
+# SDL2_ttf, WebKitGTK), a throwaway container of it. The test's runfiles and
+# the Swift runtime's libraries go in (container_build.sh's packaging), the
+# pictures come back.
+LINUX_GUI_IMAGE="ghcr.io/attilathefun/shireworks-linux-gui@sha256:b9063a0f937371f17ba6f728028e19c8216829e818a391b9427dd377d153b34f"
+if [[ $platforms == *" linux "* ]]; then
+    (
+        set -e
+        eval "$("$shireworks" lease container --image="$LINUX_GUI_IMAGE" --cpus=4 --memory=4 --minutes=60 \
+            --kind=ci --label="Isomer: the Linux Storybook's tests")"
+        id="${SHIREWORKS_ID:-}"
+        [ -n "$id" ] || { echo "platform_tests.sh: no container for Linux" >&2; exit 1; }
+        trap '"$shireworks" release "$id" >/dev/null 2>&1' EXIT
+        tar -czf "$out/linux.tgz" -C "$apps" linux
+        "$shireworks" put "$id" "$out/linux.tgz" /tmp/linux.tgz >/dev/null
+        rm -f "$out/linux.tgz"
+        status=0
+        "$shireworks" run "$id" -- bash -c 'set -e
+            mkdir -p /w/out && tar -xzf /tmp/linux.tgz -C /w
+            cd /w/linux/runfiles/_main
+            check="$(find .. -path "*/picture_check/picture_check" -type f | head -1)"
+            status=0
+            RUNFILES_DIR=/w/linux/runfiles LD_LIBRARY_PATH=/w/linux/lib TEST_UNDECLARED_OUTPUTS_DIR=/w/out bash tests/platforms/linux_test.sh \
+                linux/storybook_linux_application/storybook_linux_application "$check" "$@" || status=$?
+            tar -czf /tmp/out.tgz -C /w/out .
+            exit $status' linux "${stories[@]}" || status=$?
+        "$shireworks" get "$id" /tmp/out.tgz "$out/linux.tgz" && tar -xzf "$out/linux.tgz" -C "$out/linux" && rm -f "$out/linux.tgz"
+        exit $status
+    ) >"$out/linux.log" 2>&1 &
+    pids+=($!) names+=(linux)
 fi
 
 # Android: an emulator leased from Shireworks, run on its Mac's own
