@@ -381,6 +381,50 @@ public struct Path: Equatable, Sendable {
 
     private(set) var elements: [Segment] = []
 
+    /// The path's parts exactly as they were added: curves, arcs, and the
+    /// whole shapes with their corner style and transforms. Hosts that draw
+    /// those themselves (Apple's SwiftUI, through the `pathExact` param)
+    /// replay them, so a shape is drawn as Apple's SwiftUI draws it, where
+    /// `elements` has curves as lines. Nil once the path was changed in a
+    /// way this doesn't follow.
+    private(set) var exact: [ExactPart]? = []
+
+    enum ExactPart: Equatable, Sendable {
+        case move(CGPoint)
+        case line(CGPoint)
+        case quadCurve(to: CGPoint, control: CGPoint)
+        case curve(to: CGPoint, control1: CGPoint, control2: CGPoint)
+        case closeSubpath
+        case rect(CGRect, CGAffineTransform)
+        case roundedRect(CGRect, cornerSize: CGSize, continuous: Bool, CGAffineTransform)
+        case ellipse(CGRect, CGAffineTransform)
+        case arc(center: CGPoint, radius: CGFloat, start: Double, end: Double, clockwise: Bool, CGAffineTransform)
+        case tangentArc(CGPoint, CGPoint, radius: CGFloat, CGAffineTransform)
+
+        /// The part with `transform` applied after its own.
+        func applying(_ transform: CGAffineTransform) -> ExactPart {
+            switch self {
+            case .move(let p): return .move(p.applying(transform))
+            case .line(let p): return .line(p.applying(transform))
+            case .quadCurve(let p, let c): return .quadCurve(to: p.applying(transform), control: c.applying(transform))
+            case .curve(let p, let c1, let c2):
+                return .curve(to: p.applying(transform), control1: c1.applying(transform), control2: c2.applying(transform))
+            case .closeSubpath: return .closeSubpath
+            case .rect(let r, let t): return .rect(r, t.concatenating(transform))
+            case .roundedRect(let r, let size, let continuous, let t): return .roundedRect(r, cornerSize: size, continuous: continuous, t.concatenating(transform))
+            case .ellipse(let r, let t): return .ellipse(r, t.concatenating(transform))
+            case .arc(let c, let radius, let a0, let a1, let clockwise, let t):
+                return .arc(center: c, radius: radius, start: a0, end: a1, clockwise: clockwise, t.concatenating(transform))
+            case .tangentArc(let p1, let p2, let radius, let t): return .tangentArc(p1, p2, radius: radius, t.concatenating(transform))
+            }
+        }
+    }
+
+    /// Records a part exactly as added (see `exact`).
+    private mutating func record(_ part: ExactPart) {
+        exact?.append(part)
+    }
+
     /// An app's shape's `path(in:)`, kept to be asked again in the size the
     /// view is drawn at (`unitPath(for:)`); not part of the path's value.
     var source: _PathSource?
@@ -409,7 +453,7 @@ public struct Path: Equatable, Sendable {
         case .capsule:
             let radius = min(rect.width, rect.height) / 2
             addRoundedRect(in: rect, cornerSize: CGSize(width: radius, height: radius))
-        case .path(let path): elements = path.elements
+        case .path(let path): elements = path.elements; exact = path.exact
         }
     }
 
@@ -430,13 +474,14 @@ public struct Path: Equatable, Sendable {
         return minX <= maxX ? CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY) : .zero
     }
 
-    public mutating func move(to point: CGPoint) { elements.append(.move(to: point)) }
-    public mutating func addLine(to point: CGPoint) { elements.append(.line(to: point)) }
+    public mutating func move(to point: CGPoint) { elements.append(.move(to: point)); record(.move(point)) }
+    public mutating func addLine(to point: CGPoint) { elements.append(.line(to: point)); record(.line(point)) }
     public mutating func addLines(_ points: [CGPoint]) {
         for (i, point) in points.enumerated() { if i == 0 { move(to: point) } else { addLine(to: point) } }
     }
     public mutating func addRect(_ rect: CGRect, transform: CGAffineTransform = .identity) {
         append(.rect(rect), transform)
+        record(.rect(rect, transform))
     }
     public mutating func addRects(_ rects: [CGRect], transform: CGAffineTransform = .identity) {
         for rect in rects { addRect(rect, transform: transform) }
@@ -446,13 +491,20 @@ public struct Path: Equatable, Sendable {
         transform: CGAffineTransform = .identity
     ) {
         append(.roundedRect(rect, cornerRadius: min(cornerSize.width, cornerSize.height)), transform)
+        record(.roundedRect(rect, cornerSize: cornerSize, continuous: style == .continuous, transform))
     }
     public mutating func addEllipse(in rect: CGRect, transform: CGAffineTransform = .identity) {
         append(.ellipse(in: rect), transform)
+        record(.ellipse(rect, transform))
     }
-    public mutating func closeSubpath() { elements.append(.closeSubpath) }
+    public mutating func closeSubpath() { elements.append(.closeSubpath); record(.closeSubpath) }
     public mutating func addPath(_ path: Path, transform: CGAffineTransform = .identity) {
         for segment in path.elements { append(segment, transform) }
+        if let parts = path.exact {
+            exact?.append(contentsOf: transform.isIdentity ? parts : parts.map { $0.applying(transform) })
+        } else {
+            exact = nil
+        }
     }
 
     /// The path transformed (its whole shapes as their outlines, unless
@@ -573,9 +625,16 @@ public struct Path: Equatable, Sendable {
     // Curves are drawn as runs of short lines (the hosts draw lines), fine
     // enough that they read as curves at any size a view is drawn.
 
-    /// A line to the curve's start when the path has a point, else a move.
+    /// A line to the curve's start when the path has a point, else a move
+    /// (the lines a curve is drawn with: `elements` only, the curve itself
+    /// is recorded whole).
     private mutating func begin(at point: CGPoint) {
-        if currentPoint == nil { move(to: point) } else { addLine(to: point) }
+        elements.append(currentPoint == nil ? .move(to: point) : .line(to: point))
+    }
+
+    /// One of the lines a curve is drawn with (`elements` only).
+    private mutating func flatLine(to point: CGPoint) {
+        elements.append(.line(to: point))
     }
 
     /// `addArc(center:radius:startAngle:endAngle:clockwise:)`, as Core
@@ -599,7 +658,8 @@ public struct Path: Equatable, Sendable {
                 .applying(transform)
         }
         begin(at: point(start))
-        for step in 1...steps { addLine(to: point(start + direction * sweep * Double(step) / Double(steps))) }
+        for step in 1...steps { flatLine(to: point(start + direction * sweep * Double(step) / Double(steps))) }
+        record(.arc(center: center, radius: radius, start: startAngle.radians, end: endAngle.radians, clockwise: clockwise, transform))
     }
 
     /// `addRelativeArc(center:radius:startAngle:delta:)`: an arc turning
@@ -636,6 +696,7 @@ public struct Path: Equatable, Sendable {
         // Graphics draws it.
         guard l1 > 0, l2 > 0, radius > 0, abs(cross) > 1e-9, cosine > -1 + 1e-9 else {
             begin(at: p1.applying(transform))
+            record(.tangentArc(tangent1End, tangent2End, radius: radius, transform))
             return
         }
         // Where the circle touches each line: r / tan(θ/2) from the corner.
@@ -657,32 +718,35 @@ public struct Path: Equatable, Sendable {
             halve(mid, b, depth - 1)
         }
         halve(t1, t2, 4)
-        for point in points { addLine(to: point.applying(transform)) }
+        for point in points { flatLine(to: point.applying(transform)) }
+        record(.tangentArc(tangent1End, tangent2End, radius: radius, transform))
     }
 
     /// `addQuadCurve(to:control:)`: a quadratic Bézier from the current point.
     public mutating func addQuadCurve(to end: CGPoint, control: CGPoint) {
         let from = currentPoint ?? end
-        if currentPoint == nil { move(to: end) }
+        if currentPoint == nil { elements.append(.move(to: end)) }
         let steps = 24
         for step in 1...steps {
             let t = CGFloat(step) / CGFloat(steps), u = 1 - t
-            addLine(to: CGPoint(x: u * u * from.x + 2 * u * t * control.x + t * t * end.x,
-                                y: u * u * from.y + 2 * u * t * control.y + t * t * end.y))
+            flatLine(to: CGPoint(x: u * u * from.x + 2 * u * t * control.x + t * t * end.x,
+                                 y: u * u * from.y + 2 * u * t * control.y + t * t * end.y))
         }
+        record(.quadCurve(to: end, control: control))
     }
 
     /// `addCurve(to:control1:control2:)`: a cubic Bézier from the current point.
     public mutating func addCurve(to end: CGPoint, control1: CGPoint, control2: CGPoint) {
         let from = currentPoint ?? end
-        if currentPoint == nil { move(to: end) }
+        if currentPoint == nil { elements.append(.move(to: end)) }
         let steps = 32
         for step in 1...steps {
             let t = CGFloat(step) / CGFloat(steps), u = 1 - t
             let a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t
-            addLine(to: CGPoint(x: a * from.x + b * control1.x + c * control2.x + d * end.x,
-                                y: a * from.y + b * control1.y + c * control2.y + d * end.y))
+            flatLine(to: CGPoint(x: a * from.x + b * control1.x + c * control2.x + d * end.x,
+                                 y: a * from.y + b * control1.y + c * control2.y + d * end.y))
         }
+        record(.curve(to: end, control1: control1, control2: control2))
     }
 
     /// A Core Graphics path (Isomer's CoreGraphics, or Apple's): its moves
@@ -742,7 +806,10 @@ public struct Path: Equatable, Sendable {
         func point(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x / w, y: p.y / h) }
         func box(_ r: CGRect) -> CGRect { CGRect(x: r.minX / w, y: r.minY / h, width: r.width / w, height: r.height / h) }
         var out = Path()
-        for segment in source.make(CGRect(origin: .zero, size: size)).elements {
+        let made = source.make(CGRect(origin: .zero, size: size))
+        let toUnit = CGAffineTransform(scaleX: 1 / w, y: 1 / h)
+        out.exact = made.exact.map { $0.map { $0.applying(toUnit) } }
+        for segment in made.elements {
             switch segment {
             case .move(let p): out.elements.append(.move(to: point(p)))
             case .line(let p): out.elements.append(.line(to: point(p)))
@@ -766,6 +833,7 @@ public struct Path: Equatable, Sendable {
         func point(_ p: CGPoint) -> CGPoint { CGPoint(x: rect.minX + p.x * rect.width, y: rect.minY + p.y * rect.height) }
         func box(_ r: CGRect) -> CGRect { CGRect(x: rect.minX + r.minX * rect.width, y: rect.minY + r.minY * rect.height, width: r.width * rect.width, height: r.height * rect.height) }
         var out = Path()
+        out.exact = nil
         for element in elements {
             switch element {
             case .move(let p): out.elements.append(.move(to: point(p)))
@@ -804,7 +872,40 @@ public struct Path: Equatable, Sendable {
         return parts.joined(separator: " ")
     }
 
+    /// The exact parts as the tree carries them (the `pathExact` param of a
+    /// shape node), for hosts that replay them with their own path calls:
+    /// space-separated, each a letter and its numbers, at full precision;
+    /// `T` the part's transform (a b c d tx ty).
+    ///   M x y · L x y · Q x y cx cy · C x y c1x c1y c2x c2y · Z
+    ///   R x y w h T · O x y w h cw ch continuous T · E x y w h T
+    ///   A cx cy r start end clockwise T · N x1 y1 x2 y2 r T
+    /// Nil when the path has none.
+    var exactSerialized: String? {
+        guard let exact, !exact.isEmpty else { return nil }
+        func f(_ v: CGFloat) -> String { String(Double(v)) }
+        func p(_ point: CGPoint) -> String { "\(f(point.x)) \(f(point.y))" }
+        func r(_ rect: CGRect) -> String { "\(f(rect.minX)) \(f(rect.minY)) \(f(rect.width)) \(f(rect.height))" }
+        func t(_ m: CGAffineTransform) -> String { "\(f(m.a)) \(f(m.b)) \(f(m.c)) \(f(m.d)) \(f(m.tx)) \(f(m.ty))" }
+        return exact.map { part -> String in
+            switch part {
+            case .move(let point): return "M \(p(point))"
+            case .line(let point): return "L \(p(point))"
+            case .quadCurve(let to, let control): return "Q \(p(to)) \(p(control))"
+            case .curve(let to, let c1, let c2): return "C \(p(to)) \(p(c1)) \(p(c2))"
+            case .closeSubpath: return "Z"
+            case .rect(let rect, let m): return "R \(r(rect)) \(t(m))"
+            case .roundedRect(let rect, let size, let continuous, let m):
+                return "O \(r(rect)) \(f(size.width)) \(f(size.height)) \(continuous ? 1 : 0) \(t(m))"
+            case .ellipse(let rect, let m): return "E \(r(rect)) \(t(m))"
+            case .arc(let center, let radius, let start, let end, let clockwise, let m):
+                return "A \(p(center)) \(f(radius)) \(String(start)) \(String(end)) \(clockwise ? 1 : 0) \(t(m))"
+            case .tangentArc(let p1, let p2, let radius, let m): return "N \(p(p1)) \(p(p2)) \(f(radius)) \(t(m))"
+            }
+        }.joined(separator: " ")
+    }
+
     init?(serialized text: String) {
+        exact = nil
         let tokens = text.split(separator: " ")
         var i = 0
         func number() -> CGFloat? {

@@ -667,6 +667,13 @@ package final class FlatTreeEncoder {
             if let spacing = node.lineSpacing, spacing > 0 { out.params = (out.params ?? []) + [("lineSpacing", formatNumber(spacing))] }
             // `.tracking` / `.kerning`: points between characters.
             if let tracking = node.tracking, tracking != 0 { out.params = (out.params ?? []) + [("tracking", formatNumber(tracking))] }
+            // `.multilineTextAlignment`: its lines' alignment, apart from where
+            // the text sits in its box (alignH), for hosts that align a
+            // paragraph's lines themselves.
+            if node.textAlignmentExplicit {
+                let lines = node.alignment.horizontal == .leading ? "leading" : node.alignment.horizontal == .trailing ? "trailing" : "center"
+                out.params = (out.params ?? []) + [("textAlign", lines)]
+            }
         case .shape(let shapeKind, _, _):
             out.kind = .shape
             (out.shape, shapeRadius) = flatShape(shapeKind)
@@ -676,6 +683,9 @@ package final class FlatTreeEncoder {
             if case .path(let path) = shapeKind {
                 let unit = node.pathSize.map { path.unitPath(for: $0) } ?? path
                 out.params = (out.params ?? []) + [("path", unit.serialized)]
+                // Its parts exactly as added (curves and arcs whole), for
+                // hosts that draw them with their own path calls (Apple's).
+                if let exact = unit.exactSerialized { out.params = (out.params ?? []) + [("pathExact", exact)] }
             }
             // `.trim(from:to:)`: the arc a ring draws.
             if let trim = node.trim {
@@ -1133,6 +1143,9 @@ package final class FlatTreeEncoder {
         if node.offsetX != 0 { out.offsetX = Double(node.offsetX) }
         if node.offsetY != 0 { out.offsetY = Double(node.offsetY) }
         if node.scaleEffect != 1 { out.scale = Double(node.scaleEffect) }
+        // `.rotationEffect`: radians about the centre, for hosts that turn
+        // the view themselves (Apple's; the GPU renderer turns what it draws).
+        if node.rotation != 0 { out.params = (out.params ?? []) + [("rotation", formatNumber(node.rotation))] }
         // `.position`: the greedy box's child centered at (x, y); hosts
         // apply their own positioning (SwiftUI `.position`, CSS absolute).
         if let x = node.positionX, let y = node.positionY {

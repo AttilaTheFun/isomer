@@ -314,7 +314,9 @@ extension TabView: _PrimitiveView {
         let contentHolder = RenderNode.box(child: contentNode)
         contentHolder.expandsWidth = true
         contentHolder.expandsHeight = true
-        contentHolder.alignment = .topLeading
+        // A tab's content sits in the middle of the area, as in SwiftUI
+        // (content that fills it, a NavigationStack or a List, is the same).
+        contentHolder.alignment = .center
 
         // Bottom tab bar: a native host component (an HTML bar on web, a
         // bottom navigation bar on Android). Each tab's icon (a bundled asset)
