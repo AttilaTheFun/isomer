@@ -40,6 +40,8 @@ let package = Package(
         .library(name: "ImageIO", targets: ["ImageIO"]),
         .library(name: "SwiftUI", targets: ["SwiftUI"]),
         .library(name: "PhotosUI", targets: ["PhotosUI"]),
+        // On Apple platforms: what Isomer adds to Apple's frameworks (below).
+        .library(name: "Isomer", targets: ["Isomer"]),
         // Driving and serving an app (drive/, docs/drive_plan.md).
         .library(name: "IsomerWire", targets: ["IsomerWire"]),
         .library(name: "IsomerServing", targets: ["IsomerServing"]),
@@ -217,6 +219,29 @@ let package = Package(
             ],
             path: "frameworks/photos_ui",
             exclude: ["BUILD.bazel"]
+        ),
+        // The Isomer module on Apple platforms, for an app on Apple's SwiftUI:
+        // what Isomer adds beside Apple's frameworks (Platform, Clipboard,
+        // SecureStore, WebView, VideoPlayer, MetalView, the platform
+        // modifiers, JSON, the Mac's stand-ins for iOS's API), as the Bazel
+        // module's //apple/libraries/swift_ui builds it, without its umbrella
+        // over Isomer's own modules (shared/isomer/Exports.swift) and without
+        // SwiftMap (Map is its placeholder here). Off Apple the Isomer module
+        // is the Bazel module's, over Isomer's SwiftUI and a platform's host.
+        .target(
+            name: "Isomer",
+            path: ".",
+            sources: [
+                "apple/libraries/swift_ui/AppleClipboard.swift",
+                "apple/libraries/swift_ui/AppleMacStandIns.swift",
+                "apple/libraries/swift_ui/AppleMetalView.swift",
+                "apple/libraries/swift_ui/AppleWebView.swift",
+                "apple/libraries/swift_ui/IsomerBridge.swift",
+                "apple/libraries/swift_ui/Map.swift",
+                "apple/libraries/swift_ui/SwiftUIShim.swift",
+                "shared/swift_ui_extensions/JSON.swift",
+                "shared/swift_ui_extensions/SecureStore.swift",
+            ]
         ),
         // Driving and serving an app (drive/, docs/drive_plan.md): the
         // messages (shared/wire's protos, generated as they build), the services
