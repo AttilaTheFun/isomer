@@ -15,26 +15,24 @@ public protocol Commands {
 
 extension Never: Commands {}
 
-extension Commands where Body == Never {
-    /// Commands made of no other commands. (Apple's keep theirs out of
-    /// their interface; this one declaration stands for all of Isomer's.)
-    public var body: Never { fatalError("primitive commands") }
-}
-
 /// No commands (an empty `.commands { }`).
 public struct EmptyCommands: Commands {
     public init() {}
     public typealias Body = Never
+    public var body: Never { fatalError("primitive commands") }
 }
 
 /// Several commands as one (a `CommandsBuilder` block's).
 struct TupleCommands: Commands {
     typealias Body = Never
+    var body: Never { fatalError("primitive commands") }
 }
 
 extension _ConditionalContent: Commands where TrueContent: Commands, FalseContent: Commands {}
 
-extension Optional: Commands where Wrapped: Commands {}
+extension Optional: Commands where Wrapped: Commands {
+    public var body: Never { fatalError("primitive commands") }
+}
 
 /// Builds a scene's commands from the statements of a closure.
 @resultBuilder
@@ -74,7 +72,8 @@ public struct CommandMenu<Content>: Commands where Content: View {
     let name: String
     let content: Content
 
-    public typealias Body = Never
+    /// Nothing to draw on Isomer's hosts (see above).
+    public var body: some Commands { EmptyCommands() }
 
     public init(_ nameKey: LocalizedStringKey, @ViewBuilder content: () -> Content) {
         self.name = Text(nameKey).content
@@ -123,7 +122,8 @@ public struct CommandGroup<Content>: Commands where Content: View {
     let placement: CommandGroupPlacement
     let content: Content
 
-    public typealias Body = Never
+    /// Nothing to draw on Isomer's hosts (see above).
+    public var body: some Commands { EmptyCommands() }
 
     public init(before group: CommandGroupPlacement, @ViewBuilder addition: () -> Content) {
         placement = group
