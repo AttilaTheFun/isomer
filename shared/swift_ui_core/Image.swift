@@ -243,6 +243,13 @@ extension Image: _PrimitiveView {
             let node = RenderNode(kind: .text(glyph))
             node.symbolName = source
             node.symbolIsImage = true
+            // `.imageScale`: its size beside the text, for hosts with the
+            // system's symbols (ImageScale.swift).
+            switch ctx.env.imageScale {
+            case .small: node.hostHints.append(("imageScale", "small"))
+            case .large: node.hostHints.append(("imageScale", "large"))
+            case .medium: break
+            }
             node.symbolSecondary = ctx.env.foregroundSecondary
             node.font = ctx.env.font
             node.color = ctx.env.foregroundColor

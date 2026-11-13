@@ -320,6 +320,7 @@ package final class FlatTreeEncoder {
             if let detents = presentation.content.presentationDetents, !detents.isEmpty { sheetParams.append(("detents", detents)) }
             if let grabber = presentation.content.presentationDragIndicator { sheetParams.append(("grabber", grabber == "hidden" ? "0" : "1")) }
             if presentation.content.presentationDismissDisabled { sheetParams.append(("nodismiss", "1")) }
+            if let sizing = presentation.content.presentationSizing, sizing != "automatic" { sheetParams.append(("sizing", sizing)) }
             switch presentation.style {
             case .sheet:
                 node.style = .sheet

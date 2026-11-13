@@ -196,6 +196,7 @@ struct NodeView: View, Equatable {
                     NodeView(pnode: pnode.children[0], send: send)
                 }
                 .modifier(MenuIndicatorHidden(hidden: nodeParam("indicator") == "hidden"))
+                .modifier(NativeMenuStyle(name: nodeParam("menuStyle")))
             default:
                 HostViewBody(node: node, send: send)
             }
@@ -352,7 +353,9 @@ struct NodeView: View, Equatable {
             // row's separator starts at its text, not at the symbol); a
             // `Text(Image(…))` on its own is text.
             if nodeParam("symbolImage") == "1" {
-                let image = Image(systemName: symbol).font(textFont)
+                // `.imageScale` in the app: the symbol's size beside its font.
+                let scale: Image.Scale = nodeParam("imageScale") == "small" ? .small : nodeParam("imageScale") == "large" ? .large : .medium
+                let image = Image(systemName: symbol).font(textFont).imageScale(scale)
                 if let color { return AnyView(image.foregroundColor(color)) }
                 return AnyView(image)
             }
@@ -1005,6 +1008,7 @@ struct HostViewBody: View {
                 MenuItems(node: node, send: send)
             }
             .modifier(MenuIndicatorHidden(hidden: param("indicator") == "hidden"))
+            .modifier(NativeMenuStyle(name: param("menuStyle")))
         case "datepicker":
             NativeDatePicker(
                 title: param("title") ?? "",
@@ -3216,8 +3220,28 @@ struct SheetTraits: ViewModifier {
                 .presentationDetents(detents.isEmpty ? [.large] : detents)
                 .presentationDragIndicator(grabber)
                 .interactiveDismissDisabled(param("nodismiss") == "1")
+                .modifier(SheetSizing(name: param("sizing")))
         } else {
             content.interactiveDismissDisabled(param("nodismiss") == "1")
+        }
+    }
+}
+
+/// `.presentationSizing` from the sheet's params ("sizing"), where the
+/// system has it.
+struct SheetSizing: ViewModifier {
+    let name: String?
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if #available(iOS 18.0, macOS 15.0, visionOS 2.0, *) {
+            switch name {
+            case "form": content.presentationSizing(.form)
+            case "page": content.presentationSizing(.page)
+            case "fitted": content.presentationSizing(.fitted)
+            default: content
+            }
+        } else {
+            content
         }
     }
 }
@@ -3811,6 +3835,27 @@ struct MenuIndicatorHidden: ViewModifier {
 
     func body(content: Content) -> some View {
         if hidden { content.menuIndicator(.hidden) } else { content }
+    }
+}
+
+/// `.menuStyle` by the guest's choice ("menuStyle": "button",
+/// "borderlessButton"; none, the platform's).
+struct NativeMenuStyle: ViewModifier {
+    let name: String?
+
+    @ViewBuilder func body(content: Content) -> some View {
+        switch name {
+        case "button":
+            if #available(iOS 16.0, macOS 12.0, tvOS 17.0, *) { content.menuStyle(.button) } else { content }
+        case "borderlessButton":
+            #if os(iOS) || os(macOS)
+            content.menuStyle(.borderlessButton)
+            #else
+            content
+            #endif
+        default:
+            content
+        }
     }
 }
 
