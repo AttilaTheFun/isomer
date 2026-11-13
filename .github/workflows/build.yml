@@ -220,49 +220,58 @@ jobs:
           retention-days: 14
 
   apple:
-    # The iPhone and Mac Storybooks' tests on GitHub's own `xcode-27` Mac (a
-    # simulator made for the run, and the Mac's own screen:
-    # tools/ci/hosted_apple_test.sh), for a public repository's verify; a
-    # private one runs them in verify itself, on Shireworks' leases. Two
-    # hours: its builds (the headful iPhone app, the tests hosted in it, the
-    # Mac's) took 85 minutes of 0.50's run where Bazel's cache was cold, and
-    # the Mac's tests were cut off at 90.
+    # The iPhone and Mac Storybooks' tests on GitHub's own `xcode-27` Macs,
+    # four at once, for a public repository's verify; a private one runs
+    # them in verify itself, on Shireworks' leases. Each part on a Mac of its
+    # own: the pictures (tools/ci/hosted_apple_test.sh: a simulator made for
+    # the run, and the Mac's own screen; 13 minutes), and the Storybook's
+    # tests headful (tools/ci/hosted_headful_test.sh), driving the iPhone app
+    # (ios), hosted in it (hosted) and driving the Mac app (macos). One Mac
+    # took 96 minutes for them all in 0.51.1's run, 64 of them Bazel
+    # building the tests from cold. Two hours each: a cold build of the
+    # headful iPhone tests took 44 minutes.
     needs: verify
     if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release') && !github.event.repository.private }}
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [pictures, ios, hosted, macos]
     runs-on: xcode-27
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
+        if: matrix.part == 'pictures'
         with:
           name: apple-test-apps
           path: .ci/apple
       - name: The iPhone and Mac Storybooks' tests
+        if: matrix.part == 'pictures'
         run: >-
           tools/ci/hosted_apple_test.sh "$(ls .ci/apple/*storybook_ios*.ipa | head -1)"
           "$(ls .ci/apple/*storybook_macos*.zip | head -1)" .ci/platform-tests/apple
       - uses: actions/download-artifact@v4
+        if: matrix.part != 'pictures'
         with:
           name: headful-apps
           path: .ci/headful
-      # Bazel's downloads kept between runs in GitHub's cache: GitHub's
-      # release downloads, where most of them come from, have failed for
-      # an hour at a time with 504s.
       - uses: actions/cache@v4
+        if: matrix.part != 'pictures'
         with:
           path: ~/.cache/isomer-bazel-repository
           key: bazel-repository-${{ runner.os }}-${{ hashFiles('MODULE.bazel', 'examples/MODULE.bazel', 'examples/third_party/swift_packages/Package.resolved') }}
           restore-keys: bazel-repository-${{ runner.os }}-
-      # The Storybook's tests (the headless source) against the apps headful:
-      # the test built here, the apps the container's.
-      - name: The Storybook's tests, headful on the iPhone and the Mac
+      - name: The Storybook's tests, headful
+        if: matrix.part != 'pictures'
+        env:
+          HEADFUL_APPLE_PARTS: ${{ matrix.part }}
         run: >-
           exec tools/ci/hosted_headful_test.sh apple "$(ls .ci/headful/*storybook_ios*.ipa | head -1)"
           "$(ls .ci/headful/*storybook_macos*.zip | head -1)" .ci/platform-tests/apple/headful
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
-          name: platform-tests-apple
+          name: platform-tests-apple-${{ matrix.part }}
           path: .ci/platform-tests/apple
           retention-days: 14
 
