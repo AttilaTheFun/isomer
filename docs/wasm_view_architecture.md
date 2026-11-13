@@ -121,6 +121,10 @@ never in a feature bundle.
 
 ## Bundle splitting (investigated 2026-07-08)
 
+*Since 2026-11-13: features as side modules over one runtime module work,
+the Storybook as a 226 KB gzip side module; see
+[side_modules.md](side_modules.md). The analysis below is July's.*
+
 **What the bytes are.** A feature `.wasm` (the hot-reload demo) section
 breakdown: `code` 52.6%, `name` 18.4%, `export` 15.8%, `data` 8.9%, debug
 ~0.4%. The `name`/debug sections strip in release; the `export` section is an

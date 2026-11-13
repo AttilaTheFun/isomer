@@ -1,0 +1,1 @@
+../../../../../swift_ffi/runtime/swift_wasm_host/WasmBundleProvider.swift
