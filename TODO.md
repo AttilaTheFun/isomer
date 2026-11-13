@@ -347,6 +347,20 @@ platforms documented. Open:
   avoids it). Measure Isomer's modules built resilient on Android (size,
   the Storybook's frame times: every SwiftUI type an app uses becomes
   resilient to it) before choosing a default or a flag.
+- **Isomer's SwiftUI in Swift 6 language mode**: with
+  `-strict-concurrency=complete` (SwiftPM on Linux, 6.4, after #196) the
+  SwiftUI target has 149 warnings that are errors in Swift 6 mode, in 30
+  files: sending non-Sendable values (bindings, actions, styles) into
+  main-actor code (Presentations 28, Modifiers, Focus, ForEach,
+  TreeEncoder), built-in styles' conformances to internal protocols
+  crossing into main-actor code (Controls, Form, ToggleStyle,
+  ProgressViewStyle, MenuStyle), non-Sendable static style options and
+  environment defaults (`ButtonStyleOption.automatic`, `OpenURLAction`),
+  and main-actor initializers called from nonisolated ones (Label,
+  Commands, ForEach). Fix them, matching Apple's isolation and
+  sendability where its interface says (`nonisolated` initializers,
+  `Sendable` actions), then build the package's targets in Swift 6 mode
+  and keep a CI check on it.
 - **Foundation for every Swift target on Android without wrappers**: a
   `swift_library` that imports Foundation without depending on
   `@isomer//:foundation` finds the SDK's corelibs Foundation, and links
