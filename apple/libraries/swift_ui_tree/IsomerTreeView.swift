@@ -122,6 +122,15 @@ struct NodeView: View, Equatable {
     }
 
     @ViewBuilder private var content: some View {
+        if nodeParam("native") == "stepper" {
+            // The core's stepper (a label and two buttons): the system's.
+            NativeStepper(pnode: pnode, send: send)
+        } else {
+            kindContent
+        }
+    }
+
+    @ViewBuilder private var kindContent: some View {
         switch node.kind {
         case .box:
             boxBody
@@ -750,6 +759,34 @@ struct NodeView: View, Equatable {
         case .end: return .bottom
         default: return .center
         }
+    }
+}
+
+/// The core's Stepper as the system's: its title the label, its two
+/// buttons' taps (− then +) the halves, a half off at its bound
+/// ("stepperCan": decrement, increment, 1 or 0).
+struct NativeStepper: View {
+    let pnode: PatchedNode
+    let send: (String, String) -> Void
+
+    var body: some View {
+        let taps = Self.taps(in: pnode)
+        func param(_ key: String) -> String? { pnode.flat.params.first { $0.key == key }?.value }
+        let can = Array(param("stepperCan") ?? "11")
+        let decrement = taps.count == 2 && can.first == "1" ? { send(taps[0], "") } : nil
+        let increment = taps.count == 2 && can.last == "1" ? { send(taps[1], "") } : nil
+        Stepper(onIncrement: increment, onDecrement: decrement) { Text(verbatim: param("stepperTitle") ?? "") }
+    }
+
+    /// The taps under the node, in order.
+    static func taps(in node: PatchedNode) -> [String] {
+        var found: [String] = []
+        func walk(_ node: PatchedNode) {
+            if let tap = node.flat.tap { found.append(tap) }
+            for child in node.children { walk(child) }
+        }
+        walk(node)
+        return found
     }
 }
 
