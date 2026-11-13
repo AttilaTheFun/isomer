@@ -263,16 +263,17 @@ cp "$root/drive/launchers/windows_launcher.sh" "$platforms/windows-headful/"
 ls -l "$platforms/windows-headful"
 # The Linux Storybook test, for a container of Shireworks linux-gui image
 # (tools/ci/platform_tests.sh, when PLATFORM_TESTS names linux): its
-# runfiles, and the Swift runtime libraries beside them (the image has no
-# Swift; its system libraries are its own). Built again first: the headful
+# runfiles, and any Swift runtime libraries they load beside them (the
+# image has no Swift; its system libraries are its own). Built again first: the headful
 # build above writes the same path.
 mkdir -p "$platforms/linux/lib"
 if bazel build "${flags[@]}" //tests/platforms:storybook_linux_test; then
     runfiles="$(bazel info "${flags[@]}" bazel-bin)/tests/platforms/storybook_linux_test.runfiles"
     cp -RL "$runfiles" "$platforms/linux/runfiles"
-    for exe in "$platforms/linux/runfiles/_main/linux/storybook_linux_application/storybook_linux_application" \
-        $(find "$platforms/linux/runfiles" -path "*/picture_check/picture_check" -type f); do
-        ldd "$exe" | awk "/=> \// { print \$3 }"
+    # The executables (the app target is a launcher over its _bin); none
+    # when Swift is linked in statically, as it is today.
+    for exe in $(find "$platforms/linux/runfiles" -type f \( -name "storybook_linux_application*" -o -name picture_check \)); do
+        ldd "$exe" 2> /dev/null | awk "/=> \// { print \$3 }"
     done | grep -v -E "^/(usr/)?lib/(aarch64|x86_64)-linux-gnu/" | sort -u | xargs -r cp -L -t "$platforms/linux/lib"
     ls -l "$platforms/linux/lib"
 else
