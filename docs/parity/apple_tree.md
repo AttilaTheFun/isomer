@@ -27,7 +27,7 @@ At 0.51.1, 40 of 98 stories differed. Their causes, and where each stands:
 | `underline(color:)`, `strikethrough(color:)` colours dropped | text.decoration | kept (`runLines`) |
 | `Text(Image(systemName:))` inline as a Unicode glyph | text.format | the run names its symbol (`runSymbols`), drawn as the system's |
 | `.disabled` as opacity, not the control's own look | controls.toggle | open: the core dims a disabled subtree's colours (`env.opacity *= 0.45`) where SwiftUI dims only its controls, on every platform |
-| `LazyVGrid`'s adaptive columns against the window's width | layout.lazygrid | open |
+| `LazyVGrid`'s adaptive columns against the window's width | layout.lazygrid | its columns sent (`native` lazyvgrid), the system's grid on Apple |
 | `adoptFixedSize` through padding; an image's corners rounded too | images.assets | the clip adopts the frame and the padding; an image inside padding keeps its corners |
 | `@State` inherited by another view type at the same place | input.focus | another type at a path starts its state afresh |
 | `.environment(\.colorScheme, .dark)` not reaching named colours | state.environment | host hint `scheme`, applied |

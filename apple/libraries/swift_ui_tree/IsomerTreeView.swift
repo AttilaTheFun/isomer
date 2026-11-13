@@ -131,6 +131,9 @@ struct NodeView: View, Equatable {
             // A ProgressView with a label: the system's, the label in its
             // own font and colour (a text's string as the app gave it).
             NativeLabelledProgress(bar: bar, label: label, send: send)
+        } else if nodeParam("native") == "lazyvgrid" {
+            // A LazyVGrid: the system's, its columns in its own width.
+            NativeLazyVGrid(pnode: pnode, send: send)
         } else if nodeParam("native") == "unavailable" {
             // The core's ContentUnavailableView: the system's, from its parts.
             NativeUnavailable(pnode: pnode, send: send)
@@ -767,6 +770,38 @@ struct NodeView: View, Equatable {
         case .start: return .top
         case .end: return .bottom
         default: return .center
+        }
+    }
+}
+
+/// The core's LazyVGrid as the system's: its columns ("gridColumns",
+/// Grid.swift's `gridItemSpec`), spacing and alignment, and its cells, the
+/// core's lines' cells in order.
+struct NativeLazyVGrid: View {
+    let pnode: PatchedNode
+    let send: (String, String) -> Void
+
+    private func param(_ key: String) -> String? { pnode.flat.params.first { $0.key == key }?.value }
+
+    private var columns: [GridItem] {
+        (param("gridColumns") ?? "").split(separator: ";").compactMap { spec in
+            let parts = spec.split(separator: ",").map(String.init)
+            guard parts.count == 4 else { return nil }
+            func n(_ text: String) -> CGFloat { text == "inf" ? .infinity : CGFloat(Double(text) ?? 0) }
+            let spacing = parts[3] == "-" ? nil : CGFloat(Double(parts[3]) ?? 0)
+            switch parts[0] {
+            case "f": return GridItem(.fixed(n(parts[1])), spacing: spacing)
+            case "a": return GridItem(.adaptive(minimum: n(parts[1]), maximum: n(parts[2])), spacing: spacing)
+            default: return GridItem(.flexible(minimum: n(parts[1]), maximum: n(parts[2])), spacing: spacing)
+            }
+        }
+    }
+
+    var body: some View {
+        let cells = pnode.children.flatMap(\.children).compactMap { $0.children.first }
+        let alignment: HorizontalAlignment = param("gridAlign") == "leading" ? .leading : param("gridAlign") == "trailing" ? .trailing : .center
+        LazyVGrid(columns: columns, alignment: alignment, spacing: param("gridSpacing").flatMap(Double.init).map { CGFloat($0) }) {
+            ForEach(keyedNodes(cells)) { cell in NodeView(pnode: cell.node, send: send) }
         }
     }
 }
