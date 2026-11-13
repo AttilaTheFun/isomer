@@ -114,13 +114,23 @@ struct MenuStory: View {
                 Label("More", systemImage: "ellipsis.circle")
             }
             Menu("Sort") {
-                Button("By name") { choice = "By name" }
-                Button("By date") { choice = "By date" }
+                SortOrders(choice: $choice)
             }
             .menuIndicator(.hidden)
             Text("Chose: \(choice)")
                 .font(.footnote)
                 .foregroundColor(.secondary)
+        }
+    }
+}
+
+/// A menu's items from a view of their own.
+struct SortOrders: View {
+    @Binding var choice: String
+
+    var body: some View {
+        ForEach(["By name", "By date"], id: \.self) { order in
+            Button(order) { choice = order }
         }
     }
 }

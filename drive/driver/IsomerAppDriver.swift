@@ -181,6 +181,14 @@ struct DriverScreen {
             topPresentation = node
         case .hostview:
             let kind = node.view ?? "view"
+            // A navigation bar's title (the stack's or a split column's
+            // pushed screen's `navigationTitle`) is a text on the screen, as
+            // the system's bar shows and reads it; the host draws it from
+            // this node's params, not from a text node.
+            if kind == "navbar" || kind == "navstack", let title = p["title"], !title.isEmpty, !combined {
+                texts.append(title)
+                textNodes.append((node, inside))
+            }
             if ["toggle", "picker", "segmented", "stepper", "datepicker", "colorpicker"].contains(kind) {
                 var label = p["a11yLabel"] ?? p["title"] ?? Self.textsUnder(node).joined(separator: " ")
                 if label.isEmpty { label = around.joined(separator: " ") }
