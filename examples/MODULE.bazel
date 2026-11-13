@@ -374,7 +374,9 @@ maven.install(
     ],
     use_starlark_android_rules = True,
 )
-use_repo(maven, "examples_maven")
+# isomer_maven too, for the test of an app's own AndroidX set
+# (//tests/android_maven).
+use_repo(maven, "examples_maven", "isomer_maven")
 
 # Hermetic Go >= 1.24 for gazelle's repo tooling (rules_android's `ak` Go
 # tools request it; the host Go is not consulted).
