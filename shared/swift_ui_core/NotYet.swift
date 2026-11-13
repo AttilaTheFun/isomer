@@ -83,11 +83,6 @@ extension Scene {
     public nonisolated func onChange<V>(of value: V, initial: Bool = false, _ action: @escaping () -> Void) -> some Scene where V : Equatable { self }
 }
 
-extension Scene {
-    @available(*, unavailable, message: "Not yet in Isomer: Documents, scenes, windows and commands (docs/parity/SwiftUI.md)")
-    public nonisolated func commandsRemoved() -> some Scene { self }
-}
-
 extension View {
     @available(*, unavailable, message: "Not yet in Isomer: Documents, scenes, windows and commands (docs/parity/SwiftUI.md)")
     public nonisolated func navigationDocument(_ url: URL) -> some View { self }

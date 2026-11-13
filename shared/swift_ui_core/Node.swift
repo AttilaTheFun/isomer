@@ -210,6 +210,9 @@ package final class RenderNode {
     /// ("medium,large"), `.presentationDragIndicator` ("visible"/"hidden"),
     /// `.interactiveDismissDisabled`.
     var presentationDetents: String?
+    /// `.presentationSizing` on a sheet's content ("form", "page",
+    /// "fitted"; "automatic" or nil the platform's).
+    var presentationSizing: String?
     var presentationDragIndicator: String?
     var presentationDismissDisabled = false
     /// `.presentationCompactAdaptation` on a popover's content: the
