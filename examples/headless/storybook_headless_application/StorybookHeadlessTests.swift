@@ -45,6 +45,12 @@ struct StorybookHeadlessTests {
     private func launch(story: String? = nil) throws -> HeadlessApp {
         let environment = ProcessInfo.processInfo.environment
         if let app = HeadlessApp.hostedIfAny() {
+            // The app's own pictures, kept as the run's attachments (an
+            // XCTest run's result bundle carries them home).
+            HeadlessApp.onPicture = { id, png in
+                print("[picture] \(id): \(png.count) bytes")
+                Attachment.record(png, named: id.replacingOccurrences(of: "/", with: "~") + ".png")
+            }
             // Back to the list, then the story: each test starts as at launch.
             try Self.show("stories")
             if let story { try Self.show(story) }

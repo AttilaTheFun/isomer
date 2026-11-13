@@ -8,7 +8,10 @@ package(default_visibility = ["//visibility:public"])
 # or a headful app a launcher starts, attached to a hub of its own.
 swift_library(
     name = "isomer_headless",
-    srcs = ["HeadlessApp.swift"],
+    srcs = [
+        "HeadlessApp.swift",
+        "HostedPicture.swift",
+    ],
     module_name = "IsomerHeadless",
     deps = [
         "//drive/serving",
