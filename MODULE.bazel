@@ -368,6 +368,14 @@ maven.install(
         # DROP_SHADER_CACHE broadcast targets it; baseline profiles).
         "androidx.profileinstaller:profileinstaller:1.4.1",
         "androidx.startup:startup-runtime:1.1.1",
+        "androidx.tracing:tracing:1.2.0",
+        # Kotlin's standard library and coroutines at what the graph resolved
+        # them to beside rules_android's (Compose alone floors them at 1.8 and
+        # 1.7, older than the kotlinc that compiles the runtime).
+        "org.jetbrains.kotlin:kotlin-stdlib:2.1.20",
+        "org.jetbrains.kotlin:kotlin-stdlib-jdk7:2.1.20",
+        "org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.1.20",
+        "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0",
         # The Compose compiler, matching rules_kotlin's kotlinc (2.2.21).
         "org.jetbrains.kotlin:kotlin-compose-compiler-plugin-embeddable:2.2.21",
     ],
