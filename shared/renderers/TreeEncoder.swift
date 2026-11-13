@@ -1167,7 +1167,10 @@ package final class FlatTreeEncoder {
         if node.scaleEffect != 1 { out.scale = Double(node.scaleEffect) }
         // `.rotationEffect`: radians about the centre, for hosts that turn
         // the view themselves (Apple's; the GPU renderer turns what it draws).
-        if node.rotation != 0 { out.params = (out.params ?? []) + [("rotation", formatNumber(node.rotation))] }
+        if node.rotation != 0 { out.params = (out.params ?? []) + [("rotation", String(node.rotation))] }
+        // The visual transforms the app's view has (Node.swift's
+        // `visualTransforms`), whatever their values now.
+        if !node.visualTransforms.isEmpty { out.params = (out.params ?? []) + [("fx", node.visualTransforms)] }
         // `.position`: the greedy box's child centered at (x, y); hosts
         // apply their own positioning (SwiftUI `.position`, CSS absolute).
         if let x = node.positionX, let y = node.positionY {

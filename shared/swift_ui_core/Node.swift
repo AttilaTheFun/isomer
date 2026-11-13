@@ -137,6 +137,11 @@ package final class RenderNode {
     /// time without affecting siblings.
     var offsetX: CGFloat = 0
     var offsetY: CGFloat = 0
+    /// Which of `.rotationEffect`, `.scaleEffect` and `.offset` the app's
+    /// view has, whatever their values now (param "fx": "r", "s", "o"):
+    /// hosts that apply them as modifiers apply each to such a view always,
+    /// so it stays one view while they animate, and to no other.
+    var visualTransforms = ""
     /// `.position(x:y:)`: this (greedy) box centers its child at the point,
     /// in the box's own coordinates.
     var positionX: CGFloat?

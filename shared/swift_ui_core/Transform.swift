@@ -6,6 +6,7 @@
 extension View {
     nonisolated public func rotationEffect(_ angle: Angle, anchor: UnitPoint = .center) -> some View {
         _AnimatableBoxModifier(child: self, descend: "rotation") { box, env, path, now in
+            if !box.visualTransforms.contains("r") { box.visualTransforms += "r" }
             let target = angle.radians
             box.rotation = Double(Runtime.shared.animator.value(
                 key: path + "#rotation", target: target, animation: env.animation, now: now))
@@ -14,6 +15,7 @@ extension View {
 
     nonisolated public func scaleEffect(_ scale: CGFloat, anchor: UnitPoint = .center) -> some View {
         _AnimatableBoxModifier(child: self, descend: "scale") { box, env, path, now in
+            if !box.visualTransforms.contains("s") { box.visualTransforms += "s" }
             box.scaleEffect = Runtime.shared.animator.value(
                 key: path + "#scale", target: scale, animation: env.animation, now: now)
         }

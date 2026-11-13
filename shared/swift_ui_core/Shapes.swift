@@ -274,7 +274,16 @@ extension StrokeShapeView: _PrimitiveView {
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var view = _ShapeView(kind: shape.shapeKind, fill: nil, stroke: (resolveStyleColor(style), strokeStyle.lineWidth))
         view.trim = shape.shapeTrim
-        return view.makeNode(&ctx)
+        let node = view.makeNode(&ctx)
+        // The rest of the stroke's style, where it isn't the default, for
+        // hosts that stroke with it (Apple's): "cap,join,miter,phase,dash…".
+        if strokeStyle != StrokeStyle(lineWidth: strokeStyle.lineWidth) {
+            func name(_ cap: CGLineCap) -> String { cap == .round ? "round" : cap == .square ? "square" : "butt" }
+            func name(_ join: CGLineJoin) -> String { join == .round ? "round" : join == .bevel ? "bevel" : "miter" }
+            let numbers = ([strokeStyle.miterLimit, strokeStyle.dashPhase] + strokeStyle.dash).map { String(Double($0)) }
+            node.hostHints.append(("strokeStyle", ([name(strokeStyle.lineCap), name(strokeStyle.lineJoin)] + numbers).joined(separator: ",")))
+        }
+        return node
     }
 }
 
