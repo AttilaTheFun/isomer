@@ -231,6 +231,15 @@ let package = Package(
         .target(
             name: "Isomer",
             path: ".",
+            // Everything but apple/ and shared/: the examples' bundles
+            // (.lproj, asset catalogs) would otherwise be this target's
+            // resources.
+            exclude: [
+                ".github", "android", "cli", "core_graphics", "docs", "drive", "examples",
+                "foundation", "frameworks", "headless", "linux", "metal", "swift_ffi",
+                "swift_gpu", "swift_map", "swift_ui_macros", "tests", "third_party", "tools",
+                "wasm", "web", "windows", "xplat",
+            ],
             sources: [
                 "apple/libraries/swift_ui/AppleClipboard.swift",
                 "apple/libraries/swift_ui/AppleMacStandIns.swift",
