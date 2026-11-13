@@ -882,17 +882,27 @@ do the same in an app's own tooling.
 ### Android release size
 
 An app's Swift is one JNI library (`lib<app>_runtime_bindings.so`): the
-Swift runtime, Foundation, SwiftUI and the app, statically linked. Built
-to ship, add `--config=android_release` (.bazelrc, examples/.bazelrc):
+Swift runtime, Foundation, SwiftUI and the app, statically linked. It
+exports only its JNI entry points (`Java_*`, and `JNI_OnLoad` where a
+library has one: swift_ffi/rules/jni_exports.lds), in every build since
+0.53: what it links statically, libc++ among it, stays its own, never
+meeting another library's copy in the process (a host app's
+`libc++_shared.so`, a prebuilt C++ library's). C++ objects passed between
+it and another shared library are therefore made and destroyed by
+different C++ runtimes; build such a library with the same NDK. Built to
+ship, add `--config=android_release` (.bazelrc, examples/.bazelrc):
 
 - `-c opt` and `-Osize`;
-- only the JNI entry points exported (`Java_*`, and `JNI_OnLoad` where a
-  library has one: swift_ffi/rules/jni_exports.lds, through
-  `--@isomer//swift_ffi/rules:jni_exports_only`), every other symbol local,
-  so `--gc-sections` drops the code they don't reach;
+- `--gc-sections`, which drops the code the JNI entry points don't reach
+  (`--@isomer//swift_ffi/rules:jni_exports_only`);
 - the symbol tables stripped (`--strip-all`), and no Swift module embedded
   for the debugger (`swift.no_embed_debug_module`, the `.swift_ast`
   section).
+
+To build one of the app's libraries alone for Android (to look at its
+archive or its module), name Isomer's platform:
+`--platforms=@isomer//tools/platforms:android_arm64` (or
+`:android_x86_64`).
 
 The Storybook (every story of the SwiftUI API, the Isomer module, the map
 engine and FlatBuffers), measured at 0.42: 34.5 MB at `-c opt` (24,116
