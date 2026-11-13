@@ -347,20 +347,6 @@ platforms documented. Open:
   avoids it). Measure Isomer's modules built resilient on Android (size,
   the Storybook's frame times: every SwiftUI type an app uses becomes
   resilient to it) before choosing a default or a flag.
-- **Isomer's SwiftUI in Swift 6 language mode**: with
-  `-strict-concurrency=complete` (SwiftPM on Linux, 6.4, after #196) the
-  SwiftUI target has 149 warnings that are errors in Swift 6 mode, in 30
-  files: sending non-Sendable values (bindings, actions, styles) into
-  main-actor code (Presentations 28, Modifiers, Focus, ForEach,
-  TreeEncoder), built-in styles' conformances to internal protocols
-  crossing into main-actor code (Controls, Form, ToggleStyle,
-  ProgressViewStyle, MenuStyle), non-Sendable static style options and
-  environment defaults (`ButtonStyleOption.automatic`, `OpenURLAction`),
-  and main-actor initializers called from nonisolated ones (Label,
-  Commands, ForEach). Fix them, matching Apple's isolation and
-  sendability where its interface says (`nonisolated` initializers,
-  `Sendable` actions), then build the package's targets in Swift 6 mode
-  and keep a CI check on it.
 - **Foundation for every Swift target on Android without wrappers**: a
   `swift_library` that imports Foundation without depending on
   `@isomer//:foundation` finds the SDK's corelibs Foundation, and links
@@ -371,6 +357,39 @@ platforms documented. Open:
   depends on itself). Until then, consumers wrap `swift_library` or patch
   third-party BUILD files, and `tools/foundation/check_link.py` finds a
   leak.
+
+## Warnings as errors, Swift 6 mode, complete concurrency checking (owner, 2026-11-13)
+
+The goal, over several releases: every Isomer target built with
+`-strict-concurrency=complete`, then in Swift 6 language mode, then with
+warnings as errors, as swift_ffi's packages already are. What blocks an
+app first, first:
+
+1. **What an app's own Swift 6 code meets** (0.53):
+   - `Sendable` where Apple's types are and Isomer's aren't (25, docs/
+     parity/missing/SwiftUI.md: `Text`, `Image`, the shapes, gradients,
+     `AnyShapeStyle`, `EmptyView`, `Spacer`, `ModifiedContent`, the
+     gestures' values): an app keeping one in a `Sendable` type, or
+     sending one across actors, builds only with Apple's.
+   - `Button`'s actions `@MainActor () -> Void`, as Apple's are (its 14
+     initializers): an app handing a `@MainActor` closure to Isomer's
+     nonisolated one is an error in Swift 6 mode.
+   - The two errors an app met compiling Isomer's sources in Swift 6 mode
+     (`StateObject`, `LazyState`; #196).
+2. **A ratchet in CI**: each package target's count of diagnostics under
+   complete checking (SwiftPM on Linux) can only go down.
+3. **SwiftUI's 149** under complete checking (6.4, after #196), in 30
+   files: non-Sendable values sent into main-actor code (Presentations 28,
+   Modifiers, Focus, ForEach, TreeEncoder), the built-in styles'
+   conformances to internal protocols crossing into main-actor code
+   (Controls, Form, ToggleStyle, ProgressViewStyle, MenuStyle),
+   non-Sendable static style options and environment defaults
+   (`ButtonStyleOption.automatic`, `OpenURLAction`), main-actor
+   initializers called from nonisolated ones (Label, Commands, ForEach).
+   Foundation, CoreGraphics, Combine and the Isomer* targets counted too.
+4. **Swift 6 mode** target by target (the smaller ones first), then the
+   Bazel-only modules (the hosts, the renderers, drive/).
+5. **Warnings as errors** once each is clean, as swift_ffi's packages are.
 
 ## Android below API 28 (2026-11-06)
 
