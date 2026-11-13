@@ -1,0 +1,81 @@
+load("@build_bazel_rules_apple//apple:apple.bzl", "local_provisioning_profile")
+load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
+load("@build_bazel_rules_apple//apple:versioning.bzl", "apple_bundle_version")
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_swift//swift:swift.bzl", "swift_interop_hint", "swift_library")
+load("@isomer_signing//:signing.bzl", "TEAM_ID")
+
+# The 2048 drag benchmark on an iPhone (BenchApp.swift; docs/side_modules.md
+# has its results). chot/ (the runtime's native copies and the bridge, which
+# tools/mixed/split/round.sh generates) and resources/ (the modules it runs)
+# are filled by prepare.sh, not checked in. Everything is `manual` and
+# dev-only (a device build needs a team's provisioning profile: pass
+# --repo_env=ISOMER_TEAM_ID=<team>).
+
+cc_library(
+    name = "chot",
+    srcs = glob(["chot/*.c", "chot/*.h"], allow_empty = True),
+    hdrs = glob(["chot/include/*.h"], allow_empty = True),
+    textual_hdrs = glob(["chot/*.inc"], allow_empty = True),
+    aspect_hints = [":chot_swift"],
+    copts = ["-O2", "-w"],
+    # As tools/mixed/host's CHot: guard pages over WasmKit's reserved memory,
+    # no bounds checks, no signal handler of wasm2c's own.
+    defines = [
+        "WASM_RT_USE_MMAP=1",
+        "WASM_RT_MEMCHECK_GUARD_PAGES=1",
+        "WASM_RT_SKIP_SIGNAL_RECOVERY=1",
+        "WASM_RT_NONCONFORMING_UNCHECKED_STACK_EXHAUSTION=1",
+        "WASM_RT_TRAP_HANDLER=iso_mixed_trap_handler",
+    ],
+    includes = ["chot/include"],
+    tags = ["manual"],
+)
+
+swift_interop_hint(
+    name = "chot_swift",
+    module_name = "CHot",
+)
+
+swift_library(
+    name = "bench_lib",
+    srcs = [
+        "BenchApp.swift",
+        "DragBench.swift",
+        "InterpretedBench.swift",
+        "MixedBench.swift",
+    ],
+    copts = ["-swift-version", "5"],
+    tags = ["manual"],
+    deps = [
+        ":chot",
+        "@isomer//shared/wasm_host:wasmkit_runtime",
+    ],
+)
+
+apple_bundle_version(
+    name = "_version",
+    build_version = "1",
+    short_version_string = "1.0",
+    tags = ["manual"],
+)
+
+local_provisioning_profile(
+    name = "_xcode_managed_profile",
+    profile_name = "iOS Team Provisioning Profile: *",
+    tags = ["manual"],
+    team_id = TEAM_ID,
+)
+
+ios_application(
+    name = "mixed_bench_ios_application",
+    bundle_id = "com.LoganShire.IsomerMixedBench",
+    families = ["iphone"],
+    infoplists = ["Info.plist"],
+    minimum_os_version = "18.0",
+    provisioning_profile = ":_xcode_managed_profile",
+    resources = glob(["resources/*"], allow_empty = True),
+    tags = ["manual"],
+    version = ":_version",
+    deps = [":bench_lib"],
+)

@@ -1,0 +1,1 @@
+../../../host/Sources/SideloadCheck/main.swift

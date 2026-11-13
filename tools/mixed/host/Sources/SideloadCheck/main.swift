@@ -1,6 +1,9 @@
 // Runs a runtime module (+ side modules) under WasmKit with the iso_hot
 // bridge stubbed, taps every tap id of the first frame, and writes the
 // render stream: the WasmKit twin of tools/mixed/node/drive_all.mjs.
+// BENCH=drag instead measures event → frame for a drag (see DragBench.swift),
+// as tests/wasm_engines' testBenchmarkDrag does. NO_LINKER builds it without
+// WasmDynamicLinker, against a WasmKit without the API it needs.
 import Foundation
 @_spi(OnlyForCLI) import WasmKit
 import WasmKitWASI
@@ -15,7 +18,11 @@ let mainModule = try parseWasm(bytes: Array(try Data(contentsOf: URL(fileURLWith
 let wasi = try WASIBridgeToHost(args: ["app"])
 
 var stream: [UInt8] = []
+#if !NO_LINKER
 var linker: WasmDynamicLinker?
+#endif
+let benchmarking = ProcessInfo.processInfo.environment["BENCH"] != nil
+nonisolated(unsafe) var wantsRender = false
 var imports = Imports()
 wasi.link(to: &imports, store: store)
 func memory(_ caller: borrowing Caller) -> Memory { caller.instance!.exports[memory: "memory"]! }
@@ -33,12 +40,18 @@ for item in mainModule.imports {
     case _ where item.module == "env":
         // Late-bound: a side module defines it.
         imports.define(module: item.module, name: item.name, Function(store: store, type: type) { _, args in
+            #if !NO_LINKER
             guard let function = linker?.function(named: item.name) else { fatalError("env.\(item.name) unresolved") }
             return try function.invoke(args)
+            #else
+            fatalError("env.\(item.name): no linker in this build")
+            #endif
         })
     default:
         imports.define(module: item.module, name: item.name, Function(store: store, type: type) { _, _ in
-            type.results.map { result -> Value in
+            if item.name == "schedule_render" { wantsRender = true }
+            if item.name == "epoch_millis" && benchmarking { return [.f64((Date().timeIntervalSince1970 * 1000).bitPattern)] }
+            return type.results.map { result -> Value in
                 switch result {
                 case .i32: return item.name == "host_value" ? .i32(UInt32(bitPattern: -1)) : .i32(0)
                 case .i64: return .i64(0)
@@ -56,6 +69,7 @@ print("stage: initialize")
 try wasi.initialize(main)
 print("stage: initialized")
 let loadStart = Date()
+#if !NO_LINKER
 if arguments.count > 3 {
     print("stage: linker")
     linker = try WasmDynamicLinker(main: main, store: store)
@@ -64,8 +78,22 @@ if arguments.count > 3 {
         print("loaded \(path.split(separator: "/").last!): memory \(module.info.memorySize) B at \(module.memoryBase), table \(module.info.tableSize) at \(module.tableBase)")
     }
 }
+#endif
 print("side load ms", Int(Date().timeIntervalSince(loadStart) * 1000))
-func call(_ name: String, _ args: [Value] = []) throws -> [Value] { try main.exports[function: name]!(args) }
+final class StackBox { var stack: ExecutionStack; init(engine: Engine) { stack = ExecutionStack(engine: engine) } }
+let callStack = StackBox(engine: engine)
+func call(_ name: String, _ args: [Value] = []) throws -> [Value] { try main.exports[function: name]!.invoke(args, on: &callStack.stack) }
+if benchmarking {
+    let memory = main.exports[memory: "memory"]!
+    print(try DragBench.run(
+        call: { name, args in try call(name, args) },
+        write: { address, bytes in
+            memory.withUnsafeMutableBufferPointer(offset: UInt(address), count: bytes.count) { d in bytes.withUnsafeBytes { d.copyMemory(from: $0) } }
+        },
+        stream: { stream }, clearStream: { stream.removeAll(keepingCapacity: true) },
+        takeWantsRender: { defer { wantsRender = false }; return wantsRender }))
+    exit(0)
+}
 _ = try call("iso_hot_start", [.f64(1024.0.bitPattern), .f64(768.0.bitPattern)])
 _ = try call("iso_hot_render")
 var ids: [String] = []

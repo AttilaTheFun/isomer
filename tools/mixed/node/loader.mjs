@@ -56,7 +56,15 @@ export function loadSide(main, path) {
   if (missing.length) throw new Error('unresolved: ' + missing.slice(0, 20).join(', ') + ` (${missing.length})`);
   const inst = new WebAssembly.Instance(mod, { env, 'GOT.mem': gotMem, 'GOT.func': gotFunc, wasi_snapshot_preview1: {} });
   inst.exports.__wasm_apply_data_relocs?.();
-  if (!process.env.NO_FIX) { const dv = new DataView(E.memory.buffer); for (const o of (fs.existsSync(path + '.locrel.json') ? JSON.parse(fs.readFileSync(path + '.locrel.json')) : locrelOffsets(fs.readFileSync(path)))) dv.setInt32(memoryBase + o, dv.getInt32(memoryBase + o, true) - memoryBase, true); }
+  // The unpatched wasm-ld's LOCREL slots (lld_wasm_pic_locrel.patch fixes the
+  // linker): from a sidecar (split/locrel_from_map.py) or the module's own
+  // reloc.DATA (--emit-relocs). A module from the patched wasm-ld has neither
+  // and needs nothing.
+  if (!process.env.NO_FIX) {
+    const offsets = fs.existsSync(path + '.locrel.json') ? JSON.parse(fs.readFileSync(path + '.locrel.json')) : locrelOffsets(fs.readFileSync(path));
+    const dv = new DataView(E.memory.buffer);
+    for (const o of offsets) dv.setInt32(memoryBase + o, dv.getInt32(memoryBase + o, true) - memoryBase, true);
+  }
   if (!process.env.NO_CTORS) inst.exports.__wasm_call_ctors?.();
   return { inst, memoryBase, tableBase, info };
 }

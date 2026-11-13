@@ -115,6 +115,8 @@ final class Bridge {
         }
     }
     let rawCalls = ProcessInfo.processInfo.environment["CHECKED_CALLS"] == nil
+    /// ALL_INTERPRETED: the host's calls go to the interpreted runtime too.
+    let allInterpreted = ProcessInfo.processInfo.environment["ALL_INTERPRETED"] != nil
 
     func invokeInterpreted(_ function: Function, _ args: [Value]) -> [Value] {
         toInterpreter()
@@ -134,7 +136,7 @@ final class Bridge {
     /// there is one, else the interpreted runtime's.
     @discardableResult
     func call(_ name: String, _ args: [Value] = [], interpreted instance: Instance) -> [Value] {
-        if let index = nativeExports[name], ProcessInfo.processInfo.environment["ALL_INTERPRETED"] == nil {
+        if let index = nativeExports[name], !allInterpreted {
             let type = signatures[Int(iso_mixed_export_sig(index))]
             var a = args.map(slot)
             if a.isEmpty { a = [0] }
@@ -260,6 +262,8 @@ func slotCall(_ tableSlot: UInt32, _ sig: UInt32, _ a: UnsafePointer<UInt64>?, _
 // MARK: - Run
 
 var stream: [UInt8] = []
+let benchmarking = ProcessInfo.processInfo.environment["BENCH"] != nil
+nonisolated(unsafe) var wantsRender = false
 let started = Date()
 let b = Bridge()
 bridge = b
@@ -288,7 +292,9 @@ func hostImports(for module: Module, into imports: inout Imports) {
             })
         default:
             imports.define(module: item.module, name: item.name, Function(store: b.store, type: type) { _, _ in
-                type.results.map { t -> Value in
+                if item.name == "schedule_render" { wantsRender = true }
+                if item.name == "epoch_millis" && benchmarking { return [.f64((Date().timeIntervalSince1970 * 1000).bitPattern)] }
+                return type.results.map { t -> Value in
                     switch t {
                     case .i32: return item.name == "host_value" ? .i32(UInt32(bitPattern: -1)) : .i32(0)
                     case .i64: return .i64(0)
@@ -349,6 +355,20 @@ b.linker = WasmDynamicLinker(main: MixedLinkMain(try WasmInstanceLinkMain(runtim
 linkerForLate = b.linker
 for path in arguments.dropFirst(5) { try b.linker.load(bytes(path)) }
 print("[mixed] ready in \(Int(Date().timeIntervalSince(started) * 1000)) ms")
+if benchmarking {
+    print(try DragBench.run(
+        call: { name, args in b.call(name, args, interpreted: runtime) },
+        write: { address, bytes in
+            b.memory.withUnsafeMutableBufferPointer(offset: UInt(address), count: bytes.count) { d in bytes.withUnsafeBytes { d.copyMemory(from: $0) } }
+        },
+        stream: { stream }, clearStream: { stream.removeAll(keepingCapacity: true) },
+        takeWantsRender: { defer { wantsRender = false }; return wantsRender }))
+    print("\(b.intoInterpreted) calls from native into the interpreter, \(MixedLinkMain.intoNative) from feature code into native code")
+    if b.counting {
+        for (k, v) in b.counts.sorted(by: { $0.value > $1.value }) where v >= 50 { print("  \(v)  slot \(k)") }
+    }
+    exit(0)
+}
 
 b.call("iso_hot_start", [.f64(1024.0.bitPattern), .f64(768.0.bitPattern)], interpreted: runtime)
 b.call("iso_hot_render", interpreted: runtime)

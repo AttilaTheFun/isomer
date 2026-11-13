@@ -18,6 +18,7 @@ export function locrelOffsets(bytes) {
       if (flags === 2) uleb(b, q);
       if (flags !== 1) { while (b[q.i] !== 0x0b) { const op = b[q.i++]; if (op === 0x41) mem = sleb(b, q); else if (op === 0x23) uleb(b, q); } q.i++; }
       const sz = uleb(b, q); segs.push({ off: q.i - dataStart, mem, sz }); q.i += sz; } }
+  if (!relocData) return [];
   const out = []; const q = { i: relocData.start }; uleb(b, q); const count = uleb(b, q);
   for (let k = 0; k < count; k++) { const type = b[q.i++]; const off = uleb(b, q); uleb(b, q); if (ADDEND.has(type)) sleb(b, q);
     if (type !== 23) continue;

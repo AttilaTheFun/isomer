@@ -113,3 +113,77 @@ list from a broader corpus than the Storybook's taps; Bazel rules for the
 runtime, the native part and features; the bridge in `WasmKitRuntime` and the
 hosts (iOS, Android), and the same scheme on the web, where the browser's own
 engine runs both.
+
+### Event → frame: the Playground's 2048
+
+The Playground's 2048 sample (examples/wasm/game2048_feature, built with the
+Storybook reactor's libraries so the Storybook's runtime hosts it), dragged:
+ten drags of 60 `changed` events, a render after each (the samples), then
+each release and its animation's frames, as tests/wasm_engines'
+testBenchmarkDrag does. The native set is the Storybook's grown on this drag
+(tools/mixed/data/storybook_2048_native_set.txt: 5,187 functions, 3.95 MB of
+native code; the Storybook stayed byte-identical through its rounds).
+
+| 2048 drag | Self-contained reactor | Side module, interpreted | Side module, mixed |
+| --- | --- | --- | --- |
+| **Mac** (WasmKit 5fbb9db for the reactor) | | | |
+| mean | 2.02 ms | 2.04 ms | 0.67 ms |
+| median | 0.51 ms | 0.51 ms | 0.71 ms |
+| p90 | 7.0 ms | 7.1 ms | 0.96 ms |
+| first frame | 133 ms | 136 ms | 40 ms |
+| release animation, per frame | 7.1 ms | 7.2 ms | 0.75 ms |
+| **iPhone Air** (iOS 27.2; one WasmKit for all, see below) | | | |
+| mean | 1.41 ms | 1.50 ms | 0.50 ms |
+| median | 0.38 ms | 0.40 ms | 0.52 ms |
+| p90 | 4.9 ms | 5.1 ms | 0.58 ms |
+| first frame | 70–75 ms | 79–87 ms | 24–35 ms |
+| release animation, per frame | 4.9 ms | 5.1 ms | 0.54 ms |
+| **download** | 17.6 MB | 67 KB (26 KB gzip) | 67 KB (26 KB gzip) |
+
+Three runs of each. The frames that do work (rebuilding the board, animating)
+are 7–9× faster in mixed mode; the cheapest events, which change almost
+nothing, are about 0.15 ms slower: each still crosses into the interpreter
+for 2048's own code (about 280 calls an event: its bodies, closures and
+value witnesses). The iPhone app can't link the original WasmKit beside the
+new one, so its reactor runs on the new one; on the Mac the two measure the
+same for a reactor (2.02 against 2.04 ms). On the iPhone, two of the three
+mixed runs got no guard-page reservation for the runtime's memory (the
+earlier runs' were still held), so they ran over a memory that moves as it
+grows, unprotected from native code's out-of-bounds accesses: the same times.
+
+## Verifying the claims
+
+Every step is in tools/mixed/README.md ("Reproducing it"); the published
+pieces are the isomer branch (WasmDynamicLinker, tools/mixed, the 2048 cell,
+the iPhone app), pawlowskialex/WasmKit `isomer-side-modules` and
+pawlowskialex/llvm-project `wasm-ld-pic-locrel-6.4.2`.
+
+| Claim | Step |
+| --- | --- |
+| Swift's wasm objects and the SDK's stdlib are PIC; a feature links as a side module | 3 (`split_link.py`; `llvm-objdump -r` on the objects shows `MEMORY_ADDR_REL_SLEB`/GOT relocations) |
+| Side module and runtime sizes (tap counter, Storybook, 2048) | 3 |
+| wasm-ld's LOCREL bug, its fix, lld's tests | 1 (`shared-locrel.s`) |
+| The loader-side workaround (`--emit-relocs`, the `-Map` sidecar) | 1, 4 |
+| Byte-identical renders: V8, WasmKit, `WasmKitRuntime.loadSideModule` | 4 |
+| WasmKit's tests pass with its two commits | 2 |
+| 95% of the runtime's time in 787 functions; 82% core machinery vs 18% feature code; 74% of feature time in runtime calls | 5 |
+| All of the runtime as C: 319 MB of C, 36 MB of native code, 56 s to compile | 5 |
+| Mixed mode: 0.44 s against 3.15 s, 3.9 MB (7.4 MB bounds-checked), byte-identical | 6 (`round.sh` with `data/storybook_native_set.txt`; the WasmKit build options in host/Package.swift) |
+| Raw-slot calls vs checked (`CHECKED_CALLS=1`) | 6 |
+| The 2048 numbers, Mac and iPhone | 7 |
+
+Not reproducible from the published tools:
+
+- **Moving the hot functions instead of copying them** (18 million crossings,
+  16.1 s, 5× slower than interpreting): measured with a first version of the
+  mixed host whose split gave the native part the hot functions alone; it
+  was replaced, not kept.
+- **The time breakdowns of the mixed runs** (60% native code, 28% the
+  interpreter, 11% crossings; signal setup 5.2% of the run before its fix, the
+  error thrown on each return): macOS `sample` profiles of `MixedCheck`
+  (`REPEAT=<n>` repeats the taps for a longer sample), read by hand.
+- **The steps between the published sets**: each round's timing is
+  reproducible from its set, but only the sets the rounds ended with are
+  published (the earlier ones follow from rerunning `grow_set.py`).
+- **The toy linking test** (a hand-written runtime and feature, before
+  Isomer's): superseded by step 4.
