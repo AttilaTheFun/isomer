@@ -50,9 +50,43 @@ const EMPTY = new Uint8Array(0);
  *  the bindings have none (a module without IsomerNetworkHost). */
 export function browserNetworkHosts(Dependencies, { fetch, WebSocket } = {}) {
   if (!Dependencies || !Dependencies.hTTPHost || !Dependencies.webSocketHost) return {};
-  return {
+  const hosts = {
     isomerHTTP: Dependencies.hTTPHost(() => createHTTPHost({ fetch })),
     isomerWebSocket: Dependencies.webSocketHost(() => createWebSocketHost({ WebSocket })),
+  };
+  // The Isomer module's SecureStore, beside them (IsomerNetworkHost's
+  // `SecureStoreHost`), where the bindings have it.
+  if (Dependencies.secureStoreHost) {
+    hosts.isomerSecureStore = Dependencies.secureStoreHost(() => createSecureStoreHost());
+  }
+  return hosts;
+}
+
+/** `SecureStoreHost` over the origin's localStorage: what a page can keep
+ *  and read back at once (a browser offers nothing more secure to a page).
+ *  Items by service and key, values base64. No storage (a sandboxed frame):
+ *  memory, for the page's life. */
+export function createSecureStoreHost({ storage = globalThis.localStorage } = {}) {
+  const memory = new Map();
+  const slot = (service, key) => `isomer-secure-store:${service}\u001f${key}`;
+  const get = (name) => { try { return storage ? storage.getItem(name) : memory.get(name) ?? null; } catch { return memory.get(name) ?? null; } };
+  const put = (name, value) => { try { if (storage) { storage.setItem(name, value); return; } } catch { /* memory below */ } memory.set(name, value); };
+  const drop = (name) => { try { storage?.removeItem(name); } catch { /* memory below */ } memory.delete(name); };
+  const encode = (bytes) => { let text = ""; for (const byte of bytes) text += String.fromCharCode(byte); return btoa(text); };
+  const decode = (text) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
+  return {
+    read(service, key) {
+      const stored = get(slot(service, key));
+      if (stored === null) return { found: false, value: EMPTY, error: "" };
+      try { return { found: true, value: decode(stored), error: "" }; } catch (e) { return { found: false, value: EMPTY, error: String(e) }; }
+    },
+    write(service, key, value) {
+      try { put(slot(service, key), encode(value)); return ""; } catch (e) { return String(e); }
+    },
+    remove(service, key) {
+      drop(slot(service, key));
+      return "";
+    },
   };
 }
 
