@@ -97,9 +97,26 @@ private enum AXClient {
             // screen()); the texts are its title and message.
             presented.append(("sheet", texts.first ?? string(sheet, kAXTitleAttribute) ?? "", texts.dropFirst().first ?? ""))
         }
+        // An open menu (a Menu's pull-down, a pop-up's): an AXMenu under its
+        // button, which a button's node doesn't lead into. While it's open
+        // it is all that can be used, as a person sees it; its items are
+        // buttons (AXMenuItem).
+        if let menu = openMenu(in: root) { root = menu }
         var nodes: [AXNode] = []
         visit(root, &nodes)
         return (nodes, presented, frame(main).size)
+    }
+
+    /// The menu open under `element` (an AXMenu with items), if one is.
+    static func openMenu(in element: AXUIElement) -> AXUIElement? {
+        for child in children(element) {
+            if string(child, kAXRoleAttribute) == "AXMenu",
+               children(child).contains(where: { string($0, kAXRoleAttribute) == "AXMenuItem" }) {
+                return child
+            }
+            if let found = openMenu(in: child) { return found }
+        }
+        return nil
     }
 
     static func visit(_ element: AXUIElement, _ nodes: inout [AXNode]) {
