@@ -4,6 +4,7 @@
 // placeholder until one is picked. The headless tests (SplitTitleTests.swift)
 // read the detail's title from the screen.
 
+import Observation
 import SwiftUI
 
 @main
