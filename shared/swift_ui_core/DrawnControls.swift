@@ -14,7 +14,7 @@ struct DrawnPopUpList {
     let onSelect: (Int) -> Void
     @State private var open = false
 
-    var body: some View {
+    @MainActor var body: some View {
         Button(action: { open = true }) {
             HStack(spacing: 4) {
                 Text(label)
@@ -66,7 +66,7 @@ struct DrawnSegmented {
     let selectedIndex: Int
     let onSelect: (Int) -> Void
 
-    var body: some View {
+    @MainActor var body: some View {
         HStack(spacing: 2) {
             ForEach(0 ..< options.count, id: \.self) { index in
                 Button(action: { onSelect(index) }) {

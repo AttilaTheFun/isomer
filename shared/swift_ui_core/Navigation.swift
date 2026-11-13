@@ -1039,6 +1039,7 @@ struct DrawnNavBar {
     /// A bar item: a tinted pill with a 44-point hit target, so glyph-only
     /// items (✎ ▶︎ ⚙︎) read as tappable and are easy to hit on a phone.
     /// A disabled item is greyed, its pill too, and takes no press.
+    @MainActor
     private func item(_ label: String, disabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
@@ -1051,7 +1052,8 @@ struct DrawnNavBar {
         .disabled(disabled)
     }
 
-    var body: some View {
+    // Main-actor, as a view's body is: its buttons' actions are.
+    @MainActor var body: some View {
         HStack(spacing: 6) {
             if showsBack {
                 Button(action: onBack) {
