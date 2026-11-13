@@ -33,6 +33,9 @@ func propagateImageCornerRadius(_ node: RenderNode, _ radius: CGFloat, force: Bo
             if force || radius > 0 { n.imageCornerRadius = radius }
             return
         }
+        // Padding between them: the clip is around the padding, and the
+        // image inside it keeps its own corners, as in SwiftUI.
+        if n.padding != EdgeInsets() { return }
         if case .box = n.kind, n.children.count == 1 {
             current = n.children.first
         } else {
@@ -81,13 +84,21 @@ func propagateBackgroundCornerRadius(_ node: RenderNode, _ radius: CGFloat) {
 /// a sliver.
 func adoptFixedSize(_ box: RenderNode, from inner: RenderNode) {
     var current: RenderNode? = inner
+    // The padding of the wrappers it passes through: the clip's size is
+    // the frame's and theirs (`.frame(width: 72).padding(8).clipShape(…)`
+    // clips 88 across).
+    var padded = EdgeInsets()
     while let n = current {
         if n.fixedWidth != nil || n.fixedHeight != nil {
-            if box.fixedWidth == nil { box.fixedWidth = n.fixedWidth }
-            if box.fixedHeight == nil { box.fixedHeight = n.fixedHeight }
+            if box.fixedWidth == nil { box.fixedWidth = n.fixedWidth.map { $0 + padded.leading + padded.trailing } }
+            if box.fixedHeight == nil { box.fixedHeight = n.fixedHeight.map { $0 + padded.top + padded.bottom } }
             return
         }
         if case .box = n.kind, n.children.count == 1 {
+            padded.top += n.padding.top
+            padded.leading += n.padding.leading
+            padded.bottom += n.padding.bottom
+            padded.trailing += n.padding.trailing
             current = n.children.first
         } else {
             return
