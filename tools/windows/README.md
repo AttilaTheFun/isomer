@@ -59,9 +59,13 @@ without the headers Swift's module maps need, `corecrt_math.h` among them.)
 
 ## Running it on Linux
 
-arm64 Wine 10 or later runs the arm64 build (Ubuntu 26.04's apt): Wine 9
-can't unwind arm64 Linux libraries built with pointer authentication and
-hangs at its first start. Direct3D 11 goes through Wine onto Mesa's software
+arm64 Wine 10 or later runs the arm64 build: Wine 9 can't unwind arm64
+Linux libraries built with pointer authentication and hangs at its first
+start. A headful app (`--@isomer//drive:headful`) needs Wine Staging 11.16
+or later: its driver's SwiftNIO wakes its event loop through AF_UNIX
+sockets, which Wine 10 lacks (WSAEAFNOSUPPORT; examples'
+//tests/wine_nio:nio_probe checks a Wine). CI runs it in Shireworks' wine
+image, Wine Staging 11.21 (tools/ci/platform_tests.sh). Direct3D 11 goes through Wine onto Mesa's software
 OpenGL under Xvfb. Wine's DirectWrite and fonts are its own, so what it
 draws checks that an app runs, never what Windows draws: the proof's Windows
 pictures come from Windows.

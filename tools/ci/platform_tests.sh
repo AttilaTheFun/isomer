@@ -1,9 +1,10 @@
 #!/bin/bash
 # The platforms CI's build container can't run, tested where they run, at
 # once, after tools/ci/container_build.sh put their apps in .ci/platforms:
-#   - Windows under arm64 Wine 10 in a Linux container (Ubuntu 26.04's Wine:
-#     tools/ci/windows_test.sh), only with PLATFORM_TESTS naming it: for now
-#     (2026-11-05) CI runs the tier-1 platforms and only builds Windows;
+#   - Windows under arm64 Wine Staging in a container of Shireworks' wine
+#     image (tools/ci/windows_test.sh), only with PLATFORM_TESTS naming it:
+#     for now (2026-11-05) CI runs the tier-1 platforms and only builds
+#     Windows;
 #   - Android on an emulator leased from Shireworks, on its Mac's own
 #     hypervisor (tools/ci/android_test.sh), when PLATFORM_TESTS names it:
 #     a private repository's CI, and the fallback; a public one's runs on
@@ -30,15 +31,19 @@ shireworks="$ROOT/tools/ci/shireworks.sh"
 
 platforms=" ${PLATFORM_TESTS:-android apple} "
 
-# Windows: Wine and what it draws on, from Ubuntu 26.04's apt (its archives
-# kept in a volume between runs), in a container of its own. Nothing of
-# this runner's is mounted (a CI job's container can't mount): the app and
-# the script go in through Shireworks, the pictures come back the same way.
+# Windows: Shireworks' wine image, a throwaway container of it: Wine Staging
+# for arm64 (11.21: Wine 10 has no AF_UNIX sockets, which SwiftNIO's Windows
+# event loop wakes itself through, so a headful app's driver died there;
+# examples' //tests/wine_nio is the check), Xvfb, Mesa and ImageMagick.
+# Nothing to install: Ubuntu's wine would put Wine 10 beside Staging on
+# PATH. Nothing of this runner's is mounted (a CI job's container can't
+# mount): the app and the script go in through Shireworks, the pictures
+# come back the same way.
+WINE_IMAGE="ghcr.io/attilathefun/shireworks-wine@sha256:1fa97fd14d7e4f9ac92ffc101534e7734b45df8aca693abb965f6b3d951251ef"
 if [[ $platforms == *" windows "* ]]; then
     (
         set -e
-        eval "$("$shireworks" lease container --image=docker.io/library/ubuntu:26.04 --cpus=4 --memory=4 \
-            --volume=isomer-ci-wine-apt:/var/cache/apt/archives:8:keep --minutes=60 \
+        eval "$("$shireworks" lease container --image="$WINE_IMAGE" --cpus=4 --memory=4 --minutes=60 \
             --kind=ci --label="Isomer: the Windows Storybook's tests (Wine)")"
         id="${SHIREWORKS_ID:-}"
         [ -n "$id" ] || { echo "platform_tests.sh: no container for Wine" >&2; exit 1; }
@@ -48,9 +53,6 @@ if [[ $platforms == *" windows "* ]]; then
         rm -f "$out/windows.tgz"
         status=0
         "$shireworks" run "$id" -- bash -c 'set -e
-            rm -f /etc/apt/apt.conf.d/docker-clean
-            apt-get update -qq >/dev/null
-            DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends wine xvfb imagemagick libgl1-mesa-dri >/dev/null
             mkdir -p /w && tar -xzf /tmp/windows.tgz -C /w
             status=0
             /w/windows_test.sh /w/windows /w/out "$@" || status=$?
