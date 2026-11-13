@@ -165,6 +165,14 @@ fi
 windows=(--config=windows_on_linux --platforms=@isomer//tools/platforms:windows_arm64)
 bazel build "${flags[@]}" "${windows[@]}" //windows/storybook_windows_application
 built_windows=$?
+# The plain app, kept now: the headful build below writes the same path (a
+# flag given on the command line leaves Bazel output folders as they are),
+# and the platform tests want the app with no driver in it.
+windows_plain="$root/.ci/windows-plain"
+rm -rf "$windows_plain" && mkdir -p "$windows_plain"
+for f in $(bazel cquery "${flags[@]}" "${windows[@]}" //windows/storybook_windows_application --output=files 2> /dev/null); do
+    case "$f" in *.exe) cp "$(bazel info "${flags[@]}" execution_root)/$f" "$windows_plain/" ;; esac
+done
 # And the Windows Storybook with its driver built in (its headful build),
 # with the Storybook tests built for Windows to drive it there.
 windows_headful=(//windows/storybook_windows_application //headless/storybook_headless_application:storybook_headful_windows_test)
@@ -225,9 +233,8 @@ for f in $(files --ios_multi_cpus=sim_arm64 //apple/storybook_ios_application:st
          $(files //apple/storybook_macos_application) $(files //android/storybook_android_application:storybook_android_application_apk); do
     case "$f" in *_unsigned.apk) ;; *.ipa | *.zip | *.apk) cp "$exec_root/$f" "$platforms/" ;; esac
 done
-for f in $(files "${windows[@]}" //windows/storybook_windows_application); do
-    case "$f" in *.exe) cp "$exec_root/$f" "$platforms/windows/" ;; esac
-done
+# The plain app kept before its headful build (above).
+cp "$windows_plain"/*.exe "$platforms/windows/" 2> /dev/null || echo "no plain Windows app"
 cp "$(bazel info "${flags[@]}" output_base)"/external/+swift_windows_sdk_repository+swift_windows_sdk/swift-windows-sdk/runtime/aarch64/*.dll \
     "$platforms/windows/" 2>/dev/null
 cp -R "$root/examples/storybook/assets" "$platforms/windows/assets"
