@@ -141,8 +141,12 @@ struct StorybookHeadlessTests {
         try app.wait(for: "Chose: Rename")
         // A Label's menu, by its title.
         try app.tap("More")
-        let screen = try app.tap("Pin")
-        #expect(screen.shows("Chose: Pin"))
+        try app.tap("Pin")
+        try app.wait(for: "Chose: Pin")
+        // A menu whose items are a view of the app's own.
+        try app.tap("Sort")
+        let screen = try app.tap("By date")
+        #expect(screen.shows("Chose: By date"))
     }
 
     /// `.searchable`'s field, by its prompt.

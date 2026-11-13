@@ -601,6 +601,14 @@ private func collectMenuButtons(
         }
         return
     }
+    // A view of the app's own (`Menu { StatusMenu(issue:) }`): its body's
+    // buttons, its properties (`@Environment`, `@State`) connected first as
+    // a build connects them.
+    if _viewKind(view).isComposite {
+        connectDynamicProperties(of: view, path: ctx.path, storage: ctx.storage, env: ctx.env)
+        var sub = ctx.descend(typeName(view))
+        collectMenuButtons(view.body, ctx: &sub, into: &items)
+    }
 }
 
 /// Builds a view and returns the first text run it contains (for labels).
