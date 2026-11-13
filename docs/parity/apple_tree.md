@@ -7,7 +7,7 @@ two pictures should be the same, pixel for pixel (the owner, 2026-11-13). A stor
 differs is Isomer's: a param the encoder drops, or the tree renderer ignores, or a
 composite the core builds where Apple has a control.
 
-At 0.51.1, 40 of 98 stories differed. Their causes, and where each stands:
+At 0.51.1, 40 of 98 stories differed; after parts 1 to 3 (#182, #183), 19. Their causes, and where each stands:
 
 | Cause | Stories | State |
 | --- | --- | --- |
@@ -33,3 +33,18 @@ At 0.51.1, 40 of 98 stories differed. Their causes, and where each stands:
 | `.environment(\.colorScheme, .dark)` not reaching named colours | state.environment | host hint `scheme`, applied |
 | Web view, video player and map drawn as placeholders | isomer.webview, isomer.video, isomer.map | the web view a WKWebView, as Apple's; the video's and map's frames masked in both pictures |
 | The toolbar's glass capsule about 1 pt wider | navigation.toolbar | open |
+
+After #183's verify (19 stories), what the pictures showed and part 4's answers:
+
+| Cause | Stories | State |
+| --- | --- | --- |
+| Identity `.scaleEffect(1)` / `.offset(0,0)` on every view: a half-pixel centring rounded the other way (+1 px) | layout.lazygrid, controls.progressstyle, animation.transforms, and likely images.symbols, controls.inline, layout.geometry, gestures.tap, state.appstorage | applied only where the app's view has them (`fx`: "r", "s", "o") |
+| No video player in the tree renderer (a placeholder outside the masked frame) | isomer.video | AVKit's, as the Isomer module's |
+| Rotation rounded to two decimals of a radian | animation.transforms | full precision |
+| `Color.gradient` as Isomer's guessed two stops | shapes.elliptical | the colour (`anyName`/`anyColor`), drawn as the system's own `.gradient` |
+| ContentUnavailableView given an empty actions area (all 9 pt lower) | lists.empty | the initializer without actions when there are none |
+| A bar item drawn as its symbol where the app has a Label | navigation.toolbar | `Label(title, systemImage:)` |
+| A stroke's cap, join, dashes and `.trim` dropped | shapes.stroke | sent (`strokeStyle`) and applied |
+| NavigationLink outside a row drawn as a tappable text, not a system button (glyph spacing) | navigation.links | open |
+| The dark badge's border in the light scheme's secondary | state.environment | open: the `scheme` hint doesn't reach it (cause not found) |
+| A CGPath ellipse replayed as curves; a rotated rounded rect as a path (antialiasing at a few pixels) | shapes.arcs, shapes.rotation | open |

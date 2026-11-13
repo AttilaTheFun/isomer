@@ -833,6 +833,14 @@ struct NativeUnavailable: View {
         return nil
     }
 
+    @ViewBuilder private func unavailableLabel(title: String, symbol: String?) -> some View {
+        if let symbol {
+            Label(title, systemImage: symbol)
+        } else {
+            Text(verbatim: title)
+        }
+    }
+
     var body: some View {
         let label = Self.part("label", in: pnode)
         let symbol = label.flatMap { Self.first(in: $0) { $0.flat.params.contains { $0.key == "symbol" } } }?
@@ -841,17 +849,21 @@ struct NativeUnavailable: View {
         let description = Self.part("description", in: pnode).flatMap { Self.first(in: $0) { $0.flat.kind == .text } }?.flat.v
         let actions = Self.part("actions", in: pnode)
         if #available(iOS 17.0, macOS 14.0, tvOS 17.0, watchOS 10.0, *) {
-            ContentUnavailableView {
-                if let symbol {
-                    Label(title, systemImage: symbol)
-                } else {
-                    Text(verbatim: title)
-                }
-            } description: {
-                if let description { Text(verbatim: description) }
-            } actions: {
-                if let actions, !actions.children.isEmpty || actions.flat.kind != .box {
+            // With actions only where the app gave some: the system lays an
+            // actions area out (it sat the rest 9 pt lower) even for none.
+            if let actions, !actions.children.isEmpty || actions.flat.kind != .box {
+                ContentUnavailableView {
+                    unavailableLabel(title: title, symbol: symbol)
+                } description: {
+                    if let description { Text(verbatim: description) }
+                } actions: {
                     NodeView(pnode: actions, send: send)
+                }
+            } else {
+                ContentUnavailableView {
+                    unavailableLabel(title: title, symbol: symbol)
+                } description: {
+                    if let description { Text(verbatim: description) }
                 }
             }
         } else {
@@ -1051,6 +1063,37 @@ struct AnyShapeView: View {
         return nil
     }
 
+    private func param(_ key: String) -> String? {
+        for kv in node.params where kv.key == key { return kv.value }
+        return nil
+    }
+
+    /// The stroke's style: its width, and the cap, join, miter limit and
+    /// dashes the guest gave ("strokeStyle": "cap,join,miter,phase,dash…").
+    private var strokeStyle: StrokeStyle {
+        var style = StrokeStyle(lineWidth: CGFloat(node.strokeWidth ?? 1))
+        guard let spec = param("strokeStyle") else { return style }
+        let parts = spec.split(separator: ",").map(String.init)
+        guard parts.count >= 4 else { return style }
+        style.lineCap = parts[0] == "round" ? .round : parts[0] == "square" ? .square : .butt
+        style.lineJoin = parts[1] == "round" ? .round : parts[1] == "bevel" ? .bevel : .miter
+        style.miterLimit = CGFloat(Double(parts[2]) ?? 10)
+        style.dashPhase = CGFloat(Double(parts[3]) ?? 0)
+        style.dash = parts.dropFirst(4).compactMap { Double($0) }.map { CGFloat($0) }
+        return style
+    }
+
+    /// The shape stroked as the guest asked: its style, and only the part
+    /// `.trim(from:to:)` kept ("trim": "from,to").
+    @ViewBuilder private func stroked(_ shape: NodeShape, _ color: Color) -> some View {
+        let range = (param("trim") ?? "").split(separator: ",").compactMap { Double($0) }
+        if range.count == 2 {
+            shape.trim(from: CGFloat(range[0]), to: CGFloat(range[1])).stroke(color, style: strokeStyle)
+        } else {
+            shape.stroke(color, style: strokeStyle)
+        }
+    }
+
     /// The stroke's colour, the system's by name when the guest gave one
     /// (`strokeName`).
     private func strokeColor(_ stroke: IsoFlat_ColorRGBA) -> Color {
@@ -1070,15 +1113,12 @@ struct AnyShapeView: View {
             } else if let fill = node.fill {
                 let filled = shape(radius: radius).fill(fillName.flatMap(hostSystemColor) ?? swiftColor(fill))
                 if let stroke = node.stroke {
-                    filled.overlay(
-                        shape(radius: radius).stroke(
-                            strokeColor(stroke), lineWidth: CGFloat(node.strokeWidth ?? 1)))
+                    filled.overlay(stroked(shape(radius: radius), strokeColor(stroke)))
                 } else {
                     filled
                 }
             } else if let stroke = node.stroke {
-                shape(radius: radius).stroke(
-                    strokeColor(stroke), lineWidth: CGFloat(node.strokeWidth ?? 1))
+                stroked(shape(radius: radius), strokeColor(stroke))
             } else {
                 shape(radius: radius).fill(Color.clear)
             }
@@ -1116,6 +1156,31 @@ func gradientPaint(_ json: String) -> AnyShapeStyle? {
         return UnitPoint(x: p[0], y: p[1])
     }
     func number(_ key: String) -> CGFloat { CGFloat(object[key] as? Double ?? 0) }
+    // A `Color.gradient` (its colour as "anyName" / "anyColor"): the
+    // system's own shading of that colour, not the stops Isomer guessed.
+    if #available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *) {
+        let rgba = object["anyColor"] as? [Double] ?? []
+        if let base = (object["anyName"] as? String).flatMap(hostSystemColor)
+            ?? (rgba.count == 4 ? Color(red: rgba[0], green: rgba[1], blue: rgba[2], opacity: rgba[3]) : nil) {
+            switch object["kind"] as? String {
+            case "radial" where (object["ell"] as? [Double])?.count == 2:
+                let fractions = object["ell"] as? [Double] ?? [0, 0.5]
+                return AnyShapeStyle(.ellipticalGradient(
+                    base.gradient, center: point("c", .center),
+                    startRadiusFraction: fractions[0], endRadiusFraction: fractions[1]))
+            case "radial":
+                return AnyShapeStyle(.radialGradient(
+                    base.gradient, center: point("c", .center), startRadius: number("sr"), endRadius: number("er")))
+            case "angular":
+                return AnyShapeStyle(.angularGradient(
+                    base.gradient, center: point("c", .center),
+                    startAngle: .radians(Double(number("a0"))), endAngle: .radians(Double(number("a1")))))
+            default:
+                return AnyShapeStyle(.linearGradient(
+                    base.gradient, startPoint: point("p0", .top), endPoint: point("p1", .bottom)))
+            }
+        }
+    }
     let gradient = Gradient(stops: colors)
     switch object["kind"] as? String {
     case "radial" where (object["ell"] as? [Double])?.count == 2:
@@ -1190,6 +1255,9 @@ struct HostViewBody: View {
             // `WebView(url:)`: Apple's own, as an app built against Apple's
             // SwiftUI shows it.
             TreeWebView(url: node.v.flatMap { URL(string: $0) })
+        case "video":
+            // `VideoPlayer(url:)`: AVKit's, as the Isomer module's on Apple.
+            TreeVideoPlayer(url: node.v.flatMap { URL(string: $0) })
         case "toggle":
             Toggle("", isOn: Binding(
                 get: { node.v == "1" },
@@ -1948,7 +2016,11 @@ struct BarItemContent: View {
     let symbol: String
 
     var body: some View {
-        if !symbol.isEmpty, symbolExists(symbol) {
+        if !symbol.isEmpty, symbolExists(symbol), !title.isEmpty {
+            // `Label(title, systemImage:)`, as the app wrote it: the bar
+            // shows its icon, sized and placed as the system's label is.
+            Label(title, systemImage: symbol)
+        } else if !symbol.isEmpty, symbolExists(symbol) {
             Image(systemName: symbol)
         } else {
             Text(title)
@@ -2596,16 +2668,22 @@ struct Decorations: ViewModifier {
                 }
             })
         }
-        // Visual transforms (`.offset` / `.scaleEffect`): the guest ships the
-        // animator's per-frame values, so these are plain modifiers here.
-        // Animated values, always applied (see opacity above).
-        // `.rotationEffect`, about the centre (where the guest sent one).
-        if let radians = paramValue("rotation").flatMap(Double.init) {
-            view = AnyView(view.rotationEffect(.radians(radians)))
+        // Visual transforms (`.rotationEffect`, `.scaleEffect`, `.offset`):
+        // the guest ships the animator's per-frame values, so these are
+        // plain modifiers here, on the views whose app code has them ("fx",
+        // whatever their values now: one view while they animate) and on no
+        // other. Identity ones everywhere moved views half a pixel's rounding
+        // the other way from the app's own (a centred text 1 px lower).
+        let transforms = paramValue("fx") ?? ""
+        if transforms.contains("r") || paramValue("rotation") != nil {
+            view = AnyView(view.rotationEffect(.radians(paramValue("rotation").flatMap(Double.init) ?? 0)))
         }
-        view = AnyView(view
-            .scaleEffect(CGFloat(node.scale ?? 1))
-            .offset(x: CGFloat(node.offsetX ?? 0), y: CGFloat(node.offsetY ?? 0)))
+        if transforms.contains("s") || node.scale != nil {
+            view = AnyView(view.scaleEffect(CGFloat(node.scale ?? 1)))
+        }
+        if transforms.contains("o") || node.offsetX != nil || node.offsetY != nil {
+            view = AnyView(view.offset(x: CGFloat(node.offsetX ?? 0), y: CGFloat(node.offsetY ?? 0)))
+        }
         // A guest DragGesture: report the running translation and the release
         // on the node's drag id; the guest's onChanged/onEnded run from them.
         if let drag = node.drag {

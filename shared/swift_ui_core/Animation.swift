@@ -292,6 +292,7 @@ extension View {
     /// Offsets the view (and animates the offset when an animation is in scope).
     nonisolated public func offset(x: CGFloat = 0, y: CGFloat = 0) -> some View {
         _AnimatableBoxModifier(child: self, descend: "offset") { box, env, path, now in
+            if !box.visualTransforms.contains("o") { box.visualTransforms += "o" }
             box.offsetX = Runtime.shared.animator.value(
                 key: path + "#offx", target: x, animation: env.animation, now: now)
             box.offsetY = Runtime.shared.animator.value(
