@@ -21,7 +21,8 @@ repo="${GITHUB_REPOSITORY:?}"
 # Which jobs ran depends on it: a public repository's tests and proof are
 # pictured on GitHub's runners (apple, android, proof-compare), a private
 # one's in verify and proof alone. A job missing from a run fails it, so a
-# job renamed here or in the workflow can't drop out of the check unseen.
+# job renamed here or in the workflow can't drop out of the check unseen; a
+# matrix job (apple's parts: "apple (ios)") passes when every part did.
 private="$(gh api "repos/$repo" --jq .private)"
 case "$private" in true | false) ;; *) echo "verified.sh: $repo's visibility unknown" >&2; exit 1 ;; esac
 for run in $(gh api "repos/$repo/actions/runs?head_sha=$sha&event=workflow_dispatch&per_page=50" \
@@ -29,7 +30,9 @@ for run in $(gh api "repos/$repo/actions/runs?head_sha=$sha&event=workflow_dispa
     if gh api "repos/$repo/actions/runs/$run/jobs?per_page=100" --jq "$private"' as $private
         | .jobs as $jobs
         | def result(name): ([$jobs[] | select(.name == name) | .conclusion][0] // "missing");
-          def hosted(name): if $private then result(name) == "skipped" else result(name) == "success" end;
+          def named(name): [$jobs[] | select(.name == name or (.name | startswith(name + " (")))];
+          def hosted(name): named(name) as $all | ($all | length) > 0
+            and ($all | all(.conclusion == (if $private then "skipped" else "success" end)));
         result("verify") == "success"
         and hosted("android") and hosted("apple")
         and (if $private then result("proof") == "success" else result("proof-compare") == "success" end)' |
