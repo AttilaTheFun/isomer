@@ -149,11 +149,12 @@ struct StorybookHeadlessTests {
     @Test func searchFieldFilters() throws {
         let app = try launch(story: "lists.search")
         defer { app.quit() }
-        // A city is a text of its own (the story's code names them too).
-        #expect(try app.screen().texts.contains("Paris"))
+        // A city is a text of its own (the story's code names them too);
+        // Berlin is on screen on a phone as well (the list shows its rows).
+        #expect(try app.screen().texts.contains("Berlin"))
         let screen = try app.type("Search cities", "lis")
         #expect(screen.texts.contains("Lisbon"))
-        #expect(!screen.texts.contains("Paris"))
+        #expect(!screen.texts.contains("Berlin"))
     }
 
     /// The navigation bar's items, an icon item by its Label's title.
