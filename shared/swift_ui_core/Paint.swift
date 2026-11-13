@@ -53,6 +53,10 @@ public struct Gradient: Hashable, Sendable {
     }
 
     public var stops: [Stop]
+    /// The colour a `Color.gradient` was made from (its stops are Isomer's
+    /// guess at the system's shading), for hosts that draw that colour's own
+    /// gradient (Apple's: GradientPaint's `anyBase`).
+    var anyBase: Color?
 
     public init(stops: [Stop]) {
         self.stops = stops
@@ -105,6 +109,9 @@ struct GradientPaint: Equatable, Sendable {
     var glass: String? = nil
     var glassTint: Color? = nil
     var glassInteractive = false
+    /// A `Color.gradient`'s colour (Gradient's `anyBase`): JSON "anyName"
+    /// (the system colour's name) and "anyColor" (its RGBA).
+    var anyBase: Color? = nil
 
     func withOpacity(_ opacity: Double) -> GradientPaint {
         guard opacity < 1 else { return self }
@@ -142,7 +149,7 @@ public struct LinearGradient: PaintStyle {
     }
 
     func resolvePaint() -> GradientPaint {
-        GradientPaint(kind: .linear(start: startPoint, end: endPoint), stops: gradient.stops)
+        GradientPaint(kind: .linear(start: startPoint, end: endPoint), stops: gradient.stops, anyBase: gradient.anyBase)
     }
 
     public typealias Body = Never
@@ -172,7 +179,8 @@ public struct RadialGradient: PaintStyle {
     func resolvePaint() -> GradientPaint {
         GradientPaint(
             kind: .radial(center: center, startRadius: startRadius, endRadius: endRadius),
-            stops: gradient.stops
+            stops: gradient.stops,
+            anyBase: gradient.anyBase
         )
     }
 
@@ -215,7 +223,8 @@ public struct AngularGradient: PaintStyle {
     func resolvePaint() -> GradientPaint {
         GradientPaint(
             kind: .angular(center: center, startAngle: startAngle, endAngle: endAngle),
-            stops: gradient.stops
+            stops: gradient.stops,
+            anyBase: gradient.anyBase
         )
     }
 
@@ -319,7 +328,8 @@ public struct EllipticalGradient: PaintStyle {
     func resolvePaint() -> GradientPaint {
         GradientPaint(
             kind: .elliptical(center: center, startFraction: startRadiusFraction, endFraction: endRadiusFraction),
-            stops: gradient.stops
+            stops: gradient.stops,
+            anyBase: gradient.anyBase
         )
     }
 
@@ -369,7 +379,7 @@ public struct AnyGradient: Hashable, PaintStyle, Sendable {
     }
 
     func resolvePaint() -> GradientPaint {
-        GradientPaint(kind: .linear(start: .top, end: .bottom), stops: gradient.stops)
+        GradientPaint(kind: .linear(start: .top, end: .bottom), stops: gradient.stops, anyBase: gradient.anyBase)
     }
 }
 
@@ -377,7 +387,9 @@ extension Color {
     /// A gradient of the colour, lighter at the top: the system's own
     /// shading of a fill, as Apple's (whose exact mix is its own).
     public var gradient: AnyGradient {
-        AnyGradient(Gradient(colors: [mix(with: .white, by: 0.2), self]))
+        var gradient = Gradient(colors: [mix(with: .white, by: 0.2), self])
+        gradient.anyBase = self
+        return AnyGradient(gradient)
     }
 }
 
@@ -455,6 +467,10 @@ extension GradientPaint {
             return "{\"c\":[\(num(c.red)),\(num(c.green)),\(num(c.blue)),\(num(c.alpha))],\"l\":\(num(stop.location))\(name)}"
         }.joined(separator: ",")
         fields.append("\"stops\":[\(stopJSON)]")
+        if let base = anyBase {
+            if let name = systemColorName(base) { fields.append("\"anyName\":\(jsonString(name))") }
+            fields.append("\"anyColor\":[\(num(base.red)),\(num(base.green)),\(num(base.blue)),\(num(base.alpha))]")
+        }
         if let material { fields.append("\"material\":\(jsonString(material))") }
         if let glass {
             fields.append("\"glass\":\(jsonString(glass))")
