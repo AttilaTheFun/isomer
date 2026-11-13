@@ -71,7 +71,7 @@ fi
 # SDL2_ttf, WebKitGTK), a throwaway container of it. The test's runfiles and
 # the Swift runtime's libraries go in (container_build.sh's packaging), the
 # pictures come back.
-LINUX_GUI_IMAGE="@LINUX_GUI_IMAGE@"
+LINUX_GUI_IMAGE="ghcr.io/attilathefun/shireworks-linux-gui@sha256:b9063a0f937371f17ba6f728028e19c8216829e818a391b9427dd377d153b34f"
 if [[ $platforms == *" linux "* ]]; then
     (
         set -e
