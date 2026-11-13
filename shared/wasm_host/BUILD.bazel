@@ -42,7 +42,10 @@ swift_library(
 swift_library(
     name = "wasmkit_runtime",
     package_name = "isomer",
-    srcs = ["WasmKitRuntime.swift"],
+    srcs = [
+        "WasmDynamicLinker.swift",
+        "WasmKitRuntime.swift",
+    ],
     # Optimized in every build, as WasmKit is: its host imports run per
     # guest call.
     copts = ["-O"],

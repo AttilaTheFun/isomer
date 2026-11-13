@@ -1,0 +1,107 @@
+wasm-ld: no runtime relocation for R_WASM_MEMORY_ADDR_LOCREL_I32 in PIC data.
+
+A location-relative relocation (Swift's relative pointers: conformance
+records, type descriptors, mangled names' symbolic references) between two
+places in one module holds wherever the module is loaded, and `relocate`
+writes its value at link time. In a shared library (`--experimental-pic
+-shared`) wasm-ld also emitted a runtime relocation for it in
+__wasm_apply_data_relocs, adding __memory_base to the relative value (or
+storing the symbol's GOT address, for an exported symbol): a Swift side
+module's conformance records then point outside memory and the runtime's
+first conformance scan traps. Upstream LLVM rejects the relocation instead
+("invalid runtime relocation type in data section"), so a Swift side module
+doesn't link there either; the same change belongs upstream (with
+R_WASM_MEMORY_ADDR_LOCREL_I64, which this LLVM lacks).
+
+Against swiftlang/llvm-project swift-6.4.2-RELEASE (fb5f84d9). With it, lld's
+wasm tests pass (213; shared-locrel.s, new here, fails without it), and the
+examples' Storybook linked as a side module renders byte for byte as its
+self-contained reactor does (WasmDynamicLinker, //shared/wasm_host).
+
+The same commit: pawlowskialex/llvm-project, branch wasm-ld-pic-locrel-6.4.2
+(0ecbfee3). Not applied by any build here yet: the toolchain's wasm-ld comes
+from swift.org's release (docs/side_modules.md).
+
+diff --git a/lld/test/wasm/shared-locrel.s b/lld/test/wasm/shared-locrel.s
+new file mode 100644
+index 000000000..3502334d6
+--- /dev/null
++++ b/lld/test/wasm/shared-locrel.s
+@@ -0,0 +1,54 @@
++# Location-relative data relocations (R_WASM_MEMORY_ADDR_LOCREL_I32, which
++# Swift emits for its relative pointers) are position-independent: in a shared
++# library their link-time value holds wherever the library is loaded, so no
++# runtime relocation may be generated for them, whether the target is hidden
++# or exported. An absolute address (R_WASM_MEMORY_ADDR_I32) still gets one.
++
++# RUN: llvm-mc -filetype=obj -triple=wasm32-unknown-unknown -o %t.o %s
++# RUN: wasm-ld --experimental-pic -shared -o %t.wasm %t.o
++# RUN: obj2yaml %t.wasm | FileCheck %s
++# RUN: llvm-objdump --disassemble-symbols=__wasm_apply_data_relocs --no-show-raw-insn --no-leading-addr %t.wasm | FileCheck %s --check-prefixes DIS
++
++.globaltype __memory_base, i32, immutable
++
++.section .data.hidden_target,"",@
++.globl hidden_target
++.hidden hidden_target
++.p2align 2
++hidden_target:
++  .int32 1
++  .size hidden_target, 4
++
++.section .data.exported_target,"",@
++.globl exported_target
++.p2align 2
++exported_target:
++  .int32 2
++  .size exported_target, 4
++
++.section .data.pointers,"",@
++.globl pointers
++.p2align 2
++pointers:
++  .int32 hidden_target - pointers
++  .int32 exported_target - (pointers + 4)
++  .int32 hidden_target
++  .size pointers, 12
++
++# hidden_target at 0, exported_target at 4, pointers at 8: the relative
++# pointers are 0 - 8 and 4 - 12, written at link time; the absolute one is 0
++# until __wasm_apply_data_relocs adds __memory_base.
++# CHECK:        - Type:            DATA
++# CHECK:            Content:         0100000002000000F8FFFFFFF8FFFFFF00000000
++
++# Only the absolute pointer, at 16, is relocated at load.
++# DIS:      <__wasm_apply_data_relocs>:
++# DIS-EMPTY:
++# DIS-NEXT:   i32.const 16
++# DIS-NEXT:   global.get 0
++# DIS-NEXT:   i32.add
++# DIS-NEXT:   global.get 0
++# DIS-NEXT:   i32.const 0
++# DIS-NEXT:   i32.add
++# DIS-NEXT:   i32.store 0
++# DIS-NEXT:   end
+diff --git a/lld/wasm/InputChunks.cpp b/lld/wasm/InputChunks.cpp
+index 181221a77..e74b19a83 100644
+--- a/lld/wasm/InputChunks.cpp
++++ b/lld/wasm/InputChunks.cpp
+@@ -433,6 +433,18 @@ bool InputChunk::generateRelocationCode(raw_ostream &os) const {
+     if (!requiresRuntimeReloc)
+       continue;
+ 
++    // A location-relative relocation (Swift's relative pointers) between two
++    // places in this module holds wherever the module is loaded: `relocate`
++    // already wrote its value. Adding __memory_base to it (or storing the
++    // symbol's GOT address, for one the module exports) would break it.
++    if (rel.Type == R_WASM_MEMORY_ADDR_LOCREL_I32) {
++      if (!sym->isDefined())
++        error(toString(file) + ": relocation " + relocTypeToString(rel.Type) +
++              " cannot be used against an undefined symbol `" +
++              toString(*sym) + "`");
++      continue;
++    }
++
+     LLVM_DEBUG(dbgs() << "gen reloc: type=" << relocTypeToString(rel.Type)
+                       << " addend=" << rel.Addend << " index=" << rel.Index
+                       << " output offset=" << offset << "\n");
