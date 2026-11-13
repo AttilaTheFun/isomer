@@ -1051,6 +1051,37 @@ struct AnyShapeView: View {
         return nil
     }
 
+    private func param(_ key: String) -> String? {
+        for kv in node.params where kv.key == key { return kv.value }
+        return nil
+    }
+
+    /// The stroke's style: its width, and the cap, join, miter limit and
+    /// dashes the guest gave ("strokeStyle": "cap,join,miter,phase,dash…").
+    private var strokeStyle: StrokeStyle {
+        var style = StrokeStyle(lineWidth: CGFloat(node.strokeWidth ?? 1))
+        guard let spec = param("strokeStyle") else { return style }
+        let parts = spec.split(separator: ",").map(String.init)
+        guard parts.count >= 4 else { return style }
+        style.lineCap = parts[0] == "round" ? .round : parts[0] == "square" ? .square : .butt
+        style.lineJoin = parts[1] == "round" ? .round : parts[1] == "bevel" ? .bevel : .miter
+        style.miterLimit = CGFloat(Double(parts[2]) ?? 10)
+        style.dashPhase = CGFloat(Double(parts[3]) ?? 0)
+        style.dash = parts.dropFirst(4).compactMap { Double($0) }.map { CGFloat($0) }
+        return style
+    }
+
+    /// The shape stroked as the guest asked: its style, and only the part
+    /// `.trim(from:to:)` kept ("trim": "from,to").
+    @ViewBuilder private func stroked(_ shape: NodeShape, _ color: Color) -> some View {
+        let range = (param("trim") ?? "").split(separator: ",").compactMap { Double($0) }
+        if range.count == 2 {
+            shape.trim(from: CGFloat(range[0]), to: CGFloat(range[1])).stroke(color, style: strokeStyle)
+        } else {
+            shape.stroke(color, style: strokeStyle)
+        }
+    }
+
     /// The stroke's colour, the system's by name when the guest gave one
     /// (`strokeName`).
     private func strokeColor(_ stroke: IsoFlat_ColorRGBA) -> Color {
@@ -1070,15 +1101,12 @@ struct AnyShapeView: View {
             } else if let fill = node.fill {
                 let filled = shape(radius: radius).fill(fillName.flatMap(hostSystemColor) ?? swiftColor(fill))
                 if let stroke = node.stroke {
-                    filled.overlay(
-                        shape(radius: radius).stroke(
-                            strokeColor(stroke), lineWidth: CGFloat(node.strokeWidth ?? 1)))
+                    filled.overlay(stroked(shape(radius: radius), strokeColor(stroke)))
                 } else {
                     filled
                 }
             } else if let stroke = node.stroke {
-                shape(radius: radius).stroke(
-                    strokeColor(stroke), lineWidth: CGFloat(node.strokeWidth ?? 1))
+                stroked(shape(radius: radius), strokeColor(stroke))
             } else {
                 shape(radius: radius).fill(Color.clear)
             }
