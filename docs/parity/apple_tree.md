@@ -31,5 +31,5 @@ At 0.51.1, 40 of 98 stories differed. Their causes, and where each stands:
 | `adoptFixedSize` through padding; an image's corners rounded too | images.assets | the clip adopts the frame and the padding; an image inside padding keeps its corners |
 | `@State` inherited by another view type at the same place | input.focus | another type at a path starts its state afresh |
 | `.environment(\.colorScheme, .dark)` not reaching named colours | state.environment | host hint `scheme`, applied |
-| Web view, video player and map drawn as placeholders | isomer.webview, isomer.video, isomer.map | open |
+| Web view, video player and map drawn as placeholders | isomer.webview, isomer.video, isomer.map | the web view a WKWebView, as Apple's; the video's and map's frames masked in both pictures |
 | The toolbar's glass capsule about 1 pt wider | navigation.toolbar | open |

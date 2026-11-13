@@ -1182,6 +1182,10 @@ struct HostViewBody: View {
 
     var body: some View {
         switch node.view {
+        case "webview":
+            // `WebView(url:)`: Apple's own, as an app built against Apple's
+            // SwiftUI shows it.
+            TreeWebView(url: node.v.flatMap { URL(string: $0) })
         case "toggle":
             Toggle("", isOn: Binding(
                 get: { node.v == "1" },
