@@ -22,12 +22,6 @@ public struct SecureStoreHostValue {
     public let found: Bool
     public let value: [UInt8]
     public let error: String
-
-    public init(found: Bool, value: [UInt8], error: String) {
-        self.found = found
-        self.value = value
-        self.error = error
-    }
 }
 
 /// The system's store of secrets: items by service and key. Each answers at
