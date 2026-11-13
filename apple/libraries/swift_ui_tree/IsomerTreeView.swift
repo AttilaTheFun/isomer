@@ -125,6 +125,15 @@ struct NodeView: View, Equatable {
         if nodeParam("native") == "stepper" {
             // The core's stepper (a label and two buttons): the system's.
             NativeStepper(pnode: pnode, send: send)
+        } else if nodeParam("native") == "progress",
+                  let bar = pnode.children.first(where: { $0.flat.kind == .progress }),
+                  let label = pnode.children.first(where: { $0.flat.kind != .progress }) {
+            // A ProgressView with a label: the system's, the label in its
+            // own font and colour (a text's string as the app gave it).
+            NativeLabelledProgress(bar: bar, label: label, send: send)
+        } else if nodeParam("native") == "unavailable" {
+            // The core's ContentUnavailableView: the system's, from its parts.
+            NativeUnavailable(pnode: pnode, send: send)
         } else {
             kindContent
         }
@@ -758,6 +767,107 @@ struct NodeView: View, Equatable {
         case .start: return .top
         case .end: return .bottom
         default: return .center
+        }
+    }
+}
+
+/// The core's ContentUnavailableView as the system's: the label's symbol
+/// and title, the description's text, and the actions as the app made
+/// them (the parts marked "part").
+struct NativeUnavailable: View {
+    let pnode: PatchedNode
+    let send: (String, String) -> Void
+
+    private static func part(_ name: String, in node: PatchedNode) -> PatchedNode? {
+        if node.flat.params.contains(where: { $0.key == "part" && $0.value == name }) { return node }
+        for child in node.children {
+            if let found = part(name, in: child) { return found }
+        }
+        return nil
+    }
+
+    /// The first node under `node` (itself included) that `match` takes.
+    private static func first(in node: PatchedNode, where match: (PatchedNode) -> Bool) -> PatchedNode? {
+        if match(node) { return node }
+        for child in node.children {
+            if let found = first(in: child, where: match) { return found }
+        }
+        return nil
+    }
+
+    var body: some View {
+        let label = Self.part("label", in: pnode)
+        let symbol = label.flatMap { Self.first(in: $0) { $0.flat.params.contains { $0.key == "symbol" } } }?
+            .flat.params.first { $0.key == "symbol" }?.value
+        let title = label.flatMap { Self.first(in: $0) { $0.flat.kind == .text && !$0.flat.params.contains { $0.key == "symbol" } } }?.flat.v ?? ""
+        let description = Self.part("description", in: pnode).flatMap { Self.first(in: $0) { $0.flat.kind == .text } }?.flat.v
+        let actions = Self.part("actions", in: pnode)
+        if #available(iOS 17.0, macOS 14.0, tvOS 17.0, watchOS 10.0, *) {
+            ContentUnavailableView {
+                if let symbol {
+                    Label(title, systemImage: symbol)
+                } else {
+                    Text(verbatim: title)
+                }
+            } description: {
+                if let description { Text(verbatim: description) }
+            } actions: {
+                if let actions, !actions.children.isEmpty || actions.flat.kind != .box {
+                    NodeView(pnode: actions, send: send)
+                }
+            }
+        } else {
+            // Before the system had one: the core's composite (its padding
+            // too, which Decorations leaves to this).
+            ForEach(keyedNodes(pnode.children)) { child in NodeView(pnode: child.node, send: send) }
+                .padding(.horizontal, 16)
+        }
+    }
+}
+
+/// The core's ProgressView with a label, as the system's.
+struct NativeLabelledProgress: View {
+    let bar: PatchedNode
+    let label: PatchedNode
+    let send: (String, String) -> Void
+
+    @ViewBuilder private var labelView: some View {
+        if label.flat.kind == .text, label.children.isEmpty {
+            Text(verbatim: label.flat.v ?? "")
+        } else {
+            NodeView(pnode: label, send: send)
+        }
+    }
+
+    var body: some View {
+        let style = bar.flat.params.first { $0.key == "pstyle" }?.value
+        Group {
+            if let value = bar.flat.num {
+                ProgressView(value: value) { labelView }
+            } else {
+                ProgressView { labelView }
+            }
+        }
+        .modifier(NativeProgressStyle(style: style))
+        .tint(Self.tint(of: bar.flat))
+    }
+
+    /// The bar's `.tint`, if the guest gave one.
+    static func tint(of node: IsoFlat_Node) -> Color? {
+        func param(_ key: String) -> String? { node.params.first { $0.key == key }?.value }
+        return param("tintName").flatMap(hostSystemColor) ?? param("tint").flatMap(colorFromHex)
+    }
+}
+
+/// `.progressViewStyle` by the guest's choice ("pstyle").
+struct NativeProgressStyle: ViewModifier {
+    let style: String?
+
+    func body(content: Content) -> some View {
+        switch style {
+        case "circular": content.progressViewStyle(.circular)
+        case "linear": content.progressViewStyle(.linear)
+        default: content
         }
     }
 }
@@ -2324,7 +2434,10 @@ struct Decorations: ViewModifier {
         // A Button's padding, fill, corners and tap are the system button's
         // own (its style draws them, its action is the tap).
         let isButton = paramValue("button") != nil || paramValue("share") != nil
-        if !isButton, let padding = paddingInsets {
+        // A composite drawn as the system's control has the control's own
+        // insets, not the composite's padding.
+        let drawnNative = paramValue("native") == "unavailable"
+        if !isButton, !drawnNative, let padding = paddingInsets {
             view = AnyView(view.padding(padding))
         }
         // A fixed frame positions content by the frame's alignment too

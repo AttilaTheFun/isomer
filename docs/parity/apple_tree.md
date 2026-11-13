@@ -23,7 +23,7 @@ At 0.51.1, 40 of 98 stories differed. Their causes, and where each stands:
 | Live content and the platform's own name | isomer.map, isomer.video, controls.progressstyle, isomer.platform | masked alike in both pictures |
 | `.bold()` sent as weight 700 (iOS draws `.fontWeight(.bold)` heavier) | text.weights, text.decoration, layout.grid, scrolling.horizontal | `.bold()` its own trait (`boldTrait`), drawn with `Text.bold()` |
 | Content exactly 1 px off (identity opacity, scale and offset wrappers?) | images.symbols, controls.inline, layout.geometry, gestures.tap, state.appstorage | open |
-| The core's own Stepper, labelled ProgressView, DisclosureGroup, ContentUnavailableView | controls.stepper, controls.progress, lists.outline, lists.empty | the Stepper tagged with its role (`native`), drawn as the system's; the others open |
+| The core's own Stepper, labelled ProgressView, DisclosureGroup, ContentUnavailableView | controls.stepper, controls.progress, lists.outline, lists.empty | tagged with their roles (`native`, parts by `part`) and drawn as the system's: the Stepper, a labelled ProgressView, ContentUnavailableView; DisclosureGroup and OutlineGroup open (in a List they are rows of their own) |
 | `underline(color:)`, `strikethrough(color:)` colours dropped | text.decoration | kept (`runLines`) |
 | `Text(Image(systemName:))` inline as a Unicode glyph | text.format | the run names its symbol (`runSymbols`), drawn as the system's |
 | `.disabled` as opacity, not the control's own look | controls.toggle | open: the core dims a disabled subtree's colours (`env.opacity *= 0.45`) where SwiftUI dims only its controls, on every platform |

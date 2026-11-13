@@ -35,6 +35,15 @@ extension View {
         }
     }
 
+    /// Which part of a composite of `_hostRole`'s this is (host hint
+    /// "part"), for the hosts that draw the system's control from its parts.
+    nonisolated func _hostPart(_ part: String) -> some View {
+        _ModifiedView(child: self, descend: "part", pure: true) { inner, _ in
+            if !inner.hostHints.contains(where: { $0.0 == "part" }) { inner.hostHints.append(("part", part)) }
+            return inner
+        }
+    }
+
     /// `.blur(radius:opaque:)`.
     nonisolated public func blur(radius: CGFloat, opaque: Bool = false) -> some View {
         _ModifiedView(child: self, descend: "blur", pure: true) { inner, _ in
