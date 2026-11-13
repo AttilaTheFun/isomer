@@ -2,7 +2,8 @@
 # The Windows Storybook's stories under Wine, in a Linux container: the app
 # cross-built on Linux for Windows on Arm (--config=windows_on_linux), run by
 # arm64 Wine (10 or later: 9 can't unwind arm64 Linux libraries built with
-# pointer authentication), Direct3D 11 through Wine onto Mesa's software
+# pointer authentication; Staging 11.16 or later for a headful app, whose
+# driver's SwiftNIO needs AF_UNIX sockets), Direct3D 11 through Wine onto Mesa's software
 # OpenGL under Xvfb. One launch, the stories switched through
 # ISO_STORYBOOK_CONTROL as on Linux; each picture the X display, checked for
 # having drawn (more than one colour) and kept. Wine draws Windows' text and
@@ -11,8 +12,8 @@
 #
 #   tools/ci/windows_test.sh <app dir> <out dir> <story>…
 # <app dir>: the .exe, the Swift runtime's DLLs and the Storybook's assets
-# (tools/ci/container_build.sh's `platforms` packaging). Needs wine, xvfb and
-# imagemagick (Ubuntu 26.04's apt).
+# (tools/ci/container_build.sh's `platforms` packaging). Needs wine, Xvfb
+# and ImageMagick: Shireworks' wine image (tools/ci/platform_tests.sh).
 set -uo pipefail
 app="$(cd "$1" && pwd)"
 out="$2"

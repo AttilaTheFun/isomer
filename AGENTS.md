@@ -597,7 +597,9 @@ may differ from real hardware (Wine's fonts), which is acceptable.
   - Windows: built in the same container for Windows on Arm
     (`--config=windows_on_linux`, tools/windows: the Windows Swift SDK and
     Microsoft's libraries beside the host's Swift, README there), run under
-    arm64 Wine 10 in an Ubuntu 26.04 container (tools/ci/windows_test.sh;
+    arm64 Wine Staging in a container of Shireworks' wine image
+    (tools/ci/windows_test.sh; Staging for its AF_UNIX sockets, which a
+    headful app's SwiftNIO needs;
     Wine's own fonts and DirectWrite: a check, never the proof's pixels);
   - Android (2026-11-06): on GitHub's own Ubuntu runner, the primary for
     this public repository (the workflow's `android` job: an x86_64
