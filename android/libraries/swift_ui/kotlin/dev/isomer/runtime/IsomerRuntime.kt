@@ -25,13 +25,15 @@ object IsomerRuntime {
     /**
      * What the app's Swift needs before any of it runs: its directories in
      * the environment, where Foundation's FileManager finds them
-     * (AppDirectories), and Foundation's networking (NetworkHosts). Each
-     * embedding surface calls it as it is made, on the main thread, and
-     * the generated MainActivity first of all; once is enough.
+     * (AppDirectories), Foundation's networking (NetworkHosts) and the
+     * Isomer module's SecureStore (AndroidSecureStoreHost). Each embedding
+     * surface calls it as it is made, on the main thread, and the generated
+     * MainActivity first of all; once is enough.
      */
     fun prepare(context: Context) {
         AppDirectories.prepare(context)
         NetworkHosts.install()
+        AndroidSecureStoreHost.install(context)
     }
 
     /**

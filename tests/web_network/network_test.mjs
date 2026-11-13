@@ -7,7 +7,7 @@
 // here). URLSession over them in a real page: run_network_check.js.
 
 import net from "node:net";
-import { browserNetworkHosts, createHTTPHost, createWebSocketHost } from "./network.js";
+import { browserNetworkHosts, createHTTPHost, createSecureStoreHost, createWebSocketHost } from "./network.js";
 import { startNetworkServer } from "./network_server.js";
 
 const server = await startNetworkServer();
@@ -198,6 +198,25 @@ check("an unknown connection", await reason(() => sockets.next(999)), "networkCo
   const pageSockets = createWebSocketHost({ WebSocket: PageSocket });
   check("a page's WebSocket is made", [await reason(() => pageSockets.open("wss://elsewhere.invalid/socket", "[]", "[]", 2)), made],
     ["cannotConnectToHost", ["wss://elsewhere.invalid/socket"]]);
+}
+
+// SecureStore's host: the origin's storage (here a Map standing for
+// localStorage), items by service and key, memory where there's none.
+{
+  const items = new Map();
+  const storage = { getItem: (k) => items.get(k) ?? null, setItem: (k, v) => items.set(k, String(v)), removeItem: (k) => items.delete(k) };
+  const store = createSecureStoreHost({ storage });
+  const absent = store.read("app", "token");
+  check("SecureStore: an absent item", [absent.found, absent.error], [false, ""]);
+  check("SecureStore: a write", store.write("app", "token", encoder.encode("sécret")), "");
+  const stored = store.read("app", "token");
+  check("SecureStore: what was written", [stored.found, decoder.decode(stored.value)], [true, "sécret"]);
+  check("SecureStore: by service", store.read("other", "token").found, false);
+  check("SecureStore: kept in the storage by service and key", [...items.keys()], ["isomer-secure-store:app\u001ftoken"]);
+  check("SecureStore: a removal", [store.remove("app", "token"), store.read("app", "token").found], ["", false]);
+  const memory = createSecureStoreHost({ storage: null });
+  memory.write("app", "k", encoder.encode("v"));
+  check("SecureStore: memory without storage", decoder.decode(memory.read("app", "k").value), "v");
 }
 
 await server.close();

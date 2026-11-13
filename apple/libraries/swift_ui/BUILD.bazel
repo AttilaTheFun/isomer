@@ -22,6 +22,7 @@ swift_library(
         "SwiftUIShim.swift",
         "//shared/isomer:Exports.swift",
         "//shared/swift_ui_extensions:JSON.swift",
+        "//shared/swift_ui_extensions:SecureStore.swift",
     ],
     module_name = "Isomer",
     deps = [

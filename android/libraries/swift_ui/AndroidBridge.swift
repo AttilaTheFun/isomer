@@ -300,6 +300,9 @@ package func nativeStart(host: any AndroidHost, renderer: String, width: Double,
         // Foundation's networking: what the Kotlin runtime injected (or
         // handed to installIsomerNetworkHosts already).
         installInjectedNetworkHosts()
+        // SecureStore: what an app injected over the runtime's own (handed
+        // to installIsomerSecureStore already).
+        installInjectedSecureStore()
         installMainExecutorHook()
         Runtime.shared.displayScale = host.displayScale()
         // ImageIO decodes on whatever thread asks (the host's JNI attaches it).

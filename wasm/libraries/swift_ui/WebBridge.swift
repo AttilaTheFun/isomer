@@ -135,6 +135,8 @@ package func isoStart(host: any WebHost, renderer: String, width: Double, height
         // Foundation's networking over the page's fetch and WebSocket (boot
         // injects them), before the app's `@main`, which may ask already.
         installInjectedNetworkHosts()
+        // SecureStore over the page's storage (boot injects it).
+        installInjectedSecureStore()
         if Runtime.shared.host == nil {
             _ = _application_main(0, nil)
         }
