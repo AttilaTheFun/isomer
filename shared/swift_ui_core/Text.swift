@@ -22,12 +22,19 @@ struct TextRun: Equatable {
     /// `.monospacedDigit()` on this part (`Text("Score: ") +
     /// Text("\(n)").monospacedDigit()`): tabular figures.
     var tabular = false
+    /// `underline(_:color:)` / `strikethrough(_:color:)`'s colours (the
+    /// text's when nil).
+    var underlineColor: Color?
+    var strikethroughColor: Color?
 }
 
 public struct Text {
     var content: String
     var explicitFont: Font?
     var explicitWeight: Font.Weight?
+    /// `.bold()`: the bold trait, which Apple's system draws apart from a
+    /// bold weight; `.fontWeight` is `explicitWeight`.
+    var boldTrait = false
     var explicitColor: Color?
     var isItalic = false
     /// Styled as its container would style it (`Section("Title")`'s
@@ -35,6 +42,8 @@ public struct Text {
     var containerStyled = false
     var isUnderlined = false
     var isStruck = false
+    var underlineColor: Color?
+    var strikethroughColor: Color?
     var isMonospaced = false
     /// `.monospacedDigit()`: tabular figures, whatever its font.
     var monospacedDigits = false
@@ -75,7 +84,7 @@ public struct Text {
 
     public func bold() -> Text {
         var copy = self
-        copy.explicitWeight = .bold
+        copy.boldTrait = true
         return copy
     }
 
@@ -99,12 +108,14 @@ public struct Text {
     public func underline(_ active: Bool = true, color: Color? = nil) -> Text {
         var copy = self
         copy.isUnderlined = active
+        copy.underlineColor = color
         return copy
     }
 
     public func strikethrough(_ active: Bool = true, color: Color? = nil) -> Text {
         var copy = self
         copy.isStruck = active
+        copy.strikethroughColor = color
         return copy
     }
 
@@ -137,9 +148,10 @@ public struct Text {
 
     /// This Text as one run (its own styles), for concatenation.
     var ownRun: TextRun {
-        TextRun(length: content.count, bold: explicitWeight == .bold || explicitWeight == .semibold || explicitWeight == .heavy,
+        TextRun(length: content.count, bold: boldTrait || explicitWeight == .bold || explicitWeight == .semibold || explicitWeight == .heavy,
                 italic: isItalic, monospaced: isMonospaced, underline: isUnderlined, strikethrough: isStruck, color: explicitColor,
-                weight: explicitWeight?.value, tabular: monospacedDigits)
+                weight: explicitWeight?.value, tabular: monospacedDigits,
+                underlineColor: isUnderlined ? underlineColor : nil, strikethroughColor: isStruck ? strikethroughColor : nil)
     }
 
     public func fontWeight(_ weight: Font.Weight?) -> Text {
@@ -179,6 +191,9 @@ extension Text: _PrimitiveView {
         var font = explicitFont ?? ctx.env.font
         if let weight = explicitWeight {
             font = font.weight(weight)
+        } else if boldTrait {
+            node.boldTraitBase = font.weight.value
+            font = font.weight(.bold)
         }
         if monospacedDigits { font = font.monospacedDigit() }
         node.font = font
@@ -188,7 +203,7 @@ extension Text: _PrimitiveView {
         }
         node.color = (explicitColor ?? ctx.env.foregroundColor).opacity(ctx.env.opacity)
         node.colorAuto = (explicitColor == nil || containerStyled) && !ctx.env.foregroundColorSet && ctx.env.opacity == 1
-        node.fontAuto = ((explicitFont == nil && explicitWeight == nil) || containerStyled) && !ctx.env.fontSet
+        node.fontAuto = ((explicitFont == nil && explicitWeight == nil && !boldTrait) || containerStyled) && !ctx.env.fontSet
         node.lineLimit = ctx.env.lineLimit
         if !runs.isEmpty {
             node.textRuns = runs

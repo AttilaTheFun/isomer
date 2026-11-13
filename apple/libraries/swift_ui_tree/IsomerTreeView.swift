@@ -362,8 +362,9 @@ struct NodeView: View, Equatable {
         }
         // A font the app did not choose ("autoFont") is the container's: a
         // Form's or a list's section header, a button's control size.
-        var text = Self.styledText(node.v ?? "", runs: nodeParam("runs"), links: nodeParam("runLinks"))
+        var text = Self.styledText(node.v ?? "", runs: nodeParam("runs"), links: nodeParam("runLinks"), lines: nodeParam("runLines"))
         if nodeParam("autoFont") != "1" { text = text.font(textFont) }
+        if nodeParam("boldTrait") != nil { text = text.bold() }
         if nodeParam("tnum") == "1" { text = text.monospacedDigit() }
         if let color = ownColor {
             text = text.foregroundColor(nodeParam("colorName").flatMap(hostSystemColor) ?? swiftColor(color))
@@ -414,9 +415,21 @@ struct NodeView: View, Equatable {
     /// A concatenated or markdown Text's styled runs ("length:flags[:r,g,b,a]"
     /// joined by ";", lengths in characters; flags b/i/m/u/s and "w<weight>")
     /// as SwiftUI's Text concatenation.
-    static func styledText(_ string: String, runs: String?, links: String? = nil) -> Text {
+    static func styledText(_ string: String, runs: String?, links: String? = nil, lines: String? = nil) -> Text {
         guard let runs, !runs.isEmpty else { return Text(verbatim: string) }
         var linkURLs = (links ?? "").split(separator: "\u{1F}", omittingEmptySubsequences: false).map(String.init)[...]
+        // Each run's underline and strikethrough colours (`runLines`).
+        let lineColors = (lines ?? "").split(separator: ";", omittingEmptySubsequences: false).map { run -> (Color?, Color?) in
+            let sides = run.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+            func color(_ spec: String?) -> Color? {
+                guard let spec, !spec.isEmpty else { return nil }
+                if let named = hostSystemColor(spec) { return named }
+                let c = spec.split(separator: ",").compactMap { Double($0) }
+                return c.count == 4 ? Color(red: c[0], green: c[1], blue: c[2], opacity: c[3]) : nil
+            }
+            return (color(sides.first), color(sides.count > 1 ? sides[1] : nil))
+        }
+        var runIndex = 0
         var result = Text(verbatim: "")
         var index = string.startIndex
         for run in runs.split(separator: ";") {
@@ -465,8 +478,10 @@ struct NodeView: View, Equatable {
                     piece = piece.font(.system(.body, design: .monospaced))
                 }
             }
-            if flags.contains("u") { piece = piece.underline() }
-            if flags.contains("s") { piece = piece.strikethrough() }
+            let (underlineColor, strikethroughColor) = runIndex < lineColors.count ? lineColors[runIndex] : (nil, nil)
+            runIndex += 1
+            if flags.contains("u") { piece = piece.underline(true, color: underlineColor) }
+            if flags.contains("s") { piece = piece.strikethrough(true, color: strikethroughColor) }
             if flags.contains("t") { piece = piece.monospacedDigit() }
             if let ownColor, !isLink { piece = piece.foregroundColor(ownColor) }
             result = result + piece
@@ -481,7 +496,9 @@ struct NodeView: View, Equatable {
     /// A named typeface (`Font.custom`, param "family") is the system's
     /// by that name, the app's bundled fonts among them.
     private var textFont: Font {
-        let weight = flatFontWeight(node.weight ?? 400)
+        // `Text.bold()`: the font at its weight before, the bold trait
+        // applied to the text (textBody), as the app's is.
+        let weight = flatFontWeight(nodeParam("boldTrait").flatMap(Int32.init) ?? node.weight ?? 400)
         if let family = nodeParam("family") {
             return Font.custom(family, fixedSize: node.size.map { CGFloat($0) } ?? 15).weight(weight)
         }
@@ -2432,6 +2449,13 @@ struct Decorations: ViewModifier {
         }
         if let popover = paramValue("popover") {
             view = AnyView(view.modifier(AnchoredPopover(id: popover, send: send)))
+        }
+        // `.environment(\.colorScheme, …)` in the app: the subtree's
+        // scheme, so the system's colours by name resolve in it.
+        switch paramValue("scheme") {
+        case "dark": view = AnyView(view.environment(\.colorScheme, .dark))
+        case "light": view = AnyView(view.environment(\.colorScheme, .light))
+        default: break
         }
         // `.layoutPriority`: what its stack gives it first, so outermost.
         if let priority = paramValue("layoutPriority").flatMap(Double.init) {

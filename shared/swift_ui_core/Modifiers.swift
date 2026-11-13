@@ -148,7 +148,14 @@ extension _EnvironmentModifier: _PrimitiveView {
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var sub = ctx.descend(descend)
         transform(&sub.env)
-        return buildNode(view: child, ctx: &sub)
+        let node = buildNode(view: child, ctx: &sub)
+        // `.environment(\.colorScheme, …)` other than its surroundings': the
+        // subtree's scheme (host hint "scheme"), for hosts that resolve the
+        // system's colours by name (Apple's, in that scheme).
+        if sub.env.colorScheme != ctx.env.colorScheme, !node.hostHints.contains(where: { $0.0 == "scheme" }) {
+            node.hostHints.append(("scheme", sub.env.colorScheme == .dark ? "dark" : "light"))
+        }
+        return node
     }
 }
 
