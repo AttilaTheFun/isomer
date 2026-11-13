@@ -670,6 +670,11 @@ package final class FlatTreeEncoder {
                     let lines = node.textRuns.map { spec($0.underlineColor) + "|" + spec($0.strikethroughColor) }
                     out.params = (out.params ?? []) + [("runLines", lines.joined(separator: ";"))]
                 }
+                // The runs that are SF Symbols, by name in run order ("" for
+                // the others, ";" between), for hosts with the system's symbols.
+                if node.textRuns.contains(where: { $0.symbol != nil }) {
+                    out.params = (out.params ?? []) + [("runSymbols", node.textRuns.map { $0.symbol ?? "" }.joined(separator: ";"))]
+                }
                 // Link runs' URLs, in run order (unit-separated).
                 let links = node.textRuns.compactMap(\.link)
                 if !links.isEmpty { out.params = (out.params ?? []) + [("runLinks", links.joined(separator: "\u{1F}"))] }

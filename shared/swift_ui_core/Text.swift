@@ -26,6 +26,9 @@ struct TextRun: Equatable {
     /// text's when nil).
     var underlineColor: Color?
     var strikethroughColor: Color?
+    /// The SF Symbol this run is (`Text(Image(systemName:))` among words),
+    /// its glyph the run's text: hosts with the system's symbols draw it.
+    var symbol: String?
 }
 
 public struct Text {
@@ -151,7 +154,8 @@ public struct Text {
         TextRun(length: content.count, bold: boldTrait || explicitWeight == .bold || explicitWeight == .semibold || explicitWeight == .heavy,
                 italic: isItalic, monospaced: isMonospaced, underline: isUnderlined, strikethrough: isStruck, color: explicitColor,
                 weight: explicitWeight?.value, tabular: monospacedDigits,
-                underlineColor: isUnderlined ? underlineColor : nil, strikethroughColor: isStruck ? strikethroughColor : nil)
+                underlineColor: isUnderlined ? underlineColor : nil, strikethroughColor: isStruck ? strikethroughColor : nil,
+                symbol: symbolName)
     }
 
     public func fontWeight(_ weight: Font.Weight?) -> Text {

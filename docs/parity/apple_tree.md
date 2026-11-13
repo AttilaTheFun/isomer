@@ -25,7 +25,7 @@ At 0.51.1, 40 of 98 stories differed. Their causes, and where each stands:
 | Content exactly 1 px off (identity opacity, scale and offset wrappers?) | images.symbols, controls.inline, layout.geometry, gestures.tap, state.appstorage | open |
 | The core's own Stepper, labelled ProgressView, DisclosureGroup, ContentUnavailableView | controls.stepper, controls.progress, lists.outline, lists.empty | open: the system's controls |
 | `underline(color:)`, `strikethrough(color:)` colours dropped | text.decoration | kept (`runLines`) |
-| `Text(Image(systemName:))` inline as a Unicode glyph | text.format | open |
+| `Text(Image(systemName:))` inline as a Unicode glyph | text.format | the run names its symbol (`runSymbols`), drawn as the system's |
 | `.disabled` as opacity, not the control's own look | controls.toggle | open: the core dims a disabled subtree's colours (`env.opacity *= 0.45`) where SwiftUI dims only its controls, on every platform |
 | `LazyVGrid`'s adaptive columns against the window's width | layout.lazygrid | open |
 | `adoptFixedSize` through padding; an image's corners rounded too | images.assets | open |

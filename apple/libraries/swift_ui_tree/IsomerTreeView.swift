@@ -362,7 +362,8 @@ struct NodeView: View, Equatable {
         }
         // A font the app did not choose ("autoFont") is the container's: a
         // Form's or a list's section header, a button's control size.
-        var text = Self.styledText(node.v ?? "", runs: nodeParam("runs"), links: nodeParam("runLinks"), lines: nodeParam("runLines"))
+        var text = Self.styledText(node.v ?? "", runs: nodeParam("runs"), links: nodeParam("runLinks"), lines: nodeParam("runLines"),
+                                   symbols: nodeParam("runSymbols"))
         if nodeParam("autoFont") != "1" { text = text.font(textFont) }
         if nodeParam("boldTrait") != nil { text = text.bold() }
         if nodeParam("tnum") == "1" { text = text.monospacedDigit() }
@@ -415,7 +416,7 @@ struct NodeView: View, Equatable {
     /// A concatenated or markdown Text's styled runs ("length:flags[:r,g,b,a]"
     /// joined by ";", lengths in characters; flags b/i/m/u/s and "w<weight>")
     /// as SwiftUI's Text concatenation.
-    static func styledText(_ string: String, runs: String?, links: String? = nil, lines: String? = nil) -> Text {
+    static func styledText(_ string: String, runs: String?, links: String? = nil, lines: String? = nil, symbols: String? = nil) -> Text {
         guard let runs, !runs.isEmpty else { return Text(verbatim: string) }
         var linkURLs = (links ?? "").split(separator: "\u{1F}", omittingEmptySubsequences: false).map(String.init)[...]
         // Each run's underline and strikethrough colours (`runLines`).
@@ -429,6 +430,9 @@ struct NodeView: View, Equatable {
             }
             return (color(sides.first), color(sides.count > 1 ? sides[1] : nil))
         }
+        // The runs that are SF Symbols (`runSymbols`), drawn as the
+        // system's symbol where it has it, as `Text(Image(systemName:))` is.
+        let symbolNames = (symbols ?? "").split(separator: ";", omittingEmptySubsequences: false).map(String.init)
         var runIndex = 0
         var result = Text(verbatim: "")
         var index = string.startIndex
@@ -462,6 +466,8 @@ struct NodeView: View, Equatable {
                 if emphasized { intent.insert(.emphasized) }
                 if !intent.isEmpty { attributed.inlinePresentationIntent = intent }
                 piece = Text(attributed)
+            } else if runIndex < symbolNames.count, !symbolNames[runIndex].isEmpty, symbolExists(symbolNames[runIndex]) {
+                piece = Text(Image(systemName: symbolNames[runIndex]))
             } else {
                 piece = Text(verbatim: String(string[index..<end]))
             }
