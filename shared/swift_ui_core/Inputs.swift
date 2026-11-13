@@ -222,6 +222,9 @@ public struct Stepper {
             .background(Color(white: 0, opacity: 0.08))
             .cornerRadius(8)
         }
+        // Hosts with the system's stepper draw it, its label the title and
+        // its halves the two buttons here (host hint "native").
+        ._hostRole("stepper", ("stepperTitle", title), ("stepperCan", (canDecrement ? "1" : "0") + (canIncrement ? "1" : "0")))
     }
 }
 

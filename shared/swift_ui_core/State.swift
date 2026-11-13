@@ -24,6 +24,10 @@ extension _DynamicProperty {
 
 final class StateStorage {
     var locations: [String: AnyObject] = [:]
+    /// The type of the view whose properties are kept at each path: another
+    /// type there is another view, whose state starts afresh (SwiftUI's
+    /// identity is the type and the place).
+    var types: [String: ObjectIdentifier] = [:]
 }
 
 /// Whether `new` is `old` again: Equatable values by `==`; anything else
@@ -313,6 +317,18 @@ public struct Binding<Value> {
 func connectDynamicProperties(
     of view: any View, path: String, storage: StateStorage, env: EnvironmentValues
 ) {
+    // Another type of view at this place (a story switched in place, a
+    // branch's other view): the old one's state goes, so a property of the
+    // same name and type isn't the old view's.
+    let type = ObjectIdentifier(Swift.type(of: view))
+    let previous = storage.types[path]
+    if previous != type {
+        if previous != nil {
+            let prefix = path + "#"
+            for key in storage.locations.keys where key.hasPrefix(prefix) { storage.locations[key] = nil }
+        }
+        storage.types[path] = type
+    }
     // In place, by the type's layout (DynamicPropertyLayout.swift); Mirror
     // for a type whose fields are not inline.
     if _connectByLayout(of: view, path: path, storage: storage, env: env) { return }

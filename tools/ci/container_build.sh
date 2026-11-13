@@ -104,8 +104,12 @@ if [ "${1:-}" = package ]; then
 elif [ $# -eq 0 ] || [ "$*" = all ] || [ "$*" = pr ]; then
     mode=checks
     [ $# -eq 0 ] || mode="$*"
+    # The iPhone Storybook on Isomer's frameworks too: the proof's parity
+    # app, the one build of Apple's tree renderer (apple/libraries/
+    # swift_ui_tree), which nothing else here compiles.
     set -- --ios_multi_cpus=sim_arm64 \
         //apple/storybook_ios_application:storybook_ios_sim_application \
+        //apple/storybook_isomer_ios_application \
         //apple/storybook_macos_application:storybook_macos_application \
         //web/storybook_web_application:storybook_web_application \
         //android/storybook_android_application:storybook_android_application \

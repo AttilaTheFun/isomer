@@ -223,6 +223,10 @@ package final class RenderNode {
     var popoverAnchor: String?
     /// A concatenated Text's styled spans (empty: one plain run).
     var textRuns: [TextRun] = []
+    /// `Text.bold()` (not `.fontWeight(.bold)`): the font's weight before it
+    /// (param "boldTrait"), for hosts whose system draws the bold trait
+    /// apart from a bold weight (Apple's); `font` has the bold weight.
+    var boldTraitBase: Int?
     /// The list row is the list's current selection (semantic hosts draw it).
     var listSelected = false
     /// `.controlSize` on a progress view ("small"/"large"/"mini"), regular when nil.

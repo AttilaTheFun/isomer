@@ -12,6 +12,7 @@ swift_library(
         "FlatPatchTree.swift",
         "IsomerTreeView.swift",
         "PickerRequests.swift",
+        "TreeHostViews.swift",
     ],
     module_name = "IsomerTree",
     visibility = ["//visibility:public"],

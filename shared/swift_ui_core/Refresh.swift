@@ -33,18 +33,25 @@ public struct ContentUnavailableView<Label: View, Description: View, Actions: Vi
     }
 
     public var body: some View {
+        // Hosts with the system's ContentUnavailableView draw it (host hint
+        // "native"), from the parts marked here ("part"): the label's symbol
+        // and title, the description's text, the actions as they are.
         VStack(spacing: 10) {
             label
                 .labelStyle(ContentUnavailableLabelStyle())
+                ._hostPart("label")
             description
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
+                ._hostPart("description")
             actions
+                ._hostPart("actions")
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
         .padding(.horizontal, 16)
+        ._hostRole("unavailable")
     }
 }
 

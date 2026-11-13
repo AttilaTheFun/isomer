@@ -21,15 +21,15 @@ At 0.51.1, 40 of 98 stories differed. Their causes, and where each stands:
 | NavigationLink's chevron outside a row | navigation.links | the chevron is a row's |
 | A tab's content at its top-leading corner | navigation.tabs | centred |
 | Live content and the platform's own name | isomer.map, isomer.video, controls.progressstyle, isomer.platform | masked alike in both pictures |
-| `.bold()` sent as weight 700 (iOS draws `.fontWeight(.bold)` heavier) | text.weights, text.decoration, layout.grid, scrolling.horizontal | open |
+| `.bold()` sent as weight 700 (iOS draws `.fontWeight(.bold)` heavier) | text.weights, text.decoration, layout.grid, scrolling.horizontal | `.bold()` its own trait (`boldTrait`), drawn with `Text.bold()` |
 | Content exactly 1 px off (identity opacity, scale and offset wrappers?) | images.symbols, controls.inline, layout.geometry, gestures.tap, state.appstorage | open |
-| The core's own Stepper, labelled ProgressView, DisclosureGroup, ContentUnavailableView | controls.stepper, controls.progress, lists.outline, lists.empty | open: the system's controls |
-| `underline(color:)`, `strikethrough(color:)` colours dropped | text.decoration | open |
-| `Text(Image(systemName:))` inline as a Unicode glyph | text.format | open |
-| `.disabled` as opacity, not the control's own look | controls.toggle | open |
-| `LazyVGrid`'s adaptive columns against the window's width | layout.lazygrid | open |
-| `adoptFixedSize` through padding; an image's corners rounded too | images.assets | open |
-| `@State` inherited by another view type at the same place | input.focus | open (a state bug) |
-| `.environment(\.colorScheme, .dark)` not reaching named colours | state.environment | open |
-| Web view, video player and map drawn as placeholders | isomer.webview, isomer.video, isomer.map | open |
+| The core's own Stepper, labelled ProgressView, DisclosureGroup, ContentUnavailableView | controls.stepper, controls.progress, lists.outline, lists.empty | tagged with their roles (`native`, parts by `part`) and drawn as the system's: the Stepper, a labelled ProgressView, ContentUnavailableView; DisclosureGroup and OutlineGroup open (in a List they are rows of their own) |
+| `underline(color:)`, `strikethrough(color:)` colours dropped | text.decoration | kept (`runLines`) |
+| `Text(Image(systemName:))` inline as a Unicode glyph | text.format | the run names its symbol (`runSymbols`), drawn as the system's |
+| `.disabled` as opacity, not the control's own look | controls.toggle | open: the core dims a disabled subtree's colours (`env.opacity *= 0.45`) where SwiftUI dims only its controls, on every platform |
+| `LazyVGrid`'s adaptive columns against the window's width | layout.lazygrid | its columns sent (`native` lazyvgrid), the system's grid on Apple |
+| `adoptFixedSize` through padding; an image's corners rounded too | images.assets | the clip adopts the frame and the padding; an image inside padding keeps its corners |
+| `@State` inherited by another view type at the same place | input.focus | another type at a path starts its state afresh |
+| `.environment(\.colorScheme, .dark)` not reaching named colours | state.environment | host hint `scheme`, applied |
+| Web view, video player and map drawn as placeholders | isomer.webview, isomer.video, isomer.map | the web view a WKWebView, as Apple's; the video's and map's frames masked in both pictures |
 | The toolbar's glass capsule about 1 pt wider | navigation.toolbar | open |

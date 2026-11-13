@@ -122,6 +122,27 @@ struct NodeView: View, Equatable {
     }
 
     @ViewBuilder private var content: some View {
+        if nodeParam("native") == "stepper" {
+            // The core's stepper (a label and two buttons): the system's.
+            NativeStepper(pnode: pnode, send: send)
+        } else if nodeParam("native") == "progress",
+                  let bar = pnode.children.first(where: { $0.flat.kind == .progress }),
+                  let label = pnode.children.first(where: { $0.flat.kind != .progress }) {
+            // A ProgressView with a label: the system's, the label in its
+            // own font and colour (a text's string as the app gave it).
+            NativeLabelledProgress(bar: bar, label: label, send: send)
+        } else if nodeParam("native") == "lazyvgrid" {
+            // A LazyVGrid: the system's, its columns in its own width.
+            NativeLazyVGrid(pnode: pnode, send: send)
+        } else if nodeParam("native") == "unavailable" {
+            // The core's ContentUnavailableView: the system's, from its parts.
+            NativeUnavailable(pnode: pnode, send: send)
+        } else {
+            kindContent
+        }
+    }
+
+    @ViewBuilder private var kindContent: some View {
         switch node.kind {
         case .box:
             boxBody
@@ -365,8 +386,10 @@ struct NodeView: View, Equatable {
         }
         // A font the app did not choose ("autoFont") is the container's: a
         // Form's or a list's section header, a button's control size.
-        var text = Self.styledText(node.v ?? "", runs: nodeParam("runs"), links: nodeParam("runLinks"))
+        var text = Self.styledText(node.v ?? "", runs: nodeParam("runs"), links: nodeParam("runLinks"), lines: nodeParam("runLines"),
+                                   symbols: nodeParam("runSymbols"))
         if nodeParam("autoFont") != "1" { text = text.font(textFont) }
+        if nodeParam("boldTrait") != nil { text = text.bold() }
         if nodeParam("tnum") == "1" { text = text.monospacedDigit() }
         if let color = ownColor {
             text = text.foregroundColor(nodeParam("colorName").flatMap(hostSystemColor) ?? swiftColor(color))
@@ -417,9 +440,24 @@ struct NodeView: View, Equatable {
     /// A concatenated or markdown Text's styled runs ("length:flags[:r,g,b,a]"
     /// joined by ";", lengths in characters; flags b/i/m/u/s and "w<weight>")
     /// as SwiftUI's Text concatenation.
-    static func styledText(_ string: String, runs: String?, links: String? = nil) -> Text {
+    static func styledText(_ string: String, runs: String?, links: String? = nil, lines: String? = nil, symbols: String? = nil) -> Text {
         guard let runs, !runs.isEmpty else { return Text(verbatim: string) }
         var linkURLs = (links ?? "").split(separator: "\u{1F}", omittingEmptySubsequences: false).map(String.init)[...]
+        // Each run's underline and strikethrough colours (`runLines`).
+        let lineColors = (lines ?? "").split(separator: ";", omittingEmptySubsequences: false).map { run -> (Color?, Color?) in
+            let sides = run.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+            func color(_ spec: String?) -> Color? {
+                guard let spec, !spec.isEmpty else { return nil }
+                if let named = hostSystemColor(spec) { return named }
+                let c = spec.split(separator: ",").compactMap { Double($0) }
+                return c.count == 4 ? Color(red: c[0], green: c[1], blue: c[2], opacity: c[3]) : nil
+            }
+            return (color(sides.first), color(sides.count > 1 ? sides[1] : nil))
+        }
+        // The runs that are SF Symbols (`runSymbols`), drawn as the
+        // system's symbol where it has it, as `Text(Image(systemName:))` is.
+        let symbolNames = (symbols ?? "").split(separator: ";", omittingEmptySubsequences: false).map(String.init)
+        var runIndex = 0
         var result = Text(verbatim: "")
         var index = string.startIndex
         for run in runs.split(separator: ";") {
@@ -452,6 +490,8 @@ struct NodeView: View, Equatable {
                 if emphasized { intent.insert(.emphasized) }
                 if !intent.isEmpty { attributed.inlinePresentationIntent = intent }
                 piece = Text(attributed)
+            } else if runIndex < symbolNames.count, !symbolNames[runIndex].isEmpty, symbolExists(symbolNames[runIndex]) {
+                piece = Text(Image(systemName: symbolNames[runIndex]))
             } else {
                 piece = Text(verbatim: String(string[index..<end]))
             }
@@ -468,8 +508,10 @@ struct NodeView: View, Equatable {
                     piece = piece.font(.system(.body, design: .monospaced))
                 }
             }
-            if flags.contains("u") { piece = piece.underline() }
-            if flags.contains("s") { piece = piece.strikethrough() }
+            let (underlineColor, strikethroughColor) = runIndex < lineColors.count ? lineColors[runIndex] : (nil, nil)
+            runIndex += 1
+            if flags.contains("u") { piece = piece.underline(true, color: underlineColor) }
+            if flags.contains("s") { piece = piece.strikethrough(true, color: strikethroughColor) }
             if flags.contains("t") { piece = piece.monospacedDigit() }
             if let ownColor, !isLink { piece = piece.foregroundColor(ownColor) }
             result = result + piece
@@ -484,7 +526,9 @@ struct NodeView: View, Equatable {
     /// A named typeface (`Font.custom`, param "family") is the system's
     /// by that name, the app's bundled fonts among them.
     private var textFont: Font {
-        let weight = flatFontWeight(node.weight ?? 400)
+        // `Text.bold()`: the font at its weight before, the bold trait
+        // applied to the text (textBody), as the app's is.
+        let weight = flatFontWeight(nodeParam("boldTrait").flatMap(Int32.init) ?? node.weight ?? 400)
         if let family = nodeParam("family") {
             return Font.custom(family, fixedSize: node.size.map { CGFloat($0) } ?? 15).weight(weight)
         }
@@ -730,6 +774,168 @@ struct NodeView: View, Equatable {
         case .end: return .bottom
         default: return .center
         }
+    }
+}
+
+/// The core's LazyVGrid as the system's: its columns ("gridColumns",
+/// Grid.swift's `gridItemSpec`), spacing and alignment, and its cells, the
+/// core's lines' cells in order.
+struct NativeLazyVGrid: View {
+    let pnode: PatchedNode
+    let send: (String, String) -> Void
+
+    private func param(_ key: String) -> String? { pnode.flat.params.first { $0.key == key }?.value }
+
+    private var columns: [GridItem] {
+        (param("gridColumns") ?? "").split(separator: ";").compactMap { spec in
+            let parts = spec.split(separator: ",").map(String.init)
+            guard parts.count == 4 else { return nil }
+            func n(_ text: String) -> CGFloat { text == "inf" ? .infinity : CGFloat(Double(text) ?? 0) }
+            let spacing = parts[3] == "-" ? nil : CGFloat(Double(parts[3]) ?? 0)
+            switch parts[0] {
+            case "f": return GridItem(.fixed(n(parts[1])), spacing: spacing)
+            case "a": return GridItem(.adaptive(minimum: n(parts[1]), maximum: n(parts[2])), spacing: spacing)
+            default: return GridItem(.flexible(minimum: n(parts[1]), maximum: n(parts[2])), spacing: spacing)
+            }
+        }
+    }
+
+    var body: some View {
+        let cells = pnode.children.flatMap(\.children).compactMap { $0.children.first }
+        let alignment: HorizontalAlignment = param("gridAlign") == "leading" ? .leading : param("gridAlign") == "trailing" ? .trailing : .center
+        LazyVGrid(columns: columns, alignment: alignment, spacing: param("gridSpacing").flatMap(Double.init).map { CGFloat($0) }) {
+            ForEach(keyedNodes(cells)) { cell in NodeView(pnode: cell.node, send: send) }
+        }
+    }
+}
+
+/// The core's ContentUnavailableView as the system's: the label's symbol
+/// and title, the description's text, and the actions as the app made
+/// them (the parts marked "part").
+struct NativeUnavailable: View {
+    let pnode: PatchedNode
+    let send: (String, String) -> Void
+
+    private static func part(_ name: String, in node: PatchedNode) -> PatchedNode? {
+        if node.flat.params.contains(where: { $0.key == "part" && $0.value == name }) { return node }
+        for child in node.children {
+            if let found = part(name, in: child) { return found }
+        }
+        return nil
+    }
+
+    /// The first node under `node` (itself included) that `match` takes.
+    private static func first(in node: PatchedNode, where match: (PatchedNode) -> Bool) -> PatchedNode? {
+        if match(node) { return node }
+        for child in node.children {
+            if let found = first(in: child, where: match) { return found }
+        }
+        return nil
+    }
+
+    var body: some View {
+        let label = Self.part("label", in: pnode)
+        let symbol = label.flatMap { Self.first(in: $0) { $0.flat.params.contains { $0.key == "symbol" } } }?
+            .flat.params.first { $0.key == "symbol" }?.value
+        let title = label.flatMap { Self.first(in: $0) { $0.flat.kind == .text && !$0.flat.params.contains { $0.key == "symbol" } } }?.flat.v ?? ""
+        let description = Self.part("description", in: pnode).flatMap { Self.first(in: $0) { $0.flat.kind == .text } }?.flat.v
+        let actions = Self.part("actions", in: pnode)
+        if #available(iOS 17.0, macOS 14.0, tvOS 17.0, watchOS 10.0, *) {
+            ContentUnavailableView {
+                if let symbol {
+                    Label(title, systemImage: symbol)
+                } else {
+                    Text(verbatim: title)
+                }
+            } description: {
+                if let description { Text(verbatim: description) }
+            } actions: {
+                if let actions, !actions.children.isEmpty || actions.flat.kind != .box {
+                    NodeView(pnode: actions, send: send)
+                }
+            }
+        } else {
+            // Before the system had one: the core's composite (its padding
+            // too, which Decorations leaves to this).
+            ForEach(keyedNodes(pnode.children)) { child in NodeView(pnode: child.node, send: send) }
+                .padding(.horizontal, 16)
+        }
+    }
+}
+
+/// The core's ProgressView with a label, as the system's.
+struct NativeLabelledProgress: View {
+    let bar: PatchedNode
+    let label: PatchedNode
+    let send: (String, String) -> Void
+
+    @ViewBuilder private var labelView: some View {
+        if label.flat.kind == .text, label.children.isEmpty {
+            Text(verbatim: label.flat.v ?? "")
+        } else {
+            NodeView(pnode: label, send: send)
+        }
+    }
+
+    var body: some View {
+        let style = bar.flat.params.first { $0.key == "pstyle" }?.value
+        Group {
+            if let value = bar.flat.num {
+                ProgressView(value: value) { labelView }
+            } else {
+                ProgressView { labelView }
+            }
+        }
+        .modifier(NativeProgressStyle(style: style))
+        .tint(Self.tint(of: bar.flat))
+    }
+
+    /// The bar's `.tint`, if the guest gave one.
+    static func tint(of node: IsoFlat_Node) -> Color? {
+        func param(_ key: String) -> String? { node.params.first { $0.key == key }?.value }
+        return param("tintName").flatMap(hostSystemColor) ?? param("tint").flatMap(colorFromHex)
+    }
+}
+
+/// `.progressViewStyle` by the guest's choice ("pstyle").
+struct NativeProgressStyle: ViewModifier {
+    let style: String?
+
+    func body(content: Content) -> some View {
+        switch style {
+        case "circular": content.progressViewStyle(.circular)
+        case "linear": content.progressViewStyle(.linear)
+        default: content
+        }
+    }
+}
+
+/// The core's Stepper as the system's: its title the label, its two
+/// buttons' taps (− then +) the halves, a half off at its bound
+/// ("stepperCan": decrement, increment, 1 or 0).
+struct NativeStepper: View {
+    let pnode: PatchedNode
+    let send: (String, String) -> Void
+
+    private func param(_ key: String) -> String? { pnode.flat.params.first { $0.key == key }?.value }
+
+    var body: some View {
+        let taps = Self.taps(in: pnode)
+        let can = Array(param("stepperCan") ?? "11")
+        let decrement: (() -> Void)? = taps.count == 2 && can.first == "1" ? { send(taps[0], "") } : nil
+        let increment: (() -> Void)? = taps.count == 2 && can.last == "1" ? { send(taps[1], "") } : nil
+        Stepper(onIncrement: increment, onDecrement: decrement) { Text(verbatim: param("stepperTitle") ?? "") }
+    }
+
+    /// The taps under the node, in order.
+    static func taps(in node: PatchedNode) -> [String] {
+        var found: [String] = []
+        func walk(_ node: PatchedNode) {
+            if let tap = node.flat.tap { found.append(tap) }
+            for child in node.children { walk(child) }
+        }
+        walk(node)
+        return found
     }
 }
 
@@ -980,6 +1186,10 @@ struct HostViewBody: View {
 
     var body: some View {
         switch node.view {
+        case "webview":
+            // `WebView(url:)`: Apple's own, as an app built against Apple's
+            // SwiftUI shows it.
+            TreeWebView(url: node.v.flatMap { URL(string: $0) })
         case "toggle":
             Toggle("", isOn: Binding(
                 get: { node.v == "1" },
@@ -2268,7 +2478,10 @@ struct Decorations: ViewModifier {
         // A Button's padding, fill, corners and tap are the system button's
         // own (its style draws them, its action is the tap).
         let isButton = paramValue("button") != nil || paramValue("share") != nil
-        if !isButton, let padding = paddingInsets {
+        // A composite drawn as the system's control has the control's own
+        // insets, not the composite's padding.
+        let drawnNative = paramValue("native") == "unavailable"
+        if !isButton, !drawnNative, let padding = paddingInsets {
             view = AnyView(view.padding(padding))
         }
         // A fixed frame positions content by the frame's alignment too
@@ -2436,6 +2649,13 @@ struct Decorations: ViewModifier {
         }
         if let popover = paramValue("popover") {
             view = AnyView(view.modifier(AnchoredPopover(id: popover, send: send)))
+        }
+        // `.environment(\.colorScheme, …)` in the app: the subtree's
+        // scheme, so the system's colours by name resolve in it.
+        switch paramValue("scheme") {
+        case "dark": view = AnyView(view.environment(\.colorScheme, .dark))
+        case "light": view = AnyView(view.environment(\.colorScheme, .light))
+        default: break
         }
         // `.layoutPriority`: what its stack gives it first, so outermost.
         if let priority = paramValue("layoutPriority").flatMap(Double.init) {

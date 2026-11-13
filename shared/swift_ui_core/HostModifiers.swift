@@ -22,6 +22,28 @@ extension View {
         }
     }
 
+    /// The control a composite of the core's stands for (host hint
+    /// "native", with its details), on its own node: hosts that have the
+    /// system's control draw that, the others the composite.
+    nonisolated func _hostRole(_ role: String, _ details: (String, String)...) -> some View {
+        _ModifiedView(child: self, descend: "role", pure: true) { inner, _ in
+            if !inner.hostHints.contains(where: { $0.0 == "native" }) {
+                inner.hostHints.append(("native", role))
+                inner.hostHints.append(contentsOf: details)
+            }
+            return inner
+        }
+    }
+
+    /// Which part of a composite of `_hostRole`'s this is (host hint
+    /// "part"), for the hosts that draw the system's control from its parts.
+    nonisolated func _hostPart(_ part: String) -> some View {
+        _ModifiedView(child: self, descend: "part", pure: true) { inner, _ in
+            if !inner.hostHints.contains(where: { $0.0 == "part" }) { inner.hostHints.append(("part", part)) }
+            return inner
+        }
+    }
+
     /// `.blur(radius:opaque:)`.
     nonisolated public func blur(radius: CGFloat, opaque: Bool = false) -> some View {
         _ModifiedView(child: self, descend: "blur", pure: true) { inner, _ in

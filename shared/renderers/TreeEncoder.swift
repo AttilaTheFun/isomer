@@ -658,6 +658,24 @@ package final class FlatTreeEncoder {
                     return part
                 }.joined(separator: ";")
                 out.params = (out.params ?? []) + [("runs", encoded)]
+                // Underline and strikethrough colours of their own, in run
+                // order ("<underline>|<strikethrough>" a run, ";" between):
+                // a system colour's name, else its RGBA, else nothing.
+                if node.textRuns.contains(where: { $0.underlineColor != nil || $0.strikethroughColor != nil }) {
+                    func spec(_ color: Color?) -> String {
+                        guard let color else { return "" }
+                        if let name = systemColorName(color) { return name }
+                        let c = flatColor(color)
+                        return [c.r, c.g, c.b, c.a].map { formatNumber(Double($0)) }.joined(separator: ",")
+                    }
+                    let lines = node.textRuns.map { spec($0.underlineColor) + "|" + spec($0.strikethroughColor) }
+                    out.params = (out.params ?? []) + [("runLines", lines.joined(separator: ";"))]
+                }
+                // The runs that are SF Symbols, by name in run order ("" for
+                // the others, ";" between), for hosts with the system's symbols.
+                if node.textRuns.contains(where: { $0.symbol != nil }) {
+                    out.params = (out.params ?? []) + [("runSymbols", node.textRuns.map { $0.symbol ?? "" }.joined(separator: ";"))]
+                }
                 // Link runs' URLs, in run order (unit-separated).
                 let links = node.textRuns.compactMap(\.link)
                 if !links.isEmpty { out.params = (out.params ?? []) + [("runLinks", links.joined(separator: "\u{1F}"))] }
@@ -850,6 +868,9 @@ package final class FlatTreeEncoder {
         case .text:
             out.fontSize = Double(node.font.size)
             out.weight = Int32(node.font.weight.value)
+            // `Text.bold()`: the weight before it, for hosts that draw the
+            // bold trait themselves (Apple's draws it apart from `.bold`).
+            if let base = node.boldTraitBase { out.params = (out.params ?? []) + [("boldTrait", String(base))] }
             out.color = flatColor(node.color)
             if let name = systemColorName(node.color) { out.params = (out.params ?? []) + [("colorName", name)] }
             // The text style (hosts with a type ramp use it) and whether the

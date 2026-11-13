@@ -119,10 +119,32 @@ extension LazyVGrid: _PrimitiveView {
         var sub = ctx.descend("vgrid")
         let cells = buildChildren(of: content, ctx: &sub)
         let trackSpacing = columns.first?.spacing ?? spacing ?? 8
-        return gridNode(
+        let node = gridNode(
             cells: cells, items: columns, mainAxis: .vertical, trackSpacing: trackSpacing,
             lineSpacing: spacing ?? 8, extent: Runtime.shared.width)
+        // Hosts with the system's lazy grid lay the cells out themselves,
+        // in the grid's own width (host hint "native": its columns, spacing
+        // and alignment; the cells the lines' in order).
+        node.hostHints.append(("native", "lazyvgrid"))
+        node.hostHints.append(("gridColumns", columns.map(gridItemSpec).joined(separator: ";")))
+        if let spacing { node.hostHints.append(("gridSpacing", String(Double(spacing)))) }
+        node.hostHints.append(("gridAlign", alignment == .leading ? "leading" : alignment == .trailing ? "trailing" : "center"))
+        return node
     }
+}
+
+/// A grid item as a host hint: `<kind>,<a>,<b>,<spacing>`: f (fixed, its
+/// length), x (flexible, minimum and maximum), a (adaptive, minimum and
+/// maximum); "inf" an unbounded maximum, "-" no spacing of its own.
+func gridItemSpec(_ item: GridItem) -> String {
+    func n(_ value: CGFloat) -> String { value == .infinity ? "inf" : String(Double(value)) }
+    let size: String
+    switch item.size {
+    case .fixed(let length): size = "f,\(n(length)),0"
+    case .flexible(let minimum, let maximum): size = "x,\(n(minimum)),\(n(maximum))"
+    case .adaptive(let minimum, let maximum): size = "a,\(n(minimum)),\(n(maximum))"
+    }
+    return size + "," + (item.spacing.map { String(Double($0)) } ?? "-")
 }
 
 extension LazyHGrid: _PrimitiveView {

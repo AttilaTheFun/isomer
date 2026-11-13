@@ -96,6 +96,9 @@ extension ProgressView: _PrimitiveView {
         labelNode.color = Color(white: 0, opacity: 0.5)
         // Spinner above its label; bar below its label (matches SwiftUI).
         stack.children = value == nil ? [bar, labelNode] : [labelNode, bar]
+        // Hosts with the system's ProgressView draw it with the label
+        // (host hint "native"): its font and colour, not these.
+        stack.hostHints.append(("native", "progress"))
         return stack
     }
 }
