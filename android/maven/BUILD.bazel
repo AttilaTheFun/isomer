@@ -1,0 +1,46 @@
+load("@rules_android//rules:rules.bzl", "android_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The Maven artifacts Isomer's Android runtime compiles and links against,
+# behind flags (docs/android_maven.md). By default Isomer's own set, from
+# @isomer_maven (MODULE.bazel, pinned by isomer's lock file); an app with
+# AndroidX of its own points the flags at its own instead, so one copy of
+# AndroidX goes into its APK:
+#
+#   build --@isomer//android/maven:androidx=//third_party:androidx_for_isomer
+#   build --@isomer//android/maven:compose_compiler=@maven//:org_jetbrains_kotlin_kotlin_compose_compiler_plugin_embeddable
+#
+# The whole set is one flag: artifacts of one Maven repository depend on
+# each other, so a set mixed from two repositories would carry two copies
+# of what they share.
+label_flag(
+    name = "androidx",
+    build_setting_default = ":isomer_androidx",
+)
+
+# The Compose compiler plugin: the one matching the app's kotlinc (its
+# rules_kotlin's), which an app on another Kotlin release gives here.
+label_flag(
+    name = "compose_compiler",
+    build_setting_default = "@isomer_maven//:org_jetbrains_kotlin_kotlin_compose_compiler_plugin_embeddable",
+)
+
+# Isomer's set: what an app's own set must export too, at these versions
+# or later (Compose 1.7).
+android_library(
+    name = "isomer_androidx",
+    exports = [
+        "@isomer_maven//:androidx_activity_activity_compose",
+        "@isomer_maven//:androidx_browser_browser",
+        "@isomer_maven//:androidx_compose_foundation_foundation",
+        "@isomer_maven//:androidx_compose_material3_material3",
+        "@isomer_maven//:androidx_compose_runtime_runtime",
+        "@isomer_maven//:androidx_compose_ui_ui",
+        "@isomer_maven//:androidx_fragment_fragment",
+        "@isomer_maven//:androidx_lifecycle_lifecycle_common",
+        "@isomer_maven//:androidx_profileinstaller_profileinstaller",
+        "@isomer_maven//:org_jetbrains_kotlinx_kotlinx_coroutines_android",
+        "@isomer_maven//:org_jetbrains_kotlinx_kotlinx_coroutines_core",
+    ],
+)

@@ -340,21 +340,33 @@ use_repo(
     "kotlin_compiler",
 )
 
-# rules_android's Maven graph + the Compose/benchmark artifacts the example
-# apps use. Declared from THIS root (bzlmod's rules_jvm_external cannot read a
-# lock file from a non-root module), merging isomer's contribution; the
-# lock is a vendored copy of isomer's.
-#   REPIN=1 bazel run @rules_android_maven//:pin
+# Maven: Isomer's AndroidX and rules_android's tools come from isomer,
+# pinned by its lock files (an app on Isomer declares neither); the
+# examples' own are the Android benchmark's harness and its tests, in a
+# repository of their own (they go into the benchmark's instrumentation APK,
+# not an app's).
+#   REPIN=1 bazel run @examples_maven//:pin
 bazel_dep(name = "rules_jvm_external", version = "7.1")
 maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
 maven.install(
-    name = "rules_android_maven",
+    name = "examples_maven",
     aar_import_bzl_label = "@rules_android//rules:rules.bzl",
-    known_contributing_modules = [
-        "rules_android",
-        "isomer",
+    artifacts = [
+        # Jetpack Macrobenchmark: the platform-native perf harness
+        # (//tools/benchmark/android_macrobenchmark) - StartupTimingMetric +
+        # TraceSectionMetric instrumentation APK driven over adb.
+        "androidx.benchmark:benchmark-macro-junit4:1.3.4",
+        "androidx.test.uiautomator:uiautomator:2.3.0",
+        "androidx.test:runner:1.6.2",
+        "androidx.test.ext:junit:1.2.1",
+        "androidx.tracing:tracing:1.2.0",
+        # benchmark-common's perfetto proto classes extend wire's runtime;
+        # coursier resolves the KMP root (metadata-only jar) - pin the -jvm
+        # artifact that actually carries the classes.
+        "com.squareup.wire:wire-runtime-jvm:4.9.7",
+        "junit:junit:4.13.2",
     ],
-    lock_file = "//:rules_android_maven_install.json",
+    lock_file = "//:examples_maven_install.json",
     version_conflict_policy = "pinned",
     repositories = [
         "https://maven.google.com",
@@ -362,7 +374,9 @@ maven.install(
     ],
     use_starlark_android_rules = True,
 )
-use_repo(maven, "rules_android_maven")
+# isomer_maven too, for the test of an app's own AndroidX set
+# (//tests/android_maven).
+use_repo(maven, "examples_maven", "isomer_maven")
 
 # Hermetic Go >= 1.24 for gazelle's repo tooling (rules_android's `ak` Go
 # tools request it; the host Go is not consulted).

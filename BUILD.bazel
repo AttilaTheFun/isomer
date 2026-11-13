@@ -1,8 +1,9 @@
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 # Marks the repository root as a Bazel package. rules_jvm_external reads the
-# rules_android Maven lock file via the `//:rules_android_maven_install.json`
-# label (see MODULE.bazel), which requires the root to be a loadable package.
+# Maven lock files via their labels (`//:isomer_maven_install.json`,
+# `//:rules_android_maven_install.json`; see MODULE.bazel), which requires the
+# root to be a loadable package.
 
 # The reimplementation's `SwiftUI` module for the current platform — ONE
 # label a SwiftPM package's generated target (rules_swift_package_manager

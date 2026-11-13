@@ -224,7 +224,12 @@ if [ "$mode" = all ] || [ "$mode" = pr ]; then
     built_x86=0
     [ -z "${ISOMER_ANDROID_X86_64:-}" ] || bazel build "${flags[@]}" --android_platforms=@rules_android//:x86_64 \
         //android/storybook_android_application:storybook_android_application_apk || built_x86=1
-    for result in $built $built_windows $built_tests $tested_here $headless $built_gl $checked $built_x86; do [ "$result" -ne 0 ] && exit "$result"; done
+    # An app with AndroidX of its own points Isomer at its set
+    # (docs/android_maven.md): the Android Storybook built through one.
+    bazel build "${flags[@]}" --@isomer//android/maven:androidx=//tests/android_maven:androidx_for_isomer \
+        //android/storybook_android_application:storybook_android_application_apk
+    built_override=$?
+    for result in $built $built_windows $built_tests $tested_here $headless $built_gl $checked $built_x86 $built_override; do [ "$result" -ne 0 ] && exit "$result"; done
     exit 0
 fi
 # The apps tested elsewhere, for tools/ci/platform_tests.sh.

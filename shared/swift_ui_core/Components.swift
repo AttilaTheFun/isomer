@@ -547,6 +547,8 @@ extension Menu: _PrimitiveView {
         }
         // `.menuIndicator(.hidden)`: no chevron beside the label.
         if ctx.env.menuIndicatorHidden { params["indicator"] = "hidden" }
+        // `.menuStyle(.button)` / `(.borderlessButton)`: the button's look.
+        if let style = ctx.env[_MenuStyleKey.self], style != "automatic" { params["menuStyle"] = style }
         // Canonical semantic node; the self-drawing path swaps in
         // DrawnPopUpList via chrome expansion.
         let spec = HostViewSpec(

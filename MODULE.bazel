@@ -332,15 +332,22 @@ bazel_dep(name = "rules_jvm_external", version = "7.1")
 rules_java_toolchains = use_extension("@rules_java//java:extensions.bzl", "toolchains")
 use_repo(rules_java_toolchains, "remote_java_tools")
 
-# rules_android's Maven dependencies (resolved + pinned to a checked-in lock).
+# Maven: two repositories, each with its lock file here, which rules_jvm_external
+# honours for every module that depends on isomer (a lock file is any
+# module's; the root's wins where it declares the same name). So an app on
+# Isomer declares no Maven of its own for Isomer and keeps no lock file.
+#   REPIN=1 bazel run @isomer_maven//:pin
 #   REPIN=1 bazel run @rules_android_maven//:pin
 maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
+
+# Isomer's own: what its Android runtime (dev.isomer.runtime, the app
+# macros' activities) compiles and links against. Reached only through
+# //android/maven's flags (`androidx`, `compose_compiler`), so an app with
+# AndroidX of its own points them at its set instead and this repository
+# is never fetched (docs/android_maven.md).
 maven.install(
-    name = "rules_android_maven",
+    name = "isomer_maven",
     aar_import_bzl_label = "@rules_android//rules:rules.bzl",
-    # Jetpack Compose for the high-level Android renderer
-    # (Renderer.bind(.jetpackCompose)); the embeddable compose compiler must
-    # match rules_kotlin's kotlinc release (2.2.21).
     artifacts = [
         # Pinned to satisfy coursier's strict version-range resolution.
         "androidx.collection:collection:1.4.0",
@@ -355,33 +362,42 @@ maven.install(
         "androidx.compose.material3:material3:1.3.2",
         "androidx.compose.runtime:runtime:1.7.8",
         "androidx.compose.ui:ui:1.7.8",
-        # Chrome Custom Tabs: the Playground's "Run on the web" opens its
-        # in-app server's page in one (the SFSafariViewController of Android).
+        # Chrome Custom Tabs (the Playground's "Run on the web").
         "androidx.browser:browser:1.8.0",
-        "org.jetbrains.kotlin:kotlin-compose-compiler-plugin-embeddable:2.2.21",
-        # Jetpack Macrobenchmark: the platform-native perf harness
-        # (//tools/benchmark/android_macrobenchmark) - StartupTimingMetric +
-        # TraceSectionMetric instrumentation APK driven over adb.
-        "androidx.benchmark:benchmark-macro-junit4:1.3.4",
-        "androidx.test.uiautomator:uiautomator:2.3.0",
-        "androidx.test:runner:1.6.2",
-        "androidx.test.ext:junit:1.2.1",
-        "androidx.tracing:tracing:1.2.0",
-        # benchmark-common's perfetto proto classes extend wire's runtime;
-        # coursier resolves the KMP root (metadata-only jar) - pin the -jvm
-        # artifact that actually carries the classes.
-        "com.squareup.wire:wire-runtime-jvm:4.9.7",
-        # ProfileInstaller's ProfileInstallReceiver in each cell APK: macro's
-        # per-iteration DROP_SHADER_CACHE broadcast targets it.
+        # ProfileInstaller's receiver in each app (a macrobenchmark's
+        # DROP_SHADER_CACHE broadcast targets it; baseline profiles).
         "androidx.profileinstaller:profileinstaller:1.4.1",
         "androidx.startup:startup-runtime:1.1.1",
-        "junit:junit:4.13.2",
+        "androidx.tracing:tracing:1.2.0",
+        # Kotlin's standard library and coroutines at what the graph resolved
+        # them to beside rules_android's (Compose alone floors them at 1.8 and
+        # 1.7, older than the kotlinc that compiles the runtime).
+        "org.jetbrains.kotlin:kotlin-stdlib:2.1.20",
+        "org.jetbrains.kotlin:kotlin-stdlib-jdk7:2.1.20",
+        "org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.1.20",
+        "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0",
+        # The Compose compiler, matching rules_kotlin's kotlinc (2.2.21).
+        "org.jetbrains.kotlin:kotlin-compose-compiler-plugin-embeddable:2.2.21",
     ],
-    known_contributing_modules = ["rules_android"],
-    lock_file = "//:rules_android_maven_install.json",
+    lock_file = "//:isomer_maven_install.json",
     # Compose's androidx graph mixes exact-pin ranges with old floors;
     # resolve to the pinned/highest versions instead of failing.
     version_conflict_policy = "pinned",
+    repositories = [
+        "https://maven.google.com",
+        "https://repo1.maven.org/maven2",
+    ],
+    use_starlark_android_rules = True,
+)
+use_repo(maven, "isomer_maven")
+
+# rules_android's own (its tools: r8, bundletool, desugaring), which it
+# declares without a lock file: pinned here for every build on Isomer.
+maven.install(
+    name = "rules_android_maven",
+    aar_import_bzl_label = "@rules_android//rules:rules.bzl",
+    known_contributing_modules = ["rules_android"],
+    lock_file = "//:rules_android_maven_install.json",
     repositories = [
         "https://maven.google.com",
         "https://repo1.maven.org/maven2",
