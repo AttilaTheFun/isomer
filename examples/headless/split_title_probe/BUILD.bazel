@@ -12,6 +12,9 @@ swift_binary(
     copts = ["-parse-as-library"],
     module_name = "SplitTitleProbe",
     deps = [
+        # A host to link wherever it's built (a //... build without the
+        # headless flag takes the building machine's).
+        "@isomer//:swift_ui",
         "@isomer//headless/libraries/swift_ui",
         "@isomer//headless/libraries/swift_ui:isomer",
     ],
