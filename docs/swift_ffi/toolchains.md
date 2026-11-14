@@ -32,7 +32,9 @@ doc.
   `@androidndk`; SDK 35 → `@androidsdk`), rules_android 0.7.3,
   rules_kotlin 2.2.2, rules_jvm_external 7.0. The Swift Android toolchain
   links through `@androidndk//:all` with libc++ static, so an APK ships only
-  the bridge `.so`. The maven lock file is checked in; update with
+  the bridge `.so` (or, with `kt_swift_library(libcxx = "shared")` or
+  `--//swift_ffi/rules:libcxx=shared`, the NDK's `libc++_shared.so`
+  beside it: rules/libcxx.bzl). The maven lock file is checked in; update with
   `REPIN=1 bazel run @rules_android_maven//:pin`.
 - **TypeScript**: the aspect stack — aspect_rules_js (`js_test` on the
   hermetic rules_nodejs toolchain), aspect_rules_ts (`ts_project`, tsc's version

@@ -26,6 +26,24 @@ config_setting(
     flag_values = {":shared_platform": "True"},
 )
 
+# An AAR's jni/<abi>/ with the NDK's libc++_shared.so in it beside the
+# app's library, when that library needs it
+# (--@isomer//swift_ffi/rules:libcxx=shared). Off by default: the host app
+# supplies its own, the one its other C++ libraries use (defs.bzl's
+# isomer_android_aar; README, "One C++ runtime with other libraries").
+bool_flag(
+    name = "aar_libcxx_shared",
+    build_setting_default = False,
+)
+
+config_setting(
+    name = "aar_libcxx_shared_on",
+    flag_values = {
+        ":aar_libcxx_shared": "True",
+        "//swift_ffi/rules:libcxx": "shared",
+    },
+)
+
 # isomer_android_aar's assembly (defs.bzl): the classes, the libraries, the
 # manifest and the consumer rules zipped as an AAR.
 sh_binary(

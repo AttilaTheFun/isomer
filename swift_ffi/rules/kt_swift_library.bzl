@@ -11,6 +11,37 @@ load(":utils.bzl", "REACTOR_STUB", "ffi_generate", "transition_binary")
 _SWIFT_ABI = Label("//swift_ffi/runtime/swift_abi")
 _RUNTIME_KOTLIN = Label("//swift_ffi/runtime/kotlin")
 
+# The C++ runtime (libcxx.bzl): a library's `libcxx`, or without one
+# --//swift_ffi/rules:libcxx. Shared: the NDK toolchain's static libc++ left
+# out of the link (its `static_link_cpp_runtimes` feature off) and the NDK's
+# libc++_shared.so named first among the link flags, ahead of the
+# toolchain's own (rules_swift's `-lc++` for C++ interoperability, which it
+# resolves to the static pair): lld takes each libc++ symbol from it, the
+# library needs it, and none of libc++ is linked in. Static: as the
+# toolchain links, libc++ inside.
+_LIBCXX_SHARED = Label("//swift_ffi/rules:libcxx_shared")
+_NDK_LIBCXX_SHARED = Label("//swift_ffi/rules:ndk_libcxx_shared")
+
+def _libcxx(libcxx, shared, static):
+    """`shared` or `static`, as `libcxx` says, or the flag without it."""
+    if libcxx == None:
+        return select({
+            _LIBCXX_SHARED: shared,
+            "//conditions:default": static,
+        })
+    if libcxx not in ("shared", "static"):
+        fail("libcxx is \"shared\" or \"static\" (or None, for --@isomer//swift_ffi/rules:libcxx), not %r" % libcxx)
+    return shared if libcxx == "shared" else static
+
+def _libcxx_features(libcxx):
+    return _libcxx(libcxx, ["-static_link_cpp_runtimes"], [])
+
+def _libcxx_inputs(libcxx):
+    return _libcxx(libcxx, [_NDK_LIBCXX_SHARED], [])
+
+def _libcxx_linkopts(libcxx):
+    return _libcxx(libcxx, ["$(location %s)" % _NDK_LIBCXX_SHARED], [])
+
 def kt_swift_library(
         name,
         swift,
@@ -23,6 +54,7 @@ def kt_swift_library(
         shared_platform = None,
         shared_platform_when = None,
         platform = Label("//swift_ffi/rules:android-aarch64"),
+        libcxx = None,
         visibility = None,
         testonly = False,
         **kwargs):
@@ -50,6 +82,12 @@ def kt_swift_library(
     the platform first. Without one the `.so` is whole, as before.
     With `shared_platform_when` (a config_setting) too, both links are
     declared and the setting picks one: the same sources either way.
+
+    `libcxx` is the C++ runtime: `"static"`, libc++ linked in, or
+    `"shared"`, the NDK's `libc++_shared.so` needed, which the APK then
+    ships (`//swift_ffi/rules:cxx_runtime_shared` among the android_binary's
+    deps beside the library's). Without one, `--//swift_ffi/rules:libcxx`
+    says (`static` by default; `//swift_ffi/rules:cxx_runtime` follows it).
     """
     ffi_generate(
         name = name + "_header_src",
@@ -90,12 +128,13 @@ def kt_swift_library(
     # (Swift Concurrency's dispatch libraries are linked by the rules_swift
     # Android toolchain itself since bazelbuild/rules_swift#1830.)
     # The JNI entry points alone exported, the rest local: what the library
-    # links statically (the Swift runtime, Foundation, libc++) is its own,
-    # never another library's in the process (a host app's libc++_shared.so
-    # among them). Shipped (--//swift_ffi/rules:jni_exports_only) too:
+    # links statically (the Swift runtime, Foundation, and libc++ unless
+    # `libcxx` is shared) is its own, never another library's in the
+    # process (a host app's libc++_shared.so among them). Shipped
+    # (--//swift_ffi/rules:jni_exports_only) too:
     # --gc-sections drops what the entry points don't reach, and the symbol
     # tables are stripped.
-    jni_linkopts = linkopts + [
+    jni_linkopts = _libcxx_linkopts(libcxx) + linkopts + [
         "-Wl,--version-script=$(location %s)" % Label("//swift_ffi/rules:jni_exports.lds"),
         # The script names JNI_OnLoad, which a library may not have.
         "-Wl,--undefined-version",
@@ -112,7 +151,8 @@ def kt_swift_library(
             testonly = testonly,
             deps = [swift, ":" + name + "_adapter"] + link_deps,
             platform = _platform_link(shared_platform),
-            additional_linker_inputs = [Label("//swift_ffi/rules:jni_exports.lds")],
+            additional_linker_inputs = [Label("//swift_ffi/rules:jni_exports.lds")] + _libcxx_inputs(libcxx),
+            features = _libcxx_features(libcxx),
             linkopts = jni_linkopts,
             tags = ["manual"],
         )
@@ -123,7 +163,8 @@ def kt_swift_library(
             srcs = [REACTOR_STUB],
             module_name = name + "_native",
             deps = [swift, ":" + name + "_adapter"] + link_deps,
-            additional_linker_inputs = [Label("//swift_ffi/rules:jni_exports.lds")],
+            additional_linker_inputs = [Label("//swift_ffi/rules:jni_exports.lds")] + _libcxx_inputs(libcxx),
+            features = _libcxx_features(libcxx),
             linkopts = jni_linkopts,
             linkshared = True,
             tags = ["manual"],
@@ -209,14 +250,18 @@ def kt_swift_platform(
         # JNI libraries are: the dynamic symbol table, what they link
         # against, stays.
         # Its libc++ (linked statically, as in every JNI library) stays its
-        # own: exported, it would meet a host app's libc++_shared.so.
-        linkopts = [
+        # own: exported, it would meet a host app's libc++_shared.so. With
+        # --//swift_ffi/rules:libcxx=shared it links that libc++_shared.so
+        # instead, as the JNI libraries do.
+        linkopts = _libcxx_linkopts(None) + [
             "-Wl,-soname,lib%s.so" % name,
             "-Wl,--exclude-libs,libc++_static.a:libc++abi.a",
         ] + linkopts + select({
             Label("//swift_ffi/rules:jni_exports_only_on"): ["-Wl,--strip-all"],
             "//conditions:default": [],
         }),
+        additional_linker_inputs = _libcxx_inputs(None),
+        features = _libcxx_features(None),
         tags = ["manual"],
         visibility = visibility,
     )
