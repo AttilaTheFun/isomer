@@ -121,8 +121,10 @@ final class _StateObjectBacking<ObjectType: ObservableObject> {
 @MainActor @preconcurrency
 @propertyWrapper
 public struct StateObject<ObjectType>: _DynamicProperty where ObjectType: ObservableObject {
-    let thunk: () -> ObjectType
-    let backing = _StateObjectBacking<ObjectType>()
+    // Set by the nonisolated initializer (a view's value is made anywhere,
+    // as Apple's is), read on the main actor only.
+    nonisolated(unsafe) let thunk: () -> ObjectType
+    nonisolated(unsafe) let backing = _StateObjectBacking<ObjectType>()
 
     nonisolated public init(wrappedValue thunk: @autoclosure @escaping () -> ObjectType) {
         self.thunk = thunk
