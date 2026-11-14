@@ -5,7 +5,8 @@ package(
         # swift_ffi's own code is Swift 6, strict, and warning-free (this was
         # the repository-wide REPO.bazel setting when it was a repo of its own).
         "swift.enable_v6",
-        "treat_warnings_as_errors",
+        # Swift's warnings are errors; the linker's aren't (Bazel 8's link of
+        # a host tool repeats an -rpath, which ld64 warns about).
         "swift.treat_warnings_as_errors",
         "swift.upcoming.ExistentialAny",
         "swift.upcoming.StrictConcurrency",
