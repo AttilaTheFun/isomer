@@ -340,12 +340,15 @@ without a GUI before a merge, every build after one, the GUI tests and the
 proof by hand on GitHub's runners, never a slot of Shireworks' primary VM
 (those are for private repositories). A pull request gets `container`
 (every target built in one container, reading the Bazel cache, leasing
-nothing, then the core's tests, the web's in headless Chrome, and the
-Storybook's headless and remote-driving tests; the required check), each
+nothing, then the tests that draw nothing: the core's, the WASI checks,
+and the Storybook's headless and remote-driving tests; the required check,
+about 10 minutes), each
 commit on main `populate` (the same build, then what a release builds: the
 published apps under --config=alpha and the proof's apps; the cache's only
 writer). The GUI tests and the proof run only by hand: `run: verify` (the
-Storybook's test stories on GitHub's runners: the iPhone's simulator and
+tests that draw in a container, `container-verify`: the web Storybook in
+headless Chrome, and the Storybook's tests run headful on the web and on
+Linux under Xvfb, beside the Storybook's test stories on GitHub's runners: the iPhone's simulator and
 the Mac on `xcode-27`, Android on Ubuntu's KVM, Windows on windows-11-arm,
 not waited for; and the proof),
 `run: prerelease` (Alphas

@@ -101,7 +101,7 @@ if [ "${1:-}" = package ]; then
     chmod 775 "$out"
     mode=package
     shift 2
-elif [ $# -eq 0 ] || [ "$*" = all ] || [ "$*" = pr ]; then
+elif [ $# -eq 0 ] || [ "$*" = all ] || [ "$*" = pr ] || [ "$*" = headful ]; then
     mode=checks
     [ $# -eq 0 ] || mode="$*"
     # The iPhone Storybook on Isomer's frameworks too: the proof's parity
@@ -149,7 +149,7 @@ if [ "$mode" = package ]; then
     ls -l "$out"
     exit 0
 fi
-[ "$mode" = checks ] || [ "$mode" = all ] || [ "$mode" = pr ] || exit $built
+[ "$mode" = checks ] || [ "$mode" = all ] || [ "$mode" = pr ] || [ "$mode" = headful ] || exit $built
 start=$SECONDS
 # all: the tests built, not run (main: builds alone, to fill the cache).
 run_tests() { if [ "$mode" = all ]; then bazel build "$@"; else bazel test "$@"; fi; }
@@ -164,6 +164,23 @@ if [ "$mode" != all ] && ! command -v Xvfb >/dev/null || [ ! -e /usr/lib/aarch64
             --no-install-recommends xvfb libnss3 libgl1-mesa-dri libegl-mesa0 libasound2t64 \
             libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libpango-1.0-0 libcairo2 \
             libcups2t64 libdrm2 fonts-dejavu-core >/dev/null; }
+fi
+# headful (container-verify, at verify only): the tests that draw. The web
+# Storybook in headless Chrome, its test stories pictured; and the apps
+# with their drivers built in, driven as the iPhone and the Mac are: the web
+# Storybook in Chrome, dialling out to the isomer CLI hub and to the hub of
+# the Storybook tests run headful (the same tests as //headless), and the
+# Linux Storybook under Xvfb, the same tests again.
+if [ "$mode" = headful ]; then
+    bazel test "${flags[@]}" --test_output=errors //tests/platforms:storybook_web_test
+    drawn=$?
+    bazel test "${flags[@]}" --@isomer//drive:headful $(log_of headful) --test_output=errors //remote:headful_web_test \
+        //headless/storybook_headless_application:storybook_headful_web_test \
+        //headless/storybook_headless_application:storybook_headful_linux_test
+    headful=$?
+    echo "container_build.sh: the tests took $((SECONDS - start)) s"
+    for result in $built $drawn $headful; do [ "$result" -ne 0 ] && exit "$result"; done
+    exit 0
 fi
 # Windows on Arm, built here.
 windows=(--config=windows_on_linux --platforms=@isomer//tools/platforms:windows_arm64)
@@ -185,7 +202,9 @@ bazel build "${flags[@]}" "${windows[@]}" --@isomer//drive:headful "${windows_he
 # for now (2026-11-05), not run.
 bazel build "${flags[@]}" //tests/platforms:all
 built_tests=$?
-run_tests "${flags[@]}" --test_output=errors //tests/platforms:storybook_web_test //tests/foundation_networking:networking_test \
+# The tests that draw nothing run here; those that do (the web Storybook in
+# Chrome, the headful apps) in headful mode, container-verify, at verify.
+run_tests "${flags[@]}" --test_output=errors //tests/foundation_networking:networking_test \
     //tests/cxx_interop:cxx_interop_test //tests/sqlite_wasi:sqlite_file_test \
     //tests/android_app_attributes:android_app_attributes_test //tests/swift6_app:swift6_app_test
 tested_here=$?
@@ -195,11 +214,8 @@ tested_here=$?
 # the web thin client in headless Chrome).
 run_tests "${flags[@]}" --@isomer//headless $(log_of headless) --test_output=errors //headless/... //remote/...
 headless=$?
-# Headful apps driven: the web Storybook with its driver built in, in
-# Chrome, dialling out: to the isomer CLI hub, and to the hub of the
-# Storybook tests run headful (the same tests as //headless); and the Linux
-# Storybook under Xvfb, the same tests again.
-run_tests "${flags[@]}" --@isomer//drive:headful $(log_of headful) --test_output=errors //remote:headful_web_test \
+# The headful apps and their tests built (run in headful mode).
+bazel build "${flags[@]}" --@isomer//drive:headful $(log_of headful) //remote:headful_web_test \
     //headless/storybook_headless_application:storybook_headful_web_test \
     //headless/storybook_headless_application:storybook_headful_linux_test
 headful=$?

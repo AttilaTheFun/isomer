@@ -1,6 +1,7 @@
 #!/bin/bash
 # Whether a commit was verified: a run of the Build workflow by hand on it
-# (`run: verify` or `run: release`) whose verify job (the tests) passed, and
+# (`run: verify` or `run: release`) whose verify and container-verify jobs
+# (the tests; the drawing ones in the container) passed, and
 # a public repository's apple and android jobs (the iPhone's, the Mac's and
 # Android's tests on GitHub's runners),
 # and its proof: proof-compare where the proof was pictured on
@@ -33,7 +34,7 @@ for run in $(gh api "repos/$repo/actions/runs?head_sha=$sha&event=workflow_dispa
           def named(name): [$jobs[] | select(.name == name or (.name | startswith(name + " (")))];
           def hosted(name): named(name) as $all | ($all | length) > 0
             and ($all | all(.conclusion == (if $private then "skipped" else "success" end)));
-        result("verify") == "success"
+        result("verify") == "success" and result("container-verify") == "success"
         and hosted("android") and hosted("apple")
         and (if $private then result("proof") == "success" else result("proof-compare") == "success" end)' |
         grep -qx true; then
