@@ -1,0 +1,50 @@
+load("@isomer//tools/wasm:side_modules.bzl", "wasm_runtime_module", "wasm_side_module")
+load("@rules_swift//swift:swift.bzl", "swift_test")
+
+# The Storybook's app as a feature over one runtime module
+# (docs/side_modules.md): the runtime is what its reactor links but the app
+# and its stories; the side module is the app and the stories alone, linked
+# by the toolchain's wasm-ld and corrected (tools/wasm/side_module_fixup).
+
+wasm_runtime_module(
+    name = "storybook_runtime",
+    tags = ["manual"],
+    deps = [
+        "//shared/platform_services",
+        "@isomer//wasm/libraries/swift_ui",
+        "@isomer//wasm/libraries/swift_ui:hot_bridge",
+        "@isomer//wasm/libraries/swift_ui:isomer",
+    ],
+)
+
+wasm_side_module(
+    name = "storybook_side",
+    tags = ["manual"],
+    deps = [
+        "//storybook",
+        "//wasm/example_full_feature:example_full_lib",
+    ],
+)
+
+# Under WasmKit, the side module over the runtime renders what the
+# self-contained reactor renders, byte for byte: the first frame and every
+# first-frame tap after it (each story's page).
+swift_test(
+    name = "side_module_render_test",
+    size = "large",
+    srcs = ["SideModuleRenderTests.swift"],
+    data = [
+        ":storybook_runtime.wasm",
+        ":storybook_side",
+        "//wasm/example_full_feature:example_full.wasm",
+    ],
+    target_compatible_with = select({
+        "@platforms//os:macos": [],
+        "@platforms//os:linux": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    deps = [
+        "@isomer//shared/wasm_host:wasm_runtime",
+        "@isomer//shared/wasm_host:wasmkit_runtime",
+    ],
+)
