@@ -17,9 +17,9 @@ compiled into the annotated library itself (docs/abi.md), so there is no
 generated glue module anywhere. At build time an **analyzer** (driven by a
 Bazel aspect) extracts the exported surface into a JSON **IR**, and a
 **generator** emits the CONSUMER-side bindings from that IR (Kotlin,
-TypeScript, C++, a C header, or Swift host bindings) against the same
-symbols. Small per-language **runtime** libraries provide the shared
-machinery the generated code leans on (handle boxes, dispatcher registries,
+JavaScript with TypeScript declarations, C++, a C header, or Swift host
+bindings) against the same symbols. Small per-language **runtime** libraries
+provide the shared machinery the generated code leans on (handle boxes, dispatcher registries,
 string marshaling); for wasm delivery a native Swift host runs the reactor
 under an engine it injects (Isomer's hosts use WasmKit; WAMR, which the
 repo bundled until 0.38, is gone). Everything meets at a C ABI; no serialization framework sits on the
@@ -35,7 +35,7 @@ swift_ffi_analyzer  ──(aspect, per source file)──▶  JSON IR
 swift_ffi_generator ──(ffi_generate, per kind)──▶  C header │ TS │ Kotlin │ C++ │ hosts
         │
         ▼
-per-platform macros (kt_swift_library, ts_swift_wasm_library, cc_swift_library, …)
+per-platform macros (kt_swift_library, js_swift_wasm_library, cc_swift_library, …)
         │
         ▼
 runtime libraries (ts / kotlin / cpp / c_host / swift_wasm_host)
@@ -133,7 +133,7 @@ generates Swift glue:
   | Macro (its own `.bzl`) | Platform | Emits |
   | --- | --- | --- |
   | `kt_swift_library` | Android | JNI adapter `.so` (via transition) + Kotlin bindings |
-  | `ts_swift_wasm_library` | web/wasm | wasm reactor + TypeScript module (+ staged runtime copy) |
+  | `js_swift_wasm_library` | web/wasm | wasm reactor + JavaScript module and its `.d.ts` (+ staged runtime copy); `ts_swift_wasm_library` its name before 0.54 |
   | `cc_swift_library` | Apple/Linux/Windows | idiomatic C++ over the C ABI |
   | `bridge_cc_library` | building block | the generated C header over the annotated library |
   | `c_host_library` | any C host | c-host bindings for driving a reactor under a C engine the host brings |
@@ -152,7 +152,8 @@ backends (`GeneratorKind.swift`) and their pairings:
 | `c-header` | the C ABI header (declaring the macro-expanded symbols) |
 | `jni-adapter` | the C JNI adapter mapping `Java_*` onto the C ABI |
 | `kotlin` | idiomatic Kotlin bindings |
-| `ts` | idiomatic TypeScript module |
+| `js` | an idiomatic JavaScript (ES) module |
+| `dts` | its TypeScript declarations |
 | `cpp` | idiomatic header-only C++ bindings |
 | `rust` | idiomatic Rust bindings |
 | `swift-host-wasm` | native-Swift host bindings that drive a reactor |
@@ -174,7 +175,7 @@ Generated code is kept lean by pushing shared machinery into small runtimes:
 | Package | Language | Role |
 | --- | --- | --- |
 | `runtime/swift_abi` | C | `swift_abi.h`: the shared vocabulary — blob tags, `bridge_closure`, the fixed runtime prototypes, the wasm import declarations (header-only) |
-| `runtime/ts` | TypeScript | consumer-side registry/marshaling; `exports_files` only — `ts_swift_wasm_library` stages a copy next to each generated module |
+| `runtime/js` | JavaScript (+ `.d.ts`) | consumer-side registry/marshaling; `exports_files` only — `js_swift_wasm_library` stages a copy next to each generated module |
 | `runtime/kotlin` | Kotlin | `SwiftError` and shared consumer machinery |
 | `runtime/c_host` | C | host runtime for driving reactors from C (`swift_ffi_host`) |
 | `runtime/swift_wasm_host` | Swift | native-Swift host runtime (`SwiftFFIWasmHost`, `WasmBundleProvider`) for dynamically-delivered reactors |

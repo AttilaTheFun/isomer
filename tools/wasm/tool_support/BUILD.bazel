@@ -1,0 +1,12 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+# What the web build's small tools share: their failures, Python's fnmatch
+# and sort order, and JSON written as Python's json.dump(indent=2) wrote it
+# (they were Python until 0.54, and write what it wrote).
+swift_library(
+    name = "tool_support",
+    package_name = "isomer",
+    srcs = ["WasmToolSupport.swift"],
+    module_name = "WasmToolSupport",
+    visibility = ["//tools/wasm:__subpackages__"],
+)

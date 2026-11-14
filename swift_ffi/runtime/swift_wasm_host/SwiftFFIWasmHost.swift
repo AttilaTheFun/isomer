@@ -1,8 +1,8 @@
 // SwiftFFIWasmHost — the engine-agnostic Swift half of the *native host*
-// transport, the peer of swift_ffi/runtime/ts/swift_ffi_runtime.ts. It lets a
+// transport, the peer of swift_ffi/runtime/js/swift_ffi_runtime.js. It lets a
 // native Swift process load a swift_ffi wasm reactor, call its exports, and
 // satisfy its `swift_ffi` foreign-interface imports with native Swift
-// implementations — the same capability the TypeScript runtime gives the web,
+// implementations — the same capability the JavaScript runtime gives the web,
 // but for a native host driving an embedded WebAssembly engine.
 //
 // The concrete engine (WasmKit, …) is injected as a

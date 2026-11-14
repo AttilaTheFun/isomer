@@ -39,7 +39,7 @@ Everything bottoms out in macro-expanded `@c` functions.
    (`Generator+TypeScript.swift:362`), Kotlin `Swift<Proto> : AutoCloseable`.
 
 2. **Consumer → Swift** — an integer→object registry: `registerForeign()` returns an
-   incrementing id (`runtime/ts/swift_ffi_runtime.ts:90`; native peer
+   incrementing id (`runtime/js/swift_ffi_runtime.js`; native peer
    `SwiftFFIWasmHost.swift:192`). The Swift side gets a generated
    `SwiftFFIForeign_<Proto>` proxy (`emitWasmForeignProxy`,
    `Generator+SwiftGlue.swift:51`) holding a `foreignID: Int32`, implementing the
@@ -164,7 +164,7 @@ Recommend main-executor-by-default; revisit if a compute use case demands it.
   `BridgeTypes.swift:38-48`, `Generator+Validation.swift:13-37`
 - IR: `swift_ffi/swift_ffi_ir_library/{FFIModule,FFIFunction,FFIParameter}.swift`
 - Analyzer: `swift_ffi/.../ExportCollector.swift` (no generics/closure handling today)
-- Foreign registry + proxy: `runtime/ts/swift_ffi_runtime.ts:90`,
+- Foreign registry + proxy: `runtime/js/swift_ffi_runtime.js`,
   `runtime/swift_wasm_host/SwiftFFIWasmHost.swift:192`,
   `Generator+SwiftGlue.swift:51` (`emitWasmForeignProxy`), `:285` (box), `:526` (resolve)
 - Backends: `swift_ffi/swift_ffi_generator_library/GeneratorKind.swift`,

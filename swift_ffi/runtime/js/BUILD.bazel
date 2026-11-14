@@ -10,10 +10,15 @@ package(
     ],
 )
 
-# The shared TypeScript half of the bridge runtime. `ts_swift_library`
-# stages a copy next to each generated module (`<name>_runtime_ts`), which
-# imports it as "./swift_ffi_runtime.js".
+# The shared JavaScript half of the bridge runtime (an ES module) and its
+# TypeScript declarations. `js_swift_wasm_library` stages a copy of each next
+# to each generated module (`<name>_runtime_js`, `<name>_runtime_dts`), which
+# imports it as "./swift_ffi_runtime.js". It was TypeScript until 0.54
+# (runtime/ts), compiled by tsc in every app's build.
 exports_files(
-    ["swift_ffi_runtime.ts"],
+    [
+        "swift_ffi_runtime.d.ts",
+        "swift_ffi_runtime.js",
+    ],
     visibility = ["//visibility:public"],
 )

@@ -27,13 +27,18 @@ public func log(_ message: String) {
 // MARK: The site, served on a loopback port
 
 /// A static file server on 127.0.0.1, a thread a connection, one request a
-/// connection (Connection: close), nothing cached.
+/// connection (Connection: close), nothing cached. On a port of the system's
+/// choosing, or the one given (tools/wasm/serve's, `bazel run` of a web app).
 public final class SiteServer: @unchecked Sendable {
     public let root: URL
     public let port: UInt16
     private let socketFD: Int32
 
-    public init(root: URL) {
+    /// `backlog`: connections waiting to be accepted. A page asks for a dozen
+    /// runtime modules at once, and with Python's 5 (tools/wasm's server
+    /// before 0.54) those past it were reset now and then: one failed import
+    /// leaves the page's module graph unevaluated, and the page blank.
+    public init(root: URL, port: UInt16 = 0, backlog: Int32 = 128) {
         self.root = root.standardizedFileURL
         #if canImport(Glibc)
         let fd = socket(AF_INET, Int32(SOCK_STREAM.rawValue), 0)
@@ -45,18 +50,18 @@ public final class SiteServer: @unchecked Sendable {
         setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, socklen_t(MemoryLayout<Int32>.size))
         var address = sockaddr_in()
         address.sin_family = sa_family_t(AF_INET)
-        address.sin_port = 0
+        address.sin_port = port.bigEndian
         address.sin_addr.s_addr = inet_addr("127.0.0.1")
         let bound = withUnsafePointer(to: &address) {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
         }
-        guard bound == 0, listen(fd, 64) == 0 else { fail("bind/listen: \(errno)") }
+        guard bound == 0, listen(fd, backlog) == 0 else { fail("bind/listen 127.0.0.1:\(port): \(errno)") }
         var length = socklen_t(MemoryLayout<sockaddr_in>.size)
         _ = withUnsafeMutablePointer(to: &address) {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(fd, $0, &length) }
         }
         socketFD = fd
-        port = UInt16(bigEndian: address.sin_port)
+        self.port = UInt16(bigEndian: address.sin_port)
     }
 
     public func start() {
@@ -94,16 +99,33 @@ public final class SiteServer: @unchecked Sendable {
         path = path.removingPercentEncoding ?? path
         if path.hasSuffix("/") { path += "index.html" }
         let file = root.appendingPathComponent(String(path.drop(while: { $0 == "/" }))).standardizedFileURL
-        guard file.path.hasPrefix(root.path), let data = try? Data(contentsOf: file) else {
+        // A folder named without its slash: to the folder (its index.html),
+        // as a browser's relative URLs inside it need.
+        var isDirectory: ObjCBool = false
+        if inside(file), FileManager.default.fileExists(atPath: file.path, isDirectory: &isDirectory),
+           isDirectory.boolValue {
+            let query = parts[1].firstIndex(of: "?").map { String(parts[1][$0...]) } ?? ""
+            return respond(connection, 301, "text/plain", Data(), location: path + "/" + query)
+        }
+        guard inside(file), let data = try? Data(contentsOf: file) else {
             return respond(connection, 404, "text/plain", Data("not found".utf8))
         }
         respond(connection, 200, Self.types[file.pathExtension.lowercased()] ?? "application/octet-stream",
                 parts[0] == "HEAD" ? Data() : data, length: data.count)
     }
 
-    private func respond(_ connection: Int32, _ status: Int, _ type: String, _ body: Data, length: Int? = nil) {
-        let reason = [200: "OK", 404: "Not Found", 405: "Method Not Allowed"][status] ?? "Status"
+    /// Whether a file asked for is the site's (not a sibling folder whose
+    /// name starts with the site's).
+    private func inside(_ file: URL) -> Bool {
+        file.path == root.path || file.path.hasPrefix(root.path.hasSuffix("/") ? root.path : root.path + "/")
+    }
+
+    private func respond(
+        _ connection: Int32, _ status: Int, _ type: String, _ body: Data, length: Int? = nil, location: String? = nil
+    ) {
+        let reason = [200: "OK", 301: "Moved Permanently", 404: "Not Found", 405: "Method Not Allowed"][status] ?? "Status"
         let head = "HTTP/1.1 \(status) \(reason)\r\nContent-Type: \(type)\r\nContent-Length: \(length ?? body.count)\r\n"
+            + (location.map { "Location: \($0)\r\n" } ?? "")
             + "Cache-Control: no-store\r\nConnection: close\r\n\r\n"
         writeAll(connection, Data(head.utf8))
         writeAll(connection, body)

@@ -72,10 +72,10 @@ def wasm_export_list(name, wasm, entries = HOST_ENTRIES, visibility = None):
         srcs = [wasm],
         outs = [name + ".rsp"],
         cmd = "$(location %s) $< $@ %s" % (
-            Label("//swift_ffi/rules:export_list"),
+            Label("//swift_ffi/rules/export_list"),
             " ".join(["'%s'" % entry for entry in entries]),
         ),
-        tools = [Label("//swift_ffi/rules:export_list")],
+        tools = [Label("//swift_ffi/rules/export_list")],
         tags = ["manual"],
         visibility = visibility,
     )
@@ -114,7 +114,7 @@ def swift_wasm_reactor(
     the reactor shipped only (not the one its exports are read from): what
     replaces part of the program read from that one (a trimmed ICU's data).
 
-    The same reactor any wasm host loads — the browser (`ts_swift_wasm_library`
+    The same reactor any wasm host loads — the browser (`js_swift_wasm_library`
     bundles its own), a native Swift host (`swift_wasm_library`), or a plain C
     host driving an engine of its own. `c_host_library`
     deliberately builds no reactor (a C host with no Swift usually gets one from

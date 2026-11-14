@@ -1,7 +1,8 @@
 load("@rules_swift//swift:swift.bzl", "swift_library")
 
 # A site served on a loopback port and headless Chrome driven over the
-# DevTools protocol on a pipe: browser_check's and wasi_run_browser's.
+# DevTools protocol on a pipe: browser_check's and wasi_run_browser's; and the
+# server alone, tools/wasm/serve (`bazel run` of a web app).
 swift_library(
     name = "browser_driving",
     package_name = "isomer",
@@ -9,6 +10,7 @@ swift_library(
     module_name = "BrowserDriving",
     visibility = [
         "//tools/testing/browser_check:__pkg__",
+        "//tools/wasm/serve:__pkg__",
         "//tools/wasm/wasi_run_browser:__pkg__",
     ],
 )

@@ -13,9 +13,9 @@ package(
 )
 
 # The generator's implementation: merged IR in, one bridge artifact out per
-# kind (Swift glue, JNI glue, C header, TypeScript, Kotlin, Swift/C wasm
-# hosts). Pure strings — no swift-syntax. One backend per file, as
-# extensions of `Generator`.
+# kind (Swift glue, JNI glue, C header, JavaScript and its TypeScript
+# declarations, Kotlin, Swift/C wasm hosts). Pure strings — no
+# swift-syntax. One backend per file, as extensions of `Generator`.
 swift_library(
     name = "swift_ffi_generator_library",
     srcs = [
@@ -28,7 +28,7 @@ swift_library(
         "Generator+Kotlin.swift",
         "Generator+Rust.swift",
         "Generator+SwiftHost.swift",
-        "Generator+TypeScript.swift",
+        "Generator+JavaScript.swift",
         "Generator+Validation.swift",
         "GeneratorError.swift",
         "GeneratorKind.swift",

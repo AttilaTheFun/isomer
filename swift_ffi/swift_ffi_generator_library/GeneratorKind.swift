@@ -4,7 +4,8 @@ public enum GeneratorKind: String, CaseIterable, Sendable {
     case cHeader = "c-header"
     case cpp
     case rust
-    case ts
+    case js
+    case dts
     case kotlin
     case swiftHostWasm = "swift-host-wasm"
     case cHostWasm = "c-host-wasm"

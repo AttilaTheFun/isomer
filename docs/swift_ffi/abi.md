@@ -7,7 +7,7 @@ annotated declaration into peer `@c` entry points (SE-0495 — no underscored
 attributes), so the annotated `swift_library` is self-contained and every
 language meets it at the symbol level. It is an implementation detail:
 applications consume the per-language bindings (`cc_swift_library`,
-`kt_swift_library`, `ts_swift_wasm_library`, `swift_wasm_library`,
+`kt_swift_library`, `js_swift_wasm_library`, `swift_wasm_library`,
 `c_host_library`, `rs_swift_library`), never these symbols. The shared
 vocabulary (`bridge_closure`, `bridge_buf`, the blob tags, the allocator, the
 fixed-name runtime entries) is hand-written in
@@ -169,18 +169,19 @@ codecs registered per class, keyed by wire name), exposes generics as
 dispatcher, and interfaces as `AutoCloseable` `Swift<Proto>` wrappers with
 `ForeignDispatcher_<Proto>` for Kotlin implementations.
 
-## TypeScript
+## JavaScript (typed for TypeScript)
 
-TypeScript consumes the **wasm flavor**: the reactor's exports are the ABI.
-The generated module stages buffers and blobs into wasm memory with
-`swift_ffi_alloc`, drains boxes back out, and registers callbacks, interface
-implementations, and injected dependencies in the foreign registry as ordinal
-dispatchers (`makeDispatcher_<Proto>`), all dispatched back through the one
-`closure_invoke` import. TS generics are erased at runtime, so generic calls
-take one **type token** per type parameter (`Types.int`,
+JavaScript consumes the **wasm flavor** (an ES module as generated, with a
+`.d.ts` for TypeScript callers; nothing compiles it since 0.54): the
+reactor's exports are the ABI. The generated module stages buffers and
+blobs into wasm memory with `swift_ffi_alloc`, drains boxes back out, and
+registers callbacks, interface implementations, and injected dependencies
+in the foreign registry as ordinal dispatchers (`makeDispatcher_<Proto>`),
+all dispatched back through the one `closure_invoke` import. JavaScript has no generics at runtime, so generic
+calls take one **type token** per type parameter (`Types.int`,
 `Types.result(...)`, a generated `<Struct>Type`); `Lazy<T>`, `Result<T>`,
 `SwiftError`, and the blob machinery come from the staged shared runtime
-(`swift_ffi_runtime.ts`). Async exports resolve Promises via the
+(`swift_ffi_runtime.js`). Async exports resolve Promises via the
 task-enqueue microtask pump and the fixed `async_complete` import (each
 pending call carries its own blob decoder).
 

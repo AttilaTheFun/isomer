@@ -260,17 +260,23 @@ chrome_archive(
     url = "https://storage.googleapis.com/chrome-for-testing-public/157.0.8103.38/linux64/chrome-linux64.zip",
 )
 
-# TypeScript: ts_swift_library wraps a real ts_project, so aspect_rules_ts
-# (+ rules_js and the hermetic node toolchain) are full dependencies.
-bazel_dep(name = "aspect_rules_js", version = "3.2.2")
-bazel_dep(name = "aspect_rules_ts", version = "3.8.11")
-bazel_dep(name = "rules_nodejs", version = "6.7.5")
+# JavaScript and TypeScript: dev-only since 0.54. An app's web bindings are
+# JavaScript as swift_ffi generates them (js_swift_wasm_library), nothing
+# compiled, so an app on Isomer gets no rules_js, rules_ts or TypeScript of
+# Isomer's choosing (pinned from here, it collided with a host's own:
+# "Multiple non-root modules specify different versions for
+# 'npm_typescript'"). What uses them is isomer's own: the web runtime's
+# tests in the hermetic Node (tests/web_files, tests/web_network), and
+# swift_ffi's web example, whose TypeScript checks the generated
+# declarations.
+bazel_dep(name = "aspect_rules_js", version = "3.2.2", dev_dependency = True)
+bazel_dep(name = "aspect_rules_ts", version = "3.8.11", dev_dependency = True)
+bazel_dep(name = "rules_nodejs", version = "6.7.5", dev_dependency = True)
 
-# The tsc that ts_project runs. Pins @npm_typescript (the tsc ts_swift_library
-# compiles bridges with) in this module's own repo mapping, so consumers need
-# no rules_ts setup. The version is given here rather than read from a
-# package.json: nothing in the module uses npm packages.
-rules_ts_ext = use_extension("@aspect_rules_ts//ts:extensions.bzl", "ext")
+# The tsc that ts_project runs (@npm_typescript), for that example. The
+# version is given here rather than read from a package.json: nothing in the
+# module uses npm packages.
+rules_ts_ext = use_extension("@aspect_rules_ts//ts:extensions.bzl", "ext", dev_dependency = True)
 rules_ts_ext.deps(ts_version = "5.8.3")
 use_repo(rules_ts_ext, "npm_typescript")
 
@@ -310,16 +316,14 @@ bazel_dep(name = "protobuf", version = "27.0")
 # none of it. swift_gpu (//swift_gpu/...) is the GPU abstraction behind the
 # single self-drawing renderer; all direct GPU calls live there.
 
-# Bundles the web runtime (boot.js + the generated TypeScript bindings) into
-# one plain-JS file for the browser.
-bazel_dep(name = "aspect_rules_esbuild", version = "0.26.0")
+# Bundles a page with the generated bindings (dev-only: swift_ffi's web
+# example and Metal's web check; an app's site serves its modules as they
+# are).
+bazel_dep(name = "aspect_rules_esbuild", version = "0.26.0", dev_dependency = True)
 
 # Generates Xcode projects for the Apple example applications
 # (`bazel run //apple/storybook_ios_application:storybook_ios_application_project` in examples/).
 bazel_dep(name = "rules_xcodeproj", version = "4.1.0", dev_dependency = True)
-
-# Hermetic Python used to serve the web application from `bazel run`.
-bazel_dep(name = "rules_python", version = "2.0.2")
 
 # Shell rules for the adb install/run wrapper.
 bazel_dep(name = "rules_shell", version = "0.8.0")
@@ -383,12 +387,6 @@ maven.install(
     use_starlark_android_rules = True,
 )
 use_repo(maven, "isomer_maven", "rules_android_maven")
-
-python = use_extension("@rules_python//python/extensions:python.bzl", "python")
-python.toolchain(
-    is_default = True,
-    python_version = "3.12",
-)
 
 # Swift-SDK cross-compilation to WebAssembly and Android, provided by the
 # overridden rules_swift (above). Downloads the swift.org 6.4.2 host toolchain

@@ -1262,7 +1262,6 @@ host also supplies ProfileInstaller's concurrent-futures and Guava's
   * Android **NDK r30**, **build-tools 35**, platform **android-35** jar,
     **platform-tools** (adb), **emulator** + ATD arm64 system image
   * **Temurin JDK 21**, **Kotlin 2.1.20** compiler, **Electron v42**
-  * hermetic **Python** (rules_python) for the dev web server
 
 The first build downloads several GB; later builds are incremental.
 
