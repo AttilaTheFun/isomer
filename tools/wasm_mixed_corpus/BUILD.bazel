@@ -1,0 +1,19 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+# The corpus a runtime module is profiled with for mixed mode's native set
+# (docs/side_modules.md): a SwiftUI app whose screens are made methodically
+# from Catalog.swift's pieces, modifiers, containers and screen patterns,
+# not any one app's. It writes the app's one Swift file (and, given a second
+# path, how many times each pair of the catalog's kinds meets). Foundation
+# only.
+#   bazel run //tools/wasm_mixed_corpus -- /tmp/Corpus.swift /tmp/coverage.txt
+swift_binary(
+    name = "wasm_mixed_corpus",
+    package_name = "isomer",
+    srcs = [
+        "Catalog.swift",
+        "main.swift",
+    ],
+)
