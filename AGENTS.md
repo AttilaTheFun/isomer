@@ -479,10 +479,16 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
 
 ## Toolchain (MODULE.bazel is heavily commented; read it)
 
-- **Bazel 9.1.1** (`.bazelversion`). Required: rules_swift main uses
-  `include()` in MODULE.bazel, which Bazel 8 consumers choke on
-  ("include() ... can only be used in the root module"). Upstream will bump
-  their minimum eventually; it has not been raised with them.
+- **Bazel 9.1.1** (`.bazelversion`) builds isomer; a consumer may build with
+  **8.5.0 or later** (MODULE.bazel's `bazel_compatibility`; since 0.53, the
+  `include()` that held it to 9 gone with rules_swift's release). 8.5 is the
+  floor because windows_support (the MSVC runtime, a dependency's) reads
+  `module_ctx.facts`. CI's `bazel8` job builds the Storybooks with 8.5.0 on
+  each commit on main. What 8 needed: no generic `treat_warnings_as_errors`
+  on packages that link a tool for the building Mac (Bazel 8's link repeats
+  an `-rpath`, which ld64 warns about; Swift's own
+  `swift.treat_warnings_as_errors` stays), and Bazel 9's test-toolchain flag
+  only in `--config=windows_tests_on_linux`.
 - **rules_swift 4.2.2.isomer.3** from the registry: upstream 4.2.2 and six
   pull requests (MODULE.bazel). It sorts above the 4.2.2 rules_applecross
   asks for, so MVS keeps it with no override in any root (until 0.40 the

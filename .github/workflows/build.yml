@@ -158,6 +158,31 @@ jobs:
           path: ${{ runner.temp }}/execution-logs
           retention-days: 7
 
+  bazel8:
+    # Each commit on main: the Storybooks for every platform built with the
+    # oldest Bazel isomer supports (MODULE.bazel's bazel_compatibility),
+    # reading the cache, nothing run. Windows on Arm with the same flags as
+    # an app takes (--config=windows_on_linux).
+    if: github.event_name == 'push'
+    runs-on: [self-hosted, isomer-jit]
+    timeout-minutes: 180
+    env:
+      USE_BAZEL_VERSION: 8.5.0
+    steps:
+      - uses: actions/checkout@v5
+      # Built only (container_build.sh's checks take Bazel 9's test flags).
+      - name: The Storybooks with Bazel 8.5.0
+        run: >-
+          exec tools/ci/container_build.sh --ios_multi_cpus=sim_arm64
+          //apple/storybook_ios_application:storybook_ios_sim_application
+          //apple/storybook_isomer_ios_application
+          //apple/storybook_macos_application:storybook_macos_application
+          //web/storybook_web_application:storybook_web_application
+          //android/storybook_android_application:storybook_android_application_apk
+          //linux/storybook_linux_application:storybook_linux_application
+      - name: The Windows Storybook with Bazel 8.5.0
+        run: exec tools/ci/container_build.sh --config=windows_on_linux --platforms=@isomer//tools/platforms:windows_arm64 //windows/storybook_windows_application
+
   verify:
     # By hand: every platform built, and the container's own tests; a public
     # repository's iPhone, Mac and Android tests then run on GitHub's own
