@@ -1,4 +1,5 @@
-load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_swift//swift:swift.bzl", "swift_interop_hint", "swift_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -32,6 +33,22 @@ swift_library(
     ],
 )
 
+# Side modules' dynamic linking, engine-free: `dylink.0`, the imports, where a
+# side module's memory and table slots go, what each import binds to and the
+# order its relocations and constructors run in, over a small engine protocol
+# (`WasmLinkEngine`). WasmKit's adapter is `WasmDynamicLinker`, below; the
+# web's twin is wasm/libraries/swift_ui/runtime/side_modules.js. No
+# dependencies, so it builds for any platform; tests: //tests/wasm_dylink.
+swift_library(
+    name = "wasm_dylink",
+    package_name = "isomer",
+    srcs = [
+        "dylink/WasmBinaryReading.swift",
+        "dylink/WasmSideModuleLinker.swift",
+    ],
+    module_name = "IsomerWasmDylink",
+)
+
 # `WasmKitRuntime` — the engine on every native host (WAMR's place until 0.38),
 # on WasmKit (the Swift interpreter; MODULE.bazel's `wasmkit`): WASI, the
 # render callbacks and the swift_ffi transport in Swift, and WASI Threads for
@@ -42,18 +59,62 @@ swift_library(
 swift_library(
     name = "wasmkit_runtime",
     package_name = "isomer",
-    srcs = ["WasmKitRuntime.swift"],
+    srcs = [
+        # Side modules under WasmKit (`loadSideModule`): the linker's adapter.
+        "WasmDynamicLinker.swift",
+        "WasmKitFunctionProfile.swift",
+        "WasmKitRuntime.swift",
+    ],
     # Optimized in every build, as WasmKit is: its host imports run per
     # guest call.
     copts = ["-O"],
     module_name = "IsomerWasmKitRuntime",
     target_compatible_with = _NATIVE_WASM_HOSTS,
     deps = [
+        ":wasm_dylink",
         ":wasm_runtime",
         "//swift_ffi/runtime/swift_wasm_host",
         "@wasmkit//:WasmKit",
         "@wasmkit//:WasmKitWASI",
         "@wasmkit//:WasmKitWASIThreads",
+    ],
+)
+
+# Mixed mode (docs/side_modules.md): a runtime module and its features
+# (side modules) interpreted by WasmKit, with native copies of the runtime's
+# hot functions linked into the app (tools/wasm/mixed.bzl's
+# `wasm_mixed_native`, which an app that uses this adds), the guest on a
+# thread of its own. `IsomerMixedABI` is the C interface between the two:
+# the native part defines its functions, this library its callbacks.
+cc_library(
+    name = "mixed_abi",
+    hdrs = ["mixed/include/iso_mixed.h"],
+    aspect_hints = [":mixed_abi_swift"],
+    includes = ["mixed/include"],
+)
+
+swift_interop_hint(
+    name = "mixed_abi_swift",
+    module_name = "IsomerMixedABI",
+)
+
+swift_library(
+    name = "mixed_runtime",
+    package_name = "isomer",
+    srcs = [
+        "mixed/MixedBridge.swift",
+        "mixed/MixedWasmKitRuntime.swift",
+    ],
+    copts = ["-O"],
+    module_name = "IsomerMixedRuntime",
+    target_compatible_with = _NATIVE_WASM_HOSTS,
+    deps = [
+        ":mixed_abi",
+        ":wasm_runtime",
+        ":wasmkit_runtime",
+        "//swift_ffi/runtime/swift_wasm_host",
+        "@wasmkit//:WasmKit",
+        "@wasmkit//:WasmKitWASI",
     ],
 )
 

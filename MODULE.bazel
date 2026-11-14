@@ -215,6 +215,18 @@ bazel_dep(name = "swift_argument_parser", version = "1.7.0")
 # the harness's per-workload confidence gates closed. Nothing of Isomer's is in the
 # fork: the Bazel build is ours (tools/wasmkit/BUILD.wasmkit.bazel, after its
 # Package.swift). Not in the BCR.
+#
+# For side modules and mixed mode (docs/side_modules.md) it is pinned, until
+# swiftwasm/WasmKit takes them, to commits on 5fbb9db in the side-modules
+# author's fork (pawlowskialex/WasmKit), proposed upstream with their tests:
+#   - host-linking-api: the public API a dynamic loader needs, which WasmKit
+#     has inside but didn't expose: `Table.count`, `Table.grow(by:value:store:)`,
+#     `Table.function(at:store:)`, `Function.reference`, `Instance.function(at:)`,
+#     `Memory.grow(by:store:)` and `Memory.unsafeBaseAddress` (side modules);
+#   - faster-host-calls, on it: cheaper calls for a host that calls in very
+#     often (mixed mode's native code): `Function.invokeUnchecked` (raw slots,
+#     no type checks), no signal mask saved on each entry, and a return to the
+#     host that halts the direct-threaded handler chain instead of throwing.
 wasmkit_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 wasmkit_archive(
@@ -230,10 +242,47 @@ wasmkit_archive(
         "//tools/patches:wasmkit_android_software_bounds.patch",
         "//tools/patches:wasmkit_msvc_c.patch",
     ],
-    sha256 = "4618c7d55c0fe0d8756e2e29c557ad52d8ff8ef7fafe96ec7e53da9242748958",
-    strip_prefix = "WasmKit-5fbb9db8a130edf2971fc57b25186a62b689a693",
-    url = "https://github.com/AttilaTheFun/WasmKit/archive/5fbb9db8a130edf2971fc57b25186a62b689a693.tar.gz",
+    sha256 = "7b72484e3576312c48dfc65352978f86e6c3603bed4dfc0a1c92b5197ad5a982",
+    strip_prefix = "WasmKit-b2bdcd27d9094ec13c936857996cf711a18e4a86",
+    url = "https://github.com/pawlowskialex/WasmKit/archive/b2bdcd27d9094ec13c936857996cf711a18e4a86.tar.gz",
 )
+
+# Binaryen and WABT for mixed mode's native part (tools/wasm/mixed.bzl:
+# Binaryen's wasm-split, WABT's wasm2c and wat2wasm run on the build machine;
+# wasm2c's runtime, compiled for the app, from WABT's sources). Binaryen's
+# release builds for the machines Isomer builds on (a Mac, CI's Linux on
+# either architecture).
+wasm_tools_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+[
+    wasm_tools_archive(
+        name = "binaryen_" + platform,
+        build_file = "//tools/wasm_mixed:BUILD.binaryen.bazel",
+        sha256 = sha256,
+        strip_prefix = "binaryen-version_133",
+        url = "https://github.com/WebAssembly/binaryen/releases/download/version_133/binaryen-version_133-%s.tar.gz" % archive,
+    )
+    for platform, archive, sha256 in [
+        ("macos_arm64", "arm64-macos", "ad66da82ac13f163e424b1643f16c6dfcccc98b5966296b43e52d3cab04f84a8"),
+        ("linux_x86_64", "x86_64-linux", "2dc9c7813f5375db93d96ead4b78222fcc3e2677bbb832297af4797782a37489"),
+        ("linux_aarch64", "aarch64-linux", "89c07ea56faf38d0fbecf36ca8ec0721756716185f265b568e133d427f299bf8"),
+    ]
+]
+
+# wasm2c's runtime, compiled into the app: the sources of the WABT release
+# whose wasm2c (the BCR's `wabt`, below) wrote the code it runs.
+wasm_tools_archive(
+    name = "wabt_sources",
+    build_file = "//tools/wasm_mixed:BUILD.wabt_sources.bazel",
+    sha256 = "aca7fc4ba9974ad456372ab35f9cc1bac0b9fab3321b6df399d14dda9ca8a1a9",
+    strip_prefix = "wabt-1.0.37",
+    url = "https://github.com/WebAssembly/wabt/releases/download/1.0.37/wabt-1.0.37.tar.xz",
+)
+
+# WABT's wasm2c and wat2wasm, built from source for the build machine (the
+# BCR's module; WABT's own macOS release links Homebrew's OpenSSL, and its
+# WASI build runs out of stack on a runtime this size).
+bazel_dep(name = "wabt", version = "1.0.37")
 
 # Chrome for Testing: the browser //tools/wasm/wasi_run_browser runs WASI
 # commands in (the wasm checks: //foundation/tests and the rest), on Linux,

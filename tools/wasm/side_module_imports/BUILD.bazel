@@ -1,0 +1,12 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary")
+
+# What side modules import of their runtime module, as link flags: a runtime
+# module that exports just what its features use (tools/wasm/side_modules.bzl,
+# `wasm_runtime_module(exports_for = …)`), which a browser or web view can
+# load (the WebAssembly JS API's limit is 100,000 exports).
+swift_binary(
+    name = "side_module_imports",
+    srcs = ["main.swift"],
+    visibility = ["//visibility:public"],
+    deps = ["//shared/wasm_host:wasm_dylink"],
+)
