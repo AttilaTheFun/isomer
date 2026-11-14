@@ -1,0 +1,114 @@
+load("@bazel_skylib//rules:write_file.bzl", "write_file")
+load("@isomer//tools/android:defs.bzl", "isomer_android_aar")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+load("@rules_java//java:java_library.bzl", "java_library")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+# isomer_android_aar's attributes, as a host app embedding an Isomer app in
+# a large existing Android app uses them: a library of the host's left out
+# of classes.jar (provided_deps), a neverlink one never packed, the app's
+# assets, fonts and bundle resources in the AAR's assets/, further native
+# libraries in jni/arm64-v8a/ (a cc_binary's, and a cc_library's over a
+# prebuilt .so), and the macro's tags and testonly. :android_aar_test
+# opens the AAR and checks each; nothing is drawn or run.
+swift_library(
+    name = "app_swift",
+    testonly = True,
+    srcs = ["App.swift"],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "EmbeddedApp",
+    tags = ["manual"],
+    deps = [
+        "@isomer//:foundation",
+        "@isomer//:swift_ui",
+        "@isomer//android/libraries/swift_ui",
+    ],
+)
+
+# The host's own SDK, which the app's services compile against and the host
+# ships itself.
+java_library(
+    name = "host_sdk",
+    testonly = True,
+    srcs = ["host/HostSdk.java"],
+)
+
+# Compiled against, never shipped.
+java_library(
+    name = "compile_only",
+    testonly = True,
+    srcs = ["host/CompileOnly.java"],
+    neverlink = True,
+)
+
+# A native library built for the AAR's ABI, and another taken as a prebuilt
+# .so through a cc_library (the shape a host's prebuilt libraries have).
+cc_binary(
+    name = "libaar_extra.so",
+    testonly = True,
+    srcs = ["extra.c"],
+    linkshared = True,
+    tags = ["manual"],
+)
+
+cc_binary(
+    name = "libaar_prebuilt.so",
+    testonly = True,
+    srcs = ["extra.c"],
+    linkshared = True,
+    tags = ["manual"],
+)
+
+cc_library(
+    name = "aar_prebuilt",
+    testonly = True,
+    srcs = [":libaar_prebuilt.so"],
+    tags = ["manual"],
+)
+
+# A font (its bytes aren't read here: only where it is packed).
+write_file(
+    name = "font",
+    testonly = True,
+    out = "Fixture.ttf",
+    content = ["not a typeface"],
+)
+
+isomer_android_aar(
+    name = "embedded_aar",
+    testonly = True,
+    assets = ["hello.txt"],
+    extra_native_libs = [
+        ":aar_prebuilt",
+        ":libaar_extra.so",
+    ],
+    fonts = [":font"],
+    package = "dev.isomer.aartest",
+    provided_deps = [":host_sdk"],
+    resources = [
+        "Data.json",
+        "fr.lproj/Localizable.strings",
+    ],
+    services_deps = [
+        ":compile_only",
+        ":host_sdk",
+    ],
+    swift_library = ":app_swift",
+    tags = ["manual"],
+)
+
+sh_test(
+    name = "android_aar_test",
+    size = "small",
+    srcs = ["check_aar.sh"],
+    args = [
+        "$(rootpath @bazel_tools//tools/zip:zipper)",
+        "$(rootpath :embedded_aar)",
+    ],
+    data = [
+        ":embedded_aar",
+        "@bazel_tools//tools/zip:zipper",
+    ],
+)
