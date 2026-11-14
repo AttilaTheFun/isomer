@@ -208,6 +208,19 @@ struct StorybookHeadlessTests {
         #expect(screen.element("Reset") == nil)
     }
 
+    /// A split view's columns' navigation titles are texts on the screen
+    /// (the sidebar's "Storybook"; the opened story's, and its row too where
+    /// the list stands beside it), as the system's bar shows them.
+    @Test func navigationTitlesAreTexts() throws {
+        let app = try launch()
+        defer { app.quit() }
+        #expect(try app.screen().texts.contains("Storybook"))
+        let screen = try app.tap("ObservableObject")
+        let wide = try app.info().width >= 700
+        #expect(screen.texts.filter { $0 == "ObservableObject" }.count >= (wide ? 2 : 1),
+                "wide: \(wide), texts: \(screen.texts.prefix(12))")
+    }
+
     @Test func namesTargetElementsAndInspectTellsMore() throws {
         let app = try launch(story: "state.observableobject")
         defer { app.quit() }
