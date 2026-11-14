@@ -39,6 +39,11 @@ struct SplitTitleTests {
             _ = try app.tap("Mac Studio")
             Thread.sleep(forTimeInterval: 0.5)
             print("[shape] \(shape) \(width): \(try app.screen().texts)")
+            if shape == "plain" {
+                for item in try app.layout().items {
+                    print("[layout] \(width) \(String(repeating: "  ", count: item.depth))\(item.kind) \"\(item.label)\"")
+                }
+            }
         }
     }
 }
