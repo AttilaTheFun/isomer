@@ -1,6 +1,13 @@
 # Future direction: federated wasm modules
 
-**Status: not possible today — recorded so we don't overstate the capability.**
+**Status (2026-11-13): possible, and prototyped — see
+[side_modules.md](side_modules.md).** Swift 6.4.2's wasm objects are already
+position-independent, so a feature links as a side module over one runtime
+module; it took a wasm-ld fix (Swift's relative pointers in PIC data) and a
+dynamic loader over WasmKit's public API (`WasmDynamicLinker`). What follows
+is the July 2026 analysis that called it infeasible, kept as written.
+
+**Status (2026-07): not possible today — recorded so we don't overstate the capability.**
 
 This is the north-star we do **not** yet have, and an honest account of why. It
 exists so nobody reads the WasmView system as claiming something it can't do,

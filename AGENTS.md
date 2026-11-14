@@ -747,6 +747,19 @@ how Isomer runs it.
   Android for Linux). `WasmKitRuntime.canRunThreads` tries one; a host
   with both builds of its reactor picks the threaded one only then (an
   iPhone's address space may refuse it; nothing here has run on a device).
+- **Features as side modules** (prototype, 2026-11-13; docs/side_modules.md,
+  tools/mixed): a feature linked as a wasm side module (`wasm-ld
+  --experimental-pic -shared -Bsymbolic`) over one runtime module the app
+  has once: the Storybook 226 KB gzip instead of 5.4 MB.
+  `WasmKitRuntime.loadSideModule` / `WasmDynamicLinker` place it; it needs
+  wasm-ld with tools/patches/lld_wasm_pic_locrel.patch (Swift's relative
+  pointers in PIC data), which no build here applies yet. The loader calls
+  `__wasm_apply_data_relocs` itself: a side module's start function only
+  relocates its globals. tools/mixed also holds a mixed runtime: native
+  (wasm2c) copies of the runtime's hot functions beside the interpreted
+  whole, 7× faster on the Storybook (0.44 s against 3.15 s). WasmKit is
+  pinned to pawlowskialex/WasmKit's isomer-side-modules branch for the API
+  and the cheaper host calls both need (MODULE.bazel).
 
 ## Apple apps compiled against Isomer (0.32)
 

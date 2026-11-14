@@ -1,0 +1,123 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary", "swift_library")
+load("@isomer//swift_ffi/rules:swift_wasm_reactor.bzl", "transition_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+# The Playground's 2048 sample as a release reactor, with the libraries the
+# Storybook's release reactor has (example_full_feature), so the Storybook's
+# runtime module can host it as a side module: the subject of the wasm drag
+# benchmark (tests/wasm_engines' testBenchmarkDrag; tools/mixed).
+swift_library(
+    name = "game2048_lib",
+    srcs = [
+        "Game2048.swift",
+        "Game2048App.swift",
+        "Availability.swift",
+    ],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "Game2048",
+    tags = ["manual"],
+    deps = [
+        "@isomer//wasm/libraries/swift_ui",
+    ],
+)
+
+swift_binary(
+    name = "game2048_reactor_release",
+    copts = [
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    linkopts = [
+        "-Xlinker",
+        "--gc-sections",
+        "-Xlinker",
+        "--strip-all",
+        "-Xlinker",
+        "--export=_initialize",
+        "-Xlinker",
+        "--export=iso_hot_start",
+        "-Xlinker",
+        "--export=iso_hot_render",
+        "-Xlinker",
+        "--export=iso_hot_resize",
+        "-Xlinker",
+        "--export=iso_hot_configure",
+        "-Xlinker",
+        "--export=iso_hot_set_color_scheme",
+        "-Xlinker",
+        "--export=iso_hot_event",
+        "-Xlinker",
+        "--export=iso_hot_alloc",
+        "-Xlinker",
+        "--export=iso_hot_free",
+        "-Xlinker",
+        "--export=iso_hot_shutdown",
+        "-Xlinker",
+        "--export=iso_hot_pending_tasks",
+        # The swift_ffi DI entries: the interfaces' proxy-factory registration
+        # and the async fetch completion the native host calls back.
+        "-Xlinker",
+        "--export=swift_ffi_platform_services_register_KeychainService",
+        "-Xlinker",
+        "--export=swift_ffi_platform_services_register_AnalyticsService",
+        "-Xlinker",
+        "--export=swift_ffi_platform_services_register_ConfigurationService",
+        # Foundation's networking, which the hosts inject (WasmView's
+        # URLSession on Apple, WasmNetworkHosts.kt's on Android) and HotBridge
+        # installs at start: without its register exports URLSession finds
+        # no transport.
+        "-Xlinker",
+        "--export=swift_ffi_isomer_register_HTTPHost",
+        "-Xlinker",
+        "--export=swift_ffi_isomer_register_WebSocketHost",
+        "-Xlinker",
+        "--export=swift_ffi_async_resume",
+        "-Xlinker",
+        "--export-if-defined=swift_ffi_task_run",
+        "-Xlinker",
+        "--export-if-defined=swift_ffi_lazy_get",
+        "-Xlinker",
+        "--export-if-defined=swift_ffi_lazy_release",
+        # The C host STAGES string arguments (the fetch body!) through the
+        # FIXED guest allocator and drains +1 boxes through the string-box
+        # entries — without these exports staging silently fails.
+        "-Xlinker",
+        "--export=swift_ffi_alloc",
+        "-Xlinker",
+        "--export=swift_ffi_dealloc",
+        "-Xlinker",
+        "--export=swift_ffi_string_len",
+        "-Xlinker",
+        "--export=swift_ffi_string_copy",
+        "-Xlinker",
+        "--export=swift_ffi_string_release",
+        "-Xlinker",
+        "-z",
+        "-Xlinker",
+        "stack-size=16777216",
+    ],
+    linkshared = True,
+    # Distinct from the dev reactor's module name: both binaries live in this
+    # package and equal names collide on the .swiftmodule output when a
+    # wildcard build analyzes both (the name is internal — the iso_hot ABI is
+    # @_cdecl, unmangled).
+    module_name = "game2048_reactor_release",
+    tags = ["manual"],
+    deps = [
+        # The framework-owned iso_hot bridge (exports can't drift per app).
+        "@isomer//wasm/libraries/swift_ui:hot_bridge",
+        ":game2048_lib",
+        "//shared/platform_services",
+        "@isomer//wasm/libraries/swift_ui",
+        "@isomer//wasm/libraries/swift_ui:isomer",
+    ],
+)
+
+transition_binary(
+    name = "game2048_release.wasm",
+    binary = ":game2048_reactor_release",
+    platform = "@isomer//swift_ffi/rules:wasm32-wasip1",
+    tags = ["manual"],
+)
