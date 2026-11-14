@@ -27,14 +27,17 @@ public struct Button<Label: View> {
     let label: Label
     let role: ButtonRole?
 
-    public init(action: @escaping () -> Void, @ViewBuilder label: () -> Label) {
-        self.action = action
+    // Its action runs on the main actor, as Apple's Button's does: an app may
+    // hand it a `@MainActor` closure. The runtime calls it on the main
+    // thread, where it asserts it is.
+    public init(action: @escaping @MainActor () -> Void, @ViewBuilder label: () -> Label) {
+        self.action = { MainActor.assumeIsolated(action) }
         self.label = label()
         self.role = nil
     }
 
-    public init(role: ButtonRole?, action: @escaping () -> Void, @ViewBuilder label: () -> Label) {
-        self.action = action
+    public init(role: ButtonRole?, action: @escaping @MainActor () -> Void, @ViewBuilder label: () -> Label) {
+        self.action = { MainActor.assumeIsolated(action) }
         self.label = label()
         self.role = role
     }
@@ -44,12 +47,12 @@ public struct Button<Label: View> {
 }
 
 extension Button where Label == Text {
-    public init<S: StringProtocol>(_ title: S, action: @escaping () -> Void) {
+    public init<S: StringProtocol>(_ title: S, action: @escaping @MainActor () -> Void) {
         let title = String(title)
         self.init(action: action) { Text(title) }
     }
 
-    public init<S: StringProtocol>(_ title: S, role: ButtonRole?, action: @escaping () -> Void) {
+    public init<S: StringProtocol>(_ title: S, role: ButtonRole?, action: @escaping @MainActor () -> Void) {
         let title = String(title)
         self.init(role: role, action: action) { Text(title) }
     }
@@ -59,12 +62,12 @@ extension Button where Label == Text {
 // is its generic parameter. (The cores built under another module name on
 // Apple platforms alias `SwiftUI` to themselves.)
 extension Button where Label == SwiftUI.Label<Text, Image> {
-    public init<S: StringProtocol>(_ title: S, systemImage: String, action: @escaping () -> Void) {
+    public init<S: StringProtocol>(_ title: S, systemImage: String, action: @escaping @MainActor () -> Void) {
         let title = String(title)
         self.init(action: action) { SwiftUI.Label(title, systemImage: systemImage) }
     }
 
-    public init<S: StringProtocol>(_ title: S, systemImage: String, role: ButtonRole?, action: @escaping () -> Void) {
+    public init<S: StringProtocol>(_ title: S, systemImage: String, role: ButtonRole?, action: @escaping @MainActor () -> Void) {
         let title = String(title)
         self.init(role: role, action: action) { SwiftUI.Label(title, systemImage: systemImage) }
     }
