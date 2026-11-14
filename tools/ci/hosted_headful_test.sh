@@ -16,8 +16,10 @@
 #       (windows-11-arm, Git's bash) the app and its tests as CI's container
 #       built them, the tests run here as they are
 #
-# On the Apple and Android VMs only the tests are built here, by Bazel with
-# its hermetic toolchains (the test and IsomerHeadless: no app); no Swift
+# The iPhone's and the Mac's tests come built too when CI's container made
+# them (storybook_headful_apple_runner beside the .ipa); otherwise, and on
+# the Android VM, only the tests are built here, by Bazel with its hermetic
+# toolchains (the test and IsomerHeadless: no app); no Swift
 # toolchain builds for Windows on Windows here, so CI's container builds
 # Windows' tests too. Their outputs (the launchers' logs) are kept in <out>.
 set -uo pipefail
@@ -38,6 +40,24 @@ trap cleanup EXIT
 printf '%s\n' 'rewrite (github\.com/.*) $1' 'rewrite (github\.com/.*) mirror.bazel.build/$1' > "$work/downloader.cfg"
 package=//headless/storybook_headless_application
 failures=0
+# The iPhone's and the Mac's tests as CI's container built them, a Mac
+# command beside the apps (storybook_headful_apple_runner): run as they are,
+# Swift Testing's frameworks from this Mac's Xcode. Without one, built here.
+apple_runner() {
+    local name="$1" out="$2"
+    shift 2
+    local developer platform
+    developer="$(xcode-select -p)"
+    platform="$developer/Platforms/MacOSX.platform/Developer"
+    mkdir -p "$out/$name"
+    chmod +x "$runner"
+    env DYLD_FRAMEWORK_PATH="$platform/Library/Frameworks:$platform/Library/PrivateFrameworks" \
+        DYLD_LIBRARY_PATH="$platform/usr/lib" TEST_UNDECLARED_OUTPUTS_DIR="$out/$name" "$@" \
+        "$runner" > "$out/$name/test.log" 2>&1
+    local status=$?
+    cat "$out/$name/test.log"
+    [ "$status" -eq 0 ] || failures=$((failures + 1))
+}
 # One test target, its outputs kept.
 run() {
     local target="$1" out="$2"
@@ -60,6 +80,8 @@ apple)
     mkdir -p "${3:?<out>}"
     out="$(cd "$3" && pwd)"
     parts=" ${HEADFUL_APPLE_PARTS:-ios hosted macos} "
+    runner="$(dirname "$ipa")/storybook_headful_apple_runner"
+    [ -f "$runner" ] || runner=""
     if [[ $parts == *" ios "* || $parts == *" hosted "* ]]; then
         # The iPhone: a simulator of the run's own, the app installed.
         runtime="$(xcrun simctl list runtimes iOS available | sed -n 's/^iOS .* - \(com\.apple\.CoreSimulator\.SimRuntime\.iOS-[0-9-]*\)$/\1/p' | tail -1)"
@@ -70,7 +92,12 @@ apple)
         mkdir -p "$work/ios" && unzip -q "$ipa" -d "$work/ios" && xcrun simctl install "$udid" "$work/ios/Payload/"*.app || exit 1
     fi
     if [[ $parts == *" ios "* ]]; then
-        run storybook_headful_ios_test "$out" --test_env=ISOMER_SIMULATOR="$udid"
+        if [ -n "$runner" ]; then
+            apple_runner storybook_headful_ios_test "$out" ISOMER_SIMULATOR="$udid" \
+                ISOMER_BUNDLE_ID=com.LoganShire.IsomerStorybook ISOMER_HEADFUL_LAUNCHER="$ROOT/drive/launchers/ios_launcher.sh"
+        else
+            run storybook_headful_ios_test "$out" --test_env=ISOMER_SIMULATOR="$udid"
+        fi
     fi
     if [[ $parts == *" hosted "* ]]; then
         # The same tests hosted in the app: an XCTest bundle in the headful
@@ -86,7 +113,13 @@ apple)
         # The Mac: this VM's own screen.
         ditto -x -k "$zip" "$work/mac" || exit 1
         defaults write com.apple.CrashReporter DialogType -string none
-        run storybook_headful_macos_test "$out" --test_env=ISOMER_MAC_APP="$(ls -d "$work/mac/"*.app | head -1)"
+        app="$(ls -d "$work/mac/"*.app | head -1)"
+        if [ -n "$runner" ]; then
+            apple_runner storybook_headful_macos_test "$out" ISOMER_MAC_APP="$app" \
+                ISOMER_BUNDLE_ID=com.LoganShire.IsomerStorybook ISOMER_HEADFUL_LAUNCHER="$ROOT/drive/launchers/macos_launcher.sh"
+        else
+            run storybook_headful_macos_test "$out" --test_env=ISOMER_MAC_APP="$app"
+        fi
     fi
     ;;
 android)

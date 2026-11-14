@@ -1,4 +1,5 @@
 load("@build_bazel_rules_apple//apple:ios.bzl", "ios_unit_test")
+load("@build_bazel_rules_apple//apple:macos.bzl", "macos_command_line_application")
 load("@build_bazel_rules_apple//apple/testing/default_runner:ios_xctestrun_runner.bzl", "ios_xctestrun_runner")
 load("@rules_swift//swift:swift.bzl", "swift_library")
 load("@rules_swift//swift:swift_binary.bzl", "swift_binary")
@@ -211,6 +212,40 @@ swift_test(
         # Swift Testing's import libraries (the SDK's Library/Testing-*).
         "@swift_windows_sdk//:testing",
     ],
+)
+
+# The headful tests for the iPhone and the Mac as a Mac command, built in
+# CI's container (rules_applecross) and run on a Mac as they are, as
+# Windows' are: GitHub's Macs reach no Bazel cache, and building the tests
+# there took 23 of each job's 32 minutes. One command drives either, by
+# the launcher the environment names (tools/ci/hosted_headful_test.sh):
+#
+#   ISOMER_HEADFUL_LAUNCHER=<ios_launcher.sh> ISOMER_SIMULATOR=<udid> ISOMER_BUNDLE_ID=… storybook_headful_apple_runner
+#   ISOMER_HEADFUL_LAUNCHER=<macos_launcher.sh> ISOMER_MAC_APP=<Storybook.app> storybook_headful_apple_runner
+#
+# Swift Testing's main as Windows' (windows_test_main); the frameworks from
+# the Mac's Xcode at run time (DYLD_FRAMEWORK_PATH).
+swift_library(
+    name = "storybook_headful_apple_tests",
+    testonly = True,
+    srcs = [
+        "StorybookHeadlessTests.swift",
+        ":windows_test_main",
+    ],
+    module_name = "StorybookHeadfulAppleTests",
+    tags = ["manual"],
+    deps = [
+        "@isomer//headless/isomer_headless",
+        "@isomer//shared/wire/swift",
+    ],
+)
+
+macos_command_line_application(
+    name = "storybook_headful_apple_runner",
+    testonly = True,
+    minimum_os_version = "15.0",
+    tags = ["manual"],
+    deps = [":storybook_headful_apple_tests"],
 )
 
 # The same tests hosted in the app (the plan's fourth way): an XCTest bundle
