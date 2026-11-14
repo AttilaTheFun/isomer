@@ -96,8 +96,15 @@ if [ -n "$webview_ipa" ]; then
         xcrun simctl terminate "$udid" "$WEBVIEW_BUNDLE" >/dev/null 2>&1
         SIMCTL_CHILD_ISO_STORYBOOK_STORY="$story" xcrun simctl launch "$udid" "$WEBVIEW_BUNDLE" >/dev/null ||
             { echo "hosted_apple_test: ios-webview $story: didn't launch" >&2; failures=$((failures + 1)); continue; }
-        # The reactor compiled by WebKit first.
-        sleep 8
+        # The reactor compiled by WebKit first: a picture every 2 s until one
+        # has drawn, for at most HOSTED_WEBVIEW_WAIT seconds (60), then two
+        # alike as for the others.
+        waited=0
+        until ios_shot "$out/ios-webview-$story.png" && drawn "$out/ios-webview-$story.png"; do
+            [ "$waited" -lt "${HOSTED_WEBVIEW_WAIT:-60}" ] || break
+            sleep 2
+            waited=$((waited + 2))
+        done
         if steady ios_shot "$out/ios-webview-$story.png" && drawn "$out/ios-webview-$story.png"; then
             echo "hosted_apple_test: ios-webview $story"
         else

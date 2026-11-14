@@ -1,0 +1,89 @@
+"""Isomer's AndroidX: the Maven artifacts Isomer's Android runtime
+(dev.isomer.runtime, the activities its app macros make) compiles and links
+against, as a module of its own (isomer's docs/android_maven.md).
+
+isomer declares no Maven for its consumers: a module extension reads every
+module's tags, so a maven.install in isomer would be evaluated in every
+build on Isomer, by that build's rules_jvm_external, whether it used
+Isomer's AndroidX or not. An app that does depends on this module, at
+isomer's version:
+
+    bazel_dep(name = "isomer_android_maven", version = "<isomer's version>")
+
+and an app with AndroidX of its own points isomer's flags at it and never
+has this module in its build.
+
+Released with isomer, from isomer's tag (this directory of it): the
+registry's entry asks for the same release of isomer, which this set is
+built for. Its version moves with isomer's MODULE.bazel.
+"""
+
+module(
+    name = "isomer_android_maven",
+    version = "0.53.0",
+)
+
+# isomer's //android/maven:extensions.bzl, told where this set is (below).
+# isomer depends on this module only for its own builds, so the two name
+# each other only there.
+bazel_dep(name = "isomer", version = "0.53.0")
+bazel_dep(name = "rules_android", version = "0.7.3")
+bazel_dep(name = "rules_jvm_external", version = "7.1")
+
+# Isomer's set, pinned by the lock file beside this, which rules_jvm_external
+# honours in every build with this module (a lock file is any module's; the
+# root's wins where it declares the same name). Repinned from isomer's
+# checkout (`REPIN=1 bazel run @isomer_maven//:pin`, docs/android_maven.md).
+maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
+maven.install(
+    name = "isomer_maven",
+    aar_import_bzl_label = "@rules_android//rules:rules.bzl",
+    artifacts = [
+        # Pinned to satisfy coursier's strict version-range resolution.
+        "androidx.collection:collection:1.4.0",
+        # The real ListenableFuture (androidx pulls the empty
+        # 9999.0-empty-to-avoid-conflict-with-guava marker by default).
+        "com.google.guava:listenablefuture:1.0",
+        "androidx.lifecycle:lifecycle-common:2.8.7",
+        "androidx.lifecycle:lifecycle-runtime:2.8.7",
+        "androidx.activity:activity-compose:1.9.3",
+        "androidx.compose.foundation:foundation:1.7.8",
+        "androidx.fragment:fragment:1.8.5",
+        "androidx.compose.material3:material3:1.3.2",
+        "androidx.compose.runtime:runtime:1.7.8",
+        "androidx.compose.ui:ui:1.7.8",
+        # Chrome Custom Tabs (the Playground's "Run on the web").
+        "androidx.browser:browser:1.8.0",
+        # ProfileInstaller's receiver in each app (a macrobenchmark's
+        # DROP_SHADER_CACHE broadcast targets it; baseline profiles).
+        "androidx.profileinstaller:profileinstaller:1.4.1",
+        "androidx.startup:startup-runtime:1.1.1",
+        "androidx.tracing:tracing:1.2.0",
+        # Kotlin's standard library and coroutines at what the graph resolved
+        # them to beside rules_android's (Compose alone floors them at 1.8 and
+        # 1.7, older than the kotlinc that compiles the runtime).
+        "org.jetbrains.kotlin:kotlin-stdlib:2.1.20",
+        "org.jetbrains.kotlin:kotlin-stdlib-jdk7:2.1.20",
+        "org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.1.20",
+        "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0",
+        # The Compose compiler, matching rules_kotlin's kotlinc (2.2.21).
+        "org.jetbrains.kotlin:kotlin-compose-compiler-plugin-embeddable:2.2.21",
+    ],
+    lock_file = "//:isomer_maven_install.json",
+    # Compose's androidx graph mixes exact-pin ranges with old floors;
+    # resolve to the pinned/highest versions instead of failing.
+    version_conflict_policy = "pinned",
+    repositories = [
+        "https://maven.google.com",
+        "https://repo1.maven.org/maven2",
+    ],
+    use_starlark_android_rules = True,
+)
+use_repo(maven, "isomer_maven")
+
+# Where the set is, for isomer's flags' defaults (@isomer_android_maven_set).
+android_maven = use_extension("@isomer//android/maven:extensions.bzl", "android_maven")
+android_maven.set(
+    androidx = "//:androidx",
+    compose_compiler = "//:compose_compiler",
+)
