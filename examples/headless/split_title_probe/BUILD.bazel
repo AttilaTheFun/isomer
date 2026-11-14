@@ -1,0 +1,29 @@
+load("@rules_swift//swift:swift_binary.bzl", "swift_binary")
+load("@rules_swift//swift:swift_test.bzl", "swift_test")
+
+# A split view shaped as an app's dashboard, built headless, and the tests
+# that read its detail column's navigation title (SplitTitleTests.swift).
+# With the app's flag, as //headless/... is run:
+#
+#   bazel test --@isomer//headless //headless/split_title_probe:split_title_test
+swift_binary(
+    name = "split_title_probe",
+    srcs = ["SplitTitleProbe.swift"],
+    copts = ["-parse-as-library"],
+    module_name = "SplitTitleProbe",
+    deps = [
+        # A host to link wherever it's built (a //... build without the
+        # headless flag takes the building machine's).
+        "@isomer//:swift_ui",
+        "@isomer//headless/libraries/swift_ui",
+        "@isomer//headless/libraries/swift_ui:isomer",
+    ],
+)
+
+swift_test(
+    name = "split_title_test",
+    srcs = ["SplitTitleTests.swift"],
+    data = [":split_title_probe"],
+    module_name = "SplitTitleTests",
+    deps = ["@isomer//headless/isomer_headless"],
+)
