@@ -292,7 +292,7 @@ JavaScript engine, and WasmKit goes:
   `isomer_application`. Web-view mode over WebKit is in (docs/modes.md,
   "Web-view mode on the iPhone and the Mac", which lists what is open:
   Android's WebView, WebView2, the platform services over the session, an
-  iPhone test). Asked of #188's author (its comment, 2026-11-14):
+  iPhone test that taps). Asked of #188's author (its comment, 2026-11-14):
   split the PR, the crash of a second engine in a process, a native set per
   feature, his WasmKit commits rebased onto upstream main (to propose
   there), the LOCREL fix to LLVM.

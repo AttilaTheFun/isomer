@@ -64,12 +64,14 @@ hot-reload as wasm and ship compiled):
 - **Tests**: the examples' //tests/webview_session:session_test runs the page
   in headless Chrome with the Storybook's guest, as a head drives it: the
   first patch is the whole tree, a tap changes it. It draws nothing (a pull
-  request's test). The iPhone side has no automated test yet: it needs a
-  simulator (a hosted XCTest on a Mac at verify, as the Storybook's).
+  request's test). On the iPhone, verify's Apple pictures
+  (tools/ci/hosted_apple_test.sh, on GitHub's Mac) open the web-view app on
+  each smoke story and check it drew; nothing there taps yet.
 - **Open**: Android's WebView and Windows' WebView2 as transports; the
   platform services the page lacks (the app's container for files, the
   keychain, the clipboard, networking without CORS) over the session; an
-  iPhone test; a Mac example; and `--@isomer//:mode` choosing it.
+  iPhone test that taps (a headful XCTest); a Mac example; and
+  `--@isomer//:mode` choosing it.
 
 ### What crosses an asynchronous seam
 
