@@ -27,7 +27,7 @@ toolchains (see the `swift` extension below); the wasm/android targets are plain
 
 module(
     name = "isomer",
-    version = "0.52.0",
+    version = "0.53.0",
     # The oldest Bazel a consumer builds with (isomer itself takes
     # .bazelversion's): 8.5 has module_ctx.facts, which windows_support (the
     # MSVC runtime, a dependency's) reads. CI's bazel8 job builds the
