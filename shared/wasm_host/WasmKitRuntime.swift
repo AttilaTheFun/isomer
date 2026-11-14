@@ -27,6 +27,11 @@
 //     answers), and the dependencies' register exports called at launch.
 //   • The guest's Swift concurrency jobs drained on the main queue, held
 //     while a tree the guest sent has yet to be drawn, with a frame after each drain that changed something.
+//   • Side modules (`loadSideModule`): a feature linked as a wasm side
+//     module over a runtime module launched here, placed in its memory and
+//     table by `WasmDynamicLinker`. The runtime module's own `env` function
+//     imports (the app's entry, `__main_argc_argv`, which it calls but
+//     doesn't define) are bound to the side modules' exports when called.
 //
 // Threads: a reactor built for `wasm32-unknown-wasip1-threads` imports a
 // shared memory and `wasi.thread-spawn`. Where WasmKit can make a shared
@@ -109,6 +114,11 @@ public final class WasmKitRuntime: WasmRuntime {
     private var pendingDependencies: [String: SwiftFFIDependency] = [:]
     private var ffi: SwiftFFIHostRuntime?
     private var hostImports: WasmHostImports?
+    private var linker: WasmDynamicLinker?
+    /// The side modules' symbols the main module's `env` imports reach,
+    /// looked up when first called (the side module is loaded after the
+    /// main module is instantiated).
+    private let lateSymbols = LateSymbols()
 
     /// Stacks for calls into the guest, reused: one is taken for each call
     /// and given back when it returns (a host import may call in again, on
@@ -160,6 +170,7 @@ public final class WasmKitRuntime: WasmRuntime {
 
         let bindings = Bindings(runtime: self, hostImports: hostImports, ffi: ffi)
         let declared = Self.importTypes(module)
+        let lateSymbols = self.lateSymbols
         let makeImports: @Sendable (Store) throws -> Imports = { store in
             if WasmKitRuntime.trace {
                 print("[wasmkit-trace] instance for a \(Thread.isMainThread ? "main" : "guest") thread")
@@ -167,6 +178,7 @@ public final class WasmKitRuntime: WasmRuntime {
             var imports = Imports()
             wasi.link(to: &imports, store: store)
             bindings.link(to: &imports, store: store, declared: declared)
+            lateSymbols.link(to: &imports, store: store, declared: declared)
             return imports
         }
 
@@ -209,6 +221,30 @@ public final class WasmKitRuntime: WasmRuntime {
             hostImports.onLog("[wasmkit] threaded reactor: guest threads on")
         }
         activateDependencies()
+    }
+
+    /// Loads `wasm`, a feature linked as a side module (wasm-ld
+    /// `--experimental-pic -shared -Bsymbolic`) over the runtime module
+    /// `launch` started, into its memory and table, and runs its
+    /// constructors. Call it after `launch` and before the feature is
+    /// started (`iso_hot_start` calls the side module's entry). The runtime
+    /// module must export its table, `__stack_pointer` and its allocator
+    /// (see `WasmDynamicLinker`). Not for a threaded runtime.
+    public func loadSideModule(wasm: [UInt8]) throws {
+        guard let instance, let store else {
+            throw WasmKitRuntimeError.launchFailed("loadSideModule before launch")
+        }
+        guard threads == nil else {
+            throw WasmKitRuntimeError.launchFailed("side modules over a threaded runtime aren't supported")
+        }
+        do {
+            let linker = try self.linker ?? WasmDynamicLinker(main: instance, store: store)
+            self.linker = linker
+            lateSymbols.linker = linker
+            try linker.load(wasm)
+        } catch {
+            throw WasmKitRuntimeError.launchFailed("side module: \(error)")
+        }
     }
 
     /// The guest's environment and preopened directories: the host's ISO_*
@@ -407,6 +443,38 @@ public final class WasmKitRuntime: WasmRuntime {
         func writeBytes(_ ptr: UInt32, _ bytes: [UInt8]) {
             MainActor.assumeIsolated { runtime.writeBytes(ptr, bytes) }
         }
+    }
+}
+
+// MARK: - Late-bound symbols
+
+/// The main module's `env` function imports nothing else binds: symbols a
+/// side module will define (a runtime module linked with
+/// `--allow-undefined` imports the app's entry it calls). Each is bound to
+/// a thunk that finds the symbol among the loaded side modules' exports when
+/// it is first called.
+private final class LateSymbols: @unchecked Sendable {
+    var linker: WasmDynamicLinker?
+    private var resolved: [String: Function] = [:]
+
+    func link(to imports: inout Imports, store: Store, declared: [String: FunctionType]) {
+        for (qualified, type) in declared where qualified.hasPrefix("env.") {
+            let name = String(qualified.dropFirst(4))
+            imports.define(module: "env", name: name, Function(store: store, type: type) { [self] _, args in
+                guard let function = self.function(name) else {
+                    throw WasmKitRuntimeError.launchFailed(
+                        "env.\(name) called before a side module defining it was loaded")
+                }
+                return try function.invoke(args)
+            })
+        }
+    }
+
+    private func function(_ name: String) -> Function? {
+        if let function = resolved[name] { return function }
+        let function = linker?.loaded.lazy.compactMap { $0.instance.exports[function: name] }.first
+        resolved[name] = function
+        return function
     }
 }
 
