@@ -96,6 +96,7 @@ hosted_xctest() {
       <key>DYLD_INSERT_LIBRARIES</key><string>__PLATFORMS__/iPhoneSimulator.platform/Developer/usr/lib/libXCTestBundleInject.dylib</string>
       <key>XCInjectBundleInto</key><string>__TESTHOST__/$host.app/$executable</string>
       <key>DYLD_FRAMEWORK_PATH</key><string>$developer/Library/Frameworks</string>
+      <key>DYLD_LIBRARY_PATH</key><string>__PLATFORMS__/iPhoneSimulator.platform/Developer/usr/lib</string>
     </dict>
   </dict>
   <key>__xctestrun_metadata__</key>
