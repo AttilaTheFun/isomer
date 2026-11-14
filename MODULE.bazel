@@ -215,6 +215,14 @@ bazel_dep(name = "swift_argument_parser", version = "1.7.0")
 # the harness's per-workload confidence gates closed. Nothing of Isomer's is in the
 # fork: the Bazel build is ours (tools/wasmkit/BUILD.wasmkit.bazel, after its
 # Package.swift). Not in the BCR.
+#
+# For side modules (docs/side_modules.md) it is pinned, until swiftwasm/WasmKit
+# takes it, to two commits on 5fbb9db in the side-modules author's fork
+# (pawlowskialex/WasmKit, host-linking-api), proposed upstream with their
+# tests: the public API a dynamic loader needs, which WasmKit has inside but
+# didn't expose: `Table.count`, `Table.grow(by:value:store:)`,
+# `Table.function(at:store:)`, `Function.reference`, `Instance.function(at:)`,
+# `Memory.grow(by:store:)` and `Memory.unsafeBaseAddress`.
 wasmkit_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 wasmkit_archive(
@@ -230,9 +238,9 @@ wasmkit_archive(
         "//tools/patches:wasmkit_android_software_bounds.patch",
         "//tools/patches:wasmkit_msvc_c.patch",
     ],
-    sha256 = "4618c7d55c0fe0d8756e2e29c557ad52d8ff8ef7fafe96ec7e53da9242748958",
-    strip_prefix = "WasmKit-5fbb9db8a130edf2971fc57b25186a62b689a693",
-    url = "https://github.com/AttilaTheFun/WasmKit/archive/5fbb9db8a130edf2971fc57b25186a62b689a693.tar.gz",
+    sha256 = "ace00050374eb8696ce86cdbf4ed513fd265e482145f7fd73d281b328bf6d688",
+    strip_prefix = "WasmKit-a32c64e7f8dd1e25724cd7cf8927cd7d71ba5a44",
+    url = "https://github.com/pawlowskialex/WasmKit/archive/a32c64e7f8dd1e25724cd7cf8927cd7d71ba5a44.tar.gz",
 )
 
 # Chrome for Testing: the browser //tools/wasm/wasi_run_browser runs WASI

@@ -1,0 +1,68 @@
+load("@aspect_rules_js//js:defs.bzl", "js_test")
+load("@rules_swift//swift:swift.bzl", "swift_binary", "swift_library", "swift_test")
+
+# The dynamic linker for side modules: IsomerWasmDylink (engine-free) with
+# WasmKit's adapter, and the web's twin (side_modules.js), on the same
+# modules, assembled byte by byte (fixtures/WasmFixtures.swift) so no
+# toolchain or patched wasm-ld is needed.
+
+swift_library(
+    name = "fixtures",
+    testonly = True,
+    srcs = ["fixtures/WasmFixtures.swift"],
+    module_name = "WasmFixtures",
+)
+
+swift_test(
+    name = "wasm_dylink_test",
+    size = "small",
+    srcs = ["WasmDylinkTests.swift"],
+    # WasmKit's adapter runs on the native hosts; the tests on the Mac and
+    # in CI's Linux container.
+    target_compatible_with = select({
+        "@platforms//os:macos": [],
+        "@platforms//os:linux": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    deps = [
+        ":fixtures",
+        "//shared/wasm_host:wasm_dylink",
+        "//shared/wasm_host:wasmkit_runtime",
+        "@wasmkit//:WasmKit",
+    ],
+)
+
+swift_binary(
+    name = "write_fixtures",
+    testonly = True,
+    srcs = ["fixtures/write_fixtures.swift"],
+    deps = [":fixtures"],
+)
+
+# The fixtures as files, and the module under test beside the test, which
+# imports it as "./side_modules.js".
+genrule(
+    name = "web_inputs",
+    testonly = True,
+    srcs = ["//wasm/libraries/swift_ui:runtime/side_modules.js"],
+    outs = [
+        "side_modules.js",
+        "main.wasm",
+        "side_a.wasm",
+        "side_b.wasm",
+        "wrong_kind.wasm",
+        "unresolved.wasm",
+        "overlong_elements.wasm",
+        "truncated_dylink.wasm",
+        "huge_alignment.wasm",
+    ],
+    cmd = "cp $(location //wasm/libraries/swift_ui:runtime/side_modules.js) $(RULEDIR)/side_modules.js && $(location :write_fixtures) $(RULEDIR)",
+    tools = [":write_fixtures"],
+)
+
+js_test(
+    name = "side_modules_test",
+    size = "small",
+    data = [":web_inputs"],
+    entry_point = "side_modules_test.mjs",
+)
