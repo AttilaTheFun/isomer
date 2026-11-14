@@ -21,7 +21,8 @@ load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
 load("@build_bazel_rules_apple//apple:macos.bzl", "macos_application")
 load("@rules_android//rules:rules.bzl", "android_binary")
 load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
-load("@rules_swift//swift:swift.bzl", "swift_library")
+# Named apart: the macros take the app's library as `swift_library`.
+load("@rules_swift//swift:swift.bzl", swift_library_rule = "swift_library")
 load("@rules_swift//swift:swift_binary.bzl", "swift_binary")
 load("//tools/android:defs.bzl", "apk_install_run", "isomer_android_app")
 load("//tools/wasm:defs.bzl", "isomer_web_app")
@@ -278,7 +279,7 @@ def _apple(
         tags = manual,
         template = Label("//tools/application:webview_app.swift.tpl"),
     )
-    swift_library(
+    swift_library_rule(
         name = name + "_webview_shell",
         srcs = [":%s_webview_shell_swift" % name],
         module_name = _identifier(name) + "_WebViewShell",
@@ -292,7 +293,7 @@ def _apple(
         tags = manual,
         template = Label("//tools/application:remote_app.swift.tpl"),
     )
-    swift_library(
+    swift_library_rule(
         name = name + "_remote_shell",
         srcs = [":%s_remote_shell_swift" % name],
         module_name = _identifier(name) + "_RemoteShell",
