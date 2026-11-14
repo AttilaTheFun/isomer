@@ -84,6 +84,9 @@ final class MixedBridge {
     /// imports), or nil for a symbol a side module defines (`env.*`).
     var importFunctions: [Function?] = []
     var importIsEnv: [Bool] = []
+    /// False when the runtime's memory has no guard pages and the native
+    /// part checks no bounds: everything then runs interpreted.
+    var nativeEnabled = true
 
     init(engine: Engine, store: Store) {
         self.engine = engine
@@ -133,7 +136,7 @@ final class MixedBridge {
     /// Calls the runtime's export `name` from the host: its native copy when
     /// there is one, else the interpreted runtime's.
     func call(_ name: String, _ args: [Value], interpreted instance: Instance) throws -> [Value] {
-        if let index = nativeExports[name] {
+        if nativeEnabled, let index = nativeExports[name] {
             let type = signatures[Int(iso_mixed_export_sig(index))]
             var a = args.map(mixedSlot)
             if a.isEmpty { a = [0] }
@@ -182,7 +185,7 @@ final class MixedLinkMain: WasmLinkMain {
     func allocate(size: Int, alignment: Int) throws -> UInt32 { try inner.allocate(size: size, alignment: alignment) }
 
     func function(named name: String) -> Function? {
-        if routed.contains(name), let index = bridge.nativeExports[name] {
+        if bridge.nativeEnabled, routed.contains(name), let index = bridge.nativeExports[name] {
             let b = bridge
             let type = b.signatures[Int(iso_mixed_export_sig(index))]
             let resultType = type.results.first
@@ -201,7 +204,9 @@ final class MixedLinkMain: WasmLinkMain {
     }
 
     func global(named name: String) -> Global? { inner.global(named: name) }
-    func didInstantiate(_ module: WasmDynamicLinker.LoadedModule) throws { bridge.mirror() }
+    func didInstantiate(_ module: WasmDynamicLinker.LoadedModule) throws {
+        if bridge.nativeEnabled { bridge.mirror() }
+    }
 }
 
 // MARK: - The native part's callbacks

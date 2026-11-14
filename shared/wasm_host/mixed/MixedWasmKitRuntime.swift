@@ -43,7 +43,6 @@ public enum MixedRuntimeError: Error, CustomStringConvertible {
     case alreadyRunning
     case notLaunched
     case missingExport(String)
-    case unprotectedMemory
     case launchFailed(String)
 
     public var description: String {
@@ -51,8 +50,6 @@ public enum MixedRuntimeError: Error, CustomStringConvertible {
         case .alreadyRunning: return "a mixed runtime already runs in this process (the native part is one instance)"
         case .notLaunched: return "the mixed runtime isn't launched"
         case .missingExport(let name): return "the runtime module exports no \(name)"
-        case .unprotectedMemory:
-            return "no guard pages for the runtime's memory, and the native part was built without bounds checks"
         case .launchFailed(let reason): return "launch failed: \(reason)"
         }
     }
@@ -273,6 +270,12 @@ public final class MixedWasmKitRuntime: WasmRuntime {
     /// still be on the main queue.
     public var isIdle: Bool { thread.isIdle }
 
+    /// Whether the native part runs. False when WasmKit couldn't reserve
+    /// the runtime's memory with guard pages (an iPhone grants a process a
+    /// few such reservations) and the native part checks no bounds: the
+    /// guest then runs interpreted. Known after `launch`.
+    public var isNative: Bool { guest?.isNative ?? false }
+
     public func renderPending() { guest?.requestRender() }
 
     /// swift_ffi's view of this engine, on the main thread.
@@ -303,6 +306,8 @@ final class MixedGuest: @unchecked Sendable {
     let swiftFFI: [String: SwiftFFIImport]
     private var bridge: MixedBridge!
     private var runtime: Instance!
+    /// Native code runs (else the guest runs interpreted: see `setUp`).
+    var isNative = false
     private var wasi: WASIBridgeToHost?
     /// Placeholder address → the real one.
     private var placeholders: [UInt32: UInt32] = [:]
@@ -347,38 +352,52 @@ final class MixedGuest: @unchecked Sendable {
         b.memory = memory
         b.table = table
         b.stackPointer = stackPointer
-        if !memory.unsafeBaseAddress.stable && iso_mixed_checks_bounds() == 0 {
-            throw MixedRuntimeError.unprotectedMemory
-        }
+        // Native code without bounds checks needs the memory WasmKit reserved
+        // with guard pages, whose base never moves. The reservation is 4 GiB
+        // and more; an iPhone grants a process only a few, so one can be
+        // refused (other engines in the process hold theirs), and WasmKit
+        // then gives a memory that moves as it grows. Native code there would
+        // fault: the guest runs interpreted instead, slower but safe.
+        // ISO_MIXED_NATIVE=0 takes that path anywhere (a test's, a host's
+        // that wants to compare).
+        let forcedOff = ProcessInfo.processInfo.environment["ISO_MIXED_NATIVE"] == "0"
+        let protected = memory.unsafeBaseAddress.stable || iso_mixed_checks_bounds() != 0
+        b.nativeEnabled = protected && !forcedOff
+        isNative = b.nativeEnabled
+        if forcedOff {
+            log("[mixed] ISO_MIXED_NATIVE=0: running interpreted")
+        } else if !protected {
+            log("[mixed] no guard pages for the runtime's memory (the reservation was refused): running interpreted")
+        } else {
+            iso_mixed_instantiate()
+            b.nativeStackPointer = iso_mixed_stack_pointer()
 
-        iso_mixed_instantiate()
-        b.nativeStackPointer = iso_mixed_stack_pointer()
-
-        // The table slots the split added: the runtime's functions there.
-        let originalCount = table.count
-        for line in native.slots.split(separator: "\n") {
-            let parts = line.split(separator: " ").compactMap { Int($0) }
-            guard parts.count == 2 else { continue }
-            guard let function = runtime.function(at: parts[1]) else {
-                throw MixedRuntimeError.launchFailed("slots.txt names function \(parts[1]), which the runtime hasn't: another build's")
+            // The table slots the split added: the runtime's functions there.
+            let originalCount = table.count
+            for line in native.slots.split(separator: "\n") {
+                let parts = line.split(separator: " ").compactMap { Int($0) }
+                guard parts.count == 2 else { continue }
+                guard let function = runtime.function(at: parts[1]) else {
+                    throw MixedRuntimeError.launchFailed("slots.txt names function \(parts[1]), which the runtime hasn't: another build's")
+                }
+                if parts[0] >= table.count { try table.grow(by: parts[0] + 1 - table.count, store: store) }
+                if parts[0] >= originalCount { table[parts[0]] = function.reference }
             }
-            if parts[0] >= table.count { try table.grow(by: parts[0] + 1 - table.count, store: store) }
-            if parts[0] >= originalCount { table[parts[0]] = function.reference }
-        }
 
-        // The shim: the host's imports for the native part, and calls
-        // through the shared table into interpreted functions.
-        let shimModule = try parseWasm(bytes: native.shim)
-        var shimImports = Imports()
-        wasi.link(to: &shimImports, store: store)
-        bindHostImports(for: shimModule, into: &shimImports, store: store)
-        shimImports.define(module: "env", name: "memory", memory)
-        shimImports.define(module: "env", name: "table", table)
-        let shim = try shimModule.instantiate(store: store, imports: shimImports)
-        let importCount = Int(iso_mixed_import_count)
-        b.importIsEnv = (0..<importCount).map { String(cString: iso_mixed_import_module(UInt32($0))) == "env" }
-        b.importFunctions = (0..<importCount).map { b.importIsEnv[$0] ? nil : shim.exports[function: "imp_\($0)"] }
-        b.mirror()
+            // The shim: the host's imports for the native part, and calls
+            // through the shared table into interpreted functions.
+            let shimModule = try parseWasm(bytes: native.shim)
+            var shimImports = Imports()
+            wasi.link(to: &shimImports, store: store)
+            bindHostImports(for: shimModule, into: &shimImports, store: store)
+            shimImports.define(module: "env", name: "memory", memory)
+            shimImports.define(module: "env", name: "table", table)
+            let shim = try shimModule.instantiate(store: store, imports: shimImports)
+            let importCount = Int(iso_mixed_import_count)
+            b.importIsEnv = (0..<importCount).map { String(cString: iso_mixed_import_module(UInt32($0))) == "env" }
+            b.importFunctions = (0..<importCount).map { b.importIsEnv[$0] ? nil : shim.exports[function: "imp_\($0)"] }
+            b.mirror()
+        }
 
         try wasi.initialize(runtime)
         b.linker = WasmDynamicLinker(main: MixedLinkMain(try WasmInstanceLinkMain(runtime), bridge: b, routed: native.routed), store: store)
