@@ -1,0 +1,45 @@
+<!doctype html>
+<!--
+  An Isomer app in web-view mode (docs/modes.md): this page, in a web view a
+  native app owns and keeps out of sight, runs the app's Swift as wasm and
+  serves its session (runtime/session_host.js); the native app draws it.
+  Every isomer_web_app site has it beside index.html.
+
+  The channel is WebKit's: the native app sends each ClientMessage with
+  `callAsyncJavaScript("isomerSession.receive(message)")`, its bytes as
+  base64, and takes each ServerMessage, base64 too, from the `isomer`
+  message handler (apple/libraries/webview_head). Besides the messages the
+  handler gets `{ ready: true }` once the page can take the session's start,
+  and `{ error }` if the app ends it.
+
+  The query names the app (`?bundleIdentifier=…&bundleName=…&bundleVersion=…
+  &bundleBuild=…`, Bundle.main's values in the guest; its files are kept
+  under its identifier).
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Isomer</title>
+</head>
+<body>
+<script type="module">
+import { createSessionHost } from "./runtime/session_host.js";
+import { fromBase64, toBase64 } from "./runtime/session_messages.js";
+
+const channel = window.webkit?.messageHandlers?.isomer;
+if (!channel) throw new Error("webview.html: no `isomer` message handler (WebKit's) to serve the session over");
+const query = new URLSearchParams(location.search);
+const host = createSessionHost({
+  send: (bytes) => channel.postMessage(toBase64(bytes)),
+  onEnd: (error) => channel.postMessage({ error: String(error?.stack ?? error) }),
+  bundleIdentifier: query.get("bundleIdentifier") ?? undefined,
+  bundleName: query.get("bundleName") ?? undefined,
+  bundleVersion: query.get("bundleVersion") ?? undefined,
+  bundleBuild: query.get("bundleBuild") ?? undefined,
+});
+window.isomerSession = { receive: (message) => host.receive(fromBase64(message)) };
+channel.postMessage({ ready: true });
+</script>
+</body>
+</html>

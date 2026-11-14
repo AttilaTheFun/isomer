@@ -1,0 +1,40 @@
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+
+# Web-view mode's page side (docs/modes.md): the web Storybook's site serving
+# its session (isomer's runtime/session_host.js, which webview.html runs in a
+# native app's web view), driven in headless Chrome as a head drives it
+# (session_test.html): the whole tree first, a tap, the change. It draws
+# nothing, so it runs with a pull request's tests (tools/ci/container_build.sh):
+# Chrome for Testing on Linux, the Mac's own Chrome on a Mac.
+sh_test(
+    name = "session_test",
+    size = "medium",
+    srcs = ["session_test.sh"],
+    args = [
+        "$(rootpath @isomer//tools/testing/browser_check)",
+        "$(rootpath //web/storybook_web_application:storybook_web_application_site)",
+        "$(rootpath session_test.html)",
+    ] + select({
+        "//tests/platforms:linux_arm64": ["$(rootpath @chrome_linux_arm64//:chrome)"],
+        "//tests/platforms:linux_x86_64": ["$(rootpath @chrome_linux_x86_64//:chrome)"],
+        "//conditions:default": ["''"],
+    }),
+    data = [
+        "session_test.html",
+        "//web/storybook_web_application:storybook_web_application_site",
+        "@isomer//tools/testing/browser_check",
+    ] + select({
+        "//tests/platforms:linux_arm64": [
+            "@chrome_linux_arm64//:chrome",
+            "@chrome_linux_arm64//:files",
+        ],
+        "//tests/platforms:linux_x86_64": [
+            "@chrome_linux_x86_64//:chrome",
+            "@chrome_linux_x86_64//:files",
+        ],
+        "//conditions:default": [],
+    }),
+    # Chrome starts its own sandbox (or, as root in a container, none):
+    # not inside Bazel's.
+    tags = ["no-sandbox"],
+)

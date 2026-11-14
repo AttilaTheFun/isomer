@@ -1,0 +1,32 @@
+load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+# The Storybook in web-view mode on an iPhone (WebViewApp.swift;
+# docs/modes.md): the web Storybook's site (its Swift as wasm) bundled as a
+# resource folder, run in a web view the app keeps out of sight, drawn by
+# Isomer's tree renderer over the session protocol. The simulator's: no
+# provisioning profile. Build with --ios_multi_cpus=sim_arm64.
+swift_library(
+    name = "webview_ios_application_lib",
+    srcs = ["WebViewApp.swift"],
+    module_name = "WebViewApp",
+    tags = ["manual"],
+    deps = ["@isomer//apple/libraries/webview_head"],
+)
+
+ios_application(
+    name = "webview_ios_application",
+    bundle_id = "com.LoganShire.IsomerExamples.WebView",
+    bundle_name = "WebView",
+    families = [
+        "ipad",
+        "iphone",
+    ],
+    infoplists = ["Info.plist"],
+    minimum_os_version = "18.0",
+    # The site, a folder in the bundle (storybook_web_application_site/):
+    # webview.html, the runtime's modules and app.wasm.
+    resources = ["//web/storybook_web_application:storybook_web_application_site"],
+    tags = ["manual"],
+    deps = [":webview_ios_application_lib"],
+)

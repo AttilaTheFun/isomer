@@ -1,0 +1,112 @@
+<!doctype html>
+<!--
+  The page that serves an app's session in web-view mode
+  (runtime/session_host.js, as webview.html runs it in a native app's web
+  view), checked as a head would use it: the head's start, then the app's
+  frames read as a head reads them (session_messages.js, flat_tree.js). The
+  first patch must be the whole tree, a tap on the story's button must change
+  it. Nothing is drawn: the patches are only read.
+
+  Opened with the story's launch hook: ?ISO_STORYBOOK_STORY=state.observableobject.
+  The result is `window.__isoSessionTest` ("pass", or why not); a failure is
+  also thrown, for the driver to see.
+-->
+<html>
+<head><meta charset="utf-8"><title>Session test</title></head>
+<body>
+<script type="module">
+import { createSessionHost } from "./runtime/session_host.js";
+import { clientMessage, readServerMessage } from "./runtime/session_messages.js";
+import { applyPatch, makeReader } from "./runtime/flat_tree.js";
+
+const environment = Object.fromEntries(
+  [...new URLSearchParams(location.search)].filter(([key]) => key.startsWith("ISO_")));
+
+function finish(result) {
+  if (window.__isoSessionTest !== undefined) return;
+  window.__isoSessionTest = result;
+  console.log("session test:", result);
+  if (result !== "pass") setTimeout(() => { throw new Error("session test: " + result); });
+}
+
+// The first op of a tree.proto Patch: its path, and whether it keeps the
+// children it had (attrsOnly).
+function firstOp(bytes) {
+  const r = makeReader(bytes);
+  while (!r.done()) {
+    const [field, type] = r.tag();
+    if (field !== 1 || type !== 2) { r.skip(type); continue; }
+    const [from, to] = r.span();
+    const op = makeReader(bytes, from, to);
+    const out = { path: null, attrsOnly: false, node: false };
+    while (!op.done()) {
+      const [f, t] = op.tag();
+      if (f === 1 && t === 2) out.path = op.string();
+      else if (f === 2 && t === 2) { op.skip(t); out.node = true; }
+      else if (f === 3 && t === 0) out.attrsOnly = op.bool();
+      else op.skip(t);
+    }
+    return out;
+  }
+  return null;
+}
+
+const texts = (node, out = []) => {
+  if (!node) return out;
+  if (node.k === "text" && typeof node.v === "string") out.push(node.v);
+  for (const child of node.ch || []) texts(child, out);
+  return out;
+};
+// The tap id of the tappable node whose text is `label` (a Button's).
+const tapOf = (node, label) => {
+  if (!node) return null;
+  if (node.tap && texts(node).some((text) => text.trim() === label)) return node.tap;
+  for (const child of node.ch || []) {
+    const found = tapOf(child, label);
+    if (found) return found;
+  }
+  return null;
+};
+
+let tree = null;
+let patches = 0;
+let tapped = false;
+const counts = { image: 0, command: 0, dark: 0, log: 0 };
+const host = createSessionHost({
+  send(bytes) {
+    const message = readServerMessage(bytes);
+    if (message.image) counts.image++;
+    if (message.command) counts.command++;
+    if (message.dark !== undefined) counts.dark++;
+    if (message.log) counts.log++;
+    if (!message.patch) return;
+    if (patches === 0) {
+      const op = firstOp(message.patch);
+      if (!op || op.path !== "n" || op.attrsOnly || !op.node) {
+        return finish("the first patch isn't the whole tree: " + JSON.stringify(op));
+      }
+    }
+    patches++;
+    tree = applyPatch(tree, message.patch);
+    window.__isoLastTree = JSON.stringify(tree);
+    const shown = texts(tree);
+    if (!tapped && shown.includes("Taps: 0")) {
+      const id = tapOf(tree, "Tap");
+      if (!id) return finish("no Tap button in the tree");
+      tapped = true;
+      host.receive(clientMessage.event(id, ""));
+    } else if (tapped && shown.includes("Taps: 1")) {
+      console.log(`session test: ${patches} patches,`, JSON.stringify(counts));
+      finish("pass");
+    }
+  },
+  onEnd: (error) => finish("the session ended: " + (error?.stack ?? error)),
+});
+// The head's start, as IsomerRemoteSession sends it: an iPhone's size and
+// scale, light, Apple's tree renderer, the launch environment.
+host.receive(clientMessage.start({ width: 393, height: 852, displayScale: 3, dark: false, environment, renderer: "swiftui" }));
+host.receive(clientMessage.scenePhase(0));
+setTimeout(() => finish(`timed out: ${patches} patches, tapped ${tapped}; last tree ${String(window.__isoLastTree).slice(0, 400)}`), 50000);
+</script>
+</body>
+</html>

@@ -116,7 +116,8 @@ elif [ $# -eq 0 ] || [ "$*" = all ] || [ "$*" = pr ] || [ "$*" = headful ]; then
         //android/storybook_android_application:storybook_android_application_apk \
         //linux/storybook_linux_application:storybook_linux_application \
         //headless/storybook_headless_application:storybook_headful_apple_runner \
-        //apple/remote_ios_application
+        //apple/remote_ios_application \
+        //apple/webview_ios_application
 fi
 
 # In the container: the build in the examples' module, then (CI's run) the
@@ -205,10 +206,12 @@ bazel build "${flags[@]}" "${windows[@]}" --@isomer//drive:headful "${windows_he
 bazel build "${flags[@]}" //tests/platforms:all
 built_tests=$?
 # The tests that draw nothing run here; those that do (the web Storybook in
-# Chrome, the headful apps) in headful mode, container-verify, at verify.
+# Chrome, the headful apps) in headful mode, container-verify, at verify. The
+# web-view session test drives a page in Chrome that draws nothing.
 run_tests "${flags[@]}" --test_output=errors //tests/foundation_networking:networking_test \
     //tests/cxx_interop:cxx_interop_test //tests/sqlite_wasi:sqlite_file_test \
-    //tests/android_app_attributes:android_app_attributes_test //tests/swift6_app:swift6_app_test
+    //tests/android_app_attributes:android_app_attributes_test //tests/swift6_app:swift6_app_test \
+    //tests/webview_session:session_test
 tested_here=$?
 # The headless tests: the Storybook built for the headless host and driven
 # through its runtime (//headless in the examples), nothing drawn, and served

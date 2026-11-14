@@ -78,7 +78,28 @@ ISO_STORYBOOK_STORY=state.observableobject \
   app answers with its SwiftUI renderer's patches.
   examples/apple/remote_ios_application is an app of it.
 - **Swift**: `IsomerConnection.connect()` over any transport (drive/serving),
-  for a head of its own.
+  for a head of its own. `IsomerRemoteView(connection:)` (and
+  `IsomerRemoteSession(connection:)`) take one instead of a URL.
+
+## A page as the server (web-view mode)
+
+The app needn't be on a server: in web-view mode (docs/modes.md) its Swift
+runs as wasm in a page, in a web view the app owns, and the page serves the
+session over the web view's message channel. The page is the app's web
+site's `webview.html` (every `isomer_web_app` site has one), over
+runtime/session_host.js: `createSessionHost({ send })` boots the guest at
+the head's `start`, takes each ClientMessage's bytes (`receive(bytes)`) and
+sends each ServerMessage's through `send`, so any channel that carries bytes
+can carry it. On the iPhone and the Mac, `IsomerWebViewAppView(site:)`
+(apple/libraries/webview_head) is the head and the channel: a hidden
+WKWebView, `callAsyncJavaScript` one way and a script message handler the
+other, the site served from the bundle (`isomer-app://app/`).
+examples/apple/webview_ios_application is the Storybook so.
+
+What differs from a server: text is measured by the page's own canvas (a
+browser's fonts, not a fixed-width estimate); the app's files, networking and
+SecureStore are the page's, as on the web; one session a page (a new session
+loads it again).
 
 ## What a remote app can't know
 
@@ -109,6 +130,11 @@ In the examples, with the app's flag (`bazel test --@isomer//headless
   app's WebSocket, drawing the session and clicking in it (Chrome for Testing
   on Linux, the Mac's Chrome on a Mac);
 - `//remote:cli_test`: the `isomer` CLI.
+
+And without it, beside the other tests that draw nothing:
+`//tests/webview_session:session_test`, the web Storybook's page serving its
+session (session_host.js) in headless Chrome, driven as a head drives it: the
+whole tree first, a tap, the change.
 
 Android's head was checked by hand on an emulator (drawn, tapped, typed
 into); an automated run is open (TODO.md).

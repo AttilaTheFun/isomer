@@ -179,6 +179,7 @@ exports_files([
     "runtime/react_embed.js",
     "runtime/raster.js",
     "runtime/remote.js",
+    "runtime/session_host.js",
     "runtime/session_messages.js",
     "runtime/symbols.js",
     "runtime/platform_services.js",
@@ -188,3 +189,8 @@ exports_files([
     "runtime/haptics.js",
     "runtime/fonts.js",
 ])
+
+# The page an app runs in when a native app owns it, invisible, and draws it
+# over the session protocol (web-view mode, docs/modes.md): every
+# `isomer_web_app` site has it beside index.html.
+exports_files(["webview.html"])
