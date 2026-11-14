@@ -281,22 +281,18 @@ JavaScript engine, and WasmKit goes:
     process (no JIT for an app's own JavaScriptCore on iOS; whether it runs
     wasm there without JIT, to check; the Mac's can JIT with the allow-JIT
     entitlement). First frame and event to frame.
-- Order: the WebKit runtime on Apple with its benchmark against WasmKit
-  (0.53); Android's JavaScriptSandbox, Linux's JavaScriptCore and Windows'
-  WebView2 (0.54); then WasmKit, its fork, `WasmKitRuntime` and
-  //tools/wasm/wasi_run go (0.55), the threaded SQLite check moved to a
-  cross-origin isolated page.
-- **The owner, 2026-11-14, on isomer#188:** benchmark it whatever else is
-  decided. The shape it points at, if it brings wasm near the web view's
-  JIT: the runtime baked into the app compiled, and features delivered as
-  small wasm side modules over it (kilobytes, not 5 MB each); with
-  wasi-threads (Swift 6.5) it could compete with native. So, before any
-  WasmKit retirement step: reproduce its numbers on our machines (the
-  Storybook's taps, 2048 played; interpreted, mixed on its own thread, the
-  web view, and the whole runtime compiled), on a simulator and a real
-  phone (the device lab's), then choose. Merge side modules first in any
-  case (engine-neutral; the size win stands); the WasmKit API commits go
-  upstream through the Upstream session.
+- **Superseded (owner, 2026-11-14): WasmKit stays**, for embedded
+  features (docs/modes.md). A whole app is compiled, a web view (wasm with
+  the JIT behind the session protocol) or remote (compiled or wasm); an
+  embedded feature is compiled or interpreted (isomer#188's side modules and
+  mixed mode). The engines above remain the web-view mode's on each
+  platform. The iPhone XS benchmark is in docs/modes.md. Order: side
+  modules (#188's first half); Apple's head over a session; web-view mode;
+  embedded interpreted mode (#188's second half); `--@isomer//:mode` and
+  `isomer_application`. Asked of #188's author (its comment, 2026-11-14):
+  split the PR, the crash of a second engine in a process, a native set per
+  feature, his WasmKit commits rebased onto upstream main (to propose
+  there), the LOCREL fix to LLVM.
 - isomer#188 (an outside contributor's): features as wasm side modules
   over one runtime the app has once (the Storybook 226 KB gzip against
   5.4 MB). Worth keeping engine-neutral (the linker apart from WasmKit, a web
