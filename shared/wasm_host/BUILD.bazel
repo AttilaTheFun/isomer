@@ -32,6 +32,22 @@ swift_library(
     ],
 )
 
+# Side modules' dynamic linking, engine-free: `dylink.0`, the imports, where a
+# side module's memory and table slots go, what each import binds to and the
+# order its relocations and constructors run in, over a small engine protocol
+# (`WasmLinkEngine`). WasmKit's adapter is `WasmDynamicLinker`, below; the
+# web's twin is wasm/libraries/swift_ui/runtime/side_modules.js. No
+# dependencies, so it builds for any platform; tests: //tests/wasm_dylink.
+swift_library(
+    name = "wasm_dylink",
+    package_name = "isomer",
+    srcs = [
+        "dylink/WasmBinaryReading.swift",
+        "dylink/WasmSideModuleLinker.swift",
+    ],
+    module_name = "IsomerWasmDylink",
+)
+
 # `WasmKitRuntime` — the engine on every native host (WAMR's place until 0.38),
 # on WasmKit (the Swift interpreter; MODULE.bazel's `wasmkit`): WASI, the
 # render callbacks and the swift_ffi transport in Swift, and WASI Threads for
@@ -42,13 +58,18 @@ swift_library(
 swift_library(
     name = "wasmkit_runtime",
     package_name = "isomer",
-    srcs = ["WasmKitRuntime.swift"],
+    srcs = [
+        # Side modules under WasmKit (`loadSideModule`): the linker's adapter.
+        "WasmDynamicLinker.swift",
+        "WasmKitRuntime.swift",
+    ],
     # Optimized in every build, as WasmKit is: its host imports run per
     # guest call.
     copts = ["-O"],
     module_name = "IsomerWasmKitRuntime",
     target_compatible_with = _NATIVE_WASM_HOSTS,
     deps = [
+        ":wasm_dylink",
         ":wasm_runtime",
         "//swift_ffi/runtime/swift_wasm_host",
         "@wasmkit//:WasmKit",
