@@ -3358,6 +3358,15 @@ func hostTextStyle(_ name: String) -> Font.TextStyle? {
 
 // MARK: - Pictures the app decoded
 
+/// A picture the app made, for the tree's image nodes that name its source:
+/// how a head over a session hands on its `image` messages (the bytes ride
+/// beside the tree there, not in it).
+public enum IsomerTreeImages {
+    public static func register(source: String, data: Data) {
+        HostImages.shared.remember(source, data: data)
+    }
+}
+
 /// The pictures a guest's ImageIO decoded (`isomer-image://` sources),
 /// from the bytes that rode the tree with the node that first showed one.
 final class HostImages: @unchecked Sendable {
@@ -3372,6 +3381,11 @@ final class HostImages: @unchecked Sendable {
     /// A picture's bytes as a patch brings them.
     func remember(_ source: String, base64: String) {
         guard let data = Data(base64Encoded: base64) else { return }
+        remember(source, data: data)
+    }
+
+    /// A picture's bytes as a session's `image` message brings them.
+    func remember(_ source: String, data: Data) {
         lock.lock()
         pending[source] = data
         lock.unlock()

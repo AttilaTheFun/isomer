@@ -79,11 +79,21 @@ enum RemoteSession {
     /// tree), at the head's size and appearance.
     @MainActor
     static func begin(_ start: Wire_Start) {
-        let compose = start.renderer == "compose"
-        rendererName = compose ? "Compose" : "DOM"
         HeadlessHead.current = nil
         let send: ([UInt8]) -> Void = { patch in RemoteSession.send { $0.patch = Data(patch) } }
-        Renderer.bind(compose ? JetpackComposeRenderer(send: send) : DOMRenderer(send: send))
+        // The head's renderer, as the app's `Bridge.rendererName` reports it:
+        // Compose (Android), SwiftUI (Apple's tree renderer), else the DOM.
+        switch start.renderer {
+        case "compose":
+            rendererName = "Compose"
+            Renderer.bind(JetpackComposeRenderer(send: send))
+        case "swiftui":
+            rendererName = "SwiftUI"
+            Renderer.bind(SwiftUIRenderer(send: send))
+        default:
+            rendererName = "DOM"
+            Renderer.bind(DOMRenderer(send: send))
+        }
         let runtime = Runtime.shared
         runtime.setSystemColorScheme(dark: start.dark)
         if start.displayScale > 0 { runtime.displayScale = CGFloat(start.displayScale) }
