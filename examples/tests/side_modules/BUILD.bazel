@@ -69,8 +69,13 @@ wasm_mixed_native(
     tags = ["manual"],
 )
 
-swift_test(
-    name = "mixed_render_test",
+# Twice: with native code, and with ISO_MIXED_NATIVE=0, the path
+# MixedWasmKitRuntime takes when WasmKit can't reserve guard pages for the
+# runtime's memory (an iPhone grants a process one such reservation, so a
+# mixed runtime that isn't the first engine there gets none): the guest
+# interpreted, rendering the same.
+[swift_test(
+    name = name,
     size = "large",
     srcs = [
         "MixedRenderTests.swift",
@@ -84,6 +89,7 @@ swift_test(
         ":storybook_side",
         "//wasm/example_full_feature:example_full.wasm",
     ],
+    env = env,
     target_compatible_with = select({
         "@platforms//os:macos": [],
         "@platforms//os:linux": [],
@@ -95,7 +101,10 @@ swift_test(
         "@isomer//shared/wasm_host:wasm_runtime",
         "@isomer//shared/wasm_host:wasmkit_runtime",
     ],
-)
+) for name, env in [
+    ("mixed_render_test", {}),
+    ("mixed_interpreted_render_test", {"ISO_MIXED_NATIVE": "0"}),
+]]
 
 # The same in V8 (Node), with the web's linker
 # (wasm/libraries/swift_ui/runtime/side_modules.js): what browsers and web

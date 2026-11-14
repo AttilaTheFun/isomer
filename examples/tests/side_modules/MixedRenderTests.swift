@@ -73,6 +73,9 @@ final class MixedRenderTests: XCTestCase {
             RunLoop.main.run(mode: .default, before: Date(timeIntervalSinceNow: 0.001))
         })
 
+        // Native code runs unless ISO_MIXED_NATIVE=0 (or WasmKit couldn't
+        // reserve guard pages, which a Mac always can).
+        XCTAssertEqual(mixed.isNative, ProcessInfo.processInfo.environment["ISO_MIXED_NATIVE"] != "0")
         XCTAssertGreaterThan(reactorTaps, 50)
         XCTAssertEqual(mixedTaps, reactorTaps)
         XCTAssertEqual(mixedStream.count, reactorStream.count)
