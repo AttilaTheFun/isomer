@@ -278,6 +278,13 @@ public final class MixedWasmKitRuntime: WasmRuntime {
 
     public func renderPending() { guest?.requestRender() }
 
+    /// Native code's calls into the interpreter so far (ISO_MIXED_COUNT=1),
+    /// and resets them.
+    public func takeCrossings() -> MixedCrossings {
+        guard let guest else { return MixedCrossings() }
+        return (try? thread.sync { guest.takeCrossings() }) ?? MixedCrossings()
+    }
+
     /// swift_ffi's view of this engine, on the main thread.
     private final class Adapter: SwiftFFIWasmEngine {
         unowned let runtime: MixedWasmKitRuntime
@@ -397,6 +404,7 @@ final class MixedGuest: @unchecked Sendable {
             b.importIsEnv = (0..<importCount).map { String(cString: iso_mixed_import_module(UInt32($0))) == "env" }
             b.importFunctions = (0..<importCount).map { b.importIsEnv[$0] ? nil : shim.exports[function: "imp_\($0)"] }
             b.mirror()
+            b.runtimeSlotLimit = table.count
         }
 
         try wasi.initialize(runtime)
@@ -443,6 +451,11 @@ final class MixedGuest: @unchecked Sendable {
     }
 
     func forget(_ placeholder: UInt32) { placeholders[placeholder] = nil }
+
+    func takeCrossings() -> MixedCrossings {
+        defer { bridge.crossings = MixedCrossings() }
+        return bridge.crossings
+    }
 
     func read(_ ptr: UInt32, _ len: UInt32) -> [UInt8] {
         let address = placeholders[ptr] ?? ptr

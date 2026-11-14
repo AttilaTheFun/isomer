@@ -135,6 +135,10 @@ public final class WasmKitRuntime: WasmRuntime {
 
     public init() {}
 
+    /// Set before `launch`: the interpreter reports each call of the
+    /// runtime module's functions to it (WasmKitFunctionProfile). Slower.
+    public var profile: WasmKitFunctionProfile?
+
     deinit {
         // A single-threaded instance closes its WASI (WasmKit requires it
         // before the bridge goes); a threaded one was kept (see `launch`).
@@ -151,7 +155,7 @@ public final class WasmKitRuntime: WasmRuntime {
         self.hostImports = hostImports
         var configuration = EngineConfiguration(stackSize: stackSize)
         configuration.features.insert(.threads)
-        let engine = Engine(configuration: configuration)
+        let engine = Engine(configuration: configuration, interceptor: profile)
         self.engine = engine
         let module: Module
         do {
@@ -210,6 +214,7 @@ public final class WasmKitRuntime: WasmRuntime {
             }
             let instance = try module.instantiate(store: store, imports: imports)
             self.instance = instance
+            profile?.attach(instance)
             memory = instance.exports[memory: "memory"]
             try wasi.initialize(instance)
         } catch {

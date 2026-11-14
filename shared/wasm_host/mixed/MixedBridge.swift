@@ -11,6 +11,7 @@
 // The native part is a C library linked into the app (tools/wasm/
 // mixed.bzl's wasm_mixed_native): one per process, so one bridge.
 
+import Foundation
 import IsomerMixedABI
 import IsomerWasmKitRuntime
 @_spi(OnlyForCLI) import WasmKit
@@ -60,6 +61,22 @@ func mixedSignatureKey(_ type: FunctionType) -> String {
 /// The process's one bridge (the native part is one C instance).
 nonisolated(unsafe) var mixedBridge: MixedBridge?
 
+/// Native code's calls into the interpreter, with ISO_MIXED_COUNT=1: into the
+/// runtime's own functions (what the native set lacks), into a side module's
+/// (the feature's code, always interpreted) and into the host's imports.
+/// Time is counted at the outermost crossing only (inclusive).
+public struct MixedCrossings: Sendable {
+    public var runtimeCalls = 0
+    public var runtimeNanos: UInt64 = 0
+    public var featureCalls = 0
+    public var featureNanos: UInt64 = 0
+    public var hostCalls = 0
+    /// Calls by table slot, for the runtime's functions, and their time
+    /// when outermost.
+    public var runtimeSlots: [Int: Int] = [:]
+    public var runtimeSlotNanos: [Int: UInt64] = [:]
+}
+
 final class MixedBridge {
     let engine: Engine
     let store: Store
@@ -87,6 +104,31 @@ final class MixedBridge {
     /// False when the runtime's memory has no guard pages and the native
     /// part checks no bounds: everything then runs interpreted.
     var nativeEnabled = true
+
+    static let counting = ProcessInfo.processInfo.environment["ISO_MIXED_COUNT"] != nil
+    /// Slots below it are the runtime's (its table and the split's slots);
+    /// side modules' come after.
+    var runtimeSlotLimit = Int.max
+    var crossings = MixedCrossings()
+
+    @inline(never)
+    func counted(slot: Int?, feature: Bool, _ body: () -> Void) {
+        let outermost = depth == 0
+        let start = outermost ? DispatchTime.now().uptimeNanoseconds : 0
+        body()
+        let nanos = outermost ? DispatchTime.now().uptimeNanoseconds - start : 0
+        if feature {
+            crossings.featureCalls += 1
+            crossings.featureNanos += nanos
+        } else {
+            crossings.runtimeCalls += 1
+            crossings.runtimeNanos += nanos
+            if let slot {
+                crossings.runtimeSlots[slot, default: 0] += 1
+                crossings.runtimeSlotNanos[slot, default: 0] += nanos
+            }
+        }
+    }
 
     init(engine: Engine, store: Store) {
         self.engine = engine
@@ -253,6 +295,15 @@ func isoMixedImportCall(_ index: UInt32, _ a: UnsafePointer<UInt64>?, _ r: Unsaf
         b.importFunctions[i] = f
         function = f
     }
+    if MixedBridge.counting {
+        if b.importIsEnv[i] {
+            b.counted(slot: nil, feature: true) { b.invokeInterpretedRaw(function, a, r) }
+        } else {
+            b.crossings.hostCalls += 1
+            b.invokeInterpretedRaw(function, a, r)
+        }
+        return
+    }
     b.invokeInterpretedRaw(function, a, r)
 }
 
@@ -269,6 +320,10 @@ func isoMixedSlotCall(_ tableSlot: UInt32, _ sig: UInt32, _ a: UnsafePointer<UIn
     } else {
         function = b.table.function(at: s, store: b.store)!
         b.slotFunctions[s] = function
+    }
+    if MixedBridge.counting {
+        b.counted(slot: s, feature: s >= b.runtimeSlotLimit) { b.invokeInterpretedRaw(function, a, r) }
+        return
     }
     b.invokeInterpretedRaw(function, a, r)
 }
