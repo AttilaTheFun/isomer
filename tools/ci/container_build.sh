@@ -260,7 +260,10 @@ platforms="$root/.ci/platforms"
 rm -rf "$platforms" && mkdir -p "$platforms/windows" && chmod -R 777 "$platforms"
 exec_root="$(bazel info "${flags[@]}" execution_root)"
 files() { bazel cquery "${flags[@]}" "$@" --output=files 2> /dev/null; }
+# The web-view iPhone app too (the Storybook as wasm in a web view, drawn by
+# the tree renderer), checked beside the iPhone Storybook.
 for f in $(files --ios_multi_cpus=sim_arm64 //apple/storybook_ios_application:storybook_ios_sim_application) \
+         $(files --ios_multi_cpus=sim_arm64 //apple/webview_ios_application) \
          $(files //apple/storybook_macos_application) $(files //android/storybook_android_application:storybook_android_application_apk); do
     case "$f" in *_unsigned.apk) ;; *.ipa | *.zip | *.apk) cp "$exec_root/$f" "$platforms/" ;; esac
 done

@@ -24,8 +24,9 @@ ios_application(
     ],
     infoplists = ["Info.plist"],
     minimum_os_version = "18.0",
-    # The site, a folder in the bundle (storybook_web_application_site/):
-    # webview.html, the runtime's modules and app.wasm.
+    # The site (webview.html, the runtime's modules, app.wasm): a folder in
+    # the bundle, or its files at the bundle's root as rules_applecross lays a
+    # resource folder out (IsomerWebViewHost.bundledSite finds either).
     resources = ["//web/storybook_web_application:storybook_web_application_site"],
     tags = ["manual"],
     deps = [":webview_ios_application_lib"],

@@ -22,7 +22,7 @@ struct WebViewApp: App {
 
     var body: some Scene {
         WindowGroup {
-            if let site = Bundle.main.url(forResource: "storybook_web_application_site", withExtension: nil) {
+            if let site = IsomerWebViewHost.bundledSite(named: "storybook_web_application_site") {
                 IsomerWebViewAppView(site: site, environment: environment)
                     .ignoresSafeArea(edges: .bottom)
             } else {

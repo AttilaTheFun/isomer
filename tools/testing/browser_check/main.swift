@@ -254,7 +254,7 @@ for page in options.pages {
     usleep(useconds_t(options.settle * 1_000_000))
     if page.out.isEmpty {
         // No picture asked for.
-    } else if let data =(chrome.send("Page.captureScreenshot", ["format": "png"], session: session)?["data"] as? String)
+    } else if let data = (chrome.send("Page.captureScreenshot", ["format": "png"], session: session)?["data"] as? String)
         .flatMap({ Data(base64Encoded: $0) }) {
         let out = URL(fileURLWithPath: page.out)
         try? FileManager.default.createDirectory(at: out.deletingLastPathComponent(), withIntermediateDirectories: true)

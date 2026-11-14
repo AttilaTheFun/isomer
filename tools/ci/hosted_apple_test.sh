@@ -10,7 +10,7 @@
 # Mac's by its window alone), and checked for having drawn something; the
 # pictures kept in <out>.
 #
-#   tools/ci/hosted_apple_test.sh <storybook_ios_sim_application .ipa> <storybook_macos_application .zip> <out>
+#   tools/ci/hosted_apple_test.sh <storybook_ios_sim_application .ipa> <storybook_macos_application .zip> <out> [<webview_ios_application .ipa>]
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 absolute() { printf '%s/%s' "$(cd "$(dirname "$1")" && pwd)" "$(basename "$1")"; }
@@ -18,6 +18,8 @@ ipa="$(absolute "${1:?usage: hosted_apple_test.sh <.ipa> <.zip> <out>}")"
 macos_zip="$(absolute "${2:?<.zip>}")"
 mkdir -p "${3:?<out>}"
 out="$(cd "$3" && pwd)"
+webview_ipa=""
+[ -z "${4:-}" ] || webview_ipa="$(absolute "$4")"
 stories=($(sed -n 's/^ *"\([a-z]*\.[a-z]*\)",$/\1/p' "$ROOT/examples/tests/platforms/stories.bzl"))
 [ ${#stories[@]} -gt 0 ] || { echo "hosted_apple_test: no stories" >&2; exit 1; }
 BUNDLE=com.LoganShire.IsomerStorybook
@@ -75,6 +77,35 @@ for story in "${stories[@]}"; do
         failures=$((failures + 1))
     fi
 done
+# The web-view app (examples/apple/webview_ios_application, docs/modes.md),
+# when given: the Storybook as wasm in a web view out of sight, drawn by the
+# tree renderer over the session; each story opened as the Storybook's are,
+# its picture checked for having drawn (not the spinner of a session that
+# never began).
+webview_count=0
+if [ -n "$webview_ipa" ]; then
+    WEBVIEW_BUNDLE=com.LoganShire.IsomerExamples.WebView
+    xcrun simctl terminate "$udid" "$BUNDLE" >/dev/null 2>&1
+    mkdir -p "$work/webview" && unzip -q "$webview_ipa" -d "$work/webview" &&
+        xcrun simctl install "$udid" "$work/webview/Payload/"*.app ||
+        { echo "hosted_apple_test: the web-view app didn't install" >&2; failures=$((failures + 1)); webview_ipa=""; }
+fi
+if [ -n "$webview_ipa" ]; then
+    for story in "${stories[@]}"; do
+        webview_count=$((webview_count + 1))
+        xcrun simctl terminate "$udid" "$WEBVIEW_BUNDLE" >/dev/null 2>&1
+        SIMCTL_CHILD_ISO_STORYBOOK_STORY="$story" xcrun simctl launch "$udid" "$WEBVIEW_BUNDLE" >/dev/null ||
+            { echo "hosted_apple_test: ios-webview $story: didn't launch" >&2; failures=$((failures + 1)); continue; }
+        # The reactor compiled by WebKit first.
+        sleep 8
+        if steady ios_shot "$out/ios-webview-$story.png" && drawn "$out/ios-webview-$story.png"; then
+            echo "hosted_apple_test: ios-webview $story"
+        else
+            echo "hosted_apple_test: ios-webview $story: nothing drawn" >&2
+            failures=$((failures + 1))
+        fi
+    done
+fi
 xcrun simctl shutdown "$udid" >/dev/null 2>&1
 xcrun simctl delete "$udid" >/dev/null 2>&1
 udid=""
@@ -133,5 +164,5 @@ for story in "${stories[@]}"; do
     wait "$pid" 2>/dev/null
     pid=""
 done
-echo "hosted_apple_test: $(( ${#stories[@]} * 2 )) pictures, $failures failed"
+echo "hosted_apple_test: $(( ${#stories[@]} * 2 + webview_count )) pictures, $failures failed"
 [ $failures -eq 0 ]

@@ -4,7 +4,7 @@
 // protocol (IsomerRemoteView).
 //
 //   WindowGroup {
-//       IsomerWebViewAppView(site: Bundle.main.url(forResource: "app_site", withExtension: nil)!)
+//       IsomerWebViewAppView(site: IsomerWebViewHost.bundledSite(named: "app_site")!)
 //   }
 //
 // The web view sits behind what the app draws, 1×1 point and nearly

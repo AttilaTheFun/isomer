@@ -75,6 +75,17 @@ public final class IsomerWebViewHost: NSObject {
         #endif
     }
 
+    /// An isomer_web_app's site given to an app as a resource (its
+    /// `<name>_site`): the folder of that name in the bundle, or the bundle's
+    /// resources themselves, where the site's files were laid out at its
+    /// root (rules_applecross's build lays a resource folder out so; a Mac's
+    /// rules_apple keeps the folder). Nil when neither has its webview.html.
+    public nonisolated static func bundledSite(named name: String, in bundle: Bundle = .main) -> URL? {
+        [bundle.url(forResource: name, withExtension: nil), bundle.resourceURL].compactMap { $0 }.first {
+            FileManager.default.fileExists(atPath: $0.appendingPathComponent("webview.html").path)
+        }
+    }
+
     /// Opens a session: the page loaded afresh and ready for its start.
     func open() async throws -> IsomerCall<[UInt8], [UInt8]> {
         end(throwing: IsomerCallError(.unavailable, "another session began"))

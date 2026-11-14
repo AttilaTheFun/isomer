@@ -236,6 +236,7 @@ jobs:
           path: |
             .ci/platforms/*storybook_ios*.ipa
             .ci/platforms/*storybook_macos*.zip
+            .ci/platforms/*webview_ios*.ipa
           retention-days: 3
       # exec: the runner's cancel reaches the script, which releases its leases.
       - name: The tests on Shireworks' leases
@@ -295,6 +296,7 @@ jobs:
         run: >-
           tools/ci/hosted_apple_test.sh "$(ls .ci/apple/*storybook_ios*.ipa | head -1)"
           "$(ls .ci/apple/*storybook_macos*.zip | head -1)" .ci/platform-tests/apple
+          "$(ls .ci/apple/*webview_ios*.ipa 2>/dev/null | head -1)"
       - uses: actions/download-artifact@v4
         if: matrix.part != 'pictures'
         with:
