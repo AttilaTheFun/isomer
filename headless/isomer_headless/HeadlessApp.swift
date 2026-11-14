@@ -314,41 +314,63 @@ public final class HeadlessApp: @unchecked Sendable {
     /// the app. `quit()` stops it. The app has `timeout` seconds to attach.
     public convenience init(launcher: String, environment: [String: String] = [:], timeout: Double = 120) throws {
         let hub = try HeadfulHub.shared()
-        let name = HeadfulHub.nextName()
+        // A launch that never attaches is tried once more: a simulator now
+        // and then loses a launch made just as the app before it quits. The
+        // first try has half the time.
+        var failure: HeadlessError?
+        for (attempt, wait) in [timeout / 2, timeout].enumerated() {
+            let name = HeadfulHub.nextName()
+            let (process, requests) = try Self.startLauncher(launcher, hub: hub.url, name: name, environment: environment)
+            let attached = try Self.blocking { () async -> Bool in
+                let deadline = Date().addingTimeInterval(wait)
+                while Date() < deadline {
+                    if await hub.hub.waitUntilAttached(name, timeout: 1) { return true }
+                    if !process.isRunning { return false }
+                }
+                return false
+            }
+            if attached {
+                try self.init(connection: IsomerLocalConnection(hub.hub), context: IsomerCallContext(metadata: ["iso-target": name]))
+                launched = process
+                self.requests = requests
+                return
+            }
+            let running = process.isRunning
+            if running {
+                process.terminate()
+                let stopped = Date().addingTimeInterval(10)
+                while process.isRunning, Date() < stopped { Thread.sleep(forTimeInterval: 0.1) }
+            }
+            failure = HeadlessError(message: running || process.terminationReason == .uncaughtSignal
+                ? "the app \(launcher) launched didn't attach in \(Int(wait)) s"
+                : "\(launcher) ended (\(process.terminationStatus)) before its app attached", screen: nil)
+            if attempt == 0 { print("[headless] \(failure!.message): launching again") }
+        }
+        throw failure!
+    }
+
+    /// The launcher run for one launch: the hub's URL, the app's name and
+    /// `environment` as its arguments, and where the test asks it for
+    /// pictures (`picture`).
+    private static func startLauncher(_ launcher: String, hub: String, name: String,
+                                      environment: [String: String]) throws -> (Process, URL) {
         let process = Process()
-        let arguments = [hub.url, name] + environment.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }
+        let arguments = [hub, name] + environment.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }
         #if os(Windows)
         // A launcher script through Git's bash (ISOMER_BASH, else Git for
         // Windows' own), as Windows runs no script by its #! line.
         let bash = ProcessInfo.processInfo.environment["ISOMER_BASH"] ?? #"C:\Program Files\Git\bin\bash.exe"#
         process.executableURL = URL(fileURLWithPath: bash)
-        process.arguments = [Self.resolve(launcher)] + arguments
+        process.arguments = [resolve(launcher)] + arguments
         #else
-        process.executableURL = URL(fileURLWithPath: Self.resolve(launcher))
+        process.executableURL = URL(fileURLWithPath: resolve(launcher))
         process.arguments = arguments
         #endif
-        // Where the test asks the launcher for pictures (`picture`).
         let requests = FileManager.default.temporaryDirectory.appendingPathComponent("isomer-requests-\(name)")
         try? FileManager.default.createDirectory(at: requests, withIntermediateDirectories: true)
         process.environment = ProcessInfo.processInfo.environment.merging(["ISOMER_LAUNCHER_REQUESTS": requests.path]) { $1 }
         try process.run()
-        let attached = try Self.blocking { () async -> Bool in
-            let deadline = Date().addingTimeInterval(timeout)
-            while Date() < deadline {
-                if await hub.hub.waitUntilAttached(name, timeout: 1) { return true }
-                if !process.isRunning { return false }
-            }
-            return false
-        }
-        guard attached else {
-            if process.isRunning { process.terminate() }
-            throw HeadlessError(message: process.isRunning || process.terminationReason == .uncaughtSignal
-                ? "the app \(launcher) launched didn't attach in \(Int(timeout)) s"
-                : "\(launcher) ended (\(process.terminationStatus)) before its app attached", screen: nil)
-        }
-        try self.init(connection: IsomerLocalConnection(hub.hub), context: IsomerCallContext(metadata: ["iso-target": name]))
-        launched = process
-        self.requests = requests
+        return (process, requests)
     }
     #endif
 

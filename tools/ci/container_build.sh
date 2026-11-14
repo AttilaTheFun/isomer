@@ -114,7 +114,8 @@ elif [ $# -eq 0 ] || [ "$*" = all ] || [ "$*" = pr ] || [ "$*" = headful ]; then
         //web/storybook_web_application:storybook_web_application \
         //android/storybook_android_application:storybook_android_application \
         //android/storybook_android_application:storybook_android_application_apk \
-        //linux/storybook_linux_application:storybook_linux_application
+        //linux/storybook_linux_application:storybook_linux_application \
+        //headless/storybook_headless_application:storybook_headful_apple_runner
 fi
 
 # In the container: the build in the examples' module, then (CI's run) the
@@ -332,6 +333,14 @@ for f in $(files "${headful[@]}" --ios_multi_cpus=sim_arm64 //apple/storybook_io
          $(files "${headful[@]}" //apple/storybook_macos_application); do
     case "$f" in *.ipa | *.zip) cp "$exec_root/$f" "$platforms/headful/" ;; esac
 done
+# And the tests that drive them, a Mac command (rules_applecross), run on
+# the Mac as they are: GitHub Macs reach no Bazel cache.
+runner=//headless/storybook_headless_application:storybook_headful_apple_runner
+if bazel build "${flags[@]}" "$runner"; then
+    for f in $(files "$runner"); do cp "$exec_root/$f" "$platforms/headful/storybook_headful_apple_runner"; done
+else
+    built_x86=1
+fi
 if [ -n "${ISOMER_ANDROID_X86_64:-}" ]; then
     if bazel build "${flags[@]}" "${headful[@]}" "${x86[@]}" "$android"; then
         for f in $(files "${headful[@]}" "${x86[@]}" "$android"); do
