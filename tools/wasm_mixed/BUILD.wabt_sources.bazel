@@ -1,0 +1,26 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+# wasm2c's runtime, from WABT's sources (MODULE.bazel's wabt_sources),
+# compiled into each app's native part with its own options
+# (tools/wasm/mixed.bzl). Not its memory implementation: the native part's
+# memory is WasmKit's.
+filegroup(
+    name = "runtime_srcs",
+    srcs = [
+        "wasm2c/wasm-rt-exceptions-impl.c",
+        "wasm2c/wasm-rt-impl.c",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "runtime_headers",
+    hdrs = [
+        "wasm2c/wasm-rt.h",
+        "wasm2c/wasm-rt-exceptions.h",
+        "wasm2c/wasm-rt-impl.h",
+    ],
+    includes = ["wasm2c"],
+    textual_hdrs = ["wasm2c/wasm-rt-impl-tableops.inc"],
+    visibility = ["//visibility:public"],
+)

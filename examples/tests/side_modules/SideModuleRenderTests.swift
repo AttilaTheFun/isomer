@@ -31,7 +31,7 @@ final class SideModuleRenderTests: XCTestCase {
         if let side { try runtime.loadSideModule(wasm: side) }
         _ = try runtime.call("iso_hot_start", [.f64(1024), .f64(768)])
         _ = try runtime.call("iso_hot_render", [])
-        let ids = Self.tapIDs(stream)
+        let ids = TapTargets.ids(stream)
         XCTAssertFalse(ids.isEmpty, "no tap targets in the first frame")
         for id in ids {
             let idBytes = Array(id.utf8)
@@ -44,26 +44,6 @@ final class SideModuleRenderTests: XCTestCase {
             _ = try runtime.call("iso_hot_render", [])
         }
         return (stream, ids.count)
-    }
-
-    /// Every distinct tap target id in a frame, in order: an ASCII run of
-    /// digits, dots and lower-case letters ending in ".tap".
-    static func tapIDs(_ bytes: [UInt8]) -> [String] {
-        let suffix = Array(".tap".utf8)
-        func idByte(_ c: UInt8) -> Bool { (48...57).contains(c) || c == 46 || (97...122).contains(c) }
-        var ids: [String] = []
-        var i = 0
-        while i + 4 <= bytes.count {
-            if bytes[i..<(i + 4)].elementsEqual(suffix) {
-                var start = i
-                while start > 0 && idByte(bytes[start - 1]) { start -= 1 }
-                var id = String(decoding: bytes[start..<(i + 4)], as: UTF8.self)
-                while id.hasPrefix(".") { id.removeFirst() }
-                if !id.isEmpty && !ids.contains(id) { ids.append(id) }
-            }
-            i += 1
-        }
-        return ids
     }
 
     func testSideModuleRendersAsTheReactor() throws {

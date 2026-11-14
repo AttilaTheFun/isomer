@@ -1,4 +1,5 @@
 load("@aspect_rules_js//js:defs.bzl", "js_test")
+load("@isomer//tools/wasm:mixed.bzl", "wasm_mixed_native")
 load("@isomer//tools/wasm:side_modules.bzl", "wasm_runtime_module", "wasm_side_module")
 load("@rules_swift//swift:swift.bzl", "swift_test")
 
@@ -36,7 +37,10 @@ wasm_side_module(
 swift_test(
     name = "side_module_render_test",
     size = "large",
-    srcs = ["SideModuleRenderTests.swift"],
+    srcs = [
+        "SideModuleRenderTests.swift",
+        "TapTargets.swift",
+    ],
     data = [
         ":storybook_runtime.wasm",
         ":storybook_side",
@@ -48,6 +52,46 @@ swift_test(
         "//conditions:default": ["@platforms//:incompatible"],
     }),
     deps = [
+        "@isomer//shared/wasm_host:wasm_runtime",
+        "@isomer//shared/wasm_host:wasmkit_runtime",
+    ],
+)
+
+# Mixed mode, the guest on its own thread (MixedWasmKitRuntime): the same
+# runtime module and side module, with native copies of the runtime's hot
+# functions (the Storybook's native set and routed list, from profiling its
+# taps: docs/side_modules.md), render what the reactor renders, byte for byte.
+wasm_mixed_native(
+    name = "storybook_native",
+    native_set = "storybook_native_set.txt",
+    routed = "storybook_routed.txt",
+    runtime = ":storybook_runtime.wasm",
+    tags = ["manual"],
+)
+
+swift_test(
+    name = "mixed_render_test",
+    size = "large",
+    srcs = [
+        "MixedRenderTests.swift",
+        "TapTargets.swift",
+    ],
+    data = [
+        "storybook_routed.txt",
+        ":storybook_native_shim",
+        ":storybook_native_slots",
+        ":storybook_runtime.wasm",
+        ":storybook_side",
+        "//wasm/example_full_feature:example_full.wasm",
+    ],
+    target_compatible_with = select({
+        "@platforms//os:macos": [],
+        "@platforms//os:linux": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    deps = [
+        ":storybook_native",
+        "@isomer//shared/wasm_host:mixed_runtime",
         "@isomer//shared/wasm_host:wasm_runtime",
         "@isomer//shared/wasm_host:wasmkit_runtime",
     ],

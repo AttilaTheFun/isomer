@@ -1,0 +1,7 @@
+# Binaryen's release build (MODULE.bazel's binaryen_<platform>): wasm-split,
+# and the library it loads from ../lib.
+filegroup(
+    name = "wasm_split",
+    srcs = ["bin/wasm-split"] + glob(["lib/*"]),
+    visibility = ["//visibility:public"],
+)

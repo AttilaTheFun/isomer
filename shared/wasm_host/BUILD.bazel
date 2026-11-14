@@ -1,4 +1,5 @@
-load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_swift//swift:swift.bzl", "swift_interop_hint", "swift_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -75,6 +76,44 @@ swift_library(
         "@wasmkit//:WasmKit",
         "@wasmkit//:WasmKitWASI",
         "@wasmkit//:WasmKitWASIThreads",
+    ],
+)
+
+# Mixed mode (docs/side_modules.md): a runtime module and its features
+# (side modules) interpreted by WasmKit, with native copies of the runtime's
+# hot functions linked into the app (tools/wasm/mixed.bzl's
+# `wasm_mixed_native`, which an app that uses this adds), the guest on a
+# thread of its own. `IsomerMixedABI` is the C interface between the two:
+# the native part defines its functions, this library its callbacks.
+cc_library(
+    name = "mixed_abi",
+    hdrs = ["mixed/include/iso_mixed.h"],
+    aspect_hints = [":mixed_abi_swift"],
+    includes = ["mixed/include"],
+)
+
+swift_interop_hint(
+    name = "mixed_abi_swift",
+    module_name = "IsomerMixedABI",
+)
+
+swift_library(
+    name = "mixed_runtime",
+    package_name = "isomer",
+    srcs = [
+        "mixed/MixedBridge.swift",
+        "mixed/MixedWasmKitRuntime.swift",
+    ],
+    copts = ["-O"],
+    module_name = "IsomerMixedRuntime",
+    target_compatible_with = _NATIVE_WASM_HOSTS,
+    deps = [
+        ":mixed_abi",
+        ":wasm_runtime",
+        ":wasmkit_runtime",
+        "//swift_ffi/runtime/swift_wasm_host",
+        "@wasmkit//:WasmKit",
+        "@wasmkit//:WasmKitWASI",
     ],
 )
 
