@@ -9,16 +9,18 @@ over the same memory and table (`MixedWasmKitRuntime`,
     wasm_mixed_native(
         name = "native",
         runtime = ":runtime.wasm",       # with its names (not stripped)
-        native_set = "native_set.txt",   # the functions to copy, by name
+        native_set = ["corpus_set.txt"], # the functions to copy, by name
+        modules = ["SwiftUI", ...],      # and every function of these modules
+        closure = True,                  # and all they call directly
         routed = "routed.txt",           # runtime functions features call natively
     )
 
 gives `:native` (a cc_library of the native part, for the app to link) and
 `:native_shim` / `:native_slots` (`native_generated/shim.wasm` and
 `native_generated/slots.txt`, which `MixedNativePart` reads at launch, e.g.
-from the app's bundle). The
-native set comes from profiling the app (docs/side_modules.md); a set naming
-functions the runtime no longer has still builds, without them.
+from the app's bundle). The native set comes from profiling a corpus, not
+an app (docs/side_modules.md); a set naming functions the runtime no longer
+has still builds, without them.
 """
 
 load("@rules_cc//cc:defs.bzl", "cc_library")
@@ -66,13 +68,16 @@ def _wasm_mixed_generate_impl(ctx):
     args.add("--wasm2c", ctx.executable._wasm2c)
     args.add("--wat2wasm", ctx.executable._wat2wasm)
     args.add("--runtime", ctx.file.runtime)
-    args.add("--set", ctx.file.native_set)
+    args.add_joined("--set", ctx.files.native_set, join_with = ",")
     args.add("--entries", entries)
     args.add("--out", out_dir)
+    args.add("--max-size", str(ctx.attr.max_size))
+    args.add("--modules", ",".join(ctx.attr.modules))
+    args.add("--closure", "1" if ctx.attr.closure else "0")
     ctx.actions.run(
         executable = ctx.executable._generator,
         arguments = [args],
-        inputs = ctx.files._wasm_split + [ctx.file.runtime, ctx.file.native_set] + ctx.files.routed,
+        inputs = ctx.files._wasm_split + [ctx.file.runtime] + ctx.files.native_set + ctx.files.routed,
         tools = [ctx.attr._wasm2c[DefaultInfo].files_to_run, ctx.attr._wat2wasm[DefaultInfo].files_to_run],
         outputs = outputs.values(),
         mnemonic = "WasmMixedGenerate",
@@ -84,8 +89,11 @@ _wasm_mixed_generate = rule(
     implementation = _wasm_mixed_generate_impl,
     attrs = {
         "runtime": attr.label(allow_single_file = [".wasm"], mandatory = True),
-        "native_set": attr.label(allow_single_file = True, mandatory = True),
+        "native_set": attr.label_list(allow_files = True, mandatory = True),
         "routed": attr.label(allow_files = True),
+        "max_size": attr.int(default = 0),
+        "modules": attr.string_list(),
+        "closure": attr.bool(),
         "_generator": attr.label(default = Label("//tools/wasm_mixed"), executable = True, cfg = "exec"),
         "_wasm_split": attr.label(default = Label("//tools/wasm_mixed:wasm_split"), cfg = "exec"),
         "_wasm2c": attr.label(default = Label("//tools/wasm_mixed:wasm2c"), executable = True, cfg = "exec"),
@@ -115,15 +123,32 @@ _c_sources = rule(
     attrs = {"src": attr.label(mandatory = True)},
 )
 
-def wasm_mixed_native(name, runtime, native_set, routed = None, bounds_checks = False, tags = [], visibility = None):
+def wasm_mixed_native(name, runtime, native_set, routed = None, max_size = 0, modules = [], closure = False, bounds_checks = False, tags = [], visibility = None):
     """The native part of a runtime module in mixed mode.
 
     Args:
         name: `:<name>` is the cc_library; `:<name>_shim` and `:<name>_slots`
             the shim module and slot map `MixedNativePart` reads.
         runtime: The runtime module, with its name section.
-        native_set: The functions to copy to native code, one name a line.
+        native_set: The functions to copy to native code, by name, one a
+            line: a list of files, their union. A name means every function
+            by that name, so a set outlives the runtime build it was made
+            from. The runtime's own set comes from the corpus
+            (tools/wasm_mixed_corpus, profiled with WasmKitFunctionProfile
+            and `wasm_mixed profile-set`), not from any one feature: a
+            feature downloaded later can't bring native code. A feature
+            built into the app may add a set from its own profile.
         routed: Runtime functions features call through their native copies.
+        max_size: Every function of at most this many bytes of wasm code goes
+            native too, whatever the set says: small functions are where
+            native code's calls into the interpreter go (tools/wasm_mixed/
+            Select.swift). 0, none by size.
+        modules: Swift modules whose every function goes native (their
+            closures, witnesses and the generics specialized for them too).
+        closure: What the chosen functions and the entry points call
+            directly goes native too, all the way down (interpreted code
+            never calls native code, so one interpreted function on the way
+            leaves what's beneath it interpreted).
         bounds_checks: Compile memory bounds checks into the native code. Off,
             it relies on WasmKit's guard pages (faster, 3.9 MB against 7.4 MB
             of native code for the Storybook's runtime); where WasmKit has
@@ -137,6 +162,9 @@ def wasm_mixed_native(name, runtime, native_set, routed = None, bounds_checks = 
         runtime = runtime,
         native_set = native_set,
         routed = routed,
+        max_size = max_size,
+        modules = modules,
+        closure = closure,
         tags = tags,
     )
     for output, basename in [("shim", "shim.wasm"), ("slots", "slots.txt")]:
