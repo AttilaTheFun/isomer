@@ -195,6 +195,11 @@ bazel_dep(name = "apple_support", version = "2.11.0")
 bazel_dep(name = "rules_cc", version = "0.2.17")
 bazel_dep(name = "rules_shell", version = "0.8.0")
 
+# js_test, for the tests that run the web's runtime in the hermetic Node
+# (//tests/side_modules: the web's side-module linker in V8). Isomer's own
+# version (its MODULE.bazel).
+bazel_dep(name = "aspect_rules_js", version = "3.2.2", dev_dependency = True)
+
 # Xcode project generation for the Apple example apps
 # (`bazel run //apple/<app>:<app>_project`).
 bazel_dep(name = "rules_xcodeproj", version = "4.1.0")
