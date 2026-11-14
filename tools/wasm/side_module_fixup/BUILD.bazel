@@ -1,0 +1,13 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary")
+
+# Corrects a side module the toolchain's wasm-ld (Swift 6.4.2's) linked: it
+# gives Swift's relative pointers a runtime relocation that adds
+# __memory_base, which breaks every conformance record. `wasm_side_module`
+# (tools/wasm/side_modules.bzl) runs it after each link. It goes when a
+# swift.org toolchain carries the wasm-ld fix
+# (tools/patches/lld_wasm_pic_locrel.patch, proposed to LLVM).
+swift_binary(
+    name = "side_module_fixup",
+    srcs = ["main.swift"],
+    visibility = ["//visibility:public"],
+)
