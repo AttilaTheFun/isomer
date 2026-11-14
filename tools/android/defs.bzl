@@ -343,6 +343,22 @@ _SHARED_PLATFORM_LIBRARIES = select({
     "//conditions:default": [],
 })
 
+# The C++ runtime the app's libraries need (an app's `libcxx`, or
+# --@isomer//swift_ffi/rules:libcxx): with `shared` the NDK's
+# libc++_shared.so, which an APK ships beside them and an AAR leaves to its
+# host unless --@isomer//tools/android:aar_libcxx_shared (README, "One C++
+# runtime with other libraries"); nothing with `static`.
+_CXX_RUNTIME = {
+    None: [Label("//swift_ffi/rules:cxx_runtime")],
+    "shared": [Label("//swift_ffi/rules:cxx_runtime_shared")],
+    "static": [],
+}
+
+_AAR_CXX_RUNTIME = select({
+    Label("//tools/android:aar_libcxx_shared_on"): [Label("//swift_ffi/rules:libc++_shared.so")],
+    "//conditions:default": [],
+})
+
 def _without(deps, own):
     """`deps` less the labels in `own`: an app that lists one of the
     macro's own (Isomer's AndroidX flag, say) would otherwise make Bazel
@@ -351,7 +367,7 @@ def _without(deps, own):
         return deps  # a select(): taken as it is
     return [dep for dep in deps if native.package_relative_label(dep) not in own]
 
-def isomer_android_library(name, swift_library, extra_kotlin_srcs = [], extra_deps = [], testonly = False, visibility = None):
+def isomer_android_library(name, swift_library, extra_kotlin_srcs = [], extra_deps = [], libcxx = None, testonly = False, visibility = None):
     """Level 3 building block: the app's Swift + the Isomer Android
     runtime, packaged for embedding in an existing app.
 
@@ -367,6 +383,10 @@ def isomer_android_library(name, swift_library, extra_kotlin_srcs = [], extra_de
     ACCESS_NETWORK_STATE too, a request made offline fails as
     `notConnectedToInternet` rather than `cannotFindHost`.
 
+    `libcxx` is the C++ runtime the app's library links: `"shared"` (the
+    NDK's libc++_shared.so, which `<name>_native` carries), `"static"`, or
+    None for `--@isomer//swift_ffi/rules:libcxx` (static by default).
+
     Declares:
       <name>        kt_android_library — dep this from your app's Kotlin.
       <name>_native cc_library carrying the .so — dep it from android_binary.
@@ -379,11 +399,13 @@ def isomer_android_library(name, swift_library, extra_kotlin_srcs = [], extra_de
         link_deps = [Label("//android/libraries/swift_ui:application_entry")],
         shared_platform = _SHARED_PLATFORM,
         shared_platform_when = Label("//tools/android:shared_platform_on"),
+        libcxx = libcxx,
         testonly = testonly,
     )
     cc_library(
         name = name + "_native",
         srcs = [":lib%s_bindings.so" % name] + _SHARED_PLATFORM_LIBRARIES,
+        deps = _CXX_RUNTIME[libcxx],
         tags = ["manual"],
         testonly = testonly,
         visibility = visibility,
@@ -441,6 +463,7 @@ def isomer_wasm_android_library(name, swift_library, visibility = None):
             ":lib%s_bindings.so" % name,
             ":lib%s_wasm_bindings.so" % name,
         ],
+        deps = _CXX_RUNTIME[None],
         tags = ["manual"],
         visibility = visibility,
     )
@@ -485,6 +508,7 @@ def isomer_android_app(
         extra_application = "",
         icon = None,
         debug_key = None,
+        libcxx = None,
         tags = [],
         testonly = False,
         target_compatible_with = None,
@@ -534,6 +558,13 @@ def isomer_android_app(
     `android:icon` and `android:roundIcon`. Without one, Android draws its
     default.
 
+    `libcxx = "shared"` links the app's Swift against the NDK's
+    `libc++_shared.so` and ships it in the APK's lib/<abi>/, for an app
+    whose Swift shares C++ objects with another shared library (README,
+    "One C++ runtime with other libraries"); `"static"` keeps libc++ inside
+    the app's library; None (the default) follows
+    `--@isomer//swift_ffi/rules:libcxx`, static unless it says otherwise.
+
     `debug_key` is the keystore a debug build is signed with (android_binary's
     `debug_key`; rules_android's own debug key without one). `tags`,
     `target_compatible_with` and `exec_compatible_with` go to the APK and
@@ -579,6 +610,7 @@ def isomer_android_app(
         # One label or a list of them.
         extra_kotlin_srcs = (services_kt if type(services_kt) == "list" else [services_kt]) if services_kt else [],
         extra_deps = services_deps,
+        libcxx = libcxx,
         testonly = testonly,
     )
 
@@ -1010,7 +1042,7 @@ def isomer_android_aar(
         extra_native_libs = extra_native_libs,
         lib = ":%s_lib" % name,
         manifest = ":%s_manifest" % name,
-        native_libs = [":lib%s_runtime_bindings.so" % name] + _SHARED_PLATFORM_LIBRARIES,
+        native_libs = [":lib%s_runtime_bindings.so" % name] + _SHARED_PLATFORM_LIBRARIES + _AAR_CXX_RUNTIME,
         proguard = ":%s_proguard" % name,
         provided_by_name = provided_by_name,
         provided_deps = provided_deps,

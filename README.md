@@ -1041,8 +1041,9 @@ library has one: swift_ffi/rules/jni_exports.lds), in every build since
 meeting another library's copy in the process (a host app's
 `libc++_shared.so`, a prebuilt C++ library's). C++ objects passed between
 it and another shared library are therefore made and destroyed by
-different C++ runtimes; build such a library with the same NDK. Built to
-ship, add `--config=android_release` (.bazelrc, examples/.bazelrc):
+different C++ runtimes, unless the app links the NDK's shared one (see
+"One C++ runtime with other libraries"). Built to ship, add
+`--config=android_release` (.bazelrc, examples/.bazelrc):
 
 - `-c opt` and `-Osize`;
 - `--gc-sections`, which drops the code the JNI entry points don't reach
@@ -1059,6 +1060,64 @@ The Storybook (every story of the SwiftUI API, the Isomer module, the map
 engine and FlatBuffers), measured at 0.42: 34.5 MB at `-c opt` (24,116
 exported symbols), 16.2 MB with `--config=android_release` (46, all JNI),
 in a 15.6 MB APK. Link-time optimization is not part of it yet.
+
+### One C++ runtime with other libraries
+
+An app whose Swift calls C++ in another shared library (a prebuilt `.so`
+built with the NDK's `c++_shared`) passes C++ objects across the boundary:
+a `std::string` or `std::vector` made on one side and freed on the other,
+a `shared_ptr` held by both, an exception thrown in one and caught in the
+other, `dynamic_cast` and `typeid` on the other's types. With libc++
+linked statically into the app's library, as by default, each side has
+its own C++ runtime, and those don't work across it. The NDK's rule is
+that every library sharing C++ across `.so` boundaries uses
+`libc++_shared.so`, one copy in the process. To link the app's library
+that way:
+
+```starlark
+isomer_android_app(
+    name = "my_app",
+    swift_library = ":app_swift",
+    package = "com.example.myapp",
+    libcxx = "shared",
+    extra_binary_deps = [":vendor_cxx"],  # e.g. cc_library(srcs = ["libvendor.so"])
+)
+```
+
+- The app's library (`lib<app>_runtime_bindings.so`) is linked without
+  the NDK toolchain's static libc++ (`libc++_static.a`, `libc++abi.a`,
+  its `static_link_cpp_runtimes` feature) and against the NDK's
+  `libc++_shared.so`: it needs it (DT_NEEDED) and defines none of it. The
+  Swift runtime's C++, the app's own C++ and Swift's C++ interoperability
+  (`-lc++`) all take libc++ from it.
+- The APK ships that `libc++_shared.so` in lib/<abi>/, from the NDK the
+  app was linked with (hermetic_android_toolchains' NDK r30): ship no
+  other copy. The prebuilt library must be built with the same NDK and
+  `c++_shared` (`-DANDROID_STL=c++_shared` with CMake,
+  `APP_STL := c++_shared` with ndk-build).
+- `libcxx = "static"` keeps libc++ inside, as by default; without the
+  attribute, `--@isomer//swift_ffi/rules:libcxx=shared|static` decides
+  for every JNI library in the build (`static` by default), and for the
+  shared platform library (`--@isomer//tools/android:shared_platform`,
+  below), which follows only the flag. An app's `libcxx = "shared"` with a
+  static platform leaves libc++ inside the platform, local to it: fine
+  while the platform's code shares no C++ objects with the other library.
+- `isomer_android_aar` follows the flag (`--@isomer//swift_ffi/rules:libcxx=shared`)
+  and leaves `libc++_shared.so` out of its jni/<abi>/: the host app ships
+  it, the one its own C++ libraries use, from the same NDK or a newer one
+  (a newer libc++ keeps what an older one exported).
+  A host with no C++ of its own adds
+  `--@isomer//tools/android:aar_libcxx_shared` to have the AAR carry it.
+- A JNI library built with swift_ffi's `kt_swift_library` directly takes
+  `libcxx` too; its android_binary then lists
+  `@isomer//swift_ffi/rules:cxx_runtime_shared` among its deps (or
+  `:cxx_runtime`, which follows the flag) for `libc++_shared.so`.
+
+The JNI exports and `--config=android_release` are as above: the library
+still exports only its JNI entry points. The examples'
+//tests/android_libcxx_shared checks an app built so (an APK holding
+`libc++_shared.so`, the app's library needing it and defining none of the
+symbols it exports), with the NDK's llvm-objdump and llvm-nm.
 
 ### Native libraries from a feature split
 

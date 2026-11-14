@@ -541,8 +541,14 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   `@androidndk//:all` supplies the cc toolchains the Swift Android toolchain
   links through (NDK r30, API 28); `@androidsdk` (SDK 35 / build-tools
   35.0.0) feeds rules_android via `override_repo(rules_android_sdk, androidsdk)`.
-  libc++ is linked **statically** (upstream's merged choice); there is no
-  `select_android_runtime_lib` anymore and no libc++_shared.so in the APK.
+  libc++ is linked **statically** by default (upstream's merged choice):
+  no libc++_shared.so in the APK. An app sharing C++ objects with another
+  library opts into the NDK's libc++_shared.so (`isomer_android_app(libcxx
+  = "shared")`, or `--@isomer//swift_ffi/rules:libcxx=shared` for the
+  whole build: the toolchain's `static_link_cpp_runtimes` feature off,
+  libc++_shared.so picked from the cc toolchain's files and shipped;
+  swift_ffi/rules/libcxx.bzl, README "One C++ runtime with other
+  libraries").
 - **Swift toolchain**: swift.org 6.4.2 host toolchain + matching wasm/Android
   Swift SDK bundles, via rules_swift's `swift` extension. Toolchain versions
   must match the SDK bundle versions exactly.
