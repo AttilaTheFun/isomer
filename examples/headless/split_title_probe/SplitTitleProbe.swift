@@ -4,6 +4,7 @@
 // placeholder until one is picked. The headless tests (SplitTitleTests.swift)
 // read the detail's title from the screen.
 
+import Foundation
 import Observation
 import SwiftUI
 
@@ -51,16 +52,31 @@ struct ProbeRoot: View {
                 }
             }
         } detail: {
-            Group {
-                if store.selection == "ci" {
-                    Text("Runs").navigationTitle("CI")
-                } else if let name = store.selection {
+            switch ProcessInfo.processInfo.environment["PROBE_DETAIL"] ?? "" {
+            case "plain":
+                // The selection's title on a text, nothing around it.
+                Text("What's running").navigationTitle(store.selection ?? "None")
+            case "screen":
+                // The screen alone, no Group or placeholder.
+                ServerScreen(name: store.selection ?? "None")
+            case "if":
+                if let name = store.selection {
                     ServerScreen(name: name)
                 } else {
-                    ContentUnavailableView("Pick a server", systemImage: "gauge.with.dots.needle.50percent")
+                    Text("Pick a server")
                 }
+            default:
+                Group {
+                    if store.selection == "ci" {
+                        Text("Runs").navigationTitle("CI")
+                    } else if let name = store.selection {
+                        ServerScreen(name: name)
+                    } else {
+                        ContentUnavailableView("Pick a server", systemImage: "gauge.with.dots.needle.50percent")
+                    }
+                }
+                .navigationSplitViewColumnWidth(min: 560, ideal: 640)
             }
-            .navigationSplitViewColumnWidth(min: 560, ideal: 640)
         }
         .sheet(isPresented: $settings) { Text("Settings") }
     }
