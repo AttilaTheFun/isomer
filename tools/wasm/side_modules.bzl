@@ -27,6 +27,7 @@ load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load("@rules_swift//swift:swift.bzl", "swift_binary")
 load("@rules_swift//swift:swift_common.bzl", "swift_common")
+load("//swift_ffi/rules:swift_wasm_reactor.bzl", "wasm_export_list")
 load("//swift_ffi/rules:utils.bzl", "transition_binary")
 
 _WASM_PLATFORM = Label("//swift_ffi/rules:wasm32-wasip1")
@@ -51,13 +52,13 @@ def _xlinker(flags):
         out += ["-Xlinker", flag]
     return out
 
-# A runtime module's link: every public symbol exported and nothing dead-
-# stripped (a feature may call any of it), the table exported and growable
-# (a side module's slots go at its end), the stack pointer exported (side
-# modules share it), undefined symbols allowed (the app's entry, which the
-# feature defines), the reactor's 16 MiB stack.
-RUNTIME_LINKOPTS = _xlinker([
-    "--export-dynamic",
+# A runtime module's link: nothing dead-stripped (a feature may call any of
+# it), the table exported and growable (a side module's slots go at its end),
+# the stack pointer exported (side modules share it), undefined symbols
+# allowed (the app's entry, which the feature defines), the reactor's 16 MiB
+# stack. What it exports: every public symbol (RUNTIME_LINKOPTS), or what the
+# host calls and its features import (`exports_for`).
+_RUNTIME_BASE_LINKOPTS = _xlinker([
     "--no-gc-sections",
     "--export-table",
     "--growable-table",
@@ -67,7 +68,15 @@ RUNTIME_LINKOPTS = _xlinker([
     "stack-size=16777216",
 ] + ["--export=" + name for name in RUNTIME_LIBC_EXPORTS])
 
-def wasm_runtime_module(name, deps, linkopts = [], copts = [], tags = [], visibility = None, **kwargs):
+RUNTIME_LINKOPTS = _xlinker(["--export-dynamic"]) + _RUNTIME_BASE_LINKOPTS
+
+# What a host calls of a runtime module beyond what every runtime exports
+# (the table, the stack pointer, the libc functions above): its
+# initialization, the iso_hot ABI and swift_ffi's entries (the dependencies'
+# register exports among them).
+RUNTIME_HOST_ENTRIES = ["_initialize", "iso_hot_*", "swift_ffi_*"]
+
+def wasm_runtime_module(name, deps, exports_for = [], linkopts = [], copts = [], tags = [], visibility = None, **kwargs):
     """A runtime module: `deps` linked once, for side modules to link against.
 
     `deps` are what a feature's reactor links but the feature: the iso_hot
@@ -75,19 +84,65 @@ def wasm_runtime_module(name, deps, linkopts = [], copts = [], tags = [], visibi
     the features use. Gives `<name>.wasm`, with its names (mixed mode's
     split reads them; strip it to ship).
 
+    It exports every public symbol, unless `exports_for` names the side
+    modules it serves: then what the host calls and what those side modules
+    import. Every public symbol of Isomer's runtime is more than the 100,000
+    exports the WebAssembly JS API lets a browser or web view load (WasmKit
+    has no such limit); a feature binds to its runtime's build anyway.
+
     Args:
         name: The target; `<name>.wasm` is the module.
         deps: The libraries in it.
+        exports_for: `wasm_side_module` targets whose imports it exports.
         linkopts: More link options.
         copts: More Swift options for the binary's (empty) module.
         tags: Tags for both targets (`manual` is added to the binary).
         visibility: The module's visibility.
         **kwargs: Passed to the `swift_binary`.
     """
+    exports = RUNTIME_LINKOPTS
+    linker_inputs = []
+    if exports_for:
+        # Linked once exporting everything, to read the host's entries from
+        # (as reactors are: swift_wasm_reactor.bzl's wasm_export_list).
+        swift_binary(
+            name = name + "_all_binary",
+            copts = ["-enable-experimental-feature", "Extern"] + copts,
+            linkopts = RUNTIME_LINKOPTS + linkopts,
+            linkshared = True,
+            deps = deps,
+            tags = ["manual"] + tags,
+            **kwargs
+        )
+        transition_binary(
+            name = name + "_all.wasm",
+            binary = ":" + name + "_all_binary",
+            platform = _WASM_PLATFORM,
+            tags = ["manual"] + tags,
+        )
+        wasm_export_list(
+            name = name + "_host_exports",
+            wasm = ":" + name + "_all.wasm",
+            entries = RUNTIME_HOST_ENTRIES,
+        )
+        native.genrule(
+            name = name + "_feature_exports",
+            srcs = exports_for,
+            outs = [name + "_feature_exports.rsp"],
+            cmd = "$(location %s) $@ $(SRCS)" % Label("//tools/wasm/side_module_imports"),
+            tools = [Label("//tools/wasm/side_module_imports")],
+            tags = tags,
+        )
+        exports = _RUNTIME_BASE_LINKOPTS + [
+            "@$(location :%s_host_exports)" % name,
+            "@$(location :%s_feature_exports)" % name,
+        ]
+        linker_inputs = [":" + name + "_host_exports", ":" + name + "_feature_exports"]
     swift_binary(
         name = name + "_binary",
         copts = ["-enable-experimental-feature", "Extern"] + copts,
-        linkopts = RUNTIME_LINKOPTS + linkopts,
+        linkopts = exports + linkopts,
+        additional_linker_inputs = linker_inputs,
         linkshared = True,
         deps = deps,
         tags = ["manual"] + tags,
