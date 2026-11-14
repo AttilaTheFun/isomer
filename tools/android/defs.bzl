@@ -9,6 +9,7 @@ load("@bazel_skylib//rules:expand_template.bzl", "expand_template")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load("@rules_android//rules:rules.bzl", "android_binary")
 load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load("@rules_java//java/common:java_info.bzl", "JavaInfo")
 load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
@@ -721,18 +722,80 @@ def isomer_android_app(
 
 # MARK: - An Isomer app as an Android library (AAR)
 
+def _supplied_by_name(jar):
+    """The default test for a jar the host supplies: one of a Maven
+    repository's (AndroidX, Compose) or rules_kotlin's or rules_android's
+    (Kotlin's standard library), by its repository's name."""
+    repo = jar.owner.workspace_name if jar.owner else ""
+    return "maven" in repo or "kotlin" in repo or repo.startswith("rules_android")
+
+# The platform each ABI's libraries are built for (tools/platforms).
+_ABI_PLATFORMS = {
+    "arm64-v8a": Label("//tools/platforms:android_arm64"),
+    "x86_64": Label("//tools/platforms:android_x86_64"),
+}
+
+def _native_libs_transition_impl(_settings, attr):
+    # A cc target in `extra_native_libs` is built for the AAR's ABI, as
+    # android_binary builds its cc deps for its own; a .so file is as it is.
+    return {"//command_line_option:platforms": str(_ABI_PLATFORMS[attr.abi])}
+
+_native_libs_transition = transition(
+    implementation = _native_libs_transition_impl,
+    inputs = [],
+    outputs = ["//command_line_option:platforms"],
+)
+
+def _shared_libraries(target):
+    """The shared libraries a target in `extra_native_libs` gives: its own
+    .so files (a file, a `cc_binary(linkshared = True)`), and the prebuilt
+    ones its CcInfo links (a `cc_library` over .so files: a library with
+    no static archive beside it). A cc_library compiled from source is
+    linked into a library, not packed whole: android_binary would link it
+    into the app's, which an AAR has none of."""
+    libs = [f for f in target[DefaultInfo].files.to_list() if f.extension == "so"]
+    if CcInfo in target:
+        for linker_input in target[CcInfo].linking_context.linker_inputs.to_list():
+            for library in linker_input.libraries:
+                if library.static_library or library.pic_static_library:
+                    continue
+                lib = library.resolved_symlink_dynamic_library or library.dynamic_library
+                if lib:
+                    libs.append(lib)
+    return libs
+
 def _isomer_aar_impl(ctx):
     # The app's own classes and Isomer's: every runtime jar of the library
-    # but what the host app supplies (AndroidX, Compose and Kotlin, from
-    # Maven or rules_kotlin), which it would otherwise get twice.
-    def supplied_by_host(jar):
-        repo = jar.owner.workspace_name if jar.owner else ""
-        return "maven" in repo or "kotlin" in repo or repo.startswith("rules_android")
+    # but what the host app supplies, which it would otherwise get twice.
+    # That is every runtime jar of `provided_deps` (theirs and their
+    # dependencies'), and, unless `provided_by_name` is off, the jars of
+    # Maven's, rules_kotlin's and rules_android's repositories (AndroidX,
+    # Compose and Kotlin). A neverlink library (an android_library or
+    # java_library with `neverlink = True`, compiled against and never
+    # shipped) is left out by JavaInfo itself: it adds no runtime jars.
+    provided = depset(transitive = [
+        dep[JavaInfo].transitive_runtime_jars
+        for dep in ctx.attr.provided_deps
+    ]).to_list()
+    provided_set = {jar: True for jar in provided}
     jars = [
         jar
         for jar in ctx.attr.lib[JavaInfo].transitive_runtime_jars.to_list()
-        if not supplied_by_host(jar)
+        if jar not in provided_set and not (ctx.attr.provided_by_name and _supplied_by_name(jar))
     ]
+
+    # The libraries in jni/<abi>/, each by its file's name, once: the app's
+    # and the platform's, then the further ones (`extra_native_libs`).
+    libs = []
+    names = {}
+    for lib in ctx.files.native_libs + [lib for target in ctx.attr.extra_native_libs for lib in _shared_libraries(target)]:
+        if lib.basename in names:
+            if names[lib.basename] != lib.path:
+                fail("two libraries named %s in %s's jni/%s: %s and %s" % (lib.basename, ctx.label.name, ctx.attr.abi, names[lib.basename], lib.path))
+            continue
+        names[lib.basename] = lib.path
+        libs.append(lib)
+
     out = ctx.actions.declare_file(ctx.label.name + ".aar")
     args = ctx.actions.args()
     args.add(ctx.executable._zipper)
@@ -743,11 +806,16 @@ def _isomer_aar_impl(ctx):
     args.add("--jars")
     args.add_all(jars)
     args.add("--libs")
-    args.add_all(ctx.files.native_libs)
+    args.add_all(libs)
+    if ctx.file.assets:
+        # The merged directory (_app_assets) whole, not its files: the
+        # script copies it into the AAR's assets/.
+        args.add("--assets")
+        args.add_all([ctx.file.assets], expand_directories = False)
     ctx.actions.run(
         executable = ctx.executable._assemble,
         arguments = [args],
-        inputs = jars + ctx.files.native_libs + [ctx.file.manifest, ctx.file.proguard],
+        inputs = jars + libs + ctx.files.assets + [ctx.file.manifest, ctx.file.proguard],
         tools = [ctx.executable._zipper],
         outputs = [out],
         mnemonic = "IsomerAar",
@@ -758,11 +826,30 @@ def _isomer_aar_impl(ctx):
 _isomer_aar = rule(
     implementation = _isomer_aar_impl,
     attrs = {
-        "abi": attr.string(default = "arm64-v8a"),
+        "abi": attr.string(default = "arm64-v8a", values = _ABI_PLATFORMS.keys()),
+        "assets": attr.label(allow_single_file = True, doc = "The assets/ directory (an _app_assets target's)."),
+        "extra_native_libs": attr.label_list(
+            # Any target: a cc_library over prebuilt libraries gives no .so
+            # among its files (_shared_libraries finds them in its CcInfo).
+            allow_files = True,
+            cfg = _native_libs_transition,
+            doc = "Further shared libraries for jni/<abi>/: .so files, or targets giving them.",
+        ),
         "lib": attr.label(providers = [JavaInfo], mandatory = True),
         "manifest": attr.label(allow_single_file = True, mandatory = True),
         "native_libs": attr.label_list(allow_files = [".so"]),
         "proguard": attr.label(allow_single_file = True, mandatory = True),
+        "provided_by_name": attr.bool(
+            default = True,
+            doc = "Leave out the jars of repositories named for Maven, rules_kotlin or rules_android.",
+        ),
+        "provided_deps": attr.label_list(
+            providers = [JavaInfo],
+            doc = "Libraries the host supplies: their runtime jars, transitively, are left out of classes.jar.",
+        ),
+        "_allowlist_function_transition": attr.label(
+            default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
+        ),
         "_assemble": attr.label(default = Label("//tools/android:assemble_aar"), executable = True, cfg = "exec"),
         "_zipper": attr.label(default = Label("@bazel_tools//tools/zip:zipper"), executable = True, cfg = "exec"),
     },
@@ -777,6 +864,16 @@ def isomer_android_aar(
         services_kt = None,
         services_installer = None,
         services_deps = [],
+        provided_deps = [],
+        provided_by_name = True,
+        assets = None,
+        fonts = [],
+        resources = [],
+        extra_native_libs = [],
+        tags = [],
+        testonly = False,
+        target_compatible_with = None,
+        exec_compatible_with = None,
         visibility = None):
     """An Isomer app as an Android library (`<name>.aar`), for a host app to
     embed: the same app `isomer_android_app` makes an APK of, its entry
@@ -791,18 +888,55 @@ def isomer_android_aar(
                        package), no R classes; AndroidX, Compose and Kotlin
                        are the host's dependencies, not bundled (README
                        says which Compose the runtime is built against)
-      jni/arm64-v8a/   the app's Swift (`lib<name>_runtime_bindings.so`)
+      jni/arm64-v8a/   the app's Swift (`lib<name>_runtime_bindings.so`),
+                       and `extra_native_libs`
+      assets/          `assets`, `fonts` and `resources`, when given
       AndroidManifest.xml, proguard.txt (the consumer keeps), R.txt (empty)
 
     `process` runs the activity in a process of its own (":isomer", or a
     full name); no Application subclass is needed. The services arguments
     are `isomer_android_app`'s.
+
+    What the host supplies stays out of classes.jar. By default that is
+    every jar of a repository named for Maven, rules_kotlin or
+    rules_android (`provided_by_name`): AndroidX, Compose and Kotlin, from
+    Isomer's Maven set or the app's own (docs/android_maven.md). A host
+    whose own libraries reach the app another way (its SDK in
+    `services_deps`, a Maven repository named otherwise) lists them in
+    `provided_deps`: their runtime jars and their dependencies' are left
+    out. A neverlink library (`neverlink = True`) is never packed: Bazel
+    gives it no runtime jars. `provided_by_name = False` turns the names
+    off, leaving out `provided_deps` alone.
+
+    `assets`, `fonts` and `resources` are `isomer_android_app`'s, laid out
+    as its APK has them (`<name>_assets`): `assets` at the root of the
+    AAR's assets/, `fonts` in assets/fonts/ (`Font.custom`), `resources` in
+    assets/bundle/ (Bundle.main). The host's build merges them into its
+    APK's assets/, beside its own: a host embedding two Isomer apps gets
+    one assets/fonts/ and one assets/bundle/ for both.
+
+    `extra_native_libs` are further shared libraries for jni/<abi>/, as
+    `isomer_android_app`'s `extra_binary_deps` puts them in its APK: .so
+    files, `cc_binary(linkshared = True)` targets, or `cc_library` targets
+    over prebuilt .so files, built for the AAR's ABI.
+
+    `tags`, `target_compatible_with` and `exec_compatible_with` go to the
+    AAR (`tags = ["manual"]` keeps a wildcard build from building it; the
+    targets beneath it are manual already), `testonly` to every target the
+    macro makes, as `isomer_android_app`'s do.
     """
+    outer = {"tags": tags, "testonly": testonly}
+    if target_compatible_with != None:
+        outer["target_compatible_with"] = target_compatible_with
+    if exec_compatible_with != None:
+        outer["exec_compatible_with"] = exec_compatible_with
+
     isomer_android_library(
         name = name + "_runtime",
         swift_library = swift_library,
         extra_kotlin_srcs = (services_kt if type(services_kt) == "list" else [services_kt]) if services_kt else [],
         extra_deps = services_deps,
+        testonly = testonly,
     )
     expand_template(
         name = name + "_main_activity",
@@ -812,7 +946,9 @@ def isomer_android_aar(
             "{DEFAULT_RENDERER}": "jetpackCompose",
             "{INSTALL_SERVICES}": services_installer or "",
         },
+        tags = ["manual"],
         template = Label("//tools/android:main_activity.kt.tpl"),
+        testonly = testonly,
     )
     expand_template(
         name = name + "_manifest",
@@ -823,7 +959,9 @@ def isomer_android_aar(
             "{PROCESS_ATTR}": ('\n            android:process="%s"' % process) if process else "",
             "{PROCESS_NOTE}": (" It runs in its own process, %s." % process) if process else "",
         },
+        tags = ["manual"],
         template = Label("//tools/android:aar_manifest.xml.tpl"),
+        testonly = testonly,
     )
     write_file(
         name = name + "_proguard",
@@ -836,7 +974,22 @@ def isomer_android_aar(
             "-keep class %s.** { *; }" % package,
             "",
         ],
+        tags = ["manual"],
+        testonly = testonly,
     )
+    asset_list = assets if type(assets) == "list" else ([assets] if assets else [])
+    aar_assets = None
+    if asset_list or fonts or resources:
+        # The APK's assets/ directory, as isomer_android_app merges it.
+        _app_assets(
+            name = name + "_assets",
+            assets = asset_list,
+            fonts = fonts,
+            resources = resources,
+            tags = ["manual"],
+            testonly = testonly,
+        )
+        aar_assets = ":%s_assets" % name
     kt_android_library(
         name = name + "_lib",
         srcs = [":%s_main_activity" % name],
@@ -844,6 +997,7 @@ def isomer_android_aar(
         manifest = ":%s_manifest" % name,
         plugins = [Label("//android/libraries/swift_ui:compose_compiler_plugin")],
         tags = ["manual"],
+        testonly = testonly,
         deps = [
             ":%s_runtime" % name,
             # Isomer's AndroidX, or the app's own (//android/maven).
@@ -852,9 +1006,14 @@ def isomer_android_aar(
     )
     _isomer_aar(
         name = name,
+        assets = aar_assets,
+        extra_native_libs = extra_native_libs,
         lib = ":%s_lib" % name,
         manifest = ":%s_manifest" % name,
         native_libs = [":lib%s_runtime_bindings.so" % name] + _SHARED_PLATFORM_LIBRARIES,
         proguard = ":%s_proguard" % name,
+        provided_by_name = provided_by_name,
+        provided_deps = provided_deps,
         visibility = visibility,
+        **outer
     )
