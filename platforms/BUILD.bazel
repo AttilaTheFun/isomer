@@ -1,0 +1,22 @@
+"""The target platforms Isomer builds for, by short public labels:
+`--platforms=@isomer//platforms:android_arm64` in an app's build. Each is
+an alias of //tools/platforms', where the platforms are declared (and the
+transitions that use them live), so the two labels name one platform.
+"""
+
+package(default_visibility = ["//visibility:public"])
+
+[
+    alias(
+        name = platform,
+        actual = "//tools/platforms:" + platform,
+    )
+    for platform in [
+        "android_arm64",
+        "android_x86_64",
+        "linux_x86_64",
+        "wasm32",
+        "windows_arm64",
+        "windows_x86_64",
+    ]
+]
