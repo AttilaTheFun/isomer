@@ -1,18 +1,21 @@
 load("@aspect_rules_js//js:defs.bzl", "js_test")
 load("@isomer//tools/wasm:mixed.bzl", "wasm_mixed_native")
 load("@isomer//tools/wasm:side_modules.bzl", "wasm_runtime_module", "wasm_side_module")
-load("@rules_swift//swift:swift.bzl", "swift_test")
+load("@rules_swift//swift:swift.bzl", "swift_library", "swift_test")
 
 # The Storybook's app as a feature over one runtime module
 # (docs/side_modules.md): the runtime is what its reactor links but the app
 # and its stories; the side module is the app and the stories alone, linked
 # by the toolchain's wasm-ld and corrected (tools/wasm/side_module_fixup).
 
-# Exporting what its side module imports (and what the host calls): every
+# Exporting what its side modules import (and what the host calls): every
 # public symbol would be more exports than V8 loads.
 wasm_runtime_module(
     name = "storybook_runtime",
-    exports_for = [":storybook_side"],
+    exports_for = [
+        ":corpus_side",
+        ":storybook_side",
+    ],
     tags = ["manual"],
     deps = [
         "//shared/platform_services",
@@ -57,13 +60,82 @@ swift_test(
     ],
 )
 
-# Mixed mode, the guest on its own thread (MixedWasmKitRuntime): the same
-# runtime module and side module, with native copies of the runtime's hot
-# functions (the Storybook's native set and routed list, from profiling its
-# taps: docs/side_modules.md), render what the reactor renders, byte for byte.
+# Mixed mode's native set comes from a corpus, not from any app: the
+# runtime's native code ships in the app, and a feature downloaded later
+# can't bring its own. tools/wasm_mixed_corpus writes the corpus, an app of
+# 88 screens made methodically from SwiftUI's pieces; :corpus_profile runs it
+# under the interpreter, profiled; `wasm_mixed profile-set` keeps every
+# runtime function that ran:
+#
+#   bazel test -c opt //tests/side_modules:corpus_profile
+#   bazel run @isomer//tools/wasm_mixed -- profile-set --time 1.0 --calls 1 \
+#     $PWD/<storybook_runtime.wasm> $PWD/tests/side_modules/corpus_native_set.txt \
+#     $PWD/<bazel-testlogs>/tests/side_modules/corpus_profile/test.outputs/corpus_profile.txt
+#
+# (a set names functions, so it outlives the runtime build it came from).
+# With it, every function of Isomer's own modules and everything those and
+# the entry points call directly: interpreted code never calls native code,
+# so one interpreted function on the way (MainActor.assumeIsolated, under
+# every entry point) would leave everything beneath it interpreted. The
+# Storybook isn't in the corpus.
+genrule(
+    name = "corpus_source",
+    outs = ["corpus/Corpus.swift"],
+    cmd = "$(location @isomer//tools/wasm_mixed_corpus) $@ > /dev/null",
+    tags = ["manual"],
+    tools = ["@isomer//tools/wasm_mixed_corpus"],
+)
+
+swift_library(
+    name = "corpus_lib",
+    srcs = ["corpus/Corpus.swift"],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "Corpus",
+    tags = ["manual"],
+    deps = ["@isomer//wasm/libraries/swift_ui"],
+)
+
+wasm_side_module(
+    name = "corpus_side",
+    tags = ["manual"],
+    deps = [":corpus_lib"],
+)
+
+swift_test(
+    name = "corpus_profile",
+    size = "enormous",
+    srcs = ["CorpusProfile.swift"],
+    data = [
+        ":corpus_side",
+        ":storybook_runtime.wasm",
+    ],
+    tags = ["manual"],
+    target_compatible_with = select({
+        "@platforms//os:macos": [],
+        "@platforms//os:linux": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    deps = [
+        "@isomer//shared/wasm_host:wasm_runtime",
+        "@isomer//shared/wasm_host:wasmkit_runtime",
+    ],
+)
+
 wasm_mixed_native(
     name = "storybook_native",
-    native_set = ["storybook_native_set.txt"],
+    closure = True,
+    modules = [
+        "CoreGraphics",
+        "HotBridge",
+        "Isomer",
+        "IsomerFFI",
+        "IsomerSwiftUI",
+        "IsomerTreeMessages",
+        "Observation",
+        "SwiftUI",
+    ],
+    native_set = ["corpus_native_set.txt"],
     routed = "storybook_routed.txt",
     runtime = ":storybook_runtime.wasm",
     tags = ["manual"],
