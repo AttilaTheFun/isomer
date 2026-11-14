@@ -19,3 +19,13 @@ one_configuration(
     name = "swift_protobuf",
     actual = "@swiftpkg_swift_protobuf//:SwiftProtobuf",
 )
+
+# The same, in the configuration of a build whose SwiftUI isn't the package's
+# (Apple's tree renderer beside Apple's SwiftUI:
+# //shared/isomer_swift_ui:beside_own_swift_ui), so SwiftProtobuf is built
+# once there (apple/libraries/remote_head).
+one_configuration(
+    name = "beside_own_swift_ui",
+    actual = "@swiftpkg_isomer//:IsomerWire",
+    configuration = "own_swift_ui",
+)

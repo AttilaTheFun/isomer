@@ -15,8 +15,9 @@ swift_library(
     module_name = "IsomerRemoteHead",
     deps = [
         "//apple/libraries/swift_ui_tree",
-        "//drive/remote",
-        "//drive/serving",
-        "//shared/wire/swift",
+        # In the tree renderer's configuration: one SwiftProtobuf.
+        "//drive/remote:beside_own_swift_ui",
+        "//drive/serving:beside_own_swift_ui",
+        "//shared/wire/swift:beside_own_swift_ui",
     ],
 )
