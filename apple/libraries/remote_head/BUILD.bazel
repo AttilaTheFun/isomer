@@ -1,0 +1,23 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# Apple's head over a session (docs/modes.md, docs/remote_sessions.md): an
+# app whose SwiftUI runs elsewhere (a server, built headless; a page),
+# drawn by the tree renderer. iOS 17 and macOS 14 (Observation).
+swift_library(
+    name = "remote_head",
+    package_name = "isomer",
+    srcs = [
+        "IsomerRemoteView.swift",
+        "RemoteHeadSession.swift",
+    ],
+    module_name = "IsomerRemoteHead",
+    deps = [
+        "//apple/libraries/swift_ui_tree",
+        # In the tree renderer's configuration: one SwiftProtobuf.
+        "//drive/remote:beside_own_swift_ui",
+        "//drive/serving:beside_own_swift_ui",
+        "//shared/wire/swift:beside_own_swift_ui",
+    ],
+)

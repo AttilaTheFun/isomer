@@ -135,6 +135,18 @@ final class RemoteTests: XCTestCase {
     }
 
     func testAHeadsSessionOverGRPC() async throws {
+        try await headsSession(renderer: "dom")
+    }
+
+    /// Apple's tree renderer as the head (apple/libraries/remote_head):
+    /// the app binds its SwiftUI renderer, whose patches are the same tree.
+    func testASwiftUIHeadsSession() async throws {
+        try await headsSession(renderer: "swiftui")
+    }
+
+    /// A head's session: its first frame the whole tree, a tap on its
+    /// button, and the frame that tap made.
+    private func headsSession(renderer: String) async throws {
         let url = try serve("grpc://127.0.0.1:0")
         let endpoint = try IsomerRemote.endpoint(url)
         let call = try await endpoint.connection.connect(context: endpoint.context(token: nil))
@@ -144,7 +156,7 @@ final class RemoteTests: XCTestCase {
                     $0.width = 390
                     $0.height = 6000
                 }
-                $0.renderer = "dom"
+                $0.renderer = renderer
             }
         })
         var seen: [String] = []

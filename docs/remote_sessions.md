@@ -2,7 +2,8 @@
 
 An app's SwiftUI can run on a server, built headless, and be drawn on a
 client that holds nothing of the app but a renderer: a browser with the
-DOM renderer, an Android phone with the Compose renderer. The client
+DOM renderer, an Android phone with the Compose renderer, an iPhone or a Mac
+with the tree renderer. The client
 sends what the person does; the app answers with each frame as a patch of
 its render tree. A low-end phone needs only the renderer and a WebSocket:
 no Swift, no wasm, no native library.
@@ -71,6 +72,11 @@ ISO_STORYBOOK_STORY=state.observableobject \
   interpreter: android/libraries/swift_ui/kotlin/…/RemoteIsomer.kt): the
   Compose renderer, FlatTree and IsomerWebSockets. examples/android/
   remote_android_application is an app of it: Kotlin and Compose only.
+- **The iPhone and the Mac**: `IsomerRemoteView(url:)`
+  (apple/libraries/remote_head): Apple's tree renderer (IsomerTreeView, the
+  real SwiftUI) over the session, starting it as a `swiftui` head, which the
+  app answers with its SwiftUI renderer's patches.
+  examples/apple/remote_ios_application is an app of it.
 - **Swift**: `IsomerConnection.connect()` over any transport (drive/serving),
   for a head of its own.
 

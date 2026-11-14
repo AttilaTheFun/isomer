@@ -115,7 +115,8 @@ elif [ $# -eq 0 ] || [ "$*" = all ] || [ "$*" = pr ] || [ "$*" = headful ]; then
         //android/storybook_android_application:storybook_android_application \
         //android/storybook_android_application:storybook_android_application_apk \
         //linux/storybook_linux_application:storybook_linux_application \
-        //headless/storybook_headless_application:storybook_headful_apple_runner
+        //headless/storybook_headless_application:storybook_headful_apple_runner \
+        //apple/remote_ios_application
 fi
 
 # In the container: the build in the examples' module, then (CI's run) the
