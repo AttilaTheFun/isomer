@@ -650,6 +650,33 @@ For full-application adoption, `isomer_android_app` and
 platform-specific modifiers (`.androidStatusBarStyle`, `.webDocumentTitle`,
 …) over a generic `platformCommand` channel.
 
+`isomer_application` (`@isomer//tools/application:defs.bzl`) declares one
+app's targets on every platform from one Swift library: `<name>_ios`,
+`<name>_macos`, `<name>_android` (and `_apk`) and `<name>_web`, built in
+the mode `--@isomer//:mode` names (docs/modes.md):
+
+- `compiled` (the default): the app's Swift in each platform's app
+  (rules_apple's applications, `isomer_android_app`, `isomer_web_app`);
+- `webview`: the app's Swift as wasm in a web view the iPhone or Mac app
+  keeps out of sight, drawn by Isomer's tree renderer over the session
+  protocol (Android's web-view transport isn't built yet);
+- `remote`: the app served headless elsewhere (`<name>_server`, built with
+  `--@isomer//headless`), the apps only heads drawing its session.
+
+The web is wasm in every mode. Each mode's app is also there by name
+(`<name>_ios_webview`, `<name>_android_remote`, …).
+
+```starlark
+load("@isomer//tools/application:defs.bzl", "isomer_application")
+
+isomer_application(
+    name = "notes",
+    bundle_id = "com.example.Notes",
+    display_name = "Notes",
+    swift_library = ":notes_lib",  # alwayslink, -parse-as-library, on @isomer//:swift_ui
+)
+```
+
 ## Consuming isomer
 
 List the project's registry before the Bazel Central Registry in your

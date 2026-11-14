@@ -70,8 +70,9 @@ hot-reload as wasm and ship compiled):
 - **Open**: Android's WebView and Windows' WebView2 as transports; the
   platform services the page lacks (the app's container for files, the
   keychain, the clipboard, networking without CORS) over the session; an
-  iPhone test that taps (a headful XCTest); a Mac example; and
-  `--@isomer//:mode` choosing it.
+  iPhone test that taps (a headful XCTest). `--@isomer//:mode=webview`
+  chooses it for an `isomer_application` ("The setting" below, whose example
+  has a Mac app in web-view mode too).
 
 ### What crosses an asynchronous seam
 
@@ -116,10 +117,38 @@ interpreted:
 
 ## The setting
 
-`--@isomer//:mode=compiled|webview|remote` for a whole app (an
-`isomer_application` macro that takes it on every platform; today the macros
-are per platform: `isomer_android_app`, `isomer_web_app`, rules_apple's on
-Apple), and a feature-level choice for `IsomerView`.
+`--@isomer//:mode=compiled|webview|remote` (a string flag at isomer's root,
+with config settings `@isomer//:mode_compiled`, `:mode_webview` and
+`:mode_remote`) for a whole app, which `isomer_application`
+(tools/application/defs.bzl) takes on every platform. The examples'
+.bazelrc names two: `--config=webview_mode`, `--config=remote_mode`.
+
+`isomer_application(name, swift_library, bundle_id, display_name, …)`
+takes the app's one Swift library (its `@main App`, alwayslink,
+`-parse-as-library`, on `@isomer//:swift_ui`, so it builds against Apple's
+SwiftUI on Apple's platforms and Isomer's elsewhere) and its identity, and
+declares each platform's app in every mode, `manual`, with the platform's
+own name an alias to the one the build's mode picks:
+
+| Target | `compiled` | `webview` | `remote` |
+| --- | --- | --- | --- |
+| `<name>_ios`, `<name>_macos` | `_ios_compiled`: rules_apple's application over the library | `_ios_webview`: a generated shell (`IsomerWebViewAppView`) with the web app's site bundled; none of the app's Swift compiled in | `_ios_remote`: a generated shell (`IsomerRemoteView`) over the session at the Info.plist's `IsomerSessionURL` (`remote_url`), or the launch argument `-url` |
+| `<name>_android`, `<name>_android_apk` | `_android_compiled`: `isomer_android_app` | none yet: incompatible (constraint `//tools/application:android_web_view_transport_not_built_yet`), skipped by a wildcard build, refused by name | `_android_remote`: a generated Kotlin shell over `IsomerRemote` (the intent's `url` extra, else `android_remote_url`), no Swift |
+| `<name>_web` | `isomer_web_app` | the same | the same |
+
+and `<name>_server`, the app headless (`--@isomer//headless`), serving
+itself for the remote apps (ISO_DRIVE_LISTEN, ISO_HEADLESS_PROTOCOL=serve).
+The shells are generated from templates beside the macro
+(webview_app.swift.tpl, remote_app.swift.tpl, remote_activity.kt.tpl), as is
+the web page of an app without one of its own (index.html.tpl). A mode
+given on the command line puts the whole build in a configuration of its
+own; CI builds each mode's apps by name instead, in its one configuration
+(tools/ci/container_build.sh: the examples' selection probe,
+shared/selection_probe_application, in every mode on the iPhone, the Mac,
+Android and the web), and checks by analysis alone that the setting picks
+them.
+
+A feature-level choice for `IsomerView` is to come (item 4).
 
 ## Measured (iPhone XS, A12, iOS 18.7; 2026-11-14)
 
@@ -153,4 +182,4 @@ on the same reactor.
    WebView2); the platform services over the session.
 4. Embedded interpreted mode (isomer#188's second half, with its crash fixed
    and its native set profiled per feature).
-5. `--@isomer//:mode` and `isomer_application`.
+5. `--@isomer//:mode` and `isomer_application` ("The setting" above).
