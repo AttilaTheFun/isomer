@@ -488,7 +488,11 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   on packages that link a tool for the building Mac (Bazel 8's link repeats
   an `-rpath`, which ld64 warns about; Swift's own
   `swift.treat_warnings_as_errors` stays), and Bazel 9's test-toolchain flag
-  only in `--config=windows_tests_on_linux`.
+  only in `--config=windows_tests_on_linux`. A known apple_support issue a
+  consumer on 8 met (README, "Bazel 8"): with apple_support's C toolchain
+  registered through `--extra_toolchains`, the build-time Swift tools'
+  CppArchive fails in the sandbox (no apple-support-ar-wrapper);
+  `--strategy=CppArchive=local` works around it.
 - **rules_swift 4.2.2.isomer.3** from the registry: upstream 4.2.2 and six
   pull requests (MODULE.bazel). It sorts above the 4.2.2 rules_applecross
   asks for, so MVS keeps it with no override in any root (until 0.40 the

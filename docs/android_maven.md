@@ -61,12 +61,15 @@ android_library(
         "@maven//:androidx_activity_activity_compose",
         "@maven//:androidx_browser_browser",
         "@maven//:androidx_compose_foundation_foundation",
+        "@maven//:androidx_compose_material_material_icons_core",
         "@maven//:androidx_compose_material3_material3",
         "@maven//:androidx_compose_runtime_runtime",
         "@maven//:androidx_compose_ui_ui",
+        "@maven//:androidx_concurrent_concurrent_futures",
         "@maven//:androidx_fragment_fragment",
         "@maven//:androidx_lifecycle_lifecycle_common",
         "@maven//:androidx_profileinstaller_profileinstaller",
+        "@maven//:com_google_guava_listenablefuture",
         "@maven//:org_jetbrains_kotlinx_kotlinx_coroutines_android",
         "@maven//:org_jetbrains_kotlinx_kotlinx_coroutines_core",
     ],
@@ -85,6 +88,18 @@ Isomer's Maven is in its build: its rules_jvm_external and rules_android may
 be its own. The app's versions must be at least Isomer's
 (android/maven_module/MODULE.bazel's list: Compose 1.7, activity-compose
 1.9, material3 1.3).
+
+concurrent-futures (`androidx.concurrent:concurrent-futures`, its
+`AbstractResolvableFuture`) and Guava's `ListenableFuture`
+(`com.google.guava:listenablefuture`, or the whole of `com.google.guava:guava`)
+are ProfileInstaller's dependencies, not Isomer's, but the set must carry
+them: ProfileInstaller's install task loads them a few seconds after launch,
+and an app whose graph excludes them (an `exclusions` entry, a Guava left out
+of a large app's graph) crashes then with `NoClassDefFoundError`. Isomer's set
+exports both by name for that reason. So it does material-icons-core
+(`androidx.compose.material:material-icons-core`, the runtime's
+`Icons.Filled`), which Material 3 brought with it until 1.4: a set on a later
+Material 3 lists it itself.
 
 The app's own Kotlin depends on the same set (`@isomer//android/maven:androidx`
 when it uses Isomer's, its own otherwise), never on single artifacts of
