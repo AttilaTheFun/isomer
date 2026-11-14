@@ -9,8 +9,8 @@
 #   self-hosted runner never runs a fork's code): every platform's
 #   Storybook built in one Linux container on Shireworks' on-demand runners
 #   (tools/ci/container_build.sh pr: the Apple ones with rules_applecross),
-#   then every test without a GUI: the core's, the web's in headless Chrome,
-#   the Storybook's headless UI tests and the remote-driving tests. It reads
+#   then every test that draws nothing: the core's, the WASI checks, the
+#   Storybook's headless UI tests and the remote-driving tests. It reads
 #   Shireworks' Bazel cache, never writes it, and leases nothing. The
 #   required check. A newer push cancels its run.
 # - populate (each commit on main): the merged tree built (container_build.sh
@@ -19,8 +19,11 @@
 #   (Shireworks' ci.populate names it), so a later pull request's build, and
 #   a release's, is mostly hits.
 # - By hand (workflow_dispatch, `run:`):
-#   - verify: the GUI tests: everything built in the container, then the
-#     Storybook's test stories on GitHub's own runners (apple: the iPhone's
+#   - verify: the GUI tests: everything built in the container; the tests
+#     that draw in a container of their own (container-verify: the web
+#     Storybook in headless Chrome, the Storybook's tests headful on the web
+#     and on Linux under Xvfb); and the Storybook's test stories on GitHub's
+#     own runners (apple: the iPhone's
 #     simulator and the Mac on `xcode-27`; android: an emulator under
 #     Ubuntu's KVM; windows: windows-11-arm, tier 2, not waited for; a
 #     private copy on Shireworks' leases instead); and beside them the
@@ -111,9 +114,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       # Every target built in the Linux container (Windows on Arm with
-      # --config=windows_on_linux), then every test that runs without a GUI:
-      # the core's, the web's in headless Chrome, the headless UI tests.
-      - name: Every target built, and the tests without a GUI
+      # --config=windows_on_linux), then every test that draws nothing: the
+      # core's, the WASI checks, the Storybook's headless and remote-driving
+      # tests. Those that draw run in container-verify.
+      - name: Every target built, and the tests that draw nothing
         env:
           ISOMER_EXECUTION_LOGS: ${{ runner.temp }}/execution-logs
         run: exec tools/ci/container_build.sh pr
@@ -243,6 +247,22 @@ jobs:
           name: platform-tests
           path: .ci/platform-tests
           retention-days: 14
+
+  container-verify:
+    # By hand, beside verify and apple: the tests that draw, in a Linux
+    # container. The web Storybook in headless Chrome, its test stories
+    # pictured; and the Storybook's tests run headful, the web app in Chrome
+    # and the Linux app under Xvfb, driven as apple drives the iPhone's and
+    # the Mac's (tools/ci/container_build.sh headful). A release needs it.
+    if: github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release')
+    runs-on: [self-hosted, isomer-jit]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+      - name: The tests that draw
+        env:
+          ISOMER_EXECUTION_LOGS: ${{ runner.temp }}/execution-logs
+        run: exec tools/ci/container_build.sh headful
 
   apple:
     # The iPhone and Mac Storybooks' tests on GitHub's own `xcode-27` Macs,
