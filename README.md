@@ -704,6 +704,23 @@ bazel_dep(name = "isomer", version = "0.36.1")
 rules_swift isomer needs comes from that registry by version, patches and
 all.
 
+**Android: Isomer's AndroidX, or your own** (since 0.54;
+[docs/android_maven.md](docs/android_maven.md)). Isomer's Android runtime
+builds against the AndroidX set `@isomer//android/maven:androidx` names
+(with the Compose compiler `:compose_compiler` names). isomer declares no
+Maven of its own for you: an app with no AndroidX of its own adds Isomer's
+set, a module released with each isomer, at the same version,
+
+```starlark
+bazel_dep(name = "isomer_android_maven", version = "0.54.1")
+```
+
+and an app with AndroidX of its own leaves the module out and points both
+flags at its own set in its `.bazelrc`. With neither, an Android build
+fails saying which to do. rules_android's own Maven (its tools) is
+rules_android's to declare; docs/android_maven.md shows how to pin it with
+isomer's lock file, as the examples do.
+
 Isomer's Swift libraries are a Swift package too (since 0.43: Foundation,
 CoreGraphics, Combine and what they stand on, from isomer's root
 Package.swift), built through rules_swift_package_manager in your own
@@ -833,7 +850,27 @@ build --strategy=CppArchive=local
 
 ### Upgrading isomer
 
-Each release's notes have an Upgrading section; three things are easy to miss:
+Each release's notes have an Upgrading section; these things are easy to miss:
+
+- **Isomer's AndroidX is a module of its own (since 0.54).** isomer no
+  longer declares any Maven for its consumers (docs/android_maven.md):
+  - an app that used Isomer's AndroidX (left
+    `@isomer//android/maven:androidx` at its default) adds
+    `bazel_dep(name = "isomer_android_maven", version = …)` at isomer's
+    version, or its Android builds fail saying so;
+  - an app with its own AndroidX (both flags set) changes nothing, and
+    no longer evaluates Isomer's Maven: a rules_jvm_external older than
+    isomer's is fine;
+  - `@isomer_maven` exists only with the module: an app that named its
+    targets directly (`use_repo(maven, "isomer_maven")`) depends on the
+    module or on its own artifacts;
+  - `@rules_android_maven` is no longer pinned by isomer: an app that
+    relied on that pin declares it with isomer's lock file
+    (`lock_file = "@isomer//:rules_android_maven_install.json"`,
+    docs/android_maven.md) or its own, or lets rules_android resolve it;
+  - `rules_xcodeproj` and `rules_jvm_external` are isomer's development
+    dependencies only, so isomer no longer raises an app's to 4.1.0 and
+    7.1: an app that needs those versions asks for them itself.
 
 - **Isomer's Swift is a Swift package (since 0.43).** Add isomer to the
   Package.swift your rules_swift_package_manager graph reads (by revision,
