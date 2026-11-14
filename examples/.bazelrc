@@ -11,6 +11,13 @@ build --incompatible_enable_proto_toolchain_resolution
 # native .aot; WasmKit, the engine since, interprets the .wasm.)
 build:release -c opt
 
+# How a whole app (isomer_application) runs its Swift (docs/modes.md, "The
+# setting"): --config=webview_mode for wasm in a web view the app keeps out of
+# sight, --config=remote_mode for an app that is only a head over a session
+# (the app served headless). Compiled, the default, needs none.
+build:webview_mode --@isomer//:mode=webview
+build:remote_mode --@isomer//:mode=remote
+
 # Real OpenStreetMap tiles for the SwiftUI `Map` view: point isomer's
 # per-platform map-engine label flags at this module's own swift_map dep
 # (bazel_dep + git_override in MODULE.bazel). The examples are the showcase,

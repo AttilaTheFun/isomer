@@ -1,3 +1,4 @@
+load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 # Marks the repository root as a Bazel package. rules_jvm_external reads the
@@ -120,3 +121,43 @@ cc_library(
     name = "system_swift_ui",
     visibility = ["//visibility:public"],
 )
+
+# How a whole app's Swift runs (docs/modes.md, "The setting"):
+# `--@isomer//:mode=compiled|webview|remote`, read by isomer_application
+# (tools/application/defs.bzl), whose platform targets build the mode it
+# names:
+#
+#   compiled  the app's Swift compiled into each platform's app (the default:
+#             what isomer_android_app, isomer_web_app and rules_apple's
+#             applications build)
+#   webview   the app's Swift as wasm, in a web view the app keeps out of
+#             sight, drawn by a head over the session protocol (the iPhone
+#             and the Mac; Android's WebView transport isn't built yet)
+#   remote    the app elsewhere (built headless, serving itself), the app
+#             only a head over its session
+#
+# The web is wasm in every mode. A mode is a whole build's: every app the
+# build makes takes it.
+string_flag(
+    name = "mode",
+    build_setting_default = "compiled",
+    values = [
+        "compiled",
+        "remote",
+        "webview",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+[
+    config_setting(
+        name = "mode_" + mode,
+        flag_values = {":mode": mode},
+        visibility = ["//visibility:public"],
+    )
+    for mode in [
+        "compiled",
+        "remote",
+        "webview",
+    ]
+]

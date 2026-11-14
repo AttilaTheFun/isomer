@@ -163,9 +163,10 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
 - **A text field's `selection` where a host doesn't report it**
   (shared/swift_ui_core/TextSelection.swift): the web, Compose and the Apple
   tree view on iOS 18 and macOS 15 report the caret and show a selection the
-  app sets (0.33, examples' selection_probe_* apps); below iOS 18 (a
-  compiled feature's iOS 16), and in the GPU renderer's, Linux's and
-  Windows' fields, the binding still follows the end of the text.
+  app sets (0.33, the examples' selection probe,
+  shared/selection_probe_application); below iOS 18 (a compiled feature's
+  iOS 16), and in the GPU renderer's, Linux's and Windows' fields, the
+  binding still follows the end of the text.
 - **QuickLook (`quickLookPreview`) is only in compiled Apple features**:
   the web and Android have no preview to present (an AgentUI attachment
   there opens its own viewer). A host-presented one on each would let the
