@@ -1,3 +1,4 @@
+load("@aspect_rules_js//js:defs.bzl", "js_test")
 load("@isomer//tools/wasm:side_modules.bzl", "wasm_runtime_module", "wasm_side_module")
 load("@rules_swift//swift:swift.bzl", "swift_test")
 
@@ -6,8 +7,11 @@ load("@rules_swift//swift:swift.bzl", "swift_test")
 # and its stories; the side module is the app and the stories alone, linked
 # by the toolchain's wasm-ld and corrected (tools/wasm/side_module_fixup).
 
+# Exporting what its side module imports (and what the host calls): every
+# public symbol would be more exports than V8 loads.
 wasm_runtime_module(
     name = "storybook_runtime",
+    exports_for = [":storybook_side"],
     tags = ["manual"],
     deps = [
         "//shared/platform_services",
@@ -47,4 +51,41 @@ swift_test(
         "@isomer//shared/wasm_host:wasm_runtime",
         "@isomer//shared/wasm_host:wasmkit_runtime",
     ],
+)
+
+# The same in V8 (Node), with the web's linker
+# (wasm/libraries/swift_ui/runtime/side_modules.js): what browsers and web
+# views run. Against the shipped reactor (the development one exports every
+# symbol: more than V8 loads).
+genrule(
+    name = "node_inputs",
+    srcs = [
+        "@isomer//wasm/libraries/swift_ui:runtime/side_modules.js",
+        ":storybook_runtime.wasm",
+        ":storybook_side",
+        "//wasm/example_full_feature:example_full_release.wasm",
+    ],
+    outs = [
+        "node/side_modules.js",
+        "node/side_module_render_test.mjs",
+        "node/storybook_runtime.wasm",
+        "node/storybook_side.wasm",
+        "node/example_full.wasm",
+    ],
+    cmd = " && ".join([
+        "cp $(location @isomer//wasm/libraries/swift_ui:runtime/side_modules.js) $(RULEDIR)/node/side_modules.js",
+        "cp $(location side_module_render_test.mjs) $(RULEDIR)/node/side_module_render_test.mjs",
+        "cp $(location :storybook_runtime.wasm) $(RULEDIR)/node/storybook_runtime.wasm",
+        "cp $(location :storybook_side) $(RULEDIR)/node/storybook_side.wasm",
+        "cp $(location //wasm/example_full_feature:example_full_release.wasm) $(RULEDIR)/node/example_full.wasm",
+    ]),
+    tags = ["manual"],
+    tools = ["side_module_render_test.mjs"],
+)
+
+js_test(
+    name = "side_module_render_node_test",
+    size = "large",
+    data = [":node_inputs"],
+    entry_point = "node/side_module_render_test.mjs",
 )
