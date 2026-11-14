@@ -64,7 +64,7 @@ swift_test(
 #   bazel test --test_env=ANDROID_SERIAL=<serial> --test_env=ADB=<adb> :storybook_headful_android_test
 #
 # Windows': the test cross-built in CI's container for Windows on Arm
-# (--config=windows_on_linux, which takes Bazel's legacy test toolchain:
+# (--config=windows_tests_on_linux, which takes Bazel's legacy test toolchain:
 # no execution platform there can run a Windows test), with the app, then
 # run on GitHub's windows-11-arm (tools/ci/hosted_windows_test.ps1), which
 # names the app and Git's bash:
