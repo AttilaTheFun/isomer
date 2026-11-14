@@ -348,7 +348,10 @@ hosted=(--@isomer//drive:headful --ios_multi_cpus=sim_arm64)
 hosted_targets=(//headless/storybook_headless_application:storybook_hosted_ios_test //apple/storybook_ios_application:storybook_test_host)
 if bazel build "${flags[@]}" "${hosted[@]}" "${hosted_targets[@]}"; then
     mkdir -p "$platforms/headful/hosted"
-    for f in $(files "${hosted[@]}" "${hosted_targets[@]}"); do
+    # One query a target (cquery takes one expression); the bundle is the
+    # test target internal bundle target archive.
+    for f in $(files "${hosted[@]}" //headless/storybook_headless_application:storybook_hosted_ios_test.__internal__.__test_bundle) \
+             $(files "${hosted[@]}" //apple/storybook_ios_application:storybook_test_host); do
         case "$f" in *.zip | *.ipa) cp "$exec_root/$f" "$platforms/headful/hosted/" ;; esac
     done
     ls -l "$platforms/headful/hosted"
