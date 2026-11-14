@@ -58,6 +58,58 @@ apple_runner() {
     cat "$out/$name/test.log"
     [ "$status" -eq 0 ] || failures=$((failures + 1))
 }
+# The tests hosted in the iPhone app as CI's container built them (their
+# XCTest bundle and the app hosting it, beside the .ipa in hosted/): run
+# with an xctestrun as rules_apple's runner writes one, by xcodebuild, on
+# the job's simulator.
+hosted_xctest() {
+    local out="$1" name=storybook_hosted_ios_test root="$work/hosted"
+    mkdir -p "$root" "$out/$name"
+    unzip -q "$(ls "$hosted_dir"/*.ipa | head -1)" -d "$root/ipa" && unzip -q "$(ls "$hosted_dir"/*.zip | head -1)" -d "$root" ||
+        { failures=$((failures + 1)); return; }
+    local app bundle host executable identifier developer
+    app="$(ls -d "$root/ipa/Payload/"*.app | head -1)"
+    host="$(basename "$app" .app)"
+    mv "$app" "$root/"
+    bundle="$(basename "$(ls -d "$root/"*.xctest | head -1)" .xctest)"
+    executable="$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$root/$host.app/Info.plist")"
+    identifier="$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$root/$host.app/Info.plist")"
+    developer="$(xcode-select -p)/Platforms/iPhoneSimulator.platform/Developer"
+    cat > "$root/$name.xctestrun" <<XCTESTRUN
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>$bundle</key>
+  <dict>
+    <key>ProductModuleName</key><string>$bundle</string>
+    <key>TestBundlePath</key><string>__TESTROOT__/$bundle.xctest</string>
+    <key>IsAppHostedTestBundle</key><true/>
+    <key>TestHostPath</key><string>__TESTROOT__/$host.app</string>
+    <key>TestHostBundleIdentifier</key><string>$identifier</string>
+    <key>IsUITestBundle</key><false/>
+    <key>IsXCTRunnerHostedTestBundle</key><false/>
+    <key>DependentProductPaths</key>
+    <array><string>__TESTROOT__/$bundle.xctest</string><string>__TESTROOT__/$host.app</string></array>
+    <key>TestingEnvironmentVariables</key>
+    <dict>
+      <key>DYLD_INSERT_LIBRARIES</key><string>__PLATFORMS__/iPhoneSimulator.platform/Developer/usr/lib/libXCTestBundleInject.dylib</string>
+      <key>XCInjectBundleInto</key><string>__TESTHOST__/$host.app/$executable</string>
+      <key>DYLD_FRAMEWORK_PATH</key><string>$developer/Library/Frameworks</string>
+      <key>DYLD_LIBRARY_PATH</key><string>__PLATFORMS__/iPhoneSimulator.platform/Developer/usr/lib</string>
+    </dict>
+  </dict>
+  <key>__xctestrun_metadata__</key>
+  <dict><key>FormatVersion</key><integer>1</integer></dict>
+</dict>
+</plist>
+XCTESTRUN
+    xcodebuild test-without-building -xctestrun "$root/$name.xctestrun" -destination "id=$udid" \
+        -resultBundlePath "$out/$name/result.xcresult" > "$out/$name/test.log" 2>&1
+    local status=$?
+    grep -E "Test run with|✘|passed after|failed after|TEST (SUCCEEDED|FAILED)" "$out/$name/test.log" | tail -40
+    [ "$status" -eq 0 ] || { tail -30 "$out/$name/test.log"; failures=$((failures + 1)); }
+}
 # One test target, its outputs kept.
 run() {
     local target="$1" out="$2"
@@ -82,6 +134,8 @@ apple)
     parts=" ${HEADFUL_APPLE_PARTS:-ios hosted macos} "
     runner="$(dirname "$ipa")/storybook_headful_apple_runner"
     [ -f "$runner" ] || runner=""
+    hosted_dir="$(dirname "$ipa")/hosted"
+    [ -d "$hosted_dir" ] || hosted_dir=""
     if [[ $parts == *" ios "* || $parts == *" hosted "* ]]; then
         # The iPhone: a simulator of the run's own, the app installed.
         runtime="$(xcrun simctl list runtimes iOS available | sed -n 's/^iOS .* - \(com\.apple\.CoreSimulator\.SimRuntime\.iOS-[0-9-]*\)$/\1/p' | tail -1)"
@@ -105,8 +159,12 @@ apple)
         # network. On this simulator: one rules_apple's runner made beside it
         # took over a minute to boot on GitHub's runner, xcodebuild hung, and
         # the Mac's tests after it timed out.
-        run storybook_hosted_ios_test "$out" --@isomer//drive:headful --ios_multi_cpus=sim_arm64 \
-            --test_env=ISOMER_SIMULATOR="$udid"
+        if [ -n "$hosted_dir" ]; then
+            hosted_xctest "$out"
+        else
+            run storybook_hosted_ios_test "$out" --@isomer//drive:headful --ios_multi_cpus=sim_arm64 \
+                --test_env=ISOMER_SIMULATOR="$udid"
+        fi
     fi
     [ -z "$udid" ] || xcrun simctl shutdown "$udid" > /dev/null 2>&1
     if [[ $parts == *" macos "* ]]; then
