@@ -1287,11 +1287,17 @@ extension NavigationSplitView: _PrimitiveView {
                     Runtime.shared.setNeedsRender()
                 }
             }
-            // Give the sidebar/content their own nav-bar chrome; the detail is
-            // already a NavigationStack from the app.
-            let node = wrapInBar
-                ? buildNode(view: NavigationStack(staticTitleFallback: true) { AnyView(view) }, ctx: &sub)
+            // Every column has its own bar, as in SwiftUI: its title, its
+            // toolbar, Back on a phone. The sidebar and content lead with a
+            // fixed title when they don't scroll; a detail keeps a full-bleed
+            // root (a map). A column that brings its own NavigationStack keeps
+            // that one, as the semantic path does.
+            var node = wrapInBar
+                ? buildNode(view: NavigationStack(staticTitleFallback: suffix != "detail") { AnyView(view) }, ctx: &sub)
                 : buildNode(view: view, ctx: &sub)
+            if wrapInBar, let content = node.navigationContent, _leadsToOwnNavigation(content) {
+                node = content
+            }
             Runtime.shared.compactSplitBack = nil
             if let hint = Runtime.shared.columnWidthHint { widthHints[suffix] = hint }
             Runtime.shared.columnWidthHint = nil
@@ -1325,7 +1331,7 @@ extension NavigationSplitView: _PrimitiveView {
             func build(_ name: String) -> RenderNode {
                 switch name {
                 case "detail":
-                    return column(detail, "detail", wrapInBar: false, backTo: columnCount == 3 ? "content" : "sidebar")
+                    return column(detail, "detail", wrapInBar: true, backTo: columnCount == 3 ? "content" : "sidebar")
                 case "content":
                     return column(content, "content", wrapInBar: true, backTo: "sidebar")
                 default:
@@ -1362,7 +1368,7 @@ extension NavigationSplitView: _PrimitiveView {
         sidebarBox.fixedWidth = widthHints["sidebar"] ?? 240
         sidebarBox.background = [splitFill(Color.barBackground)]
 
-        let detailBox = column(detail, "detail", wrapInBar: false)
+        let detailBox = column(detail, "detail", wrapInBar: true)
         detailBox.expandsWidth = true
         Runtime.shared.splitReselectRequested = false
 

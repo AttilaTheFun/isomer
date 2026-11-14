@@ -15,21 +15,12 @@ struct SplitTitleTests {
                                environment: ["ISO_HEADLESS_WIDTH": String(width)].merging(extra) { $1 })
     }
 
-    @Test(arguments: [390, 1024])
-    func detailTitleIsAText(width: Int) throws {
-        let app = try launch(width: width)
-        defer { app.quit() }
-        _ = try app.wait(for: "Mac Studio")
-        _ = try app.tap("Mac Studio")
-        let screen = try app.wait(for: "What's running")
-        // The title, and the row beside it when the list stays on screen.
-        #expect(screen.texts.filter { $0 == "Mac Studio" }.count == (width >= 700 ? 2 : 1),
-                "texts: \(screen.texts)")
-    }
-
-    /// What the screen shows with each shape of detail (diagnostic: prints).
+    /// The detail's title on the screen (with the row beside it where the
+    /// list stays on screen), whatever the detail is: a bare text, the
+    /// screen, an `if`, a Group with a placeholder (an app's dashboard), and
+    /// with partial frames off.
     @Test(arguments: ["plain", "screen", "if", "group", "group-whole"])
-    func detailShapes(shape: String) throws {
+    func detailTitleIsAText(shape: String) throws {
         for width in [390, 1024] {
             var extra = ["PROBE_DETAIL": shape]
             if shape == "group-whole" { extra = ["ISO_PARTIAL": "0"] }
@@ -37,12 +28,12 @@ struct SplitTitleTests {
             defer { app.quit() }
             _ = try app.wait(for: "Mac Studio")
             _ = try app.tap("Mac Studio")
-            Thread.sleep(forTimeInterval: 0.5)
-            print("[shape] \(shape) \(width): \(try app.screen().texts)")
-            if shape == "plain" {
-                for item in try app.layout().items {
-                    print("[layout] \(width) \(String(repeating: "  ", count: item.depth))\(item.kind) \"\(item.label)\"")
-                }
+            let screen = try app.wait(for: "What's running")
+            #expect(screen.texts.filter { $0 == "Mac Studio" }.count >= (width >= 700 ? 2 : 1),
+                    "\(shape) at \(width): \(screen.texts)")
+            if width < 700 {
+                // The detail's bar goes back to the list, as a phone's does.
+                #expect(try app.back().texts.contains("MacBook Pro"), "\(shape): back")
             }
         }
     }

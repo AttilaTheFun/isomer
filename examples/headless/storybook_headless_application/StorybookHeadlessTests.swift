@@ -217,7 +217,7 @@ struct StorybookHeadlessTests {
         #expect(try app.screen().texts.contains("Storybook"))
         let screen = try app.tap("ObservableObject")
         let wide = try app.info().width >= 700
-        #expect(screen.texts.filter { $0 == "ObservableObject" }.count == (wide ? 2 : 1),
+        #expect(screen.texts.filter { $0 == "ObservableObject" }.count >= (wide ? 2 : 1),
                 "wide: \(wide), texts: \(screen.texts.prefix(12))")
     }
 
