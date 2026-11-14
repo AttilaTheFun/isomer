@@ -86,8 +86,8 @@ done""".format(out = out.path))
     # new publish is fetched on the next load; the file names stay.
     # (The shell is already inside the site directory from the check above.)
     commands.append(r"""V=$(cat index.html *.js runtime/*.js *.wasm | cksum | cut -d' ' -f1) && [ -n "$V" ] && \
-perl -pi -e 's/((?:from|import)\s*\(?\s*["\x27])(\.{1,2}\/[^"\x27?]+?\.js)(["\x27])/$1$2?v='"$V"'$3/g; s/(new\s+Worker\s*\(\s*["\x27])(\.\/[^"\x27?]+?\.js)(["\x27])/$1$2?v='"$V"'$3/g; s/(["\x27])(\.\/[^"\x27?]+?\.wasm)(["\x27])/$1$2?v='"$V"'$3/g' index.html *.js runtime/*.js && \
-perl -pi -e 's/(<script[^>]*\ssrc=")(\.\/[^"?]+?\.js)(")/$1$2?v='"$V"'$3/g' index.html
+perl -pi -e 's/((?:from|import)\s*\(?\s*["\x27])(\.{1,2}\/[^"\x27?]+?\.js)(["\x27])/$1$2?v='"$V"'$3/g; s/(new\s+Worker\s*\(\s*["\x27])(\.\/[^"\x27?]+?\.js)(["\x27])/$1$2?v='"$V"'$3/g; s/(["\x27])(\.\/[^"\x27?]+?\.wasm)(["\x27])/$1$2?v='"$V"'$3/g' *.html *.js runtime/*.js && \
+perl -pi -e 's/(<script[^>]*\ssrc=")(\.\/[^"?]+?\.js)(")/$1$2?v='"$V"'$3/g' *.html
 """)
 
     ctx.actions.run_shell(
@@ -276,6 +276,11 @@ _ISO_RUNTIME_JS = [
     # `Font.custom`'s bundled fonts, loaded before the first frame (boot.js
     # imports it).
     Label("//wasm/libraries/swift_ui:runtime/fonts.js"),
+    # The page serving the app's session to a head elsewhere (webview.html: a
+    # native app's web view, web-view mode, docs/modes.md) and the session's
+    # messages it reads and writes.
+    Label("//wasm/libraries/swift_ui:runtime/session_host.js"),
+    Label("//wasm/libraries/swift_ui:runtime/session_messages.js"),
     # Isomer's Metal executor: the only navigator.gpu code.
     Label("//metal/runtime:runtime_js"),
 ]
@@ -401,7 +406,11 @@ def isomer_web_app(
     static_site(
         name = name + "_site",
         assets = assets,
-        extra_pages = extra_pages,
+        extra_pages = extra_pages + [
+            # The page a native app runs this app in, out of sight, drawing
+            # it over the session protocol (web-view mode, docs/modes.md).
+            Label("//wasm/libraries/swift_ui:webview.html"),
+        ],
         fonts = fonts,
         index = index,
         # The generic iso_hot host sits at the site root beside the ffi
@@ -420,6 +429,7 @@ def isomer_web_app(
         site_imports_test(
             name = name + "_site_imports_test",
             site = ":%s_site" % name,
+            entries = ["index.html", "webview.html"],
         )
 
     web_server(

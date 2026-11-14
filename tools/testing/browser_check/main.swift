@@ -11,7 +11,9 @@
 //                 --page "<path and query>=<out.png>" [--page …]
 //
 // Each page is loaded in turn and waited for until `--until` (a JavaScript
-// expression) is true, then `--settle` seconds more, then pictured (PNG). A
+// expression) is true, then `--settle` seconds more, then pictured (PNG; not
+// a page given no picture's path, `--page "<path>="`: a test that draws
+// nothing, its result read from the page). A
 // page that never gets there, or that throws, fails the run (exit 1), as
 // does an error on the console unless `--allow-errors`. The console and the
 // exceptions are printed either way. CHROME in the environment names Chrome
@@ -235,7 +237,7 @@ func differingPixels(_ a: Data, _ b: Data, session: String) -> Int? {
 
 for page in options.pages {
     let url = "http://127.0.0.1:\(server.port)/" + page.path.drop(while: { $0 == "/" })
-    let name = URL(fileURLWithPath: page.out).deletingPathExtension().lastPathComponent
+    let name = page.out.isEmpty ? page.path : URL(fileURLWithPath: page.out).deletingPathExtension().lastPathComponent
     log("\(name): \(url)")
     _ = chrome.send("Page.navigate", ["url": url], session: session)
     let deadline = Date().addingTimeInterval(options.timeout)
@@ -250,7 +252,9 @@ for page in options.pages {
     }
     if !ready { failures.append("\(name): not ready in \(Int(options.timeout)) s (\(options.until))") }
     usleep(useconds_t(options.settle * 1_000_000))
-    if let data = (chrome.send("Page.captureScreenshot", ["format": "png"], session: session)?["data"] as? String)
+    if page.out.isEmpty {
+        // No picture asked for.
+    } else if let data = (chrome.send("Page.captureScreenshot", ["format": "png"], session: session)?["data"] as? String)
         .flatMap({ Data(base64Encoded: $0) }) {
         let out = URL(fileURLWithPath: page.out)
         try? FileManager.default.createDirectory(at: out.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -268,7 +272,7 @@ for page in options.pages {
     } else {
         failures.append("\(name): no picture")
     }
-    if options.dom {
+    if options.dom, !page.out.isEmpty {
         let result = chrome.send("Runtime.evaluate", ["expression": domDump, "returnByValue": true], session: session)
         if let text = (result?["result"] as? [String: Any])?["value"] as? String {
             try? Data(text.utf8).write(to: URL(fileURLWithPath: page.out).appendingPathExtension("dom.txt"))

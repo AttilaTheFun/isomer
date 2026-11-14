@@ -140,6 +140,24 @@ package func isoStart(host: any WebHost, renderer: String, width: Double, height
         if Runtime.shared.host == nil {
             _ = _application_main(0, nil)
         }
+        // A head elsewhere, for a page serving the app's session
+        // (runtime/session_host.js: web-view mode, docs/modes.md): the tree
+        // goes out as the head's renderer takes it (Apple's tree renderer's,
+        // Compose's) through `renderTree`, which the page sends on as the
+        // session's patches, as RemoteSession binds them on a server.
+        if renderer == "swiftui" || renderer == "compose" {
+            let send: ([UInt8]) -> Void = { webHost?.renderTree(tree: $0) }
+            if renderer == "swiftui" {
+                _boundRendererName = "SwiftUI"
+                Renderer.bind(SwiftUIRenderer(send: send))
+            } else {
+                _boundRendererName = "Compose"
+                Renderer.bind(JetpackComposeRenderer(send: send))
+            }
+            Runtime.shared.start(host: WasmHostBridge(), width: width, height: height)
+            _isoDriveAttach("Web", _boundRendererName)
+            return
+        }
         // The DOM renderer, by its name or its name until 0.51.
         if renderer == "dom" || renderer == "react" {
             _boundRendererName = "DOM"
@@ -253,6 +271,15 @@ package func isoSetColorScheme(dark: Bool) {
 @ExportedFunction
 package func isoOpenURL(url: String) {
     Runtime.shared.openURL(external: url)
+}
+
+/// The system's back, from a head elsewhere (a session's `back`: Android's
+/// gesture): the app's navigation pops, if it can.
+@ExportedFunction
+package func isoBack() {
+    MainActor.assumeIsolated {
+        _ = Runtime.shared.handleBackButton()
+    }
 }
 
 @ExportedFunction

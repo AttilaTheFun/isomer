@@ -23,7 +23,10 @@ public final class IsomerRemoteSession {
     /// The app's own color scheme (`preferredColorScheme`), if it set one.
     public private(set) var appDark: Bool?
 
-    private let url: String
+    /// Where the app is: a URL (IsomerRemote's), or a connection of the
+    /// host's own (a page in a web view, apple/libraries/webview_head).
+    private let url: String?
+    private let connection: (any IsomerConnection)?
     private let token: String?
     private let environment: [String: String]
     private var call: IsomerCall<Wire_ClientMessage, Wire_ServerMessage>?
@@ -38,7 +41,19 @@ public final class IsomerRemoteSession {
     /// unix:/path); `environment` its launch hooks (ISO_ only).
     public init(url: String, token: String? = nil, environment: [String: String] = [:]) {
         self.url = url
+        self.connection = nil
         self.token = token
+        self.environment = environment
+    }
+
+    /// The app over a connection the host made: a page in a web view the
+    /// app owns (web-view mode, docs/modes.md: IsomerWebViewConnection), or
+    /// any other transport. `environment` is the app's launch hooks (ISO_
+    /// only), sent with the session's start.
+    public init(connection: any IsomerConnection, environment: [String: String] = [:]) {
+        self.url = nil
+        self.connection = connection
+        self.token = nil
         self.environment = environment
     }
 
@@ -48,10 +63,15 @@ public final class IsomerRemoteSession {
         guard !started else { return }
         started = true
         status = "Connecting…"
-        reading = Task { [url, token, environment] in
+        reading = Task { [url, connection, token, environment] in
             do {
-                let endpoint = try IsomerRemote.endpoint(url)
-                let call = try await endpoint.connection.connect(context: endpoint.context(token: token))
+                let call: IsomerCall<Wire_ClientMessage, Wire_ServerMessage>
+                if let connection {
+                    call = try await connection.connect()
+                } else {
+                    let endpoint = try IsomerRemote.endpoint(url ?? "")
+                    call = try await endpoint.connection.connect(context: endpoint.context(token: token))
+                }
                 self.call = call
                 var start = Wire_Start()
                 start.size.width = width

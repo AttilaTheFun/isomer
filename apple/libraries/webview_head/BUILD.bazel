@@ -1,0 +1,25 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# An app in web-view mode on the iPhone and the Mac (docs/modes.md): its
+# Swift runs as wasm in a WKWebView the app owns (the app's isomer_web_app
+# site, bundled, its webview.html serving the session), drawn by the tree
+# renderer over the session protocol (//apple/libraries/remote_head). A
+# library of its own so that an app with a remote head alone links no
+# WebKit. iOS 17 and macOS 14, as remote_head.
+swift_library(
+    name = "webview_head",
+    package_name = "isomer",
+    srcs = [
+        "IsomerSiteSchemeHandler.swift",
+        "IsomerWebViewAppView.swift",
+        "IsomerWebViewConnection.swift",
+    ],
+    module_name = "IsomerWebViewHead",
+    deps = [
+        "//apple/libraries/remote_head",
+        # In the tree renderer's configuration, as remote_head takes it.
+        "//drive/serving:beside_own_swift_ui",
+    ],
+)

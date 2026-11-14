@@ -7,6 +7,7 @@
 // a page; this view sends it the size, scale, appearance and scene phase, and
 // what the person does.
 
+import IsomerServing
 import IsomerTree
 import SwiftUI
 
@@ -19,6 +20,12 @@ public struct IsomerRemoteView: View {
 
     public init(url: String, token: String? = nil, environment: [String: String] = [:]) {
         _session = State(initialValue: IsomerRemoteSession(url: url, token: token, environment: environment))
+    }
+
+    /// The app over a connection the host made (a page in a web view the app
+    /// owns: IsomerWebViewAppView, apple/libraries/webview_head).
+    public init(connection: any IsomerConnection, environment: [String: String] = [:]) {
+        _session = State(initialValue: IsomerRemoteSession(connection: connection, environment: environment))
     }
 
     public var body: some View {

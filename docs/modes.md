@@ -28,7 +28,50 @@ hot-reload as wasm and ship compiled):
   Apple's tree renderer (apple/libraries/swift_ui_tree, FlatPatchTree), the
   Compose interpreter (FlatTree.kt), the DOM renderer (flat_tree.js). The web
   and Android heads already take a session (`connectIsomer`,
-  `IsomerRemote`); Apple's needs one.
+  `IsomerRemote`), and Apple's too (`IsomerRemoteView`,
+  apple/libraries/remote_head), by URL or over a connection of its own.
+
+### Web-view mode on the iPhone and the Mac (what there is)
+
+- **The page** is the app's own web site: every `isomer_web_app` site has
+  `webview.html` beside index.html, which serves the app's session
+  (wasm/libraries/swift_ui/runtime/session_host.js) instead of drawing it.
+  The guest starts with the head's `start` (its size, scale, appearance, the
+  ISO_ launch environment) under the head's renderer by name (`isoStart`
+  with "swiftui" binds `SwiftUIRenderer`, "compose" Compose's; the app's
+  `Bridge.rendererName` says so); each ClientMessage is the guest's export
+  called (`isoHostEvent`, `isoResize`, `isoKeyEvent`, `isoSetColorScheme`,
+  `isoSetDisplayScale`, `isoSetScenePhase`, `isoOpenURL`, `isoBack`), as
+  headless/libraries/swift_ui/RemoteSession.swift maps them on a server;
+  out go its patches, the pictures it registers, its platform commands,
+  the URLs it opens and its appearance. Text is measured by the page's
+  canvas; files, networking and SecureStore are the page's, as on the web.
+  The messages are written and read by hand (session_messages.js).
+- **Apple's side** (apple/libraries/webview_head, `IsomerWebViewHead`, its own
+  library so a remote-only app links no WebKit): `IsomerWebViewHost` owns a
+  WKWebView and serves the bundled site from `isomer-app://app/`
+  (`IsomerSiteSchemeHandler`: a stable origin, so the page's IndexedDB keeps
+  the app's files). `IsomerWebViewConnection` is an `IsomerConnection`:
+  client messages go to the page with `callAsyncJavaScript` (base64), one at
+  a time; server messages come back through the `isomer` message handler.
+  Each session loads the page afresh. `IsomerWebViewAppView(site:)` keeps the
+  web view 1×1 point and nearly transparent behind `IsomerRemoteView(connection:)`
+  in the app's window, where WebKit counts it visible.
+- **The example**: examples/apple/webview_ios_application, the web
+  Storybook's site bundled into an iPhone app (simulator, no profile) that
+  compiles none of the Storybook's Swift; CI's container builds it on every
+  pull request.
+- **Tests**: the examples' //tests/webview_session:session_test runs the page
+  in headless Chrome with the Storybook's guest, as a head drives it: the
+  first patch is the whole tree, a tap changes it. It draws nothing (a pull
+  request's test). On the iPhone, verify's Apple pictures
+  (tools/ci/hosted_apple_test.sh, on GitHub's Mac) open the web-view app on
+  each smoke story and check it drew; nothing there taps yet.
+- **Open**: Android's WebView and Windows' WebView2 as transports; the
+  platform services the page lacks (the app's container for files, the
+  keychain, the clipboard, networking without CORS) over the session; an
+  iPhone test that taps (a headful XCTest); a Mac example; and
+  `--@isomer//:mode` choosing it.
 
 ### What crosses an asynchronous seam
 
@@ -105,8 +148,9 @@ on the same reactor.
 2. Apple's head over a session: web-view and remote apps on the iPhone and
    the Mac.
 3. Web-view mode: the in-page runtime behind the session protocol, its
-   transport over WebKit's message channel (then Android's WebView,
-   Windows' WebView2); the platform services over the session.
+   transport over WebKit's message channel (both there: "Web-view mode on
+   the iPhone and the Mac" above; then Android's WebView, Windows'
+   WebView2); the platform services over the session.
 4. Embedded interpreted mode (isomer#188's second half, with its crash fixed
    and its native set profiled per feature).
 5. `--@isomer//:mode` and `isomer_application`.
