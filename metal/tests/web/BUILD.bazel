@@ -1,7 +1,7 @@
 # Isomer's Metal end to end on a browser's WebGPU: MetalCheck.swift as a
-# wasm reactor, its page (app.ts, bundled with the bindings and the
-# executor), and the driver that runs it in headless Chrome (needs Chrome
-# on the Mac, hence manual):
+# wasm reactor, its page (app.ts, bundled with the JavaScript bindings and
+# the executor by esbuild, a dev dependency of isomer's), and the driver
+# that runs it in headless Chrome (needs Chrome on the Mac, hence manual):
 #
 #   bazel build //metal/tests/web:metal_check_bundle //metal/tests/web:metal_check_web.wasm
 #   node tools/metal/run_metal_check.js \
@@ -9,7 +9,7 @@
 
 load("@aspect_rules_esbuild//esbuild:defs.bzl", "esbuild")
 load("@rules_swift//swift:swift.bzl", "swift_library")
-load("//swift_ffi/rules:ts_swift_wasm_library.bzl", "ts_swift_wasm_library")
+load("//swift_ffi/rules:js_swift_wasm_library.bzl", "js_swift_wasm_library")
 
 swift_library(
     name = "metal_check",
@@ -24,7 +24,7 @@ swift_library(
     ],
 )
 
-ts_swift_wasm_library(
+js_swift_wasm_library(
     name = "metal_check_web",
     # Swift's generic-metadata code needs more than wasm-ld's default stack.
     linkopts = [
@@ -51,8 +51,8 @@ esbuild(
     srcs = [
         "app.ts",
         ":executor",
-        ":metal_check_web_gen_ts",
-        ":metal_check_web_runtime_ts",
+        ":metal_check_web_js",
+        ":metal_check_web_runtime_js",
     ],
     entry_point = "app.ts",
     format = "iife",

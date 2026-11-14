@@ -1,12 +1,12 @@
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
-load("@rules_python//python:defs.bzl", "py_binary")
 load("@rules_swift//swift:swift_library.bzl", "swift_library")
 
 # The swift_ffi rule definitions — one file per public macro:
 #   bridge_cc_library.bzl / cc_swift_library.bzl / kt_swift_library.bzl /
-#   ts_swift_wasm_library.bzl / swift_wasm_reactor.bzl / swift_wasm_library.bzl /
+#   js_swift_wasm_library.bzl / swift_wasm_reactor.bzl / swift_wasm_library.bzl /
 #   c_host_library.bzl / rs_swift_library.bzl
-# (utils.bzl is internal). Target platforms for the cross-compiled bridges
+# (utils.bzl is internal; ts_swift_wasm_library.bzl is js_swift_wasm_library's
+# name before 0.54). Target platforms for the cross-compiled bridges
 # live here too; the Swift-SDK toolchains registered in MODULE.bazel match
 # these constraints.
 package(
@@ -40,10 +40,10 @@ config_setting(
 )
 
 # A reactor's host entries, read from a link of it exporting everything
-# (swift_wasm_reactor.bzl's wasm_export_list).
-py_binary(
+# (swift_wasm_reactor.bzl's wasm_export_list): export_list/main.swift.
+alias(
     name = "export_list",
-    srcs = ["export_list.py"],
+    actual = "//swift_ffi/rules/export_list",
 )
 
 platform(

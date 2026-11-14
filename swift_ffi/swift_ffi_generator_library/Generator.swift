@@ -8,7 +8,8 @@ import SwiftFFIIRLibrary
 //   c-header        C header declaring the macro-expanded `@c` symbols
 //   jni-adapter     C adapter mapping `Java_*` JNI symbols onto the C ABI
 //   kotlin          Kotlin bindings: a facade object + interface wrapper classes
-//   ts              TypeScript module wrapping a wasm reactor's exports
+//   js              JavaScript (an ES module) wrapping a wasm reactor's exports
+//   dts             its TypeScript declarations (for consumers who want types)
 //   cpp / rust      idiomatic C++ / Rust bindings over the C ABI
 //   swift-host-wasm / c-host-wasm   Swift / C host bindings driving a reactor
 //
@@ -64,8 +65,10 @@ public struct Generator {
             return emitCpp(module, moduleName: moduleName, headerName: header)
         case .rust:
             return emitRust(module, moduleName: moduleName)
-        case .ts:
-            return emitTypeScript(module, moduleName: moduleName)
+        case .js:
+            return emitJavaScript(module, moduleName: moduleName)
+        case .dts:
+            return emitTypeDeclarations(module, moduleName: moduleName)
         case .kotlin:
             return emitKotlin(module, package: javaPackage, className: javaClass, libraryName: libraryName,
                 preloadLibraries: preloadLibraries)

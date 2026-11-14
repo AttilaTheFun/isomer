@@ -1,12 +1,6 @@
-load("@rules_python//python:defs.bzl", "py_binary")
-
 package(default_visibility = ["//visibility:public"])
 
-exports_files([
-    "defs.bzl",
-    "serve.py",
-    "site_imports_test.py",
-])
+exports_files(["defs.bzl"])
 
 # `-c opt`: the web app's reactor is shipped without its function names.
 config_setting(
@@ -14,17 +8,19 @@ config_setting(
     values = {"compilation_mode": "opt"},
 )
 
-# The exports a program linked from a wasm_sdk_bundle needs (its hosts'
-# entries, from the archives' symbol indexes): written into the manifest.
-py_binary(
+# The web build's tools, Swift since 0.54 (they were Python, and rules_python
+# a dependency of every app on Isomer), each in a package of its own; their
+# old names here kept for whoever names them:
+#   sdk_exports         a wasm_sdk_bundle's manifest, its hosts' entries added
+#   icu_data            a module's ICU data, trimmed, as an object
+#   serve               the `bazel run` of a web app (web_server)
+#   site_imports_check  site_imports_test's check
+alias(
     name = "sdk_exports",
-    srcs = ["sdk_exports.py"],
-    visibility = ["//visibility:public"],
+    actual = "//tools/wasm/sdk_exports",
 )
 
-# A module's ICU data, trimmed, as an object (defs.bzl's icu_data_library).
-py_binary(
+alias(
     name = "icu_data",
-    srcs = ["icu_data.py"],
+    actual = "//tools/wasm/icu_data",
 )
-

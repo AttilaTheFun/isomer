@@ -117,28 +117,51 @@ final class GeneratorTests: XCTestCase {
         XCTAssertTrue(header.contains("#ifndef"))
     }
 
-    func testTypeScriptWrapsExports() throws {
-        let ts = try artifact(.ts)
-        XCTAssertTrue(ts.contains("export"))
-        XCTAssertTrue(ts.contains("greet"))
-        XCTAssertTrue(ts.contains("Counter"))
+    func testJavaScriptWrapsExports() throws {
+        let js = try artifact(.js)
+        XCTAssertTrue(js.contains("export"))
+        XCTAssertTrue(js.contains("greet"))
+        XCTAssertTrue(js.contains("Counter"))
         // Wrapper methods dispatch through the interface's invoke entry.
-        XCTAssertTrue(ts.contains("swift_ffi_Counter_invoke"))
+        XCTAssertTrue(js.contains("swift_ffi_Counter_invoke"))
         // The fixed five-entry import table is always bound.
-        XCTAssertTrue(ts.contains("closure_invoke"))
-        XCTAssertTrue(ts.contains("dependency_get"))
-        XCTAssertTrue(ts.contains("task_enqueue"))
-        XCTAssertTrue(ts.contains("async_complete"))
+        XCTAssertTrue(js.contains("closure_invoke"))
+        XCTAssertTrue(js.contains("dependency_get"))
+        XCTAssertTrue(js.contains("task_enqueue"))
+        XCTAssertTrue(js.contains("async_complete"))
         // The loader registers the dependency-proxy factories.
-        XCTAssertTrue(ts.contains("swift_ffi_register_Counter"))
+        XCTAssertTrue(js.contains("swift_ffi_register_Counter"))
         // Runtime staging uses the fixed allocator names.
-        XCTAssertTrue(ts.contains("swift_ffi_alloc"))
+        XCTAssertTrue(js.contains("swift_ffi_alloc"))
+        // JavaScript, nothing of TypeScript's: no type imports, annotations
+        // or casts for a compiler to take out.
+        XCTAssertFalse(js.contains("import type"))
+        XCTAssertFalse(js.contains("type WasmValue"))
+        XCTAssertFalse(js.contains(" as number"))
+        XCTAssertFalse(js.contains("export interface"))
+        XCTAssertFalse(js.contains("implements"))
+        XCTAssertFalse(js.contains("): void {"))
     }
 
-    func testTypeScriptWrapperReleasesBesideAnInterfaceClose() throws {
+    func testDeclarationsTypeTheModule() throws {
+        let dts = try artifact(.dts)
+        XCTAssertTrue(dts.contains("import type {"))
+        XCTAssertTrue(dts.contains("export interface Counter {"))
+        XCTAssertTrue(dts.contains("export declare class SwiftCounter implements Counter {"))
+        XCTAssertTrue(dts.contains("export interface Stats {"))
+        XCTAssertTrue(dts.contains("export declare const StatsType: BridgeType<Stats>;"))
+        XCTAssertTrue(dts.contains("export declare class Greeter {"))
+        XCTAssertTrue(dts.contains("export declare function load("))
+        XCTAssertTrue(dts.contains("): Promise<Greeter>;"))
+        // Declarations only: no bodies.
+        XCTAssertFalse(dts.contains("this.runtime"))
+        XCTAssertFalse(dts.contains("swift_ffi_Counter_invoke"))
+    }
+
+    func testJavaScriptWrapperReleasesBesideAnInterfaceClose() throws {
         // A connection-like interface with a `close` of its own: the
-        // TypeScript wrapper's release takes another name, since a class
-        // cannot overload `close()` with it.
+        // wrapper's release takes another name, since a class cannot
+        // overload `close()` with it.
         var connection = module
         connection.interfaces.append(
             FFIInterface(
@@ -151,12 +174,15 @@ final class GeneratorTests: XCTestCase {
                     )
                 ]
             ))
-        let ts = try Generator(module: connection).artifact(kind: .ts, moduleName: "Greeter")
-        XCTAssertTrue(ts.contains("  close(code: number): void {"))
-        XCTAssertTrue(ts.contains("  release(): void {"))
-        XCTAssertTrue(ts.contains("Connection used after release()"))
+        let js = try Generator(module: connection).artifact(kind: .js, moduleName: "Greeter")
+        XCTAssertTrue(js.contains("  close(code) {"))
+        XCTAssertTrue(js.contains("  release() {"))
+        XCTAssertTrue(js.contains("Connection used after release()"))
         // Other wrappers keep `close()`.
-        XCTAssertTrue(ts.contains("Counter used after close()"))
+        XCTAssertTrue(js.contains("Counter used after close()"))
+        let dts = try Generator(module: connection).artifact(kind: .dts, moduleName: "Greeter")
+        XCTAssertTrue(dts.contains("  close(code: number): void;"))
+        XCTAssertTrue(dts.contains("  release(): void;"))
     }
 
     func testKotlinEmitsFacadeAndWrapper() throws {
@@ -289,15 +315,17 @@ final class GeneratorTests: XCTestCase {
         XCTAssertTrue(kotlin.contains("override val name = \"Stats\""))
     }
 
-    func testTypeScriptEmitsV2Shapes() throws {
-        let ts = try Generator(module: v2Module).artifact(kind: .ts, moduleName: "Greeter")
-        XCTAssertTrue(ts.contains("echo<T>(T_type: BridgeType<T>"))
-        XCTAssertTrue(ts.contains("StatsType"))
-        XCTAssertTrue(ts.contains("typeHeader(Tags.struct, \"Stats\")"))
-        XCTAssertTrue(ts.contains("closure_invoke"))
-        XCTAssertTrue(ts.contains("Lazy<string>"))
+    func testJavaScriptEmitsV2Shapes() throws {
+        let js = try Generator(module: v2Module).artifact(kind: .js, moduleName: "Greeter")
+        XCTAssertTrue(js.contains("echo(T_type, "))
+        XCTAssertTrue(js.contains("StatsType"))
+        XCTAssertTrue(js.contains("typeHeader(Tags.struct, \"Stats\")"))
+        XCTAssertTrue(js.contains("closure_invoke"))
         // The lazy_get/lazy_release calls live in the shared runtime file.
-        XCTAssertTrue(ts.contains("new Lazy("))
+        XCTAssertTrue(js.contains("new Lazy("))
+        let dts = try Generator(module: v2Module).artifact(kind: .dts, moduleName: "Greeter")
+        XCTAssertTrue(dts.contains("echo<T>(T_type: BridgeType<T>"))
+        XCTAssertTrue(dts.contains("Lazy<string>"))
     }
 
     func testRustEmitsConsumerBindings() throws {

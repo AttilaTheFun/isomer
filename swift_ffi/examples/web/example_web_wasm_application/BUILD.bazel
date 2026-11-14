@@ -1,17 +1,22 @@
 # The web "wasm mode" cell of the example matrix: the shared greeter
-# (//swift_ffi/examples/shared/greeter) as a wasm reactor + TypeScript bindings,
-# typechecked with tsc and opened in a hermetic Electron shell. The web runs
-# Swift only as wasm (the browser's own WebAssembly engine), so there is no web
-# compiled cell.
+# (//swift_ffi/examples/shared/greeter) as a wasm reactor + JavaScript bindings
+# (with their TypeScript declarations), used from TypeScript typechecked with
+# tsc and opened in a hermetic Electron shell. The web runs Swift only as wasm
+# (the browser's own WebAssembly engine), so there is no web compiled cell.
 #
 #   bazel run //swift_ffi/examples/web/example_web_wasm_application                      # Electron window
 #   bazel test //swift_ffi/examples/web/example_web_wasm_application:greeter_web_test   # assertions
+#
+# The bindings need no TypeScript (since 0.54); this example's own sources
+# are TypeScript, to check the declarations a consumer's TypeScript reads
+# (rules_ts, rules_js and esbuild are isomer's dev dependencies: an example's,
+# never an application's).
 
 load("@aspect_rules_esbuild//esbuild:defs.bzl", "esbuild")
-load("@aspect_rules_js//js:defs.bzl", "js_test")
+load("@aspect_rules_js//js:defs.bzl", "js_library", "js_test")
 load("@aspect_rules_ts//ts:defs.bzl", "ts_project")
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
-load("//swift_ffi/rules:ts_swift_wasm_library.bzl", "ts_swift_wasm_library")
+load("//swift_ffi/rules:js_swift_wasm_library.bzl", "js_swift_wasm_library")
 
 package(
     features = [
@@ -25,11 +30,21 @@ package(
     ],
 )
 
-# WebAssembly: a wasm reactor (`greeter_web.wasm`) + TypeScript bindings
-# (`greeter_web.ts`).
-ts_swift_wasm_library(
+# WebAssembly: a wasm reactor (`greeter_web.wasm`) + JavaScript bindings
+# (`greeter_web.js`, its declarations `greeter_web.d.ts`).
+js_swift_wasm_library(
     name = "greeter_web",
     swift = "//swift_ffi/examples/shared/greeter",
+)
+
+# The bindings as rules_js sees them: modules and their declarations, for
+# the ts_project below to check against.
+js_library(
+    name = "greeter_web_js_library",
+    srcs = [
+        ":greeter_web",
+        ":greeter_web_types",
+    ],
 )
 
 # Typechecks the example sources against the bridge's emitted declarations,
@@ -47,7 +62,7 @@ ts_project(
     ],
     transpiler = "tsc",
     tsconfig = "tsconfig.json",
-    deps = [":greeter_web"],
+    deps = [":greeter_web_js_library"],
 )
 
 # Executes the compiled test against the reactor under the hermetic Node.
@@ -57,20 +72,22 @@ js_test(
     args = ["$(rootpath :greeter_web.wasm)"],
     data = [
         "package.json",
+        ":greeter_web",
         ":greeter_web.wasm",
         ":ts",
     ],
     entry_point = ":greeter_web_test.js",
 )
 
-# Bundle the renderer for Electron's Chromium (esbuild consumes the .ts
-# directly; the type checking happened in :ts above).
+# Bundle the renderer for Electron's Chromium (esbuild consumes app.ts
+# directly, with the bindings as they are; the type checking happened in :ts
+# above).
 esbuild(
     name = "bundle",
     srcs = [
         "app.ts",
-        ":greeter_web_gen_ts",
-        ":greeter_web_runtime_ts",
+        ":greeter_web_js",
+        ":greeter_web_runtime_js",
     ],
     entry_point = "app.ts",
     format = "esm",

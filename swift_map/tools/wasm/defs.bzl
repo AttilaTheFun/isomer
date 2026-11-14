@@ -1,6 +1,6 @@
 """Rules for assembling and serving the static wasm web application."""
 
-load("@rules_python//python:defs.bzl", "py_binary")
+load("//tools/wasm:defs.bzl", _web_server = "web_server")
 
 def _static_site_impl(ctx):
     out = ctx.actions.declare_directory(ctx.label.name)
@@ -45,16 +45,8 @@ def web_server(name, site, port = "8080", query = "", **kwargs):
     """`bazel run`-able dev server for a static_site target.
 
     Serves on localhost and opens the default browser (append `-- --no-open`
-    to suppress, e.g. for headless verification).
+    to suppress, e.g. for headless verification). isomer's own server: it
+    finds the site wherever the runfiles put it (this directory's copy looked
+    one level too shallow once swift_map moved under isomer).
     """
-    py_binary(
-        name = name,
-        # isomer's own server: it finds the site wherever the runfiles put
-        # it (this directory's copy looked one level too shallow once
-        # swift_map moved under isomer).
-        srcs = ["//tools/wasm:serve.py"],
-        main = "//tools/wasm:serve.py",
-        args = ["$(rootpath %s)" % site, port, query],
-        data = [site],
-        **kwargs
-    )
+    _web_server(name = name, site = site, port = port, query = query, **kwargs)

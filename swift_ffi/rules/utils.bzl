@@ -1,7 +1,7 @@
 """Internal shared Starlark for the swift_ffi rules: the analyzer aspect and
 its provider, the generator invocation rule, the platform transition, and
 small helpers. Nothing here is public API — load the per-macro files
-(`kt_swift_library.bzl`, `ts_swift_wasm_library.bzl`, …) instead."""
+(`kt_swift_library.bzl`, `js_swift_wasm_library.bzl`, …) instead."""
 
 load("@rules_swift//swift:providers.bzl", "SwiftInfo")
 
@@ -219,7 +219,7 @@ ffi_generate = rule(
         ),
         "kind": attr.string(
             mandatory = True,
-            values = ["jni-adapter", "c-header", "cpp", "rust", "ts", "kotlin", "swift-host-wasm", "c-host-wasm"],
+            values = ["jni-adapter", "c-header", "cpp", "rust", "js", "dts", "kotlin", "swift-host-wasm", "c-host-wasm"],
         ),
         "output_name": attr.string(mandatory = True, doc = "Generated file name."),
         "module_name": attr.string(

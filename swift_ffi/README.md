@@ -21,7 +21,7 @@ in a plain C ABI — no serialization framework on the call path.
 | You are writing… | You use | You get |
 | --- | --- | --- |
 | an Android app (Kotlin) | `kt_swift_library` | a JNI `lib<name>.so` + idiomatic Kotlin bindings (`use { }`, `suspend`, `Result<T>`) |
-| a web app (TypeScript) | `ts_swift_wasm_library` | a wasm reactor + a strict-mode TypeScript module (`using`, `Promise`, `Result` unions) |
+| a web app (JavaScript or TypeScript) | `js_swift_wasm_library` | a wasm reactor + an ES module, with TypeScript declarations for strict-mode callers (`using`, `Promise`, `Result` unions); nothing to compile |
 | an Apple / Linux / Windows app (C++) | `cc_swift_library` | idiomatic C++ over the bridge (templates, std::function, RAII wrappers) |
 | a Rust crate | `rs_swift_library` | generated Rust bindings over the bridge |
 | a native host that loads Swift as wasm (dynamic delivery, no recompile) | `c_host_library` / `swift_wasm_library` | C or Swift host bindings that drive the reactor under an engine the host embeds (Swift hosts: [WasmKit][wasmkit] through `//swift_ffi/runtime/swift_wasm_host`, as Isomer's do; a C host brings its own C engine) |
@@ -90,14 +90,14 @@ Annotate a `swift_library`, then wrap it for your platform:
 
 ```starlark
 load("@isomer//swift_ffi/rules:kt_swift_library.bzl", "kt_swift_library")
-load("@isomer//swift_ffi/rules:ts_swift_wasm_library.bzl", "ts_swift_wasm_library")
+load("@isomer//swift_ffi/rules:js_swift_wasm_library.bzl", "js_swift_wasm_library")
 load("@isomer//swift_ffi/rules:cc_swift_library.bzl", "cc_swift_library")
 
 # Android: lib<name>.so + Kotlin bindings.
 kt_swift_library(name = "greeter_android", swift = ":greeter")
 
-# Web: a wasm reactor + a TypeScript module.
-ts_swift_wasm_library(name = "greeter_web", swift = ":greeter")
+# Web: a wasm reactor + an ES module (and its .d.ts).
+js_swift_wasm_library(name = "greeter_web", swift = ":greeter")
 
 # Apple / Linux / Windows: idiomatic C++ over the C ABI.
 cc_swift_library(name = "greeter_cpp", swift = ":greeter")

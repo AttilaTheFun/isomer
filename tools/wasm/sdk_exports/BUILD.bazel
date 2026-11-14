@@ -1,0 +1,11 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary")
+
+# The exports a program linked from a wasm_sdk_bundle needs (its hosts'
+# entries, from the archives' symbol indexes): written into the manifest.
+swift_binary(
+    name = "sdk_exports",
+    package_name = "isomer",
+    srcs = ["main.swift"],
+    visibility = ["//visibility:public"],
+    deps = ["//tools/wasm/tool_support"],
+)

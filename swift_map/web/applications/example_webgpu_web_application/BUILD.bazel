@@ -1,10 +1,10 @@
-load("//swift_ffi/rules:ts_swift_wasm_library.bzl", "ts_swift_wasm_library")
+load("//swift_ffi/rules:js_swift_wasm_library.bzl", "js_swift_wasm_library")
 load("//swift_map/tools/wasm:defs.bzl", "static_site", "web_server")
 
-# The wasm reactor + TypeScript bindings for the SwiftMap web module. The
+# The wasm reactor + JavaScript bindings for the SwiftMap web module. The
 # bridge's .js outputs land at the site root, where boot.js's
 # `../map_bridge.js` import resolves.
-ts_swift_wasm_library(
+js_swift_wasm_library(
     name = "map_bridge",
     linkopts = [
         # wasm-ld defaults the linear stack to ~1 MiB, which Swift's generic-

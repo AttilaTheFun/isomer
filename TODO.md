@@ -532,14 +532,12 @@ The tools should be Swift wherever Swift can do the job, with no Python in
 the repository: executable targets (`swift_binary`, or a package's `swift
 run`), CoreGraphics and ImageIO for images.
 
-- **Run by Bazel** (`py_binary`, on rules_python 2.0.2's hermetic Python
-  3.12):
-  - swift_ffi's `export_list.py` (a reactor's exports);
-  - tools/wasm's `icu_data.py`, `sdk_exports.py` and `serve.py` (the web
-    apps' `bazel run`, swift_map's too), and its `site_imports_test.py`;
-  - the network probe's `network_check.py`.
-
-  With these in Swift, rules_python and its toolchain leave MODULE.bazel.
+- **Run by Bazel:** done in 0.54. swift_ffi's `export_list`, tools/wasm's
+  `icu_data`, `sdk_exports`, `serve` (the web apps' `bazel run`, swift_map's
+  too) and `site_imports_check` (`site_imports_test`) are Swift, writing
+  byte for byte what the Python wrote, and rules_python left MODULE.bazel.
+  Left: the network probe's `network_check.py` (the examples' own
+  rules_python).
 - **Run by CI:** the proof (`tools/proof/proof.py`, which CI's
   `tools/ci/proof.sh` runs on every platform: its builds, its leases, the
   apps' launches, story switching, the hold-still status bars and the
@@ -556,13 +554,16 @@ run`), CoreGraphics and ImageIO for images.
 
 ## No Node
 
-Node never runs in an Isomer app. It is in the build and the tests (rules_nodejs
-6.7.5's hermetic Node; never npm), and it can go too:
+Node never runs in an Isomer app, nor (since 0.54) in its build. It is in
+isomer's own tests and examples (rules_nodejs 6.7.5's hermetic Node, a dev
+dependency; never npm), and it can go from there too:
 
-- **TypeScript.** swift_ffi's `ts_swift_library` compiles the generated web
-  bindings with `tsc` 5.8.3, through aspect_rules_ts and aspect_rules_js. If
-  swift_ffi generated JavaScript itself (with a `.d.ts` for typed callers),
-  `tsc` would go.
+- **TypeScript.** Done in 0.54: swift_ffi generates JavaScript itself, with a
+  `.d.ts` for typed callers (`js_swift_wasm_library`), and no app's build
+  runs `tsc`. aspect_rules_ts, aspect_rules_js, rules_nodejs and
+  aspect_rules_esbuild are dev dependencies, for what follows; `tsc`
+  5.8.3 still checks swift_ffi's web example, whose own sources are
+  TypeScript (they check the generated declarations).
 - **esbuild** bundles the Metal web tests and swift_ffi's web example, run
   through aspect_rules_esbuild's Node launcher. Serving those as plain ES
   modules, as the web runtime already is, removes it.

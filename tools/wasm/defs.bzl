@@ -3,9 +3,8 @@
 load("@bazel_skylib//rules:copy_file.bzl", "copy_file")
 load("@rules_cc//cc:defs.bzl", "cc_library")
 load("//swift_ffi/rules:swift_wasm_reactor.bzl", "HOST_ENTRIES")
-load("//swift_ffi/rules:ts_swift_wasm_library.bzl", "ts_swift_wasm_library")
+load("//swift_ffi/rules:js_swift_wasm_library.bzl", "js_swift_wasm_library")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
-load("@rules_python//python:defs.bzl", "py_binary", "py_test")
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 load("@rules_swift//swift:providers.bzl", "SwiftInfo")
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
@@ -117,17 +116,47 @@ static_site = rule(
     doc = "Assembles index.html + app.wasm + JS runtime + assets into one directory.",
 )
 
+def _tool_with_data_impl(ctx):
+    # The tool under this target's name (a symlink: it is the tool), with
+    # the data in its runfiles; the arguments are the target's `args`.
+    executable = ctx.actions.declare_file(ctx.label.name)
+    ctx.actions.symlink(output = executable, target_file = ctx.executable.tool, is_executable = True)
+    runfiles = ctx.runfiles(files = ctx.files.data)
+    runfiles = runfiles.merge(ctx.attr.tool[DefaultInfo].default_runfiles)
+    for target in ctx.attr.data:
+        runfiles = runfiles.merge(target[DefaultInfo].default_runfiles)
+    return [DefaultInfo(executable = executable, runfiles = runfiles)]
+
+_TOOL_WITH_DATA_ATTRS = {
+    "data": attr.label_list(allow_files = True),
+    "tool": attr.label(executable = True, cfg = "target", mandatory = True),
+}
+
+# A tool run with data of the target's (`bazel run`): web_server's.
+_tool_run = rule(
+    implementation = _tool_with_data_impl,
+    attrs = _TOOL_WITH_DATA_ATTRS,
+    executable = True,
+)
+
+# The same as a test (`bazel test`): site_imports_test's.
+_tool_test = rule(
+    implementation = _tool_with_data_impl,
+    attrs = _TOOL_WITH_DATA_ATTRS,
+    test = True,
+)
+
 def web_server(name, site, port = "8080", query = "", **kwargs):
     """`bazel run`-able dev server for a static_site target.
 
     Serves on localhost and opens the default browser (append `-- --no-open`
     to suppress). `query` is appended to the opened URL (e.g.
-    "renderer=dom" selects the layered renderer binding).
+    "renderer=dom" selects the layered renderer binding). The server is
+    //tools/wasm/serve (Swift; serve.py, on rules_python, until 0.54).
     """
-    py_binary(
+    _tool_run(
         name = name,
-        srcs = [Label("//tools/wasm:serve.py")],
-        main = Label("//tools/wasm:serve.py"),
+        tool = Label("//tools/wasm/serve"),
         args = ["$(rootpath %s)" % site, port, query],
         data = [site],
         **kwargs
@@ -308,10 +337,10 @@ def icu_data_library(name, wasm, drop = ICU_DROP, locales = None, visibility = N
     names; ICU_DROP by default): a cc_library (`<name>`, whole) defining the
     same symbol as the SDK's ICU archive, whose member is then never
     loaded. `wasm` is the reactor linked with every symbol exported (the
-    data is read from it: tools/wasm/icu_data.py). Add it to the deps of the
+    data is read from it: tools/wasm/icu_data). Add it to the deps of the
     shipped link only. A reactor without ICU gets a library defining
     nothing. `locales` (language codes) keeps only those languages' locale
-    data (tools/wasm/icu_data.py).
+    data (tools/wasm/icu_data).
 
     The full Foundation links all of ICU's data: 34 MB of Visor's 60 MB
     reactor, 13 MB of its 21 MB compressed.
@@ -321,11 +350,11 @@ def icu_data_library(name, wasm, drop = ICU_DROP, locales = None, visibility = N
         srcs = [wasm],
         outs = [name + ".o"],
         cmd = "$(location %s) $< $@ %s > /dev/null" % (
-            Label("//tools/wasm:icu_data"),
+            Label("//tools/wasm/icu_data"),
             " ".join(["'%s'" % pattern for pattern in drop] +
                      (["locales=%s" % ",".join(locales)] if locales else [])),
         ),
-        tools = [Label("//tools/wasm:icu_data")],
+        tools = [Label("//tools/wasm/icu_data")],
         tags = ["manual"],
     )
     cc_library(
@@ -348,10 +377,11 @@ def isomer_web_app(
         site_visibility = None,
         check_site_imports = True,
         visibility = None):
-    """A Isomer web application: generates the wasm reactor + TS
-    bindings from `swift_library` (the app's SwiftUI code, alwayslink, deps
-    on //wasm/libraries/swift_ui), transpiles the bindings, assembles the
-    static site around `index`, and declares a `bazel run` dev server.
+    """An Isomer web application: generates the wasm reactor and its
+    JavaScript bindings from `swift_library` (the app's SwiftUI code,
+    alwayslink, deps on //wasm/libraries/swift_ui), assembles the static site
+    around `index`, and declares a `bazel run` dev server. Swift and Bazel
+    alone build it: no Python, Node or TypeScript (since 0.54).
     `icu_locales` (language codes) keeps only those languages' ICU locale
     data in an app that has ICU. `fonts` are .ttf/.otf files for
     `Font.custom`, served from the site's fonts/ and loaded before the first
@@ -362,11 +392,11 @@ def isomer_web_app(
       <name>       `bazel run` dev server opening `index` with `query`
       <name>_site  the static site directory (for Electron wrappers etc.)
     """
-    # The bridge compiles to real ES modules: app_bridge.js (the bindings,
+    # The bridge is ES modules as generated: app_bridge.js (the bindings,
     # named so boot.js's `../app_bridge.js` import resolves at the site
     # root), swift_ffi_runtime.js (the shared runtime it imports), and the
-    # app_bridge.wasm reactor.
-    ts_swift_wasm_library(
+    # app_bridge.wasm reactor; their .d.ts beside them stay out of the site.
+    js_swift_wasm_library(
         name = "app_bridge",
         # Shipped exporting only what the page calls (swift_ffi's entries),
         # read from a link exporting everything: exported whole, a module
@@ -498,10 +528,9 @@ def site_imports_test(name, site, entries = ["index.html"], optional = [], **kwa
     from, relative to it; `optional` the modules a page imports dynamically
     and this site deliberately leaves out.
     """
-    py_test(
+    _tool_test(
         name = name,
-        srcs = [Label("//tools/wasm:site_imports_test.py")],
-        main = Label("//tools/wasm:site_imports_test.py"),
+        tool = Label("//tools/wasm/site_imports_check"),
         size = "small",
         args = ["$(rootpath %s)" % site] + entries + (["--optional"] + optional if optional else []),
         data = [site],
@@ -639,7 +668,7 @@ wasm_sdk_bundle = rule(
         ),
         "platform": attr.label(mandatory = True),
         "_sdk_exports": attr.label(
-            default = Label("//tools/wasm:sdk_exports"),
+            default = Label("//tools/wasm/sdk_exports"),
             executable = True,
             cfg = "exec",
         ),

@@ -1,0 +1,13 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary")
+
+# The `bazel run` of a web app (defs.bzl's web_server): its site served on
+# 127.0.0.1 and opened in the default browser. Swift, as Isomer's build
+# tools are (it was serve.py until 0.54, and rules_python a dependency of
+# every app on Isomer); the server is browser_driving's, the tests'.
+swift_binary(
+    name = "serve",
+    package_name = "isomer",
+    srcs = ["main.swift"],
+    visibility = ["//visibility:public"],
+    deps = ["//tools/testing/browser_driving"],
+)

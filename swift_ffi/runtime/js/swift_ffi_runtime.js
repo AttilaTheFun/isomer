@@ -1,5 +1,6 @@
-// swift_ffi_runtime — the hand-written TypeScript half of the bridge
-// runtime, shared by every generated module. `ts_swift_library` stages this
+// swift_ffi_runtime — the hand-written JavaScript half of the bridge
+// runtime, shared by every generated module (an ES module; its types are in
+// swift_ffi_runtime.d.ts beside it). `js_swift_wasm_library` stages this
 // file next to the generated bindings, which import from
 // "./swift_ffi_runtime.js"; multiple bridges in one directory share the one
 // copy. The generated module keeps only the per-Swift-module pieces
@@ -9,26 +10,28 @@
 // to the Swift instance. Release deterministically with `close()` (or a
 // `using` declaration); the FinalizationRegistry backstop releases leaked
 // wrappers after they are garbage collected.
-
-export type WasmValue = number | bigint;
+//
+// It was TypeScript, compiled by tsc, until 0.54: this is what tsc made of
+// it (ES2022, class fields defined), kept by hand, so a page runs the same
+// code it ran then.
 
 export class Runtime {
-  readonly memory: WebAssembly.Memory;
-  private readonly exports: WebAssembly.Exports;
+  memory;
+  exports;
 
-  constructor(exports: WebAssembly.Exports) {
+  constructor(exports) {
     this.exports = exports;
-    this.memory = exports.memory as WebAssembly.Memory;
+    this.memory = exports.memory;
   }
 
-  call(name: string, ...args: WasmValue[]): WasmValue {
-    const fn = this.exports[name] as (...a: WasmValue[]) => WasmValue;
+  call(name, ...args) {
+    const fn = this.exports[name];
     return fn(...args);
   }
 
   /** True when the reactor exports `name` (e.g. an interface's register
    * entry point). */
-  has(name: string): boolean {
+  has(name) {
     return typeof this.exports[name] === "function";
   }
 }
@@ -36,28 +39,24 @@ export class Runtime {
 export const encoder = new TextEncoder();
 export const decoder = new TextDecoder();
 
-export function stageBytes(
-  runtime: Runtime, bytes: Uint8Array,
-): { ptr: number; len: number; drop(): void } {
+export function stageBytes(runtime, bytes) {
   if (bytes.length === 0) {
     return { ptr: 0, len: 0, drop() {} };
   }
-  const ptr = runtime.call("swift_ffi_alloc", bytes.length) as number;
+  const ptr = runtime.call("swift_ffi_alloc", bytes.length);
   new Uint8Array(runtime.memory.buffer, ptr, bytes.length).set(bytes);
   return { ptr, len: bytes.length, drop: () => runtime.call("swift_ffi_dealloc", ptr) };
 }
 
-export function stageString(
-  runtime: Runtime, value: string,
-): { ptr: number; len: number; drop(): void } {
+export function stageString(runtime, value) {
   return stageBytes(runtime, encoder.encode(value));
 }
 
-export function takeBytes(runtime: Runtime, handle: number): Uint8Array {
-  const len = runtime.call("swift_ffi_string_len", handle) as number;
+export function takeBytes(runtime, handle) {
+  const len = runtime.call("swift_ffi_string_len", handle);
   let result = new Uint8Array(0);
   if (len > 0) {
-    const ptr = runtime.call("swift_ffi_alloc", len) as number;
+    const ptr = runtime.call("swift_ffi_alloc", len);
     runtime.call("swift_ffi_string_copy", handle, ptr);
     result = new Uint8Array(runtime.memory.buffer, ptr, len).slice();
     runtime.call("swift_ffi_dealloc", ptr);
@@ -66,35 +65,29 @@ export function takeBytes(runtime: Runtime, handle: number): Uint8Array {
   return result;
 }
 
-export function takeString(runtime: Runtime, handle: number): string {
+export function takeString(runtime, handle) {
   return decoder.decode(takeBytes(runtime, handle));
 }
 
 /** Releases leaked Swift-owned wrappers after garbage collection. */
-export const registry = new FinalizationRegistry<() => void>((release) => release());
+export const registry = new FinalizationRegistry((release) => release());
 
 /** A Swift error surfaced across the bridge (message only). */
-export class SwiftError extends Error {}
-
-/** The bridged shape of Swift `throws` and `Result` returns. */
-export type Result<T> = { ok: true; value: T } | { ok: false; error: SwiftError };
+export class SwiftError extends Error {
+}
 
 // In-flight async calls, keyed by call id, awaiting the fixed
 // `swift_ffi.async_complete` import (the blob decodes per-call).
-export type PendingCall = {
-  resolve: (value: unknown) => void;
-  decode: (blob: Uint8Array) => unknown;
-};
-export const pendingCalls = new Map<number, PendingCall>();
+export const pendingCalls = new Map();
 let callId = 0;
 
-export function nextCallId(): number {
+export function nextCallId() {
   callId += 1;
   return callId;
 }
 
 /** An ERROR blob carrying `message` (a dispatcher's failure answer). */
-export function encodeError(message: string): Uint8Array {
+export function encodeError(message) {
   const w = new BlobWriter();
   w.header(Tags.error, 0);
   const bytes = encoder.encode(message);
@@ -105,7 +98,7 @@ export function encodeError(message: string): Uint8Array {
 /** Delivers a host implementation's answer to an in-flight async interface
  * call: stages `blob` and calls the guest's fixed `swift_ffi_async_resume`
  * export (the resumed Swift task runs on the next microtask pump). */
-export function resumeAsync(runtime: Runtime, callId: number, blob: Uint8Array): void {
+export function resumeAsync(runtime, callId, blob) {
   const staged = stageBytes(runtime, blob);
   runtime.call("swift_ffi_async_resume", callId, staged.ptr, staged.len);
   staged.drop();
@@ -115,11 +108,10 @@ export function resumeAsync(runtime: Runtime, callId: number, blob: Uint8Array):
 // DISPATCHERS (closures, foreign interface objects, and injected
 // dependencies all cross the one `swift_ffi.closure_invoke` channel);
 // Swift's proxy releases its entry via `foreign_release` when ARC drops it.
-export type ForeignDispatcher = (args: Uint8Array) => Uint8Array;
-export const foreignObjects = new Map<number, ForeignDispatcher>();
+export const foreignObjects = new Map();
 let foreignId = 0;
 
-export function registerForeign(dispatcher: ForeignDispatcher): number {
+export function registerForeign(dispatcher) {
   foreignId += 1;
   foreignObjects.set(foreignId, dispatcher);
   return foreignId;
@@ -139,20 +131,12 @@ const WASI_ENOSYS = 52;
  * write guest memory, possibly during `_initialize`) and the built-ins, so
  * an override can hand back what it doesn't own (a file system's `fd_write`
  * passes stdout and stderr on). */
-export type WasiOverrides = Record<string, (...args: any[]) => number>;
-export type WasiOverridesFactory = (
-  getMemory: () => WebAssembly.Memory,
-  builtins: Readonly<WasiOverrides>,
-) => WasiOverrides;
-export function wasiShim(
-  getMemory: () => WebAssembly.Memory,
-  overridesOrFactory: WasiOverrides | WasiOverridesFactory = {},
-): Record<string, (...args: number[]) => number> {
+export function wasiShim(getMemory, overridesOrFactory = {}) {
   const view = () => new DataView(getMemory().buffer);
   // Guest stdout/stderr, buffered to newlines per fd.
-  const lineBuffers = new Map<number, string>();
+  const lineBuffers = new Map();
   const textDecoder = new TextDecoder();
-  const emit = (fd: number, chunk: string) => {
+  const emit = (fd, chunk) => {
     let buffered = (lineBuffers.get(fd) ?? "") + chunk;
     let newline = buffered.lastIndexOf("\n");
     if (newline >= 0) {
@@ -162,7 +146,7 @@ export function wasiShim(
     }
     lineBuffers.set(fd, buffered);
   };
-  const builtins: Record<string, (...args: number[]) => number> = {
+  const builtins = {
     args_sizes_get: (argc, argvBufSize) => {
       view().setUint32(argc, 0, true);
       view().setUint32(argvBufSize, 0, true);
@@ -238,9 +222,9 @@ export function wasiShim(
   const overrides = typeof overridesOrFactory === "function"
     ? overridesOrFactory(getMemory, builtins)
     : overridesOrFactory;
-  const known: Record<string, (...args: number[]) => number> = { ...builtins, ...overrides };
+  const known = { ...builtins, ...overrides };
   return new Proxy(known, {
-    get: (target, name: string) => target[name] ?? (() => WASI_ENOSYS),
+    get: (target, name) => target[name] ?? (() => WASI_ENOSYS),
   });
 }
 
@@ -259,93 +243,93 @@ export const Tags = {
   handle: 9,
   error: 10,
   foreign: 11,
-} as const;
+};
 
 export class BlobWriter {
-  private chunks: number[] = [];
+  chunks = [];
 
-  i32(value: number): this {
+  i32(value) {
     const b = new DataView(new ArrayBuffer(4));
     b.setInt32(0, value, true);
     this.push(new Uint8Array(b.buffer));
     return this;
   }
 
-  i64(value: bigint): this {
+  i64(value) {
     const b = new DataView(new ArrayBuffer(8));
     b.setBigInt64(0, value, true);
     this.push(new Uint8Array(b.buffer));
     return this;
   }
 
-  f64(value: number): this {
+  f64(value) {
     const b = new DataView(new ArrayBuffer(8));
     b.setFloat64(0, value, true);
     this.push(new Uint8Array(b.buffer));
     return this;
   }
 
-  bytes(value: Uint8Array): this {
+  bytes(value) {
     this.push(value);
     return this;
   }
 
-  header(tag: number, aux: number): this {
+  header(tag, aux) {
     return this.i32(tag).i32(aux);
   }
 
   /** A STRUCT/HANDLE/FOREIGN header: types are identified on the wire by
    * NAME (aux is the name's byte length, the name follows). */
-  typeHeader(tag: number, name: string): this {
+  typeHeader(tag, name) {
     const bytes = encoder.encode(name);
     return this.i32(tag).i32(bytes.length).bytes(bytes);
   }
 
-  private push(bytes: Uint8Array): void {
+  push(bytes) {
     for (const byte of bytes) this.chunks.push(byte);
   }
 
-  data(): Uint8Array {
+  data() {
     return new Uint8Array(this.chunks);
   }
 }
 
 export class BlobReader {
-  private view: DataView;
-  private raw: Uint8Array;
-  private cursor = 0;
+  view;
+  raw;
+  cursor = 0;
 
-  constructor(bytes: Uint8Array) {
+  constructor(bytes) {
     this.raw = bytes;
     this.view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   }
 
-  i32(): number {
+  i32() {
     const v = this.view.getInt32(this.cursor, true);
     this.cursor += 4;
     return v;
   }
 
-  i64(): bigint {
+  i64() {
     const v = this.view.getBigInt64(this.cursor, true);
     this.cursor += 8;
     return v;
   }
 
-  f64(): number {
+  f64() {
     const v = this.view.getFloat64(this.cursor, true);
     this.cursor += 8;
     return v;
   }
 
-  bytes(count: number): Uint8Array {
+  bytes(count) {
     const v = this.raw.slice(this.cursor, this.cursor + count);
     this.cursor += count;
     return v;
   }
 
   /** True when every byte has been consumed. */
-  get done(): boolean {
+  get done() {
     return this.cursor >= this.raw.byteLength;
   }
 }
@@ -353,7 +337,7 @@ export class BlobReader {
 /** Reads a (tag, aux) header where aux is a type-name byte length, returning
  * the tag and the name (STRUCT/HANDLE/FOREIGN carry names; other tags have
  * aux 0 and an empty name). */
-export function readTypeHeader(r: BlobReader): { tag: number; name: string } {
+export function readTypeHeader(r) {
   const tag = r.i32();
   const aux = r.i32();
   const name = aux > 0 ? decoder.decode(r.bytes(aux)) : "";
@@ -362,7 +346,7 @@ export function readTypeHeader(r: BlobReader): { tag: number; name: string } {
 
 /** Reads a HANDLE value (a +1 or borrowed Swift box, per direction),
  * returning its bits. */
-export function readHandleBits(r: BlobReader, expected: string): number {
+export function readHandleBits(r, expected) {
   const { tag, name } = readTypeHeader(r);
   if (tag !== Tags.handle) throw new SwiftError(`expected ${expected} handle, got tag ${tag}`);
   if (name && name !== expected) throw new SwiftError(`expected ${expected}, got ${name}`);
@@ -370,31 +354,22 @@ export function readHandleBits(r: BlobReader, expected: string): number {
 }
 
 /** Writes a HANDLE value (an interface instance by Swift box handle). */
-export function writeHandle(w: BlobWriter, name: string, bits: number): void {
+export function writeHandle(w, name, bits) {
   w.typeHeader(Tags.handle, name);
   w.i64(BigInt(bits));
 }
 
 /** Writes a FOREIGN value (a consumer implementation by foreign-registry id). */
-export function writeForeign(w: BlobWriter, name: string, id: number): void {
+export function writeForeign(w, name, id) {
   w.typeHeader(Tags.foreign, name);
   w.i64(BigInt(id));
 }
 
-/** A runtime type token: TypeScript generics are erased, so generic bridge
- * calls take one of these per type parameter (e.g. `Types.int`,
- * `Types.result(Types.string)`, or a generated `<Struct>Type`). */
-export interface BridgeType<T> {
-  encode(writer: BlobWriter, value: T): void;
-  decode(reader: BlobReader): T;
-}
-
-function scalar<T>(
-  tag: number,
-  write: (w: BlobWriter, v: T) => void,
-  read: (r: BlobReader) => T,
-  name: string,
-): BridgeType<T> {
+// A runtime type token (BridgeType in the .d.ts): JavaScript has no
+// generics to carry a type, so generic bridge calls take one of these per
+// type parameter (e.g. `Types.int`, `Types.result(Types.string)`, or a
+// generated `<Struct>Type`).
+function scalar(tag, write, read, name) {
   return {
     encode(w, v) {
       w.header(tag, 0);
@@ -411,11 +386,11 @@ function scalar<T>(
 
 export const Types = {
   /** Swift `Int` (a 64-bit value; safe up to 2^53). */
-  int: scalar<number>(Tags.int, (w, v) => w.i64(BigInt(v)), (r) => Number(r.i64()), "Int"),
-  int32: scalar<number>(Tags.int32, (w, v) => w.i64(BigInt(v)), (r) => Number(r.i64()), "Int32"),
-  double: scalar<number>(Tags.double, (w, v) => w.f64(v), (r) => r.f64(), "Double"),
-  bool: scalar<boolean>(Tags.bool, (w, v) => w.i64(v ? 1n : 0n), (r) => r.i64() !== 0n, "Bool"),
-  string: scalar<string>(
+  int: scalar(Tags.int, (w, v) => w.i64(BigInt(v)), (r) => Number(r.i64()), "Int"),
+  int32: scalar(Tags.int32, (w, v) => w.i64(BigInt(v)), (r) => Number(r.i64()), "Int32"),
+  double: scalar(Tags.double, (w, v) => w.f64(v), (r) => r.f64(), "Double"),
+  bool: scalar(Tags.bool, (w, v) => w.i64(v ? 1n : 0n), (r) => r.i64() !== 0n, "Bool"),
+  string: scalar(
     Tags.string,
     (w, v) => {
       const bytes = encoder.encode(v);
@@ -424,7 +399,7 @@ export const Types = {
     (r) => decoder.decode(r.bytes(Number(r.i64()))),
     "String",
   ),
-  bytes: scalar<Uint8Array>(
+  bytes: scalar(
     Tags.bytes,
     (w, v) => w.i64(BigInt(v.length)).bytes(v),
     (r) => r.bytes(Number(r.i64())),
@@ -432,7 +407,7 @@ export const Types = {
   ),
   /** Swift `Result<T, Error>` as a value: a LIST of [isError, payload] (the
    * general container encoding — see array/dictionary below). */
-  result<T>(inner: BridgeType<T>): BridgeType<Result<T>> {
+  result(inner) {
     return {
       encode(w, v) {
         w.header(Tags.list, 0);
@@ -450,7 +425,7 @@ export const Types = {
     };
   },
   /** Swift `Array<Element>` as a value: a LIST of the elements. */
-  array<T>(element: BridgeType<T>): BridgeType<T[]> {
+  array(element) {
     return {
       encode(w, v) {
         w.header(Tags.list, 0);
@@ -459,7 +434,7 @@ export const Types = {
       },
       decode(r) {
         const count = readListHeader(r, "Array");
-        const items: T[] = [];
+        const items = [];
         for (let i = 0; i < count; i++) items.push(element.decode(r));
         return items;
       },
@@ -467,7 +442,7 @@ export const Types = {
   },
   /** Swift `Dictionary<Key, Value>` as a value: a LIST of alternating
    * key/value pairs (unordered). */
-  dictionary<K, V>(key: BridgeType<K>, value: BridgeType<V>): BridgeType<Map<K, V>> {
+  dictionary(key, value) {
     return {
       encode(w, v) {
         w.header(Tags.list, 0);
@@ -480,7 +455,7 @@ export const Types = {
       decode(r) {
         const count = readListHeader(r, "Dictionary");
         if (count % 2 !== 0) throw new SwiftError(`expected Dictionary, got list of ${count}`);
-        const map = new Map<K, V>();
+        const map = new Map();
         for (let i = 0; i < count; i += 2) map.set(key.decode(r), value.decode(r));
         return map;
       },
@@ -489,26 +464,26 @@ export const Types = {
 };
 
 /** Reads a LIST header, returning the element count. */
-function readListHeader(r: BlobReader, expected: string): number {
+function readListHeader(r, expected) {
   const tag = r.i32();
   r.i32();
   if (tag !== Tags.list) throw new SwiftError(`expected ${expected}, got tag ${tag}`);
   return Number(r.i64());
 }
 
-export function encodeWith<T>(type: BridgeType<T>, value: T): Uint8Array {
+export function encodeWith(type, value) {
   const writer = new BlobWriter();
   type.encode(writer, value);
   return writer.data();
 }
 
-export function decodeWith<T>(type: BridgeType<T>, bytes: Uint8Array): T {
+export function decodeWith(type, bytes) {
   return type.decode(new BlobReader(bytes));
 }
 
 /** If the blob is an ERROR blob, its message (the invoke/closure failure
  * channel); null otherwise. */
-export function errorMessageOf(bytes: Uint8Array): string | null {
+export function errorMessageOf(bytes) {
   if (bytes.byteLength < 4) return null;
   const r = new BlobReader(bytes);
   const tag = r.i32();
@@ -518,41 +493,41 @@ export function errorMessageOf(bytes: Uint8Array): string | null {
 }
 
 /** Encodes an error message as an ERROR blob (closure failure channel). */
-export function encodeErrorBlob(message: string): Uint8Array {
+export function encodeErrorBlob(message) {
   const bytes = encoder.encode(message);
   return new BlobWriter().header(Tags.error, 0).i64(BigInt(bytes.length)).bytes(bytes).data();
 }
 
 /** A deferred Swift value: the Swift-side computation runs on first
  * `value()` (then caches, releasing the handle). */
-export class Lazy<T> {
-  private handle: number;
-  private cached: T | undefined;
-  private hasValue = false;
+export class Lazy {
+  runtime;
+  type;
+  handle;
+  cached;
+  hasValue = false;
 
   /** @internal */
-  constructor(
-    private readonly runtime: Runtime,
-    handle: number,
-    private readonly type: BridgeType<T>,
-  ) {
+  constructor(runtime, handle, type) {
+    this.runtime = runtime;
+    this.type = type;
     this.handle = handle;
     registry.register(this, () => runtime.call("swift_ffi_lazy_release", handle), this);
   }
 
-  value(): T {
+  value() {
     if (!this.hasValue) {
       if (this.handle === 0) throw new Error("Lazy used after close()");
-      const box = this.runtime.call("swift_ffi_lazy_get", this.handle) as number;
+      const box = this.runtime.call("swift_ffi_lazy_get", this.handle);
       this.cached = decodeWith(this.type, takeBytes(this.runtime, box));
       this.hasValue = true;
       this.close();
     }
-    return this.cached as T;
+    return this.cached;
   }
 
   /** Releases the underlying Swift handle. Idempotent. */
-  close(): void {
+  close() {
     if (this.handle !== 0) {
       registry.unregister(this);
       this.runtime.call("swift_ffi_lazy_release", this.handle);

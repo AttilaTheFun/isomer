@@ -68,7 +68,7 @@ extension Generator {
             // The C ABI of the `\(moduleName)` bridge, exactly as the SwiftFFI macros
             // expand it into the annotated module (`@c(swift_ffi_[<ns>_]<name>)`).
             // This layer is an implementation detail: consume it through the
-            // generated per-language bindings (Kotlin / C++ / TypeScript), not
+            // generated per-language bindings (Kotlin / C++ / JavaScript), not
             // directly. The fixed-name runtime entry points (swift_ffi_alloc,
             // the byte-box drains, Lazy handles) are declared by swift_abi.h.
             #ifndef SWIFT_FFI_\(guardName)_H

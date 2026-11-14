@@ -38,7 +38,7 @@ management. The repo is ONE Bazel module, `isomer`, plus the examples:
 | Directory | Module | What |
 | --- | --- | --- |
 | `.` | `isomer` | everything below |
-| `swift_ffi/` | (isomer) | the Swift <-> Kotlin/TypeScript/C bridge generator: macros, analyzer, generator, rules, runtimes. Labels `//swift_ffi/...` (`@isomer//swift_ffi/...` from outside). Its own examples are `swift_ffi/examples`; docs in `docs/swift_ffi/`. Every BUILD file under it carries `package(features = [swift.enable_v6, treat_warnings_as_errors, ...])` — what its REPO.bazel said when it was a repo; keep that on new packages there |
+| `swift_ffi/` | (isomer) | the Swift <-> Kotlin/JavaScript/C bridge generator: macros, analyzer, generator, rules, runtimes. Labels `//swift_ffi/...` (`@isomer//swift_ffi/...` from outside). Its own examples are `swift_ffi/examples`; docs in `docs/swift_ffi/`. Every BUILD file under it carries `package(features = [swift.enable_v6, treat_warnings_as_errors, ...])` — what its REPO.bazel said when it was a repo; keep that on new packages there |
 | `core_graphics/`, `foundation/` | (isomer) | Isomer's `CoreGraphics` and `Foundation` for the platforms without Apple's (see "Apple's frameworks off Apple") |
 | `frameworks/` | (isomer) | the other Apple frameworks SwiftUI's interface names, off Apple: `CoreTransferable`, `UniformTypeIdentifiers`, `PhotosUI`, `OSLog` (`Logger`: logcat on Android, standard error elsewhere; `@isomer//:os_log`, and in each platform's SDK group), `Combine` (since 0.42: Isomer's own, beneath Foundation). Not UIKit or Dispatch (see "Apple's frameworks off Apple") |
 | `metal/` | (isomer) | Isomer's `Metal` (`//metal/metal`), IsomerMetal (`//metal/isomer_metal`: the MSL→WGSL translator, the backend interface), the web backend (`//metal/web`, `//metal/runtime`) |
@@ -1251,11 +1251,14 @@ The wasm + Android host bridges ride swift_ffi's generated bindings:
   `alwayslink` (the only reference comes from an archive linked after it).
 - `.bazelrc` carries `--strategy=SwiftCompile=local` (swift_ffi macro plugin
   sandbox issue).
-- On web the generated TS bindings compile via swift_ffi's `ts_swift_library`
-  (target must be named `app_bridge`; its .js outputs land at the site root
-  next to `swift_ffi_runtime.js`); boot.js and the rest of the runtime are
-  served as raw ES modules, NOT bundled — aspect esbuild's sandbox plugin
-  rejects cross-package staged entry points, don't try.
+- On web swift_ffi generates the bindings as JavaScript, with a `.d.ts`
+  (`js_swift_wasm_library`, 0.54; TypeScript compiled by tsc before, which
+  put rules_ts, rules_js and a pinned TypeScript in every app's build: they
+  are dev dependencies now, and rules_python is gone, its tools Swift).
+  The target must be named `app_bridge`; its .js outputs land at the site
+  root next to `swift_ffi_runtime.js`, and boot.js and the rest of the
+  runtime are served as raw ES modules, NOT bundled — aspect esbuild's
+  sandbox plugin rejects cross-package staged entry points, don't try.
 - On Android the Kotlin runtime (`dev.isomer.runtime`) compiles against
   the generated `SwiftUIBridge`, so `isomer_android_library` fixes the
   bindings' `java_package` to that package. Any kt library holding
