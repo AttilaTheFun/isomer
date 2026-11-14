@@ -258,6 +258,7 @@ def apk_install_run(name, apk, activity, extras = "", **kwargs):
     write_file(
         name = name + "_script",
         out = script_name,
+        testonly = kwargs.get("testonly", False),
         content = [
             "#!/bin/bash",
             "set -euo pipefail",
@@ -341,7 +342,15 @@ _SHARED_PLATFORM_LIBRARIES = select({
     "//conditions:default": [],
 })
 
-def isomer_android_library(name, swift_library, extra_kotlin_srcs = [], extra_deps = [], visibility = None):
+def _without(deps, own):
+    """`deps` less the labels in `own`: an app that lists one of the
+    macro's own (Isomer's AndroidX flag, say) would otherwise make Bazel
+    refuse a duplicated label."""
+    if type(deps) != "list":
+        return deps  # a select(): taken as it is
+    return [dep for dep in deps if native.package_relative_label(dep) not in own]
+
+def isomer_android_library(name, swift_library, extra_kotlin_srcs = [], extra_deps = [], testonly = False, visibility = None):
     """Level 3 building block: the app's Swift + the Isomer Android
     runtime, packaged for embedding in an existing app.
 
@@ -369,13 +378,16 @@ def isomer_android_library(name, swift_library, extra_kotlin_srcs = [], extra_de
         link_deps = [Label("//android/libraries/swift_ui:application_entry")],
         shared_platform = _SHARED_PLATFORM,
         shared_platform_when = Label("//tools/android:shared_platform_on"),
+        testonly = testonly,
     )
     cc_library(
         name = name + "_native",
         srcs = [":lib%s_bindings.so" % name] + _SHARED_PLATFORM_LIBRARIES,
         tags = ["manual"],
+        testonly = testonly,
         visibility = visibility,
     )
+    androidx = Label("//android/maven:androidx")
     kt_android_library(
         name = name,
         srcs = [Label("//android/libraries/swift_ui:runtime_kotlin")] + extra_kotlin_srcs,
@@ -383,12 +395,13 @@ def isomer_android_library(name, swift_library, extra_kotlin_srcs = [], extra_de
         manifest = Label("//android/libraries/swift_ui:RuntimeManifest.xml"),
         plugins = [Label("//android/libraries/swift_ui:compose_compiler_plugin")],
         tags = ["manual"],
+        testonly = testonly,
         visibility = visibility,
         deps = [
             ":%s_bindings" % name,
             # Isomer's AndroidX, or the app's own (//android/maven).
-            Label("//android/maven:androidx"),
-        ] + extra_deps,
+            androidx,
+        ] + _without(extra_deps, [androidx]),
     )
 
 def isomer_wasm_android_library(name, swift_library, visibility = None):
@@ -470,6 +483,11 @@ def isomer_android_app(
         extra_binary_deps = [],
         extra_application = "",
         icon = None,
+        debug_key = None,
+        tags = [],
+        testonly = False,
+        target_compatible_with = None,
+        exec_compatible_with = None,
         visibility = None):
     """Level 4: the whole app is SwiftUI. Generates the MainActivity and
     AndroidManifest around the app's Swift `@main App`, assembles the APK,
@@ -515,6 +533,13 @@ def isomer_android_app(
     `android:icon` and `android:roundIcon`. Without one, Android draws its
     default.
 
+    `debug_key` is the keystore a debug build is signed with (android_binary's
+    `debug_key`; rules_android's own debug key without one). `tags`,
+    `target_compatible_with` and `exec_compatible_with` go to the APK and
+    the run target (`tags = ["manual"]` keeps a wildcard build from building
+    the app; the targets beneath them are manual already), `testonly` to
+    every target the macro makes.
+
     `assets` is what the APK's assets/ holds (a `flat_assets` directory, or
     a list of them and of files); `fonts` are .ttf/.otf files for
     `Font.custom`, put in assets/fonts/ beside them (the two merged into one
@@ -540,17 +565,26 @@ def isomer_android_app(
     self-drawing SwiftGPURenderer). See android/README.md +
     docs/renderer_layers.md.
     """
+    # What the targets users build and run take; the rest are manual.
+    outer = {"tags": tags, "testonly": testonly}
+    if target_compatible_with != None:
+        outer["target_compatible_with"] = target_compatible_with
+    if exec_compatible_with != None:
+        outer["exec_compatible_with"] = exec_compatible_with
+
     isomer_android_library(
         name = name + "_runtime",
         swift_library = swift_library,
         # One label or a list of them.
         extra_kotlin_srcs = (services_kt if type(services_kt) == "list" else [services_kt]) if services_kt else [],
         extra_deps = services_deps,
+        testonly = testonly,
     )
 
     expand_template(
         name = name + "_main_activity",
         out = "generated/%s/MainActivity.kt" % name,
+        testonly = testonly,
         substitutions = {
             "{PACKAGE}": package,
             "{DEFAULT_RENDERER}": default_renderer,
@@ -587,6 +621,7 @@ def isomer_android_app(
             name = name + "_icon",
             src = icon,
             out = "generated/%s/res/mipmap-xxxhdpi/ic_launcher.png" % name,
+            testonly = testonly,
         )
         application_attrs += '\n        android:icon="@mipmap/ic_launcher"'
         application_attrs += '\n        android:roundIcon="@mipmap/ic_launcher"'
@@ -615,6 +650,7 @@ def isomer_android_app(
     expand_template(
         name = name + "_manifest",
         out = "generated/%s/AndroidManifest.xml" % name,
+        testonly = testonly,
         substitutions = select({
             Label("//drive:headful_on"): headful,
             "//conditions:default": substitutions,
@@ -634,6 +670,7 @@ def isomer_android_app(
             fonts = fonts,
             resources = resources,
             tags = ["manual"],
+            testonly = testonly,
         )
         kt_kwargs["assets"] = [":%s_assets" % name]
         kt_kwargs["assets_dir"] = name + "_assets"
@@ -648,6 +685,7 @@ def isomer_android_app(
         manifest = ":%s_manifest" % name,
         plugins = [Label("//android/libraries/swift_ui:compose_compiler_plugin")],
         tags = ["manual"],
+        testonly = testonly,
         deps = [
             ":%s_runtime" % name,
             # Isomer's AndroidX, or the app's own (//android/maven).
@@ -656,9 +694,11 @@ def isomer_android_app(
         **kt_kwargs
     )
 
+    androidx = Label("//android/maven:androidx")
     android_binary(
         name = name + "_apk",
         manifest = ":%s_manifest" % name,
+        debug_key = debug_key,
         visibility = visibility,
         deps = [
             ":%s_app_lib" % name,
@@ -666,8 +706,9 @@ def isomer_android_app(
             # Isomer's AndroidX, or the app's own (//android/maven):
             # ProfileInstaller among it, Macrobenchmark's DROP_SHADER_CACHE
             # broadcast target.
-            Label("//android/maven:androidx"),
-        ] + extra_binary_deps,
+            androidx,
+        ] + _without(extra_binary_deps, [androidx]),
+        **outer
     )
 
     apk_install_run(
@@ -675,6 +716,7 @@ def isomer_android_app(
         activity = "%s/.MainActivity" % package,
         apk = ":%s_apk.apk" % name,
         visibility = visibility,
+        **outer
     )
 
 # MARK: - An Isomer app as an Android library (AAR)

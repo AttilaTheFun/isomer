@@ -185,7 +185,9 @@ public struct LazyState<Value>: _DynamicProperty {
     }
 }
 
-extension LazyState: Sendable where Value: Sendable {}
+// Its State's location is read and written on the main actor only, as a
+// State's is: unchecked, as State itself makes no promise of its own.
+extension LazyState: @unchecked Sendable where Value: Sendable {}
 
 extension LazyState where Value: ExpressibleByNilLiteral {
     public init() {

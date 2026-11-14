@@ -196,8 +196,6 @@ windowResizability, the Mac's stand-ins. Owed:
 - The Isomer module re-exporting FoundationNetworking where it exists, so
   `import Isomer` gives URLSession everywhere (Applications).
 - An "app became active" signal readable outside views (Applications).
-- `isomer_android_app` accepting `@isomer//android/maven:androidx` in an
-  app's deps beside its own (today: "duplicated in the deps attribute").
 - `imageScale` and `menuStyle` on the web's and Android's renderers (Apple's
   tree renderer has them).
 - SecureStore: a real store on Linux (a file only the user reads) and
@@ -318,6 +316,80 @@ Both architectures on both, as Android has both:
 - Linux: x86_64 beside aarch64, cross-built in CI's arm64 container (the
   x86_64 toolchain under Rosetta, or Swift's static Linux SDK); tested on
   GitHub's `ubuntu-24.04` and `ubuntu-24.04-arm`; shipped both.
+
+## An app's native code beside other libraries (2026-11-13)
+
+From an app that links Isomer beside C++ and Swift libraries of its own.
+Done (#196): `isomer_android_app`'s `debug_key`, `tags`, `testonly` and
+compatibility attributes; Isomer's AndroidX label listed again taken once;
+JNI libraries exporting only their entry points in every build (libc++
+local); two Swift 6 errors (`StateObject`, `LazyState`); the Android
+platforms documented. Open:
+
+- **One C++ runtime** (asked first): an option (a build flag, or an
+  attribute of `isomer_android_app`/`isomer_android_library`/the AAR) that
+  links the app's JNI library against the NDK's `libc++_shared.so` and
+  packages it in the APK (an AAR leaves it to its host), so a prebuilt C++
+  library built with the same NDK and `c++_shared` shares one C++ runtime
+  with it (exceptions, `dynamic_cast` and `typeid` across the boundary).
+  Find first where the static libc++ comes into the link (the NDK cc
+  toolchain or rules_swift's Android toolchain), then a flag that swaps it.
+- **A prebuilt Swift library beside the app**: the shared platform
+  (`--@isomer//tools/android:shared_platform`, README "One platform
+  library for several apps") is one runtime for the app and anything
+  linked against it, but only from the same build of Isomer. Document that
+  route and the other one (a static archive and `.swiftinterface`, linked
+  into the app's one library), and what pins each to an Isomer version.
+- **Library evolution off Apple**: a library built with
+  `-enable-library-evolution` warns on importing Isomer's Foundation,
+  SwiftUI and os, which aren't (the warning has no diagnostic group, so
+  `-Wwarning` can't keep it out of warnings-as-errors; `internal import`
+  avoids it). Measure Isomer's modules built resilient on Android (size,
+  the Storybook's frame times: every SwiftUI type an app uses becomes
+  resilient to it) before choosing a default or a flag.
+- **Foundation for every Swift target on Android without wrappers**: a
+  `swift_library` that imports Foundation without depending on
+  `@isomer//:foundation` finds the SDK's corelibs Foundation, and links
+  two. rules_swift's non-Apple toolchains have no implicit dependencies, so
+  this is a rules_swift change (upstream): the Android toolchain taking
+  implicit deps from a label flag, which `@isomer//:foundation`'s own
+  `one_configuration` wrapper turns off for Foundation's build (else it
+  depends on itself). Until then, consumers wrap `swift_library` or patch
+  third-party BUILD files, and `tools/foundation/check_link.py` finds a
+  leak.
+
+## Warnings as errors, Swift 6 mode, complete concurrency checking (owner, 2026-11-13)
+
+The goal, over several releases: every Isomer target built with
+`-strict-concurrency=complete`, then in Swift 6 language mode, then with
+warnings as errors, as swift_ffi's packages already are. What blocks an
+app first, first:
+
+1. **What an app's own Swift 6 code meets** (0.53):
+   - `Sendable` where Apple's types are and Isomer's aren't (25, docs/
+     parity/missing/SwiftUI.md: `Text`, `Image`, the shapes, gradients,
+     `AnyShapeStyle`, `EmptyView`, `Spacer`, `ModifiedContent`, the
+     gestures' values): an app keeping one in a `Sendable` type, or
+     sending one across actors, builds only with Apple's.
+   - `Button`'s actions `@MainActor () -> Void`, as Apple's are (its 14
+     initializers): an app handing a `@MainActor` closure to Isomer's
+     nonisolated one is an error in Swift 6 mode.
+   - The two errors an app met compiling Isomer's sources in Swift 6 mode
+     (`StateObject`, `LazyState`; #196).
+2. **A ratchet in CI**: each package target's count of diagnostics under
+   complete checking (SwiftPM on Linux) can only go down.
+3. **SwiftUI's 149** under complete checking (6.4, after #196), in 30
+   files: non-Sendable values sent into main-actor code (Presentations 28,
+   Modifiers, Focus, ForEach, TreeEncoder), the built-in styles'
+   conformances to internal protocols crossing into main-actor code
+   (Controls, Form, ToggleStyle, ProgressViewStyle, MenuStyle),
+   non-Sendable static style options and environment defaults
+   (`ButtonStyleOption.automatic`, `OpenURLAction`), main-actor
+   initializers called from nonisolated ones (Label, Commands, ForEach).
+   Foundation, CoreGraphics, Combine and the Isomer* targets counted too.
+4. **Swift 6 mode** target by target (the smaller ones first), then the
+   Bazel-only modules (the hosts, the renderers, drive/).
+5. **Warnings as errors** once each is clean, as swift_ffi's packages are.
 
 ## Android below API 28 (2026-11-06)
 
