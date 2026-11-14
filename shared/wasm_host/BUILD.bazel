@@ -62,6 +62,7 @@ swift_library(
     srcs = [
         # Side modules under WasmKit (`loadSideModule`): the linker's adapter.
         "WasmDynamicLinker.swift",
+        "WasmKitFunctionProfile.swift",
         "WasmKitRuntime.swift",
     ],
     # Optimized in every build, as WasmKit is: its host imports run per
