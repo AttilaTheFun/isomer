@@ -41,6 +41,9 @@ kt_swift_library(
 cc_library(
     name = "engine_native",
     srcs = [":libwasm_engine_bindings.so"],
+    # Its C++ runtime, libc++_shared.so with
+    # --//swift_ffi/rules:libcxx=shared (nothing otherwise).
+    deps = ["//swift_ffi/rules:cxx_runtime"],
     tags = ["manual"],
     target_compatible_with = ["@platforms//os:android"],
 )

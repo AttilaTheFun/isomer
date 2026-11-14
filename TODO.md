@@ -347,16 +347,13 @@ Done (#196): `isomer_android_app`'s `debug_key`, `tags`, `testonly` and
 compatibility attributes; Isomer's AndroidX label listed again taken once;
 JNI libraries exporting only their entry points in every build (libc++
 local); two Swift 6 errors (`StateObject`, `LazyState`); the Android
-platforms documented. Open:
+platforms documented. Done since: one C++ runtime, the NDK's
+`libc++_shared.so` (`isomer_android_app(libcxx = "shared")`,
+`--@isomer//swift_ffi/rules:libcxx=shared`; an AAR leaves it to its host
+unless `--@isomer//tools/android:aar_libcxx_shared`); an
+`isomer_android_aar(libcxx = ...)` attribute waits for the AAR's own
+attributes to land. Open:
 
-- **One C++ runtime** (asked first): an option (a build flag, or an
-  attribute of `isomer_android_app`/`isomer_android_library`/the AAR) that
-  links the app's JNI library against the NDK's `libc++_shared.so` and
-  packages it in the APK (an AAR leaves it to its host), so a prebuilt C++
-  library built with the same NDK and `c++_shared` shares one C++ runtime
-  with it (exceptions, `dynamic_cast` and `typeid` across the boundary).
-  Find first where the static libc++ comes into the link (the NDK cc
-  toolchain or rules_swift's Android toolchain), then a flag that swaps it.
 - **A prebuilt Swift library beside the app**: the shared platform
   (`--@isomer//tools/android:shared_platform`, README "One platform
   library for several apps") is one runtime for the app and anything

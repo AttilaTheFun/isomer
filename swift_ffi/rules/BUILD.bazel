@@ -1,5 +1,8 @@
-load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "string_flag")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_swift//swift:swift_library.bzl", "swift_library")
+load(":libcxx.bzl", "ndk_libcxx_shared")
+load(":utils.bzl", "transition_binary")
 
 # The swift_ffi rule definitions — one file per public macro:
 #   bridge_cc_library.bzl / cc_swift_library.bzl / kt_swift_library.bzl /
@@ -37,6 +40,63 @@ bool_flag(
 config_setting(
     name = "jni_exports_only_on",
     flag_values = {":jni_exports_only": "True"},
+)
+
+# The C++ runtime a JNI library links (libcxx.bzl): `static`, the NDK
+# toolchain's default, libc++ inside the library and local to it; or
+# `shared`, the NDK's libc++_shared.so, which the library needs and the app
+# ships, for an app whose Swift shares C++ objects (exceptions, RTTI,
+# standard library types) with another shared library built with the same
+# NDK and `c++_shared` (README, "One C++ runtime with other libraries").
+string_flag(
+    name = "libcxx",
+    build_setting_default = "static",
+    values = [
+        "shared",
+        "static",
+    ],
+)
+
+config_setting(
+    name = "libcxx_shared",
+    flag_values = {":libcxx": "shared"},
+)
+
+# The NDK's libc++_shared.so for the configuration's Android target (built
+# in an Android configuration: a JNI library's link, an android_binary's
+# native dependencies).
+ndk_libcxx_shared(
+    name = "ndk_libcxx_shared",
+    tags = ["manual"],
+)
+
+# What an APK ships beside its JNI libraries for their C++ runtime, as
+# cc_libraries for android_binary's deps beside the libraries' own:
+# `cxx_runtime` follows the flag (the NDK's libc++_shared.so with
+# `libcxx=shared`, nothing otherwise), `cxx_runtime_shared` is the
+# libc++_shared.so a library with `libcxx = "shared"` of its own needs.
+cc_library(
+    name = "cxx_runtime",
+    srcs = select({
+        ":libcxx_shared": [":ndk_libcxx_shared"],
+        "//conditions:default": [],
+    }),
+    tags = ["manual"],
+)
+
+cc_library(
+    name = "cxx_runtime_shared",
+    srcs = [":ndk_libcxx_shared"],
+    tags = ["manual"],
+)
+
+# The same file built for Android from any configuration (aarch64, or
+# x86_64 under an x86_64 split), named as it ships: for an AAR's jni/<abi>/.
+transition_binary(
+    name = "libc++_shared.so",
+    binary = ":ndk_libcxx_shared",
+    platform = ":android-aarch64",
+    tags = ["manual"],
 )
 
 # A reactor's host entries, read from a link of it exporting everything

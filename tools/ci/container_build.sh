@@ -258,7 +258,7 @@ built_tests=$?
 run_tests "${flags[@]}" --test_output=errors //tests/foundation_networking:networking_test \
     //tests/cxx_interop:cxx_interop_test //tests/sqlite_wasi:sqlite_file_test \
     //tests/android_app_attributes:android_app_attributes_test //tests/android_aar:android_aar_test \
-    //tests/swift6_app:swift6_app_test \
+    //tests/swift6_app:swift6_app_test //tests/android_libcxx_shared:android_libcxx_shared_test \
     //tests/webview_session:session_test
 tested_here=$?
 # The headless tests: the Storybook built for the headless host and driven

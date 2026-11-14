@@ -58,6 +58,8 @@ kt_android_library(
 cc_library(
     name = "swift_bridge",
     srcs = [":libgreeter_android.so"],
+    # libc++_shared.so with --//swift_ffi/rules:libcxx=shared.
+    deps = ["//swift_ffi/rules:cxx_runtime"],
     target_compatible_with = ["@platforms//os:android"],
 )
 
