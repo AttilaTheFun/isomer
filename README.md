@@ -72,6 +72,13 @@ or the **wasm** build packaged from any host: `bazel build
 with the Windows x64 Electron runtime — copy the zip to a 64-bit Windows machine,
 unzip, and run `Isomer.exe`.
 
+Isomer's target platforms have public labels in `@isomer//platforms`, for
+an app's `--platforms` (or a transition of its own):
+`@isomer//platforms:android_arm64`, `:android_x86_64`, `:wasm32`,
+`:linux_x86_64`, `:windows_arm64` and `:windows_x86_64`. They are aliases
+of the platforms declared in `@isomer//tools/platforms`, whose labels keep
+working: the two name one platform.
+
 
 ### Modules: `SwiftUI` and `Isomer`
 
@@ -727,6 +734,43 @@ inject_repo(swift_deps, "isomer")
 swift-foundation pins swift-collections exactly (1.1.6 at Swift 6.4.2), so
 your graph takes that version.
 
+**Only the root module's take effect.** `inject_repo` and `override_repo`
+are ignored in any module that is not the root (as dev dependencies are),
+and so are the `dev_dependency = True` extension tags and registrations the
+examples use (hermetic_android_toolchains reads its `android.sdk` and
+`android.ndk` tags from the root alone). A module of yours that builds an
+Isomer app and is itself a dependency (a feature module a larger app's
+repository depends on, not the root) has its own lines ignored there: the
+root repeats them, depending on isomer itself so that it can name it:
+
+```starlark
+# The root's MODULE.bazel, when an Isomer app comes from a module beneath it.
+bazel_dep(name = "isomer", version = "0.53.0")  # the version the module uses
+
+swift_deps = use_extension("@rules_swift_package_manager//:extensions.bzl", "swift_deps")
+swift_deps.from_package(
+    resolved = "//third_party/swift_packages:Package.resolved",
+    swift = "//third_party/swift_packages:Package.swift",  # lists isomer, as above
+)
+inject_repo(swift_deps, "isomer")
+
+# Android: the NDK and SDK, and rules_android pointed at that SDK.
+bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.1")
+android = use_extension("@hermetic_android_toolchains//:extensions.bzl", "android")
+android.sdk(build_tools_version = "35.0.0", version = "35")
+android.ndk(api_level = 28, version = "r30")
+use_repo(android, "androidndk", "androidsdk")
+rules_android_sdk = use_extension(
+    "@rules_android//rules/android_sdk_repository:rule.bzl",
+    "android_sdk_repository_extension",
+)
+override_repo(rules_android_sdk, "androidsdk")
+register_toolchains("@androidndk//:all", "@androidsdk//:all")
+```
+
+The isomer the root depends on and the one its Package.swift lists are the
+module's release: one isomer in the build.
+
 Nothing of isomer's needs an override in your MODULE.bazel since 0.40 (its
 rules_swift, 4.2.2.isomer.3, sorts above the version rules_applecross asks
 for); you still register the toolchains, and only those of the platforms
@@ -774,6 +818,18 @@ themselves an external consumer (a standalone module over
 [`examples/.bazelrc`](examples/.bazelrc) for the required flags (Android
 license acceptance, `--strategy=SwiftCompile=local`, …) and
 `.bazelversion` for the Bazel release.
+
+**Bazel 8.** isomer builds with 9.1.1; a consumer may build with 8.5.0 or
+later (MODULE.bazel's `bazel_compatibility`). One known apple_support issue
+there: a Mac host that builds Isomer's build-time Swift tools (the bridge
+generator, the macros) with apple_support's C toolchain, registered through
+`--extra_toolchains`, fails their static archives in the sandbox
+(`CppArchive`: "execvp(…/apple_support+/crosstool/apple-support-ar-wrapper):
+No such file or directory"). Archive locally until apple_support fixes it:
+
+```
+build --strategy=CppArchive=local
+```
 
 ### Upgrading isomer
 
@@ -906,6 +962,38 @@ pipe, a terminal) hangs. Isomer's scripts run adb with standard input
 closed, and hand the device files with `adb push`, never through a pipe;
 do the same in an app's own tooling.
 
+**A host app below API 23** (an existing app at API 21 embedding an
+Isomer app) can't give Swift its own C++ toolchain: the registry's
+rules_swift refuses an Android target below the Swift SDK's minimum ("The
+Swift SDK for Android supports API 23 and later, but the C++ toolchain
+targets aarch64-linux-android21."). Swift needs a second NDK toolchain at
+23, ahead of the host's own. hermetic_android_toolchains' NDK, as Isomer's
+MODULE.bazel declares it, at API 23 and under a name of its own (the
+host's NDK may be `@androidndk` already):
+
+```starlark
+bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.1")
+android = use_extension("@hermetic_android_toolchains//:extensions.bzl", "android")
+android.sdk(build_tools_version = "35.0.0", version = "35")
+android.ndk(api_level = 23, version = "r30")
+use_repo(android, swift_ndk = "androidndk")
+```
+
+and in the host's .bazelrc, so that it outranks every registered toolchain:
+
+```
+build --extra_toolchains=@swift_ndk//:all
+```
+
+(The extension takes one root `android.ndk` tag: a host whose own NDK at
+21 is hermetic_android_toolchains' too takes one of the two from another
+source, such as rules_android_ndk.) `--extra_toolchains` outranks the
+host's registrations for every C and C++ compile of that build, not only
+Swift's: the host's own native code built with it targets API 23 too. Code
+that must load on Android 5 (API 21 and 22) comes from a build without the
+flag (a prebuilt library), and the host opens the Isomer app only from
+API 23 (`Build.VERSION.SDK_INT >= 23`); its Swift can't load below that.
+
 ### Android release size
 
 An app's Swift is one JNI library (`lib<app>_runtime_bindings.so`): the
@@ -928,8 +1016,7 @@ ship, add `--config=android_release` (.bazelrc, examples/.bazelrc):
 
 To build one of the app's libraries alone for Android (to look at its
 archive or its module), name Isomer's platform:
-`--platforms=@isomer//tools/platforms:android_arm64` (or
-`:android_x86_64`).
+`--platforms=@isomer//platforms:android_arm64` (or `:android_x86_64`).
 
 The Storybook (every story of the SwiftUI API, the Isomer module, the map
 engine and FlatBuffers), measured at 0.42: 34.5 MB at `-c opt` (24,116
@@ -1002,15 +1089,34 @@ isomer_android_aar(
     min_sdk_version = 28,
     services_kt = "AppServices.kt",   # optional, as isomer_android_app's
     services_installer = "com.example.myapp.AppServices.install()",
+    services_deps = ["@host//sdk"],   # optional: what the services compile against
+    provided_deps = ["@host//sdk"],   # optional: the host's, left out of classes.jar
+    assets = [":flat_assets"],        # optional, as isomer_android_app's
+    fonts = ["//fonts"],
+    resources = glob(["Resources/**"]),
+    extra_native_libs = ["@host//native:prebuilt"],  # optional: more of jni/
+    tags = ["manual"],                # and testonly, target_compatible_with, …
 )
 ```
 
 - **classes.jar**: the app's classes, Isomer's runtime (`dev.isomer.**`)
   and the generated bindings (`swiftffi.**`), with no R classes (the host's
-  build makes its own; Isomer declares no resources) and none of AndroidX,
-  Compose or Kotlin.
+  build makes its own; Isomer declares no resources) and none of what the
+  host supplies: the jars of any repository named for Maven, rules_kotlin
+  or rules_android (AndroidX, Compose, Kotlin; `provided_by_name = False`
+  turns that off), `provided_deps` and everything beneath them, and
+  neverlink libraries (which Bazel never packs).
 - **jni/arm64-v8a/**: the app's Swift, one library; build the AAR with
   `--config=android_release` to ship it (see "Android release size").
+  Beside it `extra_native_libs`, as `isomer_android_app`'s
+  `extra_binary_deps` put them in its APK: .so files, `cc_binary(linkshared
+  = True)` targets or `cc_library` targets over prebuilt .so files, built
+  for arm64.
+- **assets/**: `assets`, `fonts` (in assets/fonts/, for `Font.custom`) and
+  `resources` (in assets/bundle/, Bundle.main's), laid out as
+  `isomer_android_app`'s APK has them. The host's build merges them into
+  its own assets/, so two embedded Isomer apps share one fonts/ and one
+  bundle/.
 - **AndroidManifest.xml**: the entry activity, `<package>.MainActivity`, not
   exported and with no launcher entry, in `process` when one is given; the
   INTERNET and ACCESS_NETWORK_STATE permissions Foundation's networking
@@ -1034,7 +1140,13 @@ activity-compose 1.9.3, fragment 1.8.5, lifecycle 2.8.7 and Kotlin 2.2
 (its Compose compiler plugin 2.2.21): those versions or later. Compose
 keeps binary compatibility for its stable API across 1.x, so a host on a
 later Compose (1.12) resolves to its own; Isomer's CI does not yet run
-the AAR inside such a host.
+the AAR inside such a host. The runtime's Kotlin also compiles against a
+later Compose (an app's own set, docs/android_maven.md): its use of
+`SuspendingPointerInputModifierNode.pointerInputHandler`, which Compose 1.12
+deprecates at ERROR level for a replacement 1.7 lacks, is suppressed. The
+host also supplies ProfileInstaller's concurrent-futures and Guava's
+`ListenableFuture`, and on Material 3 1.4 or later material-icons-core
+(docs/android_maven.md).
 
 ## Requirements
 

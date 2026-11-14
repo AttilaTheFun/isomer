@@ -3668,6 +3668,12 @@ private class OverChildrenPointerElement(
     val handler: suspend PointerInputScope.() -> Unit,
 ) : ModifierNodeElement<OverChildrenPointerNode>() {
     override fun create() = OverChildrenPointerNode(handler)
+    // Compose deprecates this setter (at ERROR level in 1.12) for
+    // `pointerInputEventHandler`, which Compose 1.7, the oldest an app may
+    // build the runtime against (README), doesn't have. The setter is still
+    // there and still restarts the handler, so a host on a later Compose
+    // compiles it with the deprecation suppressed and runs it as before.
+    @Suppress("DEPRECATION", "DEPRECATION_ERROR")
     override fun update(node: OverChildrenPointerNode) { node.inner.pointerInputHandler = handler }
     // Handlers only name ids, so the key alone decides a restart.
     override fun equals(other: Any?) = other is OverChildrenPointerElement && other.key == key
