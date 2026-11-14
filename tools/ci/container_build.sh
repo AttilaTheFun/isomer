@@ -341,6 +341,20 @@ if bazel build "${flags[@]}" "$runner"; then
 else
     built_x86=1
 fi
+# And the tests hosted in the iPhone app: their XCTest bundle and the app
+# built to host them (headful, for the simulator), which the Mac runs with an
+# xctestrun of its own (tools/ci/hosted_headful_test.sh), as rules_apple runs them.
+hosted=(--@isomer//drive:headful --ios_multi_cpus=sim_arm64)
+hosted_targets=(//headless/storybook_headless_application:storybook_hosted_ios_test //apple/storybook_ios_application:storybook_test_host)
+if bazel build "${flags[@]}" "${hosted[@]}" "${hosted_targets[@]}"; then
+    mkdir -p "$platforms/headful/hosted"
+    for f in $(files "${hosted[@]}" "${hosted_targets[@]}"); do
+        case "$f" in *.zip | *.ipa) cp "$exec_root/$f" "$platforms/headful/hosted/" ;; esac
+    done
+    ls -l "$platforms/headful/hosted"
+else
+    built_x86=1
+fi
 if [ -n "${ISOMER_ANDROID_X86_64:-}" ]; then
     if bazel build "${flags[@]}" "${headful[@]}" "${x86[@]}" "$android"; then
         for f in $(files "${headful[@]}" "${x86[@]}" "$android"); do
