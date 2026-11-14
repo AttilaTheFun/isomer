@@ -1,0 +1,34 @@
+load("@rules_android//rules:rules.bzl", "android_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The lock file, read by rules_jvm_external through its label
+# (MODULE.bazel's `lock_file`), which needs this package.
+exports_files(["isomer_maven_install.json"])
+
+# Isomer's set: what isomer's @isomer//android/maven:androidx is by default,
+# and what an app's own set must export too, at these versions or later
+# (Compose 1.7).
+android_library(
+    name = "androidx",
+    exports = [
+        "@isomer_maven//:androidx_activity_activity_compose",
+        "@isomer_maven//:androidx_browser_browser",
+        "@isomer_maven//:androidx_compose_foundation_foundation",
+        "@isomer_maven//:androidx_compose_material3_material3",
+        "@isomer_maven//:androidx_compose_runtime_runtime",
+        "@isomer_maven//:androidx_compose_ui_ui",
+        "@isomer_maven//:androidx_fragment_fragment",
+        "@isomer_maven//:androidx_lifecycle_lifecycle_common",
+        "@isomer_maven//:androidx_profileinstaller_profileinstaller",
+        "@isomer_maven//:org_jetbrains_kotlinx_kotlinx_coroutines_android",
+        "@isomer_maven//:org_jetbrains_kotlinx_kotlinx_coroutines_core",
+    ],
+)
+
+# The Compose compiler plugin matching rules_kotlin 2.2.2's kotlinc (2.2.21):
+# isomer's @isomer//android/maven:compose_compiler by default.
+alias(
+    name = "compose_compiler",
+    actual = "@isomer_maven//:org_jetbrains_kotlin_kotlin_compose_compiler_plugin_embeddable",
+)

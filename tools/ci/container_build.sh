@@ -188,9 +188,15 @@ if [ "$mode" != headful ]; then
         done
     done
     # And no Android app in web-view mode: incompatible, refused by name.
-    if bazel build --nobuild "${flags[@]}" --@isomer//:mode=webview \
-        //shared/selection_probe_application:selection_probe_android_apk 2> /dev/null; then
+    # Refused for that reason only: any other failure (a broken target)
+    # fails the check too, its output shown.
+    if refusal="$(bazel build --nobuild "${flags[@]}" --@isomer//:mode=webview \
+        //shared/selection_probe_application:selection_probe_android_apk 2>&1)"; then
         echo "container_build.sh: an Android app in web-view mode was not refused" >&2
+        picked=1
+    elif ! grep -q "android_web_view_transport_not_built_yet" <<< "$refusal"; then
+        echo "container_build.sh: an Android app in web-view mode failed, but not as incompatible:" >&2
+        tail -30 <<< "$refusal" >&2
         picked=1
     fi
 fi

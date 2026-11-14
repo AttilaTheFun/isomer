@@ -520,6 +520,19 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
 - **`apple_support` must be declared BEFORE `rules_cc`** in MODULE.bazel, or
   rules_cc's local darwin toolchain (no `CC_TARGET_TRIPLE`) outranks it and
   Swift compiles fail with "Invalid target triple: local".
+- **Maven (0.54)**: isomer declares no Maven for its consumers (a module
+  extension reads every module's tags, and an embedding app's older
+  rules_jvm_external couldn't read isomer's). Isomer's AndroidX is the
+  `isomer_android_maven` module (android/maven_module: the `isomer_maven`
+  repository and its lock file), a dev dependency of isomer's from this
+  checkout and an ordinary one of the examples'; the registry adds it from
+  each release's tag, and its MODULE.bazel's version (and its dependency on
+  isomer) moves with isomer's. `@isomer//android/maven:androidx` and
+  `:compose_compiler` default to `@isomer_android_maven_set`, which the
+  module's tag to android/maven/extensions.bzl points at its set; with no
+  module there it fails, saying to add it or set the flags.
+  rules_android_maven, rules_jvm_external and rules_xcodeproj are dev-only.
+  docs/android_maven.md.
 - **Android C/C++** comes from `hermetic_android_toolchains` (keith's):
   `@androidndk//:all` supplies the cc toolchains the Swift Android toolchain
   links through (NDK r30, API 28); `@androidsdk` (SDK 35 / build-tools

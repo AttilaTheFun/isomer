@@ -36,6 +36,19 @@ local_path_override(
     path = "..",
 )
 
+# Isomer's AndroidX (docs/android_maven.md): the isomer_android_maven
+# module, at isomer's version, which @isomer//android/maven:androidx and
+# :compose_compiler default to. An app with AndroidX of its own leaves it
+# out and points those flags at its own. A real consumer takes it from the
+# registry by version (each isomer release has it), or, beside a
+# git_override of isomer, overrides it from the same commit with
+# `strip_prefix = "android/maven_module"`.
+bazel_dep(name = "isomer_android_maven", version = "0.53.0")
+local_path_override(
+    module_name = "isomer_android_maven",
+    path = "../android/maven_module",
+)
+
 # --- What isomer needs from its consumer -------------------------------
 
 # rules_swift: isomer's patched version comes from the project's registry
@@ -340,14 +353,27 @@ use_repo(
     "kotlin_compiler",
 )
 
-# Maven: Isomer's AndroidX and rules_android's tools come from isomer,
-# pinned by its lock files (an app on Isomer declares neither); the
-# examples' own are the Android benchmark's harness and its tests, in a
-# repository of their own (they go into the benchmark's instrumentation APK,
-# not an app's).
+# Maven: Isomer's AndroidX comes from isomer_android_maven (above), pinned
+# by its lock file. rules_android declares its own tools' repository
+# (rules_android_maven) without one; the examples pin it with isomer's lock
+# file, as an app on rules_jvm_external 7 may (or leave it to rules_android,
+# resolved afresh). The examples' own are the Android benchmark's harness
+# and its tests, in a repository of their own (they go into the benchmark's
+# instrumentation APK, not an app's).
 #   REPIN=1 bazel run @examples_maven//:pin
 bazel_dep(name = "rules_jvm_external", version = "7.1")
 maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
+maven.install(
+    name = "rules_android_maven",
+    aar_import_bzl_label = "@rules_android//rules:rules.bzl",
+    known_contributing_modules = ["rules_android"],
+    lock_file = "@isomer//:rules_android_maven_install.json",
+    repositories = [
+        "https://maven.google.com",
+        "https://repo1.maven.org/maven2",
+    ],
+    use_starlark_android_rules = True,
+)
 maven.install(
     name = "examples_maven",
     aar_import_bzl_label = "@rules_android//rules:rules.bzl",
