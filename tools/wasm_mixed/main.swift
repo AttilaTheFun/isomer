@@ -16,13 +16,20 @@ let usage = """
           the table slots wasm-split added, as the runtime's function indices
       bridge <hot.wasm> <hot.h> <out dir>
           mixed_glue.c, mixed_glue.h and shim.wat for wasm2c's hot.h
+      profile-set <runtime.wasm> <out set.txt> [--time F] [--calls N] <profile.txt>...
+          a native set from WasmKitFunctionProfile profiles of the runtime:
+          the functions that took F of its time (0.99) and every function
+          called N times or more (1000), by name
       generate --wasm-split <path> --wasm2c <path> --wat2wasm <path>
-               --runtime <runtime.wasm> --set <set.txt> --entries <keep> --out <dir>
-               [--wasi-run <wasi_run>]
+               --runtime <runtime.wasm> --set <set.txt>[,<set.txt>…] --entries <keep> --out <dir>
+               [--max-size <bytes>] [--modules <A,B>] [--closure 1] [--wasi-run <wasi_run>]
           all of it: hot_0.c … hot_7.c, hot.h, hot-impl.h, mixed_glue.c,
           mixed_glue.h, shim.wasm and slots.txt in <dir>. The runtime must
           have its name section; <keep> is the entry points and the routed
-          functions.
+          functions. A set's name means every function by that name; with
+          --max-size, every function of at most that many bytes of code
+          goes native too; with --modules, every Swift function of those
+          modules; with --closure 1, everything those call directly.
 
     """
 
@@ -44,7 +51,7 @@ func generateOptions(_ args: ArraySlice<String>) -> Generate.Options {
     let fields: [String: WritableKeyPath<Generate.Options, String>] = [
         "--wasm-split": \.wasmSplit, "--wasm2c": \.wasm2c, "--wat2wasm": \.wat2wasm,
         "--runtime": \.runtime, "--set": \.set, "--entries": \.entries, "--out": \.out,
-        "--wasi-run": \.wasiRun,
+        "--wasi-run": \.wasiRun, "--max-size": \.maxSize, "--modules": \.modules, "--closure": \.closure,
     ]
     var seen: Set<String> = []
     var rest = args[...]
@@ -61,7 +68,7 @@ func generateOptions(_ args: ArraySlice<String>) -> Generate.Options {
         options[keyPath: field] = value
         seen.insert(flag)
     }
-    let missing = fields.keys.filter { !seen.contains($0) && $0 != "--wasi-run" }.sorted()
+    let missing = fields.keys.filter { !seen.contains($0) && $0 != "--wasi-run" && $0 != "--max-size" && $0 != "--modules" && $0 != "--closure" }.sorted()
     if !missing.isEmpty { fail("generate: missing \(missing.joined(separator: ", "))\n\n\(usage)") }
     return options
 }
@@ -83,6 +90,19 @@ do {
     case "bridge":
         let a = positional(rest, 3, command)
         try Bridge.run(hotWasm: a[0], hotHeader: a[1], outDir: a[2])
+    case "profile-set":
+        var time = 0.99, calls = 1000
+        var files: [String] = []
+        var it = rest[...]
+        while let a = it.popFirst() {
+            switch a {
+            case "--time": time = Double(it.popFirst() ?? "") ?? time
+            case "--calls": calls = Int(it.popFirst() ?? "") ?? calls
+            default: files.append(a)
+            }
+        }
+        guard files.count >= 3 else { fail("profile-set takes <runtime.wasm> <out set.txt> <profile.txt>...\n\n\(usage)") }
+        try ProfileSet.run(runtime: files[0], profiles: Array(files.dropFirst(2)), output: files[1], time: time, calls: calls)
     case "generate":
         try Generate.run(generateOptions(rest))
     case "-h", "--help", "help":

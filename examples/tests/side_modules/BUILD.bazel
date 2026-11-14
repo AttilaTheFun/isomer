@@ -63,7 +63,7 @@ swift_test(
 # taps: docs/side_modules.md), render what the reactor renders, byte for byte.
 wasm_mixed_native(
     name = "storybook_native",
-    native_set = "storybook_native_set.txt",
+    native_set = ["storybook_native_set.txt"],
     routed = "storybook_routed.txt",
     runtime = ":storybook_runtime.wasm",
     tags = ["manual"],
