@@ -166,7 +166,7 @@ if [ "$mode" != all ] && ! command -v Xvfb >/dev/null || [ ! -e /usr/lib/aarch64
             libcups2t64 libdrm2 fonts-dejavu-core >/dev/null; }
 fi
 # Windows on Arm, built here.
-windows=(--config=windows_on_linux --platforms=@isomer//tools/platforms:windows_arm64)
+windows=(--config=windows_tests_on_linux --platforms=@isomer//tools/platforms:windows_arm64)
 bazel build "${flags[@]}" "${windows[@]}" //windows/storybook_windows_application
 built_windows=$?
 # The plain app, kept now: the headful build below writes the same path (a

@@ -5,7 +5,8 @@ load("@rules_swift//swift:swift_test.bzl", "swift_test")
 package(
     features = [
         "swift.enable_v6",
-        "treat_warnings_as_errors",
+        # Swift's warnings are errors; the linker's aren't (Bazel 8's link of
+        # a host tool repeats an -rpath, which ld64 warns about).
         "swift.treat_warnings_as_errors",
         "swift.upcoming.ExistentialAny",
         "swift.upcoming.StrictConcurrency",
