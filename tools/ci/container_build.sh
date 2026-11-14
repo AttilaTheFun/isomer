@@ -87,6 +87,16 @@ rewrite (github\.com/.*) \$1
 rewrite (github\.com/.*) mirror.bazel.build/\$1
 EOF
 
+# An app in each of its modes (docs/modes.md), each by its own name in this
+# build: isomer_application's example, the selection probe, on the iPhone,
+# the Mac, Android and the web, compiled, in a web view and remote.
+probe=//shared/selection_probe_application
+app_modes=()
+for app in ios_compiled ios_webview ios_remote macos_compiled macos_webview macos_remote \
+           android_compiled_apk android_remote_apk web; do
+    app_modes+=("$probe:selection_probe_$app")
+done
+
 mode=build
 out=""
 if [ "${1:-}" = package ]; then
@@ -117,7 +127,8 @@ elif [ $# -eq 0 ] || [ "$*" = all ] || [ "$*" = pr ] || [ "$*" = headful ]; then
         //linux/storybook_linux_application:storybook_linux_application \
         //headless/storybook_headless_application:storybook_headful_apple_runner \
         //apple/remote_ios_application \
-        //apple/webview_ios_application
+        //apple/webview_ios_application \
+        "${app_modes[@]}"
 fi
 
 # In the container: the build in the examples' module, then (CI's run) the
@@ -154,6 +165,36 @@ if [ "$mode" = package ]; then
 fi
 [ "$mode" = checks ] || [ "$mode" = all ] || [ "$mode" = pr ] || [ "$mode" = headful ] || exit $built
 start=$SECONDS
+# The mode setting (--@isomer//:mode, docs/modes.md) picks each platform
+# app of an isomer_application: each mode built above by its own name, the
+# setting checked here by analysis alone (a flag on the command line puts
+# every output in a folder of its own, which the cache has not seen), the
+# platform names resolving to that mode.
+picked=0
+if [ "$mode" != headful ]; then
+    for app_mode in webview remote; do
+        for platform in ios macos android_apk; do
+            [ "$app_mode" = webview ] && [ "$platform" = android_apk ] && continue
+            target=//shared/selection_probe_application:selection_probe_$platform
+            want="${target%_apk}_${app_mode}"
+            [ "$platform" = android_apk ] && want="${want}_apk"
+            deps="$(bazel cquery "${flags[@]}" --@isomer//:mode=$app_mode --ios_multi_cpus=sim_arm64 \
+                "deps($target, 1)" --output=label 2> /dev/null)" || { picked=1; continue; }
+            if ! grep -q "^$want " <<< "$deps"; then
+                echo "container_build.sh: --@isomer//:mode=$app_mode builds $target as something other than $want:" >&2
+                echo "$deps" >&2
+                picked=1
+            fi
+        done
+    done
+    # And no Android app in web-view mode: incompatible, refused by name.
+    if bazel build --nobuild "${flags[@]}" --@isomer//:mode=webview \
+        //shared/selection_probe_application:selection_probe_android_apk 2> /dev/null; then
+        echo "container_build.sh: an Android app in web-view mode was not refused" >&2
+        picked=1
+    fi
+fi
+[ $built -ne 0 ] || built=$picked
 # all: the tests built, not run (main: builds alone, to fill the cache).
 run_tests() { if [ "$mode" = all ]; then bazel build "$@"; else bazel test "$@"; fi; }
 # What the tests here need beyond the image: Xvfb, Mesa'"'"'s drivers, and the
@@ -216,8 +257,10 @@ tested_here=$?
 # The headless tests: the Storybook built for the headless host and driven
 # through its runtime (//headless in the examples), nothing drawn, and served
 # over every transport (//remote: gRPC, WebSockets, Unix sockets, the CLI,
-# the web thin client in headless Chrome).
-run_tests "${flags[@]}" --@isomer//headless $(log_of headless) --test_output=errors //headless/... //remote/...
+# the web thin client in headless Chrome). With them the selection probe
+# served headless, what its apps draw in remote mode.
+run_tests "${flags[@]}" --@isomer//headless $(log_of headless) --test_output=errors //headless/... //remote/... \
+    //shared/selection_probe_application:selection_probe_server
 headless=$?
 # The headful apps and their tests built (run in headful mode).
 bazel build "${flags[@]}" --@isomer//drive:headful $(log_of headful) //remote:headful_web_test \

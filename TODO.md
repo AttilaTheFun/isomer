@@ -295,7 +295,20 @@ JavaScript engine, and WasmKit goes:
   iPhone test that taps). Asked of #188's author (its comment, 2026-11-14):
   split the PR, the crash of a second engine in a process, a native set per
   feature, his WasmKit commits rebased onto upstream main (to propose
-  there), the LOCREL fix to LLVM.
+  there), the LOCREL fix to LLVM. `--@isomer//:mode` and
+  `isomer_application` are in (docs/modes.md, "The setting"); open with
+  them: Android's web-view mode (its WebView as a transport), the remote
+  Android shell's assets and fonts, Linux and Windows apps in the macro.
+  Known issues from web-view mode (isomer#207):
+  - **Appearance can stick in dark.** The head applies the app's resolved
+    appearance as `preferredColorScheme` (ServerMessage.dark is the
+    resolved scheme), so it can't tell the app's override from the
+    system's: once applied, the system's own change no longer reaches the
+    head. Needs a message saying the override was cleared, or the head
+    reading the system appearance beneath its override.
+  - **Back from a story opened by its launch hook** (the Storybook's
+    ISO_STORYBOOK_STORY) shows "Pick a story" with the story's title and
+    back button still shown, in the tree renderer's split navigation.
 - isomer#188 (an outside contributor's): features as wasm side modules
   over one runtime the app has once (the Storybook 226 KB gzip against
   5.4 MB). Worth keeping engine-neutral (the linker apart from WasmKit, a web

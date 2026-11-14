@@ -1,5 +1,56 @@
-# A text field's selection (`TextField(_:text:selection:)`), shared by the
-# web and Android probes (web/ and android/selection_probe_*_application).
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@isomer//tools/application:defs.bzl", "isomer_application")
+
+# A text field's selection (`TextField(_:text:selection:)`): the field
+# reporting where its caret is and showing a selection the app sets. One
+# library, one isomer_application: the iPhone's, the Mac's, Android's and the
+# web's apps, each in the mode --@isomer//:mode names (docs/modes.md):
+#
+#   bazel build --ios_multi_cpus=sim_arm64 //shared/selection_probe_application:selection_probe_ios
+#   bazel build --@isomer//:mode=webview --ios_multi_cpus=sim_arm64 //shared/selection_probe_application:selection_probe_ios
+#   bazel run //shared/selection_probe_application:selection_probe_web
+#
+# or each mode's by name (selection_probe_ios_compiled, _ios_webview,
+# _ios_remote, _android_compiled, _android_remote; tools/application/defs.bzl
+# lists them). Drive the web's with tools/testing/cdp.py (click the field,
+# type, ArrowLeft, click Complete) and read the page's text and the
+# textarea's selection; Android's on the emulator with adb input, reading
+# the probe's text with uiautomator.
+#
+# In remote mode the apps draw the probe served headless:
+#
+#   bazel run --@isomer//headless //shared/selection_probe_application:selection_probe_server
+#   (with ISO_DRIVE_LISTEN=ws://0.0.0.0:8090 ISO_HEADLESS_PROTOCOL=serve)
+swift_library(
+    name = "selection_probe_lib",
+    srcs = glob(["*.swift"]),
+    # Whole-archive: the only reference to the app's @main comes from the
+    # platform's entry, linked after it.
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "SelectionProbe",
+    # Built through each platform's transition, where @isomer//:swift_ui is
+    # that platform's SwiftUI (Apple's on Apple's).
+    tags = ["manual"],
+    deps = [
+        "@isomer//:foundation",
+        "@isomer//:swift_ui",
+    ],
+)
+
+isomer_application(
+    name = "selection_probe",
+    bundle_id = "com.LoganShire.IsomerExamples.SelectionProbe",
+    display_name = "Selection",
+    # TextSelection: iOS 18 and macOS 15 in Apple's SwiftUI.
+    minimum_ios_version = "18.0",
+    minimum_macos_version = "15.0",
+    package = "dev.isomer.selectionprobe",
+    swift_library = ":selection_probe_lib",
+)
+
+# The probe's source, for its wasm reactor (wasm/selection_probe_feature),
+# which an Apple host runs (apple/selection_probe_wasm_ios_application).
 filegroup(
     name = "srcs",
     srcs = glob(["*.swift"]),
