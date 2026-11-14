@@ -1,0 +1,84 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+# The generator of mixed mode's native part (docs/side_modules.md): the runtime module stays one wasm module that
+# WasmKit interprets, and native copies of a set of its hot functions,
+# compiled to C by WABT's wasm2c, go into the host beside it. `generate` runs
+# the whole pipeline: the runtime slimmed to its entry points, Binaryen's
+# wasm-split on the native set, the native part slimmed, the table slots the
+# split added mapped back to the runtime's functions, wasm2c, the bridge
+# (mixed_glue.c/.h over WasmKit's memory and table, and the WasmKit shim) and
+# wat2wasm. Binaryen and WABT are given by path (--wasm-split, --wasm2c,
+# --wat2wasm): the rule that calls it passes its own pinned ones. It writes
+# hot_0.c … hot_7.c, hot.h, hot-impl.h, mixed_glue.c, mixed_glue.h,
+# shim.wasm and slots.txt into --out, its scratch files in a directory there
+# that it removes; the same inputs and tools give the same bytes.
+#
+# `slim`, `map-slots` and `bridge` are the steps alone. Foundation only: no
+# packages. tools/wasm/mixed.bzl's `wasm_mixed_native` runs `generate` with
+# the pinned Binaryen and WABT below.
+#   bazel run //tools/wasm_mixed -- generate --wasm-split ... --out <dir>
+swift_binary(
+    name = "wasm_mixed",
+    package_name = "isomer",
+    srcs = [
+        "Bridge.swift",
+        "Generate.swift",
+        "MapSlots.swift",
+        "PythonText.swift",
+        "Slim.swift",
+        "Wasm.swift",
+        "main.swift",
+    ],
+)
+
+exports_files([
+    "BUILD.binaryen.bazel",
+    "BUILD.wabt_sources.bazel",
+])
+
+# The build machine's Binaryen and WABT (MODULE.bazel), for the rules'
+# exec-configured tools.
+config_setting(
+    name = "macos_arm64",
+    constraint_values = [
+        "@platforms//os:macos",
+        "@platforms//cpu:arm64",
+    ],
+)
+
+config_setting(
+    name = "linux_x86_64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+config_setting(
+    name = "linux_aarch64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
+alias(
+    name = "wasm_split",
+    actual = select({
+        ":macos_arm64": "@binaryen_macos_arm64//:wasm_split",
+        ":linux_x86_64": "@binaryen_linux_x86_64//:wasm_split",
+        ":linux_aarch64": "@binaryen_linux_aarch64//:wasm_split",
+    }),
+)
+
+alias(
+    name = "wasm2c",
+    actual = "@wabt//src/tools:wasm2c",
+)
+
+alias(
+    name = "wat2wasm",
+    actual = "@wabt//src/tools:wat2wasm",
+)
