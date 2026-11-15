@@ -299,10 +299,6 @@ JavaScript engine, and WasmKit goes:
   `isomer_application` are in (docs/modes.md, "The setting"); open with
   them: Android's web-view mode (its WebView as a transport), the remote
   Android shell's assets and fonts, Linux and Windows apps in the macro.
-  Known issues from web-view mode (isomer#207):
-  - **Back from a story opened by its launch hook** (the Storybook's
-    ISO_STORYBOOK_STORY) shows "Pick a story" with the story's title and
-    back button still shown, in the tree renderer's split navigation.
 - Side modules and mixed mode (isomer#188 and #213, an outside
   contributor's; merged as #215 for 0.54, docs/side_modules.md): open, his
   WasmKit commits (AttilaTheFun/WasmKit's isomer/side-modules) proposed to

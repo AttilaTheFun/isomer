@@ -170,6 +170,18 @@ final class NavigationState {
         stack.removeSubrange(index...)
     }
 
+    /// The root's title (and subtitle) start afresh with each build of the
+    /// shown root, as its toolbar does: a title is what the shown content
+    /// says, so a root whose content no longer names one (a split view's
+    /// detail back at its placeholder once its selection is cleared) has
+    /// none, as in SwiftUI, rather than the last one's. A pushed screen's
+    /// title stays: its link may have given it one its content never sets.
+    func resetRootTitle() {
+        guard stack.isEmpty else { return }
+        rootTitle = nil
+        rootSubtitle = nil
+    }
+
     func setTitle(_ title: String, level: Int) {
         if level == 0 {
             rootTitle = title
@@ -359,6 +371,7 @@ extension NavigationStack: _PrimitiveView {
         nav.bottomBarItems = []
         nav.titleDisplayMode = .automatic
         nav.backButtonHidden = false
+        nav.resetRootTitle()
         var sub = ctx.descend("level\(nav.stack.count)")
         sub.navigation = nav
         sub.navigationLevel = nav.stack.count
@@ -606,6 +619,7 @@ extension NavigationStack {
             nav.bottomBarItems = []
             nav.titleDisplayMode = .automatic
             nav.backButtonHidden = false
+            nav.resetRootTitle()
         }
         var sub = ctx.descend("level\(nav.stack.count)")
         sub.navigation = nav
