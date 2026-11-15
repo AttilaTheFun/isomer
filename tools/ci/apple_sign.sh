@@ -32,13 +32,15 @@
 # - Shireworks' secret service (a private repository's job on Shireworks'
 #   runners; docs/secrets.md), with `permissions: id-token: write` and the
 #   runner's SHIREWORKS_GRANT: apple-developer-id-p12 and -password,
-#   apple-notary-key, -key-id and apple-notary-issuer for a Mac app;
+#   apple-notary-key, -key-id and apple-notary-issuer for a Mac app (a
+#   password-less .p12 keeps no -password secret);
 #   apple-development-p12 and -password for an iPhone app; and
 #   apple-profiles, a .tar (or .tar.gz) of the profiles (a Mac app's Developer ID one, if
 #   its entitlements need one; an empty .tar when none does), for either;
 # - with --key-from-env (a public repository's job on GitHub's runners),
 #   the same from its GitHub environment's secrets: APPLE_DEVELOPER_ID_P12
-#   (base64), APPLE_DEVELOPER_ID_PASSWORD, APPLE_NOTARY_KEY (the .p8's
+#   (base64), APPLE_DEVELOPER_ID_PASSWORD (empty or unset for a password-less
+#   .p12, as APPLE_DEVELOPMENT_PASSWORD), APPLE_NOTARY_KEY (the .p8's
 #   text), APPLE_NOTARY_KEY_ID, APPLE_NOTARY_ISSUER, APPLE_DEVELOPMENT_P12
 #   (base64), APPLE_DEVELOPMENT_PASSWORD, APPLE_PROFILES (the .tar or
 #   .tar.gz, base64; with APPLE_PROFILES_2 … _9 beside it where one secret
@@ -161,6 +163,10 @@ if [ -n "$from_env" ]; then
   put apple-development-p12 APPLE_DEVELOPMENT_P12 1
   put apple-development-password APPLE_DEVELOPMENT_PASSWORD 0
   put apple-profiles APPLE_PROFILES 1
+  # A password-less .p12 (as Logan's export was) has no password secret: an empty file says so.
+  for name in apple-developer-id-password apple-development-password; do
+    [ -f "$secrets/$name" ] || (umask 077; : > "$secrets/$name")
+  done
   for n in 2 3 4 5 6 7 8 9; do
     put "apple-profiles-$n" "APPLE_PROFILES_$n" 1
     unset "APPLE_PROFILES_$n"
@@ -168,10 +174,29 @@ if [ -n "$from_env" ]; then
   unset APPLE_DEVELOPER_ID_P12 APPLE_DEVELOPER_ID_PASSWORD APPLE_NOTARY_KEY APPLE_NOTARY_KEY_ID APPLE_NOTARY_ISSUER \
     APPLE_DEVELOPMENT_P12 APPLE_DEVELOPMENT_PASSWORD APPLE_PROFILES
 else
-  secrets="$("$ROOT/tools/ci/shireworks_retry.sh" secrets-fetch "${needed[@]}")"
+  # The keys, all or nothing; then their passwords on their own, a password-less .p12 having none kept (a secret is
+  # never empty): one the service doesn't hold is an empty file.
+  keys=() passwords=()
+  for name in "${needed[@]}"; do
+    case "$name" in *-password) passwords+=("$name") ;; *) keys+=("$name") ;; esac
+  done
+  secrets="$("$ROOT/tools/ci/shireworks_retry.sh" secrets-fetch "${keys[@]}")"
+  for name in "${passwords[@]}"; do
+    folder="$(mktemp -d -p /dev/shm apple-sign-password-XXXXXX)"
+    if "$ROOT/tools/ci/shireworks_retry.sh" secrets-fetch "$name" --to="$folder" > /dev/null 2> "$work/password.log"; then
+      mv "$folder/$name" "$secrets/$name"
+    else
+      grep -q "^404\|has no secret" "$work/password.log" || { cat "$work/password.log" >&2; rm -rf "$folder"; fail "$name couldn't be fetched"; }
+      (umask 077; : > "$secrets/$name")
+    fi
+    rm -rf "$folder"
+  done
 fi
 for name in "${needed[@]}"; do
-  [ -s "$secrets/$name" ] || fail "no $name"
+  case "$name" in
+    *-password) [ -f "$secrets/$name" ] || fail "no $name" ;;
+    *) [ -s "$secrets/$name" ] || fail "no $name" ;;
+  esac
 done
 mkdir -p "$secrets/profiles"
 # A .tar or a .tar.gz (GNU tar tells them apart), and the more of them beside it.
@@ -180,13 +205,22 @@ for archive in "$secrets"/apple-profiles "$secrets"/apple-profiles-[2-9]; do
   tar -xf "$archive" -C "$secrets/profiles" --no-same-owner || fail "$(basename "$archive") isn't a .tar or .tar.gz"
 done
 
-# certificate <p12> <password file>: the identity's certificate's SHA-1.
+# certificate <p12> <password file>: the identity's certificate's SHA-1. An empty password file is a password-less
+# .p12's: openssl can't read an empty file, so it's given the empty password itself.
 certificate() {
-  local legacy=""
+  local legacy="" passin="file:$2"
   openssl pkcs12 -help 2>&1 | grep -q -- '-legacy' && legacy="-legacy"
+  [ -s "$2" ] || passin="pass:"
   # shellcheck disable=SC2086 # -legacy, or nothing
-  openssl pkcs12 $legacy -in "$1" -passin "file:$2" -nokeys -clcerts 2> /dev/null \
+  openssl pkcs12 $legacy -in "$1" -passin "$passin" -nokeys -clcerts 2> /dev/null \
     | openssl x509 -noout -fingerprint -sha1 2> /dev/null | sed 's/.*=//; s/://g'
+}
+
+# p12 <p12> <password file>: rcodesign's arguments for an identity; a password-less one's empty password said as
+# such (rcodesign refuses an empty password file), never a password on a command line.
+p12() {
+  if [ -s "$2" ]; then p12_arguments=(--p12-file "$1" --p12-password-file "$2")
+  else p12_arguments=(--p12-file "$1" --p12-password ""); fi
 }
 
 if [ -n "$mac" ]; then
@@ -241,7 +275,8 @@ for key in ("path", "bundle", "entitlements", "profile", "embed"):
     print("1" if value is True else "" if value in (None, False) else value)' "$plan" "$index")
     local path="${step[0]}" bundle="${step[1]}" entitlements="${step[2]}" profile="${step[3]}" embed="${step[4]}"
     [ -z "$profile" ] || cp "$profile" "$embed"
-    local arguments=(sign --p12-file "$p12" --p12-password-file "$password" "${extra[@]}")
+    p12 "$p12" "$password"
+    local arguments=(sign "${p12_arguments[@]}" "${extra[@]}")
     [ -z "$bundle" ] || arguments+=(--shallow)
     [ -z "$entitlements" ] || arguments+=(--entitlements-xml-file "$entitlements")
     "$rcodesign" "${arguments[@]}" "$path" > "$work/sign.log" 2>&1 \
@@ -312,8 +347,8 @@ print(info.get("CFBundleDisplayName") or info.get("CFBundleName"))' "$app/Conten
         ln -s /Applications "$image/Applications"
         echo "== $base.dmg: made by dmg, signed, notarized, stapled"
         "$dmg" create --volname "$name" --srcfolder "$image" --format UDZO "$out/$base.dmg"
-        "$rcodesign" sign --p12-file "$secrets/apple-developer-id-p12" --p12-password-file "$secrets/apple-developer-id-password" \
-          --for-notarization "$out/$base.dmg"
+        p12 "$secrets/apple-developer-id-p12" "$secrets/apple-developer-id-password"
+        "$rcodesign" sign "${p12_arguments[@]}" --for-notarization "$out/$base.dmg"
         notarize "$out/$base.dmg"
       fi
       ;;

@@ -18,10 +18,11 @@
 # - .ipa (the iPhone and iPad app): apple_sign.sh --ipa-kind (development
 #   for an Alpha, the default; production for a release: ad hoc, else
 #   enterprise, else development profiles), with APPLE_DEVELOPMENT_P12,
-#   APPLE_DEVELOPMENT_PASSWORD and APPLE_PROFILES;
+#   APPLE_DEVELOPMENT_PASSWORD (empty or unset: a .p12 with no password)
+#   and APPLE_PROFILES;
 # - .zip (a Mac app): apple_sign.sh, Developer ID, notarized and stapled,
 #   with --dmg its disk image too, with APPLE_DEVELOPER_ID_P12,
-#   APPLE_DEVELOPER_ID_PASSWORD, APPLE_NOTARY_KEY, APPLE_NOTARY_KEY_ID,
+#   APPLE_DEVELOPER_ID_PASSWORD (empty or unset: no password), APPLE_NOTARY_KEY, APPLE_NOTARY_KEY_ID,
 #   APPLE_NOTARY_ISSUER and APPLE_PROFILES (an empty one when unset: a Mac
 #   app with no profile of its own needs none);
 # - .apk: android_sign.sh with the release key --android-key names, its
@@ -67,6 +68,23 @@ while [ $# -gt 0 ]; do
     esac
 done
 [ -n "$app" ] && [ -n "$out" ] && [ ${#packages[@]} -gt 0 ] || fail "$usage"
+
+# The keys, taken out of the environment before anything else runs: each
+# value kept in an unexported variable of this shell (secret_<NAME>) and its
+# NAME unset, so no child (Bazel and its repository rules, Python, aapt2,
+# curl) ever has them. A signer gets the keys it needs alone, exported in a
+# subshell of its own by `export`, a builtin (with_secrets): no value is ever
+# a process's argument (/proc/<pid>/cmdline), and nothing here prints one or
+# runs under `set -x`.
+SECRETS=(ANDROID_SIGNING_KEYSTORE ANDROID_SIGNING_PASSWORD APPLE_DEVELOPER_ID_P12 APPLE_DEVELOPER_ID_PASSWORD
+         APPLE_NOTARY_KEY APPLE_NOTARY_KEY_ID APPLE_NOTARY_ISSUER APPLE_DEVELOPMENT_P12 APPLE_DEVELOPMENT_PASSWORD
+         APPLE_PROFILES APPLE_PROFILES_2 APPLE_PROFILES_3 APPLE_PROFILES_4 APPLE_PROFILES_5 APPLE_PROFILES_6
+         APPLE_PROFILES_7 APPLE_PROFILES_8 APPLE_PROFILES_9)
+set +x
+for name in "${SECRETS[@]}"; do
+    printf -v "secret_$name" '%s' "${!name:-}"
+    unset "$name"
+done
 [ -n "$unsigned" ] || case "$variant" in Alpha | Production) ;; *) fail "--variant is Alpha or Production" ;; esac
 case "$ipa_kind" in development | production) ;; *) fail "--ipa-kind is development or production" ;; esac
 mkdir -p "$out"
@@ -93,22 +111,31 @@ skip() {
     echo "::warning::sign_builds: $1 not signed: $2 not set in the job's environment"
     skipped+=("$1 ($2)")
 }
-# Whether every named variable is set, else the first that isn't.
+# Whether every named key was set, else the first that wasn't.
 missing() {
-    local name
-    for name in "$@"; do [ -n "${!name:-}" ] || { echo "$name"; return 0; }; done
+    local name kept
+    for name in "$@"; do
+        kept="secret_$name"
+        [ -n "${!kept}" ] || { echo "$name"; return 0; }
+    done
     return 1
 }
-# A signer run with the named secrets alone in its environment.
+# A signer run with the named keys alone in its environment:
+#   with_secrets <NAME>… -- <command>…
+# In a subshell, each named key exported from its kept value by `export`
+# (a builtin, so no value is an argument of any process), then the command
+# exec'd in its place. The other keys were never in the environment.
 with_secrets() {
-    local names=() keep=() name
-    for name in ANDROID_SIGNING_KEYSTORE ANDROID_SIGNING_PASSWORD APPLE_DEVELOPER_ID_P12 APPLE_DEVELOPER_ID_PASSWORD \
-        APPLE_NOTARY_KEY APPLE_NOTARY_KEY_ID APPLE_NOTARY_ISSUER APPLE_DEVELOPMENT_P12 APPLE_DEVELOPMENT_PASSWORD APPLE_PROFILES; do
-        names+=("-u" "$name")
-    done
-    while [ "$1" != -- ]; do keep+=("$1=${!1}"); shift; done
+    local keep=()
+    while [ "$1" != -- ]; do keep+=("$1"); shift; done
     shift
-    env "${names[@]}" ${keep[@]+"${keep[@]}"} "$@"
+    (
+        for name in "${keep[@]}"; do
+            kept="secret_$name"
+            [ -z "${!kept}" ] || export "$name=${!kept}"
+        done
+        exec "$@"
+    )
 }
 
 if [ -n "$unsigned" ]; then
@@ -123,23 +150,24 @@ fi
 promote=()
 [ "$variant" != Production ] || promote=(--variant Production)
 # APPLE_PROFILES as apple_sign.sh reads it (a .tar or .tar.gz, base64;
-# APPLE_PROFILES_2 … _9 beside it pass through): an empty .tar when unset,
-# which a Mac app with no profile of its own signs with.
-profiles() {
-    if [ -n "${APPLE_PROFILES:-}" ]; then
-        printf '%s' "$APPLE_PROFILES"
-    else
+# APPLE_PROFILES_2 … _9 beside it, where they are set): an empty .tar when
+# unset, which a Mac app with no profile of its own signs with.
+profiles_or_empty() {
+    if [ -z "$secret_APPLE_PROFILES" ]; then
         tar -cf "$work/profiles.tar" -T /dev/null
-        base64 < "$work/profiles.tar" | tr -d '\n'
+        secret_APPLE_PROFILES="$(base64 < "$work/profiles.tar" | tr -d '\n')"
     fi
 }
+PROFILES=(APPLE_PROFILES APPLE_PROFILES_2 APPLE_PROFILES_3 APPLE_PROFILES_4 APPLE_PROFILES_5 APPLE_PROFILES_6
+          APPLE_PROFILES_7 APPLE_PROFILES_8 APPLE_PROFILES_9)
 
 if [ ${#ipas[@]} -gt 0 ]; then
-    if name="$(missing APPLE_DEVELOPMENT_P12 APPLE_DEVELOPMENT_PASSWORD APPLE_PROFILES)"; then
+    # Its .p12's password may be empty (a .p12 exported with none), passed
+    # on as unset, which apple_sign.sh takes for no password.
+    if name="$(missing APPLE_DEVELOPMENT_P12 APPLE_PROFILES)"; then
         skip "the iPhone app" "$name"
     else
-        apple_profiles="$(profiles)" || exit 1
-        APPLE_PROFILES="$apple_profiles" with_secrets APPLE_DEVELOPMENT_P12 APPLE_DEVELOPMENT_PASSWORD APPLE_PROFILES -- \
+        with_secrets APPLE_DEVELOPMENT_P12 APPLE_DEVELOPMENT_PASSWORD "${PROFILES[@]}" -- \
             "$CI/apple_sign.sh" --key-from-env --ipa-kind "$ipa_kind" ${promote[@]+"${promote[@]}"} --out "$work/signed-ios" "${ipas[@]}"
         for package in "${ipas[@]}"; do
             release_asset_file "$work/signed-ios/$(basename "$package")" "$out" "$app"
@@ -148,12 +176,12 @@ if [ ${#ipas[@]} -gt 0 ]; then
 fi
 
 if [ ${#zips[@]} -gt 0 ]; then
-    if name="$(missing APPLE_DEVELOPER_ID_P12 APPLE_DEVELOPER_ID_PASSWORD APPLE_NOTARY_KEY APPLE_NOTARY_KEY_ID APPLE_NOTARY_ISSUER)"; then
+    if name="$(missing APPLE_DEVELOPER_ID_P12 APPLE_NOTARY_KEY APPLE_NOTARY_KEY_ID APPLE_NOTARY_ISSUER)"; then
         skip "the Mac app" "$name"
     else
-        apple_profiles="$(profiles)" || exit 1
-        APPLE_PROFILES="$apple_profiles" with_secrets APPLE_DEVELOPER_ID_P12 APPLE_DEVELOPER_ID_PASSWORD APPLE_NOTARY_KEY \
-            APPLE_NOTARY_KEY_ID APPLE_NOTARY_ISSUER APPLE_PROFILES -- \
+        profiles_or_empty
+        with_secrets APPLE_DEVELOPER_ID_P12 APPLE_DEVELOPER_ID_PASSWORD APPLE_NOTARY_KEY \
+            APPLE_NOTARY_KEY_ID APPLE_NOTARY_ISSUER "${PROFILES[@]}" -- \
             "$CI/apple_sign.sh" --key-from-env ${dmg:+--dmg} ${promote[@]+"${promote[@]}"} --out "$work/signed-mac" "${zips[@]}"
         for package in "${zips[@]}"; do
             signed="$work/signed-mac/$(basename "$package")"
@@ -169,7 +197,9 @@ if [ ${#apks[@]} -gt 0 ]; then
         skip "the Android app" "$name"
     else
         [ -n "$android_key" ] && [ -n "$android_pin" ] || fail "an .apk takes --android-key and --android-pin"
-        # The examples' pinned JDK and build tools, by Bazel's own paths.
+        # The examples' pinned JDK and build tools, by Bazel's own paths:
+        # Bazel (and the repository rules it runs) started after the keys
+        # left the environment (above), so they never see one.
         tools=(@hermetic_jdk//:java_bin @android_build_tools//:lib/apksigner.jar @android_build_tools//:aapt2)
         (cd "$ROOT/examples" && bazel build "${tools[@]}" > /dev/null 2>&1) || fail "the JDK and build tools didn't fetch"
         base="$(cd "$ROOT/examples" && bazel info output_base)"
