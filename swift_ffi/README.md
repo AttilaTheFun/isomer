@@ -118,6 +118,13 @@ kt_swift_platform(name = "shared_swift", deps = [":common"])
 kt_swift_library(name = "greeter_android", swift = ":greeter", java_package = "dev.example", shared_platform = ":shared_swift")
 ```
 
+A shared library that other libraries link against beside the platform (a
+Swift library shipped prebuilt) is a `swift_platform_library(name, deps,
+shared_platform)`: its `deps` (alwayslink Swift libraries) linked against
+the platform, their symbols exported, none of the platform's in it.
+Isomer's `isomer_android_shared_library` is one over Isomer's platform
+(docs/prebuilt_swift_libraries.md).
+
 The [example matrix](../docs/swift_ffi/examples.md) is a full working reference for every
 platform — `examples/shared/greeter` is one annotated library, and each
 `//swift_ffi/examples/<platform>/...` application delivers it unchanged, either

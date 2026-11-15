@@ -106,11 +106,18 @@ def _swift_shared_library_impl(ctx):
     platform = ctx.attr.platform[SwiftSharedPlatformInfo]
     in_platform = {archive: True for archive in platform.archives.to_list()}
     merged = cc_common.merge_cc_infos(cc_infos = [dep[CcInfo] for dep in ctx.attr.deps])
+
+    # `exported`: the toolchain's --exclude-libs,ALL left out, as the
+    # platform's own link leaves it out, so what the library links from its
+    # archives (its alwayslink Swift libraries) is exported for the
+    # libraries that link against it; the static libc++, if any is linked,
+    # stays local, as in the platform.
     linker_inputs = _relinked(
         merged.linking_context.linker_inputs.to_list(),
         lambda library: not (_archive(library) and _archive(library) in in_platform),
-        lambda _: True,
+        (lambda flag: flag != _EXCLUDE_LIBS) if ctx.attr.exported else (lambda _: True),
     )
+    exported = ["-Wl,--exclude-libs,libc++_static.a:libc++abi.a"] if ctx.attr.exported else []
 
     # The platform first, ahead of the toolchain's runtime archives: lld
     # takes a symbol from the first library on the line that defines it, so
@@ -120,7 +127,7 @@ def _swift_shared_library_impl(ctx):
     library = _link(
         ctx,
         linker_inputs,
-        [platform.library.path, "-Wl,-z,defs"] + ctx.attr.linkopts,
+        [platform.library.path, "-Wl,-z,defs"] + exported + ctx.attr.linkopts,
         additional_inputs = [platform.library],
     )
     return [DefaultInfo(files = depset([library]))]
@@ -130,6 +137,10 @@ swift_shared_library = rule(
     attrs = {
         "additional_linker_inputs": attr.label_list(allow_files = True),
         "deps": attr.label_list(providers = [CcInfo], mandatory = True),
+        "exported": attr.bool(
+            default = False,
+            doc = "Exports what the library links from its own archives (not the platform's): a library other libraries link against. A JNI library leaves it off.",
+        ),
         "linkopts": attr.string_list(),
         "platform": attr.label(providers = [SwiftSharedPlatformInfo], mandatory = True),
     },
