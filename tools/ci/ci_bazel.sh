@@ -52,8 +52,12 @@ setup)
         echo 'rewrite (github\.com/.*) $1'
         echo 'rewrite (github\.com/.*) mirror.bazel.build/$1'
     } > "$ROOT/.ci/downloader.cfg"
+    # No bazel-* convenience symlinks in the checkout: rules_swift_package_manager
+    # copies the local isomer package with `cp -RL`, which follows them into
+    # Bazel's output tree and its dangling links, and fails the fetch.
     lines=("$MARK" "common --downloader_config=$ROOT/.ci/downloader.cfg"
-           "common --experimental_repository_downloader_retries=5")
+           "common --experimental_repository_downloader_retries=5"
+           "common --experimental_convenience_symlinks=ignore")
     if [ -n "${ISOMER_BAZEL_ROOT:-}" ]; then
         if mkdir -p "$ISOMER_BAZEL_ROOT" 2> /dev/null && [ -w "$ISOMER_BAZEL_ROOT" ]; then
             lines+=("startup --output_user_root=$ISOMER_BAZEL_ROOT")
