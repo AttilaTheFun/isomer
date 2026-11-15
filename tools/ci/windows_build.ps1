@@ -43,8 +43,18 @@ if ($SetUp) {
     if (-not $sdkroot) { throw 'windows_build: no SDKROOT after Swift was installed' }
     "SDKROOT=$sdkroot" | Add-Content $env:GITHUB_ENV
     $paths = @([Environment]::GetEnvironmentVariable('Path', 'User'), [Environment]::GetEnvironmentVariable('Path', 'Machine')) -join ';'
-    $swiftPaths = $paths.Split(';') | Where-Object { $_ -and $_ -match '\\Swift\\' } | Select-Object -Unique
+    $swiftPaths = @($paths.Split(';') | Where-Object { $_ -and $_ -match '\\Swift\\' } | Select-Object -Unique)
     if (-not $swiftPaths) { throw 'windows_build: Swift added nothing to PATH' }
+    # The Swift runtime's DLLs (swiftCore.dll and the rest), which the tools
+    # Bazel builds for itself load when they run (protoc-gen-swift, the macro
+    # plugins): the arm64 installer's runtime is in Runtimes\<version>\usr\bin,
+    # not always on the PATH it sets.
+    $swiftRoot = if ($sdkroot -match '^(.*\\Swift)\\Platforms\\') { $Matches[1] } else { Join-Path $env:LOCALAPPDATA 'Programs\Swift' }
+    $runtime = Get-ChildItem -Recurse -Filter swiftCore.dll -Path (Join-Path $swiftRoot 'Runtimes') -ErrorAction SilentlyContinue |
+        Where-Object { $_.DirectoryName -match '\\usr\\bin$' } | Select-Object -First 1
+    if (-not $runtime) { throw "windows_build: no Swift runtime (swiftCore.dll) under $swiftRoot\Runtimes" }
+    if ($swiftPaths -notcontains $runtime.DirectoryName) { $swiftPaths = @($runtime.DirectoryName) + $swiftPaths }
+    "Swift on PATH: $($swiftPaths -join '; ')"
     $swiftPaths | Add-Content $env:GITHUB_PATH
     $env:Path = ($swiftPaths -join ';') + ';' + $env:Path
     $env:SDKROOT = $sdkroot
@@ -121,7 +131,24 @@ try {
     $command = $Bazel[0]
     $rest = @($Bazel | Select-Object -Skip 1)
     & $tool $command @repoEnv @rest
-    exit $LASTEXITCODE
+    $status = $LASTEXITCODE
+    if ($status -ne 0) {
+        # What a tool Bazel built for itself can't load, if one couldn't run
+        # (0xC0000135, a DLL not found): each DLL it names, found on PATH or
+        # not.
+        $bin = (& $tool info @repoEnv bazel-bin 2> $null | Select-Object -Last 1)
+        $execBin = $bin -replace '-fastbuild[^/\\]*', '-opt-exec'
+        foreach ($exe in Get-ChildItem -Recurse -Filter 'protoc-gen-swift*.exe' -Path (Join-Path $execBin 'external') -ErrorAction SilentlyContinue) {
+            "$($exe.FullName) loads:"
+            $dumpbin = Join-Path $env:VCToolsInstallDir 'bin\HostX64\arm64\dumpbin.exe'
+            & $dumpbin /nologo /dependents $exe.FullName | Where-Object { $_ -match '^\s+\S+\.dll\s*$' } | ForEach-Object {
+                $dll = $_.Trim()
+                $found = (Get-Command $dll -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+                "  $dll -> $(if ($found) { $found } else { 'NOT FOUND on PATH' })"
+            }
+        }
+    }
+    exit $status
 } finally {
     Pop-Location
 }
