@@ -96,7 +96,7 @@ public final class WasmKitLinkEngine: WasmLinkEngine {
     public var memoryByteCount: Int { main.memory.byteCount }
 
     public func zeroMemory(at address: UInt32, count: Int) throws {
-        main.memory.withUnsafeMutableBufferPointer(offset: UInt(address), count: count) {
+        try main.memory.withUnsafeMutableBufferPointer(offset: UInt(address), count: count) {
             _ = $0.initializeMemory(as: UInt8.self, repeating: 0)
         }
     }
