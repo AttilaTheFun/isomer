@@ -252,6 +252,10 @@ bazel build "${flags[@]}" "${windows[@]}" --@isomer//drive:headful "${windows_he
 # for now (2026-11-05), not run.
 bazel build "${flags[@]}" //tests/platforms:all
 built_tests=$?
+# The WasmKit host runtime for Android and Windows too: an app may host
+# reactors there (the Playground does on Android), though no app here does.
+bazel build "${flags[@]}" --platforms=@isomer//tools/platforms:android_arm64 @isomer//shared/wasm_host:wasmkit_runtime || built_tests=1
+bazel build "${flags[@]}" "${windows[@]}" @isomer//shared/wasm_host:wasmkit_runtime || built_tests=1
 # The tests that draw nothing run here; those that do (the web Storybook in
 # Chrome, the headful apps) in headful mode, container-verify, at verify. The
 # web-view session test drives a page in Chrome that draws nothing.

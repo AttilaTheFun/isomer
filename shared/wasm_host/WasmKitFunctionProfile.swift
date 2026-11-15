@@ -13,6 +13,10 @@
     import Darwin
 #elseif canImport(Glibc)
     import Glibc
+#elseif canImport(Android)
+    import Android
+#elseif canImport(ucrt)
+    import ucrt
 #endif
 @_spi(OnlyForCLI) import WasmKit
 
@@ -45,6 +49,12 @@ public final class WasmKitFunctionProfile: EngineInterceptor {
     @inline(__always) private static func now() -> UInt64 {
         #if canImport(Darwin)
             clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+        #elseif os(Windows)
+            // No clock_gettime in Windows' C runtime: its timespec_get, the
+            // wall clock (a profile's shares, not a deadline).
+            var t = timespec()
+            _ = timespec_get(&t, TIME_UTC)
+            return UInt64(t.tv_sec) * 1_000_000_000 + UInt64(t.tv_nsec)
         #else
             var t = timespec()
             clock_gettime(CLOCK_MONOTONIC, &t)
