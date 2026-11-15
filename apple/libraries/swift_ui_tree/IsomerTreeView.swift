@@ -1347,6 +1347,8 @@ struct ListBody: View {
     /// state, so a row coming on screen does not rebuild the list (as it
     /// would, every row of a scroll, through @State).
     @State private var window = RowWindow()
+    /// The selection as of the list's last body, read by its binding.
+    @State private var selectionState = ListSelection()
 
     var node: IsoFlat_Node { pnode.flat }
 
@@ -1354,13 +1356,23 @@ struct ListBody: View {
         let cells = listCells
         let sections = Self.sections(of: cells)
         let _ = window.keys = cells.map(Self.identity)
+        let _ = selectionState.update(cells.first { Self.param($0, "selected") == "1" }.map(Self.identity), cells: cells)
+        // The binding reads and writes the list as it is NOW, not as this
+        // body saw it: SwiftUI keeps bindings from earlier bodies and reads
+        // them again, and a phone's collapsed NavigationSplitView takes a
+        // sidebar selection it reads as a detail to show. One captured at
+        // launch, when the app opened on a row's detail
+        // (`preferredCompactColumn` .detail, the selection already set),
+        // read back that row after Back had cleared it, and the split went
+        // straight on to the detail again (its placeholder, with Back).
+        let state = selectionState
         let selection = Binding<String?>(
-            get: { cells.first { Self.param($0, "selected") == "1" }.map(Self.identity) },
+            get: { state.selected },
             set: { key in
                 // A row chosen: the guest's own selection is set by the
                 // row's tap. (Deselection comes from the guest: a phone's
                 // split going back clears it.)
-                guard let key, let cell = cells.first(where: { Self.identity($0) == key }),
+                guard let key, let cell = state.cells.first(where: { Self.identity($0) == key }),
                       let tap = cell.flat.tap else { return }
                 send(tap, "")
             })
@@ -3778,6 +3790,21 @@ struct ScrollEdgeModifier: ViewModifier {
         case "hard": return .hard
         default: return nil
         }
+    }
+}
+
+/// A list's selection as its last body had it (the guest's), for the
+/// native list's binding, which SwiftUI may read long after the body that
+/// made it: a reference, so every copy reads the same, current one.
+final class ListSelection {
+    /// The guest's selected row's key.
+    private(set) var selected: String?
+    /// The list's cells, for a chosen row's tap.
+    private(set) var cells: [PatchedNode] = []
+
+    func update(_ selected: String?, cells: [PatchedNode]) {
+        self.selected = selected
+        self.cells = cells
     }
 }
 
