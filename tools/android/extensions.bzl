@@ -7,22 +7,35 @@ only the individual packages below are needed, each pinned by sha256.
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
+# The JDK's home is Contents/Home in the Mac's archive and the archive's top
+# on Linux ({home}): `:java_bin` and `:jar_bin` name its tools on either, as
+# rules here take them (the paths themselves are exported too).
 _JDK_BUILD = """\
 package(default_visibility = ["//visibility:public"])
 
 exports_files([
-    "Contents/Home/bin/java",
-    "Contents/Home/bin/jar",
+    "{home}bin/java",
+    "{home}bin/jar",
 ])
+
+alias(
+    name = "java_bin",
+    actual = "{home}bin/java",
+)
+
+alias(
+    name = "jar_bin",
+    actual = "{home}bin/jar",
+)
 
 filegroup(
     name = "java",
-    srcs = ["Contents/Home/bin/java"],
+    srcs = ["{home}bin/java"],
 )
 
 filegroup(
     name = "all",
-    srcs = glob(["Contents/Home/**"]),
+    srcs = glob(["{home}**"]),
 )
 """
 
@@ -155,7 +168,7 @@ def _android_tools_impl(mctx):
         url = host["jdk"][0],
         sha256 = host["jdk"][1],
         strip_prefix = "jdk-21.0.5+11",
-        build_file_content = _JDK_BUILD,
+        build_file_content = _JDK_BUILD.format(home = "Contents/Home/" if host_name == "mac" else ""),
     )
 
     http_archive(
