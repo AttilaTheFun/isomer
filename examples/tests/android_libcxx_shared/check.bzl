@@ -2,11 +2,13 @@
 (`isomer_android_app(libcxx = "shared")`, `isomer_android_aar(libcxx =
 "shared")`): check.sh run on it at build
 time with the NDK's own llvm-nm and llvm-objdump, so `build_test` checks
-it and nothing runs or draws."""
+it and nothing runs or draws. `ndk_tools`, `NdkToolsInfo` and
+`android_transition` are public: //tests/prebuilt_swift_library's checks
+read the same tools."""
 
 load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain", "use_cc_toolchain")
 
-_NdkToolsInfo = provider(
+NdkToolsInfo = provider(
     doc = "The Android cc toolchain's binary tools.",
     fields = {
         "files": "depset of File: the toolchain's files, the tools among them.",
@@ -17,7 +19,7 @@ _NdkToolsInfo = provider(
 
 def _ndk_tools_impl(ctx):
     cc_toolchain = find_cc_toolchain(ctx)
-    return [_NdkToolsInfo(
+    return [NdkToolsInfo(
         files = cc_toolchain.all_files,
         nm = cc_toolchain.nm_executable,
         objdump = cc_toolchain.objdump_executable,
@@ -35,14 +37,14 @@ def _android_impl(_settings, _attr):
 
 # The toolchain resolved for Android, its tools for the machine running
 # the check.
-_android = transition(
+android_transition = transition(
     implementation = _android_impl,
     inputs = [],
     outputs = ["//command_line_option:platforms"],
 )
 
 def _libcxx_shared_check_impl(ctx):
-    tools = ctx.attr._ndk_tools[0][_NdkToolsInfo]
+    tools = ctx.attr._ndk_tools[0][NdkToolsInfo]
     out = ctx.actions.declare_file(ctx.label.name + ".txt")
     # An AAR leaves libc++_shared.so to its host: the NDK's is read instead.
     aar = ctx.file.apk.extension == "aar"
@@ -77,8 +79,8 @@ libcxx_shared_check = rule(
             default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
         ),
         "_check": attr.label(default = Label(":check"), executable = True, cfg = "exec"),
-        "_ndk_libcxx": attr.label(default = "@isomer//swift_ffi/rules:ndk_libcxx_shared", cfg = _android),
-        "_ndk_tools": attr.label(default = Label(":ndk_tools"), cfg = _android),
+        "_ndk_libcxx": attr.label(default = "@isomer//swift_ffi/rules:ndk_libcxx_shared", cfg = android_transition),
+        "_ndk_tools": attr.label(default = Label(":ndk_tools"), cfg = android_transition),
         "_zipper": attr.label(default = "@bazel_tools//tools/zip:zipper", executable = True, cfg = "exec"),
     },
     doc = "Checks that `apk` ships libc++_shared.so (an AAR: leaves it to its host) and that `library` needs it and holds no libc++ of its own.",

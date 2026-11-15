@@ -344,14 +344,23 @@ platforms documented. Done since: one C++ runtime, the NDK's
 `libc++_shared.so` (`isomer_android_app(libcxx = "shared")`,
 `--@isomer//swift_ffi/rules:libcxx=shared`; an AAR leaves it to its host
 unless `--@isomer//tools/android:aar_libcxx_shared`), and
-`isomer_android_aar(libcxx = ...)` in 0.54. Open:
+`isomer_android_aar(libcxx = ...)` in 0.54. Done in 0.56: a prebuilt
+Swift library beside the app, both routes documented
+(docs/prebuilt_swift_libraries.md: a shared library over the shared
+platform, `isomer_android_shared_library` and `shared_platform = True`;
+a static archive and `.swiftinterface` through `swift_import`), what pins
+each to an Isomer version and a Swift toolchain, and the examples'
+//tests/prebuilt_swift_library checking an app built each way. Open:
 
-- **A prebuilt Swift library beside the app**: the shared platform
-  (`--@isomer//tools/android:shared_platform`, README "One platform
-  library for several apps") is one runtime for the app and anything
-  linked against it, but only from the same build of Isomer. Document that
-  route and the other one (a static archive and `.swiftinterface`, linked
-  into the app's one library), and what pins each to an Isomer version.
+- **A prebuilt module's `.swiftinterface` through Bazel off Apple**:
+  rules_swift 4.2.2's `swift_import(swiftinterface = ...)` compiles the
+  interface (SwiftCompileModuleInterface) without the Swift SDK on its
+  swift.org toolchains (no `-sdk`, none of the toolchain's copts, where the
+  Android SDK's resource directory is): "no such module 'Swift'". An app on
+  Android imports a prebuilt library's `.swiftmodule` until rules_swift
+  gives that action the SDK (an upstream change; then a patched version in
+  the registry's rules_swift), when //tests/prebuilt_swift_library's
+  imports can take the interfaces.
 - **Library evolution off Apple**: a library built with
   `-enable-library-evolution` warns on importing Isomer's Foundation,
   SwiftUI and os, which aren't (the warning has no diagnostic group, so

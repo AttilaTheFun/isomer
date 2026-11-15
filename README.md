@@ -971,6 +971,10 @@ Each release's notes have an Upgrading section; these things are easy to miss:
   examples/.bazelrc's `--config=isomer_library_evolution` (copy its lines:
   rules_swift's per-target copts; they build and link, the Storybook's
   apps the check, and the warnings go).
+  A library shipped prebuilt with a `.swiftinterface` needs library
+  evolution for the interface: an `internal import` of each Isomer module
+  its interface doesn't name keeps the warning away (below, "Prebuilt
+  Swift libraries", docs/prebuilt_swift_libraries.md).
 
 Apple-only consumers can skip the Android blocks' *registrations* but not the
 `android.sdk`/`android.ndk` tags (the extension requires them from the root
@@ -1173,6 +1177,10 @@ asked for both, in that order). Several Isomer apps or features in one host
 then share one runtime and one copy of Isomer, and changing an app relinks
 only its small library. The two libraries must come from one build of
 isomer, since the app's library links against that platform exactly.
+An app (or `isomer_android_library`, `isomer_android_aar`) whose
+`shared_platform = True` links against the platform and ships it whatever
+the flag says: one that takes a prebuilt library linked against the
+platform needs it (below, "Prebuilt Swift libraries").
 
 The Storybook, measured at 0.42 with `--config=android_release`: the
 platform 19.8 MB and the app's library 0.6 MB (16.7 MB APK), against
@@ -1190,6 +1198,34 @@ version script can undo, so the platform is linked without that flag
 through a registration made as the app's library loads
 (android/libraries/swift_ui/application_main.c), since a platform loaded
 first can't find it by name.
+
+### Prebuilt Swift libraries
+
+A Swift library that uses Isomer's Swift (Foundation, SwiftUI, the Isomer
+module) and that an app takes prebuilt, as files, rather than from source,
+ships one of two ways (docs/prebuilt_swift_libraries.md):
+
+- **over the shared platform**: `lib<name>.so` linked against
+  `libisomer_platform.so` (`isomer_android_shared_library`), each module's
+  `.swiftmodule` and `.swiftinterface` beside it; the app sets
+  `shared_platform = True`, takes the module with a `swift_import` (a
+  `cc_import` of the `.so` beneath it)
+  and ships the `.so` in `extra_binary_deps`. One runtime and one Isomer
+  serve both libraries.
+- **as a static archive and a `.swiftinterface`**: the library's
+  `swift_library` built with `library_evolution = True`; the app's
+  `swift_import(archives = ..., swiftmodule = ..., deps = [Isomer's
+  targets])` links the archive into its one library (the `.swiftmodule`:
+  rules_swift 4.2.2 compiles a `.swiftinterface` for Android without the
+  Swift SDK).
+
+Either way the library is bound to the isomer version, the Swift toolchain
+and the Isomer build settings it was built with, which the app must share:
+Isomer's modules, and Swift's own ABI off Apple's platforms, have no
+binary compatibility across versions, and a mismatch fails the link or
+the load at best, and corrupts memory at worst. The examples'
+//tests/prebuilt_swift_library builds a library both ways and checks the
+apps that take it.
 
 ### Embedding an Isomer app in an Android app
 

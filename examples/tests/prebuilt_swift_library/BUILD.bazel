@@ -1,0 +1,247 @@
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+load("@isomer//tools/android:defs.bzl", "isomer_android_app", "isomer_android_shared_library")
+load("@rules_cc//cc:cc_import.bzl", "cc_import")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+load("@rules_swift//swift:swift.bzl", "swift_import", "swift_library")
+load("//tests/android_libcxx_shared:check.bzl", "ndk_tools")
+load(":check.bzl", "prebuilt_library_check", "swift_library_artifacts")
+
+# A Swift library shipped prebuilt beside an Isomer app on Android, by the
+# two routes isomer's docs/prebuilt_swift_libraries.md describes, each as
+# its author builds it and as an app takes the files, not the library's
+# targets. Both are checked in the APK at build time with the NDK's
+# llvm-nm and llvm-objdump (check.sh): built, never run, nothing drawn.
+#
+# The library: PrebuiltGreeter (Foundation inside, an `internal import`)
+# and PrebuiltGreeterView (a SwiftUI View in its interface, a `public
+# import`), each built against Isomer's modules as an app's Swift is, with
+# library evolution, so their interfaces ship as .swiftinterface text.
+# Both are alwayslink: route (a) links them into a shared library that
+# nothing in it refers to.
+
+swift_library(
+    name = "greeter",
+    testonly = True,
+    srcs = ["Greeting.swift"],
+    alwayslink = True,
+    library_evolution = True,
+    module_name = "PrebuiltGreeter",
+    tags = ["manual"],
+    deps = ["@isomer//:foundation"],
+)
+
+swift_library(
+    name = "greeter_view",
+    testonly = True,
+    srcs = ["GreetingView.swift"],
+    alwayslink = True,
+    library_evolution = True,
+    module_name = "PrebuiltGreeterView",
+    tags = ["manual"],
+    deps = [
+        "@isomer//:foundation",
+        "@isomer//:swift_ui",
+    ],
+)
+
+# What the author ships, either route: each module's .swiftinterface and
+# .swiftmodule (and, for route b, its static archive). The apps import the
+# .swiftmodule: rules_swift 4.2.2's swift_import compiles a .swiftinterface
+# for Android without the Swift SDK (its SwiftCompileModuleInterface action
+# gets no -sdk and no resource directory: "no such module 'Swift'"), so
+# until rules_swift passes them, the binary module, which only the same
+# compiler reads (as the route needs anyway), is what an app imports. The
+# .swiftinterface ships beside it for people and tools to read.
+swift_library_artifacts(
+    name = "greeter_artifacts",
+    testonly = True,
+    library = ":greeter",
+    tags = ["manual"],
+)
+
+swift_library_artifacts(
+    name = "greeter_view_artifacts",
+    testonly = True,
+    library = ":greeter_view",
+    tags = ["manual"],
+)
+
+[
+    filegroup(
+        name = "%s_%s" % (module, kind),
+        testonly = True,
+        srcs = [":%s_artifacts" % module],
+        output_group = kind,
+        tags = ["manual"],
+    )
+    for module in ("greeter", "greeter_view")
+    for kind in ("archive", "swiftinterface", "swiftmodule")
+]
+
+# --- Route (b): a static archive and its module, linked into the app's
+# one library. The app imports each module (swift_import), against Isomer's
+# modules from its own graph (`deps`, which also link them: the archive's
+# autolink entries are not read), and links the archive into
+# lib<app>_runtime_bindings.so beside its own Swift, its one Foundation and
+# its one copy of Isomer.
+
+swift_import(
+    name = "greeter_archive_import",
+    testonly = True,
+    archives = [":greeter_archive"],
+    module_name = "PrebuiltGreeter",
+    swiftmodule = ":greeter_swiftmodule",
+    tags = ["manual"],
+    deps = ["@isomer//:foundation"],
+)
+
+swift_import(
+    name = "greeter_view_archive_import",
+    testonly = True,
+    archives = [":greeter_view_archive"],
+    module_name = "PrebuiltGreeterView",
+    swiftmodule = ":greeter_view_swiftmodule",
+    tags = ["manual"],
+    deps = [
+        "@isomer//:foundation",
+        "@isomer//:swift_ui",
+    ],
+)
+
+swift_library(
+    name = "archive_app_swift",
+    testonly = True,
+    srcs = ["App.swift"],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "PrebuiltArchiveApp",
+    tags = ["manual"],
+    deps = [
+        ":greeter_archive_import",
+        ":greeter_view_archive_import",
+        "@isomer//:foundation",
+        "@isomer//:swift_ui",
+        "@isomer//android/libraries/swift_ui",
+    ],
+)
+
+isomer_android_app(
+    name = "prebuilt_archive_android_application",
+    testonly = True,
+    package = "dev.isomer.prebuiltarchive",
+    swift_library = ":archive_app_swift",
+    tags = ["manual"],
+)
+
+# --- Route (a): a shared library over Isomer's shared platform. The
+# author links the module against libisomer_platform.so
+# (isomer_android_shared_library: its symbols exported, none of the
+# platform's in it); the app links its own library against the same
+# platform (`shared_platform = True`), imports the module and links against
+# the .so (a cc_import beneath the swift_import), and ships the .so beside
+# the platform (extra_binary_deps).
+
+isomer_android_shared_library(
+    name = "prebuilt_greeter",
+    testonly = True,
+    deps = [":greeter"],
+)
+
+cc_import(
+    name = "prebuilt_greeter_so",
+    testonly = True,
+    shared_library = ":libprebuilt_greeter.so",
+    tags = ["manual"],
+)
+
+swift_import(
+    name = "greeter_shared_import",
+    testonly = True,
+    module_name = "PrebuiltGreeter",
+    swiftmodule = ":greeter_swiftmodule",
+    tags = ["manual"],
+    deps = [":prebuilt_greeter_so"],
+)
+
+cc_library(
+    name = "prebuilt_greeter_native",
+    testonly = True,
+    srcs = [":libprebuilt_greeter.so"],
+    tags = ["manual"],
+)
+
+swift_library(
+    name = "shared_app_swift",
+    testonly = True,
+    srcs = ["SharedApp.swift"],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "PrebuiltSharedApp",
+    tags = ["manual"],
+    deps = [
+        ":greeter_shared_import",
+        "@isomer//:foundation",
+        "@isomer//:swift_ui",
+        "@isomer//android/libraries/swift_ui",
+    ],
+)
+
+isomer_android_app(
+    name = "prebuilt_shared_android_application",
+    testonly = True,
+    extra_binary_deps = [":prebuilt_greeter_native"],
+    package = "dev.isomer.prebuiltshared",
+    shared_platform = True,
+    swift_library = ":shared_app_swift",
+    tags = ["manual"],
+)
+
+# --- The checks.
+
+ndk_tools(
+    name = "ndk_tools",
+    tags = ["manual"],
+)
+
+sh_binary(
+    name = "check",
+    srcs = ["check.sh"],
+)
+
+prebuilt_library_check(
+    name = "prebuilt_archive_check",
+    testonly = True,
+    apk = ":prebuilt_archive_android_application_apk.apk",
+    archives = [
+        ":greeter_archive",
+        ":greeter_view_archive",
+    ],
+    library = "libprebuilt_archive_android_application_runtime_bindings.so",
+    modules = [
+        "PrebuiltGreeter",
+        "PrebuiltGreeterView",
+    ],
+    tags = ["manual"],
+)
+
+prebuilt_library_check(
+    name = "prebuilt_shared_check",
+    testonly = True,
+    apk = ":prebuilt_shared_android_application_apk.apk",
+    library = "libprebuilt_shared_android_application_runtime_bindings.so",
+    modules = ["PrebuiltGreeter"],
+    shared_library = "libprebuilt_greeter.so",
+    tags = ["manual"],
+)
+
+# The interfaces too: emitted, as the author ships them.
+build_test(
+    name = "prebuilt_swift_library_test",
+    targets = [
+        ":greeter_swiftinterface",
+        ":greeter_view_swiftinterface",
+        ":prebuilt_archive_check",
+        ":prebuilt_shared_check",
+    ],
+)

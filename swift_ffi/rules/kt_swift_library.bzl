@@ -272,3 +272,47 @@ def kt_swift_platform(
         tags = ["manual"],
         visibility = visibility,
     )
+
+def swift_platform_library(
+        name,
+        deps,
+        shared_platform,
+        linkopts = [],
+        platform = Label("//swift_ffi/rules:android-aarch64"),
+        testonly = False,
+        visibility = None):
+    """A shared library (`:lib<name>.so`) of Swift libraries linked against
+    a `kt_swift_platform`, as a `kt_swift_library`'s JNI library is, but
+    exporting what it links from `deps` (each an alwayslink `swift_library`,
+    or nothing of it is linked: nothing in the library refers to it) rather
+    than JNI entry points: a library that other libraries link against
+    beside the platform, built once and shipped as a file (a prebuilt
+    library; Isomer's README, "Prebuilt Swift libraries").
+
+    It needs the platform by name (DT_NEEDED `lib<platform>.so`) and holds
+    none of what the platform holds; `-z defs` fails its link on a symbol
+    neither defines. Named `lib<name>.so` (its soname), as the app ships it.
+    """
+    swift_shared_library(
+        name = name + "_link",
+        testonly = testonly,
+        deps = deps,
+        platform = _platform_link(shared_platform),
+        exported = True,
+        # libc++ as the platform takes it (the flag decides).
+        linkopts = _libcxx_linkopts(None) + ["-Wl,-soname,lib%s.so" % name] + linkopts + select({
+            Label("//swift_ffi/rules:jni_exports_only_on"): ["-Wl,--strip-all"],
+            "//conditions:default": [],
+        }),
+        additional_linker_inputs = _libcxx_inputs(None),
+        features = _libcxx_features(None),
+        tags = ["manual"],
+    )
+    transition_binary(
+        name = "lib" + name + ".so",
+        testonly = testonly,
+        binary = ":" + name + "_link",
+        platform = platform,
+        tags = ["manual"],
+        visibility = visibility,
+    )
