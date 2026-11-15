@@ -15,7 +15,12 @@
 //   iso type <element> <text>
 //   iso set <element> <value>
 //   iso select <element> <option>
-//   iso swipe [<element>] <up|down|left|right>
+//   iso swipe [<element>] <up|down|left|right> [<action>]
+//                                        a list row's swipe actions (listed as
+//                                        buttons, or the one named performed),
+//                                        else a drag
+//   iso longpress <element>              its context menu (its items then the
+//                                        screen's buttons), or its long press
 //   iso back | dismiss
 //   iso wait <text> [--timeout <seconds>]
 //   iso drive                            commands as JSON lines on standard input
@@ -311,9 +316,13 @@ func command(_ verb: String, _ rest: [String], _ options: Options) -> Wire_Comma
         if rest.count >= 2 {
             command.target = rest[0]
             command.direction = rest[1]
+            // A row's swipe action, by its title.
+            if rest.count >= 3 { command.value = rest[2] }
         } else {
-            command.direction = argument(0, "swipe [<element>] <up|down|left|right>")
+            command.direction = argument(0, "swipe [<element>] <up|down|left|right> [<action>]")
         }
+    case "longpress":
+        command.target = argument(0, "longpress <element>")
     case "wait":
         command.text = argument(0, "wait <text> [--timeout <seconds>]")
         command.timeout = options.timeout
@@ -366,6 +375,7 @@ func describe(_ answer: Wire_Answer) -> String {
     for element in screen.elements where shown(element.role) {
         var line = "\(element.name.isEmpty ? element.role : element.name) \(quoted(element.label))"
         if element.hasID { line += " #\(element.id)" }
+        if element.disabled { line += " (disabled)" }
         if element.hasValue { line += " = \(quoted(element.value))" }
         if !element.options.isEmpty { line += " [\(element.options.map(quoted).joined(separator: ", "))]" }
         lines.append(line)
@@ -569,7 +579,7 @@ func hub(_ arguments: [String]) async throws {
 let parsed = Options(CommandLine.arguments.dropFirst())
 let arguments = parsed.rest[...]
 guard let verb = arguments.first else {
-    print("iso ls|info|tap|type|set|select|swipe|back|dismiss|wait|drive [--app <name>[,<name>…] | --all], iso apps, iso hub [stop], iso application add|remove|select|list|stop …")
+    print("iso ls|info|tap|type|set|select|swipe|longpress|back|dismiss|wait|drive [--app <name>[,<name>…] | --all], iso apps, iso hub [stop], iso application add|remove|select|list|stop …")
     exit(2)
 }
 

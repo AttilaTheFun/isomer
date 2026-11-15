@@ -284,6 +284,47 @@ struct StorybookHeadlessTests {
         #expect(screen.element("Delete draft…") != nil)
     }
 
+    /// A long press opens a row's context menu: its items are the screen's
+    /// buttons until one is tapped.
+    @Test func aLongPressOpensTheContextMenu() throws {
+        let app = try launch(story: "lists.actions")
+        defer { app.quit() }
+        // Apple's driver reads the accessibility tree, which offers no long
+        // press it can use in process (drive/apple): Isomer's apps alone.
+        guard try app.info().renderer != "SwiftUI" else { return }
+        var screen = try app.longPress("Weekly report")
+        #expect(screen.elements.map(\.label) == ["Flag", "Delete"], "\(screen.elements)")
+        // (A row's subject is a text of its own: the story's code names
+        // them too, in its listing.)
+        #expect(!screen.texts.contains("Lunch on Friday?"), "an open menu is all there is")
+        // Closed again, nothing chosen.
+        screen = try app.dismiss()
+        #expect(screen.texts.contains("Weekly report"))
+        try app.longPress("Weekly report")
+        screen = try app.tap("Delete")
+        #expect(!screen.texts.contains("Weekly report"), "\(screen.texts)")
+        #expect(screen.texts.contains("Lunch on Friday?"))
+    }
+
+    /// A swipe on a row reveals its swipe actions as buttons (left: the
+    /// trailing ones, `.onDelete`'s Delete; right: the leading Flag), or
+    /// performs the one it names.
+    @Test func aSwipeRevealsARowsActions() throws {
+        let app = try launch(story: "lists.actions")
+        defer { app.quit() }
+        guard try app.info().renderer != "SwiftUI" else { return }
+        let before = try app.screen()
+        var screen = try app.swipe("Lunch on Friday?", "right")
+        #expect(screen.element("Flag")?.role == "button", "\(screen.elements)")
+        screen = try app.tap("Flag")
+        // Flagged: the flag's symbol beside its subject, a text more.
+        #expect(screen.texts.count == before.texts.count + 1, "\(screen.texts)")
+        #expect(screen.element("Flag") == nil, "the actions close once one is tapped")
+        screen = try app.swipe("Your order has shipped", "left", action: "Delete")
+        #expect(!screen.texts.contains("Your order has shipped"), "\(screen.texts)")
+        #expect(throws: (any Error).self) { try app.swipe("Weekly report", "left", action: "Archive") }
+    }
+
     @Test func unknownTargetFailsWithTheScreen() throws {
         let app = try launch(story: "state.observableobject")
         defer { app.quit() }

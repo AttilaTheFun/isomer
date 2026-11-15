@@ -42,6 +42,9 @@ struct AccessibilityScreen {
         var kind = ""
         /// What `inspect` shows beside it: its frame, traits, role, hint.
         var params: [String: String] = [:]
+        /// Listed, but takes no input (UIKit's notEnabled trait, AXEnabled
+        /// false): a tap on it fails, as Isomer's driver's does.
+        var disabled = false
     }
 
     struct Text {
@@ -49,6 +52,8 @@ struct AccessibilityScreen {
         var object: AnyObject
         var kind = ""
         var params: [String: String] = [:]
+        /// Its accessibility identifier: a list's row of texts takes it.
+        var id: String?
     }
 
     var texts: [Text] = []
@@ -66,13 +71,20 @@ struct AccessibilityScreen {
     }
 
     mutating func add(_ object: AnyObject, role: String, label: String, value: String? = nil, id: String? = nil,
-                      options: [String] = [], kind: String = "", params: [String: String] = [:]) {
+                      options: [String] = [], kind: String = "", params: [String: String] = [:], disabled: Bool = false) {
         if role == "text" {
-            if !label.isEmpty { texts.append(Text(text: label, object: object, kind: kind, params: params)) }
+            guard !label.isEmpty else { return }
+            texts.append(Text(text: label, object: object, kind: kind, params: params, id: id))
+            // A text with an identifier is also an element a test finds by
+            // it (XCUITest's `staticTexts["id"]`), as Isomer's driver lists
+            // a view with an identifier and nothing to use in it.
+            if let id {
+                elements.append(Element(role: "staticText", label: label, id: id, object: object, kind: kind, params: params))
+            }
             return
         }
         elements.append(Element(role: role, label: label, id: id, value: value, options: options, object: object,
-                                kind: kind, params: params))
+                                kind: kind, params: params, disabled: disabled))
     }
 
     /// A name on the screen (`button-3`, `text-2`): its role and place.
@@ -125,6 +137,7 @@ struct AccessibilityScreen {
             if let value = element.value { entry.value = value }
             entry.options = element.options
             entry.name = element.name
+            entry.disabled = element.disabled
             return entry
         }
         screen.presented = presented.map { presentation in
@@ -240,7 +253,9 @@ final class AccessibilityDriver {
             // to if need be; else a text of exactly those words.
             var element = await reveal(before, { $0.element(target, roles: ["button", "toggle"]) })
             if element == nil { element = await reveal(before, { $0.textTarget(target) }) }
-            if let element {
+            if let element, element.disabled {
+                error = "\(element.name.isEmpty ? target : element.name) is disabled"
+            } else if let element {
                 if !(await activate(element)) { error = "\(element.name.isEmpty ? target : element.name) didn't take the tap" }
             } else {
                 error = "no button \(target)"
@@ -264,7 +279,15 @@ final class AccessibilityDriver {
                 error = "no picker \(target)"
             }
         case "swipe":
-            error = await swipe(before, target, command.direction)
+            if command.value.isEmpty {
+                error = await swipe(before, target, command.direction)
+            } else {
+                // A row's swipe action, by its title: what the platform's
+                // accessibility offers of it (iOS: the row's custom actions).
+                error = await swipeAction(before, target, command.value)
+            }
+        case "longpress":
+            error = await longPress(before, target)
         case "back":
             if !(await back(before)) { error = "nothing to go back from" }
         case "dismiss":
