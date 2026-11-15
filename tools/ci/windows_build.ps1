@@ -62,7 +62,11 @@ if ($SetUp) {
     # it ends 0xC0000135 (a DLL not found). This runner is the job's alone
     # and goes with it; the fix that lasts is rules_swift's, the action run
     # with the default shell environment.
-    Copy-Item (Join-Path $runtime.DirectoryName '*.dll') (Join-Path $env:SystemRoot 'System32') -Force
+    # Only what System32 lacks: the runtime's folder also carries the VC
+    # runtime (msvcp140.dll and the rest), whose system copies stay.
+    $system32 = Join-Path $env:SystemRoot 'System32'
+    Get-ChildItem (Join-Path $runtime.DirectoryName '*.dll') | Where-Object { -not (Test-Path (Join-Path $system32 $_.Name)) } |
+        ForEach-Object { Copy-Item $_.FullName $system32 }
     $swiftPaths | Add-Content $env:GITHUB_PATH
     $env:Path = ($swiftPaths -join ';') + ';' + $env:Path
     $env:SDKROOT = $sdkroot
