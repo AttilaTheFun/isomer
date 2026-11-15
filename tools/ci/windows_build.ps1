@@ -55,6 +55,14 @@ if ($SetUp) {
     if (-not $runtime) { throw "windows_build: no Swift runtime (swiftCore.dll) under $swiftRoot\Runtimes" }
     if ($swiftPaths -notcontains $runtime.DirectoryName) { $swiftPaths = @($runtime.DirectoryName) + $swiftPaths }
     "Swift on PATH: $($swiftPaths -join '; ')"
+    # And in System32, which Windows searches whatever a process's
+    # environment: rules_swift's SwiftProtocGen action runs protoc, and so
+    # protoc-gen-swift, with no environment at all (actions.run with no env
+    # and no use_default_shell_env), so no PATH finds the runtime for it, and
+    # it ends 0xC0000135 (a DLL not found). This runner is the job's alone
+    # and goes with it; the fix that lasts is rules_swift's, the action run
+    # with the default shell environment.
+    Copy-Item (Join-Path $runtime.DirectoryName '*.dll') (Join-Path $env:SystemRoot 'System32') -Force
     $swiftPaths | Add-Content $env:GITHUB_PATH
     $env:Path = ($swiftPaths -join ';') + ';' + $env:Path
     $env:SDKROOT = $sdkroot
