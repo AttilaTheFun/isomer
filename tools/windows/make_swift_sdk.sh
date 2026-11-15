@@ -3,9 +3,9 @@
 # toolchain installer: its Windows.platform (the SDK the compiler builds
 # against, XCTest and Testing beside it) and the runtime's DLLs for arm64
 # and x64 (what an app ships beside its .exe), as one archive. Run on Linux
-# with 7-Zip and msitools (apt: 7zip msitools); the archive is then served
-# from Shireworks' files (added by its maintainers) and named by its SHA-256 in
-# MODULE.bazel (tools/windows/README.md).
+# with 7-Zip and msitools (apt: 7zip msitools); the archive is then kept by
+# the builder (tools/ci/ci_bazel.sh's ISOMER_WINDOWS_SDKS) and named by its
+# SHA-256 in MODULE.bazel (tools/windows/README.md).
 #
 #   tools/windows/make_swift_sdk.sh <swift-X.Y.Z-RELEASE-windows10-arm64.exe> <out.tar.gz>
 set -euo pipefail

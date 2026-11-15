@@ -1,15 +1,12 @@
 #!/bin/bash
-# The Android Storybook's stories on a phone: an emulator leased from
-# Shireworks (`shireworks <lease id>`: its adb and screenshots through
-# tools/ci/shireworks.sh; CI's), or one by adb (GitHub's runner's, or one in
-# this container: android_device.sh). Installed, each story
-# opened by its link
+# The Android Storybook's stories on a phone reached by adb: GitHub's Ubuntu
+# runner's emulator (tools/ci/hosted_android_test.sh), CI's, or any other.
+# Installed, each story opened by its link
 # (iso://story/<id>, a VIEW intent to the running app, as the proof does),
 # pictured by screencap once two pictures in a row agree, and checked for
 # having drawn; the pictures kept in <out>.
 #
 #   tools/ci/android_test.sh <adb> <serial> <storybook .apk> <out> <story>…
-#   tools/ci/android_test.sh shireworks <lease id> <storybook .apk> <out> <story>…
 set -uo pipefail
 # Nothing here reads standard input, and adb mustn't either: on a device
 # without adb's shell protocol (Android 6.0, API 23) `adb shell` copies
@@ -19,14 +16,8 @@ adb="$1" serial="$2" apk="$3" out="$4"
 shift 4
 mkdir -p "$out"
 BUNDLE=com.LoganShire.IsomerStorybook
-if [ "$adb" = shireworks ]; then
-    shireworks="$(cd "$(dirname "$0")" && pwd)/shireworks.sh"
-    a() { "$shireworks" adb "$serial" "$@"; }
-    shot() { "$shireworks" screenshot "$serial" "$1" >/dev/null; }
-else
-    a() { "$adb" -s "$serial" "$@"; }
-    shot() { a exec-out screencap -p >"$1"; }
-fi
+a() { "$adb" -s "$serial" "$@"; }
+shot() { a exec-out screencap -p >"$1"; }
 a install -r "$apk" >/dev/null || { echo "android_test: the install failed" >&2; exit 1; }
 a shell cmd uimode night no >/dev/null 2>&1
 a shell am start -W -n "$BUNDLE/.MainActivity" >/dev/null

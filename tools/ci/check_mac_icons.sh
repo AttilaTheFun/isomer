@@ -2,12 +2,13 @@
 # Every Mac app among a folder's zips has icons in the dark appearance
 # (NSAppearanceNameDarkAqua, by `assetutil --info` of its Assets.car), or
 # this fails and nothing is published: a flat icon, with no dark or tinted
-# appearance, is never published. The apps are built on Linux with
-# rules_applecross, whose actool compiles an Icon Composer icon's layers and
-# appearances as Xcode does (examples/.bazelrc's apple_on_linux accepts its
-# flattened images, which aren't Xcode's); this checks what it made with
-# Xcode's assetutil on a Mac, and in CI's Linux containers by the
-# appearance names the catalog stores (no Mac needed).
+# appearance, is never published. CI builds the apps on GitHub's Macs with
+# their Xcode; a builder may build them on Linux with rules_applecross, whose
+# actool compiles an Icon Composer icon's layers and appearances as Xcode
+# does (examples/.bazelrc's apple_on_linux accepts its flattened images,
+# which aren't Xcode's). This checks either with Xcode's assetutil on a Mac,
+# and in CI's Linux jobs by the appearance names the catalog stores (no Mac
+# needed).
 # The Storybook's Mac app has an Icon Composer icon. Copied from AttilaTheFun/reviews' tools/ci/check_mac_icons.sh.
 #
 #   tools/ci/check_mac_icons.sh <dir>

@@ -1,0 +1,230 @@
+#!/bin/bash
+# A publishing job's builds signed and saved as a release's assets, on
+# GitHub's own Linux runner, with nothing of the project's own servers: each
+# package signed in the job itself by the signers copied byte for byte from
+# AttilaTheFun/shireworks (tools/ci/android_sign.sh, tools/ci/apple_sign.sh
+# with apple_profiles.py), its keys from the job's GitHub environment
+# (`release`: main and v* tags), then its builds.json line written from the
+# signed package (tools/ci/release_assets.sh's release_asset_file), as
+# Applications and Reviews read a release (the private
+# AttilaTheFun/applications' docs/RELEASE_ASSETS.md): <App>-<version>-<platform>.<ext>
+# and builds.json, in <out>, for tools/ci/attach_release.sh.
+#
+#   tools/ci/sign_builds.sh --variant Alpha|Production --app <app> --out <dir>
+#       [--ipa-kind development|production] [--dmg]
+#       [--android-key <name> --android-pin <sha256>] <package>…
+#   tools/ci/sign_builds.sh --unsigned --app <app> --out <dir> <package>…
+#
+# - .ipa (the iPhone and iPad app): apple_sign.sh --ipa-kind (development
+#   for an Alpha, the default; production for a release: ad hoc, else
+#   enterprise, else development profiles), with APPLE_DEVELOPMENT_P12,
+#   APPLE_DEVELOPMENT_PASSWORD and APPLE_PROFILES;
+# - .zip (a Mac app): apple_sign.sh, Developer ID, notarized and stapled,
+#   with --dmg its disk image too, with APPLE_DEVELOPER_ID_P12,
+#   APPLE_DEVELOPER_ID_PASSWORD, APPLE_NOTARY_KEY, APPLE_NOTARY_KEY_ID,
+#   APPLE_NOTARY_ISSUER and APPLE_PROFILES (an empty one when unset: a Mac
+#   app with no profile of its own needs none);
+# - .apk: android_sign.sh with the release key --android-key names, its
+#   certificate pinned (--android-pin), with ANDROID_SIGNING_KEYSTORE and
+#   ANDROID_SIGNING_PASSWORD; the JDK and apksigner.jar the examples'
+#   Bazel pins (@hermetic_jdk, @android_build_tools), and its builds.json
+#   line read with that build-tools' aapt2. On an x86_64 Linux alone: the
+#   JDK and build tools Bazel has for Linux are x86_64.
+#
+# Production (a release's promotion): each Apple package stamped Production
+# first (tools/ci/stamp_variant.sh), then signed again; an .apk is the
+# release's own production build (--config=prod), its line Production.
+# APPLE_PROFILES may be a gzipped .tar (GitHub caps a secret at 48 KB), as
+# apple_sign.sh reads it.
+#
+# A platform whose secrets aren't all set is skipped, with a warning in the
+# log and the job's summary, never failing the job: a fork, or a
+# repository whose keys aren't all in yet, still proposes with what it can
+# sign. Nothing unsigned is saved. --unsigned (an experiment's, which no
+# environment's keys reach from a branch) saves the packages as built.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+CI="$ROOT/tools/ci"
+fail() { echo "sign_builds: $*" >&2; exit 1; }
+usage="usage: tools/ci/sign_builds.sh --variant Alpha|Production --app <app> --out <dir> [--ipa-kind development|production] [--dmg] [--android-key <name> --android-pin <sha256>] <package>…"
+
+variant="" app="" out="" ipa_kind="development" dmg="" android_key="" android_pin="" unsigned=""
+packages=()
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --variant) variant="${2:?}"; shift 2 ;;
+        --app) app="${2:?}"; shift 2 ;;
+        --out) out="${2:?}"; shift 2 ;;
+        --ipa-kind) ipa_kind="${2:?}"; shift 2 ;;
+        --dmg) dmg=1; shift ;;
+        --android-key) android_key="${2:?}"; shift 2 ;;
+        --android-pin) android_pin="${2:?}"; shift 2 ;;
+        --unsigned) unsigned=1; shift ;;
+        -*) fail "unknown option $1; $usage" ;;
+        *) packages+=("$1"); shift ;;
+    esac
+done
+[ -n "$app" ] && [ -n "$out" ] && [ ${#packages[@]} -gt 0 ] || fail "$usage"
+[ -n "$unsigned" ] || case "$variant" in Alpha | Production) ;; *) fail "--variant is Alpha or Production" ;; esac
+case "$ipa_kind" in development | production) ;; *) fail "--ipa-kind is development or production" ;; esac
+mkdir -p "$out"
+out="$(cd "$out" && pwd)"
+# shellcheck source=tools/ci/release_assets.sh
+. "$CI/release_assets.sh"
+
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+ipas=() zips=() apks=()
+for package in "${packages[@]}"; do
+    [ -f "$package" ] || fail "no such file: $package"
+    package="$(cd "$(dirname "$package")" && pwd)/$(basename "$package")"
+    case "$package" in
+        *.ipa) ipas+=("$package") ;;
+        *.zip) zips+=("$package") ;;
+        *.apk) apks+=("$package") ;;
+        *) fail "$(basename "$package") is not an .ipa, a Mac app's .zip or an .apk" ;;
+    esac
+done
+
+skipped=()
+skip() {
+    echo "::warning::sign_builds: $1 not signed: $2 not set in the job's environment"
+    skipped+=("$1 ($2)")
+}
+# Whether every named variable is set, else the first that isn't.
+missing() {
+    local name
+    for name in "$@"; do [ -n "${!name:-}" ] || { echo "$name"; return 0; }; done
+    return 1
+}
+# A signer run with the named secrets alone in its environment.
+with_secrets() {
+    local names=() keep=() name
+    for name in ANDROID_SIGNING_KEYSTORE ANDROID_SIGNING_PASSWORD APPLE_DEVELOPER_ID_P12 APPLE_DEVELOPER_ID_PASSWORD \
+        APPLE_NOTARY_KEY APPLE_NOTARY_KEY_ID APPLE_NOTARY_ISSUER APPLE_DEVELOPMENT_P12 APPLE_DEVELOPMENT_PASSWORD APPLE_PROFILES; do
+        names+=("-u" "$name")
+    done
+    while [ "$1" != -- ]; do keep+=("$1=${!1}"); shift; done
+    shift
+    env "${names[@]}" ${keep[@]+"${keep[@]}"} "$@"
+}
+
+if [ -n "$unsigned" ]; then
+    for package in ${ipas[@]+"${ipas[@]}"} ${zips[@]+"${zips[@]}"}; do
+        release_asset_file "$package" "$out" "$app"
+    done
+    [ ${#apks[@]} -eq 0 ] || fail "--unsigned takes Apple packages alone"
+    exit 0
+fi
+
+# The Apple packages, stamped first for a release.
+copies() {
+    local package copy
+    for package in "$@"; do
+        copy="$work/apple/$(basename "$package")"
+        mkdir -p "$work/apple"
+        cp "$package" "$copy"
+        [ "$variant" != Production ] || "$CI/stamp_variant.sh" Production "$copy" >&2
+        echo "$copy"
+    done
+}
+# APPLE_PROFILES as apple_sign.sh reads it (a .tar or .tar.gz, base64;
+# APPLE_PROFILES_2 … _9 beside it pass through): an empty .tar when unset,
+# which a Mac app with no profile of its own signs with.
+profiles() {
+    if [ -n "${APPLE_PROFILES:-}" ]; then
+        printf '%s' "$APPLE_PROFILES"
+    else
+        tar -cf "$work/profiles.tar" -T /dev/null
+        base64 < "$work/profiles.tar" | tr -d '\n'
+    fi
+}
+
+if [ ${#ipas[@]} -gt 0 ]; then
+    if name="$(missing APPLE_DEVELOPMENT_P12 APPLE_DEVELOPMENT_PASSWORD APPLE_PROFILES)"; then
+        skip "the iPhone app" "$name"
+    else
+        mapfile -t stamped < <(copies "${ipas[@]}")
+        [ ${#stamped[@]} -eq ${#ipas[@]} ] || fail "the iPhone packages weren't copied"
+        apple_profiles="$(profiles)" || exit 1
+        APPLE_PROFILES="$apple_profiles" with_secrets APPLE_DEVELOPMENT_P12 APPLE_DEVELOPMENT_PASSWORD APPLE_PROFILES -- \
+            "$CI/apple_sign.sh" --key-from-env --ipa-kind "$ipa_kind" --out "$work/signed-ios" "${stamped[@]}"
+        for package in "${stamped[@]}"; do
+            release_asset_file "$work/signed-ios/$(basename "$package")" "$out" "$app"
+        done
+    fi
+fi
+
+if [ ${#zips[@]} -gt 0 ]; then
+    if name="$(missing APPLE_DEVELOPER_ID_P12 APPLE_DEVELOPER_ID_PASSWORD APPLE_NOTARY_KEY APPLE_NOTARY_KEY_ID APPLE_NOTARY_ISSUER)"; then
+        skip "the Mac app" "$name"
+    else
+        mapfile -t stamped < <(copies "${zips[@]}")
+        [ ${#stamped[@]} -eq ${#zips[@]} ] || fail "the Mac packages weren't copied"
+        apple_profiles="$(profiles)" || exit 1
+        APPLE_PROFILES="$apple_profiles" with_secrets APPLE_DEVELOPER_ID_P12 APPLE_DEVELOPER_ID_PASSWORD APPLE_NOTARY_KEY \
+            APPLE_NOTARY_KEY_ID APPLE_NOTARY_ISSUER APPLE_PROFILES -- \
+            "$CI/apple_sign.sh" --key-from-env ${dmg:+--dmg} --out "$work/signed-mac" "${stamped[@]}"
+        for package in "${stamped[@]}"; do
+            signed="$work/signed-mac/$(basename "$package")"
+            release_asset_file "$signed" "$out" "$app"
+            # The disk image, described by its app's .zip.
+            [ -z "$dmg" ] || release_asset_file "${signed%.zip}.dmg" "$out" "$app" "$signed"
+        done
+    fi
+fi
+
+if [ ${#apks[@]} -gt 0 ]; then
+    if name="$(missing ANDROID_SIGNING_KEYSTORE ANDROID_SIGNING_PASSWORD)"; then
+        skip "the Android app" "$name"
+    else
+        [ -n "$android_key" ] && [ -n "$android_pin" ] || fail "an .apk takes --android-key and --android-pin"
+        # The examples' pinned JDK and build tools, by Bazel's own paths.
+        tools=(@hermetic_jdk//:java_bin @android_build_tools//:lib/apksigner.jar @android_build_tools//:aapt2)
+        (cd "$ROOT/examples" && bazel build "${tools[@]}" > /dev/null 2>&1) || fail "the JDK and build tools didn't fetch"
+        base="$(cd "$ROOT/examples" && bazel info output_base)"
+        tool() { (cd "$ROOT/examples" && bazel cquery "$1" --output=files 2> /dev/null) | head -1 | sed "s|^|$base/|"; }
+        java="$(tool @hermetic_jdk//:java_bin)"
+        apksigner="$(tool @android_build_tools//:lib/apksigner.jar)"
+        aapt2="$(tool @android_build_tools//:aapt2)"
+        [ -x "$java" ] && [ -f "$apksigner" ] && [ -x "$aapt2" ] || fail "no JDK or build tools at $java, $apksigner, $aapt2"
+        for package in "${apks[@]}"; do
+            signed="$work/signed-android/$(basename "$package")"
+            with_secrets ANDROID_SIGNING_KEYSTORE ANDROID_SIGNING_PASSWORD -- \
+                "$CI/android_sign.sh" --key-from-env --app "$android_key" --pin "$android_pin" \
+                --java "$java" --apksigner "$apksigner" "$package" "$signed"
+            # Its line as Shireworks' signing service answered for an APK
+            # (release_asset_answer_describe): the package, its version and
+            # versionCode and its label, from its manifest (aapt2), the
+            # variant the job's.
+            "$aapt2" dump badging "$signed" > "$work/badging.txt" || fail "aapt2 doesn't read $(basename "$signed")"
+            python3 -I - "$work/badging.txt" "$variant" > "$work/answer.json" << 'PY'
+import json, re, sys
+text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+def field(pattern):
+    found = re.search(pattern, text, re.M)
+    return found.group(1) if found else ""
+package = field(r"^package: name='([^']*)'")
+if not package:
+    sys.exit("sign_builds: aapt2 names no package")
+build = {"platform": "android", "name": field(r"^application-label:'([^']*)'") or package,
+         "version": field(r"versionName='([^']*)'"), "buildNumber": field(r"versionCode='([^']*)'"),
+         "variant": sys.argv[2], "urlSchemes": []}
+json.dump({"bundleID": package, "channel": "production" if sys.argv[2] == "Production" else "beta", "build": build}, sys.stdout)
+PY
+            release_asset_file "$signed" "$out" "$app" "$work/answer.json"
+        done
+    fi
+fi
+
+# A builds.json however little was signed, so the draft is made and says so.
+[ -f "$out/builds.json" ] || echo '[]' > "$out/builds.json"
+if [ ${#skipped[@]} -gt 0 ] && [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+    {
+        echo "### Builds not signed"
+        echo
+        for line in "${skipped[@]}"; do echo "- $line"; done
+    } >> "$GITHUB_STEP_SUMMARY"
+fi
+echo "sign_builds: into $out:"
+ls -l "$out"
