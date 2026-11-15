@@ -11,7 +11,9 @@
 #   SHIREWORKS_SERVERS    else the first of these (http://host:7480, …), with
 #   SHIREWORKS_API_KEY    an application's key, or
 #   SHIREWORKS_TOKEN      the server's token and SHIREWORKS_HOLDER (else $USER)
-#   SHIREWORKS_ADMIN_KEY  the admin key (its owner's shell): the admin commands use it
+#   SHIREWORKS_SESSION    a terminal's session (Settings › Devices › Add a Terminal): the owner's, the admin
+#                         commands' and the rest's (2026-11-14: it replaces the admin key)
+#   SHIREWORKS_ADMIN_KEY  the admin key, read until it's gone
 # Until Shireworks 0.4 the OSS_ names of the first two are read too.
 #
 #   shireworks.sh lease <platform> [--config=…] [--minutes=N] [--label=…] [--kind=…]
@@ -34,25 +36,46 @@
 #                                  an iOS lease's simulator; --env reaches a launched app
 #   shireworks.sh adb <id> <arguments…>        an Android lease's emulator
 #   shireworks.sh install <id> <sha256>        a stored app, on an iOS lease
+#   shireworks.sh fresh-app <id> <bundle id> [--group=<app group>]…
+#                                  a Mac slot's app made new for the primary's console user (quit, its container,
+#                                  group containers, preferences, saved state and caches removed): a first launch
 #   shireworks.sh screenshot <id> <file.png> [--window=…]
 #   shireworks.sh xctest <id> --tests=<file | object> [--host=<file | object>] [--ui] [--gui]
-#                 [--only-testing=Class[/method]]… [--junit=<file.xml>] [--result=<file.xcresult.zip>]
+#                 [--only-testing=Class[/method]]… [--junit=<file.xml>] [--result=<file.xcresult.zip>] [--attachments=<file.zip>]
 #                                  tests on an iOS lease's simulator or a Mac slot (a file here
-#                                  is stored first; else a stored object's sha256 or name): xcodebuild's output as it comes, its JUnit and
-#                                  zipped result bundle saved if asked; exits with its status
+#                                  is stored first; else a stored object's sha256 or name): xcodebuild's output as it comes, its JUnit,
+#                                  zipped result bundle and its tests' attachments (kept for the run, exported, zipped with
+#                                  xcresulttool's manifest.json at the top: API 23) saved if asked; exits with its status
 #   shireworks.sh storage-put <file> [--name=…] [--ttl=…]   its JSON (sha256 and all)
 #   shireworks.sh cache-token     the Bazel cache's read token (for .netrc: never log it)
 #   shireworks.sh files-url <sha256>                        a served file's URL
 #   shireworks.sh capabilities
-#   shireworks.sh sign <file> [--package=ipa|mac|dmg] [--bundle-id=…] [--out=<file>] [--audience=shireworks] [--promote]
+#   shireworks.sh sign <file> [--package=ipa|mac|dmg|tool|apk] [--bundle-id=…] [--out=<file>] [--audience=shireworks] [--promote]
 #                                  a CI job's build signed on Shireworks' Mac (pure-mac §3): stored, signed as the job's
 #                                  GitHub OIDC token allows (the job needs `permissions: id-token: write`; else
 #                                  SHIREWORKS_OIDC_TOKEN), and written back (in place unless --out); prints what signed it;
-#                                  --promote (a release's run): a tested Alpha's app stamped Production first
+#                                  --promote (a release's run): a tested Alpha's app stamped Production first. An .apk is
+#                                  checked (v2 signature, its package its repository's) and described, never re-signed
 #
 # With SHIREWORKS_ADMIN_KEY (and SHIREWORKS_SERVERS), the admin's:
 #   shireworks.sh secret-remove <account>           (admin) a secret forgotten, its Keychain item and its file:
 #                                  client/works-builder-app.json|.pem, client/ci-github-app.json|.pem
+#   shireworks.sh issues-key-import <file.pem>      (admin) the factory's GitHub App's private key into the Keychain, for the
+#                                  issues dispatcher (server.json issuesDispatcher.appID); delete the file after
+#   shireworks.sh agent-key-import <file.pem> --app-id=N [--installation=N]
+#                                  (admin) the agents' GitHub App's key into the Keychain alone, for
+#                                  agent-proxy's GitHub tokens (no installation: agent-proxy finds it); delete the .pem after
+#   shireworks.sh agent-proxy-key-set              (admin) agent-proxy's key for this server's API and MCP (an
+#                                  agent-scope key: key-create agent-proxy --scope=agent), its value on standard
+#                                  input alone, into the Keychain as agent-proxy/shireworks-key
+#   shireworks.sh runner-key-import <file.pem> --app-id=N [--repositories=…] [--max-concurrent=N]
+#                                  (admin) CI's GitHub App's key into the Keychain alone, its files gone;
+#                                  delete the .pem after
+#   shireworks.sh agent-secret-set <NAME>          (admin) a secret for the runner's agents (agentRunner.secrets), its
+#                                  value on standard input alone, into the Keychain as agents/<NAME>; removed with
+#                                  secret-remove agents/<NAME>
+#   shireworks.sh relay-token [--new]               (admin) the containers' relay's token, printed alone, once (--new: another),
+#                                  for `shireworks.sh relay-token | multipass-agent relay token set`
 #   shireworks.sh signing          (admin) what signing holds: identities, profiles, whether the notary key is set
 #   shireworks.sh signing-identity-import <file.p12>   (admin) its password read from SHIREWORKS_P12_PASSWORD, else asked
 #   shireworks.sh signing-identity-remove <sha1> | signing-profile-import <file> | signing-profile-remove <uuid>
@@ -64,7 +87,9 @@
 #   shireworks.sh files | files-add <sha256> [--name=…] | files-remove <sha256>
 #                                  the files every build's downloader trusts, served by their hash
 #   shireworks.sh volumes | volume-delete <name>
-#   shireworks.sh keys | key-create <application> | key-rotate <application> | key-revoke <application>
+#   shireworks.sh terminal-session [--name=…]   (the admin key, on the server's Mac) a terminal's session, its line
+#                                  `export SHIREWORKS_SESSION=…` printed once, for ~/.zshrc (never to a terminal)
+#   shireworks.sh keys | key-create <application> [--scope=agent] | key-rotate <application> | key-revoke <application>
 #                                  a made or rotated key is printed once (rotated: the old stops at once)
 #   shireworks.sh image-build <platform> <config> [--from=<base config>] [--script=<file | sha256>]
 #                 [--copy=<file | sha256>:<path in the machine>]… [--device=…] [--runtime=…] [--api=N] [--tag=…]
@@ -77,7 +102,7 @@
 # A refusal is printed with its status and the script exits 1.
 
 program=$(cat << 'PYTHON'
-import hashlib, http.client, json, os, re, shlex, sys, tempfile, time, urllib.parse, uuid
+import hashlib, http.client, ipaddress, json, os, re, shlex, sys, tempfile, time, urllib.parse, uuid
 
 me = "shireworks.sh"
 
@@ -88,6 +113,39 @@ def die(message, status=1):
 def env(name):
     value = os.environ.get("SHIREWORKS_" + name) or os.environ.get("OSS_" + name) or ""
     return value.strip()
+
+def origin(text):
+    parts = urllib.parse.urlsplit(text if "://" in text else "http://" + text)
+    scheme = (parts.scheme or "http").lower()
+    return f"{scheme}://{(parts.hostname or '').lower()}:{parts.port or (7445 if scheme == 'https' else 7480)}"
+
+# A terminal's session for `server` (as `sw`'s Token.session(for:)): SHIREWORKS_SESSION_FOR's entry for its origin,
+# else SHIREWORKS_SESSION for this computer's loopback (or any server, when there's no SHIREWORKS_SESSION_FOR).
+def terminal_session_for(server):
+    entries = {}
+    for entry in re.split(r"[ ,\n]+", os.environ.get("SHIREWORKS_SESSION_FOR", "").strip()):
+        name, _, token = entry.partition("=")
+        if token.startswith("sws_"):
+            entries[origin(name)] = token
+    here = origin(urllib.parse.urlunsplit(server))
+    if here in entries:
+        return entries[here]
+    session = os.environ.get("SHIREWORKS_SESSION", "").strip()
+    if not session.startswith("sws_"):
+        return ""
+    return session if not entries or is_loopback_host(server.hostname) else ""
+
+# localhost, or an address (never a name: 127.0.0.1.evil.com is one) in 127/8, ::1 or ::ffff:127/104.
+def is_loopback_host(host):
+    host = (host or "").lower().strip("[]")
+    if host == "localhost":
+        return True
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    mapped = getattr(address, "ipv4_mapped", None)
+    return address.is_loopback or bool(mapped and mapped.is_loopback)
 
 # Whom to ask, as what.
 grant = env("GRANT")
@@ -107,7 +165,8 @@ else:
     if not first:
         die("no server: set SHIREWORKS_GRANT (a CI job has it) or SHIREWORKS_SERVERS")
     server = urllib.parse.urlsplit(first if "://" in first else "http://" + first)
-    key = os.environ.get("SHIREWORKS_API_KEY", "").strip() or os.environ.get("SHIREWORKS_ADMIN_KEY", "").strip()
+    key = (terminal_session_for(server) or os.environ.get("SHIREWORKS_API_KEY", "").strip()
+           or os.environ.get("SHIREWORKS_ADMIN_KEY", "").strip())
     secret = os.environ.get("SHIREWORKS_TOKEN", "").strip()
     if key:
         headers["Authorization"] = "Bearer " + key
@@ -117,7 +176,7 @@ else:
     else:
         die("no credential: set SHIREWORKS_GRANT, SHIREWORKS_API_KEY or SHIREWORKS_TOKEN")
 host = server.hostname
-port = server.port or 7480
+port = server.port or (7445 if server.scheme == "https" else 7480)
 
 def connect(timeout=600):
     if server.scheme == "https":
@@ -296,18 +355,88 @@ def volume_delete(arguments):
     as_admin()
     request("DELETE", "/v1/volumes/" + urllib.parse.quote(name, safe="")).read()
 
-# The admin's commands: the admin key when it's set (a job's grant never is).
+# The admin's commands: a terminal's session (the owner's) for this server, else the admin key, when it's set (a job's grant
+# never is).
 def as_admin(required=False):
-    admin = os.environ.get("SHIREWORKS_ADMIN_KEY", "").strip()
+    admin = terminal_session_for(server) or os.environ.get("SHIREWORKS_ADMIN_KEY", "").strip()
     if admin:
         headers["Authorization"] = "Bearer " + admin
     elif required:
-        die("this is the admin's: set SHIREWORKS_ADMIN_KEY (and SHIREWORKS_SERVERS)", 2)
+        die("this is the admin's: set SHIREWORKS_SESSION (Settings › Devices › Add a Terminal) and SHIREWORKS_SERVERS", 2)
 
 def secret_remove(arguments):
     (account,) = positional(arguments, 1, "secret-remove <account>")
     as_admin(required=True)
     print(json.dumps(call("DELETE", "/v1/server/secrets/" + account), indent=2))
+
+def issues_key_import(arguments):
+    (path,) = positional(arguments, 1, "issues-key-import <file.pem>")
+    as_admin(required=True)
+    with open(path) as file:
+        pem = file.read()
+    print(json.dumps(call("PUT", "/v1/server/issues-key", {"pem": pem}), indent=2))
+
+def agent_key_import(arguments):
+    (path,) = positional(arguments, 1, "agent-key-import <file.pem> --app-id=N [--installation=N]")
+    app_id = option(arguments, "app-id")
+    if not (app_id or "").isdigit():
+        die("agent-key-import: --app-id=N, the agents' GitHub App's id", 2)
+    installation = option(arguments, "installation")
+    if installation is not None and not installation.isdigit():
+        die("agent-key-import: --installation=N, the App's installation id", 2)
+    as_admin(required=True)
+    with open(path) as file:
+        body = {"appId": int(app_id), "pem": file.read()}
+    if installation:
+        body["installationId"] = int(installation)
+    print(json.dumps(call("PUT", "/v1/server/agent-key", body), indent=2))
+
+def runner_key_import(arguments):
+    (path,) = positional(arguments, 1, "runner-key-import <file.pem> --app-id=N [--repositories=a/b,c/d] [--max-concurrent=N]")
+    app_id = option(arguments, "app-id")
+    if not (app_id or "").isdigit():
+        die("runner-key-import: --app-id=N, the CI App's id", 2)
+    as_admin(required=True)
+    with open(path) as file:
+        body = {"appId": int(app_id), "pem": file.read()}
+    repositories = option(arguments, "repositories")
+    if repositories:
+        body["repositories"] = [r for r in repositories.split(",") if r]
+    most = option(arguments, "max-concurrent")
+    if most:
+        body["maxConcurrent"] = int(most)
+    print(json.dumps(call("PUT", "/v1/server/runner-key", body), indent=2))
+
+def agent_secret_set(arguments):
+    # The value on standard input alone (never the command line): e.g.
+    # printf %s "$TOKEN" | shireworks.sh agent-secret-set CLAUDE_CODE_OAUTH_TOKEN
+    (name,) = positional(arguments, 1, "agent-secret-set <NAME>  (the value on standard input)")
+    as_admin(required=True)
+    if sys.stdin.isatty():
+        sys.exit("shireworks.sh: agent-secret-set reads the value from standard input (pipe it in)")
+    value = sys.stdin.read()
+    if value.endswith("\n"):
+        value = value[:-1]
+    if not value:
+        sys.exit("shireworks.sh: no value on standard input")
+    print(json.dumps(call("PUT", "/v1/server/agent-secrets/" + name, {"value": value}), indent=2))
+
+def agent_proxy_key_set(arguments):
+    # The value on standard input alone (never the command line): e.g.
+    # shireworks.sh key-create agent-proxy --scope=agent | shireworks.sh agent-proxy-key-set
+    positional(arguments, 0, "agent-proxy-key-set  (the key on standard input)")
+    as_admin(required=True)
+    if sys.stdin.isatty():
+        sys.exit("shireworks.sh: agent-proxy-key-set reads the key from standard input (pipe it in)")
+    key = sys.stdin.read().strip()
+    if not key:
+        sys.exit("shireworks.sh: no key on standard input")
+    print(json.dumps(call("PUT", "/v1/server/agent-proxy-key", {"key": key}), indent=2))
+
+def relay_token(arguments):
+    as_admin(required=True)
+    answer = call("POST", "/v1/server/relay-token", {"new": True} if "--new" in arguments else {})
+    sys.stdout.write(answer["token"] + "\n")
 
 def signing(arguments):
     as_admin(required=True)
@@ -464,7 +593,7 @@ def volumes(arguments):
 def keys(arguments):
     as_admin(required=True)
     for key in call("GET", "/v1/keys") or []:
-        print(f"{key['application']}  {key.get('created', '')}")
+        print(f"{key['application']}  {key.get('scope', 'user')}  {key.get('created', '')}")
 
 def key_create(arguments):
     (application,) = positional(arguments, 1, "key-create <application>")
@@ -474,7 +603,29 @@ def key_create(arguments):
     if any(key.get("application") == application for key in call("GET", "/v1/keys") or []):
         die(f"{application} has a key already: key-rotate {application} makes a new one (the old stops at once)", 2)
     # Shown once: the caller keeps it (never logged).
-    print(call("POST", "/v1/keys", {"application": application})["key"])
+    body = {"application": application}
+    if option(arguments, "scope"):
+        body["scope"] = option(arguments, "scope")
+    print(call("POST", "/v1/keys", body)["key"])
+
+def terminal_session(arguments):
+    # A terminal's session (the owner's), made with the admin key on the server's Mac itself: its line for ~/.zshrc,
+    # printed alone and once (never logged). Refused to a terminal: pipe it into what keeps it.
+    positional(arguments, 0, "terminal-session [--name=\"This Mac's terminal\"] [--for=https://<this Mac's TLS address>]")
+    if sys.stdout.isatty():
+        die("terminal-session prints a secret once: pipe it into what keeps it (shireworks.sh terminal-session >> ~/.zshrc)", 2)
+    admin = os.environ.get("SHIREWORKS_ADMIN_KEY", "").strip()
+    if not admin:
+        die("terminal-session is made with the admin key (SHIREWORKS_ADMIN_KEY), on the server's Mac", 2)
+    headers["Authorization"] = "Bearer " + admin
+    made = call("POST", "/v1/auth/sessions", {"device": option(arguments, "name", "This Mac's terminal")})
+    # --for=<the server's address as another computer reaches it (its TLS one)>: that computer's line, its session
+    # named for this server; else this computer's own.
+    reached = option(arguments, "for")
+    if reached:
+        print(f'export SHIREWORKS_SESSION_FOR="${{SHIREWORKS_SESSION_FOR:+$SHIREWORKS_SESSION_FOR }}{origin(reached)}={made["token"]}"')
+    else:
+        print("export SHIREWORKS_SESSION=" + made["token"])
 
 def key_rotate(arguments):
     (application,) = positional(arguments, 1, "key-rotate <application>")
@@ -556,7 +707,7 @@ def stored(given):
 
 def xctest(arguments):
     (lease,) = positional(arguments, 1, "xctest <id> --tests=<file | sha256> [--host=…] [--ui] [--gui] [--only-testing=…]… "
-                                         "[--junit=<file>] [--result=<file>]")
+                                         "[--junit=<file>] [--result=<file>] [--attachments=<file.zip>]")
     if not option(arguments, "tests"):
         die("xctest: --tests=<the test bundle, zipped, or its stored object's sha256>", 2)
     body = {"tests": stored(option(arguments, "tests"))}
@@ -566,6 +717,9 @@ def xctest(arguments):
         body["ui"] = True
     if flag(arguments, "gui"):
         body["gui"] = True
+    # --attachments keeps the run's attachments as well as fetching them.
+    if option(arguments, "attachments"):
+        body["keepAttachments"] = True
     only = [a.split("=", 1)[1] for a in arguments if a.startswith("--only-testing=")]
     if only:
         body["onlyTesting"] = only
@@ -573,7 +727,7 @@ def xctest(arguments):
     run = answer.getheader("Shireworks-XCTest-Run") or ""
     status = streamed(answer)
     # Its results, whatever the tests said (a failed run has them too).
-    for name, what in (("junit", "junit"), ("result", "result")):
+    for name, what in (("junit", "junit"), ("result", "result"), ("attachments", "attachments")):
         target = option(arguments, name)
         if not target:
             continue
@@ -636,6 +790,11 @@ def install(arguments):
     lease, sha256 = positional(arguments, 2, "install <id> <sha256>")
     print(json.dumps(call("POST", lease_path(lease) + "/install", {"object": sha256}), indent=2))
 
+def fresh_app(arguments):
+    lease, bundle = positional(arguments, 2, "fresh-app <id> <bundle id> [--group=<app group>]…")
+    groups = [a.split("=", 1)[1] for a in arguments if a.startswith("--group=")]
+    print(json.dumps(call("POST", lease_path(lease) + "/fresh-app", {"bundleID": bundle, "groups": groups}), indent=2))
+
 def screenshot(arguments):
     lease, file = positional(arguments, 2, "screenshot <id> <file.png> [--window=…]")
     window = option(arguments, "window")
@@ -657,17 +816,21 @@ def oidc_token(audience):
         die(f"sign: GitHub gave no OIDC token: {error}")
 
 def sign(arguments):
-    (file,) = positional(arguments, 1, "sign <file> [--package=ipa|mac|dmg] [--bundle-id=…] [--out=<file>] [--audience=…]")
-    package = option(arguments, "package") or {".ipa": "ipa", ".zip": "mac", ".dmg": "dmg"}.get(os.path.splitext(file)[1])
-    if package not in ("ipa", "mac", "dmg"):
-        die("sign: say what it is: --package=ipa (an iPhone app), mac (a Mac app's .zip) or dmg (a disk image)", 2)
+    (file,) = positional(arguments, 1, "sign <file> [--package=ipa|mac|dmg|tool|apk] [--bundle-id=…] [--out=<file>] [--audience=…]")
+    package = option(arguments, "package") or {".ipa": "ipa", ".zip": "mac", ".dmg": "dmg", ".apk": "apk"}.get(os.path.splitext(file)[1])
+    if package not in ("ipa", "mac", "dmg", "tool", "apk"):
+        die("sign: say what it is: --package=ipa (an iPhone app), mac (a Mac app's .zip), dmg (a disk image), "
+            "tool (one command-line executable, zipped alone, with --bundle-id=<its identifier>) "
+            "or apk (an Android app, signed by its build: checked, never re-signed)", 2)
+    if package == "tool" and not option(arguments, "bundle-id"):
+        die("sign: a tool is signed under its identifier: --bundle-id=<identifier>", 2)
     token = oidc_token(option(arguments, "audience", "shireworks"))
     name = os.path.basename(file)
     stored = store(file, {"name": name})
     body = {"object": stored["object"]["sha256"], "package": package, "token": token, "name": "signed-" + name}
     if option(arguments, "bundle-id"):
         body["bundleID"] = option(arguments, "bundle-id")
-    # A release's promotion of a tested Alpha: stamped Production, then signed as production.
+    # A release's promotion of a tested Alpha: stamped Production, then signed as production (an APK: checked as production).
     if flag(arguments, "promote"):
         body["promote"] = True
     answer = json.loads(request("POST", "/v1/signing/requests", body, timeout=3600).read())
@@ -717,12 +880,13 @@ def capabilities(arguments):
     print(json.dumps(call("GET", "/v1/capabilities"), indent=2))
 
 commands = {"lease": lease, "release": release, "list": list_leases, "volume-delete": volume_delete, "renew": renew,
-            "restart": restart, "secret-remove": secret_remove,
+            "restart": restart, "secret-remove": secret_remove, "relay-token": relay_token, "agent-secret-set": agent_secret_set, "issues-key-import": issues_key_import, "runner-key-import": runner_key_import,
+            "agent-key-import": agent_key_import, "agent-proxy-key-set": agent_proxy_key_set,
             "signing": signing, "signing-identity-import": signing_identity_import, "signing-identity-remove": signing_identity_remove,
             "signing-profile-import": signing_profile_import, "signing-profile-remove": signing_profile_remove,
             "signing-notary-key": signing_notary_key, "files": files, "files-add": files_add, "files-remove": files_remove, "volumes": volumes,
-            "keys": keys, "key-create": key_create, "key-rotate": key_rotate, "key-revoke": key_revoke, "run": run, "put": put, "get": get,
-            "simctl": device("simctl"), "adb": device("adb"), "install": install, "screenshot": screenshot, "xctest": xctest,
+            "keys": keys, "key-create": key_create, "terminal-session": terminal_session, "key-rotate": key_rotate, "key-revoke": key_revoke, "run": run, "put": put, "get": get,
+            "simctl": device("simctl"), "adb": device("adb"), "install": install, "fresh-app": fresh_app, "screenshot": screenshot, "xctest": xctest,
             "storage-put": storage_put, "sign": sign, "cache-token": cache_token, "files-url": files_url, "capabilities": capabilities,
             "image-build": image_build, "image-builds": image_builds, "components": components,
             "component-install": component_install, "component-remove": component_remove}

@@ -1,18 +1,24 @@
 #!/bin/bash
 # A signed build, saved as a GitHub release's asset (docs/RELEASE_ASSETS.md):
-# sourced by publish_from_ci.sh and promote_from_ci.sh, which call
-# `release_asset` with each build the server answered, for their
-# `--download <dir>`, and by sign_from_ci.sh, which calls
-# `release_asset_file` with each package Shireworks signed. The job then
+# sourced by sign_from_ci.sh (Applications Server's publish and promote
+# scripts are gone with it, 2026-11-15: `release_asset`, for a build a
+# server answered, stays for a repository still copying them), which calls
+# `release_asset_file` with each package Shireworks signed (or, an .apk,
+# checked, with what Shireworks answered for it). The job then
 # attaches the folder to its release (attach_release.sh). bash, curl and
 # openssl; sha256sum or shasum.
 #
 #   release_asset_file <package> <dir> [<app>] [<described by>]
 #
-# - <package>: a signed .ipa, Mac app's .zip or .dmg, copied into <dir>;
-# - <app>: the app's name across platforms, else its Info.plist's;
+# - <package>: a signed .ipa, Mac app's .zip or .dmg, or an .apk, copied
+#   into <dir>;
+# - <app>: the app's name across platforms, else its Info.plist's (an
+#   .apk's label);
 # - <described by>: the package whose Info.plist describes it, else itself
-#   (a .dmg's: its app's .zip, as a disk image isn't read here).
+#   (a .dmg's: its app's .zip, as a disk image isn't read here); or, ending
+#   in .json, what Shireworks answered for it (`shireworks.sh sign`'s
+#   output): an .apk's, as python can't read AndroidManifest.xml's binary
+#   XML (release_asset_answer_describe).
 #
 #   release_asset <build JSON> <dir> <server> <ca.pem> <file>
 #
@@ -222,10 +228,44 @@ print(json.dumps(schemes, separators=(",", ":")) if schemes else "")
 PY
 }
 
+# What Shireworks' signing answered for a package (`shireworks.sh sign`'s
+# output: its bundle id, channel and "build"), as release_asset_describe
+# prints a package's. An .apk's, as Applications Server's lines had it: it
+# carries no BuildVariant, so Shireworks names it by the channel its policy
+# decided (a releaser's release: Production; main's: Alpha), and so does
+# this if an answer has none; no executable UUID; its link schemes always
+# an array, "[]".
+#
+#   release_asset_answer_describe <answer.json>
+release_asset_answer_describe() {
+  python3 -I - "$1" << 'PY'
+import json, sys
+answer = json.load(open(sys.argv[1]))
+build = answer.get("build")
+if not isinstance(build, dict):
+    sys.exit("Shireworks' answer describes no build")
+bundle = answer.get("bundleID")
+if not bundle:
+    sys.exit("Shireworks' answer names no bundle id")
+platform = build.get("platform") or ""
+variant = build.get("variant") or ("Production" if answer.get("channel") == "production" else "Alpha")
+schemes = build.get("urlSchemes") or []
+for value in (bundle, build.get("name") or bundle, build.get("version") or "", build.get("buildNumber") or "", variant,
+              build.get("executableUUID") or "", platform):
+    if "\n" in str(value):
+        sys.exit("a value in Shireworks' answer has a line break")
+    print(value)
+print(json.dumps(schemes, separators=(",", ":")) if schemes or platform == "android" else "")
+PY
+}
+
 release_asset_file() {
   local package="$1" dir="$2" app="${3:-}" described="${4:-$1}"
   local description bundle name version build_number variant uuid platform schemes ext asset icon
-  description="$(release_asset_describe "$described")" || { echo "release_asset_file: $(basename "$described") was not read" >&2; return 1; }
+  case "$described" in
+    *.json) description="$(release_asset_answer_describe "$described")" ;;
+    *) description="$(release_asset_describe "$described")" ;;
+  esac || { echo "release_asset_file: $(basename "$described") was not read" >&2; return 1; }
   { read -r bundle; read -r name; read -r version; read -r build_number; read -r variant; read -r uuid; read -r platform; read -r schemes; } \
     <<< "$description" || true
   [ -n "$bundle" ] && [ -n "$version" ] && [ -n "$platform" ] || { echo "release_asset_file: $(basename "$described") names no build" >&2; return 1; }

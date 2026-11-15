@@ -8,18 +8,28 @@
 # profiles that never leave its Keychain. A Mac app is notarized there; its
 # ticket is stapled on a Mac slot leased for the job, which also makes a
 # production release's disk image. A Mac app or disk image the notary
-# didn't accept fails the job. Each signed build is then saved into
-# <dir> as its release's asset, with builds.json describing it
-# (release_assets.sh), for attach_release.sh.
+# didn't accept fails the job. An Android app's .apk is signed by its own
+# build, and Shireworks never signs it again (every update of an Android
+# app must keep its certificate): it checks it (APK Signature Scheme v2 or
+# later, its package one of the repository's) and answers with the same
+# bytes and what the APK says of itself, which describes it in
+# builds.json (python here can't read AndroidManifest.xml's binary XML),
+# as Applications Server's "signing none" did. Each signed (or checked)
+# build is then saved into <dir> as its release's asset, with builds.json
+# describing it (release_assets.sh), for attach_release.sh.
 #
 #   tools/ci/sign_from_ci.sh [--promote] [--app <app>] --download <dir> <package>…
 #
 # - <package>: an .ipa (an iPhone and iPad app, a device build signed ad
 #   hoc) or a Mac app's .zip, as CI built it (`--config=alpha`), or, with
-#   --promote, as a proposal attached it (an Alpha, signed);
+#   --promote, as a proposal attached it (an Alpha, signed); or an .apk,
+#   as CI built and signed it (`--config=alpha`, or with --promote the
+#   release's own `--config=prod` build), saved as
+#   `<App>-<version>-android.apk`;
 # - --promote: a published release's run (its v* tag's): each app stamped
 #   Production by Shireworks and signed for production, and each Mac app's
-#   disk image made, signed, notarized and stapled beside it;
+#   disk image made, signed, notarized and stapled beside it; an .apk is
+#   never stamped, only checked as production;
 # - --app: the app's name across platforms, in the assets' names
 #   (`<App>-<version>-<platform>.<ext>`), else each build's own.
 #
@@ -47,7 +57,7 @@ done
 [ -n "$download" ] && [ ${#packages[@]} -gt 0 ] || fail "$usage"
 for package in "${packages[@]}"; do
   [ -f "$package" ] || fail "no such file: $package"
-  case "$package" in *.ipa|*.zip) ;; *) fail "$(basename "$package") is neither an .ipa nor a Mac app's .zip" ;; esac
+  case "$package" in *.ipa|*.zip|*.apk) ;; *) fail "$(basename "$package") is neither an .ipa, a Mac app's .zip nor an .apk" ;; esac
 done
 
 work="$(mktemp -d)"
@@ -55,7 +65,7 @@ chmod 700 "$work"
 # shellcheck source=tools/ci/mac_slot.sh
 . "$ROOT/tools/ci/mac_slot.sh"
 # An end before the last line is a failure, whatever macOS's bash 3.2 says
-# (publish_from_ci.sh); the slot is given back however it ends.
+# (as Applications Server's scripts had it); the slot is given back however it ends.
 finished=""
 cleanup() {
   local code=$?
@@ -70,9 +80,10 @@ trap 'exit 143' TERM
 # shellcheck source=tools/ci/release_assets.sh
 . "$ROOT/tools/ci/release_assets.sh"
 
-# sign <file> <package kind> [<shireworks.sh options>…]: signed in place;
-# what Shireworks said (its channel, bundle id, version and whether it was
-# notarized) is printed, and kept in $work/answer.json.
+# sign <file> <package kind> [<shireworks.sh options>…]: signed in place
+# (an .apk: checked, the same bytes back); what Shireworks said (its
+# channel, bundle id, version, whether it was notarized, and the build's
+# description) is printed, and kept in $work/answer.json.
 sign() {
   local file="$1" kind="$2"
   shift 2
@@ -80,7 +91,9 @@ sign() {
   python3 -I -c '
 import json, sys
 answer = json.load(open(sys.argv[1]))
-print("Signed by Shireworks: " + ", ".join(f"{key} {answer.get(key)}" for key in ("bundleID", "version", "channel", "notarized")))
+checked = (answer.get("build") or {}).get("platform") == "android"
+print(("Checked" if checked else "Signed") + " by Shireworks: "
+      + ", ".join(f"{key} {answer.get(key)}" for key in ("bundleID", "version", "channel") + (() if checked else ("notarized",))))
 ' "$work/answer.json"
 }
 # Whether Shireworks' notary accepted it: its answer's "notarized" is
@@ -153,6 +166,11 @@ for package in "${packages[@]}"; do
         if notarized; then staple "$dmg"; else fail "$(basename "$dmg") was not notarized: a production disk image must be"; fi
         release_asset_file "$dmg" "$download" "$app" "$copy" || fail "$(basename "$dmg") was not saved"
       fi
+      ;;
+    *.apk)
+      # Checked, never re-signed nor stamped; described by Shireworks' answer.
+      sign "$copy" apk ${promote:+--promote}
+      release_asset_file "$copy" "$download" "$app" "$work/answer.json" || fail "$(basename "$package") was not saved"
       ;;
   esac
 done
