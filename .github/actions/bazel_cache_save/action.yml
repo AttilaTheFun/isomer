@@ -20,13 +20,13 @@ runs:
   steps:
     - name: The disk cache, trimmed
       shell: bash
-      run: tools/ci/ci_bazel.sh trim .ci/bazel-cache "${{ inputs.gigabytes }}"
+      run: tools/ci/ci_bazel.sh trim "$HOME/.cache/isomer-bazel" "${{ inputs.gigabytes }}"
     - uses: actions/cache/save@v4
       with:
-        path: .ci/bazel-cache/disk
+        path: ~/.cache/isomer-bazel/disk
         key: bazel-disk-${{ inputs.group }}-${{ hashFiles('MODULE.bazel', 'examples/MODULE.bazel', '**/Package.resolved') }}-${{ github.sha }}
     - if: inputs.repository-hit != 'true'
       uses: actions/cache/save@v4
       with:
-        path: .ci/bazel-cache/repository
+        path: ~/.cache/isomer-bazel/repository
         key: bazel-repository-${{ inputs.group }}-${{ hashFiles('MODULE.bazel', 'examples/MODULE.bazel', '**/Package.resolved') }}

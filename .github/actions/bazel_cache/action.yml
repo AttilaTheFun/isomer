@@ -5,6 +5,8 @@
 # MODULE.bazel and the SwiftPM graphs, the disk cache by commit too, the
 # newest of the group's restored when this commit's isn't there. Only main's
 # builds write them (.github/actions/bazel_cache_save); every other job reads them.
+# They live in the home directory, outside the checkout: Bazel 9 refuses a
+# repository contents cache inside the main repository.
 name: Bazel's cache
 description: Restores the job group's Bazel caches and writes Bazel's settings
 inputs:
@@ -24,17 +26,17 @@ runs:
     - id: repository
       uses: actions/cache/restore@v4
       with:
-        path: .ci/bazel-cache/repository
+        path: ~/.cache/isomer-bazel/repository
         key: bazel-repository-${{ inputs.group }}-${{ hashFiles('MODULE.bazel', 'examples/MODULE.bazel', '**/Package.resolved') }}
         restore-keys: bazel-repository-${{ inputs.group }}-
     - if: inputs.disk != 'false'
       uses: actions/cache/restore@v4
       with:
-        path: .ci/bazel-cache/disk
+        path: ~/.cache/isomer-bazel/disk
         key: bazel-disk-${{ inputs.group }}-${{ hashFiles('MODULE.bazel', 'examples/MODULE.bazel', '**/Package.resolved') }}-${{ github.sha }}
         restore-keys: |
           bazel-disk-${{ inputs.group }}-${{ hashFiles('MODULE.bazel', 'examples/MODULE.bazel', '**/Package.resolved') }}-
           bazel-disk-${{ inputs.group }}-
     - name: Bazel's settings
       shell: bash
-      run: tools/ci/ci_bazel.sh setup .ci/bazel-cache
+      run: tools/ci/ci_bazel.sh setup "$HOME/.cache/isomer-bazel"
