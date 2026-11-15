@@ -16,7 +16,8 @@ $msvc = Get-ChildItem (Join-Path $vs 'VC\Tools\MSVC') | Sort-Object Name | Selec
 "MSVC: $($msvc.FullName)"
 
 # An object to archive: one function, compiled by the ARM64-hosted compiler.
-$work = 'C:\p'
+# As deep as Bazel's execution root was (C:/b/<hash>/execroot/_main).
+$work = 'C:\b\c57rdinz\execroot\_main'
 New-Item -ItemType Directory -Force $work | Out-Null
 Set-Content "$work\t.c" 'int iso_probe(void) { return 1; }'
 $cl = Join-Path $msvc.FullName 'bin\HostARM64\arm64\cl.exe'
