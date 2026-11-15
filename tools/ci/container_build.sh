@@ -13,7 +13,8 @@
 #   targets take on Linux (rules_applecross; tools/linux/build.sh
 #   --apple-sdks, for an agent that has it);
 # - windows: on Linux, with ISOMER_WINDOWS_SDKS alone (Microsoft's sysroot,
-#   which may not be redistributed either: tools/windows/README.md).
+#   which may not be redistributed either: tools/windows/README.md); CI
+#   builds Windows on Windows instead (tools/ci/windows_build.ps1).
 # Bazel's settings (its caches in GitHub's cache, the downloads, the SDKs)
 # are tools/ci/ci_bazel.sh's, written before this runs.
 #

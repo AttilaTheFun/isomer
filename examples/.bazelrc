@@ -221,6 +221,7 @@ build:apple_on_linux --action_env=RULES_APPLECROSS_RELAX_ACTOOL_ICON_COMPOSER=1
 # here alone, so no other build fetches them. Build a Windows target with
 # `--config=windows_on_linux --platforms=@isomer//tools/platforms:windows_arm64`.
 build:windows_on_linux --extra_toolchains=@swift_windows_sdk//:all
+build:windows_on_linux --@isomer//tools/windows:on_linux
 # A Windows test builds here to run on Windows: Bazel 9's default test
 # toolchain wants an execution platform that is the target's (none here can
 # run it), its legacy one doesn't. A flag Bazel 8 doesn't know (it has only

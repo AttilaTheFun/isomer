@@ -340,10 +340,15 @@ project's image on arm64; Android on x86_64 (Google's SDK and NDK tools and
 the hermetic JDK for Linux are x86_64, and GitHub's arm64 runners have no
 Rosetta); the Apple targets on `xcode-27` Macs with their own Xcode (the
 owner, 2026-11-15: Apple's SDKs may not be redistributed, so CI never takes
-the SDK archive rules_applecross builds them with on Linux); Windows not
-at all (Microsoft's sysroot may not be redistributed either; tier 2). Bazel
-keeps its disk and repository caches in GitHub's cache (actions/cache, by
-group, linux, android or apple, and MODULE.bazel; tools/ci/ci_bazel.sh:
+the SDK archive rules_applecross builds them with on Linux); Windows on
+GitHub's windows-11-arm, natively, with swift.org's Swift at the pinned
+release and the runner image's own Visual Studio and Windows SDK, built
+only (tier 2; tools/ci/windows_build.ps1, the recipe of tools/proof/proof.py:
+vcvarsall arm64, BAZEL_SH Git's bash, `--output_user_root=C:/b`,
+`--repo_env` for SDKROOT, PATH and MSVC's variables), as Microsoft's sysroot
+may not be redistributed for a build on Linux. Bazel keeps its disk and
+repository caches in GitHub's cache (actions/cache, by group, linux,
+android, apple or windows, and MODULE.bazel; tools/ci/ci_bazel.sh:
 written by main's builds alone, trimmed to stay within GitHub's 10 GB a
 repository). CI follows the owner's policy for protected repositories
 (AttilaTheFun/reviews' docs/CI_POLICY.md) and the shape the owner set on
@@ -352,17 +357,20 @@ every build after one, the GUI tests and the proof by hand. A pull request
 gets `container` (the web and Linux targets built, then the tests that draw
 nothing: the core's, the WASI checks, and the Storybook's headless and
 remote-driving tests; the required check), `container-android` (the Android
-targets and their build tests) and `container-apple` (the Apple targets),
-each commit on main `populate`, `populate-android` and `populate-apple`
-(the same builds, then what a release builds: the published apps under
---config=alpha and the proof's apps; the cache's only writers) and `bazel8`.
+targets and their build tests), `container-apple` (the Apple targets) and
+`container-windows` (not required), each commit on main `populate`,
+`populate-android`, `populate-apple` and `populate-windows` (the same
+builds, then the published apps under --config=alpha; the cache's only
+writers; never the proof's: the owner's rule, a screenshot proof runs only
+by hand or in a release's run) and `bazel8`.
 The GUI tests and the proof run only by hand: `run: verify` (each
-platform's build, `verify`, `verify-android`, `verify-apple`; the tests
+platform's build, `verify`, `verify-android`, `verify-apple`,
+`verify-windows`; the tests
 that draw in a container, `container-verify`: the web Storybook in headless
 Chrome, and the Storybook's tests run headful on the web and on Linux under
 Xvfb; the Storybook's test stories, the iPhone's simulator and the Mac on
 `xcode-27` (`apple`), Android on Ubuntu's KVM (`android`); and the proof),
-`run: prerelease` (Alphas and a draft marked pre-release), `run: release`
+`run: proof` (the proof alone), `run: prerelease` (Alphas and a draft marked pre-release), `run: release`
 (verify and the proof, then the Alphas and the draft proposed for release,
 tools/ci/draft_release.sh), `run: experiment` (the Storybook Lab, drafted
 unsigned: the signing keys are the `release` environment's, main's and v*
@@ -407,9 +415,11 @@ A release is approved by publishing its draft in Reviews (which makes its
 tag): the Build workflow's `release` job checks that its commit is main's
 and was verified (tools/ci/verified.sh), takes the proposal's iPhone and
 Mac Alphas of that commit (tools/ci/release_alphas.sh: nothing Apple
-rebuilt, since 0.40), stamps them Production (tools/ci/stamp_variant.sh,
-as the old signing service did) and signs them again (the iPhone's with a
-production profile, ad hoc first; the Mac's with its disk image), builds
+rebuilt, since 0.40) and signs them again as Production (apple_sign.sh
+--variant Production, as the old signing service's promotion did; the
+iPhone's with `--ipa-kind production`, which falls back to its development
+profile, as the old service signed it, there being no distribution
+identity; the Mac's with its disk image), builds
 Android's for production and signs it, and attaches the release's assets:
 the signed builds as Applications reads them (tools/ci/attach_release.sh,
 from the private AttilaTheFun/applications' docs/RELEASE_ASSETS.md:
@@ -648,8 +658,9 @@ and Android, Android through Isomer. CI (GitHub's own runners alone, since
 (verify, the proof): the iPhone and the Mac on `xcode-27` Macs, Android on
 GitHub's x86_64 Ubuntu with KVM, the web in headless Chrome. It builds
 Linux on every change and runs it by hand (in the project's image under
-Xvfb); it builds no Windows target, as Microsoft's sysroot may not be
-redistributed (tools/windows/README.md). Never on this Mac's own screen.
+Xvfb); it builds Windows on every change, on GitHub's windows-11-arm with
+the image's own Visual Studio, and runs it nowhere for now. Never on this
+Mac's own screen.
 Tier 2's pictures may differ from real hardware (Wine's fonts), which is
 acceptable.
 
@@ -680,11 +691,16 @@ acceptable.
   - the iPhone and the Mac, built and tested on `xcode-27` Macs with their
     own Xcode (`verify-apple`, then `apple`: tools/ci/hosted_apple_test.sh
     and hosted_headful_test.sh);
-  - Windows: built on Linux only by a builder with its SDKs
-    (`--config=windows_on_linux`, tools/windows, ISOMER_WINDOWS_SDKS), not
-    by CI; it ran under arm64 Wine Staging (tools/ci/windows_test.sh, in
-    git's history) and on windows-11-arm (tools/ci/hosted_windows_test.ps1)
-    until 2026-11-15.
+  - Windows: built by CI on GitHub's windows-11-arm, natively
+    (tools/ci/windows_build.ps1: swift.org's Swift 6.4.2 for Windows,
+    pinned by SHA-256, and the image's Visual Studio and Windows SDK; the
+    headful Windows tests take that Swift's own Swift Testing, where a
+    build on Linux takes @swift_windows_sdk's, by
+    @isomer//tools/windows:on_linux), not run. On Linux only a builder
+    with Microsoft's sysroot builds it (`--config=windows_on_linux`,
+    tools/windows, ISOMER_WINDOWS_SDKS). It ran under arm64 Wine Staging
+    (tools/ci/windows_test.sh, in git's history) and on windows-11-arm
+    (tools/ci/hosted_windows_test.ps1) until 2026-11-15.
 - **Linux from a Mac**: `tools/linux/build.sh [targets]` builds in a
   container leased from Shireworks (`shireworks.sh lease container`, released
   however the script ends) of Visor's agent image, CI's

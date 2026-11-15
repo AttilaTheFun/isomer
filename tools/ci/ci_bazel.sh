@@ -16,14 +16,15 @@
 #   release downloads have failed with 504s for hours), each retried;
 # - Bazel's tree (--output_user_root) in ISOMER_BAZEL_ROOT when it is set
 #   and can be made: the x86_64 runner's second disk (/mnt), its first
-#   being too small for an Android build's;
+#   being too small for an Android build's; C:/b on Windows (short paths);
 # - Windows on Linux (--config=windows_on_linux's toolchains), when
 #   ISOMER_WINDOWS_SDKS says where the Windows Swift SDK and Microsoft's
 #   sysroot are (tools/windows/README.md): a folder holding them (Bazel's
 #   --distdir), or a URL serving each file by its SHA-256 (<url>/<sha256>,
 #   as MODULE.bazel's windows-sdks.invalid placeholders name them).
 #   Microsoft's may not be redistributed, so nothing public serves it, and
-#   CI names none: its Windows targets aren't built there.
+#   CI names none: CI builds Windows on Windows itself
+#   (tools/ci/windows_build.ps1, the runner image's Visual Studio).
 # Never the Apple targets on Linux (.bazelrc's apple_on_linux, which takes
 # Xcode's SDK archive): Apple's SDKs may not be redistributed, so CI builds
 # the Apple targets on GitHub's Macs with their own Xcode (the owner,
@@ -36,7 +37,10 @@
 # entry each time it is read) are removed until the cache is under <GB>:
 # the caches a workflow keeps share GitHub's 10 GB a repository.
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# A folder as Bazel names it: on Windows (Git's bash, CI's windows-11-arm
+# job) D:/a/…, not /d/a/….
+here() { case "$(uname -s)" in MINGW* | MSYS* | CYGWIN*) pwd -W ;; *) pwd ;; esac; }
+ROOT="$(cd "$(dirname "$0")/../.." && here)"
 MARK="# tools/ci/ci_bazel.sh's: CI's Bazel settings"
 fail() { echo "ci_bazel: $*" >&2; exit 1; }
 
@@ -59,7 +63,7 @@ setup)
     fi
     if [ -n "$cache" ]; then
         mkdir -p "$cache/disk" "$cache/repository"
-        cache="$(cd "$cache" && pwd)"
+        cache="$(cd "$cache" && here)"
         lines+=("common --disk_cache=$cache/disk" "common --repository_cache=$cache/repository")
     fi
     # sdks <ISOMER_*_SDKS's value> <placeholder host> <rewrite of it>: a
@@ -70,7 +74,7 @@ setup)
                 printf '%s\n' "$3" | sed "s|@URL@|${1%/}|" >> "$ROOT/.ci/downloader.cfg" ;;
             *)
                 [ -d "$1" ] || fail "$2: no folder $1"
-                lines+=("common --distdir=$(cd "$1" && pwd)") ;;
+                lines+=("common --distdir=$(cd "$1" && here)") ;;
         esac
     }
     if [ -n "${ISOMER_WINDOWS_SDKS:-}" ]; then
@@ -94,8 +98,14 @@ trim)
     limit=$((gb * 1024 * 1024))
     # Every entry's time and size (KB), the newest first; what is past the
     # limit, counted from the newest, goes. python3: find's -printf is
-    # GNU's alone, and a Mac's runner trims too.
-    python3 -I - "$cache/disk" "$limit" << 'PY'
+    # GNU's alone, and a Mac's runner trims too. Windows' Python may be
+    # `python` alone (its `python3` the Store's stub).
+    python=""
+    for candidate in python3 python; do
+        if command -v "$candidate" > /dev/null && "$candidate" -c "" 2> /dev/null; then python="$candidate"; break; fi
+    done
+    [ -n "$python" ] || fail "no Python here"
+    "$python" -I - "$cache/disk" "$limit" << 'PY'
 import os, sys
 root, limit = sys.argv[1], int(sys.argv[2]) * 1024
 entries = []

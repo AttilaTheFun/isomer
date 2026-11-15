@@ -1,9 +1,9 @@
 # The Windows Storybook's test stories on GitHub's own windows-11-arm runner
 # (free for a public repository): the app built on Linux for Windows on Arm
 # (tools/ci/container_build.sh with ISOMER_PLATFORMS=windows: the .exe, the
-# Swift runtime's DLLs and the Storybook's assets), run natively. CI builds no
-# Windows target since 2026-11-15 (tools/windows/README.md), so CI runs this
-# no longer; a builder with Windows' SDKs can. One launch, the stories switched through
+# Swift runtime's DLLs and the Storybook's assets), run natively. CI builds
+# Windows on windows-11-arm and runs nothing there since 2026-11-15
+# (tools/ci/windows_build.ps1), so CI runs this no longer. One launch, the stories switched through
 # ISO_STORYBOOK_CONTROL; each pictured by the app's window (DWM's frame of
 # it) once two pictures in a row agree, and checked for having drawn
 # something; the pictures kept in <out>.

@@ -4,7 +4,12 @@
 # this file and apple_profiles.py beside it byte for byte from
 # AttilaTheFun/shireworks, as it does android_sign.sh.
 #
-#   tools/ci/apple_sign.sh [--key-from-env] [--dmg] [--ipa-kind development|production] --out <dir> <package>…
+#   tools/ci/apple_sign.sh [--key-from-env] [--dmg] [--ipa-kind development|production] [--variant <name>] --out <dir> <package>…
+#
+# --variant: each app's BuildVariant (its Info.plist's) set before it's
+# signed, and a Mac app's stapled ticket taken out: how a published release
+# makes its tested Alphas Production (`--variant Production`), as the signing
+# service's VariantStamp does.
 #
 # - a Mac app's .zip (one .app at its top): signed with Developer ID
 #   (hardened runtime, a timestamp), its Developer ID profile embedded and
@@ -52,15 +57,16 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 fail() { echo "apple_sign: $*" >&2; exit 1; }
-usage="usage: tools/ci/apple_sign.sh [--key-from-env] [--dmg] [--ipa-kind development|production] --out <dir> <package>…"
+usage="usage: tools/ci/apple_sign.sh [--key-from-env] [--dmg] [--ipa-kind development|production] [--variant <name>] --out <dir> <package>…"
 
-from_env="" make_dmg="" out="" ipa_kind="production"
+from_env="" make_dmg="" out="" ipa_kind="production" variant=""
 packages=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --key-from-env) from_env=1; shift ;;
     --dmg) make_dmg=1; shift ;;
     --ipa-kind) ipa_kind="${2:?--ipa-kind takes development or production}"; shift 2 ;;
+    --variant) variant="${2:?--variant takes a build variant (Production, Alpha…)}"; shift 2 ;;
     --out) out="${2:?--out takes a folder}"; shift 2 ;;
     -*) fail "unknown option $1" ;;
     *) packages+=("$1"); shift ;;
@@ -68,6 +74,7 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$out" ] && [ ${#packages[@]} -gt 0 ] || fail "$usage"
 case "$ipa_kind" in development|production) ;; *) fail "--ipa-kind is development or production" ;; esac
+[ -z "$variant" ] || [[ "$variant" =~ ^[A-Za-z][A-Za-z0-9]{0,31}$ ]] || fail "--variant is a word (Production, Alpha…)"
 mac="" ios=""
 for i in "${!packages[@]}"; do
   [ -f "${packages[$i]}" ] || fail "no such file: ${packages[$i]}"
@@ -242,6 +249,23 @@ for key in ("path", "bundle", "entitlements", "profile", "embed"):
   done
 }
 
+# stamped <app> <Info.plist>: BuildVariant set, the plist's format kept (VariantStamp); a Mac app's stapled ticket
+# (Contents/CodeResources) taken out, its signature being made again.
+stamped() {
+  [ -n "$variant" ] || return 0
+  python3 -I -c '
+import plistlib, sys
+path, variant = sys.argv[1], sys.argv[2]
+with open(path, "rb") as file:
+    data = file.read()
+info = plistlib.loads(data)
+info["BuildVariant"] = variant
+with open(path, "wb") as file:
+    plistlib.dump(info, file, fmt=plistlib.FMT_BINARY if data.startswith(b"bplist00") else plistlib.FMT_XML)' "$2" "$variant"
+  rm -f "$1/Contents/CodeResources"
+  echo "   BuildVariant: $variant"
+}
+
 # unpacked <package> <folder>: unzipped, a ditto zip's AppleDouble files dropped (on a Mac they go back into
 # attributes; here they'd be files the signature seals, and a Mac unzipping the result would break it).
 unpacked() {
@@ -261,6 +285,7 @@ for package in "${packages[@]}"; do
       apps=("$folder"/Payload/*.app)
       [ ${#apps[@]} -eq 1 ] && [ -d "${apps[0]}" ] || fail "$base.ipa holds ${#apps[@]} apps in its Payload, not one"
       echo "== $base.ipa: signed ($ipa_kind)"
+      stamped "${apps[0]}" "${apps[0]}/Info.plist"
       sign_bundle "${apps[0]}" ios
       rm -f "$out/$base.ipa"
       (cd "$folder" && zip -qry -X "$out/$base.ipa" .)
@@ -270,6 +295,7 @@ for package in "${packages[@]}"; do
       [ ${#apps[@]} -eq 1 ] && [ -d "${apps[0]}" ] || fail "$base.zip holds ${#apps[@]} apps at its top, not one"
       app="${apps[0]}"
       echo "== $(basename "$app"): signed, notarized, stapled"
+      stamped "$app" "$app/Contents/Info.plist"
       sign_bundle "$app" mac
       notarize "$app"
       # Zipped again as ditto would: the app at the top, its links kept (-y).

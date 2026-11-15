@@ -2,10 +2,12 @@
 
 Swift and C/C++ for Windows on Arm (and x64), built on Linux, by a builder
 that has Microsoft's half of the toolchain (below). No Windows machine is
-needed to build; one is needed once, to make that half. CI builds no Windows
-target since 2026-11-15: it runs on GitHub's runners alone, and Microsoft's
-half may not be redistributed, so nothing public serves it (Windows is tier 2;
-the open question is in tools/ci/ci_bazel.sh).
+needed to build; one is needed once, to make that half. Microsoft's half may
+not be redistributed, so nothing public serves it, and since 2026-11-15 CI
+builds Windows on Windows instead: GitHub's windows-11-arm runner, with
+swift.org's Swift at the pinned release and the runner image's own Visual
+Studio and Windows SDK (tools/ci/windows_build.ps1). Windows is tier 2: built,
+not run.
 
 `--config=windows_on_linux --platforms=@isomer//tools/platforms:windows_arm64`
 (the examples' .bazelrc) turns the toolchains on. They come from

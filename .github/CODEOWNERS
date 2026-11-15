@@ -20,7 +20,6 @@
 /tools/ci/release_assets.sh @AttilaTheFun
 /tools/ci/sign_builds.sh @AttilaTheFun
 /tools/ci/stamp_apps.sh @AttilaTheFun
-/tools/ci/stamp_variant.sh @AttilaTheFun
 /tools/ci/verified.sh @AttilaTheFun
 /tools/ci/version_from_tags.sh @AttilaTheFun
 

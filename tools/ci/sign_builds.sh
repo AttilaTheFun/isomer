@@ -31,9 +31,11 @@
 #   line read with that build-tools' aapt2. On an x86_64 Linux alone: the
 #   JDK and build tools Bazel has for Linux are x86_64.
 #
-# Production (a release's promotion): each Apple package stamped Production
-# first (tools/ci/stamp_variant.sh), then signed again; an .apk is the
-# release's own production build (--config=prod), its line Production.
+# Production (a release's promotion): each Apple package's BuildVariant made
+# Production by apple_sign.sh --variant as it is signed again (a Mac app's
+# stapled ticket dropped first, as Shireworks' signing service's promotion
+# does); an .apk is the release's own production build (--config=prod), its
+# line Production.
 # APPLE_PROFILES may be a gzipped .tar (GitHub caps a secret at 48 KB), as
 # apple_sign.sh reads it.
 #
@@ -117,17 +119,9 @@ if [ -n "$unsigned" ]; then
     exit 0
 fi
 
-# The Apple packages, stamped first for a release.
-copies() {
-    local package copy
-    for package in "$@"; do
-        copy="$work/apple/$(basename "$package")"
-        mkdir -p "$work/apple"
-        cp "$package" "$copy"
-        [ "$variant" != Production ] || "$CI/stamp_variant.sh" Production "$copy" >&2
-        echo "$copy"
-    done
-}
+# A release's Apple packages made Production as they are signed.
+promote=()
+[ "$variant" != Production ] || promote=(--variant Production)
 # APPLE_PROFILES as apple_sign.sh reads it (a .tar or .tar.gz, base64;
 # APPLE_PROFILES_2 … _9 beside it pass through): an empty .tar when unset,
 # which a Mac app with no profile of its own signs with.
@@ -144,12 +138,10 @@ if [ ${#ipas[@]} -gt 0 ]; then
     if name="$(missing APPLE_DEVELOPMENT_P12 APPLE_DEVELOPMENT_PASSWORD APPLE_PROFILES)"; then
         skip "the iPhone app" "$name"
     else
-        mapfile -t stamped < <(copies "${ipas[@]}")
-        [ ${#stamped[@]} -eq ${#ipas[@]} ] || fail "the iPhone packages weren't copied"
         apple_profiles="$(profiles)" || exit 1
         APPLE_PROFILES="$apple_profiles" with_secrets APPLE_DEVELOPMENT_P12 APPLE_DEVELOPMENT_PASSWORD APPLE_PROFILES -- \
-            "$CI/apple_sign.sh" --key-from-env --ipa-kind "$ipa_kind" --out "$work/signed-ios" "${stamped[@]}"
-        for package in "${stamped[@]}"; do
+            "$CI/apple_sign.sh" --key-from-env --ipa-kind "$ipa_kind" ${promote[@]+"${promote[@]}"} --out "$work/signed-ios" "${ipas[@]}"
+        for package in "${ipas[@]}"; do
             release_asset_file "$work/signed-ios/$(basename "$package")" "$out" "$app"
         done
     fi
@@ -159,13 +151,11 @@ if [ ${#zips[@]} -gt 0 ]; then
     if name="$(missing APPLE_DEVELOPER_ID_P12 APPLE_DEVELOPER_ID_PASSWORD APPLE_NOTARY_KEY APPLE_NOTARY_KEY_ID APPLE_NOTARY_ISSUER)"; then
         skip "the Mac app" "$name"
     else
-        mapfile -t stamped < <(copies "${zips[@]}")
-        [ ${#stamped[@]} -eq ${#zips[@]} ] || fail "the Mac packages weren't copied"
         apple_profiles="$(profiles)" || exit 1
         APPLE_PROFILES="$apple_profiles" with_secrets APPLE_DEVELOPER_ID_P12 APPLE_DEVELOPER_ID_PASSWORD APPLE_NOTARY_KEY \
             APPLE_NOTARY_KEY_ID APPLE_NOTARY_ISSUER APPLE_PROFILES -- \
-            "$CI/apple_sign.sh" --key-from-env ${dmg:+--dmg} --out "$work/signed-mac" "${stamped[@]}"
-        for package in "${stamped[@]}"; do
+            "$CI/apple_sign.sh" --key-from-env ${dmg:+--dmg} ${promote[@]+"${promote[@]}"} --out "$work/signed-mac" "${zips[@]}"
+        for package in "${zips[@]}"; do
             signed="$work/signed-mac/$(basename "$package")"
             release_asset_file "$signed" "$out" "$app"
             # The disk image, described by its app's .zip.

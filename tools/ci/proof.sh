@@ -22,9 +22,6 @@
 #       SDKs aren't served to Linux: tools/ci/container_build.sh), android
 #       for x86_64 on the x86_64 Ubuntu runner (in <apps>/hosted/android/,
 #       for that runner's emulator)
-#   --stage prebuild (the same arguments)
-#       (main's populate) the same builds, nothing pictured: so a release's
-#       proof finds its actions in Bazel's cache
 #   --stage shoot --platform ios|macos|android|web --apps <dir> --review <dir>
 #       (GitHub's runner: `xcode-27` for the iPhone and the Mac, Ubuntu for
 #       Android and the web) one platform's apps pictured on that machine
@@ -66,7 +63,6 @@ PLATFORMS="${PROOF_PLATFORMS:-ios macos android web}"
 usage() {
     cat >&2 << 'EOF2'
 usage: tools/ci/proof.sh --stage build --platform <platform>[,<platform>…] --apps <dir> --review <dir> [--kind quick|full]
-       tools/ci/proof.sh --stage prebuild --platform <platform>[,<platform>…] --apps <dir> --review <dir>
        tools/ci/proof.sh --stage shoot --platform <platform> --apps <dir> --review <dir> [--kind quick|full]
        tools/ci/proof.sh --stage compare --parts <dir> --proof <dir> [--kind quick|full]
 EOF2
@@ -81,7 +77,7 @@ platform=""
 parts=""
 while [ $# -gt 0 ]; do
     case "$1" in
-        --stage) stage="${2:?--stage takes build, prebuild, shoot or compare}"; shift 2 ;;
+        --stage) stage="${2:?--stage takes build, shoot or compare}"; shift 2 ;;
         --proof) proof="${2:?--proof takes a folder}"; shift 2 ;;
         --kind) kind="${2:?--kind takes quick or full}"; shift 2 ;;
         --apps) apps="${2:?--apps takes a folder}"; shift 2 ;;
@@ -94,7 +90,7 @@ done
 case "$kind" in quick | full) ;; *) usage ;; esac
 absolute() { mkdir -p "$1" && (cd "$1" && pwd); }
 case "$stage" in
-    build | prebuild) [ -n "$platform" ] && [ -n "$apps" ] && [ -n "$review" ] || usage ;;
+    build) [ -n "$platform" ] && [ -n "$apps" ] && [ -n "$review" ] || usage ;;
     shoot) [ -n "$platform" ] && [ -n "$apps" ] && [ -n "$review" ] || usage ;;
     compare) [ -n "$parts" ] && [ -n "$proof" ] || usage ;;
     *) usage ;;
@@ -103,7 +99,7 @@ esac
 [ -z "$apps" ] || apps="$(absolute "$apps")"
 [ -z "$review" ] || review="$(absolute "$review")"
 [ -z "$parts" ] || parts="$(absolute "$parts")"
-# Whether this stage runs a step: `stages build prebuild && …`.
+# Whether this stage runs a step: `stages build compare && …`.
 stages() { case " $* " in *" $stage "*) return 0 ;; esac; return 1; }
 
 cd "$ROOT"
@@ -157,8 +153,9 @@ compare() {
     phase "done: $(find "$proof/screens" -name '*.png' | wc -l | tr -d ' ') pictures"
 }
 
-# --stage build (and prebuild): the platforms' apps built for the stage
-# that pictures them.
+# --stage build: the platforms' apps built for the stage that pictures
+# them. Only ever in a run by hand or a release's (the owner: no proof on
+# a push or a pull request), so main's populate never builds them.
 build() {
     local here=() wanted
     for wanted in ${platform//,/ }; do
@@ -273,7 +270,7 @@ if stages shoot; then
     exit 0
 fi
 
-if stages build prebuild; then
+if stages build; then
     build
     exit 0
 fi
