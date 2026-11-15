@@ -902,6 +902,7 @@ def isomer_android_aar(
         fonts = [],
         resources = [],
         extra_native_libs = [],
+        libcxx = None,
         tags = [],
         testonly = False,
         target_compatible_with = None,
@@ -952,6 +953,15 @@ def isomer_android_aar(
     files, `cc_binary(linkshared = True)` targets, or `cc_library` targets
     over prebuilt .so files, built for the AAR's ABI.
 
+    `libcxx` is the C++ runtime the app's Swift links, as
+    `isomer_android_app`'s: `"shared"` the NDK's libc++_shared.so (for a host
+    whose own native libraries share C++ objects with the app's, built with
+    `c++_shared`: README, "One C++ runtime with other libraries"),
+    `"static"`, or None for `--@isomer//swift_ffi/rules:libcxx` (static by
+    default). With `shared` the host's APK ships libc++_shared.so, as the
+    host's own libraries need it too; the AAR carries a copy only with
+    `--@isomer//tools/android:aar_libcxx_shared`.
+
     `tags`, `target_compatible_with` and `exec_compatible_with` go to the
     AAR (`tags = ["manual"]` keeps a wildcard build from building it; the
     targets beneath it are manual already), `testonly` to every target the
@@ -968,6 +978,7 @@ def isomer_android_aar(
         swift_library = swift_library,
         extra_kotlin_srcs = (services_kt if type(services_kt) == "list" else [services_kt]) if services_kt else [],
         extra_deps = services_deps,
+        libcxx = libcxx,
         testonly = testonly,
     )
     expand_template(

@@ -20,8 +20,12 @@ public final class IsomerRemoteSession {
     public private(set) var tree: PatchedNode?
     /// Why the session isn't drawing: connecting, or what ended it.
     public private(set) var status: String = "Connecting…"
-    /// The app's own color scheme (`preferredColorScheme`), if it set one.
+    /// The app's resolved color scheme, its override or the system's.
     public private(set) var appDark: Bool?
+    /// The app's own `.preferredColorScheme`, nil when it sets none: what the
+    /// head applies to its window, so the system's scheme still reaches the
+    /// app once the app lets go of its own.
+    public private(set) var appPreferredDark: Bool?
 
     /// Where the app is: a URL (IsomerRemote's), or a connection of the
     /// host's own (a page in a web view, apple/libraries/webview_head).
@@ -104,6 +108,8 @@ public final class IsomerRemoteSession {
             status = ""
         case .image(let image):
             IsomerTreeImages.register(source: image.source, data: image.bytes)
+        case .command(let command) where command.key == "preferredColorScheme":
+            appPreferredDark = command.value.isEmpty ? nil : command.value == "dark"
         case .command(let command):
             onCommand(command.key, command.value)
         case .openURL(let link):

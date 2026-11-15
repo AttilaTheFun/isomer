@@ -872,6 +872,28 @@ Each release's notes have an Upgrading section; these things are easy to miss:
     dependencies only, so isomer no longer raises an app's to 4.1.0 and
     7.1: an app that needs those versions asks for them itself.
 
+- **No Python or TypeScript in an app's build (since 0.54).** isomer no
+  longer brings rules_python, aspect_rules_js, aspect_rules_ts,
+  rules_nodejs, aspect_rules_esbuild or a TypeScript pin to its consumers
+  (they are its development dependencies): an app that relied on isomer for
+  any of them, or for their versions, declares them itself. The tools that
+  ran in Python (a reactor's export list, ICU's data trimming, the web
+  server `bazel run` starts) are Swift now, with the same arguments and
+  outputs.
+  - `ts_swift_wasm_library` is `js_swift_wasm_library`: the generated
+    bindings are an ES module, compiled by nothing, with their TypeScript
+    declarations beside it in `:<name>_types`. The old name still works, and
+    `:<name>`, `:<name>_js` and `:<name>_runtime_js` are the same files.
+  - A page that imported the bindings' `.ts` sources through its own
+    TypeScript build imports the `.js` module, typed by the `.d.ts`.
+- **WasmKit is upstream's (since 0.54).** isomer pins AttilaTheFun/WasmKit
+  at swiftwasm/WasmKit's main and the side-modules commits, without the two
+  patches it carried: 64-bit Android reactors use WasmKit's guard pages, as
+  macOS, Linux and iOS do, and an out-of-bounds memory access from a host
+  (`Memory.withUnsafe(Mutable)BufferPointer(offset:count:)`) throws a trap
+  rather than reading past the memory. A host that calls those directly adds
+  `try`.
+
 - **Isomer's Swift is a Swift package (since 0.43).** Add isomer to the
   Package.swift your rules_swift_package_manager graph reads (by revision,
   the release's tag: "Consuming isomer" above), use

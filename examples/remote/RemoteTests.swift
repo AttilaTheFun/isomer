@@ -183,6 +183,45 @@ final class RemoteTests: XCTestCase {
         XCTAssertTrue(seen.contains("Taps: 1"))
     }
 
+    /// The app's own `.preferredColorScheme` reaches a head apart from the
+    /// scheme it resolves to (platform command "preferredColorScheme"), and
+    /// "" when the app lets go of it: what Apple's head applies to its
+    /// window, so the system's appearance reaches the app again.
+    func testReportsThePreferredColorScheme() async throws {
+        let url = try serve("grpc://127.0.0.1:0", ["ISO_STORYBOOK_STORY": "state.preferredcolorscheme"])
+        let endpoint = try IsomerRemote.endpoint(url)
+        let call = try await endpoint.connection.connect(context: endpoint.context(token: nil))
+        try await call.write(Wire_ClientMessage.with {
+            $0.start = Wire_Start.with {
+                $0.size = Wire_Size.with {
+                    $0.width = 390
+                    $0.height = 6000
+                }
+                $0.renderer = "swiftui"
+            }
+        })
+        var taps: [String: String] = [:]
+        var reported: [String] = []
+        for try await message in call.inbound {
+            switch message.message {
+            case .patch(let bytes) where taps.isEmpty:
+                let first = try XCTUnwrap(try Wire_Patch(serializedBytes: bytes).ops.first)
+                for label in ["System", "Dark"] { taps[label] = try XCTUnwrap(Self.button(first.node, label)).tap }
+                try await call.write(Wire_ClientMessage.with { $0.event = Wire_Event.with { $0.id = taps["Dark"]! } })
+            case .command(let command) where command.key == "preferredColorScheme":
+                reported.append(command.value)
+                if command.value == "dark" {
+                    try await call.write(Wire_ClientMessage.with { $0.event = Wire_Event.with { $0.id = taps["System"]! } })
+                }
+            default:
+                break
+            }
+            if reported.last == "" { break }
+        }
+        await call.finish()
+        XCTAssertEqual(reported, ["dark", ""])
+    }
+
     func testDialsOutToAHub() throws {
         let cli = "\(Self.root)/\(ProcessInfo.processInfo.environment["ISOMER_CLI"] ?? "")"
         let hub = try start(cli, ["hub", "--grpc", "0"], environment: [:])
