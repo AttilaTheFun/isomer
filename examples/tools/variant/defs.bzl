@@ -4,8 +4,8 @@ All of them have the app's one bundle id, name and link scheme; a build says
 which it is in its Info.plist's `BuildVariant` ("Alpha", "Beta", "Production"
 or "AdHoc"). Alpha is the default (every main and pull request build), Beta
 is TestFlight's (for later), Production is a release branch's, built by CI's
-release job (--config=prod), and AdHoc a pull request's branch's, built by
-CI's adhoc job when it is run by hand (--config=adhoc). The private AttilaTheFun/applications' docs/VARIANTS.md says the whole of it; this
+release job (--config=prod), and AdHoc an experiment's (a branch's), built by
+CI's experiment job when it is run by hand (--config=adhoc). The private AttilaTheFun/applications' docs/VARIANTS.md says the whole of it; this
 package (BUILD.bazel and this file) is its tools/variant, copied.
 
     load("//tools/variant:defs.bzl", "variant_infoplist")

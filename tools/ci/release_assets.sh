@@ -2,8 +2,17 @@
 # A signed build, saved as a GitHub release's asset (docs/RELEASE_ASSETS.md):
 # sourced by publish_from_ci.sh and promote_from_ci.sh, which call
 # `release_asset` with each build the server answered, for their
-# `--download <dir>`. The job then attaches the folder to its release
-# (attach_release.sh). bash, curl and openssl; sha256sum or shasum.
+# `--download <dir>`, and by sign_from_ci.sh, which calls
+# `release_asset_file` with each package Shireworks signed. The job then
+# attaches the folder to its release (attach_release.sh). bash, curl and
+# openssl; sha256sum or shasum.
+#
+#   release_asset_file <package> <dir> [<app>] [<described by>]
+#
+# - <package>: a signed .ipa, Mac app's .zip or .dmg, copied into <dir>;
+# - <app>: the app's name across platforms, else its Info.plist's;
+# - <described by>: the package whose Info.plist describes it, else itself
+#   (a .dmg's: its app's .zip, as a disk image isn't read here).
 #
 #   release_asset <build JSON> <dir> <server> <ca.pem> <file>
 #
@@ -69,7 +78,7 @@ PY
 
 release_asset() {
   local build="$1" dir="$2" server="$3" ca="$4" file="$5"
-  local id key name app version build_number platform bundle variant channel commit uuid ext asset status digest size icon schemes
+  local id key name app version build_number platform bundle variant channel commit uuid ext asset status icon schemes
   id="$(release_asset_field "$build" id)"
   key="$(release_asset_field "$build" downloadKey)"
   name="$(release_asset_field "$build" name)"
@@ -98,20 +107,29 @@ release_asset() {
   status="$(curl -sS --cacert "$ca" --connect-timeout 10 --max-time 1800 -o "$dir/$asset" -w '%{http_code}' \
     "$server/builds/$id/$key/$file")" || { rm -f "$dir/$asset"; echo "release_asset: $asset was not downloaded" >&2; return 1; }
   [ "$status" = 200 ] || { rm -f "$dir/$asset"; echo "release_asset: $asset was not downloaded ($status)" >&2; return 1; }
-  if command -v sha256sum > /dev/null; then digest="$(sha256sum "$dir/$asset" | cut -d' ' -f1)"
-  else digest="$(shasum -a 256 "$dir/$asset" | cut -d' ' -f1)"; fi
-  size="$(wc -c < "$dir/$asset" | tr -d ' ')"
   icon=""
   if [ "$ext" = zip ] && [ "$platform" = macos ]; then
     icon="$(printf '%s' "${app:-$name}" | tr ' /' '--')-$version-icon.png"
     release_asset_icon "$dir/$asset" "$dir/$icon" || { rm -f "$dir/$icon"; icon=""; }
   fi
 
-  # One line a file, the same file named again replacing its line.
+  release_asset_record "$dir" "$asset" "$bundle" "${app:-$name}" "$platform" "$version" "$build_number" "$variant" "$commit" "$uuid" "$icon" "$schemes"
+}
+
+# One line of builds.json for a file in <dir>, replacing the line of a file
+# of the same name, and builds.json written again whole.
+#
+#   release_asset_record <dir> <file> <bundle id> <app> <platform> <version> <build number> <variant> <commit> <uuid> <icon> <schemes JSON>
+release_asset_record() {
+  local dir="$1" asset="$2" bundle="$3" app="$4" platform="$5" version="$6" build_number="$7" variant="$8" commit="$9"
+  local uuid="${10}" icon="${11}" schemes="${12}" digest size
+  if command -v sha256sum > /dev/null; then digest="$(sha256sum "$dir/$asset" | cut -d' ' -f1)"
+  else digest="$(shasum -a 256 "$dir/$asset" | cut -d' ' -f1)"; fi
+  size="$(wc -c < "$dir/$asset" | tr -d ' ')"
   touch "$dir/builds.lines"
   grep -v "\"file\":\"$(release_asset_json "$asset")\"" "$dir/builds.lines" > "$dir/builds.lines.new" || true
   printf '{"file":"%s","bundleID":"%s","app":"%s","platform":"%s","version":"%s","buildNumber":"%s","variant":"%s","commit":"%s","executableUUID":"%s","size":%s,"sha256":"%s"%s}\n' \
-    "$(release_asset_json "$asset")" "$(release_asset_json "$bundle")" "$(release_asset_json "${app:-$name}")" \
+    "$(release_asset_json "$asset")" "$(release_asset_json "$bundle")" "$(release_asset_json "$app")" \
     "$platform" "$(release_asset_json "$version")" "$(release_asset_json "$build_number")" "$variant" "$commit" "$uuid" \
     "$size" "$digest" "${icon:+,\"icon\":\"$(release_asset_json "$icon")\"}${schemes:+,\"urlSchemes\":$schemes}" >> "$dir/builds.lines.new"
   mv "$dir/builds.lines.new" "$dir/builds.lines"
@@ -120,4 +138,107 @@ release_asset() {
   # release (a scheme or an icon's name the lines above didn't expect).
   python3 -I -m json.tool "$dir/builds.json" > /dev/null || { echo "release_asset: builds.json isn't JSON" >&2; return 1; }
   echo "Saved for the release: $asset"
+}
+
+# A signed package's Info.plist, as release_asset_file needs it: one value a
+# line (bundle id, name, version, build number, variant, executable UUID,
+# platform), then its link schemes as a JSON array. python3: the .ipa's
+# Payload/<Name>.app/Info.plist, or the Mac app's
+# <Name>.app/Contents/Info.plist, binary or XML; the UUID the linker gave
+# its executable (LC_UUID: the arm64 slice of a fat one, else the first),
+# as Applications reads its own.
+#
+#   release_asset_describe <package>
+release_asset_describe() {
+  python3 -I - "$1" << 'PY'
+import json, plistlib, struct, sys, uuid, zipfile
+archive = zipfile.ZipFile(sys.argv[1])
+names = archive.namelist()
+def parts(name):
+    return name.split("/")
+ios = [n for n in names if len(parts(n)) == 3 and parts(n)[0] == "Payload" and parts(n)[1].endswith(".app") and parts(n)[2] == "Info.plist"]
+mac = [n for n in names if len(parts(n)) == 3 and parts(n)[0].endswith(".app") and parts(n)[1:] == ["Contents", "Info.plist"]]
+if ios:
+    plist, platform = ios[0], "ios"
+    executables = plist[: -len("Info.plist")]
+elif mac:
+    plist, platform = mac[0], "macos"
+    executables = plist[: -len("Info.plist")] + "MacOS/"
+else:
+    sys.exit("no app in it")
+info = plistlib.loads(archive.read(plist))
+bundle = info.get("CFBundleIdentifier")
+if not bundle:
+    sys.exit("its Info.plist names no bundle id")
+
+def thin(data, start):
+    if start + 28 > len(data):
+        return ""
+    magic = struct.unpack_from("<I", data, start)[0]
+    header = {0xFEEDFACF: 32, 0xFEEDFACE: 28}.get(magic)
+    if not header:
+        return ""
+    cursor = start + header
+    for _ in range(struct.unpack_from("<I", data, start + 16)[0]):
+        if cursor + 8 > len(data):
+            return ""
+        command, size = struct.unpack_from("<II", data, cursor)
+        if command == 0x1B:
+            return str(uuid.UUID(bytes=bytes(data[cursor + 8:cursor + 24]))).upper()
+        if size <= 0:
+            return ""
+        cursor += size
+    return ""
+
+def executable_uuid(data):
+    if len(data) < 8:
+        return ""
+    magic = struct.unpack_from(">I", data, 0)[0]
+    if magic in (0xCAFEBABE, 0xCAFEBABF):
+        wide = magic == 0xCAFEBABF
+        entry, first = (32 if wide else 20), None
+        for index in range(struct.unpack_from(">I", data, 4)[0]):
+            base = 8 + index * entry
+            if base + entry > len(data):
+                break
+            cpu = struct.unpack_from(">I", data, base)[0]
+            offset = struct.unpack_from(">Q" if wide else ">I", data, base + 8)[0]
+            if cpu == 0x0100000C:
+                return thin(data, offset)
+            if first is None:
+                first = offset
+        return thin(data, first) if first is not None else ""
+    return thin(data, 0)
+
+executable = executables + info.get("CFBundleExecutable", "")
+found = executable_uuid(archive.read(executable)) if info.get("CFBundleExecutable") and executable in names else ""
+schemes = [scheme for kind in info.get("CFBundleURLTypes", []) for scheme in kind.get("CFBundleURLSchemes", [])]
+for value in (bundle, info.get("CFBundleDisplayName") or info.get("CFBundleName") or bundle,
+              info.get("CFBundleShortVersionString", ""), info.get("CFBundleVersion", ""), info.get("BuildVariant", ""), found, platform):
+    if "\n" in str(value):
+        sys.exit("a value in its Info.plist has a line break")
+    print(value)
+print(json.dumps(schemes, separators=(",", ":")) if schemes else "")
+PY
+}
+
+release_asset_file() {
+  local package="$1" dir="$2" app="${3:-}" described="${4:-$1}"
+  local description bundle name version build_number variant uuid platform schemes ext asset icon
+  description="$(release_asset_describe "$described")" || { echo "release_asset_file: $(basename "$described") was not read" >&2; return 1; }
+  { read -r bundle; read -r name; read -r version; read -r build_number; read -r variant; read -r uuid; read -r platform; read -r schemes; } \
+    <<< "$description" || true
+  [ -n "$bundle" ] && [ -n "$version" ] && [ -n "$platform" ] || { echo "release_asset_file: $(basename "$described") names no build" >&2; return 1; }
+  [ -n "$variant" ] || variant=Alpha
+  ext="${package##*.}"
+  app="${app:-$name}"
+  asset="$(printf '%s' "$app" | tr ' /' '--')-$version-$platform.$ext"
+  mkdir -p "$dir"
+  cp "$package" "$dir/$asset"
+  icon=""
+  if [ "$ext" = zip ] && [ "$platform" = macos ]; then
+    icon="$(printf '%s' "$app" | tr ' /' '--')-$version-icon.png"
+    release_asset_icon "$dir/$asset" "$dir/$icon" || { rm -f "$dir/$icon"; icon=""; }
+  fi
+  release_asset_record "$dir" "$asset" "$bundle" "$app" "$platform" "$version" "$build_number" "$variant" "${GITHUB_SHA:-}" "$uuid" "$icon" "$schemes"
 }

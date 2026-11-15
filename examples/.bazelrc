@@ -231,7 +231,7 @@ build:windows_tests_on_linux --@bazel_tools//tools/test:incompatible_use_default
 # Which of an app's builds (the private AttilaTheFun/applications' docs/VARIANTS.md):
 # Alpha, the default (every main and pull request build), Beta (TestFlight's,
 # for later), Production, which only CI's release job builds, on a release
-# branch, or AdHoc, a pull request's branch built by hand. One bundle id,
+# branch, or AdHoc, an experiment's, a branch built by hand. One bundle id,
 # name and link scheme for all of them; the build says which it is in its
 # Info.plist's BuildVariant (//tools/variant). The Storybook's iPhone, iPad
 # and Mac apps alone so far: Android, the web,
@@ -241,8 +241,8 @@ build:beta --//tools/variant:variant=beta
 build:prod --//tools/variant:variant=production
 build:adhoc --//tools/variant:variant=adhoc
 # CI's iPhone and iPad apps: a device build, signed ad hoc with a placeholder
-# profile (//tools/ci_device), which Applications Server signs again with the
-# team's identity and the bundle id's profile when it is published.
+# profile (//tools/ci_device), which Shireworks' signing service signs again
+# with the team's identity and the bundle id's profile (tools/ci/sign_from_ci.sh).
 build:ci_device --ios_multi_cpus=arm64
 build:ci_device --ios_signing_cert_name=-
 

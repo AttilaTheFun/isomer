@@ -59,8 +59,11 @@ sorts above the 4.2.2 rules_applecross asks for).
 point releases. MODULE.bazel and the Storybook's apps commit MAJOR.MINOR.0
 (the iPhone's build number is always 1, Android's versionCode MAJOR×1,000,000
 + MINOR×1,000 + BUILD); CI stamps each build's own, 0.47.N, N the
-Storybook's build from the release server's number (the Playground's until
-0.47), and a release is tagged v0.47.N, the build it releases. The registry's isomer 0.38.N entry is
+Storybook's (the Playground's until 0.47), counted from the repository's
+own releases (tools/ci/version_from_tags.sh, by tools/ci/stamp_apps.sh:
+the version of a release already on the commit, else one past the highest
+v<line>.N among the releases, drafts included, and tags, so a new line's
+builds start at MAJOR.MINOR.1), and a release is tagged v0.47.N, the build it releases. The registry's isomer 0.38.N entry is
 the tag with one patch setting module() to 0.38.N (its tools/add_version.py
 --stamped). The examples' other apps are tests and stay at 1.0.
 
@@ -354,6 +357,17 @@ not waited for; and the proof),
 `run: prerelease` (Alphas
 and a draft marked pre-release), `run: release` (verify and the proof, then
 the Alphas and the draft proposed for release, tools/ci/draft_release.sh).
+The Alphas are signed by Shireworks' signing service (since 2026-11-15,
+in place of Applications Server; tools/ci/sign_from_ci.sh, from the
+private AttilaTheFun/applications): each package sent with the job's OIDC
+token, which Shireworks' policy checks (main's dispatch, or a v* tag a
+releaser published), signed on Shireworks' Mac (the Mac app notarized
+there), the Mac app's ticket stapled on a Mac slot leased for the job, and
+each signed build saved with its builds.json line, read from the package
+itself (tools/ci/release_assets.sh's `release_asset_file`). CI holds no
+signing key, notary key or password, and no `adhoc` job: a branch's
+builds are experiments only (`run: experiment`, Storybook Lab, its draft
+`adhoc-storybook-lab-<n>`: tools/ci/experiment_release.sh).
 Drafts are CI's; an agent proposes by running the workflow on main, never
 by making a draft or a tag. The proof is the full set by default (every
 story; `quick` the core set: a story from each area). The proof is in
@@ -373,9 +387,11 @@ the Mac's caret), or, where it can't be yet (a spinner, the map's live
 tiles, a remote video), painted grey as it is taken (tools/proof/masks.txt).
 A release is approved by publishing its draft
 in Reviews (which makes its tag): the Build workflow's `release` job checks
-that its commit is main's and was verified (tools/ci/verified.sh), then promotes that commit's iPhone and Mac Alphas to
-production on Applications Server (tools/ci/promote_from_ci.sh: nothing
-Apple rebuilt, since 0.40), builds and publishes Android's for production,
+that its commit is main's and was verified (tools/ci/verified.sh), then takes the iPhone and Mac Alphas
+its proposal attached, of that commit (tools/ci/release_alphas.sh), has
+Shireworks stamp them Production and sign them again, the Mac's with its
+disk image (`sign_from_ci.sh --promote`: nothing Apple rebuilt, since
+0.40), builds Android's for production and signs it the same way,
 and attaches the release's assets: the signed builds as Applications reads
 them (tools/ci/attach_release.sh, from the private AttilaTheFun/applications'
 docs/RELEASE_ASSETS.md: <App>-<version>-<platform>.<ext> and builds.json,

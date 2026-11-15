@@ -51,9 +51,8 @@
 # container sees, found by cquery with the build's own flags, from the
 # execution root. Flags as --name=value (--compilation_mode=opt, not -c
 # opt): every argument that doesn't start with "-" is taken for a target.
-# An Android app's files are its signed .apk (published as signed by its
-# build: Applications Server keeps no Android key), its unsigned one and its
-# deploy jar; only the first is copied. A .tar.gz (the web site) is copied
+# An Android app's files are its signed .apk (the one tools/ci/sign_from_ci.sh
+# takes), its unsigned one and its deploy jar; only the first is copied. A .tar.gz (the web site) is copied
 # as is.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"

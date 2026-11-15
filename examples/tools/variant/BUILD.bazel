@@ -5,7 +5,7 @@ package(default_visibility = ["//visibility:public"])
 # Which of an app's builds this is (the private AttilaTheFun/applications'
 # docs/VARIANTS.md, whose tools/variant this is): Alpha, the default
 # (every main and pull request build), Beta (TestFlight's, for later),
-# Production (a release branch's) or AdHoc (a pull request's branch, built
+# Production (a release branch's) or AdHoc (an experiment, a branch built
 # by hand). One bundle id for all of them; the build says which it is in its
 # Info.plist's BuildVariant. Set by --config=alpha, --config=beta,
 # --config=prod and --config=adhoc (.bazelrc); read through defs.bzl.

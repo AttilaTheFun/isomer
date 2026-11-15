@@ -86,7 +86,7 @@ ios_application(
     ],
     minimum_os_version = "17.0",
     # CI's device build (--config=ci_device) signs ad hoc with a placeholder
-    # profile, which Applications Server replaces with the bundle id's own; the
+    # profile, which Shireworks' signing replaces with the bundle id's own; the
     # simulator's (`bazel run`'s default) takes none, so it builds anywhere.
     provisioning_profile = select({
         "//tools/ci_device": "//tools/ci_device:ci_placeholder_profile",
@@ -101,7 +101,7 @@ ios_application(
 
 # The Storybook as an experiment (Applications' Ad hoc section, the private
 # AttilaTheFun/applications' docs/EXPERIMENTS.md): its own bundle id under
-# com.LoganShire.Experiments., signed by Applications Server with the
+# com.LoganShire.Experiments., signed by Shireworks' signing service with the
 # experiments' wildcard profile, which grants no app group, push or iCloud;
 # a name of its own and no link scheme, so it installs beside the Storybook
 # and never answers its links. Built by the Build workflow's `experiment`

@@ -1,6 +1,6 @@
 #!/bin/bash
-# Attaches a folder of signed builds (publish_from_ci.sh's or
-# promote_from_ci.sh's --download) to the repository's release `<tag>`, a
+# Attaches a folder of signed builds (sign_from_ci.sh's --download, with or
+# without --promote) to the repository's release `<tag>`, a
 # draft or published: every file but builds.lines, builds.json last, so a
 # reader that finds builds.json finds the files it names. An asset of the
 # same name is replaced (a proposal run again on its commit). What

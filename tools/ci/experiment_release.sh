@@ -1,6 +1,6 @@
 #!/bin/bash
 # An experiment's draft release (docs/EXPERIMENTS.md): its builds, as
-# publish_from_ci.sh --download saved them signed, attached to a new draft
+# sign_from_ci.sh --download saved them signed, attached to a new draft
 # named `adhoc-<slug>-<n>` (the next n for the slug) on the run's commit,
 # each builds.json line given the experiment's purpose. Applications lists
 # it in its Ad hoc section, apart from the apps, until the owner deletes it
@@ -10,7 +10,7 @@
 #   tools/ci/experiment_release.sh <slug> <purpose> <dir> [<notes.md>]
 #
 # <slug>: lowercase letters, digits and dashes (`visor-wasm`). <purpose>: one
-# line, what it is for. <dir>: publish_from_ci.sh --download's folder.
+# line, what it is for. <dir>: sign_from_ci.sh --download's folder.
 # <notes.md>: the release's notes (else the purpose).
 #
 # From the job's environment: GH_TOKEN, the job's, with `contents: write`;
@@ -28,7 +28,7 @@ commit="${GITHUB_SHA:?}"
 fail() { echo "experiment_release: $*" >&2; exit 1; }
 printf '%s' "$slug" | grep -q -E '^[a-z0-9]+(-[a-z0-9]+)*$' || fail "$slug is not a slug: lowercase letters, digits and dashes"
 case "$purpose" in *$'\n'*) fail "the purpose is one line" ;; esac
-[ -f "$dir/builds.json" ] || fail "$dir has no builds.json (publish_from_ci.sh --download <dir>)"
+[ -f "$dir/builds.json" ] || fail "$dir has no builds.json (sign_from_ci.sh --download <dir>)"
 [ -z "$notes" ] || [ -f "$notes" ] || fail "no such file: $notes"
 : "${GH_TOKEN:?GH_TOKEN, the job token with contents: write}"
 # shellcheck source=tools/ci/gh_ready.sh

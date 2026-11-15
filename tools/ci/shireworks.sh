@@ -44,10 +44,21 @@
 #   shireworks.sh cache-token     the Bazel cache's read token (for .netrc: never log it)
 #   shireworks.sh files-url <sha256>                        a served file's URL
 #   shireworks.sh capabilities
+#   shireworks.sh sign <file> [--package=ipa|mac|dmg] [--bundle-id=…] [--out=<file>] [--audience=shireworks] [--promote]
+#                                  a CI job's build signed on Shireworks' Mac (pure-mac §3): stored, signed as the job's
+#                                  GitHub OIDC token allows (the job needs `permissions: id-token: write`; else
+#                                  SHIREWORKS_OIDC_TOKEN), and written back (in place unless --out); prints what signed it;
+#                                  --promote (a release's run): a tested Alpha's app stamped Production first
 #
 # With SHIREWORKS_ADMIN_KEY (and SHIREWORKS_SERVERS), the admin's:
 #   shireworks.sh secret-remove <account>           (admin) a secret forgotten, its Keychain item and its file:
 #                                  client/works-builder-app.json|.pem, client/ci-github-app.json|.pem
+#   shireworks.sh signing          (admin) what signing holds: identities, profiles, whether the notary key is set
+#   shireworks.sh signing-identity-import <file.p12>   (admin) its password read from SHIREWORKS_P12_PASSWORD, else asked
+#   shireworks.sh signing-identity-remove <sha1> | signing-profile-import <file> | signing-profile-remove <uuid>
+#   shireworks.sh signing-notary-key [<file.p8>]       (admin) the App Store Connect key notarizing uses: the .p8 (else
+#                                  APP_STORE_CONNECT_KEY_PATH's), its id and issuer from APP_STORE_CONNECT_KEY_ID and
+#                                  APP_STORE_CONNECT_ISSUER_ID (never on the command line, nor printed)
 #   shireworks.sh restart [--hold | --now | --cancel] [--reason=…]
 #                                  alone: the restart's status; --hold or --now ask for one
 #   shireworks.sh files | files-add <sha256> [--name=…] | files-remove <sha256>
@@ -297,6 +308,50 @@ def secret_remove(arguments):
     (account,) = positional(arguments, 1, "secret-remove <account>")
     as_admin(required=True)
     print(json.dumps(call("DELETE", "/v1/server/secrets/" + account), indent=2))
+
+def signing(arguments):
+    as_admin(required=True)
+    print(json.dumps(call("GET", "/v1/signing"), indent=2))
+
+def signing_identity_import(arguments):
+    (path,) = positional(arguments, 1, "signing-identity-import <file.p12>")
+    as_admin(required=True)
+    import base64, getpass
+    password = os.environ.get("SHIREWORKS_P12_PASSWORD")
+    if password is None:
+        password = getpass.getpass(f"{path}'s password: ") if sys.stdin.isatty() else sys.stdin.readline().rstrip("\n")
+    with open(path, "rb") as file:
+        p12 = base64.b64encode(file.read()).decode()
+    print(json.dumps(call("POST", "/v1/signing/identities", {"p12": p12, "password": password}), indent=2))
+
+def signing_identity_remove(arguments):
+    (sha1,) = positional(arguments, 1, "signing-identity-remove <sha1>")
+    as_admin(required=True)
+    print(json.dumps(call("DELETE", "/v1/signing/identities/" + sha1), indent=2))
+
+def signing_profile_import(arguments):
+    (path,) = positional(arguments, 1, "signing-profile-import <file>")
+    as_admin(required=True)
+    with open(path, "rb") as file:
+        print(json.dumps(call("POST", "/v1/signing/profiles", file.read()), indent=2))
+
+def signing_profile_remove(arguments):
+    (uuid_text,) = positional(arguments, 1, "signing-profile-remove <uuid>")
+    as_admin(required=True)
+    print(json.dumps(call("DELETE", "/v1/signing/profiles/" + uuid_text), indent=2))
+
+def signing_notary_key(arguments):
+    given = [a for a in arguments if not a.startswith("--")]
+    if len(given) > 1:
+        die("usage: signing-notary-key [<file.p8>]", 2)
+    path = given[0] if given else os.environ.get("APP_STORE_CONNECT_KEY_PATH")
+    key_id, issuer = os.environ.get("APP_STORE_CONNECT_KEY_ID"), os.environ.get("APP_STORE_CONNECT_ISSUER_ID")
+    if not (path and key_id and issuer):
+        die("signing-notary-key: needs the .p8 (or APP_STORE_CONNECT_KEY_PATH), APP_STORE_CONNECT_KEY_ID and APP_STORE_CONNECT_ISSUER_ID", 2)
+    as_admin(required=True)
+    with open(path) as file:
+        key = file.read()
+    print(json.dumps(call("PUT", "/v1/signing/notary-key", {"key": key, "keyID": key_id, "issuer": issuer}), indent=2))
 
 def restart(arguments):
     as_admin(required=True)
@@ -586,6 +641,39 @@ def screenshot(arguments):
     window = option(arguments, "window")
     save(request("GET", lease_path(lease) + "/screenshot", query={"window": window} if window else None), file)
 
+def oidc_token(audience):
+    """The job's GitHub OIDC token for `audience`: never printed."""
+    if os.environ.get("SHIREWORKS_OIDC_TOKEN"):
+        return os.environ["SHIREWORKS_OIDC_TOKEN"]
+    url, bearer = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_URL"), os.environ.get("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
+    if not (url and bearer):
+        die("sign: no OIDC token: run it in a GitHub Actions job with `permissions: id-token: write`, or set SHIREWORKS_OIDC_TOKEN", 2)
+    import urllib.request
+    asked = urllib.request.Request(url + "&audience=" + urllib.parse.quote(audience), headers={"Authorization": "Bearer " + bearer})
+    try:
+        with urllib.request.urlopen(asked, timeout=60) as answer:
+            return json.loads(answer.read())["value"]
+    except (OSError, KeyError, ValueError) as error:
+        die(f"sign: GitHub gave no OIDC token: {error}")
+
+def sign(arguments):
+    (file,) = positional(arguments, 1, "sign <file> [--package=ipa|mac|dmg] [--bundle-id=…] [--out=<file>] [--audience=…]")
+    package = option(arguments, "package") or {".ipa": "ipa", ".zip": "mac", ".dmg": "dmg"}.get(os.path.splitext(file)[1])
+    if package not in ("ipa", "mac", "dmg"):
+        die("sign: say what it is: --package=ipa (an iPhone app), mac (a Mac app's .zip) or dmg (a disk image)", 2)
+    token = oidc_token(option(arguments, "audience", "shireworks"))
+    name = os.path.basename(file)
+    stored = store(file, {"name": name})
+    body = {"object": stored["object"]["sha256"], "package": package, "token": token, "name": "signed-" + name}
+    if option(arguments, "bundle-id"):
+        body["bundleID"] = option(arguments, "bundle-id")
+    # A release's promotion of a tested Alpha: stamped Production, then signed as production.
+    if flag(arguments, "promote"):
+        body["promote"] = True
+    answer = json.loads(request("POST", "/v1/signing/requests", body, timeout=3600).read())
+    save(request("GET", "/v1/storage/objects/" + answer["put"]["object"]["sha256"], timeout=3600), option(arguments, "out", file))
+    print(json.dumps(answer["result"], indent=2))
+
 def storage_put(arguments):
     (file,) = positional(arguments, 1, "storage-put <file> [--name=…] [--ttl=…]")
     query = {k: option(arguments, k) for k in ("name", "ttl") if option(arguments, k)}
@@ -629,10 +717,13 @@ def capabilities(arguments):
     print(json.dumps(call("GET", "/v1/capabilities"), indent=2))
 
 commands = {"lease": lease, "release": release, "list": list_leases, "volume-delete": volume_delete, "renew": renew,
-            "restart": restart, "secret-remove": secret_remove, "files": files, "files-add": files_add, "files-remove": files_remove, "volumes": volumes,
+            "restart": restart, "secret-remove": secret_remove,
+            "signing": signing, "signing-identity-import": signing_identity_import, "signing-identity-remove": signing_identity_remove,
+            "signing-profile-import": signing_profile_import, "signing-profile-remove": signing_profile_remove,
+            "signing-notary-key": signing_notary_key, "files": files, "files-add": files_add, "files-remove": files_remove, "volumes": volumes,
             "keys": keys, "key-create": key_create, "key-rotate": key_rotate, "key-revoke": key_revoke, "run": run, "put": put, "get": get,
             "simctl": device("simctl"), "adb": device("adb"), "install": install, "screenshot": screenshot, "xctest": xctest,
-            "storage-put": storage_put, "cache-token": cache_token, "files-url": files_url, "capabilities": capabilities,
+            "storage-put": storage_put, "sign": sign, "cache-token": cache_token, "files-url": files_url, "capabilities": capabilities,
             "image-build": image_build, "image-builds": image_builds, "components": components,
             "component-install": component_install, "component-remove": component_remove}
 
