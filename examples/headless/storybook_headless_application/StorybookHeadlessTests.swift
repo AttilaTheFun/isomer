@@ -208,6 +208,29 @@ struct StorybookHeadlessTests {
         #expect(screen.element("Reset") == nil)
     }
 
+    /// A story opened at launch (ISO_STORYBOOK_STORY: the split view starts
+    /// on its detail column, `preferredCompactColumn` .detail, the list's
+    /// selection set before the first frame) goes back as one picked from
+    /// the list does: to the list, not to the detail's placeholder under the
+    /// story's title.
+    @Test func aStoryOpenedAtLaunchGoesBackToTheList() throws {
+        let app = try launch(story: "state.observableobject")
+        defer { app.quit() }
+        // (At regular width the split view shows both columns: nothing to check.)
+        guard try app.info().width < 700 else { return }
+        var screen = try app.screen()
+        #expect(screen.shows("Taps: 0"))
+        #expect(screen.element("Text styles") == nil)
+        screen = try app.back()
+        // The list, from its top (the first area's first story) …
+        #expect(screen.texts.contains("Storybook"), "texts: \(screen.texts.prefix(12))")
+        #expect(screen.element("Text styles") != nil)
+        // … and nothing of the detail: neither the story nor the
+        // placeholder a detail with no story shows.
+        #expect(!screen.shows("Pick a story"), "texts: \(screen.texts.prefix(12))")
+        #expect(screen.element("Reset") == nil)
+    }
+
     /// A split view's columns' navigation titles are texts on the screen
     /// (the sidebar's "Storybook"; the opened story's, and its row too where
     /// the list stands beside it), as the system's bar shows them.

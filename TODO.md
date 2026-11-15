@@ -306,9 +306,6 @@ JavaScript engine, and WasmKit goes:
     system's: once applied, the system's own change no longer reaches the
     head. Needs a message saying the override was cleared, or the head
     reading the system appearance beneath its override.
-  - **Back from a story opened by its launch hook** (the Storybook's
-    ISO_STORYBOOK_STORY) shows "Pick a story" with the story's title and
-    back button still shown, in the tree renderer's split navigation.
 - isomer#188 (an outside contributor's): features as wasm side modules
   over one runtime the app has once (the Storybook 226 KB gzip against
   5.4 MB). Worth keeping engine-neutral (the linker apart from WasmKit, a web

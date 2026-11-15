@@ -183,6 +183,204 @@ final class RemoteTests: XCTestCase {
         XCTAssertTrue(seen.contains("Taps: 1"))
     }
 
+    // MARK: A compact split view's Back, as Apple's head sends it
+
+    /// The tree a head holds, each frame's patch applied as the tree
+    /// renderer applies it (apple/libraries/swift_ui_tree/FlatPatchTree.swift):
+    /// read by the test while a task applies the frames.
+    private final class HeadTree: @unchecked Sendable {
+        private let lock = NSLock()
+        private var root: Wire_Node?
+
+        var current: Wire_Node? {
+            lock.lock()
+            defer { lock.unlock() }
+            return root
+        }
+
+        func apply(_ patch: Wire_Patch) {
+            lock.lock()
+            defer { lock.unlock() }
+            for op in patch.ops { root = Self.apply(op, to: root) }
+        }
+
+        private static func apply(_ op: Wire_PatchOp, to root: Wire_Node?) -> Wire_Node? {
+            let segments = op.path.split(separator: ".").dropFirst().compactMap { Int($0) }
+            func edit(_ node: inout Wire_Node, _ rest: ArraySlice<Int>) {
+                if let index = rest.first {
+                    guard index < node.ch.count else { return }
+                    edit(&node.ch[index], rest.dropFirst())
+                } else if op.reorder || !op.order.isEmpty {
+                    // Kept children by their old index, -1 the next insert.
+                    let old = node.ch
+                    var inserted = 0
+                    node.ch = op.order.compactMap { index in
+                        if index >= 0, Int(index) < old.count { return old[Int(index)] }
+                        defer { inserted += 1 }
+                        return inserted < op.inserts.count ? op.inserts[inserted] : nil
+                    }
+                } else if op.attrsOnly {
+                    let children = node.ch
+                    node = op.node
+                    node.ch = children
+                } else {
+                    node = op.node
+                }
+            }
+            guard var node = root else { return segments.isEmpty ? op.node : nil }
+            edit(&node, segments[...])
+            return node
+        }
+    }
+
+    private static func param(_ node: Wire_Node, _ key: String) -> String? {
+        node.params.first { $0.key == key }?.value
+    }
+
+    /// The first node, in document order, that `matches`.
+    private static func find(_ node: Wire_Node, _ matches: (Wire_Node) -> Bool) -> Wire_Node? {
+        if matches(node) { return node }
+        for child in node.ch { if let found = find(child, matches) { return found } }
+        return nil
+    }
+
+    private static func isHostView(_ node: Wire_Node, _ kind: String) -> Bool {
+        node.kind == .hostView && node.hasView && node.view == kind
+    }
+
+    /// A head's session at a phone's size under Apple's tree renderer
+    /// ("swiftui": navigation as `navsplit`/`navstack` nodes, the head's own
+    /// NavigationSplitView choosing the column), its frames applied to a
+    /// tree as they come.
+    private func phoneHeadSession(story: String?) async throws
+        -> (call: IsomerCall<Wire_ClientMessage, Wire_ServerMessage>, tree: HeadTree, reading: Task<Void, Never>) {
+        let url = try serve("grpc://127.0.0.1:0", ["ISO_STORYBOOK_STORY": story ?? ""])
+        let endpoint = try IsomerRemote.endpoint(url)
+        let call = try await endpoint.connection.connect(context: endpoint.context(token: nil))
+        try await call.write(Wire_ClientMessage.with {
+            $0.start = Wire_Start.with {
+                $0.size = Wire_Size.with {
+                    // A phone's width, and tall enough that the list
+                    // builds every row (its window is the rows on screen).
+                    $0.width = 390
+                    $0.height = 6000
+                }
+                $0.renderer = "swiftui"
+            }
+        })
+        let tree = HeadTree()
+        let reading = Task {
+            do {
+                for try await message in call.inbound {
+                    guard case .patch(let bytes)? = message.message,
+                          let patch = try? Wire_Patch(serializedBytes: bytes) else { continue }
+                    tree.apply(patch)
+                }
+            } catch {}
+        }
+        return (call, tree, reading)
+    }
+
+    /// The split view's node once `condition` holds of it (and the tree it
+    /// is in), within a few seconds.
+    private func waitForSplit(_ tree: HeadTree, _ what: String,
+                       until condition: (Wire_Node, Wire_Node) -> Bool) async throws -> Wire_Node {
+        let deadline = Date().addingTimeInterval(10)
+        while Date() < deadline {
+            if let root = tree.current, let split = Self.find(root, { Self.isHostView($0, "navsplit") }),
+               condition(split, root) {
+                return split
+            }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        let split = tree.current.flatMap { Self.find($0, { Self.isHostView($0, "navsplit") }) }
+        XCTFail("\(what): never; the split's params: \(split.map { $0.params.map { "\($0.key)=\($0.value)" } } ?? [])")
+        throw CancellationError()
+    }
+
+    /// The column a split view shows on a phone, as its params ask the head.
+    private static func compactColumn(_ split: Wire_Node) -> String {
+        param(split, "compact") ?? "sidebar"
+    }
+
+    /// The detail column's own navigation stack (the Storybook's), whose
+    /// bar the head draws: its title.
+    private static func detailTitle(_ split: Wire_Node) -> String? {
+        guard let detail = split.ch.last,
+              let stack = find(detail, { isHostView($0, "navstack") }) else { return nil }
+        return param(stack, "title")
+    }
+
+    /// A row the sidebar's list shows selected.
+    private static func selectedRow(_ split: Wire_Node) -> Wire_Node? {
+        guard let sidebar = split.ch.first else { return nil }
+        return find(sidebar) { param($0, "selected") == "1" }
+    }
+
+    /// The head's Back on a phone (its NavigationSplitView's back button, or
+    /// the edge swipe: NavSplitNativeBody's "compact:sidebar:back"), and what
+    /// the app answers: the list again, asked of the head with a new
+    /// request (`compactTick`), its selection cleared, and a detail column
+    /// with neither the story nor the story's title in its bar.
+    private func goesBackToTheList(_ call: IsomerCall<Wire_ClientMessage, Wire_ServerMessage>, _ tree: HeadTree,
+                                   from split: Wire_Node) async throws {
+        let tickBefore = Self.param(split, "compactTick")
+        try await call.write(Wire_ClientMessage.with {
+            $0.event = Wire_Event.with {
+                $0.id = split.edit
+                $0.value = "compact:sidebar:back"
+            }
+        })
+        let back = try await waitForSplit(tree, "the list after Back") { split, _ in
+            Self.compactColumn(split) == "sidebar" && Self.selectedRow(split) == nil
+        }
+        XCTAssertNotEqual(Self.param(back, "compactTick"), tickBefore, "Back asks the head again")
+        XCTAssertFalse(Self.texts(back.ch.last ?? Wire_Node()).contains("Taps: 0"))
+        // The detail, unseen on a phone now, has no story: its bar no title
+        // (SwiftUI's title is the shown content's, and the placeholder sets
+        // none), not the story's left from before.
+        XCTAssertEqual(Self.detailTitle(back) ?? "", "", "the detail's title after Back")
+        // And it stays there: nothing in the next frames moves the head on.
+        try await Task.sleep(for: .milliseconds(500))
+        let settled = try XCTUnwrap(tree.current.flatMap { Self.find($0, { Self.isHostView($0, "navsplit") }) })
+        XCTAssertEqual(Self.compactColumn(settled), "sidebar")
+        XCTAssertEqual(Self.param(settled, "compactTick"), Self.param(back, "compactTick"))
+    }
+
+    /// A story opened at launch (ISO_STORYBOOK_STORY) under Apple's head:
+    /// the split view starts on its detail, and Back goes to the list.
+    func testASwiftUIHeadsBackFromAStoryOpenedAtLaunch() async throws {
+        let (call, tree, reading) = try await phoneHeadSession(story: "state.observableobject")
+        defer { reading.cancel() }
+        let split = try await waitForSplit(tree, "the story at launch") { split, root in
+            Self.compactColumn(split) == "detail" && Self.texts(root).contains("Taps: 0")
+        }
+        XCTAssertEqual(Self.detailTitle(split), "ObservableObject")
+        try await goesBackToTheList(call, tree, from: split)
+        await call.finish()
+    }
+
+    /// The same story picked from the list, then Back: what the launch's
+    /// case must match.
+    func testASwiftUIHeadsBackFromAStoryPickedFromTheList() async throws {
+        let (call, tree, reading) = try await phoneHeadSession(story: nil)
+        defer { reading.cancel() }
+        let list = try await waitForSplit(tree, "the list at launch") { split, root in
+            Self.compactColumn(split) == "sidebar" && Self.button(root, "ObservableObject") != nil
+        }
+        let root = try XCTUnwrap(tree.current)
+        let row = try XCTUnwrap(Self.button(root, "ObservableObject"))
+        XCTAssertNil(Self.selectedRow(list))
+        // The native list's selection sends the row's tap (ListBody).
+        try await call.write(Wire_ClientMessage.with { $0.event = Wire_Event.with { $0.id = row.tap } })
+        let split = try await waitForSplit(tree, "the story picked") { split, root in
+            Self.compactColumn(split) == "detail" && Self.texts(root).contains("Taps: 0")
+        }
+        XCTAssertEqual(Self.detailTitle(split), "ObservableObject")
+        try await goesBackToTheList(call, tree, from: split)
+        await call.finish()
+    }
+
     func testDialsOutToAHub() throws {
         let cli = "\(Self.root)/\(ProcessInfo.processInfo.environment["ISOMER_CLI"] ?? "")"
         let hub = try start(cli, ["hub", "--grpc", "0"], environment: [:])
