@@ -957,20 +957,24 @@ Each release's notes have an Upgrading section; these things are easy to miss:
   supported in -source 11".
 - **Library evolution is for Apple's binary frameworks, not isomer's
   platforms.** isomer's modules (Foundation, SwiftUI, Isomer and the rest)
-  are compiled without `-enable-library-evolution`: they are linked into each
-  app, and on Android, wasm, Linux and Windows there is no binary-stable
-  system framework for resilience to serve. Don't enable it for your
-  targets there. If you do (an Apple framework built from the same
-  library), each import of an isomer module warns "module 'SwiftUI' was not
-  compiled with library evolution support", and that warning has no
-  diagnostic group in Swift 6.3 (`-Wwarning <group>` can't exempt it from
-  warnings-as-errors): turn library evolution, or warnings-as-errors, off for
-  those platforms with a `select` on the target's `features`, e.g.
+  are compiled without `-enable-library-evolution` by default: they are
+  linked into each app, and on Android, wasm, Linux and Windows there is no
+  binary-stable system framework for resilience to serve. Don't enable it
+  for your targets there. If you do (an Apple framework built from the same
+  library), each public import of an isomer module reports "module
+  'SwiftUI' was not compiled with library evolution support": a warning
+  (which Swift 6.4's `-warnings-as-errors` leaves a warning), and an error in
+  a library built for distribution (InternalImportsByDefault at
+  `-library-level api`), in no diagnostic group either way. Turn library
+  evolution off for those platforms with a `select` on the target's
+  `features`, e.g.
   `features = select({"@platforms//os:android": ["-swift.enable_library_evolution"], "//conditions:default": []})`,
-  or opt Isomer's Android and wasm modules into it as well with
-  examples/.bazelrc's `--config=isomer_library_evolution` (copy its lines:
-  rules_swift's per-target copts; they build and link, the Storybook's
-  apps the check, and the warnings go).
+  import isomer's modules `internal` where your interface doesn't use them,
+  or build isomer's modules resilient too with
+  `--@isomer//:library_evolution` (docs/library_evolution.md: what it costs,
+  measured on the Android Storybook: +2.7% to the app's library, +0.85% to
+  the APK, a tenth more build time, no change in frames that the Storybook
+  could measure).
   A library shipped prebuilt with a `.swiftinterface` needs library
   evolution for the interface: an `internal import` of each Isomer module
   its interface doesn't name keeps the warning away (below, "Prebuilt

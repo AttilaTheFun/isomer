@@ -168,15 +168,17 @@ string_flag(
 # library of the app's own built with library evolution (rules_swift's
 # `library_evolution = True`, `swift.enable_library_evolution`) imports
 # Foundation, SwiftUI, os and the rest without "module 'SwiftUI' was not
-# compiled with library evolution support", a warning no diagnostic group
-# exempts from warnings-as-errors. Off by default: it makes the app's
-# library larger and its frames slower (the doc's measurements), for a
+# compiled with library evolution support": a warning, or an error for a
+# library built for distribution (Swift 6's InternalImportsByDefault and
+# `-library-level api`), which no diagnostic group names. Off by default:
+# it makes the app's library about 2.7% larger and its build slower, for a
 # guarantee nothing off Apple uses (Isomer's modules are linked into each
-# app, never swapped beneath it). Two halves carry it, both in
-# tools/library_evolution/defs.bzl: the Bazel modules' copts select on
+# app, never swapped beneath it); the Storybook's frames on Android were
+# the same either way (the doc's measurements). Two halves carry it, both
+# in tools/library_evolution/defs.bzl: the Bazel modules' copts select on
 # `:library_evolution_on`, and the Swift package's modules (Foundation,
-# SwiftUI, ..., built under `one_configuration`) take it through rules_swift's
-# per-module copts, which one_configuration's transition sets.
+# SwiftUI, ..., built under `one_configuration`) take it through
+# rules_swift's per-module copts, which one_configuration's transition sets.
 bool_flag(
     name = "library_evolution",
     build_setting_default = False,

@@ -3,14 +3,16 @@
 `--@isomer//:library_evolution` (default false; docs/library_evolution.md)
 adds `-enable-library-evolution` to every module of Isomer's that an
 Android or web app links, so that an app's own library built resilient
-(rules_swift's `library_evolution = True` or `swift.enable_library_evolution`,
-with warnings as errors) can import them: Swift warns on each import of a
-module that isn't resilient into one that is, "module 'SwiftUI' was not
-compiled with library evolution support; using it means binary
-compatibility for 'X' can't be guaranteed", a warning in no diagnostic
-group, so `-Wwarning <group>` can't keep it out of warnings-as-errors. Only
-an `internal import` (or `@_implementationOnly`) of the module avoids it
-otherwise.
+(rules_swift's `library_evolution = True` or `swift.enable_library_evolution`)
+can import them: Swift reports each public import of a module that isn't
+resilient into one that is, "module 'SwiftUI' was not compiled with library
+evolution support; using it means binary compatibility for 'X' can't be
+guaranteed" (lib/Sema/ImportResolution.cpp). A warning in no diagnostic
+group, which Swift 6.4's `-warnings-as-errors` leaves a warning; an error
+in a library built for distribution (InternalImportsByDefault or
+AccessLevelOnImport, at `-library-level api` or `spi`), which nothing
+turns off. An `internal import` (or `@_implementationOnly`) of the module
+avoids it otherwise, where the library's interface doesn't use the module.
 
 Not the `swift.enable_library_evolution` feature: isomer's REPO.bazel turns
 that off for its packages, and one_configuration drops it from the
