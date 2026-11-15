@@ -52,6 +52,9 @@ if ($SetUp) {
 }
 
 if ($Bazel.Count -eq 0) { throw "usage: tools/ci/windows_build.ps1 setup | <bazel command> '<arg>'…" }
+# A diagnosis run (temporary): which archivers open paths past MAX_PATH here.
+& (Join-Path $PSScriptRoot 'windows_paths_probe.ps1')
+exit 1
 # MSVC's environment for ARM64, from the image's Visual Studio.
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
 $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.ARM64 -property installationPath
