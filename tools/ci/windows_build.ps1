@@ -4,7 +4,8 @@
 # Visual Studio (ARM64 MSVC) and Windows SDK, so nothing of Microsoft's is
 # redistributed (tools/windows/README.md). Built only, not run: Windows is
 # tier 2. The recipe a Windows machine has always built with
-# (tools/proof/proof.py's): Bazel in MSVC's environment (vcvarsall arm64),
+# (tools/proof/proof.py's), with LLVM's clang-cl, lld-link and llvm-lib in
+# MSVC's place (below): Bazel in MSVC's environment (vcvarsall arm64),
 # BAZEL_SH Git's bash and Git's usr\bin ahead of System32 (rules_swift_package_manager
 # runs find, cp and od; tools/patches/rules_swift_package_manager_windows.patch
 # in the examples), and --repo_env for SDKROOT, PATH and MSVC's variables
@@ -52,9 +53,6 @@ if ($SetUp) {
 }
 
 if ($Bazel.Count -eq 0) { throw "usage: tools/ci/windows_build.ps1 setup | <bazel command> '<arg>'…" }
-# A diagnosis run (temporary): which archivers open paths past MAX_PATH here.
-& (Join-Path $PSScriptRoot 'windows_paths_probe.ps1')
-exit 1
 # MSVC's environment for ARM64, from the image's Visual Studio.
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
 $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.ARM64 -property installationPath
@@ -70,8 +68,22 @@ $env:BAZEL_SH = "$git\bin\bash.exe"
 # own, MSVC's link.exe still ahead of Git's link.
 $env:Path = $env:Path -replace '(?i)C:\\Windows\\system32;', "$git\usr\bin;C:\Windows\system32;"
 if ($env:Path -notmatch [regex]::Escape("$git\usr\bin")) { $env:Path = "$env:Path;$git\usr\bin" }
+# LLVM's compiler, linker and archiver in MSVC's place (rules_cc's
+# USE_CLANG_CL, BAZEL_LLVM), with MSVC's headers and libraries: MSVC's
+# lib.exe and link.exe can't open a path past 260 characters even with
+# LongPathsEnabled (they aren't long-path aware), and Bazel's object paths
+# for some exec tools (swift-syntax's, swift-protobuf's) reach 283 from
+# C:/b/<hash>/execroot/_main. LLVM's tools open them (both checked on this
+# runner). The LLVM Visual Studio carries (ARM64, its STL's), else the
+# image's own.
+$llvm = Join-Path $vs 'VC\Tools\Llvm\ARM64'
+if (-not (Test-Path (Join-Path $llvm 'bin\llvm-lib.exe'))) { $llvm = 'C:\Program Files\LLVM' }
+if (-not (Test-Path (Join-Path $llvm 'bin\llvm-lib.exe'))) { throw 'windows_build: no LLVM (clang-cl, lld-link, llvm-lib) on this runner' }
+$env:USE_CLANG_CL = '1'
+$env:BAZEL_LLVM = $llvm
 $repoEnv = @('SDKROOT', 'PATH', 'INCLUDE', 'LIB', 'LIBPATH', 'UniversalCRTSdkDir', 'UCRTVersion', 'WindowsSdkDir',
-             'WindowsSDKVersion', 'VCToolsInstallDir', 'VCINSTALLDIR', 'VSINSTALLDIR') | ForEach-Object { "--repo_env=$_" }
+             'WindowsSDKVersion', 'VCToolsInstallDir', 'VCINSTALLDIR', 'VSINSTALLDIR', 'USE_CLANG_CL', 'BAZEL_LLVM') |
+    ForEach-Object { "--repo_env=$_" }
 # Bazelisk, so .bazelversion is honoured (the image's `bazel` may be a
 # release of its own).
 $bazelisk = (Get-Command bazelisk -ErrorAction SilentlyContinue)
