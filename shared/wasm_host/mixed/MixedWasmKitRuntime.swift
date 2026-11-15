@@ -460,13 +460,13 @@ final class MixedGuest: @unchecked Sendable {
     func read(_ ptr: UInt32, _ len: UInt32) -> [UInt8] {
         let address = placeholders[ptr] ?? ptr
         guard len > 0, Int(address) + Int(len) <= bridge.memory.byteCount else { return [] }
-        return bridge.memory.withUnsafeBufferPointer(offset: UInt(address), count: Int(len)) { Array($0) }
+        return (try? bridge.memory.withUnsafeBufferPointer(offset: UInt(address), count: Int(len)) { Array($0) }) ?? []
     }
 
     func write(_ ptr: UInt32, _ bytes: [UInt8]) {
         let address = placeholders[ptr] ?? ptr
         guard Int(address) + bytes.count <= bridge.memory.byteCount else { return }
-        bridge.memory.withUnsafeMutableBufferPointer(offset: UInt(address), count: bytes.count) { d in
+        _ = try? bridge.memory.withUnsafeMutableBufferPointer(offset: UInt(address), count: bytes.count) { d in
             bytes.withUnsafeBytes { d.copyMemory(from: $0) }
         }
     }
@@ -500,7 +500,7 @@ final class MixedGuest: @unchecked Sendable {
     private func bytes(_ caller: borrowing Caller, _ pointer: Value, _ length: Value) -> [UInt8] {
         let count = Int(length.i32)
         guard count > 0, let memory = memory(caller), Int(pointer.i32) + count <= memory.byteCount else { return [] }
-        return memory.withUnsafeBufferPointer(offset: UInt(pointer.i32), count: count) { Array($0) }
+        return (try? memory.withUnsafeBufferPointer(offset: UInt(pointer.i32), count: count) { Array($0) }) ?? []
     }
 
     /// `iso_hot`, `swift_ffi` and the runtime's `env` symbols (a side
@@ -550,7 +550,7 @@ final class MixedGuest: @unchecked Sendable {
                     let utf8 = Array(answer.utf8)
                     if utf8.count <= Int(args[3].i32), let memory = memory(caller),
                        Int(args[2].i32) + utf8.count <= memory.byteCount {
-                        memory.withUnsafeMutableBufferPointer(offset: UInt(args[2].i32), count: utf8.count) { d in
+                        _ = try? memory.withUnsafeMutableBufferPointer(offset: UInt(args[2].i32), count: utf8.count) { d in
                             utf8.withUnsafeBytes { d.copyMemory(from: $0) }
                         }
                     }

@@ -255,11 +255,11 @@ final class WasmKitDynamicLinkerTests: XCTestCase {
     var table: Table { main.exports[table: "__indirect_function_table"]! }
 
     func word(_ address: UInt32) -> UInt32 {
-        memory.withUnsafeBufferPointer(offset: UInt(address), count: 4) { $0.loadUnaligned(as: UInt32.self) }
+        try! memory.withUnsafeBufferPointer(offset: UInt(address), count: 4) { $0.loadUnaligned(as: UInt32.self) }
     }
 
     func bytes(_ address: UInt32, _ count: Int) -> [UInt8] {
-        memory.withUnsafeBufferPointer(offset: UInt(address), count: count) { Array($0) }
+        try! memory.withUnsafeBufferPointer(offset: UInt(address), count: count) { Array($0) }
     }
 
     func callSlot(_ slot: UInt32, _ argument: UInt32) throws -> UInt32? {
@@ -304,7 +304,7 @@ final class WasmKitDynamicLinkerTests: XCTestCase {
     func testZeroesItsMemory() throws {
         // Dirty the heap where side module A will go, then load it.
         let next = (WasmFixtures.heapStart + 15) & ~15
-        memory.withUnsafeMutableBufferPointer(offset: UInt(next), count: 64) { _ = $0.initializeMemory(as: UInt8.self, repeating: 0xAB) }
+        try memory.withUnsafeMutableBufferPointer(offset: UInt(next), count: 64) { _ = $0.initializeMemory(as: UInt8.self, repeating: 0xAB) }
         let a = try linker.load(WasmFixtures.sideA())
         XCTAssertEqual(a.memoryBase, next)
         XCTAssertEqual(bytes(a.memoryBase + 36, 28), [UInt8](repeating: 0, count: 28))

@@ -345,12 +345,12 @@ public final class WasmKitRuntime: WasmRuntime {
 
     public func readBytes(_ ptr: UInt32, _ len: UInt32) -> [UInt8] {
         guard let memory, len > 0 else { return [] }
-        return memory.withUnsafeBufferPointer(offset: UInt(ptr), count: Int(len)) { Array($0) }
+        return (try? memory.withUnsafeBufferPointer(offset: UInt(ptr), count: Int(len)) { Array($0) }) ?? []
     }
 
     public func writeBytes(_ ptr: UInt32, _ bytes: [UInt8]) {
         guard let memory, !bytes.isEmpty else { return }
-        memory.withUnsafeMutableBufferPointer(offset: UInt(ptr), count: bytes.count) { destination in
+        _ = try? memory.withUnsafeMutableBufferPointer(offset: UInt(ptr), count: bytes.count) { destination in
             bytes.withUnsafeBytes { destination.copyMemory(from: $0) }
         }
     }
@@ -601,14 +601,14 @@ private final class Bindings: @unchecked Sendable {
         let start = Int(pointer.i32), count = Int(length.i32)
         guard count > 0 else { return [] }
         guard start + count <= memory.byteCount else { return [] }
-        return memory.withUnsafeBufferPointer(offset: UInt(start), count: count) { Array($0) }
+        return try memory.withUnsafeBufferPointer(offset: UInt(start), count: count) { Array($0) }
     }
 
     static func write(_ caller: borrowing Caller, _ pointer: Value, _ bytes: [UInt8]) throws {
         let memory = try memory(caller)
         let start = Int(pointer.i32)
         guard !bytes.isEmpty, start + bytes.count <= memory.byteCount else { return }
-        memory.withUnsafeMutableBufferPointer(offset: UInt(start), count: bytes.count) { destination in
+        try memory.withUnsafeMutableBufferPointer(offset: UInt(start), count: bytes.count) { destination in
             bytes.withUnsafeBytes { destination.copyMemory(from: $0) }
         }
     }
