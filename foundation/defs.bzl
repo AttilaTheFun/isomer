@@ -17,11 +17,20 @@ warnings as errors, library evolution): Foundation and what it is built
 from (swift-foundation, its bundled collections) are a module of their own,
 which a consumer's REPO.bazel can't reach, and they build in the language
 mode and with the warnings they are tested with. Other features pass
-through as given.
+through as given. Isomer's own modules among them are built resilient only
+when the build asks with `--@isomer//:library_evolution`, which this
+rule's transition carries to them as rules_swift's per-module copts
+(tools/library_evolution/defs.bzl).
 """
 
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load("@rules_swift//swift:providers.bzl", "SwiftInfo")
+load(
+    "//tools/library_evolution:defs.bzl",
+    "LIBRARY_EVOLUTION_INPUTS",
+    "LIBRARY_EVOLUTION_OUTPUTS",
+    "package_library_evolution",
+)
 
 # Every option rules_swift_package_manager's minimum-OS transition sets
 # (swiftpkg/internal/minimum_os_platforms.bzl there).
@@ -70,12 +79,16 @@ def _clear_minimum_os_impl(settings, attr):
         if not _language_feature(feature)
     ]
     cleared[_CONFIGURATION] = attr.configuration or settings[_CONFIGURATION]
+    # The package's modules resilient when `--@isomer//:library_evolution`
+    # asks (tools/library_evolution/defs.bzl): the one place their copts can
+    # be set, as every dependent reaches them through here.
+    cleared.update(package_library_evolution(settings))
     return cleared
 
 _clear_minimum_os = transition(
     implementation = _clear_minimum_os_impl,
-    inputs = ["//command_line_option:features", _CONFIGURATION],
-    outputs = _OPTIONS + ["//command_line_option:features", _CONFIGURATION],
+    inputs = ["//command_line_option:features", _CONFIGURATION] + LIBRARY_EVOLUTION_INPUTS,
+    outputs = _OPTIONS + ["//command_line_option:features", _CONFIGURATION] + LIBRARY_EVOLUTION_OUTPUTS,
 )
 
 def _one_configuration_impl(ctx):

@@ -1,0 +1,4 @@
+# Isomer's modules built resilient under `--@isomer//:library_evolution`
+# (the root BUILD.bazel's flag; docs/library_evolution.md): defs.bzl, loaded
+# by the BUILD files of the modules it covers and by
+# foundation/defs.bzl's one_configuration.

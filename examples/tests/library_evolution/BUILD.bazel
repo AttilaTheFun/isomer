@@ -1,0 +1,50 @@
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load(":defs.bzl", "with_library_evolution")
+
+# An app's own library built with library evolution and warnings as errors
+# (Client.swift), as an app that builds its libraries resilient does,
+# against Isomer's modules built resilient by `--@isomer//:library_evolution`
+# (docs/library_evolution.md): for Android and the web, with the flag on
+# whatever the command line says. Without the flag the same library fails on
+# its first import of Isomer's ("module 'Combine' was not compiled with
+# library evolution support"), a warning that no diagnostic group exempts
+# from warnings-as-errors.
+swift_library(
+    name = "resilient_client",
+    srcs = ["Client.swift"],
+    # The features a resilient library's build has: `-enable-library-evolution`,
+    # and the warning above an error. `library_evolution = True` would also
+    # emit a .swiftinterface, which nothing here reads.
+    features = [
+        "swift.enable_library_evolution",
+        "swift.treat_warnings_as_errors",
+    ],
+    module_name = "ResilientClient",
+    tags = ["manual"],
+    deps = [
+        "@isomer//:foundation",
+        "@isomer//:os_log",
+        "@isomer//:swift_ui",
+    ],
+)
+
+with_library_evolution(
+    name = "resilient_client_android",
+    library = ":resilient_client",
+    platform = "@isomer//tools/platforms:android_arm64",
+)
+
+with_library_evolution(
+    name = "resilient_client_wasm",
+    library = ":resilient_client",
+    platform = "@isomer//tools/platforms:wasm32",
+)
+
+build_test(
+    name = "library_evolution_test",
+    targets = [
+        ":resilient_client_android",
+        ":resilient_client_wasm",
+    ],
+)
