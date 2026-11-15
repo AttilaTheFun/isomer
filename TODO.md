@@ -504,11 +504,11 @@ has it.
     release brings CharacterSet, #2314, and its string API). Off Darwin its
     `.diacriticInsensitive` and `.widthInsensitive` comparison is
     `fatalError("not implemented yet")`: worth reporting upstream.
-- **WasmKit** (AttilaTheFun's fork, and two patches): swiftwasm/WasmKit #513
-  (iOS guard pages), #514 (Android's software bounds checks), #515 (MSVC's C),
-  #516 (constant-pool reservations), #517 (internal calls off the native
-  stack) and #518 (the dispatch fusions, on #517). #517's CoreMark needs a
-  measurement on a quiet machine.
+- **WasmKit** (AttilaTheFun's fork): upstream has taken #513, #516, #517,
+  #518 and #529, and #527 and its MSVC change in place of #514 and #515; the
+  fork's main is upstream's. Left: the side-modules author's commits
+  (isomer/side-modules: the host-linking API and cheaper host calls), to
+  propose upstream; then pin a WasmKit release.
 - **rules_swift_package_manager**: cgrindel/rules_swift_package_manager#2621
   (draft): Windows hosts.
 - **hermetic_android_toolchains**: keith/hermetic_android_toolchains#110

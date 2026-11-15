@@ -75,8 +75,10 @@ per-feature entry and a root per feature.
 
 What it needs of WasmKit: public API to place modules in a table and memory
 (`Table.grow`, `Table.function(at:)`, `Function.reference`, …), with its
-tests: a commit of the side-modules author's WasmKit fork, to propose to
-swiftwasm/WasmKit, which isomer pins until then.
+tests: commits on AttilaTheFun/WasmKit's isomer/side-modules (the fork's
+main is swiftwasm/WasmKit's), to propose to swiftwasm/WasmKit, which isomer
+pins until then.
+
 ## Mixed mode
 
 Interpreting the runtime is slow, and compiling all of it to C (wasm2c) is
@@ -156,7 +158,7 @@ and interpreted, render byte for byte what its reactor renders.
 
 What it needs of WasmKit, beside the side modules' API: cheaper host calls
 (`invokeUnchecked`, no signal mask saved per entry, a return to the host that
-doesn't throw), the fork's faster-host-calls, with its tests, proposed to
+doesn't throw), on the same branch with its tests, to propose to
 swiftwasm/WasmKit.
 
 Open: a trap in native code (or in interpreted code under it) ends the

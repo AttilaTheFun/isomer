@@ -548,7 +548,8 @@ final class MixedGuest: @unchecked Sendable {
                         return [.i32(UInt32(bitPattern: -1))]
                     }
                     let utf8 = Array(answer.utf8)
-                    if utf8.count <= Int(args[3].i32), let memory = memory(caller) {
+                    if utf8.count <= Int(args[3].i32), let memory = memory(caller),
+                       Int(args[2].i32) + utf8.count <= memory.byteCount {
                         memory.withUnsafeMutableBufferPointer(offset: UInt(args[2].i32), count: utf8.count) { d in
                             utf8.withUnsafeBytes { d.copyMemory(from: $0) }
                         }
