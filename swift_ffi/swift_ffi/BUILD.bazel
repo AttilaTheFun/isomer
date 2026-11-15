@@ -1,5 +1,6 @@
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 load("@rules_swift//swift:swift_library.bzl", "swift_library")
+load("//tools/library_evolution:defs.bzl", "LIBRARY_EVOLUTION_COPTS")
 
 package(
     features = [
@@ -52,6 +53,7 @@ swift_library(
         ":include_documentation_enabled": glob(["swift_ffi.docc/**/*.md"]),
         "//conditions:default": [],
     }),
+    copts = LIBRARY_EVOLUTION_COPTS,
     module_name = "IsomerFFI",
     plugins = ["//swift_ffi/swift_ffi_plugin"],
     visibility = ["//visibility:public"],

@@ -95,41 +95,19 @@ build:linux --action_env=C_INCLUDE_PATH=/usr/lib/glib-2.0/include:/usr/lib/dbus-
 # targets at all: there is no binary-stable system framework there for it to
 # serve, and Isomer's modules are built without it (README, "Swift features").
 #
-# If your targets there must be resilient anyway (and warnings-as-errors
-# fails each import on "module 'SwiftUI' was not compiled with library
-# evolution support"), `--config=isomer_library_evolution` builds Isomer's
-# Android and wasm modules resilient too, through rules_swift's per-target
-# copts (keyed by the canonical label, hence `@@isomer+`). Off by default:
-# resilience costs every access across those modules an indirection.
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//core_graphics:core_graphics=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//foundation:foundation=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//foundation/dispatch_time:dispatch_time=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//foundation/isomer_foundation:isomer_foundation=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//frameworks/core_transferable:core_transferable=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//frameworks/os_log:os_log=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//frameworks/os_log/os:os=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//frameworks/uniform_type_identifiers:uniform_type_identifiers=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//metal/isomer_metal:isomer_metal=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//metal/metal:metal=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//metal/web:web=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//shared/isomer_network_host:isomer_network_host=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//shared/isomer_swift_ui:isomer_swift_ui=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//shared/platform_services:platform_services=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//swift_ffi/swift_ffi:swift_ffi=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//swift_gpu/android:swift_gpu=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//swift_gpu/wasm:swift_gpu=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//swift_map/android/libraries/swift_map_engine:engine=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//swift_map/wasm/libraries/swift_map_engine:engine=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//android/libraries/swift_ui:image_io=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//android/libraries/swift_ui:isomer=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//android/libraries/swift_ui:photos_ui=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//android/libraries/swift_ui:sdk=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//android/libraries/swift_ui:swift_ui=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//wasm/libraries/swift_ui:image_io=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//wasm/libraries/swift_ui:isomer=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//wasm/libraries/swift_ui:photos_ui=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//wasm/libraries/swift_ui:sdk=-enable-library-evolution
-build:isomer_library_evolution --@rules_swift//swift:per_module_swiftcopt=@@isomer+//wasm/libraries/swift_ui:swift_ui=-enable-library-evolution
+# If your targets there must be resilient anyway (and each public import of
+# Isomer's warns, or fails in a library built for distribution, "module
+# 'SwiftUI' was not compiled with library evolution support"),
+# `--@isomer//:library_evolution` builds Isomer's modules resilient too:
+# the Bazel modules by a select on their copts, the Swift package's
+# (Foundation, SwiftUI, Combine, ...) by rules_swift's per-module copts,
+# which one_configuration sets (docs/library_evolution.md, with what it
+# costs: off by default). `--config=isomer_library_evolution`
+# is that flag, under the name this file gave a list of per-module copts
+# before 0.56 (the list missed the package's modules, which moved into
+# isomer's Swift package in 0.43 and 0.44: SwiftUI and Foundation stayed
+# fragile under it).
+build:isomer_library_evolution --@isomer//:library_evolution
 
 # Nicer error output from Swift cross-compile actions.
 build --show_progress_rate_limit=5
