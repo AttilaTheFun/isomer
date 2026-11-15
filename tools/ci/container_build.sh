@@ -256,6 +256,9 @@ built_tests=$?
 # reactors there (the Playground does on Android), though no app here does.
 bazel build "${flags[@]}" --platforms=@isomer//tools/platforms:android_arm64 @isomer//shared/wasm_host:wasmkit_runtime || built_tests=1
 bazel build "${flags[@]}" "${windows[@]}" @isomer//shared/wasm_host:wasmkit_runtime || built_tests=1
+# The Windows Electron package, zipped by the hermetic JDK jar: on Linux the
+# JDK archive has no Contents/Home, which once kept it from loading here.
+bazel build "${flags[@]}" //electron/example_full_react_electron_application:example_windows_package || built_tests=1
 # The tests that draw nothing run here; those that do (the web Storybook in
 # Chrome, the headful apps) in headful mode, container-verify, at verify. The
 # web-view session test drives a page in Chrome that draws nothing.

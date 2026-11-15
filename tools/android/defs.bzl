@@ -19,7 +19,7 @@ def _android_apk_impl(ctx):
     apk = ctx.actions.declare_file(ctx.label.name + ".apk")
 
     java = ctx.file._java
-    jdk_home = java.dirname.rsplit("/", 1)[0]  # .../Contents/Home
+    jdk_home = java.dirname.rsplit("/", 1)[0]  # the JDK's home (Contents/Home on a Mac)
 
     script = """
 set -euo pipefail
@@ -127,7 +127,7 @@ android_apk = rule(
             doc = "Map of .so target -> ABI directory name (e.g. arm64-v8a).",
         ),
         "_java": attr.label(
-            default = Label("@hermetic_jdk//:Contents/Home/bin/java"),
+            default = Label("@hermetic_jdk//:java_bin"),
             allow_single_file = True,
         ),
         "_jdk_files": attr.label(default = Label("@hermetic_jdk//:all")),

@@ -224,7 +224,7 @@ windows_electron_package = rule(
         "site": attr.label(mandatory = True),
         "_electron_win": attr.label(default = Label("@electron_win64//:all")),
         "_jar": attr.label(
-            default = Label("@hermetic_jdk//:Contents/Home/bin/jar"),
+            default = Label("@hermetic_jdk//:jar_bin"),
             allow_single_file = True,
         ),
         "_jdk_files": attr.label(default = Label("@hermetic_jdk//:all")),
