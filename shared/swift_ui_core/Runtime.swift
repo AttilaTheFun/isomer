@@ -296,6 +296,8 @@ package final class Runtime {
     }
     /// Last scheme reported to the host (to avoid redundant calls).
     var reportedColorScheme: ColorScheme = .light
+    /// Last `.preferredColorScheme` reported to the host (nil: none).
+    var reportedPreferredColorScheme: ColorScheme?
     /// Implicit-animation interpolation state, keyed by view path + property.
     let animator = Animator()
     /// The transaction animation set by the current `withAnimation` (consumed by
@@ -876,6 +878,14 @@ package final class Runtime {
         if colorScheme != reportedColorScheme {
             reportedColorScheme = colorScheme
             host.setColorScheme(dark: colorScheme == .dark)
+        }
+        // And the app's own override apart from it (platform command
+        // "preferredColorScheme": "light", "dark", or "" for none), so a head
+        // that applies it to its window can tell an override from the system's
+        // scheme and let go of it when the app does.
+        if preferredColorScheme != reportedPreferredColorScheme {
+            reportedPreferredColorScheme = preferredColorScheme
+            host.platformCommand("preferredColorScheme", _schemeParam())
         }
 
         renderingTree = true

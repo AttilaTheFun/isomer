@@ -31,6 +31,21 @@ previous="$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD^ 2> /dev/null 
     fi
     echo
     echo "Alphas: the Storybook $version for the iPhone, the Mac and Android, in Applications."
+    # The README's Upgrading bullets for this minor ("(since 0.54)"): what
+    # an app on the release before changes.
+    minor="$(echo "$version" | cut -d. -f1,2)"
+    upgrading="$(awk -v since="(since $minor)" '
+        /^### Upgrading isomer/ { inside = 1; next }
+        inside && /^#/ { exit }
+        inside && /^- / { keep = index($0, since) > 0 }
+        inside && keep { print }
+    ' README.md)"
+    if [ -n "$upgrading" ]; then
+        echo
+        echo "## Upgrading"
+        echo
+        echo "$upgrading"
+    fi
     if [ -n "$previous" ]; then
         echo
         echo "## Changes since $previous"

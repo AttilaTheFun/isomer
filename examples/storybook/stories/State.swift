@@ -25,6 +25,10 @@ extension StoryCatalog {
             summary: "Values the system passes down (the appearance, the size class) and values a view sets for the views inside it."
         ) { EnvironmentStory() },
         Story(
+            "state.preferredcolorscheme", "preferredColorScheme",
+            summary: "The app's own appearance, whatever the system's: light or dark for the whole window, or nil to follow the system again."
+        ) { PreferredColorSchemeStory() },
+        Story(
             "state.appstorage", "@AppStorage",
             summary: "A value kept in the app's defaults: it is still there when the app is opened again."
         ) { AppStorageStory() },
@@ -175,6 +179,27 @@ struct EnvironmentStory: View {
                 .cornerRadius(8)
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.4)))
         }
+    }
+}
+// end story
+
+// story: state.preferredcolorscheme
+struct PreferredColorSchemeStory: View {
+    @State private var scheme: ColorScheme?
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Asked for: \(scheme == .dark ? "dark" : scheme == .light ? "light" : "the system's")")
+            Text("Appearance: \(colorScheme == .dark ? "dark" : "light")")
+            HStack {
+                Button("System") { scheme = nil }
+                Button("Light") { scheme = .light }
+                Button("Dark") { scheme = .dark }
+            }
+            .buttonStyle(.bordered)
+        }
+        .preferredColorScheme(scheme)
     }
 }
 // end story

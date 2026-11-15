@@ -300,20 +300,17 @@ JavaScript engine, and WasmKit goes:
   them: Android's web-view mode (its WebView as a transport), the remote
   Android shell's assets and fonts, Linux and Windows apps in the macro.
   Known issues from web-view mode (isomer#207):
-  - **Appearance can stick in dark.** The head applies the app's resolved
-    appearance as `preferredColorScheme` (ServerMessage.dark is the
-    resolved scheme), so it can't tell the app's override from the
-    system's: once applied, the system's own change no longer reaches the
-    head. Needs a message saying the override was cleared, or the head
-    reading the system appearance beneath its override.
   - **Back from a story opened by its launch hook** (the Storybook's
     ISO_STORYBOOK_STORY) shows "Pick a story" with the story's title and
     back button still shown, in the tree renderer's split navigation.
-- isomer#188 (an outside contributor's): features as wasm side modules
-  over one runtime the app has once (the Storybook 226 KB gzip against
-  5.4 MB). Worth keeping engine-neutral (the linker apart from WasmKit, a web
-  view adapter), upstream first (its WasmKit commits; its wasm-ld fix to
-  LLVM), with tests in-tree; New Container Helper's review is drafted.
+- Side modules and mixed mode (isomer#188 and #213, an outside
+  contributor's; merged as #215 for 0.54, docs/side_modules.md): open, his
+  WasmKit commits (AttilaTheFun/WasmKit's isomer/side-modules) proposed to
+  swiftwasm/WasmKit, then a WasmKit release pinned; the wasm-ld LOCREL fix
+  to LLVM; one mixed runtime and one feature per process until the runtime
+  has a root per feature; the routed list is still the Storybook's; Android
+  reactors on WasmKit's guard pages (upstream's #527) checked on an
+  emulator.
 - The Playground: an end-to-end test of the web-view engine; caching a
   feature's compiled module; "BE…" (a score truncated, seen on the
   owner's iPhone 15 Pro at the standard text size, not reproduced on an
@@ -350,9 +347,8 @@ local); two Swift 6 errors (`StateObject`, `LazyState`); the Android
 platforms documented. Done since: one C++ runtime, the NDK's
 `libc++_shared.so` (`isomer_android_app(libcxx = "shared")`,
 `--@isomer//swift_ffi/rules:libcxx=shared`; an AAR leaves it to its host
-unless `--@isomer//tools/android:aar_libcxx_shared`); an
-`isomer_android_aar(libcxx = ...)` attribute waits for the AAR's own
-attributes to land. Open:
+unless `--@isomer//tools/android:aar_libcxx_shared`), and
+`isomer_android_aar(libcxx = ...)` in 0.54. Open:
 
 - **A prebuilt Swift library beside the app**: the shared platform
   (`--@isomer//tools/android:shared_platform`, README "One platform

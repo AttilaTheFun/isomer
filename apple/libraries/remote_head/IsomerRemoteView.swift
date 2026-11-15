@@ -52,7 +52,7 @@ public struct IsomerRemoteView: View {
                 session.resize(width: size.width, height: size.height)
             }
         }
-        .preferredColorScheme(session.appDark.map { $0 ? .dark : .light })
+        .preferredColorScheme(session.appPreferredDark.map { $0 ? .dark : .light })
         .onChange(of: colorScheme) { _, scheme in session.setDark(scheme == .dark) }
         .onChange(of: scenePhase) { _, phase in
             session.setScenePhase(active: phase == .active, background: phase == .background)
