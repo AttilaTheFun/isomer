@@ -353,7 +353,8 @@ written by main's builds alone, trimmed to stay within GitHub's 10 GB a
 repository). CI follows the owner's policy for protected repositories
 (AttilaTheFun/reviews' docs/CI_POLICY.md) and the shape the owner set on
 2026-11-08 (build.yml's header): the tests without a GUI before a merge,
-every build after one, the GUI tests and the proof by hand. A pull request
+every build after one, the GUI tests by hand, and the screenshot proof
+only ad hoc, ahead of a release (the owner, 2026-11-15). A pull request
 gets `container` (the web and Linux targets built, then the tests that draw
 nothing: the core's, the WASI checks, and the Storybook's headless and
 remote-driving tests; the required check), `container-android` (the Android
@@ -361,18 +362,19 @@ targets and their build tests), `container-apple` (the Apple targets) and
 `container-windows` (not required), each commit on main `populate`,
 `populate-android`, `populate-apple` and `populate-windows` (the same
 builds, then the published apps under --config=alpha; the cache's only
-writers; never the proof's: the owner's rule, a screenshot proof runs only
-by hand or in a release's run) and `bazel8`.
-The GUI tests and the proof run only by hand: `run: verify` (each
+writers; never the proof's) and `bazel8`.
+The GUI tests run only by hand: `run: verify` (each
 platform's build, `verify`, `verify-android`, `verify-apple`,
 `verify-windows`; the tests
 that draw in a container, `container-verify`: the web Storybook in headless
 Chrome, and the Storybook's tests run headful on the web and on Linux under
 Xvfb; the Storybook's test stories, the iPhone's simulator and the Mac on
-`xcode-27` (`apple`), Android on Ubuntu's KVM (`android`); and the proof),
-`run: proof` (the proof alone), `run: prerelease` (Alphas and a draft marked pre-release), `run: release`
-(verify and the proof, then the Alphas and the draft proposed for release,
-tools/ci/draft_release.sh), `run: experiment` (the Storybook Lab, drafted
+`xcode-27` (`apple`), Android on Ubuntu's KVM (`android`); no proof),
+`run: proof` (the screenshot proof alone, by hand ahead of a release),
+`run: prerelease` (Alphas and a draft marked pre-release), `run: release`
+(verify's jobs and the proof, then the Alphas and the draft proposed for
+release, tools/ci/draft_release.sh: the one run with both, which
+tools/ci/verified.sh asks for before a release is signed), `run: experiment` (the Storybook Lab, drafted
 unsigned: the signing keys are the `release` environment's, main's and v*
 tags' alone). Drafts are CI's; an agent proposes by running the workflow on
 main, never by making a draft or a tag. The proof is the full set by
@@ -387,7 +389,7 @@ tests/parity-ios), the run's `proof` artifact, and proof.zip on a release's
 draft. CI compares nothing: Reviews compares a release's proof with the
 release before it, item by id. To bisect a regression, prove earlier
 commits after the fact: push a branch at the commit and run the workflow on
-that branch. What a platform draws differently from run to run is held
+that branch with `run: proof`. What a platform draws differently from run to run is held
 still at its source (proof.py: the iPhone's status bar, Android's cropped
 off, light appearance, window crops, the Mac's caret), or, where it can't
 be yet (a spinner, the map's live tiles, a remote video), painted grey as
@@ -654,8 +656,8 @@ Tier 1 is iOS, macOS, Android and the web (wasm: the browser and Electron);
 tier 2 is Linux and Windows. Building an iOS app for Android is Isomer's
 headline, and the project's other apps (Visor, Reviews) ship iOS, the Mac
 and Android, Android through Isomer. CI (GitHub's own runners alone, since
-2026-11-15) builds tier 1 on every change and runs and pictures it by hand
-(verify, the proof): the iPhone and the Mac on `xcode-27` Macs, Android on
+2026-11-15) builds tier 1 on every change, runs it by hand (verify) and
+pictures it ahead of a release (the proof): the iPhone and the Mac on `xcode-27` Macs, Android on
 GitHub's x86_64 Ubuntu with KVM, the web in headless Chrome. It builds
 Linux on every change and runs it by hand (in the project's image under
 Xvfb); it builds Windows on every change, on GitHub's windows-11-arm with

@@ -1,11 +1,14 @@
 #!/bin/bash
 # Whether a commit was verified: a run of the Build workflow by hand on it
-# (`run: verify` or `run: release`) whose every test passed, on GitHub's own
-# runners: each platform's build and its tests there (verify,
-# verify-android, verify-apple), the tests that draw in a container
-# (container-verify), the iPhone's, the Mac's and Android's tests (apple,
-# android: a matrix job passes when every part did), and its proof
-# (proof-compare). The release job asks it before anything is signed
+# whose every test passed, on GitHub's own runners: each platform's build
+# and its tests there (verify, verify-android, verify-apple), the tests that
+# draw in a container (container-verify), the iPhone's, the Mac's and
+# Android's tests (apple, android: a matrix job passes when every part did),
+# and its screenshot proof (proof-compare). Only `run: release` runs both
+# the tests and the proof (`run: verify` has no proof, `run: proof` no
+# tests: the owner, 2026-11-15), and it is the run that proposed the
+# release, so a release's own proposal is what this finds. The release job
+# asks it before anything is signed
 # (AttilaTheFun/reviews' docs/CI_POLICY.md). A job missing from a run fails
 # it, so a job renamed here or in the workflow can't drop out of the check
 # unseen.

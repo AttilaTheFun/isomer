@@ -28,7 +28,7 @@ sharing a pool with visor's and agent_ui's. Moved between releases:
 ## The CI proof: what's left
 
 The Build workflow's proof jobs picture the Storybook on every tier-1
-platform when run by hand (verify, release), each picture compared with
+platform when run by hand (release, or proof alone), each picture compared with
 the previous release's (AGENTS.md). Since 0.47 the Storybook alone: the
 Playground's proof is AttilaTheFun/playground's.
 
