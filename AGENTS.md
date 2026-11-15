@@ -763,11 +763,9 @@ how Isomer runs it.
   `threads_wasm_resource`). Visor formats its dates and numbers itself;
   its screens match the ICU build's.
 - **Shared memory needs WasmKit's guard pages**: a 4 GiB reservation per
-  memory and signal-trapped bounds checks, on macOS, Linux and (since the
-  fork's 285def1) iOS. Android and Windows check bounds in software and
-  run no threaded reactor (on Android by
-  tools/patches/wasmkit_android_software_bounds.patch: WasmKit's C takes
-  Android for Linux). `WasmKitRuntime.canRunThreads` tries one; a host
+  memory and signal-trapped bounds checks, on macOS, Linux, iOS and
+  (upstream's #527, since the pin moved to upstream's main) 64-bit Android.
+  Windows checks bounds in software and runs no threaded reactor. `WasmKitRuntime.canRunThreads` tries one; a host
   with both builds of its reactor picks the threaded one only then (an
   iPhone's address space may refuse it; nothing here has run on a device).
 
