@@ -4,8 +4,8 @@
 # Visual Studio (ARM64 MSVC) and Windows SDK, so nothing of Microsoft's is
 # redistributed (tools/windows/README.md). Built only, not run: Windows is
 # tier 2. The recipe a Windows machine has always built with
-# (tools/proof/proof.py's), with LLVM's clang-cl, lld-link and llvm-lib in
-# MSVC's place (below): Bazel in MSVC's environment (vcvarsall arm64),
+# (tools/proof/proof.py's), with LLVM's llvm-lib as MSVC's lib.exe (below):
+# Bazel in MSVC's environment (vcvarsall arm64),
 # BAZEL_SH Git's bash and Git's usr\bin ahead of System32 (rules_swift_package_manager
 # runs find, cp and od; tools/patches/rules_swift_package_manager_windows.patch
 # in the examples), and --repo_env for SDKROOT, PATH and MSVC's variables
@@ -57,7 +57,48 @@ if ($Bazel.Count -eq 0) { throw "usage: tools/ci/windows_build.ps1 setup | <baze
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
 $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.ARM64 -property installationPath
 if (-not $vs) { throw 'windows_build: no Visual Studio with ARM64 MSVC on this runner' }
-$vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvarsall.bat'
+# Visual Studio as Bazel takes it (BAZEL_VC), with LLVM's llvm-lib as its
+# lib.exe: MSVC's lib.exe and link.exe can't open a path past 260
+# characters even with LongPathsEnabled (they aren't long-path aware), and
+# Bazel's object paths for some exec tools' archives (swift-syntax's,
+# swift-protobuf's) reach 283 from C:/b/<hash>/execroot/_main; llvm-lib
+# opens them (both checked on this runner), and makes archives MSVC's
+# link.exe reads. rules_cc takes the archiver from BAZEL_VC's
+# Tools\MSVC\<version>\bin\HostX64\arm64, so C:\v mirrors the install by
+# junctions but for that folder, copied with lib.exe replaced. (LLVM's whole
+# toolchain, rules_cc's USE_CLANG_CL, failed: rules_swift's tools pass
+# clang-cl a flag it rejects, and its ARM64 backend fails on upb's code.)
+$version = (Get-ChildItem (Join-Path $vs 'VC\Tools\MSVC') | Sort-Object Name | Select-Object -Last 1).Name
+$llvmLib = Join-Path $vs 'VC\Tools\Llvm\ARM64\bin\llvm-lib.exe'
+if (-not (Test-Path $llvmLib)) { $llvmLib = 'C:\Program Files\LLVM\bin\llvm-lib.exe' }
+if (-not (Test-Path $llvmLib)) { throw 'windows_build: no llvm-lib on this runner' }
+$mirror = 'C:\v'
+# mirror <from> <to> <the child left out>: every other child of <from> in
+# <to>, a folder by a junction, a file copied.
+function mirror($from, $to, $skip) {
+    New-Item -ItemType Directory -Force $to | Out-Null
+    foreach ($child in Get-ChildItem -Force $from) {
+        if ($child.Name -eq $skip) { continue }
+        $target = Join-Path $to $child.Name
+        if (Test-Path $target) { continue }
+        if ($child.PSIsContainer) { New-Item -ItemType Junction -Path $target -Target $child.FullName | Out-Null }
+        else { Copy-Item $child.FullName $target }
+    }
+}
+$tools = "VC\Tools\MSVC\$version\bin\HostX64\arm64"
+if (-not (Test-Path (Join-Path $mirror "$tools\lib.exe"))) {
+    mirror $vs $mirror 'VC'
+    mirror (Join-Path $vs 'VC') (Join-Path $mirror 'VC') 'Tools'
+    mirror (Join-Path $vs 'VC\Tools') (Join-Path $mirror 'VC\Tools') 'MSVC'
+    mirror (Join-Path $vs 'VC\Tools\MSVC') (Join-Path $mirror 'VC\Tools\MSVC') $version
+    mirror (Join-Path $vs "VC\Tools\MSVC\$version") (Join-Path $mirror "VC\Tools\MSVC\$version") 'bin'
+    mirror (Join-Path $vs "VC\Tools\MSVC\$version\bin") (Join-Path $mirror "VC\Tools\MSVC\$version\bin") 'HostX64'
+    mirror (Join-Path $vs "VC\Tools\MSVC\$version\bin\HostX64") (Join-Path $mirror "VC\Tools\MSVC\$version\bin\HostX64") 'arm64'
+    Copy-Item -Recurse (Join-Path $vs $tools) (Join-Path $mirror $tools)
+    Copy-Item -Force $llvmLib (Join-Path $mirror "$tools\lib.exe")
+}
+$env:BAZEL_VC = Join-Path $mirror 'VC'
+$vcvars = Join-Path $mirror 'VC\Auxiliary\Build\vcvarsall.bat'
 cmd /c "`"$vcvars`" arm64 >nul && set" | ForEach-Object {
     if ($_ -match '^([^=]+)=(.*)$') { Set-Item -Path "env:$($Matches[1])" -Value $Matches[2] }
 }
@@ -68,21 +109,8 @@ $env:BAZEL_SH = "$git\bin\bash.exe"
 # own, MSVC's link.exe still ahead of Git's link.
 $env:Path = $env:Path -replace '(?i)C:\\Windows\\system32;', "$git\usr\bin;C:\Windows\system32;"
 if ($env:Path -notmatch [regex]::Escape("$git\usr\bin")) { $env:Path = "$env:Path;$git\usr\bin" }
-# LLVM's compiler, linker and archiver in MSVC's place (rules_cc's
-# USE_CLANG_CL, BAZEL_LLVM), with MSVC's headers and libraries: MSVC's
-# lib.exe and link.exe can't open a path past 260 characters even with
-# LongPathsEnabled (they aren't long-path aware), and Bazel's object paths
-# for some exec tools (swift-syntax's, swift-protobuf's) reach 283 from
-# C:/b/<hash>/execroot/_main. LLVM's tools open them (both checked on this
-# runner). The LLVM Visual Studio carries (ARM64, its STL's), else the
-# image's own.
-$llvm = Join-Path $vs 'VC\Tools\Llvm\ARM64'
-if (-not (Test-Path (Join-Path $llvm 'bin\llvm-lib.exe'))) { $llvm = 'C:\Program Files\LLVM' }
-if (-not (Test-Path (Join-Path $llvm 'bin\llvm-lib.exe'))) { throw 'windows_build: no LLVM (clang-cl, lld-link, llvm-lib) on this runner' }
-$env:USE_CLANG_CL = '1'
-$env:BAZEL_LLVM = $llvm
 $repoEnv = @('SDKROOT', 'PATH', 'INCLUDE', 'LIB', 'LIBPATH', 'UniversalCRTSdkDir', 'UCRTVersion', 'WindowsSdkDir',
-             'WindowsSDKVersion', 'VCToolsInstallDir', 'VCINSTALLDIR', 'VSINSTALLDIR', 'USE_CLANG_CL', 'BAZEL_LLVM') |
+             'WindowsSDKVersion', 'VCToolsInstallDir', 'VCINSTALLDIR', 'VSINSTALLDIR', 'BAZEL_VC') |
     ForEach-Object { "--repo_env=$_" }
 # Bazelisk, so .bazelversion is honoured (the image's `bazel` may be a
 # release of its own).
