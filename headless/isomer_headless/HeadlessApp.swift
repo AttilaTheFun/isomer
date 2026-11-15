@@ -128,10 +128,11 @@ public struct HeadlessScreen: Sendable {
     }
 
     /// The element a target names: its name (`button-3`), its identifier,
-    /// its label, or the last whose label holds it (the app's own lookup).
+    /// its label, or the last whose label holds it (the app's own lookup;
+    /// a static text's label only whole).
     public func element(_ target: String) -> Element? {
         elements.first { $0.name == target } ?? elements.first { $0.id == target } ?? elements.last { $0.label == target }
-            ?? elements.last { $0.label.contains(target) }
+            ?? elements.last { $0.role != "staticText" && $0.label.contains(target) }
     }
 }
 

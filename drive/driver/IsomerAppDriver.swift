@@ -502,11 +502,14 @@ struct DriverScreen {
         let candidates = elements.filter { roles == nil || roles!.contains($0.role) }
         // A bar's Back is labelled with the page before's title: a button of
         // the page's own by that label comes first.
+        // A static text (a story's code listing, a card) is found by its
+        // identifier or its words exactly, not by a word in it.
         let page = candidates.filter { !$0.back }
         let backs = candidates.filter(\.back)
+        let usable = page.filter { $0.role != "staticText" }
         return candidates.first { $0.id == target }
             ?? page.last { $0.label == target } ?? backs.last { $0.label == target }
-            ?? page.last { $0.label.contains(target) } ?? backs.last { $0.label.contains(target) }
+            ?? usable.last { $0.label.contains(target) } ?? backs.last { $0.label.contains(target) }
     }
 
     /// The view a long press or a row swipe acts on: by its identifier, the

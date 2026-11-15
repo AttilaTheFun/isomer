@@ -108,7 +108,8 @@ struct AccessibilityScreen {
         let candidates = elements.filter { roles == nil || roles!.contains($0.role) }
         return candidates.first { $0.id == target }
             ?? candidates.last { $0.label == target }
-            ?? candidates.last { $0.label.contains(target) }
+            // A static text (an identified text) only by its words whole.
+            ?? candidates.last { $0.role != "staticText" && $0.label.contains(target) }
     }
 
     /// `tap` on a text (`text-<n>`, or a text's exact words): the button

@@ -315,11 +315,14 @@ struct StorybookHeadlessTests {
         guard try app.info().renderer != "SwiftUI" else { return }
         let before = try app.screen()
         var screen = try app.swipe("Lunch on Friday?", "right")
-        #expect(screen.element("Flag")?.role == "button", "\(screen.elements)")
+        #expect(screen.elements.contains { $0.role == "button" && $0.label == "Flag" }, "\(screen.elements)")
         screen = try app.tap("Flag")
         // Flagged: the flag's symbol beside its subject, a text more.
         #expect(screen.texts.count == before.texts.count + 1, "\(screen.texts)")
-        #expect(screen.element("Flag") == nil, "the actions close once one is tapped")
+        // (By its label exactly: the story's code, an element of its own by
+        // its identifier, holds the word.)
+        #expect(!screen.elements.contains { $0.role == "button" && $0.label == "Flag" },
+                "the actions close once one is tapped")
         screen = try app.swipe("Your order has shipped", "left", action: "Delete")
         #expect(!screen.texts.contains("Your order has shipped"), "\(screen.texts)")
         #expect(throws: (any Error).self) { try app.swipe("Weekly report", "left", action: "Archive") }
