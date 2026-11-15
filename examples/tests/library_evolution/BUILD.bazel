@@ -2,23 +2,33 @@ load("@bazel_skylib//rules:build_test.bzl", "build_test")
 load("@rules_swift//swift:swift.bzl", "swift_library")
 load(":defs.bzl", "with_library_evolution")
 
-# An app's own library built with library evolution and warnings as errors
-# (Client.swift), as an app that builds its libraries resilient does,
-# against Isomer's modules built resilient by `--@isomer//:library_evolution`
-# (docs/library_evolution.md): for Android and the web, with the flag on
-# whatever the command line says. Without the flag the same library fails on
-# its first import of Isomer's ("module 'Combine' was not compiled with
-# library evolution support"), a warning that no diagnostic group exempts
-# from warnings-as-errors.
+# An app's own library built as a library meant for distribution is
+# (Client.swift), against Isomer's modules built resilient by
+# `--@isomer//:library_evolution` (docs/library_evolution.md): for Android
+# and the web, with the flag on whatever the command line says. Without the
+# flag the same library fails on its first public import of Isomer's
+# ("module 'Combine' was not compiled with library evolution support"), an
+# error in this configuration.
 swift_library(
     name = "resilient_client",
-    srcs = ["Client.swift"],
-    # The features a resilient library's build has: `-enable-library-evolution`,
-    # and the warning above an error. `library_evolution = True` would also
-    # emit a .swiftinterface, which nothing here reads.
+    srcs = [
+        "Client.swift",
+        "Logging.swift",
+        "Networking.swift",
+        "OSLogging.swift",
+    ],
+    # A library for distribution's settings: Swift reports a public import
+    # of a fragile module as an error under InternalImportsByDefault (or
+    # AccessLevelOnImport) at library level api or spi, and only a warning
+    # otherwise, one that Swift 6.4's -warnings-as-errors doesn't promote.
+    copts = [
+        "-library-level",
+        "api",
+    ],
     features = [
         "swift.enable_library_evolution",
         "swift.treat_warnings_as_errors",
+        "swift.upcoming.InternalImportsByDefault",
     ],
     module_name = "ResilientClient",
     tags = ["manual"],
