@@ -222,10 +222,11 @@ struct StorybookHeadlessTests {
         #expect(screen.shows("Taps: 0"))
         #expect(screen.element("Text styles") == nil)
         screen = try app.back()
-        // The list, at the story's row (Apple's own list scrolls to the
-        // selected row, so the first area's may be off screen) …
+        // The list, by its title, which only the sidebar shows (its rows are
+        // where its scroll is, which differs: Apple's own list comes back at
+        // its top after a launch, at the story's row after one opened
+        // in-process) …
         #expect(screen.texts.contains("Storybook"), "texts: \(screen.texts.prefix(12))")
-        #expect(screen.element("ObservableObject") != nil)
         // … and nothing of the detail: neither the story nor the
         // placeholder a detail with no story shows.
         #expect(!screen.shows("Pick a story"), "texts: \(screen.texts.prefix(12))")
