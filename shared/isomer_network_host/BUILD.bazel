@@ -1,4 +1,5 @@
 load("@rules_swift//swift:swift.bzl", "swift_library")
+load("//tools/library_evolution:defs.bzl", "LIBRARY_EVOLUTION_COPTS")
 load("//swift_ffi/rules:swift_wasm_library.bzl", "swift_wasm_library")
 
 package(default_visibility = ["//visibility:public"])
@@ -13,6 +14,7 @@ swift_library(
     name = "isomer_network_host",
     package_name = "isomer",
     srcs = glob(["*.swift"]),
+    copts = LIBRARY_EVOLUTION_COPTS,
     module_name = "IsomerNetworkHost",
     # Built where IsomerFoundation is (wasm, Android), through the SwiftUI
     # libraries that link it; on an Apple host there is none (the wasm_host

@@ -289,11 +289,14 @@ if has android; then
     # (x86_64 on Linux, so built beside Android).
     bazel build //electron/example_full_react_electron_application:example_windows_package
     results+=($?)
-    # The checks that build for Android (some for wasm beside it).
+    # The checks that build for Android (some for wasm beside it; the
+    # library evolution test builds a resilient library against Isomer built
+    # with --@isomer//:library_evolution, for Android and the web).
     run_tests --test_output=errors //tests/foundation_networking:networking_test //tests/cxx_interop:cxx_interop_test \
         //tests/android_app_attributes:android_app_attributes_test //tests/android_aar:android_aar_test \
         //tests/swift6_app:swift6_app_test //tests/android_libcxx_shared:android_libcxx_shared_test \
-        //tests/prebuilt_swift_library:prebuilt_swift_library_test
+        //tests/prebuilt_swift_library:prebuilt_swift_library_test \
+        //tests/library_evolution:library_evolution_test
     results+=($?)
 fi
 if has web; then

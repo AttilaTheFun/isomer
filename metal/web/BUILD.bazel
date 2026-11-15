@@ -4,6 +4,7 @@
 # Metal drawables.
 
 load("@rules_swift//swift:swift.bzl", "swift_library")
+load("//tools/library_evolution:defs.bzl", "LIBRARY_EVOLUTION_COPTS")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -11,6 +12,7 @@ swift_library(
     name = "web",
     package_name = "isomer",
     srcs = ["MetalWeb.swift"],
+    copts = LIBRARY_EVOLUTION_COPTS,
     module_name = "IsomerMetalWeb",
     deps = [
         "//metal/isomer_metal",

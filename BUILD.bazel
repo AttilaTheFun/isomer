@@ -1,4 +1,4 @@
-load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "string_flag")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 # Marks the repository root as a Bazel package. rules_jvm_external reads the
@@ -161,3 +161,32 @@ string_flag(
         "webview",
     ]
 ]
+
+# Isomer's modules built resilient (docs/library_evolution.md):
+# `--@isomer//:library_evolution` compiles every module of Isomer's that an
+# Android or web app links with `-enable-library-evolution`, so that a
+# library of the app's own built with library evolution (rules_swift's
+# `library_evolution = True`, `swift.enable_library_evolution`) imports
+# Foundation, SwiftUI, os and the rest without "module 'SwiftUI' was not
+# compiled with library evolution support": a warning, or an error for a
+# library built for distribution (Swift 6's InternalImportsByDefault and
+# `-library-level api`), which no diagnostic group names. Off by default:
+# it makes the app's library about 2.7% larger and its build slower, for a
+# guarantee nothing off Apple uses (Isomer's modules are linked into each
+# app, never swapped beneath it); the Storybook's frames on Android were
+# the same either way (the doc's measurements). Two halves carry it, both
+# in tools/library_evolution/defs.bzl: the Bazel modules' copts select on
+# `:library_evolution_on`, and the Swift package's modules (Foundation,
+# SwiftUI, ..., built under `one_configuration`) take it through
+# rules_swift's per-module copts, which one_configuration's transition sets.
+bool_flag(
+    name = "library_evolution",
+    build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "library_evolution_on",
+    flag_values = {":library_evolution": "true"},
+    visibility = ["//visibility:public"],
+)

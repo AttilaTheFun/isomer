@@ -7,6 +7,7 @@
 # implemented, what is not, and why.
 
 load("@rules_swift//swift:swift.bzl", "swift_library")
+load("//tools/library_evolution:defs.bzl", "LIBRARY_EVOLUTION_COPTS")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -23,6 +24,7 @@ swift_library(
         "//conditions:default": [],
     }),
     srcs = glob(["*.swift"]),
+    copts = LIBRARY_EVOLUTION_COPTS,
     module_name = "Metal",
     deps = ["//metal/isomer_metal"],
 )

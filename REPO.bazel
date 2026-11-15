@@ -21,9 +21,8 @@ repo(
     features = [
         # Library evolution: Isomer's modules are linked into each app, never
         # shipped as a binary-stable framework, and are tested so. (A consumer
-        # that wants them resilient opts in: examples/.bazelrc's
-        # isomer_library_evolution config, per-target copts this doesn't
-        # turn off.)
+        # that wants them resilient opts in with `--@isomer//:library_evolution`,
+        # copts this doesn't turn off: docs/library_evolution.md.)
         "-swift.enable_library_evolution",
         "-swift.emit_swiftinterface",
         "-swift.emit_private_swiftinterface",

@@ -1,5 +1,6 @@
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_swift//swift:swift.bzl", "swift_library")
+load("//tools/library_evolution:defs.bzl", "LIBRARY_EVOLUTION_COPTS")
 load("//foundation:defs.bzl", "one_configuration")
 load("@rules_swift//swift:swift_library_group.bzl", "swift_library_group")
 load("@rules_kotlin//kotlin:core.bzl", "kt_compiler_plugin")
@@ -58,7 +59,7 @@ swift_library(
     name = "gpu_renderer",
     package_name = "isomer",
     srcs = ["//shared/renderers:SwiftGPURenderer.swift"],
-    copts = ["-DISOMER_GPU_RENDERER_MODULE"],
+    copts = ["-DISOMER_GPU_RENDERER_MODULE"] + LIBRARY_EVOLUTION_COPTS,
     module_name = "IsomerGPURenderer",
     target_compatible_with = ["@platforms//os:android"],
     deps = [
@@ -83,7 +84,7 @@ swift_library(
         "AndroidHost.swift",
     ],
     alwayslink = True,
-    copts = _ANDROID_COPTS,
+    copts = _ANDROID_COPTS + LIBRARY_EVOLUTION_COPTS,
     module_name = "IsomerAndroidHost",
     swiftc_inputs = ["jni_bridge.h"],
     target_compatible_with = ["@platforms//os:android"],
@@ -157,6 +158,7 @@ swift_library(
         "//shared/isomer:Exports.swift",
         "//shared/swift_ui_extensions:srcs",
     ],
+    copts = LIBRARY_EVOLUTION_COPTS,
     module_name = "Isomer",
     target_compatible_with = ["@platforms//os:android"],
     deps = [

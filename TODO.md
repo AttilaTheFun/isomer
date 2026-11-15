@@ -363,13 +363,13 @@ each to an Isomer version and a Swift toolchain, and the examples'
   gives that action the SDK (an upstream change; then a patched version in
   the registry's rules_swift), when //tests/prebuilt_swift_library's
   imports can take the interfaces.
-- **Library evolution off Apple**: a library built with
-  `-enable-library-evolution` warns on importing Isomer's Foundation,
-  SwiftUI and os, which aren't (the warning has no diagnostic group, so
-  `-Wwarning` can't keep it out of warnings-as-errors; `internal import`
-  avoids it). Measure Isomer's modules built resilient on Android (size,
-  the Storybook's frame times: every SwiftUI type an app uses becomes
-  resilient to it) before choosing a default or a flag.
+- **Library evolution off Apple**: `--@isomer//:library_evolution` builds
+  Isomer's modules resilient (docs/library_evolution.md, with the
+  measurements that kept it off by default). Open: the Linux, Windows and
+  headless hosts' own Bazel modules don't take it yet (the package's
+  modules do, everywhere); and its frame cost was measured only on the
+  Storybook on an emulator, where Swift spends about 2 ms a frame: an app
+  heavier in Swift, on a phone, may show what the Storybook couldn't.
 - **Foundation for every Swift target on Android without wrappers**: a
   `swift_library` that imports Foundation without depending on
   `@isomer//:foundation` finds the SDK's corelibs Foundation, and links
