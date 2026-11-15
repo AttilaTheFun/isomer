@@ -1,64 +1,42 @@
 # Isomer's CI, by the owner's policy for protected repositories
 # (AttilaTheFun/reviews' docs/CI_POLICY.md) and the shape the owner set on
 # 2026-11-08: the tests without a GUI before a merge, every build after
-# one, the GUI tests and the proof by hand to propose a release, on
-# GitHub's own runners. No slot of Shireworks' primary VM: those are for
-# private repositories' GUI tests.
+# one, the GUI tests by hand, and the screenshot proof only ahead of a
+# release (run: release, or run: proof by hand). Since
+# 2026-11-15 on GitHub's own standard runners alone (a fork runs it as it
+# is; AGENTS.md, "The release proof" and "Signing"): the web and Linux in
+# the project's image (by digest) on arm64 Ubuntu; Android in Swift's image
+# on x86_64 Ubuntu (its SDK's tools are x86_64); the Apple targets on
+# `xcode-27` Macs with their own Xcode (Apple's SDKs may not be
+# redistributed); Windows on windows-11-arm with swift.org's Swift and the
+# image's own Visual Studio, built only (tier 2). Bazel's
+# caches are GitHub's (.github/actions/bazel_cache), written by main's
+# builds alone.
 #
-# - container (every pull request from a branch of this repository: a
-#   self-hosted runner never runs a fork's code): every platform's
-#   Storybook built in one Linux container on Shireworks' on-demand runners
-#   (tools/ci/container_build.sh pr: the Apple ones with rules_applecross),
-#   then every test that draws nothing: the core's, the WASI checks, the
-#   Storybook's headless UI tests and the remote-driving tests. It reads
-#   Shireworks' Bazel cache, never writes it, and leases nothing. The
-#   required check. A newer push cancels its run.
-# - populate (each commit on main): the merged tree built (container_build.sh
-#   all), and what a release builds (the published apps as alpha builds
-#   them, the proof's apps): the one job that writes Shireworks' Bazel cache
-#   (Shireworks' ci.populate names it), so a later pull request's build, and
-#   a release's, is mostly hits.
-# - By hand (workflow_dispatch, `run:`):
-#   - verify: the GUI tests: everything built in the container; the tests
-#     that draw in a container of their own (container-verify: the web
-#     Storybook in headless Chrome, the Storybook's tests headful on the web
-#     and on Linux under Xvfb); and the Storybook's test stories on GitHub's
-#     own runners (apple: the iPhone's
-#     simulator and the Mac on `xcode-27`; android: an emulator under
-#     Ubuntu's KVM; windows: windows-11-arm, tier 2, not waited for; a
-#     private copy on Shireworks' leases instead); and beside them the
-#     proof: the Storybook on every tier-1 platform, built in CI's
-#     container, pictured on GitHub's own machines (a private copy's on
-#     Shireworks'), written in Reviews' format 2 (each picture an item under
-#     a stable id; Reviews compares it with the previous release's, not
-#     CI), uploaded as the `proof` artifact and attached to a release's
-#     draft as proof.zip (proof, proof-shoot, proof-compare; tools/ci/proof.sh). The full set by default; `kind:
-#     quick` the core set. On a commit of main, or, to bisect a regression,
-#     on a branch pushed at an earlier one;
-#   - prerelease (main): alpha alone: its version asked of Applications
-#     Server, the Storybook built for the iPhone and iPad (.ipa), the Mac
-#     (.zip) and Android (.apk) as Alphas and the web site packaged, the Mac
-#     app's icon checked, published (the server signs the Apple ones, and
-#     notarizes the Mac's) and attached to a draft release marked
-#     pre-release (tools/ci/draft_release.sh, attach_release.sh). No tests;
-#   - release (main): verify and the proof, then, only once they pass,
-#     alpha, and a draft release proposed for release, naming this run;
-#   - adhoc (a branch other than main or a release branch): the apps built
-#     as an AdHoc build and published, how a pull request's build reaches a
-#     phone.
+# - pull requests: container (web, Linux; the required check),
+#   container-android, container-apple, container-windows: every target
+#   built, then every test that draws nothing (container_build.sh pr).
+# - main's commits: populate, populate-android, populate-apple,
+#   populate-windows (the same, and what a release builds, into the cache;
+#   never a proof); bazel8, bazel8-apple.
+# - by hand (`run:`): verify (the builds and tests, no proof: verify,
+#   verify-android, verify-apple, verify-windows, container-verify, apple,
+#   android); proof (the screenshot proof alone: proof, proof-apple,
+#   proof-android, proof-shoot, proof-compare); prerelease (main: the
+#   Alphas, alpha-apple and alpha, signed with the `release` environment's
+#   keys and drafted, tools/ci/sign_builds.sh); release (main: verify's
+#   jobs and the proof, then the Alphas and a draft proposed for release;
+#   the one run that proves and verifies at once, which tools/ci/verified.sh
+#   asks for);
+#   experiment (any branch but a release branch: the Storybook Lab drafted
+#   unsigned, as no environment's keys reach a branch). There is no adhoc
+#   run: a branch's builds are experiments only (the owner, 2026-11-12).
 #   Drafts are CI's: no agent publishes one or makes a tag.
-# - release (the owner publishes a proposed release in Reviews, which makes
-#   its v* tag): its commit checked to be main's and verified
-#   (tools/ci/verified.sh), its iPhone's and Mac's Alphas promoted to
-#   production by the server (nothing Apple rebuilt), Android's built for
-#   production and published, and the release given its assets: the proof,
-#   the Mac app's disk image, the Android app and the iPhone app for the
-#   simulator. A pre-release is never released so.
-# The Playground was isomer's until 0.47; it is AttilaTheFun/playground's,
-# with CI of the same shape.
-# No signing key, notary key or password here: the publishing jobs' OIDC
-# token says where their builds came from, and which commit's version they
-# are given (the private AttilaTheFun/applications' docs/CI.md).
+# - a published release (its v* tag, made in Reviews): verified
+#   (tools/ci/verified.sh), the proposal's Apple Alphas stamped Production
+#   and signed again (nothing Apple rebuilt), Android's built for
+#   production and signed, the assets attached (release-apple, release).
+# The signing keys reach only the alpha and release jobs' signing steps.
 name: Build
 on:
   push:
@@ -70,9 +48,9 @@ on:
   workflow_dispatch:
     inputs:
       run:
-        description: "What to run: verify, prerelease or release on main (verify on a branch to bisect); adhoc on another branch; experiment on any but a release branch"
+        description: "What to run: verify (the tests, no proof), prerelease or release on main (verify on a branch to bisect); proof (the screenshot proof alone); experiment on any but a release branch"
         type: choice
-        options: [verify, prerelease, release, adhoc, experiment]
+        options: [verify, proof, prerelease, release, experiment]
         default: verify
       kind:
         description: The proof's kind
@@ -88,35 +66,38 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read
-# What the publishing jobs build, each with its own --config: the
-# Storybook's iPhone and iPad app (a device build, signed ad hoc with a
-# placeholder profile by --config=ci_device, which the server signs again
-# with the bundle id's own), Mac app and Android app (its android_binary,
-# whose signed .apk is published), optimized, as they ship, and the web
-# site (isomer-site.tar.gz, which the release carries and pages.yml
-# deploys). Flags as --name=value (tools/ci/container_build.sh package).
+# What the publishing jobs build (flags as --name=value): the Apple apps on
+# a Mac, Android's and the site on Linux. The Android release key and its
+# certificate, pinned (tools/ci/android_sign.sh).
 env:
-  PUBLISHED_APPS: >-
+  PUBLISHED_APPLE: >-
     --config=ci_device --compilation_mode=opt
     //apple/storybook_ios_application:storybook_ios_application
     //apple/storybook_macos_application:storybook_macos_application
+  PUBLISHED_LINUX: >-
+    --compilation_mode=opt
     //android/storybook_android_application:storybook_android_application_apk
     //web/storybook_web_application:isomer_site
+  ANDROID_KEY: storybook
+  ANDROID_PIN: 15B0FF4BA3BDD9EEE725C8A2E06D11513055B064DE899A09243BFA5370500959
 
 jobs:
+  # --- Pull requests: every platform built, the tests that draw nothing ---
+
   container:
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, isomer-jit]
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04-arm
+    container: ghcr.io/attilathefun/visor-agent@sha256:849dcf6aeb16119e3b769b4f0c410b93ac58ed1e3b3ef2801f7534def3fbaaf0
     timeout-minutes: 180
     env:
-      # The Android test APK for x86_64 too, as verify builds it.
-      ISOMER_ANDROID_X86_64: ${{ !github.event.repository.private && '1' || '' }}
+      ISOMER_PLATFORMS: web linux
     steps:
       - uses: actions/checkout@v5
-      # Every target built in the Linux container (Windows on Arm with
-      # --config=windows_on_linux), then every test that draws nothing: the
-      # core's, the WASI checks, the Storybook's headless and remote-driving
-      # tests. Those that draw run in container-verify.
+      - name: The job's tools
+        run: tools/ci/job_tools.sh
+      - uses: ./.github/actions/bazel_cache
+        with:
+          group: linux
       - name: Every target built, and the tests that draw nothing
         env:
           ISOMER_EXECUTION_LOGS: ${{ runner.temp }}/execution-logs
@@ -129,28 +110,95 @@ jobs:
           path: ${{ runner.temp }}/execution-logs
           retention-days: 7
 
-  populate:
-    # Each commit on main: the merged tree built as container builds it,
-    # nothing run or published. Shireworks grants this job alone the cache's
-    # write (its ci.populate).
-    if: github.event_name == 'push'
-    runs-on: [self-hosted, isomer-jit]
+  container-android:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    container:
+      image: swift:6.4.2-noble@sha256:23d9b28ad97fb1cf1999edc3a0cb265ee915ed42299a9344e7173d5a6d2b05f4
+      # Bazel's tree on the runner's second disk (ISOMER_BAZEL_ROOT).
+      volumes: ["/mnt:/mnt"]
     timeout-minutes: 180
     env:
-      ISOMER_ANDROID_X86_64: ${{ !github.event.repository.private && '1' || '' }}
+      ISOMER_PLATFORMS: android
+      ISOMER_ANDROID_X86_64: "1"
+      ISOMER_BAZEL_ROOT: /mnt/bazel
     steps:
       - uses: actions/checkout@v5
+      - name: The job's tools
+        run: tools/ci/job_tools.sh
+      - uses: ./.github/actions/bazel_cache
+        with:
+          group: android
+      - name: The Android targets built, and the Android build tests
+        run: exec tools/ci/container_build.sh pr
+
+  container-apple:
+    if: github.event_name == 'pull_request'
+    runs-on: xcode-27
+    timeout-minutes: 180
+    env:
+      ISOMER_PLATFORMS: apple
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/bazel_cache
+        with:
+          group: apple
+      - name: The Apple targets built, with this Mac's Xcode
+        run: exec tools/ci/container_build.sh pr
+
+  # Windows, built natively on GitHub's windows-11-arm (tools/ci/windows_build.ps1):
+  # tier 2, not a required check.
+  container-windows:
+    if: github.event_name == 'pull_request'
+    runs-on: windows-11-arm
+    timeout-minutes: 180
+    env:
+      ISOMER_BAZEL_ROOT: C:/b
+    steps:
+      - uses: actions/checkout@v5
+      - name: Swift for Windows
+        shell: pwsh
+        run: tools/ci/windows_build.ps1 setup
+      - uses: ./.github/actions/bazel_cache
+        with:
+          group: windows
+      # Built only (Windows is tier 2): the Storybook, then with its driver
+      # and the Storybook's tests for Windows.
+      - name: The Windows Storybook and its headful tests, built
+        shell: pwsh
+        run: |
+          tools/ci/windows_build.ps1 build '--keep_going' '//windows/storybook_windows_application'
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          tools/ci/windows_build.ps1 build '--keep_going' '--@isomer//drive:headful' '//windows/storybook_windows_application' '//headless/storybook_headless_application:storybook_headful_windows_test'
+          exit $LASTEXITCODE
+
+  # --- main: the merged tree built into GitHub's cache ---------------------
+
+  populate:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04-arm
+    container: ghcr.io/attilathefun/visor-agent@sha256:849dcf6aeb16119e3b769b4f0c410b93ac58ed1e3b3ef2801f7534def3fbaaf0
+    timeout-minutes: 180
+    env:
+      ISOMER_PLATFORMS: web linux
+    steps:
+      - uses: actions/checkout@v5
+      - name: The job's tools
+        run: tools/ci/job_tools.sh
+      - id: cache
+        uses: ./.github/actions/bazel_cache
+        with:
+          group: linux
       - name: The merged tree, built into the cache
         env:
           ISOMER_EXECUTION_LOGS: ${{ runner.temp }}/execution-logs
         run: exec tools/ci/container_build.sh all
-      # What a release builds, built here too, so its jobs find their actions
-      # in the cache: the published apps as alpha builds them (unstamped:
-      # only what the version reaches differs), and the proof's apps.
-      - name: The published apps, built into the cache
-        run: exec tools/ci/container_build.sh package .ci/packages --config=alpha $PUBLISHED_APPS
-      - name: The proof's apps, built into the cache
-        run: exec tools/ci/proof.sh --stage prebuild --apps "$RUNNER_TEMP/proof-apps" --review "$RUNNER_TEMP/proof-review"
+      - uses: ./.github/actions/bazel_cache_save
+        if: ${{ !cancelled() }}
+        with:
+          group: linux
+          gigabytes: 3
+          repository-hit: ${{ steps.cache.outputs.repository-hit }}
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
@@ -158,79 +206,214 @@ jobs:
           path: ${{ runner.temp }}/execution-logs
           retention-days: 7
 
-  bazel8:
-    # Each commit on main: the Storybooks for every platform built with the
-    # oldest Bazel isomer supports (MODULE.bazel's bazel_compatibility),
-    # reading the cache, nothing run. Windows on Arm with the same flags as
-    # an app takes (--config=windows_on_linux).
+  populate-android:
     if: github.event_name == 'push'
-    runs-on: [self-hosted, isomer-jit]
+    runs-on: ubuntu-24.04
+    container:
+      image: swift:6.4.2-noble@sha256:23d9b28ad97fb1cf1999edc3a0cb265ee915ed42299a9344e7173d5a6d2b05f4
+      volumes: ["/mnt:/mnt"]
+    timeout-minutes: 180
+    env:
+      ISOMER_PLATFORMS: android
+      ISOMER_ANDROID_X86_64: "1"
+      ISOMER_BAZEL_ROOT: /mnt/bazel
+    steps:
+      - uses: actions/checkout@v5
+      - name: The job's tools
+        run: tools/ci/job_tools.sh
+      - id: cache
+        uses: ./.github/actions/bazel_cache
+        with:
+          group: android
+      - name: The merged tree's Android targets, built into the cache
+        run: exec tools/ci/container_build.sh all
+      # And what a release builds here: the Android app and the site as
+      # alpha builds them (never the proof's apps: no proof on a push).
+      - name: The published Android app and site, built into the cache
+        run: exec tools/ci/container_build.sh package .ci/packages --config=alpha $PUBLISHED_LINUX
+      - uses: ./.github/actions/bazel_cache_save
+        if: ${{ !cancelled() }}
+        with:
+          group: android
+          gigabytes: 2
+          repository-hit: ${{ steps.cache.outputs.repository-hit }}
+
+  populate-apple:
+    if: github.event_name == 'push'
+    runs-on: xcode-27
+    timeout-minutes: 180
+    env:
+      ISOMER_PLATFORMS: apple
+    steps:
+      - uses: actions/checkout@v5
+      - id: cache
+        uses: ./.github/actions/bazel_cache
+        with:
+          group: apple
+      - name: The merged tree's Apple targets, built into the cache
+        run: exec tools/ci/container_build.sh all
+      - name: The published Apple apps, built into the cache
+        run: exec tools/ci/container_build.sh package .ci/packages --config=alpha $PUBLISHED_APPLE
+      - uses: ./.github/actions/bazel_cache_save
+        if: ${{ !cancelled() }}
+        with:
+          group: apple
+          gigabytes: 2
+          repository-hit: ${{ steps.cache.outputs.repository-hit }}
+
+  populate-windows:
+    if: github.event_name == 'push'
+    runs-on: windows-11-arm
+    timeout-minutes: 180
+    env:
+      ISOMER_BAZEL_ROOT: C:/b
+    steps:
+      - uses: actions/checkout@v5
+      - name: Swift for Windows
+        shell: pwsh
+        run: tools/ci/windows_build.ps1 setup
+      - id: cache
+        uses: ./.github/actions/bazel_cache
+        with:
+          group: windows
+      # Built only (Windows is tier 2): the Storybook, then with its driver
+      # and the Storybook's tests for Windows.
+      - name: The Windows Storybook and its headful tests, built
+        shell: pwsh
+        run: |
+          tools/ci/windows_build.ps1 build '--keep_going' '//windows/storybook_windows_application'
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          tools/ci/windows_build.ps1 build '--keep_going' '--@isomer//drive:headful' '//windows/storybook_windows_application' '//headless/storybook_headless_application:storybook_headful_windows_test'
+          exit $LASTEXITCODE
+      - uses: ./.github/actions/bazel_cache_save
+        if: ${{ !cancelled() }}
+        with:
+          group: windows
+          gigabytes: 1
+          repository-hit: ${{ steps.cache.outputs.repository-hit }}
+
+  bazel8:
+    # The Storybooks built with the oldest Bazel isomer supports.
+    if: github.event_name == 'push'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: linux
+            runner: ubuntu-24.04-arm
+            image: ghcr.io/attilathefun/visor-agent@sha256:849dcf6aeb16119e3b769b4f0c410b93ac58ed1e3b3ef2801f7534def3fbaaf0
+            targets: >-
+              //web/storybook_web_application:storybook_web_application
+              //linux/storybook_linux_application:storybook_linux_application
+          - group: android
+            runner: ubuntu-24.04
+            image: swift:6.4.2-noble@sha256:23d9b28ad97fb1cf1999edc3a0cb265ee915ed42299a9344e7173d5a6d2b05f4
+            targets: //android/storybook_android_application:storybook_android_application_apk
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: ${{ matrix.image }}
+      volumes: ["/mnt:/mnt"]
     timeout-minutes: 180
     env:
       USE_BAZEL_VERSION: 8.5.0
+      ISOMER_PLATFORMS: ${{ matrix.group == 'linux' && 'web linux' || 'android' }}
     steps:
       - uses: actions/checkout@v5
+      - name: The job's tools
+        run: tools/ci/job_tools.sh
+      - uses: ./.github/actions/bazel_cache
+        with:
+          group: ${{ matrix.group }}
+          disk: "false"
       # Built only (container_build.sh's checks take Bazel 9's test flags).
       - name: The Storybooks with Bazel 8.5.0
+        env:
+          TARGETS: ${{ matrix.targets }}
+        run: exec tools/ci/container_build.sh $TARGETS
+
+  bazel8-apple:
+    if: github.event_name == 'push'
+    runs-on: xcode-27
+    timeout-minutes: 180
+    env:
+      USE_BAZEL_VERSION: 8.5.0
+      ISOMER_PLATFORMS: apple
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/bazel_cache
+        with:
+          group: apple
+          disk: "false"
+      - name: The Apple Storybooks with Bazel 8.5.0
         run: >-
           exec tools/ci/container_build.sh --ios_multi_cpus=sim_arm64
           //apple/storybook_ios_application:storybook_ios_sim_application
           //apple/storybook_isomer_ios_application
           //apple/storybook_macos_application:storybook_macos_application
-          //web/storybook_web_application:storybook_web_application
-          //android/storybook_android_application:storybook_android_application_apk
-          //linux/storybook_linux_application:storybook_linux_application
-      - name: The Windows Storybook with Bazel 8.5.0
-        run: exec tools/ci/container_build.sh --config=windows_on_linux --platforms=@isomer//tools/platforms:windows_arm64 //windows/storybook_windows_application
+
+  # --- By hand: verify (the GUI tests) ------------------------------------
 
   verify:
-    # By hand: every platform built, and the container's own tests; a public
-    # repository's iPhone, Mac and Android tests then run on GitHub's own
-    # runners (apple, android, below), a private copy's here on Shireworks'
-    # leases. The proof runs beside it (proof, proof-shoot, proof-compare).
     if: github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release')
-    runs-on: [self-hosted, isomer-jit]
+    runs-on: ubuntu-24.04-arm
+    container: ghcr.io/attilathefun/visor-agent@sha256:849dcf6aeb16119e3b769b4f0c410b93ac58ed1e3b3ef2801f7534def3fbaaf0
     timeout-minutes: 180
     env:
-      PLATFORM_TESTS: ${{ github.event.repository.private && 'android apple' || '' }}
-      # A public repository's Android tests run on GitHub's own Ubuntu
-      # runner (android, below), from an x86_64 test APK built here.
-      ISOMER_ANDROID_X86_64: ${{ !github.event.repository.private && '1' || '' }}
+      ISOMER_PLATFORMS: web linux
     steps:
       - uses: actions/checkout@v5
-      # Every platform built in the Linux container, and the tests that run
-      # there: the core's, the web Storybook in headless Chrome.
+      - name: The job's tools
+        run: tools/ci/job_tools.sh
+      - uses: ./.github/actions/bazel_cache
+        with:
+          group: linux
       - name: Build, and the tests in the build container
         run: exec tools/ci/container_build.sh
+
+  verify-android:
+    if: github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release')
+    runs-on: ubuntu-24.04
+    container:
+      image: swift:6.4.2-noble@sha256:23d9b28ad97fb1cf1999edc3a0cb265ee915ed42299a9344e7173d5a6d2b05f4
+      volumes: ["/mnt:/mnt"]
+    timeout-minutes: 180
+    env:
+      ISOMER_PLATFORMS: android
+      ISOMER_BAZEL_ROOT: /mnt/bazel
+    steps:
+      - uses: actions/checkout@v5
+      - name: The job's tools
+        run: tools/ci/job_tools.sh
+      - uses: ./.github/actions/bazel_cache
+        with:
+          group: android
+      - name: Build, and the Android build tests
+        run: exec tools/ci/container_build.sh
       - uses: actions/upload-artifact@v4
-        if: ${{ !github.event.repository.private }}
         with:
           name: android-test-apk
           path: .ci/platforms/android-x86_64
           retention-days: 3
       - uses: actions/upload-artifact@v4
-        if: ${{ !github.event.repository.private }}
         with:
-          name: windows-test-app
-          path: .ci/platforms/windows
-          retention-days: 3
-      # The same apps with their drivers built in, for the Storybook's tests
-      # run headful (tools/ci/hosted_headful_test.sh).
-      - uses: actions/upload-artifact@v4
-        if: ${{ !github.event.repository.private }}
-        with:
-          name: headful-apps
+          name: headful-apps-android
           path: .ci/platforms/headful
           retention-days: 3
-      # The Windows Storybook headful with its tests, built for Windows here.
-      - uses: actions/upload-artifact@v4
-        if: ${{ !github.event.repository.private }}
+
+  verify-apple:
+    if: github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release')
+    runs-on: xcode-27
+    timeout-minutes: 180
+    env:
+      ISOMER_PLATFORMS: apple
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/bazel_cache
         with:
-          name: windows-headful
-          path: .ci/platforms/windows-headful
-          retention-days: 3
+          group: apple
+      - name: Build, with this Mac's Xcode
+        run: exec tools/ci/container_build.sh
       - uses: actions/upload-artifact@v4
-        if: ${{ !github.event.repository.private }}
         with:
           name: apple-test-apps
           path: |
@@ -238,16 +421,35 @@ jobs:
             .ci/platforms/*storybook_macos*.zip
             .ci/platforms/*webview_ios*.ipa
           retention-days: 3
-      # exec: the runner's cancel reaches the script, which releases its leases.
-      - name: The tests on Shireworks' leases
-        if: github.event.repository.private
-        run: exec tools/ci/platform_tests.sh .ci/platform-tests
       - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
         with:
-          name: platform-tests
-          path: .ci/platform-tests
-          retention-days: 14
+          name: headful-apps-apple
+          path: .ci/platforms/headful
+          retention-days: 3
+
+  verify-windows:
+    if: github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release')
+    runs-on: windows-11-arm
+    timeout-minutes: 180
+    env:
+      ISOMER_BAZEL_ROOT: C:/b
+    steps:
+      - uses: actions/checkout@v5
+      - name: Swift for Windows
+        shell: pwsh
+        run: tools/ci/windows_build.ps1 setup
+      - uses: ./.github/actions/bazel_cache
+        with:
+          group: windows
+      # Built only (Windows is tier 2): the Storybook, then with its driver
+      # and the Storybook's tests for Windows.
+      - name: The Windows Storybook and its headful tests, built
+        shell: pwsh
+        run: |
+          tools/ci/windows_build.ps1 build '--keep_going' '//windows/storybook_windows_application'
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          tools/ci/windows_build.ps1 build '--keep_going' '--@isomer//drive:headful' '//windows/storybook_windows_application' '//headless/storybook_headless_application:storybook_headful_windows_test'
+          exit $LASTEXITCODE
 
   container-verify:
     # By hand, beside verify and apple: the tests that draw, in a Linux
@@ -256,10 +458,18 @@ jobs:
     # and the Linux app under Xvfb, driven as apple drives the iPhone's and
     # the Mac's (tools/ci/container_build.sh headful). A release needs it.
     if: github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release')
-    runs-on: [self-hosted, isomer-jit]
+    runs-on: ubuntu-24.04-arm
+    container: ghcr.io/attilathefun/visor-agent@sha256:849dcf6aeb16119e3b769b4f0c410b93ac58ed1e3b3ef2801f7534def3fbaaf0
     timeout-minutes: 120
+    env:
+      ISOMER_PLATFORMS: web linux
     steps:
       - uses: actions/checkout@v5
+      - name: The job's tools
+        run: tools/ci/job_tools.sh
+      - uses: ./.github/actions/bazel_cache
+        with:
+          group: linux
       - name: The tests that draw
         env:
           ISOMER_EXECUTION_LOGS: ${{ runner.temp }}/execution-logs
@@ -267,17 +477,16 @@ jobs:
 
   apple:
     # The iPhone and Mac Storybooks' tests on GitHub's own `xcode-27` Macs,
-    # four at once, for a public repository's verify; a private one runs
-    # them in verify itself, on Shireworks' leases. Each part on a Mac of its
-    # own: the pictures (tools/ci/hosted_apple_test.sh: a simulator made for
-    # the run, and the Mac's own screen; 13 minutes), and the Storybook's
-    # tests headful (tools/ci/hosted_headful_test.sh), driving the iPhone app
-    # (ios), hosted in it (hosted) and driving the Mac app (macos). One Mac
-    # took 96 minutes for them all in 0.51.1's run, 64 of them Bazel
-    # building the tests from cold. Two hours each: a cold build of the
-    # headful iPhone tests took 44 minutes.
-    needs: verify
-    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release') && !github.event.repository.private }}
+    # four at once. Each part on a Mac of its own: the pictures
+    # (tools/ci/hosted_apple_test.sh: a simulator made for the run, and the
+    # Mac's own screen; 13 minutes), and the Storybook's tests headful
+    # (tools/ci/hosted_headful_test.sh), driving the iPhone app (ios),
+    # hosted in it (hosted) and driving the Mac app (macos). One Mac took 96
+    # minutes for them all in 0.51.1's run, 64 of them Bazel building the
+    # tests from cold. Two hours each: a cold build of the headful iPhone
+    # tests took 44 minutes.
+    needs: verify-apple
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release') }}
     strategy:
       fail-fast: false
       matrix:
@@ -300,7 +509,7 @@ jobs:
       - uses: actions/download-artifact@v4
         if: matrix.part != 'pictures'
         with:
-          name: headful-apps
+          name: headful-apps-apple
           path: .ci/headful
       - uses: actions/cache@v4
         if: matrix.part != 'pictures'
@@ -322,47 +531,11 @@ jobs:
           path: .ci/platform-tests/apple
           retention-days: 14
 
-  windows:
-    # The Windows Storybook's tests on GitHub's own windows-11-arm runner, run
-    # natively (tools/ci/hosted_windows_test.ps1), for a public repository's
-    # verify. Windows is tier 2: its result is reported, and a release
-    # doesn't wait for it.
-    needs: verify
-    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release') && !github.event.repository.private }}
-    runs-on: windows-11-arm
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v4
-        with:
-          name: windows-test-app
-          path: .ci/windows
-      - name: The Windows Storybook's tests
-        shell: pwsh
-        run: tools/ci/hosted_windows_test.ps1 .ci/windows .ci/platform-tests/windows
-      - uses: actions/download-artifact@v4
-        with:
-          name: windows-headful
-          path: .ci/windows-headful
-      # The Storybook's tests (the headless source) against the app headful,
-      # both built in the container, run here in Git's bash.
-      - name: The Storybook's tests, headful on Windows
-        shell: bash
-        run: exec tools/ci/hosted_headful_test.sh windows .ci/windows-headful .ci/platform-tests/windows/headful
-      - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
-        with:
-          name: platform-tests-windows
-          path: .ci/platform-tests/windows
-          retention-days: 14
-
   android:
     # The Android Storybook's tests on GitHub's own Ubuntu runner, the
-    # emulator on its KVM (tools/ci/hosted_android_test.sh), for a public
-    # repository's verify; a private one runs them in verify itself, on a
-    # Shireworks emulator.
-    needs: verify
-    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release') && !github.event.repository.private }}
+    # emulator on its KVM (tools/ci/hosted_android_test.sh).
+    needs: verify-android
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -375,7 +548,7 @@ jobs:
         run: tools/ci/hosted_android_test.sh .ci/android/storybook.apk .ci/platform-tests/android
       - uses: actions/download-artifact@v4
         with:
-          name: headful-apps
+          name: headful-apps-android
           path: .ci/headful
       # Bazel's downloads kept between runs in GitHub's cache: GitHub's
       # release downloads, where most of them come from, have failed for
@@ -394,102 +567,115 @@ jobs:
           path: .ci/platform-tests/android
           retention-days: 14
 
+  # --- By hand: the proof, built where each platform builds -------------
+
   proof:
-    # By hand, with verify: never a pull request's or a push's.
-    if: github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release')
-    # Shireworks' single-use Linux containers, as the build's: the apps built
-    # in it (rules_applecross for the Apple ones). A public repository's are
-    # then pictured on GitHub's own machines (the proof-* jobs below). A
-    # private copy pictures everything here, on machines it leases, the web
-    # in Chrome for Testing in this container.
-    runs-on: [self-hosted, isomer-jit]
+    if: github.event_name == 'workflow_dispatch' && (inputs.run == 'release' || inputs.run == 'proof')
+    runs-on: ubuntu-24.04-arm
+    container: ghcr.io/attilathefun/visor-agent@sha256:849dcf6aeb16119e3b769b4f0c410b93ac58ed1e3b3ef2801f7534def3fbaaf0
     concurrency:
       group: isomer-proof-${{ github.ref }}
       cancel-in-progress: false
-    timeout-minutes: 240
-    permissions:
-      contents: read
-      actions: read
+    timeout-minutes: 180
     env:
-      GH_TOKEN: ${{ github.token }}
-      # The branch, for a pull request's head (its run's ref is GitHub's merge).
-      PROOF_REF: ${{ github.event.pull_request && format('refs/heads/{0}', github.head_ref) || github.ref }}
       PROOF_KIND: ${{ inputs.kind || 'full' }}
     steps:
       - uses: actions/checkout@v5
         with:
-          # A pull request's own head, not GitHub's merge of it: the commit
-          # its proof is of. The whole history: a quick proof's stories
-          # include those of the story files a branch touches.
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
-      - name: The apps on every platform, pictured, and the proof
-        if: github.event.repository.private
-        # exec: the runner's cancel reaches the script's trap, which releases its leases.
-        run: exec tools/ci/proof.sh --kind "$PROOF_KIND" --proof "$RUNNER_TEMP/proof"
-      # The proof's comparison with the release before's (proof-diff.json,
-      # the private AttilaTheFun/reviews' docs/PROOF_FORMAT.md, "The
-      # comparison: proof-diff.json"; tools/ci/proof_diff.py, copied from
-      # there), made once here and kept in the proof's folder, so the
-      # artifact carries it and a release attaches it beside proof.zip.
-      # Never fails the job.
-      - name: The proof's comparison
-        if: ${{ !cancelled() && github.event.repository.private }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          [ -f "$RUNNER_TEMP/proof/proof.json" ] || exit 0
-          python3 -I tools/ci/proof_diff.py make "$RUNNER_TEMP/proof" || echo "::warning::the proof's comparison wasn't made"
-      # The proof whether every picture came or not: a broken screen is what it's for.
-      - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() && github.event.repository.private }}
+      - name: The job's tools
+        run: tools/ci/job_tools.sh
+      - uses: ./.github/actions/bazel_cache
         with:
-          name: proof
-          path: ${{ runner.temp }}/proof
-          retention-days: 90
-      - name: The apps built
-        if: ${{ !github.event.repository.private }}
-        run: exec tools/ci/proof.sh --stage build --kind "$PROOF_KIND" --apps "$RUNNER_TEMP/proof-apps" --review "$RUNNER_TEMP/proof-review"
+          group: linux
+      - name: The web app built
+        run: exec tools/ci/proof.sh --stage build --platform web --kind "$PROOF_KIND" --apps "$RUNNER_TEMP/proof-apps" --review "$RUNNER_TEMP/proof-review"
       - uses: actions/upload-artifact@v4
-        if: ${{ !github.event.repository.private }}
-        with:
-          name: proof-apps-ios
-          path: ${{ runner.temp }}/proof-apps/ios
-          retention-days: 1
-      - uses: actions/upload-artifact@v4
-        if: ${{ !github.event.repository.private }}
-        with:
-          name: proof-apps-macos
-          path: ${{ runner.temp }}/proof-apps/macos
-          retention-days: 1
-      - uses: actions/upload-artifact@v4
-        if: ${{ !github.event.repository.private }}
-        with:
-          name: proof-apps-android
-          path: ${{ runner.temp }}/proof-apps/hosted/android
-          retention-days: 1
-      - uses: actions/upload-artifact@v4
-        if: ${{ !github.event.repository.private }}
         with:
           name: proof-apps-web
           path: ${{ runner.temp }}/proof-apps/web
           retention-days: 1
       - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() && !github.event.repository.private }}
+        if: ${{ !cancelled() }}
         with:
-          name: proof-part-build
+          name: proof-part-build-web
           path: ${{ runner.temp }}/proof-review
           retention-days: 7
 
-  # A public repository's proof, pictured on GitHub's own machines, free
-  # for one (tools/ci/proof.sh --stage shoot, tools/proof/proof.py --here):
-  # the iPhone (a simulator made for the run) and the Mac on `xcode-27`
-  # Macs, the Android Storybook on an emulator under Ubuntu's KVM, the web
-  # in Ubuntu's Chrome. Each its own part, whatever came back: a broken
-  # screen is what the proof is for.
+  proof-apple:
+    if: github.event_name == 'workflow_dispatch' && (inputs.run == 'release' || inputs.run == 'proof')
+    runs-on: xcode-27
+    timeout-minutes: 180
+    env:
+      PROOF_KIND: ${{ inputs.kind || 'full' }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/bazel_cache
+        with:
+          group: apple
+      - name: The iPhone and Mac apps built, with this Mac's Xcode
+        run: exec tools/ci/proof.sh --stage build --platform ios,macos --kind "$PROOF_KIND" --apps "$RUNNER_TEMP/proof-apps" --review "$RUNNER_TEMP/proof-review"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: proof-apps-ios
+          path: ${{ runner.temp }}/proof-apps/ios
+          retention-days: 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: proof-apps-macos
+          path: ${{ runner.temp }}/proof-apps/macos
+          retention-days: 1
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: proof-part-build-apple
+          path: ${{ runner.temp }}/proof-review
+          retention-days: 7
+
+  proof-android:
+    if: github.event_name == 'workflow_dispatch' && (inputs.run == 'release' || inputs.run == 'proof')
+    runs-on: ubuntu-24.04
+    container:
+      image: swift:6.4.2-noble@sha256:23d9b28ad97fb1cf1999edc3a0cb265ee915ed42299a9344e7173d5a6d2b05f4
+      volumes: ["/mnt:/mnt"]
+    timeout-minutes: 180
+    env:
+      PROOF_KIND: ${{ inputs.kind || 'full' }}
+      ISOMER_BAZEL_ROOT: /mnt/bazel
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: The job's tools
+        run: tools/ci/job_tools.sh
+      - uses: ./.github/actions/bazel_cache
+        with:
+          group: android
+      - name: The Android app built, for x86_64
+        run: exec tools/ci/proof.sh --stage build --platform android --kind "$PROOF_KIND" --apps "$RUNNER_TEMP/proof-apps" --review "$RUNNER_TEMP/proof-review"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: proof-apps-android
+          path: ${{ runner.temp }}/proof-apps/hosted/android
+          retention-days: 1
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: proof-part-build-android
+          path: ${{ runner.temp }}/proof-review
+          retention-days: 7
+
+  # The proof pictured on GitHub's own machines, free for a public
+  # repository (tools/ci/proof.sh --stage shoot, tools/proof/proof.py
+  # --here): the iPhone (a simulator made for the run) and the Mac on
+  # `xcode-27` Macs, the Android Storybook on an emulator under Ubuntu's
+  # KVM, the web in Ubuntu's Chrome. Each its own part, whatever came back:
+  # a broken screen is what the proof is for.
   proof-shoot:
-    needs: proof
-    if: ${{ !github.event.repository.private }}
+    needs: [proof, proof-apple, proof-android]
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.run == 'release' || inputs.run == 'proof') }}
     strategy:
       fail-fast: false
       matrix:
@@ -507,7 +693,6 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           # A quick proof's stories include those of the story files a branch touches.
           fetch-depth: 0
       - uses: actions/download-artifact@v4
@@ -532,22 +717,23 @@ jobs:
   # back (a missing platform's pictures fail it). Nothing is compared: the
   # job keeps its name, which verified.sh asks for.
   proof-compare:
-    needs: [proof, proof-shoot]
-    if: ${{ !cancelled() && !github.event.repository.private && needs.proof.result == 'success' }}
-    runs-on: [self-hosted, isomer-jit]
+    needs: [proof, proof-apple, proof-android, proof-shoot]
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.run == 'release' || inputs.run == 'proof') }}
+    runs-on: ubuntu-24.04-arm
+    container: ghcr.io/attilathefun/visor-agent@sha256:849dcf6aeb16119e3b769b4f0c410b93ac58ed1e3b3ef2801f7534def3fbaaf0
     timeout-minutes: 30
     permissions:
       contents: read
       actions: read
     env:
       GH_TOKEN: ${{ github.token }}
-      PROOF_REF: ${{ github.event.pull_request && format('refs/heads/{0}', github.head_ref) || github.ref }}
       PROOF_KIND: ${{ inputs.kind || 'full' }}
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+      - name: The job's tools
+        run: tools/ci/job_tools.sh
       - uses: actions/download-artifact@v4
         with:
           pattern: proof-part-*
@@ -562,8 +748,6 @@ jobs:
       # Never fails the job.
       - name: The proof's comparison
         if: ${{ !cancelled() }}
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           [ -f "$RUNNER_TEMP/proof/proof.json" ] || exit 0
           python3 -I tools/ci/proof_diff.py make "$RUNNER_TEMP/proof" || echo "::warning::the proof's comparison wasn't made"
@@ -574,69 +758,118 @@ jobs:
           path: ${{ runner.temp }}/proof
           retention-days: 90
 
-  alpha:
-    # A proposal, by hand on main: prerelease alone, or release once verify
-    # (and a public repository's Android tests) and the proof have passed.
-    # In CI's Linux container, as every job but the GUI tests: its version
-    # asked of Applications Server, stamped in (tools/ci/stamp_apps.sh), the
-    # apps built (tools/ci/container_build.sh package), the Mac app's icon
-    # checked for the dark appearance (tools/ci/check_mac_icons.sh), the
-    # apps published (tools/ci/publish_from_ci.sh: the server signs the Apple
-    # ones and notarizes the Mac's), and the draft release made with the web
-    # site (tools/ci/draft_release.sh), the builds as the server signed them
-    # attached to it (tools/ci/attach_release.sh: <App>-<version>-<platform>.<ext>
-    # and builds.json, which Applications lists, the private
-    # AttilaTheFun/applications' docs/RELEASE_ASSETS.md).
-    needs: [verify, apple, android, proof, proof-compare]
+  # --- By hand on main: a proposal (prerelease, or release once verified) -
+
+  alpha-apple:
+    # The Apple Alphas, built unsigned (alpha signs them); the version found
+    # here and handed to alpha.
+    needs: [verify, verify-android, verify-apple, container-verify, apple, android, proof-compare]
     if: >-
       always() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
-      (inputs.run == 'prerelease' || (inputs.run == 'release' && needs.verify.result == 'success' &&
-      (github.event.repository.private ||
-      (needs.apple.result == 'success' && needs.android.result == 'success' && needs.proof-compare.result == 'success')) &&
-      (!github.event.repository.private || needs.proof.result == 'success')))
-    runs-on: [self-hosted, isomer-jit]
+      (inputs.run == 'prerelease' || (inputs.run == 'release' &&
+      needs.verify.result == 'success' && needs.verify-android.result == 'success' &&
+      needs.verify-apple.result == 'success' && needs.container-verify.result == 'success' &&
+      needs.apple.result == 'success' && needs.android.result == 'success' &&
+      needs.proof-compare.result == 'success'))
+    runs-on: xcode-27
+    timeout-minutes: 180
+    permissions:
+      # The releases' drafts, which the version is counted from.
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: version
+        name: Version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: tools/ci/stamp_apps.sh
+      - uses: ./.github/actions/bazel_cache
+        with:
+          group: apple
+      - name: Build
+        env:
+          ISOMER_PLATFORMS: apple
+        run: exec tools/ci/container_build.sh package .ci/packages --config=alpha $PUBLISHED_APPLE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: alpha-apple
+          path: |
+            .ci/packages/*.ipa
+            .ci/packages/*.zip
+          retention-days: 1
+          if-no-files-found: error
+
+  alpha:
+    # The proposal: Android's Alpha and the site built, every build signed
+    # (tools/ci/sign_builds.sh: a platform whose keys aren't set is
+    # skipped, saying so), the draft made and the builds attached.
+    needs: alpha-apple
+    if: ${{ !cancelled() && needs.alpha-apple.result == 'success' }}
+    runs-on: ubuntu-24.04
+    container:
+      image: swift:6.4.2-noble@sha256:23d9b28ad97fb1cf1999edc3a0cb265ee915ed42299a9344e7173d5a6d2b05f4
+      volumes: ["/mnt:/mnt"]
+    environment: release
     timeout-minutes: 180
     permissions:
       # The draft release.
       contents: write
-      # The OIDC token Applications Server checks.
-      id-token: write
+      # This run's proof artifact.
+      actions: read
+    env:
+      ISOMER_PLATFORMS: android web
+      ISOMER_BAZEL_ROOT: /mnt/bazel
     steps:
       - uses: actions/checkout@v5
         with:
           # The draft's changes since the previous release.
           fetch-depth: 0
-      # The builds' version, MAJOR.MINOR.N: the next of the committed line
-      # for the token's commit, from Applications Server (the same again for
-      # the same commit), stamped into the checkout before the build and
-      # never committed.
+      - name: The job's tools
+        run: tools/ci/job_tools.sh
       - name: Version
         env:
-          APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
-        run: tools/ci/stamp_apps.sh
+          VERSION: ${{ needs.alpha-apple.outputs.version }}
+        run: tools/ci/stamp_apps.sh "$VERSION"
       # The owner's line rule: no proposal on a line that already has a
       # published release (tools/ci/check_version_line.sh), before anything
       # is built.
       - name: The version's line is open
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >-
-          tools/ci/check_version_line.sh
-          "$(sed -n '/CFBundleShortVersionString/{n;s/.*<string>\(.*\)<\/string>.*/\1/p;}' examples/apple/storybook_ios_application/Info.plist)"
+          VERSION: ${{ needs.alpha-apple.outputs.version }}
+        run: tools/ci/check_version_line.sh "$VERSION"
+      - uses: ./.github/actions/bazel_cache
+        with:
+          group: android
       # exec: the runner's cancel reaches the build.
       - name: Build
-        run: exec tools/ci/container_build.sh package .ci/packages --config=alpha $PUBLISHED_APPS
+        run: exec tools/ci/container_build.sh package .ci/packages --config=alpha $PUBLISHED_LINUX
+      - uses: actions/download-artifact@v4
+        with:
+          name: alpha-apple
+          path: .ci/packages
       # Nothing is published if the Mac app's icon has no dark appearance.
       - name: The icon's dark appearance
         run: tools/ci/check_mac_icons.sh .ci/packages
-      - name: Notes
-        run: git log -1 --format=%B > "$RUNNER_TEMP/notes.md"
-      - name: Publish
+      # The keys reach this step alone.
+      - name: Sign
         env:
-          APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
+          ANDROID_SIGNING_KEYSTORE: ${{ secrets.ANDROID_SIGNING_KEYSTORE }}
+          ANDROID_SIGNING_PASSWORD: ${{ secrets.ANDROID_SIGNING_PASSWORD }}
+          APPLE_DEVELOPER_ID_P12: ${{ secrets.APPLE_DEVELOPER_ID_P12 }}
+          APPLE_DEVELOPER_ID_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_PASSWORD }}
+          APPLE_NOTARY_KEY: ${{ secrets.APPLE_NOTARY_KEY }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER: ${{ secrets.APPLE_NOTARY_ISSUER }}
+          APPLE_DEVELOPMENT_P12: ${{ secrets.APPLE_DEVELOPMENT_P12 }}
+          APPLE_DEVELOPMENT_PASSWORD: ${{ secrets.APPLE_DEVELOPMENT_PASSWORD }}
+          APPLE_PROFILES: ${{ secrets.APPLE_PROFILES }}
         run: >-
-          tools/ci/publish_from_ci.sh --notes-file "$RUNNER_TEMP/notes.md" --download "$RUNNER_TEMP/assets"
-          .ci/packages/*.zip .ci/packages/*.ipa .ci/packages/*.apk
+          tools/ci/sign_builds.sh --variant Alpha --app Storybook --out "$RUNNER_TEMP/assets"
+          --ipa-kind development --android-key "$ANDROID_KEY" --android-pin "$ANDROID_PIN"
+          .ci/packages/*.ipa .ci/packages/*.zip .ci/packages/*.apk
       # A release's proof (this run's `proof`, Reviews' format 2), zipped
       # among the draft's assets as proof.zip: the release keeps it, and
       # Reviews compares the next release's with it.
@@ -658,81 +891,44 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           KIND: ${{ inputs.run }}
+          VERSION: ${{ needs.alpha-apple.outputs.version }}
         run: |
-          version="$(sed -n '/CFBundleShortVersionString/{n;s/.*<string>\(.*\)<\/string>.*/\1/p;}' examples/apple/storybook_ios_application/Info.plist)"
-          tools/ci/draft_release.sh "$version" "$KIND" .ci/packages/isomer-site.tar.gz
-          tools/ci/attach_release.sh "v$version" "$RUNNER_TEMP/assets"
+          tools/ci/draft_release.sh "$VERSION" "$KIND" .ci/packages/isomer-site.tar.gz
+          tools/ci/attach_release.sh "v$VERSION" "$RUNNER_TEMP/assets"
 
-  # AdHoc: a branch built by hand (workflow_dispatch with run: adhoc, on a
-  # branch that is neither main nor a release branch), the apps built as
-  # alpha's are with --config=adhoc and published; the server takes them as
-  # AdHoc builds, kept a week, never attached to a release. The build
-  # itself stops a tree that doesn't build.
-  adhoc:
-    if: >
-      github.event_name == 'workflow_dispatch' && inputs.run == 'adhoc' &&
-      github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/heads/release-')
-    runs-on: [self-hosted, isomer-jit]
-    timeout-minutes: 120
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@v5
-      - name: Version
-        env:
-          APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
-        run: tools/ci/stamp_apps.sh
-      - name: Build
-        run: exec tools/ci/container_build.sh package .ci/packages --config=adhoc $PUBLISHED_APPS
-      - name: The icon's dark appearance
-        run: tools/ci/check_mac_icons.sh .ci/packages
-      # The branch's commit's message, from git: a run by hand has no
-      # head_commit in its event.
-      - name: Notes
-        run: git log -1 --format=%B > "$RUNNER_TEMP/notes.md"
-      - name: Publish
-        env:
-          APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
-        run: tools/ci/publish_from_ci.sh --notes-file "$RUNNER_TEMP/notes.md" .ci/packages/*.zip .ci/packages/*.ipa .ci/packages/*.apk
-
-  # An experiment (the private AttilaTheFun/applications' docs/EXPERIMENTS.md):
-  # by hand, with run: experiment, on any branch but a release branch. The
-  # experiment's app built AdHoc, its bundle id under
-  # com.LoganShire.Experiments. (the Storybook's, Storybook Lab, until the
-  # whole wasm apps), published (Applications Server signs it with the
-  # experiments' wildcard profile), and its draft release made
-  # (tools/ci/experiment_release.sh: adhoc-<slug>-<n>, the next n), which
-  # Applications lists in its Ad hoc section until the owner deletes it.
+  # An experiment (the private AttilaTheFun/applications' docs/EXPERIMENTS.md),
+  # drafted unsigned (tools/ci/experiment_release.sh): the `release`
+  # environment is main's and v* tags' alone, so a branch's experiment
+  # signed would need an environment of its own.
   experiment:
     if: >
       github.event_name == 'workflow_dispatch' && inputs.run == 'experiment' &&
       !startsWith(github.ref, 'refs/heads/release-')
-    runs-on: [self-hosted, isomer-jit]
+    runs-on: xcode-27
     timeout-minutes: 120
     permissions:
-      # The draft and its assets.
+      # The draft and its assets, and the drafts the version is counted from.
       contents: write
-      # The OIDC token Applications Server checks.
-      id-token: write
     steps:
       - uses: actions/checkout@v5
       - name: Version
         env:
-          APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
+          GH_TOKEN: ${{ github.token }}
         run: tools/ci/stamp_apps.sh
+      - uses: ./.github/actions/bazel_cache
+        with:
+          group: apple
+          disk: "false"
       - name: Build
+        env:
+          ISOMER_PLATFORMS: apple
         run: >-
           exec tools/ci/container_build.sh package .ci/packages --config=adhoc --config=ci_device
           --compilation_mode=opt //apple/storybook_ios_application:storybook_experiment_ios_application
       - name: Notes
         run: git log -1 --format=%B > "$RUNNER_TEMP/notes.md"
-      - name: Publish
-        env:
-          APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
-        run: >-
-          tools/ci/publish_from_ci.sh --app "Storybook Lab" --notes-file "$RUNNER_TEMP/notes.md"
-          --download "$RUNNER_TEMP/assets" .ci/packages/*.ipa
+      - name: The build, saved as built
+        run: tools/ci/sign_builds.sh --unsigned --app "Storybook Lab" --out "$RUNNER_TEMP/assets" .ci/packages/*.ipa
       - name: The experiment's draft
         env:
           GH_TOKEN: ${{ github.token }}
@@ -741,72 +937,110 @@ jobs:
           "The Storybook as an experiment: the publishing path for experiments, before the whole wasm apps"
           "$RUNNER_TEMP/assets" "$RUNNER_TEMP/notes.md"
 
-  # A release: when the owner publishes a GitHub release (its v0.40.N tag on
-  # a main commit, whose proof is in). Nothing Apple is rebuilt: the
-  # iPhone's and the Mac's Alphas main's CI published of that commit (the
-  # builds the owner tested) are promoted by Applications Server, stamped
-  # Production and signed again (tools/ci/promote_from_ci.sh). Android's
-  # are built for production and published, the server signing none. Each
-  # is attached to the release as Applications reads it, replacing the
-  # Alphas of the same names, with the Mac app's disk image
-  # (tools/ci/attach_release.sh); then its proof and the iPhone app for the
-  # simulator (tools/ci/release_extras.sh).
-  release:
+  # --- A published release: nothing Apple rebuilt -----------------------
+
+  release-apple:
     if: github.event_name == 'release' && !github.event.release.prerelease
-    runs-on: [self-hosted, isomer-jit]
+    runs-on: xcode-27
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+      # The release's own version (published, so listed with contents: read).
+      - name: Version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: tools/ci/stamp_apps.sh
+      - uses: ./.github/actions/bazel_cache
+        with:
+          group: apple
+      - name: The iPhone's, for the simulator
+        env:
+          ISOMER_PLATFORMS: apple
+        run: >-
+          exec tools/ci/container_build.sh package .ci/simulator --compilation_mode=opt --ios_multi_cpus=sim_arm64
+          //apple/storybook_ios_application:storybook_ios_sim_application
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-simulator
+          path: .ci/simulator
+          retention-days: 1
+          if-no-files-found: error
+
+  release:
+    needs: release-apple
+    if: ${{ !cancelled() && needs.release-apple.result == 'success' }}
+    runs-on: ubuntu-24.04
+    container:
+      image: swift:6.4.2-noble@sha256:23d9b28ad97fb1cf1999edc3a0cb265ee915ed42299a9344e7173d5a6d2b05f4
+      volumes: ["/mnt:/mnt"]
+    environment: release
     timeout-minutes: 120
     permissions:
       # The release's assets.
       contents: write
-      # Its commit's proof artifact.
+      # Its commit's verify run.
       actions: read
-      # The OIDC token Applications Server checks: a v* tag's, by a releaser.
-      id-token: write
+    env:
+      ISOMER_PLATFORMS: android
+      ISOMER_BAZEL_ROOT: /mnt/bazel
     steps:
       # The tag's commit, with main's history beside it.
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+      - name: The job's tools
+        run: tools/ci/job_tools.sh
       # A release is a main commit: a tag whose commit isn't on main stops here.
       - name: The release is a main commit
         run: git merge-base --is-ancestor HEAD origin/main || { echo "::error::$GITHUB_REF_NAME's commit is not on main"; exit 1; }
       # No release of a commit not verified (its verify and proof passed, in a
-      # run by hand): checked before anything is promoted.
+      # run by hand): checked before anything is signed.
       - name: The commit was verified
         env:
           GH_TOKEN: ${{ github.token }}
         run: tools/ci/verified.sh "$GITHUB_SHA"
-      # Untrusted text reaches the shell through env, never ${{ }} in run.
-      - name: Notes
+      - name: The proposal's Alphas
         env:
-          BODY: ${{ github.event.release.body }}
-        run: printf '%s\n' "$BODY" > "$RUNNER_TEMP/notes.md"
-      - name: The iPhone's and the Mac's, promoted
-        env:
-          APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
-        run: tools/ci/promote_from_ci.sh --notes-file "$RUNNER_TEMP/notes.md" --download "$RUNNER_TEMP/assets"
-      # Android's and the simulator's builds: the version main's Alpha of
-      # the commit was (the server's answer for the token's commit).
+          GH_TOKEN: ${{ github.token }}
+        run: tools/ci/release_alphas.sh "$GITHUB_REF_NAME" "$RUNNER_TEMP/alphas"
+      # Android's build: the version of this commit's release
+      # (tools/ci/version_from_tags.sh finds it by its commit).
       - name: Version
         env:
-          APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
+          GH_TOKEN: ${{ github.token }}
         run: tools/ci/stamp_apps.sh
+      - uses: ./.github/actions/bazel_cache
+        with:
+          group: android
       - name: Android's, for production
         run: >-
           tools/ci/container_build.sh package .ci/android --config=prod --compilation_mode=opt
           //android/storybook_android_application:storybook_android_application_apk
-      - name: Android's, published
+      # The keys reach this step alone.
+      - name: Sign
         env:
-          APPLICATIONS_CI_CODE: ${{ secrets.APPLICATIONS_CI_CODE }}
-        run: tools/ci/publish_from_ci.sh --notes-file "$RUNNER_TEMP/notes.md" --download "$RUNNER_TEMP/assets" .ci/android/*.apk
+          ANDROID_SIGNING_KEYSTORE: ${{ secrets.ANDROID_SIGNING_KEYSTORE }}
+          ANDROID_SIGNING_PASSWORD: ${{ secrets.ANDROID_SIGNING_PASSWORD }}
+          APPLE_DEVELOPER_ID_P12: ${{ secrets.APPLE_DEVELOPER_ID_P12 }}
+          APPLE_DEVELOPER_ID_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_PASSWORD }}
+          APPLE_NOTARY_KEY: ${{ secrets.APPLE_NOTARY_KEY }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER: ${{ secrets.APPLE_NOTARY_ISSUER }}
+          APPLE_DEVELOPMENT_P12: ${{ secrets.APPLE_DEVELOPMENT_P12 }}
+          APPLE_DEVELOPMENT_PASSWORD: ${{ secrets.APPLE_DEVELOPMENT_PASSWORD }}
+          APPLE_PROFILES: ${{ secrets.APPLE_PROFILES }}
+        run: >-
+          tools/ci/sign_builds.sh --variant Production --app Storybook --out "$RUNNER_TEMP/assets"
+          --ipa-kind production --dmg --android-key "$ANDROID_KEY" --android-pin "$ANDROID_PIN"
+          "$RUNNER_TEMP"/alphas/* .ci/android/*.apk
       - name: The signed builds, attached
         env:
           GH_TOKEN: ${{ github.token }}
         run: tools/ci/attach_release.sh "$GITHUB_REF_NAME" "$RUNNER_TEMP/assets"
-      - name: The iPhone's, for the simulator
-        run: >-
-          tools/ci/container_build.sh package .ci/simulator --compilation_mode=opt --ios_multi_cpus=sim_arm64
-          //apple/storybook_ios_application:storybook_ios_sim_application
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-simulator
+          path: .ci/simulator
       - name: The release's assets
         env:
           GH_TOKEN: ${{ github.token }}
