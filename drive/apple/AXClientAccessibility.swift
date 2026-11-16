@@ -340,6 +340,30 @@ extension AccessibilityDriver {
         return await activate(button)
     }
 
+    /// Moves SwiftUI's scene phase as the Mac moves it: background when the
+    /// app is hidden (NSApp.hide, as ⌘H), inactive when its windows are in
+    /// the Dock (miniaturized), active when shown and frontmost again. The
+    /// app's deactivation alone (another app frontmost) leaves it active.
+    func scene(_ phase: String) async -> String? {
+        let windows = NSApp.windows.filter { $0.isMiniaturized || $0.isVisible }
+        switch phase {
+        case "background":
+            NSApp.hide(nil)
+        case "inactive":
+            if NSApp.isHidden { NSApp.unhide(nil) }
+            for window in windows where !window.isMiniaturized && window.canBecomeMain { window.miniaturize(nil) }
+        case "active":
+            if NSApp.isHidden { NSApp.unhide(nil) }
+            for window in windows where window.isMiniaturized { window.deminiaturize(nil) }
+            NSApp.activate(ignoringOtherApps: true)
+        default:
+            return "no scene phase \(phase)"
+        }
+        // The window's animation into the Dock or out of it.
+        try? await Task.sleep(nanoseconds: 600_000_000)
+        return nil
+    }
+
     /// A sheet's cancel, as Escape gives it; else its Cancel button.
     func dismiss(_ screen: AccessibilityScreen) async -> Bool {
         if let cancel = screen.elements.last(where: { $0.role == "button" && ["Cancel", "Done", "OK"].contains($0.label) }) {

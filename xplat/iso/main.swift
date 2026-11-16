@@ -22,6 +22,13 @@
 //   iso longpress <element>              its context menu (its items then the
 //                                        screen's buttons), or its long press
 //   iso back | dismiss
+//   iso scene <active|inactive|background>
+//                                        the app's scene phase, as leaving the
+//                                        app (background) and coming back
+//                                        (active) moves it: an app `iso launch`
+//                                        started, by its launcher where the
+//                                        platform's own moves it (Android's),
+//                                        else by its driver
 //   iso wait <text> [--timeout <seconds>]
 //   iso drive                            commands as JSON lines on standard input
 //
@@ -334,6 +341,11 @@ func command(_ verb: String, _ rest: [String], _ options: Options) -> Wire_Comma
         }
     case "longpress":
         command.target = argument(0, "longpress <element>")
+    case "scene":
+        command.value = argument(0, "scene <active|inactive|background>")
+        guard ["active", "inactive", "background"].contains(command.value) else {
+            fail("usage: iso scene <active|inactive|background>")
+        }
     case "wait":
         command.text = argument(0, "wait <text> [--timeout <seconds>]")
         command.timeout = options.timeout
@@ -469,6 +481,13 @@ func run(_ commands: [Wire_Command], _ options: Options) async throws -> Bool {
         let results = await withTaskGroup(of: (String, [Wire_Answer], String?).self) { group in
             for target in targets {
                 group.addTask {
+                    // A scene an app's launcher moved: the screen it leads to.
+                    let commands = commands.map { command in
+                        guard command.cmd == "scene", launcherScene(target, command.value) else { return command }
+                        var ls = Wire_Command()
+                        ls.cmd = "ls"
+                        return ls
+                    }
                     let (answers, error) = await send(commands, over: endpoint, context: endpoint.context(token: nil, metadata: ["iso-target": target]))
                     return (target, answers, error)
                 }
@@ -523,6 +542,27 @@ func driveInteractively(_ options: Options) async throws {
 }
 
 // MARK: - Apps started by a launcher
+
+/// `scene` for an app `iso launch` started, by its launcher where the
+/// platform's own moves the scene (drive/launchers/requests.sh: Android's
+/// sends the app home and brings it back): true if it did, false for the
+/// app's driver to.
+func launcherScene(_ app: String, _ phase: String) -> Bool {
+    let requests = Registry.directory.appendingPathComponent("run/launch-\(app).requests")
+    guard running(runFiles("launch-\(app)").pid) != nil, FileManager.default.fileExists(atPath: requests.path) else { return false }
+    let id = "scene-\(getpid())"
+    let request = requests.appendingPathComponent("\(id).request")
+    let answer = requests.appendingPathComponent("\(id).answer")
+    let part = request.appendingPathExtension("part")
+    guard (try? Data("scene:\(phase)\n".utf8).write(to: part)) != nil,
+          (try? FileManager.default.moveItem(at: part, to: request)) != nil else { return false }
+    let deadline = Date().addingTimeInterval(30)
+    while FileManager.default.fileExists(atPath: request.path), Date() < deadline { usleep(20_000) }
+    try? FileManager.default.removeItem(at: request)
+    let said = (try? String(contentsOf: answer, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
+    try? FileManager.default.removeItem(at: answer)
+    return said == "ok"
+}
 
 /// `iso launch`: a launcher (drive/launchers) run in the background, its app
 /// dialling the hub on this machine, kept by name until `iso launch stop`.
@@ -664,7 +704,7 @@ func hub(_ arguments: [String]) async throws {
 let parsed = Options(CommandLine.arguments.dropFirst())
 let arguments = parsed.rest[...]
 guard let verb = arguments.first else {
-    print("iso ls|info|tap|type|set|select|swipe|longpress|back|dismiss|wait|drive [--app <name>[,<name>…] | --all], iso apps, iso hub [stop], iso launch <launcher> | stop <name>, iso application add|remove|select|list|stop …")
+    print("iso ls|info|tap|type|set|select|swipe|longpress|back|dismiss|scene|wait|drive [--app <name>[,<name>…] | --all], iso apps, iso hub [stop], iso launch <launcher> | stop <name>, iso application add|remove|select|list|stop …")
     exit(2)
 }
 

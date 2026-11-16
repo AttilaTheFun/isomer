@@ -578,6 +578,41 @@ public final class HeadlessApp: @unchecked Sendable {
     @discardableResult
     public func dismiss() throws -> HeadlessScreen { try send("dismiss") }
 
+    /// A scene's phase, as SwiftUI's `ScenePhase` has them.
+    public enum ScenePhase: String, Sendable {
+        case active, inactive, background
+    }
+
+    /// Moves the app's scene phase as leaving the app and coming back does,
+    /// so what it does then (`.onChange(of: scenePhase)`) runs: `background`
+    /// then `active` is a trip to the home screen and back. The launcher's
+    /// way first, where the platform's own moves it (Android's: the app sent
+    /// home and brought back, its activity stopped and resumed); else the
+    /// app's driver's (headless.proto's `scene`: Isomer's runtime's phase,
+    /// SwiftUI's scene delegate told on iOS, the app hidden or its windows
+    /// in the Dock on the Mac). The screen once it settles.
+    @discardableResult
+    public func scene(_ phase: ScenePhase) throws -> HeadlessScreen {
+        if local == nil, let requests, let launched, launched.isRunning {
+            asked += 1
+            let request = requests.appendingPathComponent("\(asked).request")
+            let answer = requests.appendingPathComponent("\(asked).answer")
+            try Data("scene:\(phase.rawValue)\n".utf8).write(to: request.appendingPathExtension("part"))
+            try FileManager.default.moveItem(at: request.appendingPathExtension("part"), to: request)
+            // Answered (requests.sh): `ok` in <n>.answer when the launcher
+            // moved it; why not, or nothing, when it didn't.
+            let deadline = Date().addingTimeInterval(30)
+            while FileManager.default.fileExists(atPath: request.path), Date() < deadline, launched.isRunning {
+                Thread.sleep(forTimeInterval: 0.02)
+            }
+            try? FileManager.default.removeItem(at: request)
+            let said = (try? String(contentsOf: answer, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
+            try? FileManager.default.removeItem(at: answer)
+            if said == "ok" { return try screen() }
+        }
+        return try send("scene") { $0.value = phase.rawValue }
+    }
+
     /// Waits until a text shows (or a control's label or value holds it).
     @discardableResult
     public func wait(for text: String, timeout: Double = 5) throws -> HeadlessScreen {

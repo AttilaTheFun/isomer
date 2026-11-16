@@ -64,4 +64,24 @@ if [ -n "$logs" ]; then
 fi
 "$adb" shell am start -W -n "$package/$activity" "${extras[@]}" > /dev/null || exit 1
 take() { "$adb" exec-out screencap -p > "$1" && [ -s "$1" ]; }
+# HeadlessApp's `scene` (requests.sh) through the activity's own lifecycle:
+# background, the app sent home (stopped); active, brought to the front again
+# as the launcher's icon brings it (its task as it was, the activity not
+# started again). Inactive (paused, still shown) has no such way: the
+# driver sets it.
+scene() {
+    case "$1" in
+    background) "$adb" shell input keyevent KEYCODE_HOME > /dev/null || return 1 ;;
+    active) "$adb" shell am start -n "$package/$activity" > /dev/null 2>&1 || return 1 ;;
+    *) return 1 ;;
+    esac
+    # Until the activity is stopped, or resumed (at most 5 s).
+    local resumed
+    for _ in $(seq 1 25); do
+        resumed="$("$adb" shell dumpsys activity activities 2> /dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -c "$package/")"
+        if [ "$1" = active ]; then [ "$resumed" -gt 0 ] && return 0; else [ "$resumed" -eq 0 ] && return 0; fi
+        sleep 0.2
+    done
+    return 0
+}
 serve_requests take

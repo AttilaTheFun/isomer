@@ -650,6 +650,68 @@ extension AccessibilityDriver {
         return false
     }
 
+    /// The scene phases the driver has moved its scenes to, by scene: UIKit's
+    /// own activation state stays as it was.
+    private static var phases: [ObjectIdentifier: Int] = [:]
+
+    /// Moves SwiftUI's scene phase (`@Environment(\.scenePhase)`, its
+    /// `.onChange`) as leaving the app and coming back does: SwiftUI's own
+    /// scene delegate told, a step at a time, what UIKit tells it then
+    /// (`sceneWillResignActive`, `sceneDidEnterBackground`,
+    /// `sceneWillEnterForeground`, `sceneDidBecomeActive`), and UIKit's
+    /// notifications of each step posted after it for what observes them.
+    /// The app stays on screen and is still driven (a simulator's real trip
+    /// to the home screen takes seconds and suspends the app). Posting the
+    /// notifications alone moves nothing: SwiftUI's phase follows its
+    /// delegate.
+    func scene(_ phase: String) async -> String? {
+        let order = ["background": 0, "inactive": 1, "active": 2]
+        guard let wanted = order[phase] else { return "no scene phase \(phase)" }
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        guard !scenes.isEmpty else { return "no scene" }
+        let center = NotificationCenter.default
+        let application = UIApplication.shared
+        for scene in scenes {
+            let key = ObjectIdentifier(scene)
+            var current = Self.phases[key] ?? {
+                switch scene.activationState {
+                case .foregroundActive: return 2
+                case .foregroundInactive: return 1
+                default: return 0
+                }
+            }()
+            while current != wanted {
+                let delegate = scene.delegate
+                switch (current, wanted > current) {
+                case (2, false):
+                    delegate?.sceneWillResignActive?(scene)
+                    center.post(name: UIScene.willDeactivateNotification, object: scene)
+                    center.post(name: UIApplication.willResignActiveNotification, object: application)
+                    current = 1
+                case (1, false):
+                    delegate?.sceneDidEnterBackground?(scene)
+                    center.post(name: UIScene.didEnterBackgroundNotification, object: scene)
+                    center.post(name: UIApplication.didEnterBackgroundNotification, object: application)
+                    current = 0
+                case (0, true):
+                    delegate?.sceneWillEnterForeground?(scene)
+                    center.post(name: UIScene.willEnterForegroundNotification, object: scene)
+                    center.post(name: UIApplication.willEnterForegroundNotification, object: application)
+                    current = 1
+                default:
+                    delegate?.sceneDidBecomeActive?(scene)
+                    center.post(name: UIScene.didActivateNotification, object: scene)
+                    center.post(name: UIApplication.didBecomeActiveNotification, object: application)
+                    current = 2
+                }
+                // A turn of the run loop between steps, as UIKit's come.
+                try? await Task.sleep(nanoseconds: 100_000_000)
+            }
+            Self.phases[key] = current
+        }
+        return nil
+    }
+
     /// The window the app is shown in: the key one, else the first.
     static func keyWindow() -> UIWindow? {
         let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }

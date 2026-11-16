@@ -25,6 +25,9 @@
 //   back, dismiss               the page's Back (its bar's, the topmost
 //                               presentation's own navigation first), else the
 //                               system's; the topmost presentation
+//   scene <phase>               the app's scene phase (active, inactive,
+//                               background), as leaving the app and coming
+//                               back moves it
 //   wait <text> [timeout]       until the text shows
 //   quit                        ends the call (and a headless app)
 //
@@ -900,6 +903,17 @@ public final class IsomerAppDriver {
                 runtime.hostViewEvent(id: dismiss, value: "")
             } else {
                 error = "nothing presented"
+            }
+        case "scene":
+            // The app's scene phase, as its host sets it when the app is left
+            // and come back to (`@Environment(\.scenePhase)`, its `.onChange`):
+            // an app built headless has no other; a headful one's host sets it
+            // again at its next real change.
+            switch command.value {
+            case "active": runtime.setScenePhase(.active)
+            case "inactive": runtime.setScenePhase(.inactive)
+            case "background": runtime.setScenePhase(.background)
+            default: error = "scene: active, inactive or background, not \(command.value)"
             }
         case "wait":
             let text = command.text

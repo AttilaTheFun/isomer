@@ -5,6 +5,11 @@
 #   lines of KEY=VALUE about the app as it stands (orientation=<the
 #   interface's: portrait, portrait-upside-down, landscape-left,
 #   landscape-right; none where the platform has no such thing>).
+#   Or, its first line `scene:<phase>` (HeadlessApp's `scene`): the app's
+#   scene moved by the platform itself (active, inactive, background), by a
+#   launcher that defines `scene <phase>` (Android's: the app sent home and
+#   brought back); answered in <n>.answer, `ok`, or why not, when the
+#   test's driver command moves it instead.
 # - stop: the test is done with the app (`quit`), seen within a poll: the
 #   launcher ends, as SIGTERM ends it, so a test needn't wait out a signal
 #   that a platform (Windows) doesn't deliver.
@@ -25,8 +30,19 @@ serve_requests() {
             for request in "$ISOMER_LAUNCHER_REQUESTS"/*.request; do
                 [ -e "$request" ] || continue
                 path="$(head -1 "$request")"
-                orientation="$(sed -n 's/^orientation=//p' "$request")"
-                "$take" "$path" "$orientation" || echo "launcher: no picture for $path" >&2
+                case "$path" in
+                scene:*)
+                    if declare -F scene > /dev/null && scene "${path#scene:}"; then
+                        echo ok > "${request%.request}.answer"
+                    else
+                        echo "the launcher doesn't move the scene to ${path#scene:}" > "${request%.request}.answer"
+                    fi
+                    ;;
+                *)
+                    orientation="$(sed -n 's/^orientation=//p' "$request")"
+                    "$take" "$path" "$orientation" || echo "launcher: no picture for $path" >&2
+                    ;;
+                esac
                 rm -f "$request"
             done
         fi

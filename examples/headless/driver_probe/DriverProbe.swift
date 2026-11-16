@@ -5,8 +5,10 @@
 // bar's icon button; a disabled toolbar item; a page pushed in a sheet; a
 // long press; controls in a Form's rows, a text field and a multi-line one,
 // the navigation title's own button; sheets closed by `dismiss` alone, and
-// one presented over another). PROBE_SCREEN picks the screen: the controls
-// (the default), the list, the sheet's, the form or the sheets. The same
+// one presented over another; the scene's phase, and what an app does on
+// coming back to the foreground). PROBE_SCREEN picks the screen: the
+// controls (the default), the list, the sheet's, the form, the sheets or the
+// scene. The same
 // source is the iPhone's probe on Apple's SwiftUI
 // (//apple/driver_probe_ios_application), which its tests drive through
 // Apple's driver, upright and turned to landscape by the app itself.
@@ -23,6 +25,7 @@ struct DriverProbe: App {
             case "sheet": SheetScreen()
             case "form": FormScreen()
             case "sheets": SheetsScreen()
+            case "scene": SceneScreen()
             default: ControlsScreen()
             }
         }
@@ -247,4 +250,35 @@ struct SheetsScreen: View {
             }
         }
     }
+}
+
+/// The scene's phase as the app sees it, each change it was told of, and
+/// what an app does on coming back from the background (a sign-in prompt
+/// opened on `.onChange(of: scenePhase)`).
+struct SceneScreen: View {
+    @Environment(\.scenePhase) private var phase
+    @State private var changes: [String] = []
+    @State private var welcome = false
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Phase: \(name(phase))")
+                Text("Changes: \(changes.isEmpty ? "none" : changes.joined(separator: " "))")
+                if welcome {
+                    Text("Welcome back")
+                    Button("Sign in") { welcome = false }
+                        .accessibilityIdentifier("sign-in")
+                }
+            }
+            .padding()
+            .navigationTitle("Scene")
+        }
+        .onChange(of: phase) { old, new in
+            changes.append(name(new))
+            if old == .background, new != .background { welcome = true }
+        }
+    }
+
+    private func name(_ phase: ScenePhase) -> String { "\(phase)" }
 }

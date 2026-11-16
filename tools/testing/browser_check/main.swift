@@ -23,7 +23,8 @@
 // headful app a test drives, launched this way. While it holds, `--requests
 // <dir>` takes a picture for each `<n>.request` file that appears there (its
 // first line the picture's path; the request is removed once the picture is
-// written): a test's `picture`. Each run's Chrome has a profile of its own,
+// written): a test's `picture`. A `scene:<phase>` request (a test's `scene`)
+// is removed unanswered: the test's driver moves the page's scene. Each run's Chrome has a profile of its own,
 // removed after: a page starts with nothing kept (its IndexedDB, its
 // localStorage), as ISOMER_FRESH's default has the other launchers start.
 //
@@ -303,6 +304,12 @@ if options.hold, let last = options.pages.last {
                 // launchers that turn a picture: a page has nothing to turn).
                 guard let target = (try? String(contentsOfFile: path, encoding: .utf8))?
                     .split(whereSeparator: \.isNewline).first.map(String.init) else { continue }
+                // A scene's phase (HeadlessApp's `scene`): not the page's to
+                // move; removed unanswered, the test's driver moves it.
+                if target.hasPrefix("scene:") {
+                    try? FileManager.default.removeItem(atPath: path)
+                    continue
+                }
                 if let data = (chrome.send("Page.captureScreenshot", ["format": "png"], session: session)?["data"] as? String)
                     .flatMap({ Data(base64Encoded: $0) }) {
                     try? data.write(to: URL(fileURLWithPath: target.trimmingCharacters(in: .whitespacesAndNewlines)))

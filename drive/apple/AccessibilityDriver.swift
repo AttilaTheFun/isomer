@@ -186,7 +186,7 @@ struct AccessibilityScreen {
 /// Drives the app running in this process through its accessibility tree.
 /// Each platform's file gives it `screen()`, `transitioning()`, `reveal`, and
 /// the actions (`activate`, `type`, `set`, `select`, `swipe`, `back`,
-/// `dismiss`).
+/// `dismiss`, `scene`).
 @MainActor
 final class AccessibilityDriver {
     var info: Wire_Info
@@ -306,6 +306,14 @@ final class AccessibilityDriver {
             }
         case "longpress":
             error = await longPress(before, target)
+        case "scene":
+            // The app's scene phase, as leaving it and coming back moves it
+            // (each platform's file says how).
+            if ["active", "inactive", "background"].contains(command.value) {
+                error = await scene(command.value)
+            } else {
+                error = "scene: active, inactive or background, not \(command.value)"
+            }
         case "back":
             if !(await back(before)) { error = "nothing to go back from" }
         case "dismiss":

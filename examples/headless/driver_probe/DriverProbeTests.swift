@@ -241,6 +241,32 @@ struct DriverProbeTests {
         }
     }
 
+    /// `scene` moves the app's scene phase as leaving it and coming back
+    /// does: its `.onChange(of: scenePhase)` sees each step, and what it
+    /// opens on coming back (a sign-in prompt) is there.
+    @Test func sceneLeavesAndComesBack() throws {
+        let app = try launch("scene")
+        defer { app.quit() }
+        try app.wait(for: "Phase: active")
+        try app.scene(.background)
+        // Through inactive, as the platform goes (the launcher's or the
+        // driver's way alike).
+        try app.scene(.active)
+        let screen = try app.wait(for: "Welcome back")
+        #expect(screen.shows("Phase: active"), "\(screen.texts)")
+        #expect(screen.texts.contains { $0.hasPrefix("Changes: ") && $0.contains("background") && $0.hasSuffix("active") },
+                "\(screen.texts)")
+        #expect(screen.element("sign-in") != nil, "\(screen.elements)")
+        try app.tap("sign-in")
+        // Inactive alone (a notification's banner pulled down, the app
+        // switcher) is no return from the background.
+        try app.scene(.inactive)
+        try app.wait(for: "Phase: inactive")
+        try app.scene(.active)
+        let back = try app.wait(for: "Phase: active")
+        #expect(!back.shows("Welcome back"), "\(back.texts)")
+    }
+
     /// An iPhone app that turns itself to landscape on an upright phone:
     /// taps reach its rows, its info says how it stands, and its pictures
     /// are turned as a person sees them.

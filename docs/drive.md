@@ -10,7 +10,7 @@ driving is something a build opts into, never an API an app calls.
 ## The protocol and its transports
 
 shared/wire/headless.proto is the driver's protocol (ls, info, tap, type,
-set, select, swipe, longpress, back, dismiss, wait, quit); shared/wire/session.proto a
+set, select, swipe, longpress, back, dismiss, scene, wait, quit); shared/wire/session.proto a
 head's session (drawing the app). An app serves both as an `IsomerServer`
 (drive/serving), apart from any transport; adapters carry it:
 
@@ -105,6 +105,8 @@ iso swipe "Weekly report" left  # a list row's trailing swipe actions, listed as
 iso swipe "Weekly report" left Delete   # or the one named, performed
 iso longpress "Weekly report"   # its context menu: its items are the screen's buttons
 iso back | dismiss
+iso scene background            # the app left (its scene phase), then come back to:
+iso scene active                # .onChange(of: scenePhase) sees each step
 iso wait "Taps: 1" --timeout 10
 iso drive                       # JSON lines on standard input
 iso launch …/drive/launchers/ios_launcher.sh   # a headful app of a launcher's (below)
@@ -170,7 +172,18 @@ what takes no activation (a list's cell, a control) as a tap would, at its
 place in the window however the app is turned. `dismiss` closes what is
 presented on top: escape, else a sheet a person may swipe away, as the
 swipe does (its `onDismiss` runs), else its own Cancel, Close or Done.
-ISO_DRIVE_TRACE=1 in the app's environment prints each reading's walk of
+`scene` moves SwiftUI's scene phase as leaving the app and coming back
+does: on iOS, SwiftUI's own scene delegate is told each step UIKit tells it
+(will resign active, did enter background, will enter foreground, did become
+active) and UIKit's notifications are posted after each, the app staying on
+screen and driven (posting the notifications alone moves nothing, and a
+simulator's real trip to the home screen takes seconds and suspends the
+app); on the Mac the app is hidden (background), its windows put in the
+Dock (inactive) or shown and brought to the front (active). Isomer's own
+driver sets its runtime's phase; a test's `HeadlessApp.scene` asks the
+launcher first, and Android's sends the app home and brings it back, its
+activity stopped and resumed, as `iso scene` does for an app `iso launch`
+started. ISO_DRIVE_TRACE=1 in the app's environment prints each reading's walk of
 the tree; on the Mac it asks its own process as an
 accessibility client would (AXUIElement), on the main thread. A list's row
 of texts is a button, as Isomer's renderers give it. Launch with simctl's
