@@ -1,21 +1,31 @@
 # Bazel's caches for a CI job, from GitHub's cache (actions/cache), and its
 # settings (tools/ci/ci_bazel.sh setup): the repository cache (downloads)
-# and the disk cache (actions' outputs) of the job's group, linux, android or
-# apple (where it builds, so what it caches is of use to it), keyed by
+# and the disk cache (actions' outputs) of the job's group, ubuntu (the web,
+# Linux and Android, built together on x86_64 Ubuntu), apple or windows
+# (where it builds, so what it caches is of use to it), keyed by
 # MODULE.bazel and the SwiftPM graphs, the disk cache by commit too, the
 # newest of the group's restored when this commit's isn't there. Only main's
 # builds write them (.github/actions/bazel_cache_save); every other job reads them.
-# They live in the home directory, outside the checkout: Bazel 9 refuses a
-# repository contents cache inside the main repository.
+# They live in the home directory, outside the checkout (Bazel 9 refuses a
+# repository contents cache inside the main repository), or where the job's
+# ISOMER_BAZEL_CACHE says (a runner's second disk).
+# BuildBuddy's remote cache too, when the job hands this its key
+# (buildbuddy-api-key, the repository's BUILDBUDDY_API_KEY secret, which
+# the workflow passes only in runs on main and a published release's):
+# given to tools/ci/ci_bazel.sh's setup step alone, which keeps it out of
+# the checkout and the log.
 name: Bazel's cache
 description: Restores the job group's Bazel caches and writes Bazel's settings
 inputs:
   group:
-    description: linux, android or apple
+    description: ubuntu, apple or windows
     required: true
   disk:
     description: Whether to restore the disk cache too ("false" for the repository cache alone)
     default: "true"
+  buildbuddy-api-key:
+    description: BuildBuddy's API key (empty, as on a fork's pull request, for GitHub's cache alone)
+    default: ""
 outputs:
   repository-hit:
     description: Whether the repository cache's own key was found
@@ -26,17 +36,19 @@ runs:
     - id: repository
       uses: actions/cache/restore@v4
       with:
-        path: ~/.cache/isomer-bazel/repository
+        path: ${{ env.ISOMER_BAZEL_CACHE || '~/.cache/isomer-bazel' }}/repository
         key: bazel-repository-${{ inputs.group }}-${{ hashFiles('MODULE.bazel', 'examples/MODULE.bazel', '**/Package.resolved') }}
         restore-keys: bazel-repository-${{ inputs.group }}-
     - if: inputs.disk != 'false'
       uses: actions/cache/restore@v4
       with:
-        path: ~/.cache/isomer-bazel/disk
+        path: ${{ env.ISOMER_BAZEL_CACHE || '~/.cache/isomer-bazel' }}/disk
         key: bazel-disk-${{ inputs.group }}-${{ hashFiles('MODULE.bazel', 'examples/MODULE.bazel', '**/Package.resolved') }}-${{ github.sha }}
         restore-keys: |
           bazel-disk-${{ inputs.group }}-${{ hashFiles('MODULE.bazel', 'examples/MODULE.bazel', '**/Package.resolved') }}-
           bazel-disk-${{ inputs.group }}-
     - name: Bazel's settings
       shell: bash
-      run: tools/ci/ci_bazel.sh setup "$HOME/.cache/isomer-bazel"
+      env:
+        BUILDBUDDY_API_KEY: ${{ inputs.buildbuddy-api-key }}
+      run: tools/ci/ci_bazel.sh setup "${ISOMER_BAZEL_CACHE:-$HOME/.cache/isomer-bazel}"
