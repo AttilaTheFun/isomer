@@ -167,8 +167,9 @@ try {
     # compilers check nothing. Verification off for CI's build here, the
     # finding reported apart.
     if ($command -in @('build', 'test')) {
-        $rest = @('--swiftcopt=-Xfrontend', '--swiftcopt=-sil-verify-none',
-                  '--host_swiftcopt=-Xfrontend', '--host_swiftcopt=-sil-verify-none') + $rest
+        # rules_swift's own flags (Bazel 9 has no --swiftcopt).
+        $rest = @('--@rules_swift//swift:copt=-Xfrontend', '--@rules_swift//swift:copt=-sil-verify-none',
+                  '--@rules_swift//swift:exec_copt=-Xfrontend', '--@rules_swift//swift:exec_copt=-sil-verify-none') + $rest
     }
     & $tool $command @repoEnv @rest
     $status = $LASTEXITCODE
