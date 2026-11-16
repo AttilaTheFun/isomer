@@ -59,8 +59,13 @@ sorts above the 4.2.2 rules_applecross asks for).
 point releases. MODULE.bazel and the Storybook's apps commit MAJOR.MINOR.0
 (the iPhone's build number is always 1, Android's versionCode MAJOR×1,000,000
 + MINOR×1,000 + BUILD); CI stamps each build's own, 0.47.N, N the
-Storybook's build from the release server's number (the Playground's until
-0.47), and a release is tagged v0.47.N, the build it releases. The registry's isomer 0.38.N entry is
+Storybook's build (the Playground's until 0.47), counted from the
+repository's own releases since 2026-11-15 (tools/ci/version_from_tags.sh,
+through stamp_apps.sh; Applications Server's number before): a release
+already made on the job's commit keeps its version (a proposal run again, or
+the release job of a published one), else one past the highest v<line>.N
+among the releases, drafts included, and tags, so a new line's first build
+is MAJOR.MINOR.1. A release is tagged v0.47.N, the build it releases. The registry's isomer 0.38.N entry is
 the tag with one patch setting module() to 0.38.N (its tools/add_version.py
 --stamped). The examples' other apps are tests and stay at 1.0.
 
@@ -316,79 +321,120 @@ and every story is held to Apple's SwiftUI's same screen
 and Reviews' parity): they should match, and a difference is Isomer's (it
 found radial and angular gradients drawn linear, Grid's columns unaligned
 and text runs' `.primary` drawn at the Mac's 85% black in the tree view).
-The platforms run at once, each on its own Shireworks lease (the Mac's a `mac`
-slot of Shireworks' primary macOS VM, its apps run by `exec --gui` and
-pictured by `screenshot --window`; PROOF_MAC=vm a macOS VM of its own; the
-iPhone's an `ios` lease in that VM, driven by Shireworks' simctl `--env`, upload,
-download and screenshot alone, Shireworks' API 20; PROOF_IOS=local simctl on
-the server's Mac). CI makes it, and
-only CI's counts (the Build workflow's `proof` job, tools/ci/proof.sh, in
-CI's own Linux container after the build: the apps built there, the Apple
-ones with rules_applecross). Since 0.42 a public repository's proof is
-pictured on GitHub's own machines, in stages (proof.sh --stage
-build|shoot|compare, proof.py --build-to/--from/--here): built in the
-container, then the iPhone (a
+CI makes it, and only CI's counts, on GitHub's own runners
+alone since 2026-11-15 (nothing of Shireworks at run time: no lease, no
+cache, no signing service, so a contributor's fork runs it as it is), in
+stages (proof.sh --stage build|shoot|compare, proof.py
+--build-to/--from/--here): built where each platform builds (`proof`: the
+web in the project's image, ghcr.io/attilathefun/visor-agent pinned by
+digest, on GitHub's arm64 Ubuntu; `proof-apple`: the iPhone and the Mac on
+an `xcode-27` Mac with its own Xcode; `proof-android`: Android for x86_64
+in Swift's image on GitHub's x86_64 Ubuntu), then pictured: the iPhone (a
 simulator made for the run) and the Mac on `xcode-27` runners, the Android
-Storybook on an emulator under Ubuntu's KVM (tools/ci/hosted_android_emulator.sh,
-shaped as Shireworks' phones: API 35, 1080×2400, 420 dpi, gesture
+Storybook on an emulator under Ubuntu's KVM
+(tools/ci/hosted_android_emulator.sh: API 35, 1080×2400, 420 dpi, gesture
 navigation) and the web in Ubuntu's Chrome (the `proof-shoot` jobs), then
-compared in the container (`proof-compare`); a private copy pictures
-everything on Shireworks' leases as above. CI follows the owner's policy
-for protected repositories (AttilaTheFun/reviews' docs/CI_POLICY.md) and
-the shape the owner set on 2026-11-08 (build.yml's header): the tests
-without a GUI before a merge, every build after one, the GUI tests and the
-proof by hand on GitHub's runners, never a slot of Shireworks' primary VM
-(those are for private repositories). A pull request gets `container`
-(every target built in one container, reading the Bazel cache, leasing
-nothing, then the tests that draw nothing: the core's, the WASI checks,
-and the Storybook's headless and remote-driving tests; the required check,
-about 10 minutes), each
-commit on main `populate` (the same build, then what a release builds: the
-published apps under --config=alpha and the proof's apps; the cache's only
-writer). The GUI tests and the proof run only by hand: `run: verify` (the
-tests that draw in a container, `container-verify`: the web Storybook in
-headless Chrome, and the Storybook's tests run headful on the web and on
-Linux under Xvfb, beside the Storybook's test stories on GitHub's runners: the iPhone's simulator and
-the Mac on `xcode-27`, Android on Ubuntu's KVM, Windows on windows-11-arm,
-not waited for; and the proof),
-`run: prerelease` (Alphas
-and a draft marked pre-release), `run: release` (verify and the proof, then
-the Alphas and the draft proposed for release, tools/ci/draft_release.sh).
-Drafts are CI's; an agent proposes by running the workflow on main, never
-by making a draft or a tag. The proof is the full set by default (every
-story; `quick` the core set: a story from each area). The proof is in
-Reviews' format 2 (the private AttilaTheFun/reviews' docs/PROOF_FORMAT.md,
-tools/ci/proof_write.swift, 0.48): proof.json and every picture an item
-under an id stable from release to release (ios/phone/<story>,
-ios/phone-isomer/<story>, macos/window/<story>, android/phone/<story>,
-web/desktop/<story>; the parity of the iPhone Storybook on Isomer's
-frameworks with Apple's a tests item, tests/parity-ios), the run's `proof`
-artifact, and proof.zip on a release's draft. CI compares nothing: Reviews
-compares a release's proof with the release before it, item by id. To
-bisect a regression, prove earlier commits after the fact: push a branch at
-the commit and run the workflow on that branch. What a platform draws
-differently from run to run is held still at its source (proof.py: the
-iPhone's status bar, Android's cropped off, light appearance, window crops,
-the Mac's caret), or, where it can't be yet (a spinner, the map's live
-tiles, a remote video), painted grey as it is taken (tools/proof/masks.txt).
-A release is approved by publishing its draft
-in Reviews (which makes its tag): the Build workflow's `release` job checks
-that its commit is main's and was verified (tools/ci/verified.sh), then promotes that commit's iPhone and Mac Alphas to
-production on Applications Server (tools/ci/promote_from_ci.sh: nothing
-Apple rebuilt, since 0.40), builds and publishes Android's for production,
-and attaches the release's assets: the signed builds as Applications reads
-them (tools/ci/attach_release.sh, from the private AttilaTheFun/applications'
-docs/RELEASE_ASSETS.md: <App>-<version>-<platform>.<ext> and builds.json,
-replacing the proposal's Alphas of the same names; the Mac's disk image too),
-then (tools/ci/release_extras.sh) the iPhone app for the simulator, beside
-the proposal's proof.zip and isomer-site.tar.gz (the web Storybook,
+written in the container (`proof-compare`). Where each platform builds
+(tools/ci/container_build.sh's ISOMER_PLATFORMS): the web and Linux in the
+project's image on arm64; Android on x86_64 (Google's SDK and NDK tools and
+the hermetic JDK for Linux are x86_64, and GitHub's arm64 runners have no
+Rosetta); the Apple targets on `xcode-27` Macs with their own Xcode (the
+owner, 2026-11-15: Apple's SDKs may not be redistributed, so CI never takes
+the SDK archive rules_applecross builds them with on Linux); Windows on
+GitHub's windows-11-arm, natively, with swift.org's Swift at the pinned
+release and the runner image's own Visual Studio and Windows SDK, built
+only (tier 2; tools/ci/windows_build.ps1, the recipe of tools/proof/proof.py:
+vcvarsall arm64, BAZEL_SH Git's bash, `--output_user_root=C:/b`,
+`--repo_env` for SDKROOT, PATH and MSVC's variables), as Microsoft's sysroot
+may not be redistributed for a build on Linux. Bazel keeps its disk and
+repository caches in GitHub's cache (actions/cache, by group, linux,
+android, apple or windows, and MODULE.bazel; tools/ci/ci_bazel.sh:
+written by main's builds alone, trimmed to stay within GitHub's 10 GB a
+repository). CI follows the owner's policy for protected repositories
+(AttilaTheFun/reviews' docs/CI_POLICY.md) and the shape the owner set on
+2026-11-08 (build.yml's header): the tests without a GUI before a merge,
+every build after one, the GUI tests by hand, and the screenshot proof
+only ad hoc, ahead of a release (the owner, 2026-11-15). A pull request
+gets `container` (the web and Linux targets built, then the tests that draw
+nothing: the core's, the WASI checks, and the Storybook's headless and
+remote-driving tests; the required check), `container-android` (the Android
+targets and their build tests), `container-apple` (the Apple targets) and
+`container-windows` (not required), each commit on main `populate`,
+`populate-android`, `populate-apple` and `populate-windows` (the same
+builds, then the published apps under --config=alpha; the cache's only
+writers; never the proof's) and `bazel8`.
+The GUI tests run only by hand: `run: verify` (each
+platform's build, `verify`, `verify-android`, `verify-apple`,
+`verify-windows`; the tests
+that draw in a container, `container-verify`: the web Storybook in headless
+Chrome, and the Storybook's tests run headful on the web and on Linux under
+Xvfb; the Storybook's test stories, the iPhone's simulator and the Mac on
+`xcode-27` (`apple`), Android on Ubuntu's KVM (`android`); no proof),
+`run: proof` (the screenshot proof alone, by hand ahead of a release),
+`run: prerelease` (Alphas and a draft marked pre-release), `run: release`
+(verify's jobs and the proof, then the Alphas and the draft proposed for
+release, tools/ci/draft_release.sh: the one run with both, which
+tools/ci/verified.sh asks for before a release is signed), `run: experiment` (the Storybook Lab, drafted
+unsigned: the signing keys are the `release` environment's, main's and v*
+tags' alone). Drafts are CI's; an agent proposes by running the workflow on
+main, never by making a draft or a tag. The proof is the full set by
+default (every story; `quick` the core set: a story from each area). The
+proof is in Reviews' format 2 (the private AttilaTheFun/reviews'
+docs/PROOF_FORMAT.md, tools/ci/proof_write.swift, 0.48): proof.json and
+every picture an item under an id stable from release to release
+(ios/phone/<story>, ios/phone-isomer/<story>, macos/window/<story>,
+android/phone/<story>, web/desktop/<story>; the parity of the iPhone
+Storybook on Isomer's frameworks with Apple's a tests item,
+tests/parity-ios), the run's `proof` artifact, and proof.zip on a release's
+draft. CI compares nothing: Reviews compares a release's proof with the
+release before it, item by id. To bisect a regression, prove earlier
+commits after the fact: push a branch at the commit and run the workflow on
+that branch with `run: proof`. What a platform draws differently from run to run is held
+still at its source (proof.py: the iPhone's status bar, Android's cropped
+off, light appearance, window crops, the Mac's caret), or, where it can't
+be yet (a spinner, the map's live tiles, a remote video), painted grey as
+it is taken (tools/proof/masks.txt). The proof's own leased modes
+(proof.py on Shireworks' leases, PROOF_MAC, PROOF_IOS) are a builder's, by
+hand, never CI's.
+
+**Signing (2026-11-15).** CI signs in the job itself, with the signers
+copied byte for byte from AttilaTheFun/shireworks (tools/ci/android_sign.sh;
+tools/ci/apple_sign.sh with apple_profiles.py, rcodesign and Apple Cross's
+`dmg`, pinned by SHA-256), on Linux alone (the keys go to /dev/shm), their
+keys the `release` environment's secrets (main and v* tags), named only in
+the alpha and release jobs' signing steps: ANDROID_SIGNING_KEYSTORE and
+_PASSWORD (the Storybook's release key, its certificate pinned in
+build.yml); APPLE_DEVELOPER_ID_P12 and _PASSWORD, APPLE_NOTARY_KEY, _KEY_ID
+and _ISSUER (the Mac app, notarized and stapled); APPLE_DEVELOPMENT_P12 and
+_PASSWORD (the iPhone app); APPLE_PROFILES (a base64 .tar or .tar.gz of
+their profiles). tools/ci/sign_builds.sh runs them and writes each signed
+package's builds.json line (tools/ci/release_assets.sh's
+release_asset_file); a platform whose keys aren't set is skipped, saying
+so in the log and the job's summary, never failing the job. The Apple
+Alphas are built on a Mac (`alpha-apple`), unsigned, and signed in `alpha`
+(Swift's image on x86_64, where Android's Alpha and the site are built).
+A release is approved by publishing its draft in Reviews (which makes its
+tag): the Build workflow's `release` job checks that its commit is main's
+and was verified (tools/ci/verified.sh), takes the proposal's iPhone and
+Mac Alphas of that commit (tools/ci/release_alphas.sh: nothing Apple
+rebuilt, since 0.40) and signs them again as Production (apple_sign.sh
+--variant Production, as the old signing service's promotion did; the
+iPhone's with `--ipa-kind production`, which falls back to its development
+profile, as the old service signed it, there being no distribution
+identity; the Mac's with its disk image), builds
+Android's for production and signs it, and attaches the release's assets:
+the signed builds as Applications reads them (tools/ci/attach_release.sh,
+from the private AttilaTheFun/applications' docs/RELEASE_ASSETS.md:
+<App>-<version>-<platform>.<ext> and builds.json, replacing the proposal's
+Alphas of the same names; the Mac's disk image too), then
+(tools/ci/release_extras.sh) the iPhone app for the simulator (built on a
+Mac, `release-apple`), beside the proposal's proof.zip and
+isomer-site.tar.gz (the web Storybook,
 //web/storybook_web_application:isomer_site), attached to the draft for
 pages.yml. A proposal's draft carries its Alphas the same way (alpha's
-attach_release.sh). Every job runs in CI's Linux container but the GUI
-tests and the proof's pictures (apple, windows, android, proof-shoot), on
-GitHub's own macOS, Windows and Ubuntu VMs: the Mac icon's dark appearance
-is read in the container (tools/ci/check_mac_icons.sh), and pages.yml and
-pins.yml run there too.
+attach_release.sh). The Mac icon's dark appearance is read on Linux
+(tools/ci/check_mac_icons.sh), and pages.yml, pins.yml and the proof-diff
+backfill run on GitHub's Ubuntu runner.
 
 **Adoption levels** (docs/adoption_levels.md): (1) rules_swift — raw Swift
 on the platform; (2) swift_ffi — idiomatic bindings; (3) embedded Isomer
@@ -510,11 +556,16 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   tools by placeholders (`https://apple-sdks.invalid/…`,
   `https://ported-tools.invalid/sha256/{sha256}`): each builder's untracked
   .bazelrc.user resolves them, with `--distdir=<a folder with them>` or a
-  `--downloader_config` rewriting them to a Shireworks server's
-  `/files/sha256/<hex>` (its read token in ~/.netrc), and turns the
-  toolchains on with `build:linux --config=apple_on_linux` (.bazelrc).
-  Without that, Linux builds what runs on Linux, and nothing fetches the
-  SDKs (GitHub's runners). A Mac builds with its own Xcode, as before.
+  `--downloader_config` rewriting them to where the builder keeps them
+  (an agent's: a Shireworks server's `/files/sha256/<hex>`, its read token
+  in ~/.netrc), and turns the toolchains on with `build:linux
+  --config=apple_on_linux` (.bazelrc). Without that, Linux builds what runs
+  on Linux, and nothing fetches the SDKs: CI never does (the owner,
+  2026-11-15: Apple's SDKs may not be redistributed), and builds the Apple
+  targets on GitHub's `xcode-27` Macs instead. A Mac builds with its own
+  Xcode, as before. Several of the ported tools' pins (actool, ibtool,
+  codesign, SwiftUIMacros) are rules_applecross main's, in none of its
+  published ported-tools releases.
   Off a Mac a Mac app is arm64 and an iOS simulator app sim_arm64
   (rules_applecross's rules_apple_arm64_default.patch: rules_apple's
   default there was x86_64, which Apple silicon won't open without Rosetta
@@ -604,52 +655,54 @@ bazel run //examples/electron/example_full_react_electron_application
 Tier 1 is iOS, macOS, Android and the web (wasm: the browser and Electron);
 tier 2 is Linux and Windows. Building an iOS app for Android is Isomer's
 headline, and the project's other apps (Visor, Reviews) ship iOS, the Mac
-and Android, Android through Isomer. CI runs and pictures tier 1 on every
-change: the iPhone and the Mac on slots of Shireworks' primary, Android on
-GitHub's Ubuntu runner (a Shireworks emulator lease in a private copy), the
-web in headless Chrome. It builds tier 2 on every
-change, but runs it only by hand for now (until the build machine has the
-room): Linux in a container under Xvfb, Windows under Wine in a container
-or on a Shireworks Windows VM, never on this Mac's own screen. Tier 2's pictures
-may differ from real hardware (Wine's fonts), which is acceptable.
+and Android, Android through Isomer. CI (GitHub's own runners alone, since
+2026-11-15) builds tier 1 on every change, runs it by hand (verify) and
+pictures it ahead of a release (the proof): the iPhone and the Mac on `xcode-27` Macs, Android on
+GitHub's x86_64 Ubuntu with KVM, the web in headless Chrome. It builds
+Linux on every change and runs it by hand (in the project's image under
+Xvfb); it builds Windows on every change, on GitHub's windows-11-arm with
+the image's own Visual Studio, and runs it nowhere for now. Never on this
+Mac's own screen.
+Tier 2's pictures may differ from real hardware (Wine's fonts), which is
+acceptable.
 
-- **Every platform's tests in containers (2026-11-04).** CI's container
-  builds every platform, Windows too, and tests each where it runs (since
-  2026-11-05 the tier-1 platforms only: iOS, the Mac, Android and the web
-  run; Linux's test and the GL check are built, and Windows under Wine runs
-  when tools/ci/platform_tests.sh's PLATFORM_TESTS names it), the
-  Storybook on its test stories (examples/tests/platforms/stories.bzl),
-  each picture checked for having drawn and kept as the run's
-  `platform-tests` artifact:
-  - in the build container (tools/ci/container_build.sh): the web in
-    headless Chrome (Chrome for Testing for linux-arm64, MODULE.bazel;
+- **Every platform's tests on GitHub's runners (2026-11-15).** Each
+  platform is built where its tools run (tools/ci/container_build.sh with
+  ISOMER_PLATFORMS) and its Storybook tested there or on a runner of its
+  own, on its test stories (examples/tests/platforms/stories.bzl), each
+  picture checked for having drawn and kept as the run's `platform-tests-*`
+  artifacts:
+  - the web and Linux, in the project's image (ghcr.io/attilathefun/visor-agent,
+    by digest) on GitHub's arm64 Ubuntu: the web in headless Chrome (Chrome
+    for Testing for linux-arm64, MODULE.bazel;
     //tools/testing/browser_check), Linux under Xvfb with Mesa's llvmpipe
-    (the host's ISO_SHOT frame dumps), the GL backend's checks on Mesa's
-    EGL, and the core's tests (`//tests/platforms:all` in the examples);
-  - Windows: built in the same container for Windows on Arm
-    (`--config=windows_on_linux`, tools/windows: the Windows Swift SDK and
-    Microsoft's libraries beside the host's Swift, README there), run under
-    arm64 Wine Staging in a container of Shireworks' wine image
-    (tools/ci/windows_test.sh; Staging for its AF_UNIX sockets, which a
-    headful app's SwiftNIO needs;
-    Wine's own fonts and DirectWrite: a check, never the proof's pixels);
-  - Android (2026-11-06): on GitHub's own Ubuntu runner, the primary for
-    this public repository (the workflow's `android` job: an x86_64
-    emulator on the runner's KVM, the x86_64 test APK built in the
-    container, tools/ci/hosted_android_test.sh); in a private copy, and as
-    the fallback, an emulator leased from Shireworks (`shireworks.sh lease
-    android`), on its Mac's own hypervisor, through `shireworks.sh adb` and
-    `screenshot` (tools/ci/android_test.sh, tools/ci/shireworks.sh: Shireworks'
-    API, copied byte for byte from AttilaTheFun/shireworks). A Cuttlefish phone in a
-    container with its own KVM (`--virtualization`, Shireworks' API 22;
-    tools/ci/android_device.sh) boots far on a Mac but doesn't finish:
-    Virtualization's vCPU threads oversleep every timed wait (macOS's timer
-    leeway), and WebView's zygote times out starting, restarting the system
-    server. On a Linux host with KVM it would be the fast path (TODO.md);
-  - the iPhone and the Mac: built in the container (rules_applecross), run
-    on an `ios` lease and a `mac` slot of Shireworks' primary macOS VM
-    (tools/ci/apple_test.sh);
-  - all of it after the build, at once: tools/ci/platform_tests.sh.
+    (the host's ISO_SHOT frame dumps; built, run by hand), the GL backend's
+    checks on Mesa's EGL, and the core's tests (`//tests/platforms:all` in
+    the examples);
+  - Android, built in Swift's image on GitHub's x86_64 Ubuntu (Google's SDK
+    and NDK tools and the hermetic JDK for Linux are x86_64, and GitHub's
+    arm64 runners have no Rosetta), tested on an x86_64 emulator on that
+    runner's KVM (the workflow's `android` job,
+    tools/ci/hosted_android_test.sh, tools/ci/android_test.sh). A Cuttlefish
+    phone in a container with its own KVM (Shireworks' API 22;
+    tools/ci/android_device.sh, in git's history) boots far on a Mac but
+    doesn't finish: Virtualization's vCPU threads oversleep every timed
+    wait (macOS's timer leeway), and WebView's zygote times out starting,
+    restarting the system server. On a Linux host with KVM it would be the
+    fast path (TODO.md);
+  - the iPhone and the Mac, built and tested on `xcode-27` Macs with their
+    own Xcode (`verify-apple`, then `apple`: tools/ci/hosted_apple_test.sh
+    and hosted_headful_test.sh);
+  - Windows: built by CI on GitHub's windows-11-arm, natively
+    (tools/ci/windows_build.ps1: swift.org's Swift 6.4.2 for Windows,
+    pinned by SHA-256, and the image's Visual Studio and Windows SDK; the
+    headful Windows tests take that Swift's own Swift Testing, where a
+    build on Linux takes @swift_windows_sdk's, by
+    @isomer//tools/windows:on_linux), not run. On Linux only a builder
+    with Microsoft's sysroot builds it (`--config=windows_on_linux`,
+    tools/windows, ISOMER_WINDOWS_SDKS). It ran under arm64 Wine Staging
+    (tools/ci/windows_test.sh, in git's history) and on windows-11-arm
+    (tools/ci/hosted_windows_test.ps1) until 2026-11-15.
 - **Linux from a Mac**: `tools/linux/build.sh [targets]` builds in a
   container leased from Shireworks (`shireworks.sh lease container`, released
   however the script ends) of Visor's agent image, CI's
@@ -668,13 +721,12 @@ may differ from real hardware (Wine's fonts), which is acceptable.
 - **Every platform in a session's container**: the same build runs in a
   Shireworks container lease of Visor's agent image (what a Visor session
   works in: Swift 6.4.0, clang, the Linux libraries, x86_64 glibc, Rosetta),
-  the SDK and tools from Shireworks' files: 5 min 50 s from cold.
-  tools/ci/container_build.sh is CI's (.github/workflows/build.yml, on a
-  self-hosted runner whose Mac runs Shireworks; branches of this repository
-  only). The container is arm64: MODULE.bazel registers swift.org's
-  ubuntu24.04 toolchains for aarch64 as well as x86_64, wasm SDK included
-  (the wasm cell's reactor). tools/proof/proof.py runs what it builds in
-  a Shireworks Linux VM.
+  the SDK and tools from Shireworks' files: 5 min 50 s from cold. That is
+  an agent's; CI's (tools/ci/container_build.sh, .github/workflows/build.yml)
+  runs on GitHub's runners alone. The container is arm64: MODULE.bazel
+  registers swift.org's ubuntu24.04 toolchains for aarch64 as well as
+  x86_64, wasm SDK included (the wasm cell's reactor). tools/proof/proof.py
+  run by hand pictures what it builds in a Shireworks Linux VM.
 - **Windows on the Shireworks Windows VM** (`shireworks.sh lease windows
   --config=swift-6.3.2`, the build layer tools/ci/shireworks/windows-swift.ps1
   makes): Bazel in MSVC's environment (vcvarsall arm64) with

@@ -10,12 +10,13 @@ sharing a pool with visor's and agent_ui's. Moved between releases:
 
 - Transfer the repository to the organization (GitHub redirects the old
   URL, archives included, while nothing new takes `AttilaTheFun/isomer`).
-- Register our self-hosted runners again under the new owner: Shireworks'
-  `isomer-jit` and the Mac's `isomer-containers` (the Shireworks session's).
+- No self-hosted runners to register again: CI runs on GitHub's own
+  runners alone since 2026-11-15. The `release` environment and its
+  secrets (the signing keys) move with the repository; check them there.
 - Install the agents' GitHub App on the organization; check that the code
   owner can still approve and that Container Helper's merges still work.
 - Move what isn't the repository's own: account-level secrets and
-  variables (Applications' CI code).
+  variables, if any are left.
 - The new URL where the old one is written:
   - bazel_registry's isomer entries (new ones; old ones redirect);
   - README, AGENTS.md, docs, the Playground's links;
@@ -27,7 +28,7 @@ sharing a pool with visor's and agent_ui's. Moved between releases:
 ## The CI proof: what's left
 
 The Build workflow's proof jobs picture the Storybook on every tier-1
-platform when run by hand (verify, release), each picture compared with
+platform when run by hand (release, or proof alone), each picture compared with
 the previous release's (AGENTS.md). Since 0.47 the Storybook alone: the
 Playground's proof is AttilaTheFun/playground's.
 
@@ -73,9 +74,10 @@ container with its own KVM, the iPhone and the Mac on slots. Left:
   bar, a one-time change); Windows' pixels stay Windows' (a Windows slot of
   a Windows primary, Shireworks' backlog for the Mac Studio). The proof's
   Android part could use the container phone once its boot is fast enough.
-- **Android in a container doesn't finish booting on a Mac**, so CI tests
-  Android on an emulator leased from Shireworks (the Mac's own hypervisor).
-  Cuttlefish in a container with its own KVM (tools/ci/android_device.sh)
+- **Android in a container doesn't finish booting on a Mac**, so CI tested
+  a private copy's Android on an emulator leased from Shireworks (the Mac's
+  own hypervisor); since 2026-11-15 CI tests on GitHub's Ubuntu KVM alone.
+  Cuttlefish in a container with its own KVM (tools/ci/android_device.sh, in git's history)
   boots far into the system server, which then restarts each time
   WebView's zygote times out starting. Not nesting: Virtualization's vCPU
   threads aren't real-time, and macOS's timer leeway makes every timed wait

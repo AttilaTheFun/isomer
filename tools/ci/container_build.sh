@@ -1,101 +1,102 @@
 #!/bin/bash
-# CI's build of every platform in a Linux container: the job's own (the
-# isomer-jit runners, Shireworks' single-use containers of the image a Visor
-# session runs in), so CI builds where an agent works. The Apple targets
-# take Xcode 27.0's SDK archive and rules_applecross's ported tools from the
-# same Shireworks server's files (by SHA-256, with its cache's read token)
-# through a downloader config written here, and its Bazel reads that
-# server's cache: no host is named in the repository.
+# CI's build of every platform, on GitHub's own runners, each platform where
+# its tools run (ISOMER_PLATFORMS):
+# - web and linux: in the project's Linux container (the image a Visor
+#   session works in, ghcr.io/attilathefun/visor-agent, by digest) on
+#   GitHub's arm64 Ubuntu runner;
+# - android: on GitHub's x86_64 Ubuntu runner, in Swift's own image:
+#   Google's Android SDK and NDK tools, and the hermetic JDK for Linux, are
+#   x86_64 programs, and GitHub's arm64 runners have nothing to run them on;
+# - apple: on GitHub's `xcode-27` Macs (a standard runner, free for a public
+#   repository), with their own Xcode (the owner, 2026-11-15): Apple's SDKs
+#   may not be redistributed, so CI never takes the SDK archive the Apple
+#   targets take on Linux (rules_applecross; tools/linux/build.sh
+#   --apple-sdks, for an agent that has it);
+# - windows: on Linux, with ISOMER_WINDOWS_SDKS alone (Microsoft's sysroot,
+#   which may not be redistributed either: tools/windows/README.md); CI
+#   builds Windows on Windows instead (tools/ci/windows_build.ps1).
+# Bazel's settings (its caches in GitHub's cache, the downloads, the SDKs)
+# are tools/ci/ci_bazel.sh's, written before this runs.
 #
-#   tools/ci/container_build.sh [<bazel build args>…]   # default: every platform's Storybook
+#   tools/ci/container_build.sh [<bazel build args>…]   # default: the platforms' Storybooks and checks
 #   tools/ci/container_build.sh all   # everything the checks build, built,
 #                                     # nothing run or copied: main's populate
-#                                     # (the Bazel cache's one writer:
-#                                     # Shireworks grants that job the write)
+#                                     # (the one writer of GitHub's cache)
 #   tools/ci/container_build.sh pr    # the same build, then every test that
 #                                     # runs without a GUI: the core's, the
 #                                     # web's in headless Chrome, the headless
 #                                     # UI tests (examples' //headless and
-#                                     # //remote): a pull request's container
+#                                     # //remote): a pull request's checks
 #                                     # (the owner, 2026-11-08: headless tests
 #                                     # before a merge, builds after one)
+#   tools/ci/container_build.sh headful  # the tests that draw (web, linux)
 #   tools/ci/container_build.sh package <dir> <bazel build args>…
 #                                     # the build, then the targets' packages
-#                                     # (.ipa, a Mac app's .zip, the signed
-#                                     # .apk) copied to <dir>, in this checkout,
-#                                     # for CI to publish
+#                                     # (.ipa, a Mac app's .zip, the .apk, the
+#                                     # site's .tar.gz) copied to <dir>, in
+#                                     # this checkout, for CI to sign and publish
 #
+#   ISOMER_PLATFORMS  which of apple, android, web, linux and windows (default:
+#                    a Mac's apple; a Linux machine's web, linux and android,
+#                    with windows when ISOMER_WINDOWS_SDKS names its SDKs)
 #   ISOMER_EXECUTION_LOGS  a folder for Bazel's execution logs (compact),
 #                    to compare two runs' action keys when the cache misses
-#   SHIREWORKS_FILES_HOST  the name Shireworks' files are reached by
-#                    (default: the server tools/ci/shireworks.sh files-url
-#                    names, from the job's SHIREWORKS_GRANT or SHIREWORKS_SERVERS)
+#   ISOMER_ANDROID_X86_64  pr and all: the Android test APK for x86_64 too
 #
-# With no arguments (CI's run) the tests run after the build, in the same
-# container: the core's (the mock renderer's and the snapshots', isomer's own
-# module) and the web's Storybook in headless Chrome (//tests/platforms in the
-# examples), their output in the log. Linux's Storybook test (under Xvfb) and
-# the GL backend's check (on Mesa's EGL) are built, not run, for now
-# (2026-11-05: CI runs the tier-1 platforms). The apps tested elsewhere are
-# put in .ci/platforms for tools/ci/platform_tests.sh: the iPhone's and the
-# Mac's (slots of Shireworks' primary macOS VM), Android's (an emulator) and
-# Windows' (built here for Windows on Arm, --config=windows_on_linux; run
-# under Wine only by hand). With ISOMER_ANDROID_X86_64 set (a public
-# repository's CI) the Android test APK is also built for x86_64, in
-# .ci/platforms/android-x86_64, for the emulator on GitHub's Ubuntu runner.
-# Any build or test failing fails the run.
+# With no arguments (verify's run) the tests run after the build: the core's
+# (the mock renderer's and the snapshots', isomer's own module) and the
+# web's Storybook in headless Chrome (//tests/platforms in the examples),
+# their output in the log. Linux's Storybook test (under Xvfb) and the GL
+# backend's check (on Mesa's EGL) are built, not run, for now (2026-11-05:
+# CI runs the tier-1 platforms). The apps tested on GitHub's other machines
+# are put in .ci/platforms: the iPhone's and the Mac's (apple, for the
+# `xcode-27` Macs), Android's for x86_64 (android, for the Ubuntu runner's
+# emulator) and Windows' (windows, for windows-11-arm). Any build or test
+# failing fails the run.
 #
-# package (the publishing jobs', as AttilaTheFun/reviews' container_build.sh
-# has it): Bazel's tree is the container's (a volume), so what CI publishes
-# is copied out into the checkout, the one folder of the Mac's the
-# container sees, found by cquery with the build's own flags, from the
-# execution root. Flags as --name=value (--compilation_mode=opt, not -c
-# opt): every argument that doesn't start with "-" is taken for a target.
-# An Android app's files are its signed .apk (published as signed by its
-# build: Applications Server keeps no Android key), its unsigned one and its
-# deploy jar; only the first is copied. A .tar.gz (the web site) is copied
-# as is.
+# package (the publishing jobs'): the targets' files, found by cquery with
+# the build's own flags, copied out of the execution root into the checkout.
+# Flags as --name=value (--compilation_mode=opt, not -c opt): every argument
+# that doesn't start with "-" is taken for a target. An Android app's files
+# are its .apk (signed by its build with a debug key, which
+# tools/ci/sign_builds.sh replaces with the release key), its unsigned one
+# and its deploy jar; only the first is copied. A .tar.gz (the web site) is
+# copied as is.
 set -euo pipefail
+# Bash 3.2 too: GitHub's Macs have no other (no mapfile, no ${!name}).
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-SDK_SHA256="251c252f7f41bcd3e08655e49e182686682d705945f4a2807049b9051c606ebb"
 
-# The job's own container builds (the isomer-jit runners: Shireworks'
-# single-use Linux containers, its cache's read token in ~/.netrc and its
-# cache in ~/.bazelrc already), in place. Off CI, an agent's container (a
-# Visor session's) builds the same way; a Mac doesn't (tools/linux/build.sh).
-[ "$(uname -s)" != Darwin ] || { echo "container_build.sh: runs in a Linux container (CI's, or tools/linux/build.sh's)" >&2; exit 1; }
-
-# Where Shireworks' files are: the URL shireworks.sh gives a file (its server
-# and port), or SHIREWORKS_FILES_HOST's port 7490.
-if [ -n "${SHIREWORKS_FILES_HOST:-}" ]; then
-    files="http://$SHIREWORKS_FILES_HOST:7490/files/sha256"
+if [ "$(uname -s)" = Darwin ]; then
+    default=apple
 else
-    files="$("$ROOT/tools/ci/shireworks.sh" files-url "$SDK_SHA256")" ||
-        { echo "container_build.sh: no Shireworks to take files from: set SHIREWORKS_FILES_HOST (or SHIREWORKS_GRANT or SHIREWORKS_SERVERS)" >&2; exit 1; }
-    files="${files%/*}"
+    default="web linux android${ISOMER_WINDOWS_SDKS:+ windows}"
 fi
-
-# The placeholders in MODULE.bazel, to Shireworks' files; and GitHub's
-# downloads tried at GitHub, then at Bazel's mirror (GitHub's release
-# downloads have failed with 504s for hours).
-mkdir -p "$ROOT/.ci"
-cat > "$ROOT/.ci/downloader.cfg" <<EOF
-rewrite apple-sdks\.invalid/.* $files/$SDK_SHA256
-rewrite ported-tools\.invalid/sha256/(.*) $files/\$1
-rewrite windows-sdks\.invalid/sha256/(.*) $files/\$1
-rewrite (github\.com/.*) \$1
-rewrite (github\.com/.*) mirror.bazel.build/\$1
-EOF
+platforms=" ${ISOMER_PLATFORMS:-$default} "
+for platform in $platforms; do
+    case "$platform" in
+        apple | android | web | linux | windows) ;;
+        *) echo "container_build.sh: no platform $platform (ISOMER_PLATFORMS: apple, android, web, linux, windows)" >&2; exit 2 ;;
+    esac
+    if [ "$(uname -s)" = Darwin ] && [ "$platform" != apple ]; then
+        echo "container_build.sh: a Mac builds the Apple platforms alone here; $platform is built on Linux" >&2; exit 2
+    fi
+    if [ "$(uname -s)" != Darwin ] && [ "$platform" = apple ]; then
+        echo "container_build.sh: the Apple platforms are built on a Mac, with its Xcode" >&2; exit 2
+    fi
+done
+if [ "$(uname -s)" != Darwin ]; then
+    [[ $platforms != *" windows "* ]] || [ -n "${ISOMER_WINDOWS_SDKS:-}" ] ||
+        { echo "container_build.sh: Windows on Linux takes Microsoft's sysroot: name it in ISOMER_WINDOWS_SDKS (tools/ci/ci_bazel.sh)" >&2; exit 2; }
+fi
+has() { [[ $platforms == *" $1 "* ]]; }
+echo "container_build.sh: the platforms here:$platforms"
 
 # An app in each of its modes (docs/modes.md), each by its own name in this
 # build: isomer_application's example, the selection probe, on the iPhone,
 # the Mac, Android and the web, compiled, in a web view and remote.
 probe=//shared/selection_probe_application
-app_modes=()
-for app in ios_compiled ios_webview ios_remote macos_compiled macos_webview macos_remote \
-           android_compiled_apk android_remote_apk web; do
-    app_modes+=("$probe:selection_probe_$app")
-done
+apps=()
+add_probes() { local app; for app in "$@"; do apps+=("$probe:selection_probe_$app"); done; }
 
 mode=build
 out=""
@@ -114,36 +115,52 @@ if [ "${1:-}" = package ]; then
 elif [ $# -eq 0 ] || [ "$*" = all ] || [ "$*" = pr ] || [ "$*" = headful ]; then
     mode=checks
     [ $# -eq 0 ] || mode="$*"
-    # The iPhone Storybook on Isomer's frameworks too: the proof's parity
-    # app, the one build of Apple's tree renderer (apple/libraries/
-    # swift_ui_tree), which nothing else here compiles.
-    set -- --ios_multi_cpus=sim_arm64 \
-        //apple/storybook_ios_application:storybook_ios_sim_application \
-        //apple/storybook_isomer_ios_application \
-        //apple/storybook_macos_application:storybook_macos_application \
-        //web/storybook_web_application:storybook_web_application \
-        //android/storybook_android_application:storybook_android_application \
-        //android/storybook_android_application:storybook_android_application_apk \
-        //linux/storybook_linux_application:storybook_linux_application \
-        //headless/storybook_headless_application:storybook_headful_apple_runner \
-        //apple/remote_ios_application \
-        //apple/webview_ios_application \
-        "${app_modes[@]}"
+    if [ "$mode" = headful ] && ! has web && ! has linux; then
+        echo "container_build.sh: headful runs the web and Linux tests: ISOMER_PLATFORMS names neither" >&2; exit 2
+    fi
+    # Each platform's Storybook, and its apps in their modes. The iPhone
+    # Storybook on Isomer's frameworks too: the proof's parity app, the one
+    # build of Apple's tree renderer (apple/libraries/swift_ui_tree), which
+    # nothing else here compiles.
+    if has apple; then
+        apps+=(//apple/storybook_ios_application:storybook_ios_sim_application
+               //apple/storybook_isomer_ios_application
+               //apple/storybook_macos_application:storybook_macos_application
+               //headless/storybook_headless_application:storybook_headful_apple_runner
+               //apple/remote_ios_application
+               //apple/webview_ios_application)
+        add_probes ios_compiled ios_webview ios_remote macos_compiled macos_webview macos_remote
+    fi
+    if has web; then
+        apps+=(//web/storybook_web_application:storybook_web_application)
+        add_probes web
+    fi
+    if has android; then
+        apps+=(//android/storybook_android_application:storybook_android_application
+               //android/storybook_android_application:storybook_android_application_apk)
+        add_probes android_compiled_apk android_remote_apk
+    fi
+    has linux && apps+=(//linux/storybook_linux_application:storybook_linux_application)
+    set -- --ios_multi_cpus=sim_arm64 ${apps[@]+"${apps[@]}"}
 fi
 
-# In the container: the build in the examples' module, then (CI's run) the
-# checks in isomer's, or (package) the packages copied out, each Bazel
-# reading the cache (the runner's ~/.bazelrc names it).
+# The build in the examples' module, then (the checks) the tests in
+# isomer's and the examples', or (package) the packages copied out.
 steps='
-root=$1 mode=$2 out=$3; shift 3
+root=$1 mode=$2 out=$3 platforms=$4; shift 4
+has() { [[ $platforms == *" $1 "* ]]; }
 cd "$root/examples"
-flags=(--config=apple_on_linux "--downloader_config=$root/.ci/downloader.cfg")
 # An execution log an invocation, named for what it builds (ISOMER_EXECUTION_LOGS).
 logs="${ISOMER_EXECUTION_LOGS:-}"
 [ -z "$logs" ] || mkdir -p "$logs"
 log_of() { [ -z "$logs" ] || printf -- "--execution_log_compact_file=%s/%s.zst" "$logs" "$1"; }
-bazel build --keep_going "${flags[@]}" $(log_of build) "$@"
-built=$?
+built=0
+targets=0
+for argument in "$@"; do case "$argument" in -*) ;; *) targets=1 ;; esac; done
+if [ $targets -eq 1 ]; then
+    bazel build --keep_going $(log_of build) "$@"
+    built=$?
+fi
 if [ "$mode" = package ]; then
     [ $built -eq 0 ] || exit $built
     options=()
@@ -152,8 +169,8 @@ if [ "$mode" = package ]; then
     for argument in "$@"; do
         case "$argument" in -*) options+=("$argument") ;; *) query="${query:+$query + }$argument" ;; esac
     done
-    exec_root="$(bazel info "${flags[@]}" "${options[@]}" execution_root)" || exit
-    files="$(bazel cquery "${flags[@]}" "${options[@]}" "$query" --output=files 2> /dev/null)" || exit
+    exec_root="$(bazel info "${options[@]}" execution_root)" || exit
+    files="$(bazel cquery "${options[@]}" "$query" --output=files 2> /dev/null)" || exit
     for file in $files; do
         case "$file" in
             *_unsigned.apk) ;;
@@ -165,6 +182,7 @@ if [ "$mode" = package ]; then
 fi
 [ "$mode" = checks ] || [ "$mode" = all ] || [ "$mode" = pr ] || [ "$mode" = headful ] || exit $built
 start=$SECONDS
+results=()
 # The mode setting (--@isomer//:mode, docs/modes.md) picks each platform
 # app of an isomer_application: each mode built above by its own name, the
 # setting checked here by analysis alone (a flag on the command line puts
@@ -172,13 +190,16 @@ start=$SECONDS
 # platform names resolving to that mode.
 picked=0
 if [ "$mode" != headful ]; then
+    mode_platforms=()
+    has apple && mode_platforms+=(ios macos)
+    has android && mode_platforms+=(android_apk)
     for app_mode in webview remote; do
-        for platform in ios macos android_apk; do
+        for platform in ${mode_platforms[@]+"${mode_platforms[@]}"}; do
             [ "$app_mode" = webview ] && [ "$platform" = android_apk ] && continue
             target=//shared/selection_probe_application:selection_probe_$platform
             want="${target%_apk}_${app_mode}"
             [ "$platform" = android_apk ] && want="${want}_apk"
-            deps="$(bazel cquery "${flags[@]}" --@isomer//:mode=$app_mode --ios_multi_cpus=sim_arm64 \
+            deps="$(bazel cquery --@isomer//:mode=$app_mode --ios_multi_cpus=sim_arm64 \
                 "deps($target, 1)" --output=label 2> /dev/null)" || { picked=1; continue; }
             if ! grep -q "^$want " <<< "$deps"; then
                 echo "container_build.sh: --@isomer//:mode=$app_mode builds $target as something other than $want:" >&2
@@ -190,30 +211,35 @@ if [ "$mode" != headful ]; then
     # And no Android app in web-view mode: incompatible, refused by name.
     # Refused for that reason only: any other failure (a broken target)
     # fails the check too, its output shown.
-    if refusal="$(bazel build --nobuild "${flags[@]}" --@isomer//:mode=webview \
-        //shared/selection_probe_application:selection_probe_android_apk 2>&1)"; then
-        echo "container_build.sh: an Android app in web-view mode was not refused" >&2
-        picked=1
-    elif ! grep -q "android_web_view_transport_not_built_yet" <<< "$refusal"; then
-        echo "container_build.sh: an Android app in web-view mode failed, but not as incompatible:" >&2
-        tail -30 <<< "$refusal" >&2
-        picked=1
+    if has android; then
+        if refusal="$(bazel build --nobuild --@isomer//:mode=webview \
+            //shared/selection_probe_application:selection_probe_android_apk 2>&1)"; then
+            echo "container_build.sh: an Android app in web-view mode was not refused" >&2
+            picked=1
+        elif ! grep -q "android_web_view_transport_not_built_yet" <<< "$refusal"; then
+            echo "container_build.sh: an Android app in web-view mode failed, but not as incompatible:" >&2
+            tail -30 <<< "$refusal" >&2
+            picked=1
+        fi
     fi
 fi
-[ $built -ne 0 ] || built=$picked
+results+=($built $picked)
 # all: the tests built, not run (main: builds alone, to fill the cache).
 run_tests() { if [ "$mode" = all ]; then bazel build "$@"; else bazel test "$@"; fi; }
-# What the tests here need beyond the image: Xvfb, Mesa'"'"'s drivers, and the
-# libraries Chrome for Testing loads.
+# What the tests on Linux need beyond the image: Xvfb, the Mesa drivers,
+# and the libraries Chrome for Testing loads.
 root_do() { if [ "$(id -u)" = 0 ]; then "$@"; else sudo "$@"; fi; }
-if [ "$mode" != all ] && ! command -v Xvfb >/dev/null || [ ! -e /usr/lib/aarch64-linux-gnu/libnss3.so ]; then
-    root_do env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends xvfb libnss3 \
-        libgl1-mesa-dri libegl-mesa0 libasound2t64 libxkbcommon0 libxcomposite1 libxdamage1 \
-        libxrandr2 libpango-1.0-0 libcairo2 libcups2t64 libdrm2 fonts-dejavu-core >/dev/null ||
-        { root_do apt-get update -qq >/dev/null && root_do env DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
-            --no-install-recommends xvfb libnss3 libgl1-mesa-dri libegl-mesa0 libasound2t64 \
-            libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libpango-1.0-0 libcairo2 \
-            libcups2t64 libdrm2 fonts-dejavu-core >/dev/null; }
+need=0
+if has web || has linux; then
+    { [ "$mode" != all ] && ! command -v Xvfb >/dev/null; } && need=1
+    [ -e /usr/lib/aarch64-linux-gnu/libnss3.so ] || [ -e /usr/lib/x86_64-linux-gnu/libnss3.so ] || need=1
+fi
+if [ $need -eq 1 ]; then
+    packages=(xvfb libnss3 libgl1-mesa-dri libegl-mesa0 libasound2t64 libxkbcommon0 libxcomposite1 libxdamage1
+              libxrandr2 libpango-1.0-0 libcairo2 libcups2t64 libdrm2 fonts-dejavu-core)
+    root_do env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends "${packages[@]}" >/dev/null ||
+        { root_do apt-get update -qq >/dev/null &&
+          root_do env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends "${packages[@]}" >/dev/null; }
 fi
 # headful (container-verify, at verify only): the tests that draw. The web
 # Storybook in headless Chrome, its test stories pictured; and the apps
@@ -222,9 +248,9 @@ fi
 # the Storybook tests run headful (the same tests as //headless), and the
 # Linux Storybook under Xvfb, the same tests again.
 if [ "$mode" = headful ]; then
-    bazel test "${flags[@]}" --test_output=errors //tests/platforms:storybook_web_test
+    bazel test --test_output=errors //tests/platforms:storybook_web_test
     drawn=$?
-    bazel test "${flags[@]}" --@isomer//drive:headful $(log_of headful) --test_output=errors //remote:headful_web_test \
+    bazel test --@isomer//drive:headful $(log_of headful) --test_output=errors //remote:headful_web_test \
         //headless/storybook_headless_application:storybook_headful_web_test \
         //headless/storybook_headless_application:storybook_headful_linux_test
     headful=$?
@@ -232,213 +258,222 @@ if [ "$mode" = headful ]; then
     for result in $built $drawn $headful; do [ "$result" -ne 0 ] && exit "$result"; done
     exit 0
 fi
-# Windows on Arm, built here.
+# Windows on Arm, built on Linux (only with the Microsoft sysroot).
 windows=(--config=windows_tests_on_linux --platforms=@isomer//tools/platforms:windows_arm64)
-bazel build "${flags[@]}" "${windows[@]}" //windows/storybook_windows_application
-built_windows=$?
-# The plain app, kept now: the headful build below writes the same path (a
-# flag given on the command line leaves Bazel output folders as they are),
-# and the platform tests want the app with no driver in it.
-windows_plain="$root/.ci/windows-plain"
-rm -rf "$windows_plain" && mkdir -p "$windows_plain"
-for f in $(bazel cquery "${flags[@]}" "${windows[@]}" //windows/storybook_windows_application --output=files 2> /dev/null); do
-    case "$f" in *.exe) cp "$(bazel info "${flags[@]}" execution_root)/$f" "$windows_plain/" ;; esac
-done
-# And the Windows Storybook with its driver built in (its headful build),
-# with the Storybook tests built for Windows to drive it there.
-windows_headful=(//windows/storybook_windows_application //headless/storybook_headless_application:storybook_headful_windows_test)
-bazel build "${flags[@]}" "${windows[@]}" --@isomer//drive:headful "${windows_headful[@]}" || built_windows=1
-# The tier-1 platforms run (the web here); the Linux tests are built but,
-# for now (2026-11-05), not run.
-bazel build "${flags[@]}" //tests/platforms:all
-built_tests=$?
-# The WasmKit host runtime for Android and Windows too: an app may host
-# reactors there (the Playground does on Android), though no app here does.
-bazel build "${flags[@]}" --platforms=@isomer//tools/platforms:android_arm64 @isomer//shared/wasm_host:wasmkit_runtime || built_tests=1
-bazel build "${flags[@]}" "${windows[@]}" @isomer//shared/wasm_host:wasmkit_runtime || built_tests=1
-# The Windows Electron package, zipped by the hermetic JDK jar: on Linux the
-# JDK archive has no Contents/Home, which once kept it from loading here.
-bazel build "${flags[@]}" //electron/example_full_react_electron_application:example_windows_package || built_tests=1
-# The tests that draw nothing run here; those that do (the web Storybook in
-# Chrome, the headful apps) in headful mode, container-verify, at verify. The
-# web-view session test drives a page in Chrome that draws nothing. The
-# library evolution test builds a resilient library against Isomer built
-# with --@isomer//:library_evolution, for Android and the web.
-run_tests "${flags[@]}" --test_output=errors //tests/foundation_networking:networking_test \
-    //tests/cxx_interop:cxx_interop_test //tests/sqlite_wasi:sqlite_file_test \
-    //tests/android_app_attributes:android_app_attributes_test //tests/android_aar:android_aar_test \
-    //tests/swift6_app:swift6_app_test //tests/android_libcxx_shared:android_libcxx_shared_test \
-    //tests/prebuilt_swift_library:prebuilt_swift_library_test //tests/webview_session:session_test \
-    //tests/library_evolution:library_evolution_test
-tested_here=$?
-# The headless tests: the Storybook built for the headless host and driven
-# through its runtime (//headless in the examples), nothing drawn, and served
-# over every transport (//remote: gRPC, WebSockets, Unix sockets, the CLI,
-# the web thin client in headless Chrome). With them the selection probe
-# served headless, what its apps draw in remote mode.
-run_tests "${flags[@]}" --@isomer//headless $(log_of headless) --test_output=errors //headless/... //remote/... \
-    //shared/selection_probe_application:selection_probe_server
-headless=$?
-# The headful apps and their tests built (run in headful mode).
-bazel build "${flags[@]}" --@isomer//drive:headful $(log_of headful) //remote:headful_web_test \
-    //headless/storybook_headless_application:storybook_headful_web_test \
-    //headless/storybook_headless_application:storybook_headful_linux_test
-headful=$?
-[ $headless -ne 0 ] || headless=$headful
-cd "$root"
-# The Linux wasm cell too (the Linux Playground links it; nothing
-# here does).
-bazel build //swift_gpu/linux:gl_backend_test //linux/libraries/swift_ui_wasm
-built_gl=$?
-# And the checks built for wasm, each a WASI command run in headless Chrome
-# (//tools/wasm/wasi_run_browser): Foundation, Combine, OSLog, the Metal
-# translator.
-run_tests --test_output=errors //tests/renderer:mock_renderer_test //tests/snapshot:snapshot_test //tests/hub:hub_test \
-    //foundation/tests:foundation_test //foundation/tests:internationalization_test \
-    //foundation/tests:internationalization_trimmed_test //frameworks/combine/tests:combine_test \
-    //frameworks/os_log/tests:os_log_test //metal/isomer_metal/tests:translator_test
-checked=$?
+if has windows; then
+    bazel build "${windows[@]}" //windows/storybook_windows_application
+    results+=($?)
+    # The plain app, kept now: the headful build below writes the same
+    # path (a flag given on the command line leaves Bazel output folders as
+    # they are), and the platform tests want the app with no driver in it.
+    windows_plain="$root/.ci/windows-plain"
+    rm -rf "$windows_plain" && mkdir -p "$windows_plain"
+    for f in $(bazel cquery "${windows[@]}" //windows/storybook_windows_application --output=files 2> /dev/null); do
+        case "$f" in *.exe) cp "$(bazel info execution_root)/$f" "$windows_plain/" ;; esac
+    done
+    # And the Windows Storybook with its driver built in (its headful
+    # build), with the Storybook tests built for Windows to drive it there.
+    bazel build "${windows[@]}" --@isomer//drive:headful //windows/storybook_windows_application \
+        //headless/storybook_headless_application:storybook_headful_windows_test
+    results+=($?)
+    # The WasmKit host runtime for Windows: an app may host reactors there.
+    bazel build "${windows[@]}" @isomer//shared/wasm_host:wasmkit_runtime
+    results+=($?)
+fi
+if has android; then
+    # The WasmKit host runtime for Android too: an app may host reactors
+    # there (the Playground does), though no app here does.
+    bazel build --platforms=@isomer//tools/platforms:android_arm64 @isomer//shared/wasm_host:wasmkit_runtime
+    results+=($?)
+    # The Windows Electron package, zipped by the jar of the hermetic JDK
+    # (x86_64 on Linux, so built beside Android).
+    bazel build //electron/example_full_react_electron_application:example_windows_package
+    results+=($?)
+    # The checks that build for Android (some for wasm beside it; the
+    # library evolution test builds a resilient library against Isomer built
+    # with --@isomer//:library_evolution, for Android and the web).
+    run_tests --test_output=errors //tests/foundation_networking:networking_test //tests/cxx_interop:cxx_interop_test \
+        //tests/android_app_attributes:android_app_attributes_test //tests/android_aar:android_aar_test \
+        //tests/swift6_app:swift6_app_test //tests/android_libcxx_shared:android_libcxx_shared_test \
+        //tests/prebuilt_swift_library:prebuilt_swift_library_test \
+        //tests/library_evolution:library_evolution_test
+    results+=($?)
+fi
+if has web; then
+    # The tests that draw nothing run here; those that do (the web Storybook
+    # in Chrome, the headful apps) in headful mode, container-verify, at
+    # verify. The web-view session test drives a page in Chrome that draws
+    # nothing.
+    run_tests --test_output=errors //tests/sqlite_wasi:sqlite_file_test //tests/webview_session:session_test
+    results+=($?)
+fi
+if has linux; then
+    # The tier-1 platforms run (the web here); the Linux tests are built
+    # but, for now (2026-11-05), not run.
+    bazel build //tests/platforms:all
+    results+=($?)
+    # The headless tests: the Storybook built for the headless host and
+    # driven through its runtime (//headless in the examples), nothing
+    # drawn, and served over every transport (//remote: gRPC, WebSockets,
+    # Unix sockets, the CLI, the web thin client in headless Chrome). With
+    # them the selection probe served headless, what its apps draw in
+    # remote mode. The Apple targets among them (the hosted iPhone tests,
+    # the Mac runner of the headful tests) belong to the Apple build.
+    apple_headless=()
+    has apple || apple_headless=(-//headless/storybook_headless_application:storybook_hosted_ios_test
+                                 -//headless/storybook_headless_application:storybook_headful_apple_runner)
+    run_tests --@isomer//headless $(log_of headless) --test_output=errors -- //headless/... //remote/... \
+        //shared/selection_probe_application:selection_probe_server ${apple_headless[@]+"${apple_headless[@]}"}
+    results+=($?)
+    # The headful apps and their tests built (run in headful mode).
+    bazel build --@isomer//drive:headful $(log_of headful) //remote:headful_web_test \
+        //headless/storybook_headless_application:storybook_headful_web_test \
+        //headless/storybook_headless_application:storybook_headful_linux_test
+    results+=($?)
+    cd "$root"
+    # The Linux wasm cell too (the Linux Playground links it; nothing
+    # here does).
+    bazel build //swift_gpu/linux:gl_backend_test //linux/libraries/swift_ui_wasm
+    results+=($?)
+    # And the checks built for wasm, each a WASI command run in headless
+    # Chrome (//tools/wasm/wasi_run_browser): Foundation, Combine, OSLog,
+    # the Metal translator.
+    run_tests --test_output=errors //tests/renderer:mock_renderer_test //tests/snapshot:snapshot_test //tests/hub:hub_test \
+        //foundation/tests:foundation_test //foundation/tests:internationalization_test \
+        //foundation/tests:internationalization_trimmed_test //frameworks/combine/tests:combine_test \
+        //frameworks/os_log/tests:os_log_test //metal/isomer_metal/tests:translator_test
+    results+=($?)
+    cd "$root/examples"
+fi
 echo "container_build.sh: the tests took $((SECONDS - start)) s"
 
-# all and pr: the x86_64 APK built too, and done.
+# all and pr: the x86_64 APK and the AndroidX override built too, and done.
 if [ "$mode" = all ] || [ "$mode" = pr ]; then
-    cd "$root/examples"
-    built_x86=0
-    [ -z "${ISOMER_ANDROID_X86_64:-}" ] || bazel build "${flags[@]}" --android_platforms=@rules_android//:x86_64 \
-        //android/storybook_android_application:storybook_android_application_apk || built_x86=1
-    # An app with AndroidX of its own points Isomer at its set
-    # (docs/android_maven.md): the Android Storybook built through one.
-    bazel build "${flags[@]}" --@isomer//android/maven:androidx=//tests/android_maven:androidx_for_isomer \
-        //android/storybook_android_application:storybook_android_application_apk
-    built_override=$?
-    for result in $built $built_windows $built_tests $tested_here $headless $built_gl $checked $built_x86 $built_override; do [ "$result" -ne 0 ] && exit "$result"; done
+    if has android; then
+        if [ -n "${ISOMER_ANDROID_X86_64:-}" ]; then
+            bazel build --android_platforms=@rules_android//:x86_64 \
+                //android/storybook_android_application:storybook_android_application_apk
+            results+=($?)
+        fi
+        # An app with AndroidX of its own points Isomer at its set
+        # (docs/android_maven.md): the Android Storybook built through one.
+        bazel build --@isomer//android/maven:androidx=//tests/android_maven:androidx_for_isomer \
+            //android/storybook_android_application:storybook_android_application_apk
+        results+=($?)
+    fi
+    for result in "${results[@]}"; do [ "$result" -ne 0 ] && exit "$result"; done
     exit 0
 fi
-# The apps tested elsewhere, for tools/ci/platform_tests.sh.
-cd "$root/examples"
-platforms="$root/.ci/platforms"
-rm -rf "$platforms" && mkdir -p "$platforms/windows" && chmod -R 777 "$platforms"
-exec_root="$(bazel info "${flags[@]}" execution_root)"
-files() { bazel cquery "${flags[@]}" "$@" --output=files 2> /dev/null; }
-# The web-view iPhone app too (the Storybook as wasm in a web view, drawn by
-# the tree renderer), checked beside the iPhone Storybook.
-for f in $(files --ios_multi_cpus=sim_arm64 //apple/storybook_ios_application:storybook_ios_sim_application) \
-         $(files --ios_multi_cpus=sim_arm64 //apple/webview_ios_application) \
-         $(files //apple/storybook_macos_application) $(files //android/storybook_android_application:storybook_android_application_apk); do
-    case "$f" in *_unsigned.apk) ;; *.ipa | *.zip | *.apk) cp "$exec_root/$f" "$platforms/" ;; esac
-done
-# The plain app kept before its headful build (above).
-cp "$windows_plain"/*.exe "$platforms/windows/" 2> /dev/null || echo "no plain Windows app"
-cp "$(bazel info "${flags[@]}" output_base)"/external/+swift_windows_sdk_repository+swift_windows_sdk/swift-windows-sdk/runtime/aarch64/*.dll \
-    "$platforms/windows/" 2>/dev/null
-cp -R "$root/examples/storybook/assets" "$platforms/windows/assets"
-# The headful Windows Storybook and its tests, for the windows job on a
-# GitHub VM (tools/ci/hosted_windows_test.ps1): both executables, the Swift
-# runtime and XCTest DLLs, the assets and the launcher.
-mkdir -p "$platforms/windows-headful"
-# The test where its build put it, and the headful app beside it in that
-# configuration (the headful flag names its output folder).
-test_exe="$(find -L "$exec_root/bazel-out" -path "*/bin/headless/storybook_headless_application/storybook_headful_windows_test.exe" 2>/dev/null | head -1)"
-if [ -n "$test_exe" ]; then
-    cp "$test_exe" "$platforms/windows-headful/"
-    cp "${test_exe%%/bin/*}/bin/windows/storybook_windows_application/storybook_windows_application.exe" "$platforms/windows-headful/" ||
-        echo "no headful Windows app beside $test_exe"
-else
-    echo "no storybook_headful_windows_test.exe under $exec_root/bazel-out"
+# The apps tested elsewhere, on the other GitHub machines: the workflow
+# uploads each folder as an artifact.
+platforms_out="$root/.ci/platforms"
+rm -rf "$platforms_out" && mkdir -p "$platforms_out/headful" && chmod -R 777 "$platforms_out"
+exec_root="$(bazel info execution_root)"
+files() { bazel cquery "$@" --output=files 2> /dev/null; }
+if has apple; then
+    # The iPhone and Mac Storybooks, and the web-view iPhone app (the
+    # Storybook as wasm in a web view, drawn by the tree renderer), for
+    # tools/ci/hosted_apple_test.sh.
+    for f in $(files --ios_multi_cpus=sim_arm64 //apple/storybook_ios_application:storybook_ios_sim_application) \
+             $(files --ios_multi_cpus=sim_arm64 //apple/webview_ios_application) \
+             $(files //apple/storybook_macos_application); do
+        case "$f" in *.ipa | *.zip) cp "$exec_root/$f" "$platforms_out/" ;; esac
+    done
+    # The same apps with their drivers built in (--@isomer//drive:headful),
+    # for the Storybook tests run headful (tools/ci/hosted_headful_test.sh).
+    headful=(--@isomer//drive:headful)
+    bazel build "${headful[@]}" --ios_multi_cpus=sim_arm64 \
+        //apple/storybook_ios_application:storybook_ios_sim_application //apple/storybook_macos_application
+    results+=($?)
+    for f in $(files "${headful[@]}" --ios_multi_cpus=sim_arm64 //apple/storybook_ios_application:storybook_ios_sim_application) \
+             $(files "${headful[@]}" //apple/storybook_macos_application); do
+        case "$f" in *.ipa | *.zip) cp "$exec_root/$f" "$platforms_out/headful/" ;; esac
+    done
+    # And the tests that drive them, a Mac command, run on the Mac as they are.
+    runner=//headless/storybook_headless_application:storybook_headful_apple_runner
+    if bazel build "$runner"; then
+        for f in $(files "$runner"); do cp "$exec_root/$f" "$platforms_out/headful/storybook_headful_apple_runner"; done
+    else
+        results+=(1)
+    fi
+    # And the tests hosted in the iPhone app: their XCTest bundle and the
+    # app built to host them (headful, for the simulator), which the Mac
+    # runs with an xctestrun of its own (tools/ci/hosted_headful_test.sh),
+    # as rules_apple runs them.
+    hosted=(--@isomer//drive:headful --ios_multi_cpus=sim_arm64)
+    if bazel build "${hosted[@]}" //headless/storybook_headless_application:storybook_hosted_ios_test \
+        //apple/storybook_ios_application:storybook_test_host; then
+        mkdir -p "$platforms_out/headful/hosted"
+        # One query a target (cquery takes one expression); the bundle is
+        # the test target internal bundle target archive.
+        for f in $(files "${hosted[@]}" //headless/storybook_headless_application:storybook_hosted_ios_test.__internal__.__test_bundle) \
+                 $(files "${hosted[@]}" //apple/storybook_ios_application:storybook_test_host); do
+            case "$f" in *.zip | *.ipa) cp "$exec_root/$f" "$platforms_out/headful/hosted/" ;; esac
+        done
+        ls -l "$platforms_out/headful/hosted"
+    else
+        results+=(1)
+    fi
 fi
-sdk="$(bazel info "${flags[@]}" output_base)/external/+swift_windows_sdk_repository+swift_windows_sdk/swift-windows-sdk"
-cp "$sdk"/runtime/aarch64/*.dll "$platforms/windows-headful/" 2>/dev/null
-# XCTest and Testing for arm64, with every DLL beside them (_TestingInterop
-# and the rest they load): bin64a in the SDK (bin64 is x64, bin32 x86).
-find -L "$sdk/Windows.platform" -path "*/bin64a/*" \( -iname "XCTest.dll" -o -iname "Testing.dll" \) 2>/dev/null |
-    while read -r dll; do cp "$(dirname "$dll")"/*.dll "$platforms/windows-headful/"; done
-cp -R "$root/examples/storybook/assets" "$platforms/windows-headful/assets"
-cp "$root/drive/launchers/windows_launcher.sh" "$platforms/windows-headful/"
-ls -l "$platforms/windows-headful"
-# The Linux Storybook test, for a container of Shireworks linux-gui image
-# (tools/ci/platform_tests.sh, when PLATFORM_TESTS names linux): its
-# runfiles, and any Swift runtime libraries they load beside them (the
-# image has no Swift; its system libraries are its own). Built again first: the headful
-# build above writes the same path.
-mkdir -p "$platforms/linux/lib"
-if bazel build "${flags[@]}" //tests/platforms:storybook_linux_test; then
-    runfiles="$(bazel info "${flags[@]}" bazel-bin)/tests/platforms/storybook_linux_test.runfiles"
-    cp -RL "$runfiles" "$platforms/linux/runfiles"
-    # The executables (the app target is a launcher over its _bin); none
-    # when Swift is linked in statically, as it is today.
-    for exe in $(find "$platforms/linux/runfiles" -type f \( -name "storybook_linux_application*" -o -name picture_check \)); do
-        ldd "$exe" 2> /dev/null | awk "/=> \// { print \$3 }"
-    done | grep -v -E "^/(usr/)?lib/(aarch64|x86_64)-linux-gnu/" | sort -u | xargs -r cp -L -t "$platforms/linux/lib"
-    ls -l "$platforms/linux/lib"
-else
-    echo "no Linux Storybook test"
-fi
-# The Android test APK for x86_64 too (ISOMER_ANDROID_X86_64), for the
-# x86_64 emulator on the GitHub runner (tools/ci/hosted_android_test.sh).
-built_x86=0
-if [ -n "${ISOMER_ANDROID_X86_64:-}" ]; then
+if has android; then
+    # The Android Storybook for x86_64, for the emulator on the GitHub
+    # Ubuntu runner (tools/ci/hosted_android_test.sh), and with its driver
+    # built in, for the Storybook tests run headful there.
     x86=(--android_platforms=@rules_android//:x86_64)
     android=//android/storybook_android_application:storybook_android_application_apk
-    if bazel build "${flags[@]}" "${x86[@]}" "$android"; then
-        mkdir -p "$platforms/android-x86_64"
-        for f in $(files "${x86[@]}" "$android"); do
-            case "$f" in *_unsigned.apk) ;; *.apk) cp "$exec_root/$f" "$platforms/android-x86_64/storybook.apk" ;; esac
-        done
-    else
-        built_x86=1
-    fi
-fi
-# The same apps with their drivers built in (--@isomer//drive:headful), for
-# the Storybook tests the GUI jobs run headful on GitHub VMs
-# (tools/ci/hosted_headful_test.sh): the iPhone simulator app, the Mac app,
-# and (ISOMER_ANDROID_X86_64) the x86_64 APK.
-headful=(--@isomer//drive:headful)
-mkdir -p "$platforms/headful"
-bazel build "${flags[@]}" "${headful[@]}" --ios_multi_cpus=sim_arm64 \
-    //apple/storybook_ios_application:storybook_ios_sim_application //apple/storybook_macos_application || built_x86=1
-for f in $(files "${headful[@]}" --ios_multi_cpus=sim_arm64 //apple/storybook_ios_application:storybook_ios_sim_application) \
-         $(files "${headful[@]}" //apple/storybook_macos_application); do
-    case "$f" in *.ipa | *.zip) cp "$exec_root/$f" "$platforms/headful/" ;; esac
-done
-# And the tests that drive them, a Mac command (rules_applecross), run on
-# the Mac as they are: GitHub Macs reach no Bazel cache.
-runner=//headless/storybook_headless_application:storybook_headful_apple_runner
-if bazel build "${flags[@]}" "$runner"; then
-    for f in $(files "$runner"); do cp "$exec_root/$f" "$platforms/headful/storybook_headful_apple_runner"; done
-else
-    built_x86=1
-fi
-# And the tests hosted in the iPhone app: their XCTest bundle and the app
-# built to host them (headful, for the simulator), which the Mac runs with an
-# xctestrun of its own (tools/ci/hosted_headful_test.sh), as rules_apple runs them.
-hosted=(--@isomer//drive:headful --ios_multi_cpus=sim_arm64)
-hosted_targets=(//headless/storybook_headless_application:storybook_hosted_ios_test //apple/storybook_ios_application:storybook_test_host)
-if bazel build "${flags[@]}" "${hosted[@]}" "${hosted_targets[@]}"; then
-    mkdir -p "$platforms/headful/hosted"
-    # One query a target (cquery takes one expression); the bundle is the
-    # test target internal bundle target archive.
-    for f in $(files "${hosted[@]}" //headless/storybook_headless_application:storybook_hosted_ios_test.__internal__.__test_bundle) \
-             $(files "${hosted[@]}" //apple/storybook_ios_application:storybook_test_host); do
-        case "$f" in *.zip | *.ipa) cp "$exec_root/$f" "$platforms/headful/hosted/" ;; esac
+    mkdir -p "$platforms_out/android-x86_64"
+    for flavour in plain headful; do
+        extra=()
+        [ "$flavour" = plain ] || extra=(--@isomer//drive:headful)
+        if bazel build ${extra[@]+"${extra[@]}"} "${x86[@]}" "$android"; then
+            for f in $(files ${extra[@]+"${extra[@]}"} "${x86[@]}" "$android"); do
+                case "$f" in
+                    *_unsigned.apk) ;;
+                    *.apk) if [ "$flavour" = plain ]; then cp "$exec_root/$f" "$platforms_out/android-x86_64/storybook.apk"
+                           else cp "$exec_root/$f" "$platforms_out/headful/storybook-x86_64.apk"; fi ;;
+                esac
+            done
+        else
+            results+=(1)
+        fi
     done
-    ls -l "$platforms/headful/hosted"
-else
-    built_x86=1
 fi
-if [ -n "${ISOMER_ANDROID_X86_64:-}" ]; then
-    if bazel build "${flags[@]}" "${headful[@]}" "${x86[@]}" "$android"; then
-        for f in $(files "${headful[@]}" "${x86[@]}" "$android"); do
-            case "$f" in *_unsigned.apk) ;; *.apk) cp "$exec_root/$f" "$platforms/headful/storybook-x86_64.apk" ;; esac
-        done
+if has windows; then
+    # The plain app kept before its headful build (above), for
+    # tools/ci/hosted_windows_test.ps1.
+    mkdir -p "$platforms_out/windows"
+    cp "$windows_plain"/*.exe "$platforms_out/windows/" 2> /dev/null || echo "no plain Windows app"
+    sdk="$(bazel info output_base)/external/+swift_windows_sdk_repository+swift_windows_sdk/swift-windows-sdk"
+    cp "$sdk"/runtime/aarch64/*.dll "$platforms_out/windows/" 2>/dev/null
+    cp -R "$root/examples/storybook/assets" "$platforms_out/windows/assets"
+    # The headful Windows Storybook and its tests, for the windows job on a
+    # GitHub VM: both executables, the Swift runtime and XCTest DLLs, the
+    # assets and the launcher.
+    mkdir -p "$platforms_out/windows-headful"
+    # The test where its build put it, and the headful app beside it in
+    # that configuration (the headful flag names its output folder).
+    test_exe="$(find -L "$exec_root/bazel-out" -path "*/bin/headless/storybook_headless_application/storybook_headful_windows_test.exe" 2>/dev/null | head -1)"
+    if [ -n "$test_exe" ]; then
+        cp "$test_exe" "$platforms_out/windows-headful/"
+        cp "${test_exe%%/bin/*}/bin/windows/storybook_windows_application/storybook_windows_application.exe" "$platforms_out/windows-headful/" ||
+            echo "no headful Windows app beside $test_exe"
     else
-        built_x86=1
+        echo "no storybook_headful_windows_test.exe under $exec_root/bazel-out"
     fi
+    cp "$sdk"/runtime/aarch64/*.dll "$platforms_out/windows-headful/" 2>/dev/null
+    # XCTest and Testing for arm64, with every DLL beside them
+    # (_TestingInterop and the rest they load): bin64a in the SDK (bin64
+    # is x64, bin32 x86).
+    find -L "$sdk/Windows.platform" -path "*/bin64a/*" \( -iname "XCTest.dll" -o -iname "Testing.dll" \) 2>/dev/null |
+        while read -r dll; do cp "$(dirname "$dll")"/*.dll "$platforms_out/windows-headful/"; done
+    cp -R "$root/examples/storybook/assets" "$platforms_out/windows-headful/assets"
+    cp "$root/drive/launchers/windows_launcher.sh" "$platforms_out/windows-headful/"
 fi
-chmod -R a+rwX "$platforms"
-ls -l "$platforms" "$platforms/headful"
-for result in $built $built_windows $built_tests $tested_here $headless $built_gl $checked $built_x86; do [ "$result" -ne 0 ] && exit "$result"; done
+chmod -R a+rwX "$platforms_out"
+ls -lR "$platforms_out" | head -80
+for result in "${results[@]}"; do [ "$result" -ne 0 ] && exit "$result"; done
 exit 0
 '
 
 cd "$ROOT/examples"
-exec bash -c "$steps" container_build "$ROOT" "$mode" "$out" "$@"
+exec bash -c "$steps" container_build "$ROOT" "$mode" "$out" "$platforms" "$@"

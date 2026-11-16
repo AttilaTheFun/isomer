@@ -1,9 +1,28 @@
 # Swift for Windows built on Linux (defs.bzl): the repository rule's BUILD
 # template, and the scripts that make its two archives (README.md).
+
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
+
 exports_files(
     [
         "case_links.swift",
         "swift_windows_sdk.BUILD",
     ],
+    visibility = ["//visibility:public"],
+)
+
+# Whether Windows is being built on Linux, with @swift_windows_sdk's
+# toolchains (--config=windows_on_linux sets it), or on Windows itself, with
+# the installed Swift's (CI's windows-11-arm job): what a Windows target
+# takes Swift Testing's import libraries from differs.
+bool_flag(
+    name = "on_linux",
+    build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "built_on_linux",
+    flag_values = {":on_linux": "true"},
     visibility = ["//visibility:public"],
 )

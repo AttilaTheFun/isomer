@@ -443,8 +443,9 @@ chrome_archive(
 # swift.org's 6.4.2 Windows installer (tools/windows/make_swift_sdk.sh), and
 # Microsoft's SDK and MSVC libraries (make_msvc_sysroot.ps1 and .sh), which
 # may be used but not redistributed: both by placeholders a builder's
-# .bazelrc.user resolves (tools/ci/container_build.sh: Shireworks' files, by
-# SHA-256), and turned on by --config=windows_on_linux only.
+# .bazelrc.user resolves (tools/ci/ci_bazel.sh's ISOMER_WINDOWS_SDKS, by
+# SHA-256: CI names none, so CI builds no Windows target), and turned on by
+# --config=windows_on_linux only.
 swift_windows_sdk = use_repo_rule("@isomer//tools/windows:defs.bzl", "swift_windows_sdk_repository")
 
 swift_windows_sdk(

@@ -1,11 +1,9 @@
 #!/bin/bash
 # The Android Storybook's stories on GitHub's own Ubuntu runner (x86_64, with
-# KVM: free for a public repository), the primary place CI runs them; a
-# private copy runs them on an emulator leased from Shireworks instead
-# (tools/ci/platform_tests.sh). The phone is tools/ci/hosted_android_emulator.sh's;
-# the app is the x86_64 test APK CI's container built
-# (tools/ci/container_build.sh with ISOMER_ANDROID_X86_64=1). Then
-# tools/ci/android_test.sh, as on a lease.
+# KVM: free for a public repository), where CI runs them. The phone is
+# tools/ci/hosted_android_emulator.sh's; the app is the x86_64 test APK CI's
+# Android build made (tools/ci/container_build.sh with ISOMER_PLATFORMS=android,
+# on GitHub's x86_64 Ubuntu runner). Then tools/ci/android_test.sh.
 #
 #   tools/ci/hosted_android_test.sh <storybook .apk> <out>
 set -euo pipefail

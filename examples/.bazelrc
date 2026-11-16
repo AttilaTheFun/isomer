@@ -199,6 +199,7 @@ build:apple_on_linux --action_env=RULES_APPLECROSS_RELAX_ACTOOL_ICON_COMPOSER=1
 # here alone, so no other build fetches them. Build a Windows target with
 # `--config=windows_on_linux --platforms=@isomer//tools/platforms:windows_arm64`.
 build:windows_on_linux --extra_toolchains=@swift_windows_sdk//:all
+build:windows_on_linux --@isomer//tools/windows:on_linux
 # A Windows test builds here to run on Windows: Bazel 9's default test
 # toolchain wants an execution platform that is the target's (none here can
 # run it), its legacy one doesn't. A flag Bazel 8 doesn't know (it has only
@@ -219,8 +220,8 @@ build:beta --//tools/variant:variant=beta
 build:prod --//tools/variant:variant=production
 build:adhoc --//tools/variant:variant=adhoc
 # CI's iPhone and iPad apps: a device build, signed ad hoc with a placeholder
-# profile (//tools/ci_device), which Applications Server signs again with the
-# team's identity and the bundle id's profile when it is published.
+# profile (//tools/ci_device), which CI signs again with the team's identity
+# and the bundle id's profile (tools/ci/sign_builds.sh) before it is published.
 build:ci_device --ios_multi_cpus=arm64
 build:ci_device --ios_signing_cert_name=-
 

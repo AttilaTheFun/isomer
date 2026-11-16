@@ -3,10 +3,11 @@
 # hand on main with `run: prerelease` or `run: release`; AttilaTheFun/reviews'
 # docs/CI_POLICY.md): tag v<version>, which publishing it makes (no agent
 # publishes a draft or makes a tag), on this run's commit, with the Alphas
-# this run just published, and for a release this run's verify and proof.
-# The same commit proposed again gets the same version from Applications
-# Server, so a draft of that tag already there (a run that failed after
-# publishing) is replaced by this one.
+# this run just signed, and for a release this run's verify and proof.
+# The same commit proposed again gets the same version
+# (tools/ci/version_from_tags.sh finds the draft by its commit), so a draft
+# of that tag already there (a run that failed after signing) is replaced
+# by this one.
 #
 #   tools/ci/draft_release.sh <version> prerelease|release [<asset>…]
 #
