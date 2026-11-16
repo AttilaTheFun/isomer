@@ -58,7 +58,7 @@ apple_runner() {
         # ISOMER_SIMULATOR the simulator as it is now (another after a recovery).
         env DYLD_FRAMEWORK_PATH="$platform/Library/Frameworks:$platform/Library/PrivateFrameworks" \
             DYLD_LIBRARY_PATH="$platform/usr/lib" TEST_UNDECLARED_OUTPUTS_DIR="$out/$name" "$@" \
-            ${udid:+ISOMER_SIMULATOR="$udid"} "$runner" "${filters[@]}" > "$log" 2>&1
+            ${udid:+ISOMER_SIMULATOR="$udid"} "$runner" ${filters[@]+"${filters[@]}"} > "$log" 2>&1
         status=$?
         cat "$log"
         [ "$status" -ne 0 ] || return 0
