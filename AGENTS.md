@@ -326,19 +326,21 @@ alone since 2026-11-15 (nothing of Shireworks at run time: no lease, no
 cache, no signing service, so a contributor's fork runs it as it is), in
 stages (proof.sh --stage build|shoot|compare, proof.py
 --build-to/--from/--here): built where each platform builds (`proof`: the
-web in the project's image, ghcr.io/attilathefun/visor-agent pinned by
-digest, on GitHub's arm64 Ubuntu; `proof-apple`: the iPhone and the Mac on
-an `xcode-27` Mac with its own Xcode; `proof-android`: Android for x86_64
-in Swift's image on GitHub's x86_64 Ubuntu), then pictured: the iPhone (a
+web, and `proof-android`: Android for x86_64, in Swift's image on GitHub's
+x86_64 Ubuntu; `proof-apple`: the iPhone and the Mac on an `xcode-27` Mac
+with its own Xcode), then pictured: the iPhone (a
 simulator made for the run) and the Mac on `xcode-27` runners, the Android
 Storybook on an emulator under Ubuntu's KVM
 (tools/ci/hosted_android_emulator.sh: API 35, 1080×2400, 420 dpi, gesture
 navigation) and the web in Ubuntu's Chrome (the `proof-shoot` jobs), then
 written in the container (`proof-compare`). Where each platform builds
-(tools/ci/container_build.sh's ISOMER_PLATFORMS): the web and Linux in the
-project's image on arm64; Android on x86_64 (Google's SDK and NDK tools and
-the hermetic JDK for Linux are x86_64, and GitHub's arm64 runners have no
-Rosetta); the Apple targets on `xcode-27` Macs with their own Xcode (the
+(tools/ci/container_build.sh's ISOMER_PLATFORMS): the web, Linux and
+Android together, in one job and one Bazel output base, on GitHub's x86_64
+Ubuntu, in Swift's image (swift:6.4.2-noble, by digest) with the Linux apps'
+libraries added (tools/ci/job_tools.sh: SDL2, GTK 3, WebKitGTK, GL and EGL,
+as the project's image, ghcr.io/attilathefun/visor-agent, has them; that
+image is arm64 alone, and Google's SDK and NDK tools and the hermetic JDK
+for Linux are x86_64, which GitHub's arm64 runners can't run); the Apple targets on `xcode-27` Macs with their own Xcode (the
 owner, 2026-11-15: Apple's SDKs may not be redistributed, so CI never takes
 the SDK archive rules_applecross builds them with on Linux); Windows on
 GitHub's windows-11-arm, natively, with swift.org's Swift at the pinned
@@ -347,24 +349,29 @@ only (tier 2; tools/ci/windows_build.ps1, the recipe of tools/proof/proof.py:
 vcvarsall arm64, BAZEL_SH Git's bash, `--output_user_root=C:/b`,
 `--repo_env` for SDKROOT, PATH and MSVC's variables), as Microsoft's sysroot
 may not be redistributed for a build on Linux. Bazel keeps its disk and
-repository caches in GitHub's cache (actions/cache, by group, linux,
-android, apple or windows, and MODULE.bazel; tools/ci/ci_bazel.sh:
-written by main's builds alone, trimmed to stay within GitHub's 10 GB a
-repository). CI follows the owner's policy for protected repositories
+repository caches in GitHub's cache (actions/cache, by group, ubuntu,
+apple or windows, and MODULE.bazel; tools/ci/ci_bazel.sh: written by
+main's builds alone, trimmed to stay within GitHub's 10 GB a repository),
+and, on this repository's own runs, in BuildBuddy's remote cache
+(.bazelrc's `--config=buildbuddy`, its key the BUILDBUDDY_API_KEY secret,
+read and write, which the workflow hands ci_bazel.sh's setup alone and only
+in runs on main and a published release's: written by main's builds and
+the release jobs, read by main's runs by hand; pull requests, whose
+scripts could upload with it, build on GitHub's cache alone until a
+read-only key, BUILDBUDDY_READ_KEY, is theirs). CI follows the owner's policy for protected repositories
 (AttilaTheFun/reviews' docs/CI_POLICY.md) and the shape the owner set on
 2026-11-08 (build.yml's header): the tests without a GUI before a merge,
 every build after one, the GUI tests by hand, and the screenshot proof
 only ad hoc, ahead of a release (the owner, 2026-11-15). A pull request
-gets `container` (the web and Linux targets built, then the tests that draw
-nothing: the core's, the WASI checks, and the Storybook's headless and
-remote-driving tests; the required check), `container-android` (the Android
-targets and their build tests), `container-apple` (the Apple targets) and
-`container-windows` (not required), each commit on main `populate`,
-`populate-android`, `populate-apple` and `populate-windows` (the same
-builds, then the published apps under --config=alpha; the cache's only
-writers; never the proof's) and `bazel8`.
+gets `container` (the web, Linux and Android targets built, then the
+tests that draw nothing: the core's, the WASI checks, the Android build
+tests, and the Storybook's headless and remote-driving tests; the required
+check), `container-apple` (the Apple targets) and `container-windows` (not
+required), each commit on main `populate`, `populate-apple` and
+`populate-windows` (the same builds, then the published apps under
+--config=alpha; the cache's only writers; never the proof's) and `bazel8`.
 The GUI tests run only by hand: `run: verify` (each
-platform's build, `verify`, `verify-android`, `verify-apple`,
+platform's build, `verify` (the web, Linux and Android), `verify-apple`,
 `verify-windows`; the tests
 that draw in a container, `container-verify`: the web Storybook in headless
 Chrome, and the Storybook's tests run headful on the web and on Linux under
@@ -376,7 +383,10 @@ Xvfb; the Storybook's test stories, the iPhone's simulator and the Mac on
 release, tools/ci/draft_release.sh: the one run with both, which
 tools/ci/verified.sh asks for before a release is signed), `run: experiment` (the Storybook Lab, drafted
 unsigned: the signing keys are the `release` environment's, main's and v*
-tags' alone). Drafts are CI's; an agent proposes by running the workflow on
+tags' alone), `run: waydroid-probe` (a probe, nothing depends on it:
+whether Waydroid's Android boots on GitHub's hosted x86_64 Ubuntu, its
+binder and all, tools/ci/waydroid_probe.sh, reported in the run's summary).
+Drafts are CI's; an agent proposes by running the workflow on
 main, never by making a draft or a tag. The proof is the full set by
 default (every story; `quick` the core set: a story from each area). The
 proof is in Reviews' format 2 (the private AttilaTheFun/reviews'
