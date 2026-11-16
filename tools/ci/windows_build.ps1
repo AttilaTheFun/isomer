@@ -143,7 +143,10 @@ try {
     # not found), and runs its copy_swift_sources.sh as an executable, which
     # Windows can't start (error 193). Here: both with the default shell
     # environment (--action_env's PATH: the Swift runtime, Git's cp and
-    # touch), the script run by the shell (run_shell: Bazel's BAZEL_SH).
+    # touch), the script run by the shell (run_shell: Bazel's BAZEL_SH). And
+    # it joins protoc's --descriptor_set_in with ":", where protoc on Windows
+    # splits that list at ";" (a proto with dependencies: "No such file or
+    # directory" for the whole list).
     & $tool fetch @repoEnv '--repo=@@rules_swift+' | Out-Host
     if ($LASTEXITCODE) { exit $LASTEXITCODE }
     $outputBase = (& $tool info @repoEnv output_base | Select-Object -Last 1)
@@ -156,7 +159,8 @@ try {
         $edits = @(
             @('tools = \[swift_proto_compiler_info\.internal\.plugin\],', "tools = [swift_proto_compiler_info.internal.plugin],`n        use_default_shell_env = True,"),
             @('actions\.run\((\s+)inputs = depset\(\[temporary_output_directory\]\),', 'actions.run_shell($1inputs = depset([temporary_output_directory, copy_swift_sources_file]),'),
-            @('executable = copy_swift_sources_file,', "command = copy_swift_sources_file.path,`n        use_default_shell_env = True,")
+            @('executable = copy_swift_sources_file,', "command = copy_swift_sources_file.path,`n        use_default_shell_env = True,"),
+            @('":"\.join\(\[f\.path for f in transitive_descriptor_sets\.to_list\(\)\]\)', '";".join([f.path for f in transitive_descriptor_sets.to_list()])')
         )
         foreach ($edit in $edits) {
             if ([regex]::Matches($text, $edit[0]).Count -ne 1) { throw "windows_build: rules_swift's swift_proto_compiler.bzl isn't as expected ($($edit[0]))" }
@@ -188,6 +192,12 @@ try {
         $rest = @('--platforms=@isomer//tools/windows:windows_arm64_clang_cl',
                   '--extra_toolchains=@isomer//tools/windows:clang_cl_for_targets',
                   '--define=CC_TARGET_TRIPLE=aarch64-unknown-windows-msvc') + $rest
+        # Bazel 9's default test toolchain runs a test on an execution
+        # platform with all the target's constraints, and the clang-cl target
+        # platform is none (made one, it would take the exec tools' C too):
+        # tests on the host, as before Bazel 9 (examples/.bazelrc's
+        # windows_tests_on_linux does the same).
+        $rest = @('--@bazel_tools//tools/test:incompatible_use_default_test_toolchain=false') + $rest
     }
     & $tool $command @repoEnv @rest
     $status = $LASTEXITCODE
