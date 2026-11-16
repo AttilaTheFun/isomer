@@ -478,6 +478,17 @@ package final class Runtime {
     /// nothing to handle (so the host can perform its default back).
     public func handleBackButton() -> Bool {
         if let dismiss = topPresentationDismiss {
+            // A page pushed in what is presented goes back to the page
+            // before it first, as the sheet's own bar's Back does in SwiftUI:
+            // a navigation stack in the topmost presentation's content (its
+            // tree path is under the presentation's).
+            if let top = pendingPresentations.last {
+                let content = top.id + "/sheet-content/"
+                for nav in navigationStates.reversed() where !nav.stack.isEmpty && nav.key?.hasPrefix(content) == true {
+                    nav.pop()
+                    return true
+                }
+            }
             dismiss()
             return true
         }

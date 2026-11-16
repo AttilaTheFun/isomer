@@ -98,6 +98,8 @@ public struct HeadlessScreen: Sendable {
         /// Its name on the screen: its role and its place among that role's,
         /// from 1 (`button-3`), which any command takes as its target.
         public let name: String
+        /// Listed, but takes no input (`.disabled(true)`): a tap on it fails.
+        public let disabled: Bool
     }
 
     public struct Presentation: Sendable {
@@ -115,7 +117,7 @@ public struct HeadlessScreen: Sendable {
         texts = screen.texts
         elements = screen.elements.map {
             Element(role: $0.role, label: $0.label, id: $0.hasID ? $0.id : nil, value: $0.hasValue ? $0.value : nil,
-                    options: $0.options, name: $0.name)
+                    options: $0.options, name: $0.name, disabled: $0.disabled)
         }
         presented = screen.presented.map { Presentation(style: $0.style, title: $0.title, message: $0.message) }
     }
@@ -126,10 +128,11 @@ public struct HeadlessScreen: Sendable {
     }
 
     /// The element a target names: its name (`button-3`), its identifier,
-    /// its label, or the last whose label holds it (the app's own lookup).
+    /// its label, or the last whose label holds it (the app's own lookup;
+    /// a static text's label only whole).
     public func element(_ target: String) -> Element? {
         elements.first { $0.name == target } ?? elements.first { $0.id == target } ?? elements.last { $0.label == target }
-            ?? elements.last { $0.label.contains(target) }
+            ?? elements.last { $0.role != "staticText" && $0.label.contains(target) }
     }
 }
 
@@ -520,14 +523,26 @@ public final class HeadlessApp: @unchecked Sendable {
         }
     }
 
-    /// Drags across a view that takes a drag (the innermost on the screen
-    /// with no target): up, down, left or right.
+    /// Swipes a list row's `.swipeActions` into sight (left: its trailing
+    /// ones, right: its leading ones), listed as buttons to `tap` until one
+    /// is; with `action`, performs that one (by its title) as the swipe
+    /// reveals it. Else drags across a view that takes a drag (the innermost
+    /// on the screen with no target): up, down, left or right.
     @discardableResult
-    public func swipe(_ target: String = "", _ direction: String) throws -> HeadlessScreen {
+    public func swipe(_ target: String = "", _ direction: String, action: String? = nil) throws -> HeadlessScreen {
         try send("swipe") {
             $0.target = target
             $0.direction = direction
+            if let action { $0.value = action }
         }
+    }
+
+    /// Presses a view long: its `.contextMenu` opens, its items the screen's
+    /// buttons (and nothing else, as a person sees an open menu) until one is
+    /// tapped (`dismiss` closes it); else its `onLongPressGesture` fires.
+    @discardableResult
+    public func longPress(_ target: String) throws -> HeadlessScreen {
+        try send("longpress") { $0.target = target }
     }
 
     @discardableResult

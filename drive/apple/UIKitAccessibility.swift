@@ -51,7 +51,9 @@ extension AccessibilityScreen {
 
     /// A list's or a table's row that holds only texts is a button to a
     /// person (it opens, it selects), as Isomer's renderers give it: its
-    /// texts, then a button labelled with them.
+    /// texts, then a button labelled with them, with the identifier its
+    /// content carries (a `List(selection:)` row found by its content's
+    /// identifier, as Isomer's driver finds it).
     @MainActor
     private mutating func visit(_ object: NSObject) {
         guard object is UICollectionViewCell || object is UITableViewCell else {
@@ -61,11 +63,13 @@ extension AccessibilityScreen {
         let elementCount = elements.count
         let textCount = texts.count
         visitObject(object)
-        if elements.count == elementCount, texts.count > textCount {
+        if elements[elementCount...].allSatisfy({ $0.role == "staticText" }), texts.count > textCount {
+            // The texts' identifiers are the row's: not elements of their own.
+            elements.removeSubrange(elementCount...)
             let row = texts[textCount...]
             let first = row.first!
-            add(first.object, role: "button", label: row.map(\.text).joined(separator: " "), kind: first.kind,
-                params: first.params)
+            add(first.object, role: "button", label: row.map(\.text).joined(separator: " "),
+                id: row.first(where: { $0.id != nil })?.id, kind: first.kind, params: first.params)
         }
     }
 
@@ -93,8 +97,10 @@ extension AccessibilityScreen {
             var params = ["traits": String(traits.rawValue),
                           "frame": "\(Int(frame.minX)) \(Int(frame.minY)) \(Int(frame.width)) \(Int(frame.height))"]
             if let hint = object.accessibilityHint { params["hint"] = hint }
+            let disabled = traits.contains(.notEnabled)
             func add(_ role: String, _ label: String, _ value: String?, _ options: [String] = []) {
-                self.add(object, role: role, label: label, value: value, id: id, options: options, kind: kind, params: params)
+                self.add(object, role: role, label: label, value: value, id: id, options: options, kind: kind, params: params,
+                         disabled: disabled)
             }
             if object is UITextField || (object as? UITextView)?.isEditable == true || traits.contains(.searchField) {
                 add("textField", label.isEmpty ? (object as? UITextField)?.placeholder ?? "" : label,
@@ -440,6 +446,11 @@ extension AccessibilityDriver {
 
     func back(_ screen: AccessibilityScreen) async -> Bool {
         guard let window = roots().0.compactMap({ ($0 as? UIWindow) ?? ($0 as? UIView)?.window }).first else { return false }
+        // What is presented on top (a sheet) first: its own navigation's
+        // page goes back, as the sheet's bar's Back does, not the window's
+        // under it.
+        var presenting = window.rootViewController
+        while let next = presenting?.presentedViewController, !next.isBeingDismissed { presenting = next }
         func top(_ controller: UIViewController?) -> UINavigationController? {
             guard let controller else { return nil }
             for child in controller.children.reversed() {
@@ -448,11 +459,39 @@ extension AccessibilityDriver {
             if let navigation = controller as? UINavigationController, navigation.viewControllers.count > 1 { return navigation }
             return nil
         }
-        if let navigation = top(window.rootViewController) {
+        if let navigation = top(presenting) {
             navigation.popViewController(animated: false)
             return true
         }
         return false
+    }
+
+    /// A row's swipe action, by its title: SwiftUI gives a List row's
+    /// `.swipeActions` to VoiceOver as the row's custom actions, performed
+    /// here as VoiceOver performs them (on the element, or the cell it is in).
+    func swipeAction(_ screen: AccessibilityScreen, _ target: String, _ action: String) async -> String? {
+        guard let element = screen.element(target) ?? screen.textTarget(target), let object = element.object as? NSObject else {
+            return "no row \(target)"
+        }
+        var current: NSObject? = object
+        while let candidate = current {
+            if let custom = candidate.accessibilityCustomActions?.first(where: { $0.name == action }) {
+                if let handler = custom.actionHandler { return handler(custom) ? nil : "\(action) didn't take" }
+                if let receiver = custom.target as? NSObject, receiver.responds(to: custom.selector) {
+                    _ = receiver.perform(custom.selector, with: custom)
+                    return nil
+                }
+            }
+            current = (candidate as? UIView)?.superview ?? (candidate as? UIAccessibilityElement)?.accessibilityContainer as? NSObject
+        }
+        return "\(target) has no swipe action \(action)"
+    }
+
+    /// A long press (a context menu, a long-press gesture) isn't offered
+    /// through UIKit's accessibility in a way the driver can use in process:
+    /// the menu's interaction presents only through UIKit's own SPI.
+    func longPress(_ screen: AccessibilityScreen, _ target: String) async -> String? {
+        "a long press isn't driven on iOS yet"
     }
 
     func dismiss(_ screen: AccessibilityScreen) async -> Bool {

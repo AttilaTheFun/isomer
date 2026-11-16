@@ -21,6 +21,7 @@ private struct AXNode: @unchecked Sendable {
     var element: AXUIElement
     var kind: String
     var params: [String: String]
+    var disabled = false
 }
 
 /// Reads the tree (on the main thread: AppKit answers in process).
@@ -129,8 +130,11 @@ private enum AXClient {
         var params = ["role": role, "frame": "\(Int(frame.minX)) \(Int(frame.minY)) \(Int(frame.width)) \(Int(frame.height))"]
         if let subrole { params["subrole"] = subrole }
         if let help = string(element, kAXHelpAttribute) { params["help"] = help }
+        // AXEnabled false: listed as disabled, as Isomer's driver lists it.
+        let disabled = (attribute(element, kAXEnabledAttribute) as? Bool) == false
         func node(_ role: String, _ label: String, _ value: String?, _ options: [String] = []) -> AXNode {
-            AXNode(role: role, label: label, value: value, id: id, options: options, element: element, kind: role == "text" ? "AXStaticText" : params["role"]!, params: params)
+            AXNode(role: role, label: label, value: value, id: id, options: options, element: element,
+                   kind: role == "text" ? "AXStaticText" : params["role"]!, params: params, disabled: disabled)
         }
         switch role {
         case "AXButton", "AXLink", "AXMenuButton", "AXMenuItem":
@@ -160,6 +164,10 @@ private enum AXClient {
             if !added.isEmpty, added.allSatisfy({ $0.role == "text" }) {
                 var row = node("button", added.map(\.label).joined(separator: " "), nil)
                 row.kind = "AXRow"
+                // The identifier its content carries is the row's (a
+                // `List(selection:)` row found by it), not its texts'.
+                if row.id == nil { row.id = added.first(where: { $0.id != nil })?.id }
+                for index in start..<nodes.count { nodes[index].id = nil }
                 nodes.append(row)
             }
         default:
@@ -200,7 +208,7 @@ extension AccessibilityDriver {
         screen.presented = presented.map { (style: alert ? "alert" : $0.0, title: $0.1, message: $0.2) }
         for node in nodes {
             screen.add(node.element, role: node.role, label: node.label, value: node.value, id: node.id,
-                       options: node.options, kind: node.kind, params: node.params)
+                       options: node.options, kind: node.kind, params: node.params, disabled: node.disabled)
         }
         screen.name()
         return screen
@@ -313,6 +321,16 @@ extension AccessibilityDriver {
 
     func swipe(_ screen: AccessibilityScreen, _ target: String, _ direction: String) async -> String? {
         "swipe isn't driven on the Mac yet"
+    }
+
+    func swipeAction(_ screen: AccessibilityScreen, _ target: String, _ action: String) async -> String? {
+        "a row's swipe actions aren't driven on the Mac yet"
+    }
+
+    /// A context menu opens in AppKit's menu tracking, which holds the main
+    /// thread this driver answers on: not driven in process.
+    func longPress(_ screen: AccessibilityScreen, _ target: String) async -> String? {
+        "a long press isn't driven on the Mac yet"
     }
 
     /// The toolbar's Back, as a navigation stack gives it.

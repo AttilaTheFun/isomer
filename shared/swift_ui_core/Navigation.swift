@@ -194,6 +194,13 @@ final class NavigationState {
         (stack.last?.title ?? (stack.isEmpty ? rootTitle : nil)) ?? ""
     }
 
+    /// The title of the page under the shown one (the root's while one page
+    /// is pushed), "" at the root: what a Back reads as.
+    var backTitle: String {
+        guard !stack.isEmpty else { return "" }
+        return (stack.count >= 2 ? stack[stack.count - 2].title : rootTitle) ?? ""
+    }
+
     func setSubtitle(_ subtitle: String, level: Int) {
         if level == 0 {
             rootSubtitle = subtitle
@@ -497,6 +504,9 @@ extension NavigationStack: _PrimitiveView {
                 "title": nav.currentTitle,
                 "subtitle": nav.currentSubtitle,
                 "back": nav.backButtonHidden ? "0" : nav.stack.isEmpty ? (splitBack == nil ? "0" : "1") : "1",
+                // The title of the page Back goes to (UIKit's back button's
+                // label; empty: "Back"), for drivers reading the bar.
+                "backTitle": nav.backTitle,
                 "dark": Runtime.shared.colorScheme == .dark ? "1" : "0",
                 "scheme": _schemeParam(),
                 "large": hasLargeTitle ? "1" : "0",
@@ -641,6 +651,9 @@ extension NavigationStack {
             "depth": "\(nav.stack.count)",
             // `.navigationBarBackButtonHidden`: the host's bar shows no Back.
             "backHidden": nav.backButtonHidden ? "1" : "0",
+            // The title of the page Back goes to (UIKit's back button's
+            // label; empty: "Back"), for drivers reading the stack.
+            "backTitle": nav.backTitle,
             // `.preferredColorScheme` ("light"/"dark", "" = system): hosts
             // apply it to the native chrome around this level.
             "scheme": _schemeParam(),
