@@ -179,8 +179,15 @@ try {
                   '--@rules_swift//swift:exec_copt=-Xfrontend', '--@rules_swift//swift:exec_copt=-sil-verify-none') + $rest
         # The target's C and C++ by clang-cl, the exec tools' by MSVC
         # (@isomer//tools/windows: SwiftNIO's C needs clang).
+        # rules_swift takes the target's triple from the cc toolchain's
+        # target_gnu_system_name, which rules_cc's clang-cl reports as
+        # aarch64-pc-windows-msvc, whereas the SDK's modules are
+        # aarch64-unknown-windows-msvc's (MSVC's reports "local", for which
+        # rules_swift writes that); CC_TARGET_TRIPLE, which it reads first,
+        # names the SDK's for both configurations.
         $rest = @('--platforms=@isomer//tools/windows:windows_arm64_clang_cl',
-                  '--extra_toolchains=@isomer//tools/windows:clang_cl_for_targets') + $rest
+                  '--extra_toolchains=@isomer//tools/windows:clang_cl_for_targets',
+                  '--define=CC_TARGET_TRIPLE=aarch64-unknown-windows-msvc') + $rest
     }
     & $tool $command @repoEnv @rest
     $status = $LASTEXITCODE
