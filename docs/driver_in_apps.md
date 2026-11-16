@@ -177,6 +177,8 @@ func launch(_ fixture: String) throws -> HeadlessApp {
 ## In CI
 
 Release and alpha builds never take `--config=drive`. The proof's apps and
-the headful tests' do: built in Shireworks' Linux containers, run on GitHub's
-runners in a public repository or on Shireworks' primary VM slots in a private
-one (docs/CI_POLICY.md in the private AttilaTheFun/reviews).
+the headful tests' do: built and run on GitHub's own runners (the web and
+Linux in the project's image, Android on x86_64 Ubuntu, the Apple apps on
+`xcode-27` Macs; .github/workflows/build.yml), as the owner's policy has it
+for a public repository (docs/CI_POLICY.md in the private
+AttilaTheFun/reviews).

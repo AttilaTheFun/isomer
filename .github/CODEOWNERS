@@ -13,12 +13,15 @@
 /tools/ci/check_mac_icons.sh @AttilaTheFun
 /tools/ci/check_version_line.sh @AttilaTheFun
 /tools/ci/attach_release.sh @AttilaTheFun
-/tools/ci/connect_from_ci.sh @AttilaTheFun
-/tools/ci/next_version.sh @AttilaTheFun
-/tools/ci/promote_from_ci.sh @AttilaTheFun
-/tools/ci/publish_from_ci.sh @AttilaTheFun
+/tools/ci/android_sign.sh @AttilaTheFun
+/tools/ci/apple_profiles.py @AttilaTheFun
+/tools/ci/apple_sign.sh @AttilaTheFun
+/tools/ci/release_alphas.sh @AttilaTheFun
 /tools/ci/release_assets.sh @AttilaTheFun
+/tools/ci/sign_builds.sh @AttilaTheFun
 /tools/ci/stamp_apps.sh @AttilaTheFun
+/tools/ci/verified.sh @AttilaTheFun
+/tools/ci/version_from_tags.sh @AttilaTheFun
 
 # The license.
 LICENSE @AttilaTheFun

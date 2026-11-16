@@ -1,17 +1,21 @@
 # Windows built on Linux
 
-Swift and C/C++ for Windows on Arm (and x64), built on Linux: CI's container
-builds the Windows apps beside every other platform's, and tests them under
-arm64 Wine (tools/ci/windows_test.sh). No Windows machine is needed to build;
-one is needed once, to make Microsoft's half of the toolchain (below).
+Swift and C/C++ for Windows on Arm (and x64), built on Linux, by a builder
+that has Microsoft's half of the toolchain (below). No Windows machine is
+needed to build; one is needed once, to make that half. Microsoft's half may
+not be redistributed, so nothing public serves it, and since 2026-11-15 CI
+builds Windows on Windows instead: GitHub's windows-11-arm runner, with
+swift.org's Swift at the pinned release and the runner image's own Visual
+Studio and Windows SDK (tools/ci/windows_build.ps1). Windows is tier 2: built,
+not run.
 
 `--config=windows_on_linux --platforms=@isomer//tools/platforms:windows_arm64`
 (the examples' .bazelrc) turns the toolchains on. They come from
 `swift_windows_sdk_repository` (defs.bzl), which pairs the host's Swift (the
 same release) with two archives, named in MODULE.bazel by SHA-256 behind a
 placeholder URL (`https://windows-sdks.invalid/sha256/<hex>`) that each
-builder resolves: CI's tools/ci/container_build.sh to Shireworks' files, as
-it resolves the Apple SDK archive's.
+builder resolves: tools/ci/ci_bazel.sh's ISOMER_WINDOWS_SDKS (a folder of
+them, or a server of its own by SHA-256).
 
 ## The Windows Swift SDK
 
@@ -39,8 +43,8 @@ builder and kept on their own server, never published.
    system needs (case_links.swift: Windows' headers include each other, and
    Swift's module maps name them, in casings other than the files'), and a
    VERSIONS file naming MSVC's and the SDK's versions.
-3. Added to Shireworks' files (by its maintainers), and its SHA-256 into
-   MODULE.bazel.
+3. Kept on the builder's own server or disk (never published), and its
+   SHA-256 into MODULE.bazel.
 
 (xwin, which downloads Microsoft's packages directly, gave a Universal CRT
 without the headers Swift's module maps need, `corecrt_math.h` among them.)
@@ -64,8 +68,8 @@ Linux libraries built with pointer authentication and hangs at its first
 start. A headful app (`--@isomer//drive:headful`) needs Wine Staging 11.16
 or later: its driver's SwiftNIO wakes its event loop through AF_UNIX
 sockets, which Wine 10 lacks (WSAEAFNOSUPPORT; examples'
-//tests/wine_nio:nio_probe checks a Wine). CI runs it in Shireworks' wine
-image, Wine Staging 11.21 (tools/ci/platform_tests.sh). Direct3D 11 goes through Wine onto Mesa's software
+//tests/wine_nio:nio_probe checks a Wine). It ran in a Wine Staging 11.21
+image until 2026-11-15 (tools/ci/windows_test.sh, in git's history). Direct3D 11 goes through Wine onto Mesa's software
 OpenGL under Xvfb. Wine's DirectWrite and fonts are its own, so what it
 draws checks that an app runs, never what Windows draws: the proof's Windows
 pictures come from Windows.
