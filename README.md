@@ -785,7 +785,7 @@ The isomer the root depends on and the one its Package.swift lists are the
 module's release: one isomer in the build.
 
 Nothing of isomer's needs an override in your MODULE.bazel since 0.40 (its
-rules_swift, 4.2.2.isomer.4, sorts above the version rules_applecross asks
+rules_swift, 4.3.0.isomer.1, sorts above the version rules_applecross asks
 for); you still register the toolchains, and only those of the platforms
 you build: an app for iOS, the Mac and Android declares the host toolchain
 and Isomer's Android SDK (below) and registers the Android Swift toolchains, with
@@ -797,7 +797,7 @@ renderer are all part of this one module (`@isomer//swift_ffi/...`,
 them. SQLite (swift_sql, a Swift package: list it in the Package.swift
 your rules_swift_package_manager graph reads) left this module at 0.34; the
 examples use it. C compiled for wasm, swift_sql's included, needs
-rules_swift#1989, which the registry's rules_swift carries.
+rules_swift#1989, which rules_swift has since 4.3.0.
 
 **Isomer's Swift SDKs.** On Android and the web Foundation is the Swift
 SDK's, so an app registers Isomer's SDKs (since 0.56) in the `swift` block
@@ -810,7 +810,7 @@ If you build for Android:
 ```starlark
 swift.android_sdk(
     url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz",
-    sha256 = "1fce2fe24ec9b7c54f97fe2aff41ceab01b5acbc5a09492c50cc918e1dbcdbac",
+    sha256 = "557ed5ffc5c9d2a2061ea3ea24a2ec0e44dcabd6f42b37ef319e2f08198034fc",
 )
 ```
 
@@ -819,7 +819,7 @@ If you build for the web:
 ```starlark
 swift.wasm_sdk(
     url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_wasm.artifactbundle.tar.gz",
-    sha256 = "d63e3f15297575b634dcc07b36e19111fb3a24b7dbac0e9b217d3c3532b3bb11",
+    sha256 = "3dbfc93e5c91e92d197e3660a488fd580133200df75bcaca90f3b50c5782ae93",
 )
 ```
 
@@ -832,12 +832,12 @@ and ICU (tens of megabytes of data, which `icu_locales` trims on the web):
 # Android, formatting:
 swift.android_sdk(
     url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_android-i18n.artifactbundle.tar.gz",
-    sha256 = "4a726a303e53529ba2d8f6c97f735ce6b880313740efc53065028a460aee0296",
+    sha256 = "9ed7cd5051cc276acd14a5210d72311f2b4b7984c4bdaa77dd25bafad2170d93",
 )
 # The web, formatting:
 swift.wasm_sdk(
     url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_wasm-i18n.artifactbundle.tar.gz",
-    sha256 = "d787225d4cb19003b6674272bb4643153aab751016d9f14c064ba58981e68f38",
+    sha256 = "cc3423d1dfa969e1fb255ed324af6a9e3c7dedc06b75d90a3ff74adcce10877c",
 )
 ```
 
@@ -913,9 +913,11 @@ Each release's notes have an Upgrading section; these things are easy to miss:
     the SDK registered is the -i18n one (a build that sets it with the
     plain SDK fails, saying which to register); keep it if your app sets
     it, or drop it with the -i18n SDK in place.
-  - rules_swift is the registry's 4.2.2.isomer.4 (its
-    `swift.android_sdk(url = …)`); your own override of rules_swift, if you
-    kept one, has to be that version.
+  - rules_swift is the registry's 4.3.0.isomer.1 (upstream 4.3.0, which
+    takes `swift.android_sdk(url = …)`, and four pull requests); your own
+    override of rules_swift, if you kept one, has to be that version.
+    4.3.0 builds Android and wasm targets without explicit modules
+    (rules_swift#1999).
   - `tools/foundation/check_link.py` is gone: there is one Foundation to
     link.
 
@@ -995,7 +997,7 @@ Each release's notes have an Upgrading section; these things are easy to miss:
   whatever version isomer asks for: bumping isomer alone silently keeps the
   old fork. Since 0.40 isomer's rules_swift needs no override (it sorts above
   rules_applecross's); delete yours, or move it to the version isomer's
-  release names (4.2.2.isomer.3 at 0.41).
+  release names (4.3.0.isomer.1 at 0.56).
 
 ### Swift features, Java and library evolution
 

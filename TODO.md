@@ -430,7 +430,7 @@ with NDK r30, so its own fallbacks are compiled in (the runtime's
 `posix_spawn`) and no shim of Isomer's is needed. An app sets
 `android.ndk(api_level = 23)` and `isomer_android_app(min_sdk_version = 23)`
 (README, "Android below API 28"); rules_swift#2000 (in the registry's
-4.2.2.isomer.3) reads the SDK's minimum and leaves out RELR below 28.
+4.3.0.isomer.1) reads the SDK's minimum and leaves out RELR below 28.
 Isomer's Kotlin calls above 23 are behind version checks (#96).
 
 - Open: Shireworks' api23 emulator config doesn't boot yet (Shireworks),
@@ -469,21 +469,17 @@ project's own modules. Every change we carry has an upstream PR now
 (2026-11-04, drafts unless noted); each patch or fork goes when a release
 has it.
 
-- **rules_swift** (the registry's 4.2.2.isomer.3: upstream 4.2.2 and a
-  patch per PR, from its head):
+- **rules_swift** (the registry's 4.3.0.isomer.1 since 0.56: upstream 4.3.0,
+  which has #1985, #1989, #1998, #1999 and #2012, and a patch per PR, from
+  its head):
   - bazelbuild/rules_swift#1860 (open): the metadata-driven wasm SDK and its
     wasip1-threads variant;
   - #1990 (open, on #1860): a single-threaded and a threads wasm SDK side
     by side;
-  - #1989 (merged after 4.2.2): the wasm SDK's clang resource directory for
-    C compiles;
   - #1995 (open): Swift/C++ interop on Android;
-  - #1985 (merged after 4.2.2): swift.org's release metadata through 6.4.2;
-  - #2000 (open, rebased over #1998 at ab75b825): Android down to the
-    Swift SDK's own minimum (6.4's: 23), no RELR below 28. Upstream main
-    has #1998 (merged 2026-11-06, b7e99a5b), which fails below API 28: a
-    rules_swift release with #1998 and not #2000 needs the registry's patch
-    to remove `_check_android_api` and its call too (#2000's head does);
+  - #2000 (merged after 4.3.0, e901d23b): Android down to the Swift SDK's
+    own minimum (6.4's: 23), no RELR below 28; 4.3.0 alone (#1998) fails
+    any target below 28;
   - #1988 (draft): `swift.windows_sdk`, Windows built on Linux with the
     builder's own SDKs (Isomer's tools/windows, upstream's
     tools/windows_sdk), which tools/windows then gives way to.

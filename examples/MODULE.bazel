@@ -52,10 +52,10 @@ local_path_override(
 # --- What isomer needs from its consumer -------------------------------
 
 # rules_swift: isomer's patched version comes from the project's registry
-# (.bazelrc lists it before the BCR), patches and all: 4.2.2.isomer.4, which
+# (.bazelrc lists it before the BCR), patches and all: 4.3.0.isomer.1, which
 # sorts above the 4.2.2 rules_applecross asks for, so it needs no override
 # (and takes `swift.android_sdk(url = …)`, below).
-bazel_dep(name = "rules_swift", version = "4.2.2.isomer.4")
+bazel_dep(name = "rules_swift", version = "4.3.0.isomer.1")
 
 # swift_ffi, swift_gpu and swift_map are part of the isomer module
 # (`@isomer//swift_ffi/...`, `@isomer//swift_gpu/...`, `@isomer//swift_map/...`):
@@ -85,7 +85,7 @@ swift.toolchain(
 # sha256 from the release's notes).
 swift.wasm_sdk(
     url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_wasm.artifactbundle.tar.gz",
-    sha256 = "d63e3f15297575b634dcc07b36e19111fb3a24b7dbac0e9b217d3c3532b3bb11",
+    sha256 = "3dbfc93e5c91e92d197e3660a488fd580133200df75bcaca90f3b50c5782ae93",
 )
 # No wasi-threads SDK beside it since 0.41: Isomer's was a build of
 # Swift 6.3.2 with swiftlang/swift#92018, which reaches a release in 6.5;
@@ -93,7 +93,7 @@ swift.wasm_sdk(
 # for it (TODO.md).
 swift.android_sdk(
     url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz",
-    sha256 = "1fce2fe24ec9b7c54f97fe2aff41ceab01b5acbc5a09492c50cc918e1dbcdbac",
+    sha256 = "557ed5ffc5c9d2a2061ea3ea24a2ec0e44dcabd6f42b37ef319e2f08198034fc",
 )
 use_repo(
     swift,

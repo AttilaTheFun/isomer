@@ -41,6 +41,16 @@ What it taught:
   FoundationInternationalization imports ICU (`_FoundationICU`) internally,
   so it asks its clients for it by `-public-autolink-library`, as
   swift-foundation's CMake build does.
+- **One object a module.** A static archive's member is linked only when a
+  symbol in it is wanted, and a file of conformances alone defines nothing a
+  client names: Foundation's NSNumberBridging.swift (Swift's numbers
+  bridging to NSNumber, which `json["n"] as? Int` needs) was dropped, and
+  the cast failed. So each Swift module is compiled whole into one object
+  (`-num-threads 0`): a module linked at all is linked whole, as Bazel links
+  a library built from source, and `--gc-sections` still drops what
+  nothing reaches. (Not objects merged by `ld -r` afterwards: wasm-ld's
+  loses the retain flag on Swift's metadata, which the final link then
+  collects.)
 - **rules_swift took an Android SDK by checksum only**, its URL
   download.swift.org's. rules_swift#2012 adds `url` (below).
 
@@ -134,10 +144,11 @@ swift.wasm_sdk(
 and the `-i18n` URL (with its own sha256) if the app formats dates or
 numbers. An app that builds for Android alone registers no wasm SDK.
 
-`swift.wasm_sdk` takes `url` through rules_swift#1860 and `swift.android_sdk`
-through rules_swift#2012 (generic: any Swift SDK artifact bundle at any URL),
-both in the registry's rules_swift 4.2.2.isomer.4, which isomer asks for and
-MVS gives every consumer.
+`swift.wasm_sdk` takes `url` through rules_swift#1860 (a patch of the
+registry's rules_swift 4.3.0.isomer.1) and `swift.android_sdk` through
+rules_swift#2012 (in rules_swift 4.3.0; generic: any Swift SDK artifact bundle
+at any URL); isomer asks for 4.3.0.isomer.1, and MVS gives it every
+consumer.
 
 ## isomer after the move
 

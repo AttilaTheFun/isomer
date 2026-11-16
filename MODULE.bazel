@@ -40,31 +40,30 @@ bazel_dep(name = "platforms", version = "1.1.0")
 
 # Apple platform (uses the locally installed Xcode, as all Bazel apple builds do).
 # rules_swift from this project's registry (AttilaTheFun/bazel_registry,
-# listed before the BCR in .bazelrc): 4.2.2.isomer.4 is upstream's 4.2.2 with
-# seven rules_swift pull requests until a release has them, each a patch in
-# the registry entry, taken from the PR's head:
-#   * #1989 (merged after 4.2.2): C compiled for wasm gets the Swift SDK's
-#     clang resource directory, so <stdarg.h> and <stddef.h> come from the
-#     SDK, among the action's inputs; C such as SQLite's amalgamation builds
-#     as is;
+# listed before the BCR in .bazelrc): 4.3.0.isomer.1 is upstream's 4.3.0
+# with four rules_swift pull requests until a release has them, each a patch
+# in the registry entry, taken from the PR's head:
 #   * #1860: a metadata-driven wasm SDK and its wasip1-threads variant;
 #   * #1990: a single-threaded and a threads wasm SDK side by side (two
 #     `swift.wasm_sdk` tags), chosen by a platform's
 #     `@rules_swift//swift/toolchains/wasm:threaded` constraint;
 #   * #1995: Swift/C++ interop on Android (the SDK's clang headers copied
 #     from the paired toolchain, swiftCxx and swiftCxxStdlib linked from
-#     beside the shared runtime, -lc++ the static libc++).
-#   * #1985 (merged after 4.2.2): swift.org's release metadata through 6.4.2;
-#   * #2000: Android targets down to the Swift SDK's own minimum (6.4's: API
-#     23), without RELR relocations below 28;
-#   * #2012: `swift.android_sdk(url = …, sha256 = …)`, an Android Swift SDK
-#     from any URL, as #1860 gives `swift.wasm_sdk`: how a consumer registers
-#     Isomer's Swift SDKs (README, "Upgrading isomer").
+#     beside the shared runtime, -lc++ the static libc++);
+#   * #2000 (merged after 4.3.0): Android targets down to the Swift SDK's
+#     own minimum (6.4's: API 23), without RELR relocations below 28; 4.3.0
+#     alone fails any target below 28 (#1998).
+# 4.3.0 itself has what 4.2.2.isomer.3 carried besides: #1989 (C compiled
+# for wasm gets the Swift SDK's clang resource directory, so SQLite's
+# amalgamation builds as is), #1985 (swift.org's release metadata through
+# 6.4.2) and #2012 (`swift.android_sdk(url = …, sha256 = …)`, how a consumer
+# registers Isomer's Swift SDKs: README, "Isomer's Swift SDKs"); and #1999,
+# which turns explicit modules off for Android and wasm.
 # It sorts above the 4.2.2 rules_applecross asks for, so no override holds
-# it, here or in a consumer. A change is a new entry (4.2.2.isomer.5) made
+# it, here or in a consumer. A change is a new entry (4.3.0.isomer.2) made
 # with the registry's tools/add_version.py --fork; back to a plain BCR
 # version at the release that has them all.
-bazel_dep(name = "rules_swift", version = "4.2.2.isomer.4")
+bazel_dep(name = "rules_swift", version = "4.3.0.isomer.1")
 # rules_apple and apple_support at rules_applecross's versions, from this
 # project's registry: rules_apple 5.3.1.applecross.6 is rules_apple 5.3.1
 # with rules_applecross's patches (bundling and signing on Linux), asking
@@ -423,7 +422,7 @@ swift.toolchain(
 # most applications do (README, "Upgrading isomer").
 swift.wasm_sdk(
     url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_wasm-i18n.artifactbundle.tar.gz",
-    sha256 = "d787225d4cb19003b6674272bb4643153aab751016d9f14c064ba58981e68f38",
+    sha256 = "cc3423d1dfa969e1fb255ed324af6a9e3c7dedc06b75d90a3ff74adcce10877c",
 )
 # No wasi-threads SDK beside it since 0.41: Isomer's was a build of
 # Swift 6.3.2 with swiftlang/swift#92018, which reaches a release in 6.5;
@@ -431,7 +430,7 @@ swift.wasm_sdk(
 # for it (TODO.md).
 swift.android_sdk(
     url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_android-i18n.artifactbundle.tar.gz",
-    sha256 = "4a726a303e53529ba2d8f6c97f735ce6b880313740efc53065028a460aee0296",
+    sha256 = "9ed7cd5051cc276acd14a5210d72311f2b4b7984c4bdaa77dd25bafad2170d93",
 )
 use_repo(
     swift,
