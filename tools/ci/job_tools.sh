@@ -12,10 +12,6 @@
 #
 #   tools/ci/job_tools.sh
 set -euo pipefail
-# TEMPORARY (this pull request's test of the combined job, removed before
-# merging): the x86_64 job the current workflow runs builds what the
-# combined `container` will, from cold.
-[ "${GITHUB_JOB:-}" != container-android ] || export ISOMER_PLATFORMS="web linux android"
 root_do() { if [ "$(id -u)" = 0 ]; then "$@"; else sudo "$@"; fi; }
 BAZELISK_VERSION=v1.30.0
 case "$(uname -m)" in
