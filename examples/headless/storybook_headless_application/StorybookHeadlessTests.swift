@@ -115,6 +115,21 @@ struct StorybookHeadlessTests {
         try app.picture("state.observableobject")
     }
 
+    /// A trip to the background and back (`scene`): the app comes back as
+    /// it was, still driven, whichever way its platform moves it (Android's
+    /// launcher sends it home and brings it back; iOS tells SwiftUI's scene
+    /// delegate; the Mac hides it; Isomer's own runtimes set the phase).
+    @Test func comesBackFromTheBackground() throws {
+        let app = try launch(story: "state.observableobject")
+        defer { app.quit() }
+        try app.tap("Tap")
+        try app.wait(for: "Taps: 1")
+        try app.scene(.background)
+        try app.scene(.active)
+        try app.tap("Tap")
+        try app.wait(for: "Taps: 2")
+    }
+
     @Test func textFieldBindsTheModel() throws {
         let app = try launch(story: "state.observableobject")
         defer { app.quit() }
