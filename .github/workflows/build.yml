@@ -929,7 +929,7 @@ jobs:
         with:
           name: waydroid-probe
           path: ${{ runner.temp }}/waydroid-probe
-          retention-days: 14
+          retention-days: 1
 
   # --- A published release: nothing Apple rebuilt -----------------------
 
