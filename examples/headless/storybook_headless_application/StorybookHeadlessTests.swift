@@ -115,6 +115,21 @@ struct StorybookHeadlessTests {
         try app.picture("state.observableobject")
     }
 
+    /// A trip to the background and back (`scene`): the app comes back as
+    /// it was, still driven, whichever way its platform moves it (Android's
+    /// launcher sends it home and brings it back; iOS tells SwiftUI's scene
+    /// delegate; the Mac hides it; Isomer's own runtimes set the phase).
+    @Test func comesBackFromTheBackground() throws {
+        let app = try launch(story: "state.observableobject")
+        defer { app.quit() }
+        try app.tap("Tap")
+        try app.wait(for: "Taps: 1")
+        try app.scene(.background)
+        try app.scene(.active)
+        try app.tap("Tap")
+        try app.wait(for: "Taps: 2")
+    }
+
     @Test func textFieldBindsTheModel() throws {
         let app = try launch(story: "state.observableobject")
         defer { app.quit() }
@@ -326,6 +341,42 @@ struct StorybookHeadlessTests {
         screen = try app.swipe("Your order has shipped", "left", action: "Delete")
         #expect(!screen.texts.contains("Your order has shipped"), "\(screen.texts)")
         #expect(throws: (any Error).self) { try app.swipe("Weekly report", "left", action: "Archive") }
+    }
+
+    /// A headful launch starts with none of the app's data from before (the
+    /// launchers' ISOMER_FRESH, HeadlessApp's default), as an app built
+    /// headless does; asked to, it keeps it.
+    @Test func aLaunchStartsFreshUnlessAskedToKeep() throws {
+        // (Hosted in the iPhone app, there is no launcher to start one.)
+        #if !(os(iOS) || os(tvOS) || os(watchOS) || os(visionOS))
+        let environment = ProcessInfo.processInfo.environment
+        guard let launcher = environment["ISOMER_HEADFUL_LAUNCHER"], !launcher.isEmpty,
+              HeadlessApp.hostedIfAny() == nil else { return }
+        let story = ["ISO_STORYBOOK_STORY": "state.appstorage"]
+        var platform = ""
+        do {
+            let app = try HeadlessApp(launcher: launcher, environment: story)
+            defer { app.quit() }
+            platform = try app.info().platform
+            // Windows' launcher keeps an app's data as it is, for now.
+            guard platform != "Windows" else { return }
+            try app.wait(for: "Starred 0 times")
+            try app.tap("Star")
+            try app.wait(for: "Starred 1 times")
+        }
+        // Kept where the platform's app keeps its defaults between launches
+        // for sure: not a web page (a browser profile of its own each
+        // launch), nor Linux's app (corelibs' UserDefaults, which a launcher
+        // stopping the app with SIGTERM gives no time to write).
+        if ["iOS", "Android", "macOS"].contains(platform) {
+            let app = try HeadlessApp(launcher: launcher, environment: story, fresh: false)
+            defer { app.quit() }
+            try app.wait(for: "Starred 1 times")
+        }
+        let app = try HeadlessApp(launcher: launcher, environment: story)
+        defer { app.quit() }
+        try app.wait(for: "Starred 0 times")
+        #endif
     }
 
     @Test func unknownTargetFailsWithTheScreen() throws {

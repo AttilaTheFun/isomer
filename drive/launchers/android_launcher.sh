@@ -4,14 +4,19 @@
 # started with ISO_DRIVER and ISO_DRIVER_NAME as its intent's ISO_ extras
 # (its environment), until this is stopped. The hub listens on this
 # machine's loopback, so its port is reversed onto the device first.
-# Pictures (a test's `picture`) are adb's screencap.
+# Pictures (a test's `picture`) are adb's screencap. It ends the app when
+# stopped (SIGTERM, or HeadlessApp's `stop` request, requests.sh).
 #
-#   android_launcher.sh <the hub's ws:// URL> <the app's name> [KEY=VALUE…]
+#   android_launcher.sh <the hub's ws:// URL> <the app's name> [KEY=VALUE…] [-- <argument>…]
 #
+# The arguments after `--` are the app's own, as ISO_ARGUMENTS (where
+# Isomer's Foundation reads a program's arguments on Android: UserDefaults'
+# `-key value`), separated by spaces.
 # From the test's environment: ISOMER_ANDROID_PACKAGE (the app),
 # ISOMER_ANDROID_ACTIVITY (.MainActivity, isomer_android_app's, by
 # default), ADB (adb; the PATH's by default), ANDROID_SERIAL (which device,
-# when several).
+# when several), ISOMER_FRESH (requests.sh: 1, the default, starts the app
+# with none of its data from before: `pm clear`).
 set -uo pipefail
 # Nothing here reads standard input, and adb mustn't either: on a device
 # without adb's shell protocol (Android 6.0, API 23) `adb shell` copies
@@ -27,8 +32,11 @@ activity="${ISOMER_ANDROID_ACTIVITY:-.MainActivity}"
 port="${url##*:}"
 port="${port%%/*}"
 "$adb" reverse "tcp:$port" "tcp:$port" > /dev/null || exit 1
+split_arguments "$@"
 extras=(-e ISO_DRIVER "$url" -e ISO_DRIVER_NAME "$name")
-for pair in "$@"; do
+# (Quoted for the device's shell, which `adb shell` hands the line to.)
+[ ${#app_arguments[@]} -eq 0 ] || extras+=(-e ISO_ARGUMENTS "'${app_arguments[*]}'")
+for pair in ${pairs[@]+"${pairs[@]}"}; do
     case "${pair%%=*}" in
         ISO_HEADLESS_WIDTH | ISO_HEADLESS_HEIGHT) ;;
         *) extras+=(-e "${pair%%=*}" "${pair#*=}") ;;
@@ -46,6 +54,9 @@ stop() {
 }
 trap stop TERM INT
 "$adb" shell am force-stop "$package" > /dev/null 2>&1 || true
+# Its data as an install leaves it (files, preferences, databases, caches,
+# the permissions it was granted).
+if fresh; then "$adb" shell pm clear "$package" > /dev/null 2>&1 || true; fi
 "$adb" logcat -c > /dev/null 2>&1 || true
 if [ -n "$logs" ]; then
     "$adb" logcat > "$logs/$name.logcat" 2> /dev/null &
@@ -53,4 +64,24 @@ if [ -n "$logs" ]; then
 fi
 "$adb" shell am start -W -n "$package/$activity" "${extras[@]}" > /dev/null || exit 1
 take() { "$adb" exec-out screencap -p > "$1" && [ -s "$1" ]; }
+# HeadlessApp's `scene` (requests.sh) through the activity's own lifecycle:
+# background, the app sent home (stopped); active, brought to the front again
+# as the launcher's icon brings it (its task as it was, the activity not
+# started again). Inactive (paused, still shown) has no such way: the
+# driver sets it.
+scene() {
+    case "$1" in
+    background) "$adb" shell input keyevent KEYCODE_HOME > /dev/null || return 1 ;;
+    active) "$adb" shell am start -n "$package/$activity" > /dev/null 2>&1 || return 1 ;;
+    *) return 1 ;;
+    esac
+    # Until the activity is stopped, or resumed (at most 5 s).
+    local resumed
+    for _ in $(seq 1 25); do
+        resumed="$("$adb" shell dumpsys activity activities 2> /dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -c "$package/")"
+        if [ "$1" = active ]; then [ "$resumed" -gt 0 ] && return 0; else [ "$resumed" -eq 0 ] && return 0; fi
+        sleep 0.2
+    done
+    return 0
+}
 serve_requests take

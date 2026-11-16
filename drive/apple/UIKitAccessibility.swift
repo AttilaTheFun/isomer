@@ -10,8 +10,10 @@ import IsomerWire
 import UIKit
 
 extension AccessibilityScreen {
-    /// The screen's bounds, set as each screen is read.
-    @MainActor static var screenBounds: CGRect?
+    /// The window the screen is read in, and how accessibility's screen
+    /// coordinates (an element's frame, its activation point) map into it,
+    /// set as each screen is read (`AccessibilityDriver.toWindow`).
+    @MainActor static var window: (bounds: CGRect, fromScreen: CGAffineTransform)?
 
     /// The screen under `roots` (the key window, or what it presents).
     @MainActor
@@ -55,14 +57,14 @@ extension AccessibilityScreen {
     /// content carries (a `List(selection:)` row found by its content's
     /// identifier, as Isomer's driver finds it).
     @MainActor
-    private mutating func visit(_ object: NSObject) {
+    private mutating func visit(_ object: NSObject, depth: Int = 0) {
         guard object is UICollectionViewCell || object is UITableViewCell else {
-            visitObject(object)
+            visitObject(object, depth: depth)
             return
         }
         let elementCount = elements.count
         let textCount = texts.count
-        visitObject(object)
+        visitObject(object, depth: depth)
         if elements[elementCount...].allSatisfy({ $0.role == "staticText" }), texts.count > textCount {
             // The texts' identifiers are the row's: not elements of their own.
             elements.removeSubrange(elementCount...)
@@ -73,8 +75,68 @@ extension AccessibilityScreen {
         }
     }
 
+    /// An element's accessibility identifier, however it carries it: a
+    /// UIView adopts UIAccessibilityIdentification, but SwiftUI's own
+    /// elements (the nodes a List's, a Form's rows and its controls are)
+    /// answer `accessibilityIdentifier` without declaring the protocol, so a
+    /// cast to it finds nothing where XCUITest, which asks the selector,
+    /// finds them all.
     @MainActor
-    private mutating func visitObject(_ object: NSObject) {
+    static func identifier(_ object: NSObject) -> String? {
+        let id: String?
+        if let identified = object as? UIAccessibilityIdentification {
+            id = identified.accessibilityIdentifier
+        } else if object.responds(to: #selector(getter: UIAccessibilityIdentification.accessibilityIdentifier)) {
+            id = object.value(forKey: "accessibilityIdentifier") as? String
+        } else {
+            id = nil
+        }
+        return id.flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    /// A text field's title where it has no accessibility label: a
+    /// UITextField's placeholder; a UITextView's (SwiftUI's multi-line
+    /// `TextField(_:text:axis:)`, which UIKit gives no placeholder of its
+    /// own) what its accessibility says of its placeholder while it is
+    /// empty, else the label it draws as one (kept, hidden, once there is
+    /// text), else its identifier.
+    @MainActor
+    static func fieldTitle(_ object: NSObject) -> String? {
+        if let field = object as? UITextField { return field.placeholder }
+        let placeholder = NSSelectorFromString("accessibilityPlaceholderValue")
+        if object.responds(to: placeholder), let text = object.value(forKey: "accessibilityPlaceholderValue") as? String,
+           !text.isEmpty {
+            return text
+        }
+        if let view = object as? UIView {
+            func label(_ view: UIView) -> String? {
+                for subview in view.subviews {
+                    if let text = (subview as? UILabel)?.text, !text.isEmpty { return text }
+                    if let text = label(subview) { return text }
+                }
+                return nil
+            }
+            if let text = label(view) { return text }
+        }
+        return identifier(object)
+    }
+
+    /// ISO_DRIVE_TRACE=1: each reading's walk printed, an object a line
+    /// (its class, whether it is an element, its traits, label, identifier
+    /// and frame), for finding what the tree holds where the driver lists
+    /// nothing.
+    static let tracing = ProcessInfo.processInfo.environment["ISO_DRIVE_TRACE"] == "1"
+
+    @MainActor
+    private mutating func visitObject(_ object: NSObject, depth: Int = 0) {
+        if Self.tracing {
+            let frame = object.accessibilityFrame
+            print("[iso trace] \(String(repeating: "  ", count: depth))\(Swift.type(of: object))"
+                + " element=\(object.isAccessibilityElement) traits=\(object.accessibilityTraits.rawValue)"
+                + " label=\(object.accessibilityLabel ?? "-") id=\(Self.identifier(object) ?? "-")"
+                + " children=\((object.accessibilityElements?.count).map(String.init) ?? "-")/\(object.accessibilityElementCount())"
+                + " frame=\(Int(frame.minX)),\(Int(frame.minY)),\(Int(frame.width)),\(Int(frame.height))")
+        }
         if let view = object as? UIView, view.isHidden || view.alpha < 0.01 { return }
         if object.accessibilityElementsHidden { return }
         // A page a navigation slid away (beside the window) is not on the
@@ -83,15 +145,15 @@ extension AccessibilityScreen {
         if let view = object as? UIView, let window = view.window {
             let frame = view.convert(view.bounds, to: window)
             if !frame.isEmpty, frame.maxX <= window.bounds.minX || frame.minX >= window.bounds.maxX { return }
-        } else if object.isAccessibilityElement, let screen = Self.screenBounds {
-            let frame = object.accessibilityFrame
-            if !frame.isEmpty, frame.maxX <= screen.minX || frame.minX >= screen.maxX { return }
+        } else if object.isAccessibilityElement, let window = Self.window {
+            let frame = object.accessibilityFrame.applying(window.fromScreen)
+            if !frame.isEmpty, frame.maxX <= window.bounds.minX || frame.minX >= window.bounds.maxX { return }
         }
         if object.isAccessibilityElement {
             let traits = object.accessibilityTraits
             let label = object.accessibilityLabel ?? ""
             let value = object.accessibilityValue
-            let id = (object as? UIAccessibilityIdentification)?.accessibilityIdentifier.flatMap { $0.isEmpty ? nil : $0 }
+            let id = Self.identifier(object)
             let kind = String(describing: Swift.type(of: object))
             let frame = object.accessibilityFrame
             var params = ["traits": String(traits.rawValue),
@@ -103,7 +165,7 @@ extension AccessibilityScreen {
                          disabled: disabled)
             }
             if object is UITextField || (object as? UITextView)?.isEditable == true || traits.contains(.searchField) {
-                add("textField", label.isEmpty ? (object as? UITextField)?.placeholder ?? "" : label,
+                add("textField", label.isEmpty ? Self.fieldTitle(object) ?? "" : label,
                     (object as? UITextField)?.text ?? (object as? UITextView)?.text ?? value)
             } else if let control = object as? UISegmentedControl {
                 add("segmented", label, value, (0..<control.numberOfSegments).map { control.titleForSegment(at: $0) ?? "" })
@@ -123,18 +185,18 @@ extension AccessibilityScreen {
             return
         }
         if let elements = object.accessibilityElements as? [NSObject], !elements.isEmpty {
-            for element in elements { visit(element) }
+            for element in elements { visit(element, depth: depth + 1) }
             return
         }
         let count = object.accessibilityElementCount()
         if count != NSNotFound, count > 0 {
             for index in 0..<count {
-                if let element = object.accessibilityElement(at: index) as? NSObject { visit(element) }
+                if let element = object.accessibilityElement(at: index) as? NSObject { visit(element, depth: depth + 1) }
             }
             return
         }
         if let view = object as? UIView {
-            for subview in view.subviews { visit(subview) }
+            for subview in view.subviews { visit(subview, depth: depth + 1) }
         }
     }
 }
@@ -151,15 +213,43 @@ extension AccessibilityDriver {
         unsafeBitCast(symbol, to: SetEnabled.self)(1)
     }
 
+    /// Accessibility's screen coordinates into `window`'s: the inverse of
+    /// what UIKit maps the window's into them with, read from three points.
+    /// They needn't be the window's turned only by the screen's own
+    /// coordinate space: on an app that turns itself to landscape on an
+    /// upright phone they are the device's, so a point converted from
+    /// `UIScreen.coordinateSpace` missed the row it was meant for.
+    static func fromScreen(_ window: UIWindow) -> CGAffineTransform {
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            let rect = UIAccessibility.convertToScreenCoordinates(CGRect(x: x, y: y, width: 0, height: 0), in: window)
+            return rect.origin
+        }
+        let origin = point(0, 0), right = point(100, 0), down = point(0, 100)
+        let toScreen = CGAffineTransform(a: (right.x - origin.x) / 100, b: (right.y - origin.y) / 100,
+                                         c: (down.x - origin.x) / 100, d: (down.y - origin.y) / 100,
+                                         tx: origin.x, ty: origin.y)
+        return toScreen.inverted()
+    }
+
+    /// An interface orientation as headless.proto's Info names it.
+    static func orientationName(_ orientation: UIInterfaceOrientation) -> String {
+        switch orientation {
+        case .portrait: "portrait"
+        case .portraitUpsideDown: "portrait-upside-down"
+        case .landscapeLeft: "landscape-left"
+        case .landscapeRight: "landscape-right"
+        default: ""
+        }
+    }
+
     /// The key window's topmost presented view controller (an alert, a
     /// sheet), or the window itself: what can be used.
     func roots() -> ([NSObject], [(style: String, title: String, message: String)]) {
-        let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows).filter { !$0.isHidden }
-        guard let window = windows.first(where: \.isKeyWindow) ?? windows.first else { return ([], []) }
-        AccessibilityScreen.screenBounds = window.screen.bounds
+        guard let window = Self.keyWindow() else { return ([], []) }
+        AccessibilityScreen.window = (window.bounds, Self.fromScreen(window))
         info.width = Double(window.bounds.width)
         info.height = Double(window.bounds.height)
+        info.orientation = window.windowScene.map { Self.orientationName($0.effectiveGeometry.interfaceOrientation) } ?? ""
         // An open menu (a Menu, a picker's menu): UIKit's context menu, a view
         // of the window's own beside its content, which the window's
         // accessibility containers don't lead to. While it's open it is all
@@ -278,8 +368,24 @@ extension AccessibilityDriver {
             return true
         }
         guard let window = roots().0.compactMap({ ($0 as? UIWindow) ?? ($0 as? UIView)?.window }).first else { return false }
-        let point = window.convert(object.accessibilityActivationPoint, from: window.screen.coordinateSpace)
-        var view = window.hitTest(point, with: nil)
+        let point = object.accessibilityActivationPoint.applying(Self.fromScreen(window))
+        if let view = window.hitTest(point, with: nil), use(from: view, element, window) { return true }
+        // Where the point reaches nothing that takes a tap: the view the
+        // element belongs to (its accessibility containers, up to a view),
+        // whatever the coordinates say.
+        var container: NSObject? = object
+        while let current = container, !(current is UIView) {
+            let key = "accessibilityContainer"
+            container = current.responds(to: NSSelectorFromString(key)) ? current.value(forKey: key) as? NSObject : nil
+        }
+        if let view = container as? UIView, view.window === window { return use(from: view, element, window) }
+        return false
+    }
+
+    /// The tap on `element` that `view` (where it stands) or a view around
+    /// it takes: a list's or a table's cell selected, a control's action.
+    private func use(from view: UIView, _ element: AccessibilityScreen.Element, _ window: UIWindow) -> Bool {
+        var view: UIView? = view
         while let current = view {
             if let cell = current as? UICollectionViewCell, let collection = Self.enclosing(UICollectionView.self, cell),
                let path = collection.indexPath(for: cell) {
@@ -416,8 +522,9 @@ extension AccessibilityDriver {
             return nil
         }
         // A menu: opened, then its option activated.
+        let closed = await screen()
         guard await activate(element) else { return "\(element.name) didn't open" }
-        let menu = await settle(after: true)
+        let menu = await settle(after: closed)
         guard let choice = menu.elements.last(where: { $0.role == "button" && $0.label == option }) else {
             return "\(element.name) has no option \(option)"
         }
@@ -463,6 +570,11 @@ extension AccessibilityDriver {
             navigation.popViewController(animated: false)
             return true
         }
+        // Nothing pushed in what is presented: back closes it, as Isomer's
+        // driver's back closes a sheet at its first page.
+        if let presented = presenting, presented !== window.rootViewController, !(presented is UIAlertController) {
+            return await dismiss(screen)
+        }
         return false
     }
 
@@ -494,9 +606,117 @@ extension AccessibilityDriver {
         "a long press isn't driven on iOS yet"
     }
 
+    /// Closes what is presented on top, as a person would: escape (what
+    /// VoiceOver's two-finger scrub does: an alert's Cancel, a menu, a
+    /// popover); else a sheet a person may swipe away, closed as the swipe
+    /// closes it (its presentation controller's delegate asked and told, so
+    /// SwiftUI's `isPresented` and `onDismiss` follow); else its own Cancel,
+    /// Close or Done. Each tried until the presentation is gone.
     func dismiss(_ screen: AccessibilityScreen) async -> Bool {
-        guard let view = roots().0.first as? UIView else { return false }
-        return view.accessibilityPerformEscape()
+        guard let window = Self.keyWindow() else { return false }
+        var top: UIViewController? = window.rootViewController
+        while let next = top?.presentedViewController, !next.isBeingDismissed { top = next }
+        guard let presented = top, presented !== window.rootViewController else {
+            // An open menu, nothing presented: escape alone.
+            return (roots().0.first as? UIView)?.accessibilityPerformEscape() ?? false
+        }
+        func closed() async -> Bool {
+            let deadline = Date().addingTimeInterval(2)
+            while Date() < deadline {
+                if presented.presentingViewController == nil || presented.isBeingDismissed { return true }
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+            return false
+        }
+        if presented.view.accessibilityPerformEscape(), await closed() { return true }
+        if !(presented is UIAlertController), let controller = presented.presentationController,
+           !presented.isModalInPresentation,
+           controller.delegate?.presentationControllerShouldDismiss?(controller) != false {
+            let delegate = controller.delegate
+            delegate?.presentationControllerWillDismiss?(controller)
+            presented.presentingViewController?.dismiss(animated: true) {
+                delegate?.presentationControllerDidDismiss?(controller)
+            }
+            if await closed() { return true }
+        }
+        let names = ["cancel", "close", "done"]
+        for name in names {
+            if let button = screen.elements.last(where: {
+                $0.role == "button" && !$0.disabled && ($0.label.lowercased() == name || $0.id?.lowercased() == name)
+            }), await activate(button), await closed() {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// The scene phases the driver has moved its scenes to, by scene: UIKit's
+    /// own activation state stays as it was.
+    private static var phases: [ObjectIdentifier: Int] = [:]
+
+    /// Moves SwiftUI's scene phase (`@Environment(\.scenePhase)`, its
+    /// `.onChange`) as leaving the app and coming back does: SwiftUI's own
+    /// scene delegate told, a step at a time, what UIKit tells it then
+    /// (`sceneWillResignActive`, `sceneDidEnterBackground`,
+    /// `sceneWillEnterForeground`, `sceneDidBecomeActive`), and UIKit's
+    /// notifications of each step posted after it for what observes them.
+    /// The app stays on screen and is still driven (a simulator's real trip
+    /// to the home screen takes seconds and suspends the app). Posting the
+    /// notifications alone moves nothing: SwiftUI's phase follows its
+    /// delegate.
+    func scene(_ phase: String) async -> String? {
+        let order = ["background": 0, "inactive": 1, "active": 2]
+        guard let wanted = order[phase] else { return "no scene phase \(phase)" }
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        guard !scenes.isEmpty else { return "no scene" }
+        let center = NotificationCenter.default
+        let application = UIApplication.shared
+        for scene in scenes {
+            let key = ObjectIdentifier(scene)
+            var current = Self.phases[key] ?? {
+                switch scene.activationState {
+                case .foregroundActive: return 2
+                case .foregroundInactive: return 1
+                default: return 0
+                }
+            }()
+            while current != wanted {
+                let delegate = scene.delegate
+                switch (current, wanted > current) {
+                case (2, false):
+                    delegate?.sceneWillResignActive?(scene)
+                    center.post(name: UIScene.willDeactivateNotification, object: scene)
+                    center.post(name: UIApplication.willResignActiveNotification, object: application)
+                    current = 1
+                case (1, false):
+                    delegate?.sceneDidEnterBackground?(scene)
+                    center.post(name: UIScene.didEnterBackgroundNotification, object: scene)
+                    center.post(name: UIApplication.didEnterBackgroundNotification, object: application)
+                    current = 0
+                case (0, true):
+                    delegate?.sceneWillEnterForeground?(scene)
+                    center.post(name: UIScene.willEnterForegroundNotification, object: scene)
+                    center.post(name: UIApplication.willEnterForegroundNotification, object: application)
+                    current = 1
+                default:
+                    delegate?.sceneDidBecomeActive?(scene)
+                    center.post(name: UIScene.didActivateNotification, object: scene)
+                    center.post(name: UIApplication.didBecomeActiveNotification, object: application)
+                    current = 2
+                }
+                // A turn of the run loop between steps, as UIKit's come.
+                try? await Task.sleep(nanoseconds: 100_000_000)
+            }
+            Self.phases[key] = current
+        }
+        return nil
+    }
+
+    /// The window the app is shown in: the key one, else the first.
+    static func keyWindow() -> UIWindow? {
+        let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows).filter { !$0.isHidden }
+        return windows.first(where: \.isKeyWindow) ?? windows.first
     }
 }
 #endif

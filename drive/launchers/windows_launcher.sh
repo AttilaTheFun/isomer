@@ -23,6 +23,8 @@ app="${ISOMER_WINDOWS_APP:?ISOMER_WINDOWS_APP: the Windows app}"
 dir="$(cd "$(dirname "$app")" && { pwd -W 2> /dev/null || pwd; })"
 environment=(ISO_DRIVER="$url" ISO_DRIVER_NAME="$name")
 for pair in "$@"; do
+    # (An app's arguments after `--` aren't passed on here yet.)
+    [ "$pair" != -- ] || break
     case "${pair%%=*}" in
         ISO_HEADLESS_WIDTH | ISO_HEADLESS_HEIGHT) ;;
         *) environment+=("$pair") ;;

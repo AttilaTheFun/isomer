@@ -46,17 +46,40 @@ failures=0
 apple_runner() {
     local name="$1" out="$2"
     shift 2
-    local developer platform
+    local developer platform log status attempt=0 filters=() failed=() test
     developer="$(xcode-select -p)"
     platform="$developer/Platforms/MacOSX.platform/Developer"
     mkdir -p "$out/$name"
     chmod +x "$runner"
-    env DYLD_FRAMEWORK_PATH="$platform/Library/Frameworks:$platform/Library/PrivateFrameworks" \
-        DYLD_LIBRARY_PATH="$platform/usr/lib" TEST_UNDECLARED_OUTPUTS_DIR="$out/$name" "$@" \
-        "$runner" > "$out/$name/test.log" 2>&1
-    local status=$?
-    cat "$out/$name/test.log"
-    [ "$status" -eq 0 ] || failures=$((failures + 1))
+    log="$out/$name/test.log"
+    # A simulator that went down before (under the tests before these) up first.
+    [ -z "$udid" ] || hosted_sim_healthy || hosted_sim_recover "$out"
+    while :; do
+        # ISOMER_SIMULATOR the simulator as it is now (another after a recovery).
+        env DYLD_FRAMEWORK_PATH="$platform/Library/Frameworks:$platform/Library/PrivateFrameworks" \
+            DYLD_LIBRARY_PATH="$platform/usr/lib" TEST_UNDECLARED_OUTPUTS_DIR="$out/$name" "$@" \
+            ${udid:+ISOMER_SIMULATOR="$udid"} "$runner" ${filters[@]+"${filters[@]}"} > "$log" 2>&1
+        status=$?
+        cat "$log"
+        [ "$status" -ne 0 ] || return 0
+        # The simulator taken down under the tests by GitHub's image
+        # (tools/ci/hosted_simulator.sh): up again, and the tests that failed
+        # run again (Swift Testing's --filter), at most twice. A test that
+        # fails with the simulator up still fails.
+        [ -n "$udid" ] && [ "$attempt" -lt 2 ] || break
+        if hosted_sim_healthy && ! grep -qE "CoreSimulatorService: Connection interrupted|device is not booted" "$log"; then
+            break
+        fi
+        hosted_sim_recover "$out" || break
+        failed=($(sed -n 's/^✘ Test \([A-Za-z0-9_]*\)(.*) failed after .*/\1/p' "$log"))
+        [ ${#failed[@]} -gt 0 ] || break
+        filters=()
+        for test in "${failed[@]}"; do filters+=(--filter "$test"); done
+        attempt=$((attempt + 1))
+        log="$out/$name/test.again-$attempt.log"
+        echo "hosted_headful_test: $name: ${#failed[@]} tests again on the simulator started again"
+    done
+    failures=$((failures + 1))
 }
 # The tests hosted in the iPhone app as CI's container built them (their
 # XCTest bundle and the app hosting it, beside the .ipa in hosted/): run
@@ -137,20 +160,39 @@ apple)
     hosted_dir="$(dirname "$ipa")/hosted"
     [ -d "$hosted_dir" ] || hosted_dir=""
     if [[ $parts == *" ios "* || $parts == *" hosted "* ]]; then
-        # The iPhone: a simulator of the run's own, the app installed.
-        runtime="$(xcrun simctl list runtimes iOS available | sed -n 's/^iOS .* - \(com\.apple\.CoreSimulator\.SimRuntime\.iOS-[0-9-]*\)$/\1/p' | tail -1)"
-        [ -n "$runtime" ] || { echo "hosted_headful_test: no iOS runtime" >&2; exit 1; }
-        udid="$(xcrun simctl create "isomer-headful-$$" "${HOSTED_IOS_DEVICE:-iPhone 17}" "$runtime")" || exit 1
-        xcrun simctl boot "$udid" && xcrun simctl bootstatus "$udid" -b > /dev/null || exit 1
-        xcrun simctl ui "$udid" appearance light
-        mkdir -p "$work/ios" && unzip -q "$ipa" -d "$work/ios" && xcrun simctl install "$udid" "$work/ios/Payload/"*.app || exit 1
+        # The iPhone: a simulator of the run's own, the apps installed
+        # (tools/ci/hosted_simulator.sh, which starts it again should
+        # GitHub's image take it down).
+        . "$ROOT/tools/ci/hosted_simulator.sh"
+        probe="$(dirname "$ipa")/probe"
+        mkdir -p "$work/ios" && unzip -q "$ipa" -d "$work/ios" || exit 1
+        prepare_ios() {
+            local app_ipa
+            xcrun simctl ui "$udid" appearance light
+            xcrun simctl install "$udid" "$work/ios/Payload/"*.app || return 1
+            [[ $parts == *" ios "* && -f "$probe/driver_probe_headful_apple_runner" ]] || return 0
+            for app_ipa in "$probe"/*.ipa; do
+                rm -rf "$work/probe" && mkdir -p "$work/probe" && unzip -q "$app_ipa" -d "$work/probe" &&
+                    xcrun simctl install "$udid" "$work/probe/Payload/"*.app || return 1
+            done
+        }
+        hosted_sim_start "isomer-headful-$$" prepare_ios || exit 1
     fi
     if [[ $parts == *" ios "* ]]; then
         if [ -n "$runner" ]; then
-            apple_runner storybook_headful_ios_test "$out" ISOMER_SIMULATOR="$udid" \
+            apple_runner storybook_headful_ios_test "$out" \
                 ISOMER_BUNDLE_ID=com.LoganShire.IsomerStorybook ISOMER_HEADFUL_LAUNCHER="$ROOT/drive/launchers/ios_launcher.sh"
         else
             run storybook_headful_ios_test "$out" --test_env=ISOMER_SIMULATOR="$udid"
+        fi
+        # The driver probe's tests (Apple's driver's own checks), when CI's
+        # container built the probe and its runner: upright, and turned to
+        # landscape by the app itself on this upright simulator.
+        if [ -f "$probe/driver_probe_headful_apple_runner" ]; then
+            runner="$probe/driver_probe_headful_apple_runner" apple_runner driver_probe_headful_ios_test "$out" \
+                ISOMER_BUNDLE_ID=com.LoganShire.IsomerExamples.DriverProbe \
+                ISOMER_LANDSCAPE_BUNDLE_ID=com.LoganShire.IsomerExamples.DriverProbeLandscape \
+                ISOMER_HEADFUL_LAUNCHER="$ROOT/drive/launchers/ios_launcher.sh"
         fi
     fi
     if [[ $parts == *" hosted "* ]]; then
@@ -160,13 +202,18 @@ apple)
         # took over a minute to boot on GitHub's runner, xcodebuild hung, and
         # the Mac's tests after it timed out.
         if [ -n "$hosted_dir" ]; then
+            hosted_sim_healthy || hosted_sim_recover "$out"
             hosted_xctest "$out"
         else
             run storybook_hosted_ios_test "$out" --@isomer//drive:headful --ios_multi_cpus=sim_arm64 \
                 --test_env=ISOMER_SIMULATOR="$udid"
         fi
     fi
-    [ -z "$udid" ] || xcrun simctl shutdown "$udid" > /dev/null 2>&1
+    if [ -n "$udid" ]; then
+        xcrun simctl shutdown "$udid" > /dev/null 2>&1
+        xcrun simctl delete "$udid" > /dev/null 2>&1
+        udid=""
+    fi
     if [[ $parts == *" macos "* ]]; then
         # The Mac: this VM's own screen.
         ditto -x -k "$zip" "$work/mac" || exit 1

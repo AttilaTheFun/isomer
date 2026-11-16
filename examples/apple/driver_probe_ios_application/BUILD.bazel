@@ -1,0 +1,41 @@
+load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+# The driver probe (//headless/driver_probe: views shaped as an app's are) on
+# Apple's SwiftUI, for the iPhone's simulator: the app its tests drive
+# through Apple's driver (drive/apple) when it is built with
+# --@isomer//drive:headful, as an app's UI tests drive it
+# (//headless/driver_probe:driver_probe_headful_apple_runner). Twice: upright,
+# and turned to landscape by the app itself (its Info.plist allows
+# landscape alone), on a simulator that stands upright, as an app's proof
+# on its side runs. No profile: the simulator's alone.
+#
+#   bazel build --@isomer//drive:headful --ios_multi_cpus=sim_arm64 //apple/driver_probe_ios_application/...
+swift_library(
+    name = "driver_probe_ios_lib",
+    srcs = ["//headless/driver_probe:DriverProbe.swift"],
+    module_name = "DriverProbeIOS",
+    tags = ["manual"],
+    deps = [
+        "@isomer//apple/libraries/swift_ui",
+        "@isomer//apple/libraries/swift_ui:isomer",
+    ],
+)
+
+[
+    ios_application(
+        name = name,
+        bundle_id = bundle_id,
+        bundle_name = "DriverProbe",
+        families = ["iphone"],
+        infoplists = [plist],
+        minimum_os_version = "17.0",
+        tags = ["manual"],
+        visibility = ["//visibility:public"],
+        deps = [":driver_probe_ios_lib"],
+    )
+    for name, bundle_id, plist in [
+        ("driver_probe_ios_application", "com.LoganShire.IsomerExamples.DriverProbe", "Info.portrait.plist"),
+        ("driver_probe_landscape_ios_application", "com.LoganShire.IsomerExamples.DriverProbeLandscape", "Info.landscape.plist"),
+    ]
+]
