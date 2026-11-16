@@ -226,11 +226,11 @@ build:ci_device --ios_multi_cpus=arm64
 build:ci_device --ios_signing_cert_name=-
 
 # BuildBuddy's remote cache and build results (--config=buildbuddy): no key
-# here. CI's jobs on this repository turn it on with the key, in a file of
-# the job's own (tools/ci/ci_bazel.sh, from the BUILDBUDDY_API_KEY secret),
-# and only main's builds and the release jobs upload to it; a pull request
-# reads (--noremote_upload_local_results). A builder with a key of their own
-# puts the same lines in .bazelrc.user. What a job downloads is Bazel's
+# here. CI's runs on main and its releases turn it on with the key, in a
+# file of the job's own (tools/ci/ci_bazel.sh, from the BUILDBUDDY_API_KEY
+# secret), and only main's builds and the release jobs upload to it; pull
+# requests don't use it (GitHub's cache alone). A builder with a key of
+# their own puts the same lines in .bazelrc.user. What a job downloads is Bazel's
 # default, the top-level outputs (what the scripts copy, run and test); the
 # writers download every output (--remote_download_all), so the disk cache
 # GitHub's cache keeps for runs without a key stays whole. Compressed

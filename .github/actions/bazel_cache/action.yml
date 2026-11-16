@@ -10,9 +10,10 @@
 # repository contents cache inside the main repository), or where the job's
 # ISOMER_BAZEL_CACHE says (a runner's second disk).
 # BuildBuddy's remote cache too, when the job hands this its key
-# (buildbuddy-api-key, the repository's BUILDBUDDY_API_KEY secret): given to
-# tools/ci/ci_bazel.sh's setup step alone, which keeps it out of the
-# checkout and the log.
+# (buildbuddy-api-key, the repository's BUILDBUDDY_API_KEY secret, which
+# the workflow passes only in runs on main and a published release's):
+# given to tools/ci/ci_bazel.sh's setup step alone, which keeps it out of
+# the checkout and the log.
 name: Bazel's cache
 description: Restores the job group's Bazel caches and writes Bazel's settings
 inputs:

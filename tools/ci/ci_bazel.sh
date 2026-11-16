@@ -26,15 +26,16 @@
 #   CI names none: CI builds Windows on Windows itself
 #   (tools/ci/windows_build.ps1, the runner image's Visual Studio).
 # - BuildBuddy's remote cache (.bazelrc's --config=buildbuddy), when
-#   BUILDBUDDY_API_KEY is set (the repository's secret, which the workflow
-#   hands this step alone; a fork's pull request has none and builds on
-#   GitHub's cache alone): the config and the key's headers in a file of
+#   BUILDBUDDY_API_KEY is set: the config and the key's headers in a file of
 #   the job's own outside the checkout (mode 600), which .bazelrc.user
 #   imports by its path, the key never on a command line nor in the log.
-#   Only main's builds (a push to main: populate, bazel8) and the release
-#   jobs (alpha and alpha-apple on main, a published release's) upload;
-#   every other run reads (--noremote_upload_local_results), so a pull
-#   request's results never enter the cache. A reader downloads only the
+#   The key reads and writes, so the workflow hands it to this step only in
+#   runs on main and a published release's, never to a pull request's or a
+#   branch's (whose copy of this script could upload with it): those build
+#   on GitHub's cache alone. Of the runs that have it, main's builds (a
+#   push to main: populate, bazel8) and the release jobs (alpha and
+#   alpha-apple on main, a published release's) upload; main's other runs
+#   by hand read (--noremote_upload_local_results). A reader downloads only the
 #   top-level outputs (Bazel's default, the files the jobs copy and run); a
 #   writer downloads them all, so the disk cache GitHub's cache keeps
 #   (above) stays whole for the runs that have no key.
@@ -114,6 +115,10 @@ setup)
             echo "ci_bazel: BuildBuddy's remote cache, read only (${GITHUB_EVENT_NAME:-}, ${GITHUB_REF:-}, ${GITHUB_JOB:-})"
         fi
     else
+        # A read-only key for pull requests (BUILDBUDDY_READ_KEY, a secret of
+        # its own once there is one) would go here: the same file with its
+        # headers and --noremote_upload_local_results, its key unable to
+        # write whatever a pull request's scripts ask.
         echo "ci_bazel: no BUILDBUDDY_API_KEY: no remote cache, GitHub's cache alone"
     fi
     if [ -n "$cache" ]; then

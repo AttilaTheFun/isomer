@@ -354,9 +354,11 @@ apple or windows, and MODULE.bazel; tools/ci/ci_bazel.sh: written by
 main's builds alone, trimmed to stay within GitHub's 10 GB a repository),
 and, on this repository's own runs, in BuildBuddy's remote cache
 (.bazelrc's `--config=buildbuddy`, its key the BUILDBUDDY_API_KEY secret,
-which the workflow hands ci_bazel.sh's setup alone: written by main's
-builds and the release jobs alone, read by pull requests; a fork's pull
-request has no key and builds on GitHub's cache). CI follows the owner's policy for protected repositories
+read and write, which the workflow hands ci_bazel.sh's setup alone and only
+in runs on main and a published release's: written by main's builds and
+the release jobs, read by main's runs by hand; pull requests, whose
+scripts could upload with it, build on GitHub's cache alone until a
+read-only key, BUILDBUDDY_READ_KEY, is theirs). CI follows the owner's policy for protected repositories
 (AttilaTheFun/reviews' docs/CI_POLICY.md) and the shape the owner set on
 2026-11-08 (build.yml's header): the tests without a GUI before a merge,
 every build after one, the GUI tests by hand, and the screenshot proof
