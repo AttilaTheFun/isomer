@@ -4,23 +4,31 @@
 # one, the GUI tests by hand, and the screenshot proof only ahead of a
 # release (run: release, or run: proof by hand). Since
 # 2026-11-15 on GitHub's own standard runners alone (a fork runs it as it
-# is; AGENTS.md, "The release proof" and "Signing"): the web and Linux in
-# the project's image (by digest) on arm64 Ubuntu; Android in Swift's image
-# on x86_64 Ubuntu (its SDK's tools are x86_64); the Apple targets on
+# is; AGENTS.md, "The release proof" and "Signing"): the web, Linux and
+# Android together, one job and one Bazel output base, in Swift's image (by
+# digest) on x86_64 Ubuntu, with the Linux apps' libraries added
+# (tools/ci/job_tools.sh; Android's SDK tools are x86_64, and the project's
+# own image is arm64 alone); the Apple targets on
 # `xcode-27` Macs with their own Xcode (Apple's SDKs may not be
 # redistributed); Windows on windows-11-arm with swift.org's Swift and the
 # image's own Visual Studio, built only (tier 2). Bazel's
 # caches are GitHub's (.github/actions/bazel_cache), written by main's
-# builds alone.
+# builds alone, and BuildBuddy's remote cache, its key the
+# BUILDBUDDY_API_KEY secret (read and write), handed to the cache action's
+# setup alone and only in runs on main and a published release's: never to
+# a pull request or a branch's run, whose scripts could upload with it
+# (tools/ci/ci_bazel.sh: main's push builds and the release jobs write;
+# main's other runs by hand read). Pull requests build on GitHub's cache
+# alone until a read-only key (BUILDBUDDY_READ_KEY) is theirs.
 #
-# - pull requests: container (web, Linux; the required check),
-#   container-android, container-apple, container-windows: every target
+# - pull requests: container (web, Linux, Android; the required check),
+#   container-apple, container-windows: every target
 #   built, then every test that draws nothing (container_build.sh pr).
-# - main's commits: populate, populate-android, populate-apple,
+# - main's commits: populate, populate-apple,
 #   populate-windows (the same, and what a release builds, into the cache;
 #   never a proof); bazel8, bazel8-apple.
 # - by hand (`run:`): verify (the builds and tests, no proof: verify,
-#   verify-android, verify-apple, verify-windows, container-verify, apple,
+#   verify-apple, verify-windows, container-verify, apple,
 #   android); proof (the screenshot proof alone: proof, proof-apple,
 #   proof-android, proof-shoot, proof-compare); prerelease (main: the
 #   Alphas, alpha-apple and alpha, signed with the `release` environment's
@@ -29,7 +37,9 @@
 #   the one run that proves and verifies at once, which tools/ci/verified.sh
 #   asks for);
 #   experiment (any branch but a release branch: the Storybook Lab drafted
-#   unsigned, as no environment's keys reach a branch). There is no adhoc
+#   unsigned, as no environment's keys reach a branch); waydroid-probe (a
+#   probe: whether Waydroid's Android boots on GitHub's hosted x86_64
+#   Ubuntu, tools/ci/waydroid_probe.sh; nothing depends on it). There is no adhoc
 #   run: a branch's builds are experiments only (the owner, 2026-11-12).
 #   Drafts are CI's: no agent publishes one or makes a tag.
 # - a published release (its v* tag, made in Reviews): verified
@@ -48,9 +58,9 @@ on:
   workflow_dispatch:
     inputs:
       run:
-        description: "What to run: verify (the tests, no proof), prerelease or release on main (verify on a branch to bisect); proof (the screenshot proof alone); experiment on any but a release branch"
+        description: "What to run: verify (the tests, no proof), prerelease or release on main (verify on a branch to bisect); proof (the screenshot proof alone); experiment on any but a release branch; waydroid-probe (a probe of Waydroid on the hosted runner) on any"
         type: choice
-        options: [verify, proof, prerelease, release, experiment]
+        options: [verify, proof, prerelease, release, experiment, waydroid-probe]
         default: verify
       kind:
         description: The proof's kind
@@ -84,20 +94,28 @@ env:
 jobs:
   # --- Pull requests: every platform built, the tests that draw nothing ---
 
+  # The web, Linux and Android in one job, one Bazel output base on the
+  # runner's second disk: Swift's image on x86_64 (Android's SDK tools are
+  # x86_64), the Linux apps' libraries added by job_tools.sh.
   container:
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-24.04-arm
-    container: ghcr.io/attilathefun/visor-agent@sha256:849dcf6aeb16119e3b769b4f0c410b93ac58ed1e3b3ef2801f7534def3fbaaf0
+    runs-on: ubuntu-24.04
+    container:
+      image: swift:6.4.2-noble@sha256:23d9b28ad97fb1cf1999edc3a0cb265ee915ed42299a9344e7173d5a6d2b05f4
+      # Bazel's tree on the runner's second disk (ISOMER_BAZEL_ROOT).
+      volumes: ["/mnt:/mnt"]
     timeout-minutes: 180
     env:
-      ISOMER_PLATFORMS: web linux
+      ISOMER_PLATFORMS: web linux android
+      ISOMER_ANDROID_X86_64: "1"
+      ISOMER_BAZEL_ROOT: /mnt/bazel
     steps:
       - uses: actions/checkout@v5
       - name: The job's tools
         run: tools/ci/job_tools.sh
       - uses: ./.github/actions/bazel_cache
         with:
-          group: linux
+          group: ubuntu
       - name: Every target built, and the tests that draw nothing
         env:
           ISOMER_EXECUTION_LOGS: ${{ runner.temp }}/execution-logs
@@ -109,28 +127,6 @@ jobs:
           name: execution-logs
           path: ${{ runner.temp }}/execution-logs
           retention-days: 7
-
-  container-android:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-24.04
-    container:
-      image: swift:6.4.2-noble@sha256:23d9b28ad97fb1cf1999edc3a0cb265ee915ed42299a9344e7173d5a6d2b05f4
-      # Bazel's tree on the runner's second disk (ISOMER_BAZEL_ROOT).
-      volumes: ["/mnt:/mnt"]
-    timeout-minutes: 180
-    env:
-      ISOMER_PLATFORMS: android
-      ISOMER_ANDROID_X86_64: "1"
-      ISOMER_BAZEL_ROOT: /mnt/bazel
-    steps:
-      - uses: actions/checkout@v5
-      - name: The job's tools
-        run: tools/ci/job_tools.sh
-      - uses: ./.github/actions/bazel_cache
-        with:
-          group: android
-      - name: The Android targets built, and the Android build tests
-        run: exec tools/ci/container_build.sh pr
 
   container-apple:
     if: github.event_name == 'pull_request'
@@ -176,45 +172,13 @@ jobs:
 
   populate:
     if: github.event_name == 'push'
-    runs-on: ubuntu-24.04-arm
-    container: ghcr.io/attilathefun/visor-agent@sha256:849dcf6aeb16119e3b769b4f0c410b93ac58ed1e3b3ef2801f7534def3fbaaf0
-    timeout-minutes: 180
-    env:
-      ISOMER_PLATFORMS: web linux
-    steps:
-      - uses: actions/checkout@v5
-      - name: The job's tools
-        run: tools/ci/job_tools.sh
-      - id: cache
-        uses: ./.github/actions/bazel_cache
-        with:
-          group: linux
-      - name: The merged tree, built into the cache
-        env:
-          ISOMER_EXECUTION_LOGS: ${{ runner.temp }}/execution-logs
-        run: exec tools/ci/container_build.sh all
-      - uses: ./.github/actions/bazel_cache_save
-        if: ${{ !cancelled() }}
-        with:
-          group: linux
-          gigabytes: 3
-          repository-hit: ${{ steps.cache.outputs.repository-hit }}
-      - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
-        with:
-          name: execution-logs
-          path: ${{ runner.temp }}/execution-logs
-          retention-days: 7
-
-  populate-android:
-    if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     container:
       image: swift:6.4.2-noble@sha256:23d9b28ad97fb1cf1999edc3a0cb265ee915ed42299a9344e7173d5a6d2b05f4
       volumes: ["/mnt:/mnt"]
     timeout-minutes: 180
     env:
-      ISOMER_PLATFORMS: android
+      ISOMER_PLATFORMS: web linux android
       ISOMER_ANDROID_X86_64: "1"
       ISOMER_BAZEL_ROOT: /mnt/bazel
     steps:
@@ -224,19 +188,30 @@ jobs:
       - id: cache
         uses: ./.github/actions/bazel_cache
         with:
-          group: android
-      - name: The merged tree's Android targets, built into the cache
+          group: ubuntu
+          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
+      - name: The merged tree, built into the cache
+        env:
+          ISOMER_EXECUTION_LOGS: ${{ runner.temp }}/execution-logs
         run: exec tools/ci/container_build.sh all
       # And what a release builds here: the Android app and the site as
       # alpha builds them (never the proof's apps: no proof on a push).
       - name: The published Android app and site, built into the cache
         run: exec tools/ci/container_build.sh package .ci/packages --config=alpha $PUBLISHED_LINUX
+      # The web, Linux and Android's share of GitHub's 10 GB: what the two
+      # groups (linux 3, android 2) had.
       - uses: ./.github/actions/bazel_cache_save
         if: ${{ !cancelled() }}
         with:
-          group: android
-          gigabytes: 2
+          group: ubuntu
+          gigabytes: 5
           repository-hit: ${{ steps.cache.outputs.repository-hit }}
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: execution-logs
+          path: ${{ runner.temp }}/execution-logs
+          retention-days: 7
 
   populate-apple:
     if: github.event_name == 'push'
@@ -250,6 +225,7 @@ jobs:
         uses: ./.github/actions/bazel_cache
         with:
           group: apple
+          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
       - name: The merged tree's Apple targets, built into the cache
         run: exec tools/ci/container_build.sh all
       - name: The published Apple apps, built into the cache
@@ -293,43 +269,34 @@ jobs:
           repository-hit: ${{ steps.cache.outputs.repository-hit }}
 
   bazel8:
-    # The Storybooks built with the oldest Bazel isomer supports.
+    # The Storybooks built with the oldest Bazel isomer supports: the web,
+    # Linux and Android together, as container builds them.
     if: github.event_name == 'push'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - group: linux
-            runner: ubuntu-24.04-arm
-            image: ghcr.io/attilathefun/visor-agent@sha256:849dcf6aeb16119e3b769b4f0c410b93ac58ed1e3b3ef2801f7534def3fbaaf0
-            targets: >-
-              //web/storybook_web_application:storybook_web_application
-              //linux/storybook_linux_application:storybook_linux_application
-          - group: android
-            runner: ubuntu-24.04
-            image: swift:6.4.2-noble@sha256:23d9b28ad97fb1cf1999edc3a0cb265ee915ed42299a9344e7173d5a6d2b05f4
-            targets: //android/storybook_android_application:storybook_android_application_apk
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-24.04
     container:
-      image: ${{ matrix.image }}
+      image: swift:6.4.2-noble@sha256:23d9b28ad97fb1cf1999edc3a0cb265ee915ed42299a9344e7173d5a6d2b05f4
       volumes: ["/mnt:/mnt"]
     timeout-minutes: 180
     env:
       USE_BAZEL_VERSION: 8.5.0
-      ISOMER_PLATFORMS: ${{ matrix.group == 'linux' && 'web linux' || 'android' }}
+      ISOMER_PLATFORMS: web linux android
+      ISOMER_BAZEL_ROOT: /mnt/bazel
     steps:
       - uses: actions/checkout@v5
       - name: The job's tools
         run: tools/ci/job_tools.sh
       - uses: ./.github/actions/bazel_cache
         with:
-          group: ${{ matrix.group }}
+          group: ubuntu
           disk: "false"
+          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
       # Built only (container_build.sh's checks take Bazel 9's test flags).
       - name: The Storybooks with Bazel 8.5.0
-        env:
-          TARGETS: ${{ matrix.targets }}
-        run: exec tools/ci/container_build.sh $TARGETS
+        run: >-
+          exec tools/ci/container_build.sh
+          //web/storybook_web_application:storybook_web_application
+          //linux/storybook_linux_application:storybook_linux_application
+          //android/storybook_android_application:storybook_android_application_apk
 
   bazel8-apple:
     if: github.event_name == 'push'
@@ -343,6 +310,7 @@ jobs:
       - uses: ./.github/actions/bazel_cache
         with:
           group: apple
+          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
           disk: "false"
       - name: The Apple Storybooks with Bazel 8.5.0
         run: >-
@@ -355,30 +323,13 @@ jobs:
 
   verify:
     if: github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release')
-    runs-on: ubuntu-24.04-arm
-    container: ghcr.io/attilathefun/visor-agent@sha256:849dcf6aeb16119e3b769b4f0c410b93ac58ed1e3b3ef2801f7534def3fbaaf0
-    timeout-minutes: 180
-    env:
-      ISOMER_PLATFORMS: web linux
-    steps:
-      - uses: actions/checkout@v5
-      - name: The job's tools
-        run: tools/ci/job_tools.sh
-      - uses: ./.github/actions/bazel_cache
-        with:
-          group: linux
-      - name: Build, and the tests in the build container
-        run: exec tools/ci/container_build.sh
-
-  verify-android:
-    if: github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release')
     runs-on: ubuntu-24.04
     container:
       image: swift:6.4.2-noble@sha256:23d9b28ad97fb1cf1999edc3a0cb265ee915ed42299a9344e7173d5a6d2b05f4
       volumes: ["/mnt:/mnt"]
     timeout-minutes: 180
     env:
-      ISOMER_PLATFORMS: android
+      ISOMER_PLATFORMS: web linux android
       ISOMER_BAZEL_ROOT: /mnt/bazel
     steps:
       - uses: actions/checkout@v5
@@ -386,8 +337,9 @@ jobs:
         run: tools/ci/job_tools.sh
       - uses: ./.github/actions/bazel_cache
         with:
-          group: android
-      - name: Build, and the Android build tests
+          group: ubuntu
+          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
+      - name: Build, and the tests in the build container
         run: exec tools/ci/container_build.sh
       - uses: actions/upload-artifact@v4
         with:
@@ -411,6 +363,7 @@ jobs:
       - uses: ./.github/actions/bazel_cache
         with:
           group: apple
+          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
       - name: Build, with this Mac's Xcode
         run: exec tools/ci/container_build.sh
       - uses: actions/upload-artifact@v4
@@ -458,18 +411,22 @@ jobs:
     # and the Linux app under Xvfb, driven as apple drives the iPhone's and
     # the Mac's (tools/ci/container_build.sh headful). A release needs it.
     if: github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release')
-    runs-on: ubuntu-24.04-arm
-    container: ghcr.io/attilathefun/visor-agent@sha256:849dcf6aeb16119e3b769b4f0c410b93ac58ed1e3b3ef2801f7534def3fbaaf0
+    runs-on: ubuntu-24.04
+    container:
+      image: swift:6.4.2-noble@sha256:23d9b28ad97fb1cf1999edc3a0cb265ee915ed42299a9344e7173d5a6d2b05f4
+      volumes: ["/mnt:/mnt"]
     timeout-minutes: 120
     env:
       ISOMER_PLATFORMS: web linux
+      ISOMER_BAZEL_ROOT: /mnt/bazel
     steps:
       - uses: actions/checkout@v5
       - name: The job's tools
         run: tools/ci/job_tools.sh
       - uses: ./.github/actions/bazel_cache
         with:
-          group: linux
+          group: ubuntu
+          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
       - name: The tests that draw
         env:
           ISOMER_EXECUTION_LOGS: ${{ runner.temp }}/execution-logs
@@ -534,7 +491,7 @@ jobs:
   android:
     # The Android Storybook's tests on GitHub's own Ubuntu runner, the
     # emulator on its KVM (tools/ci/hosted_android_test.sh).
-    needs: verify-android
+    needs: verify
     if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -571,14 +528,18 @@ jobs:
 
   proof:
     if: github.event_name == 'workflow_dispatch' && (inputs.run == 'release' || inputs.run == 'proof')
-    runs-on: ubuntu-24.04-arm
-    container: ghcr.io/attilathefun/visor-agent@sha256:849dcf6aeb16119e3b769b4f0c410b93ac58ed1e3b3ef2801f7534def3fbaaf0
+    runs-on: ubuntu-24.04
+    container:
+      image: swift:6.4.2-noble@sha256:23d9b28ad97fb1cf1999edc3a0cb265ee915ed42299a9344e7173d5a6d2b05f4
+      volumes: ["/mnt:/mnt"]
     concurrency:
       group: isomer-proof-${{ github.ref }}
       cancel-in-progress: false
     timeout-minutes: 180
     env:
       PROOF_KIND: ${{ inputs.kind || 'full' }}
+      ISOMER_PLATFORMS: web
+      ISOMER_BAZEL_ROOT: /mnt/bazel
     steps:
       - uses: actions/checkout@v5
         with:
@@ -587,7 +548,8 @@ jobs:
         run: tools/ci/job_tools.sh
       - uses: ./.github/actions/bazel_cache
         with:
-          group: linux
+          group: ubuntu
+          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
       - name: The web app built
         run: exec tools/ci/proof.sh --stage build --platform web --kind "$PROOF_KIND" --apps "$RUNNER_TEMP/proof-apps" --review "$RUNNER_TEMP/proof-review"
       - uses: actions/upload-artifact@v4
@@ -615,6 +577,7 @@ jobs:
       - uses: ./.github/actions/bazel_cache
         with:
           group: apple
+          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
       - name: The iPhone and Mac apps built, with this Mac's Xcode
         run: exec tools/ci/proof.sh --stage build --platform ios,macos --kind "$PROOF_KIND" --apps "$RUNNER_TEMP/proof-apps" --review "$RUNNER_TEMP/proof-review"
       - uses: actions/upload-artifact@v4
@@ -652,7 +615,8 @@ jobs:
         run: tools/ci/job_tools.sh
       - uses: ./.github/actions/bazel_cache
         with:
-          group: android
+          group: ubuntu
+          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
       - name: The Android app built, for x86_64
         run: exec tools/ci/proof.sh --stage build --platform android --kind "$PROOF_KIND" --apps "$RUNNER_TEMP/proof-apps" --review "$RUNNER_TEMP/proof-review"
       - uses: actions/upload-artifact@v4
@@ -763,11 +727,11 @@ jobs:
   alpha-apple:
     # The Apple Alphas, built unsigned (alpha signs them); the version found
     # here and handed to alpha.
-    needs: [verify, verify-android, verify-apple, container-verify, apple, android, proof-compare]
+    needs: [verify, verify-apple, container-verify, apple, android, proof-compare]
     if: >-
       always() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
       (inputs.run == 'prerelease' || (inputs.run == 'release' &&
-      needs.verify.result == 'success' && needs.verify-android.result == 'success' &&
+      needs.verify.result == 'success' &&
       needs.verify-apple.result == 'success' && needs.container-verify.result == 'success' &&
       needs.apple.result == 'success' && needs.android.result == 'success' &&
       needs.proof-compare.result == 'success'))
@@ -788,6 +752,7 @@ jobs:
       - uses: ./.github/actions/bazel_cache
         with:
           group: apple
+          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
       - name: Build
         env:
           ISOMER_PLATFORMS: apple
@@ -842,7 +807,8 @@ jobs:
         run: tools/ci/check_version_line.sh "$VERSION"
       - uses: ./.github/actions/bazel_cache
         with:
-          group: android
+          group: ubuntu
+          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
       # exec: the runner's cancel reaches the build.
       - name: Build
         run: exec tools/ci/container_build.sh package .ci/packages --config=alpha $PUBLISHED_LINUX
@@ -918,6 +884,7 @@ jobs:
       - uses: ./.github/actions/bazel_cache
         with:
           group: apple
+          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
           disk: "false"
       - name: Build
         env:
@@ -937,6 +904,33 @@ jobs:
           "The Storybook as an experiment: the publishing path for experiments, before the whole wasm apps"
           "$RUNNER_TEMP/assets" "$RUNNER_TEMP/notes.md"
 
+  # --- By hand: a probe -------------------------------------------------
+
+  waydroid-probe:
+    # Whether Waydroid (Android in a container on the host's own kernel,
+    # binder and all) boots on GitHub's hosted x86_64 Ubuntu, so the Android
+    # GUI tests could run in the same job as everything else
+    # (tools/ci/waydroid_probe.sh: the kernel, binder, Waydroid from its
+    # repository, its container and a session, Android's boot and adb; the
+    # findings in the run's summary). On the runner itself, not in a
+    # container. Nothing depends on it, and it never fails the run.
+    if: github.event_name == 'workflow_dispatch' && inputs.run == 'waydroid-probe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+      - name: Waydroid, probed
+        continue-on-error: true
+        run: tools/ci/waydroid_probe.sh "$RUNNER_TEMP/waydroid-probe"
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        with:
+          name: waydroid-probe
+          path: ${{ runner.temp }}/waydroid-probe
+          retention-days: 1
+
   # --- A published release: nothing Apple rebuilt -----------------------
 
   release-apple:
@@ -953,6 +947,7 @@ jobs:
       - uses: ./.github/actions/bazel_cache
         with:
           group: apple
+          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
       - name: The iPhone's, for the simulator
         env:
           ISOMER_PLATFORMS: apple
@@ -1011,7 +1006,8 @@ jobs:
         run: tools/ci/stamp_apps.sh
       - uses: ./.github/actions/bazel_cache
         with:
-          group: android
+          group: ubuntu
+          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
       - name: Android's, for production
         run: >-
           tools/ci/container_build.sh package .ci/android --config=prod --compilation_mode=opt

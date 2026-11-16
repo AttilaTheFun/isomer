@@ -1,12 +1,13 @@
 #!/bin/bash
 # CI's build of every platform, on GitHub's own runners, each platform where
 # its tools run (ISOMER_PLATFORMS):
-# - web and linux: in the project's Linux container (the image a Visor
-#   session works in, ghcr.io/attilathefun/visor-agent, by digest) on
-#   GitHub's arm64 Ubuntu runner;
-# - android: on GitHub's x86_64 Ubuntu runner, in Swift's own image:
-#   Google's Android SDK and NDK tools, and the hermetic JDK for Linux, are
-#   x86_64 programs, and GitHub's arm64 runners have nothing to run them on;
+# - web, linux and android: together, in one job and one Bazel output base,
+#   on GitHub's x86_64 Ubuntu runner, in Swift's own image with the Linux
+#   apps' libraries added (tools/ci/job_tools.sh): Google's Android SDK and
+#   NDK tools, and the hermetic JDK for Linux, are x86_64 programs, which
+#   GitHub's arm64 runners have nothing to run (no Rosetta), and the
+#   project's own image (ghcr.io/attilathefun/visor-agent, which an agent's
+#   arm64 container runs this in) is built for arm64 alone;
 # - apple: on GitHub's `xcode-27` Macs (a standard runner, free for a public
 #   repository), with their own Xcode (the owner, 2026-11-15): Apple's SDKs
 #   may not be redistributed, so CI never takes the SDK archive the Apple
@@ -361,6 +362,7 @@ if [ "$mode" = all ] || [ "$mode" = pr ]; then
             //android/storybook_android_application:storybook_android_application_apk
         results+=($?)
     fi
+    df -h / /mnt 2> /dev/null || df -h /
     for result in "${results[@]}"; do [ "$result" -ne 0 ] && exit "$result"; done
     exit 0
 fi
@@ -471,6 +473,7 @@ if has windows; then
 fi
 chmod -R a+rwX "$platforms_out"
 ls -lR "$platforms_out" | head -80
+df -h / /mnt 2> /dev/null || df -h /
 for result in "${results[@]}"; do [ "$result" -ne 0 ] && exit "$result"; done
 exit 0
 '
