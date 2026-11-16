@@ -25,6 +25,19 @@
 #   Microsoft's may not be redistributed, so nothing public serves it, and
 #   CI names none: CI builds Windows on Windows itself
 #   (tools/ci/windows_build.ps1, the runner image's Visual Studio).
+# - BuildBuddy's remote cache (.bazelrc's --config=buildbuddy), when
+#   BUILDBUDDY_API_KEY is set (the repository's secret, which the workflow
+#   hands this step alone; a fork's pull request has none and builds on
+#   GitHub's cache alone): the config and the key's headers in a file of
+#   the job's own outside the checkout (mode 600), which .bazelrc.user
+#   imports by its path, the key never on a command line nor in the log.
+#   Only main's builds (a push to main: populate, bazel8) and the release
+#   jobs (alpha and alpha-apple on main, a published release's) upload;
+#   every other run reads (--noremote_upload_local_results), so a pull
+#   request's results never enter the cache. A reader downloads only the
+#   top-level outputs (Bazel's default, the files the jobs copy and run); a
+#   writer downloads them all, so the disk cache GitHub's cache keeps
+#   (above) stays whole for the runs that have no key.
 # Never the Apple targets on Linux (.bazelrc's apple_on_linux, which takes
 # Xcode's SDK archive): Apple's SDKs may not be redistributed, so CI builds
 # the Apple targets on GitHub's Macs with their own Xcode (the owner,
@@ -64,6 +77,42 @@ setup)
         else
             echo "::warning::ci_bazel: $ISOMER_BAZEL_ROOT can't be made: Bazel's tree stays in its default place"
         fi
+    fi
+    # BuildBuddy, with the key: never traced, never echoed.
+    if [ -n "${BUILDBUDDY_API_KEY:-}" ]; then
+        set +x
+        writer=0
+        case "${GITHUB_EVENT_NAME:-}:${GITHUB_REF:-}" in
+            push:refs/heads/main | release:*) writer=1 ;;
+            workflow_dispatch:refs/heads/main)
+                case "${GITHUB_JOB:-}" in alpha | alpha-apple) writer=1 ;; esac ;;
+        esac
+        secret_dir="$HOME/.config/isomer-ci"
+        (umask 077 && mkdir -p "$secret_dir")
+        chmod 700 "$secret_dir"
+        secret_rc="$secret_dir/buildbuddy.bazelrc"
+        (umask 077 && : > "$secret_rc")
+        chmod 600 "$secret_rc"
+        {
+            echo "common --config=buildbuddy"
+            printf 'common --remote_header=x-buildbuddy-api-key=%s\n' "$BUILDBUDDY_API_KEY"
+            printf 'common --bes_header=x-buildbuddy-api-key=%s\n' "$BUILDBUDDY_API_KEY"
+            if [ $writer -eq 1 ]; then
+                echo "common --remote_download_all"
+            else
+                echo "common --noremote_upload_local_results"
+            fi
+        } >> "$secret_rc"
+        unset BUILDBUDDY_API_KEY
+        secret_rc="$(cd "$secret_dir" && here)/buildbuddy.bazelrc"
+        lines+=("try-import $secret_rc")
+        if [ $writer -eq 1 ]; then
+            echo "ci_bazel: BuildBuddy's remote cache, read and written (${GITHUB_EVENT_NAME:-}, ${GITHUB_REF:-}, ${GITHUB_JOB:-})"
+        else
+            echo "ci_bazel: BuildBuddy's remote cache, read only (${GITHUB_EVENT_NAME:-}, ${GITHUB_REF:-}, ${GITHUB_JOB:-})"
+        fi
+    else
+        echo "ci_bazel: no BUILDBUDDY_API_KEY: no remote cache, GitHub's cache alone"
     fi
     if [ -n "$cache" ]; then
         mkdir -p "$cache/disk" "$cache/repository"

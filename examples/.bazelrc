@@ -225,6 +225,24 @@ build:adhoc --//tools/variant:variant=adhoc
 build:ci_device --ios_multi_cpus=arm64
 build:ci_device --ios_signing_cert_name=-
 
+# BuildBuddy's remote cache and build results (--config=buildbuddy): no key
+# here. CI's jobs on this repository turn it on with the key, in a file of
+# the job's own (tools/ci/ci_bazel.sh, from the BUILDBUDDY_API_KEY secret),
+# and only main's builds and the release jobs upload to it; a pull request
+# reads (--noremote_upload_local_results). A builder with a key of their own
+# puts the same lines in .bazelrc.user. What a job downloads is Bazel's
+# default, the top-level outputs (what the scripts copy, run and test); the
+# writers download every output (--remote_download_all), so the disk cache
+# GitHub's cache keeps for runs without a key stays whole. Compressed
+# (zstd), and the build event stream without the legacy list of each
+# target's outputs, which BuildBuddy doesn't read.
+build:buildbuddy --bes_results_url=https://app.buildbuddy.io/invocation/
+build:buildbuddy --bes_backend=grpcs://remote.buildbuddy.io
+build:buildbuddy --remote_cache=grpcs://remote.buildbuddy.io
+build:buildbuddy --remote_timeout=10m
+build:buildbuddy --remote_cache_compression
+build:buildbuddy --nolegacy_important_outputs
+
 # Per-machine settings (untracked), e.g. --override_module for a fork checked
 # out beside isomer.
 try-import %workspace%/.bazelrc.user

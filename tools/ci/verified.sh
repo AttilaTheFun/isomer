@@ -1,7 +1,8 @@
 #!/bin/bash
 # Whether a commit was verified: a run of the Build workflow by hand on it
 # whose every test passed, on GitHub's own runners: each platform's build
-# and its tests there (verify, verify-android, verify-apple), the tests that
+# and its tests there (verify: the web, Linux and Android together;
+# verify-apple), the tests that
 # draw in a container (container-verify), the iPhone's, the Mac's and
 # Android's tests (apple, android: a matrix job passes when every part did),
 # and its screenshot proof (proof-compare). Only `run: release` runs both
@@ -28,7 +29,7 @@ for run in $(gh api "repos/$repo/actions/runs?head_sha=$sha&event=workflow_dispa
     if gh api "repos/$repo/actions/runs/$run/jobs?per_page=100" --jq '.jobs as $jobs
         | def named(name): [$jobs[] | select(.name == name or (.name | startswith(name + " (")))];
           def passed(name): named(name) as $all | ($all | length) > 0 and ($all | all(.conclusion == "success"));
-        passed("verify") and passed("verify-android") and passed("verify-apple") and passed("container-verify")
+        passed("verify") and passed("verify-apple") and passed("container-verify")
         and passed("apple") and passed("android") and passed("proof-compare")' |
         grep -qx true; then
         echo "$run"

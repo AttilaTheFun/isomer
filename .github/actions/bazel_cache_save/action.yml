@@ -7,7 +7,7 @@ name: Bazel's cache, saved
 description: Trims and saves the job group's Bazel caches
 inputs:
   group:
-    description: linux, android or apple
+    description: ubuntu, apple or windows
     required: true
   gigabytes:
     description: The disk cache's size at most, in GB
@@ -20,13 +20,13 @@ runs:
   steps:
     - name: The disk cache, trimmed
       shell: bash
-      run: tools/ci/ci_bazel.sh trim "$HOME/.cache/isomer-bazel" "${{ inputs.gigabytes }}"
+      run: tools/ci/ci_bazel.sh trim "${ISOMER_BAZEL_CACHE:-$HOME/.cache/isomer-bazel}" "${{ inputs.gigabytes }}"
     - uses: actions/cache/save@v4
       with:
-        path: ~/.cache/isomer-bazel/disk
+        path: ${{ env.ISOMER_BAZEL_CACHE || '~/.cache/isomer-bazel' }}/disk
         key: bazel-disk-${{ inputs.group }}-${{ hashFiles('MODULE.bazel', 'examples/MODULE.bazel', '**/Package.resolved') }}-${{ github.sha }}
     - if: inputs.repository-hit != 'true'
       uses: actions/cache/save@v4
       with:
-        path: ~/.cache/isomer-bazel/repository
+        path: ${{ env.ISOMER_BAZEL_CACHE || '~/.cache/isomer-bazel' }}/repository
         key: bazel-repository-${{ inputs.group }}-${{ hashFiles('MODULE.bazel', 'examples/MODULE.bazel', '**/Package.resolved') }}
