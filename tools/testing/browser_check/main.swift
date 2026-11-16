@@ -19,10 +19,14 @@
 // exceptions are printed either way. CHROME in the environment names Chrome
 // when `--chrome` doesn't. `--hold` keeps the last page open after its
 // picture, its console still printed, until the process is told to stop
-// (SIGTERM or SIGINT): a headful app a test drives, launched this way. While
-// it holds, `--requests <dir>` takes a picture for each `<n>.request` file
-// that appears there (the file holds the picture's path; the request is
-// removed once the picture is written): a test's `picture`.
+// (SIGTERM or SIGINT, or a file named `stop` in `--requests`' folder): a
+// headful app a test drives, launched this way. While it holds, `--requests
+// <dir>` takes a picture for each `<n>.request` file that appears there (its
+// first line the picture's path; the request is removed once the picture is
+// written): a test's `picture`. A `scene:<phase>` request (a test's `scene`)
+// is removed unanswered: the test's driver moves the page's scene. Each run's Chrome has a profile of its own,
+// removed after: a page starts with nothing kept (its IndexedDB, its
+// localStorage), as ISOMER_FRESH's default has the other launchers start.
 //
 // For comparing two renderings of a site (the web's DOM renderer against
 // React's, story by story): `--dom` also writes each page's DOM beside its
@@ -288,13 +292,24 @@ if options.hold, let last = options.pages.last {
     let name = URL(fileURLWithPath: last.out).deletingPathExtension().lastPathComponent
     log("\(name): held open until stopped")
     while Held.stopping == 0 {
-        usleep(200_000)
+        usleep(50_000)
+        // The test done with the app (HeadlessApp's quit: a `stop` file).
+        if !options.requests.isEmpty, FileManager.default.fileExists(atPath: options.requests + "/stop") { break }
         // A test's pictures, as asked.
         if !options.requests.isEmpty,
            let names = try? FileManager.default.contentsOfDirectory(atPath: options.requests) {
             for request in names.sorted() where request.hasSuffix(".request") {
                 let path = options.requests + "/" + request
-                guard let target = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
+                // Its first line (the rest says what the app is, for
+                // launchers that turn a picture: a page has nothing to turn).
+                guard let target = (try? String(contentsOfFile: path, encoding: .utf8))?
+                    .split(whereSeparator: \.isNewline).first.map(String.init) else { continue }
+                // A scene's phase (HeadlessApp's `scene`): not the page's to
+                // move; removed unanswered, the test's driver moves it.
+                if target.hasPrefix("scene:") {
+                    try? FileManager.default.removeItem(atPath: path)
+                    continue
+                }
                 if let data = (chrome.send("Page.captureScreenshot", ["format": "png"], session: session)?["data"] as? String)
                     .flatMap({ Data(base64Encoded: $0) }) {
                     try? data.write(to: URL(fileURLWithPath: target.trimmingCharacters(in: .whitespacesAndNewlines)))

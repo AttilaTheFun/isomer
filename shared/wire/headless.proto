@@ -17,7 +17,8 @@ option java_multiple_files = true;
 
 message Command {
   // ls, info, inspect, tap, type, set, select, swipe, longpress, back,
-  // dismiss, wait or quit (drive/driver/IsomerAppDriver.swift says each).
+  // dismiss, scene, wait or quit (drive/driver/IsomerAppDriver.swift says
+  // each).
   string cmd = 1;
   // The element: its name on the screen (`button-3`, `text-2`: its role and
   // its place among that role's, from 1), its accessibility identifier, its
@@ -28,7 +29,15 @@ message Command {
   string text = 3;
   // `set`'s value (a toggle's "1" or "0", a picker's index); `select`'s
   // option, by its label; `swipe`'s action on a list row (one of its
-  // `.swipeActions`, by its title), performed as the swipe reveals it.
+  // `.swipeActions`, by its title), performed as the swipe reveals it;
+  // `scene`'s phase: active, inactive or background, the app's scene moved
+  // as leaving the app and coming back moves it (`@Environment(\.scenePhase)`
+  // and its `.onChange`): Isomer's runtime's phase set (headless, the web,
+  // Linux, Windows, and Android when no launcher took it); on iOS SwiftUI's
+  // scene delegate told each step UIKit tells it; on the Mac the app hidden
+  // (background), its windows in the Dock (inactive) or shown again (active).
+  // A test's HeadlessApp.scene asks its launcher first: Android's sends the
+  // app home and brings it back (the activity's own lifecycle).
   string value = 4;
   // `wait`'s timeout in seconds (5 when 0).
   double timeout = 5;
@@ -71,6 +80,13 @@ message Info {
   // The window, in points.
   double width = 6;
   double height = 7;
+  // The interface's orientation where the platform turns it apart from the
+  // device (iOS): portrait, portrait-upside-down, landscape-left or
+  // landscape-right, as UIKit's interface orientations; empty elsewhere. A
+  // launcher turns its pictures by it (drive/launchers/ios_launcher.sh): an
+  // app that turns itself to landscape on an upright phone is drawn on its
+  // side in the device's frame.
+  string orientation = 8;
 }
 
 message Screen {

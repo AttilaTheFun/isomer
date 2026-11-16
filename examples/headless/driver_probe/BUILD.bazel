@@ -1,3 +1,5 @@
+load("@build_bazel_rules_apple//apple:macos.bzl", "macos_command_line_application")
+load("@rules_swift//swift:swift.bzl", "swift_library")
 load("@rules_swift//swift:swift_binary.bzl", "swift_binary")
 load("@rules_swift//swift:swift_test.bzl", "swift_test")
 
@@ -9,6 +11,12 @@ load("@rules_swift//swift:swift_test.bzl", "swift_test")
 # flag, as //headless/... is run:
 #
 #   bazel test --@isomer//headless //headless/driver_probe:driver_probe_test
+# Also the iPhone probe's source, on Apple's SwiftUI.
+exports_files(
+    ["DriverProbe.swift"],
+    visibility = ["//apple/driver_probe_ios_application:__pkg__"],
+)
+
 swift_binary(
     name = "driver_probe",
     srcs = ["DriverProbe.swift"],
@@ -29,4 +37,48 @@ swift_test(
     data = [":driver_probe"],
     module_name = "DriverProbeTests",
     deps = ["@isomer//headless/isomer_headless"],
+)
+
+# The same tests against the iPhone's probe on Apple's SwiftUI
+# (//apple/driver_probe_ios_application, built with --@isomer//drive:headful),
+# through Apple's driver, upright and turned to landscape by the app
+# (:driver_probe_landscape_ios_application): a Mac command, built in CI's
+# container and run on GitHub's Mac with the apps on a simulator, as the
+# Storybook's (tools/ci/hosted_headful_test.sh):
+#
+#   ISOMER_HEADFUL_LAUNCHER=<ios_launcher.sh> ISOMER_SIMULATOR=<udid> \
+#   ISOMER_BUNDLE_ID=com.LoganShire.IsomerExamples.DriverProbe \
+#   ISOMER_LANDSCAPE_BUNDLE_ID=com.LoganShire.IsomerExamples.DriverProbeLandscape driver_probe_headful_apple_runner
+#
+# Swift Testing's main written out (as the Storybook's runner's), the
+# frameworks from the Mac's Xcode at run time (DYLD_FRAMEWORK_PATH).
+genrule(
+    name = "test_main",
+    outs = ["test_main/main.swift"],
+    cmd = """
+{
+  echo 'import Testing'
+  echo 'await Testing.__swiftPMEntryPoint() as Never'
+} > $@
+""",
+)
+
+swift_library(
+    name = "driver_probe_headful_apple_tests",
+    testonly = True,
+    srcs = [
+        "DriverProbeTests.swift",
+        ":test_main",
+    ],
+    module_name = "DriverProbeHeadfulAppleTests",
+    tags = ["manual"],
+    deps = ["@isomer//headless/isomer_headless"],
+)
+
+macos_command_line_application(
+    name = "driver_probe_headful_apple_runner",
+    testonly = True,
+    minimum_os_version = "15.0",
+    tags = ["manual"],
+    deps = [":driver_probe_headful_apple_tests"],
 )
