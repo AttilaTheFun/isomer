@@ -66,9 +66,9 @@ hosted_sim_start() {
     hosted_sim_create
 }
 
-# Booted, and its launchd answering.
+# CoreSimulator answering, and the simulator booted.
 hosted_sim_healthy() {
-    [ -n "$udid" ] && xcrun simctl getenv "$udid" HOME > /dev/null 2>&1
+    [ -n "$udid" ] && xcrun simctl list devices 2> /dev/null | grep -qF "($udid) (Booted)"
 }
 
 hosted_sim_recover() {
