@@ -11,8 +11,10 @@
 # (`-NSTextInsertionPointBlinkPeriodOn 100000`, a `-key value` of
 # UserDefaults' argument domain: a later one wins). From the test's
 # environment: ISOMER_MAC_APP, the .app, and ISOMER_FRESH (requests.sh: 1,
-# the default, gives each launch a new home, removed after; 0 the same home
-# every launch of the app, kept in the temporary directory).
+# the default, starts it with none of its data from before: its defaults
+# deleted, through cfprefsd, which keeps them by the user's own home
+# whatever CFFIXED_USER_HOME says, and its home emptied; 0 keeps both). The
+# home is the app's own, in the temporary directory, the same every launch.
 set -uo pipefail
 . "$(dirname "$0")/requests.sh"
 url="${1:?usage: macos_launcher.sh <hub url> <name> [KEY=VALUE…]}"
@@ -28,12 +30,13 @@ for pair in ${pairs[@]+"${pairs[@]}"}; do
         *) environment+=("$pair") ;;
     esac
 done
+bundle_id="$(defaults read "$app/Contents/Info" CFBundleIdentifier)"
+home="${TMPDIR:-/tmp}/isomer-mac-home-$bundle_id"
 if fresh; then
-    home="$(mktemp -d)"
-else
-    home="${TMPDIR:-/tmp}/isomer-mac-home-$(basename "$app" .app)"
-    mkdir -p "$home"
+    defaults delete "$bundle_id" > /dev/null 2>&1
+    rm -rf "$home"
 fi
+mkdir -p "$home"
 env "${environment[@]}" CFFIXED_USER_HOME="$home" "$binary" -AppleInterfaceStyle Light \
     -ApplePersistenceIgnoreState YES -AppleShowScrollBars WhenScrolling ${app_arguments[@]+"${app_arguments[@]}"} \
     > "$home/app.log" 2>&1 &
@@ -41,7 +44,6 @@ pid=$!
 stop() {
     kill "$pid" 2> /dev/null || true
     wait "$pid" 2> /dev/null || true
-    if fresh; then rm -rf "$home"; fi
     exit 0
 }
 trap stop TERM INT

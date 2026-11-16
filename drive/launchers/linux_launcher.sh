@@ -9,9 +9,9 @@
 #   linux_launcher.sh <the hub's ws:// URL> <the app's name> [KEY=VALUE…] [-- <argument>…]
 #
 # From the test's environment: ISOMER_LINUX_APP, the app, and ISOMER_FRESH
-# (requests.sh: 1, the default, gives the app a new home, HOME and XDG_*,
-# each launch; 0 the same one every launch, kept in the temporary
-# directory).
+# (requests.sh: 1, the default, empties the app's home, HOME and XDG_*,
+# the same every launch, in the temporary directory, before the launch; 0
+# keeps it).
 set -uo pipefail
 . "$(dirname "$0")/requests.sh"
 url="${1:?usage: linux_launcher.sh <hub url> <name> [KEY=VALUE…]}"
@@ -27,11 +27,8 @@ for pair in ${pairs[@]+"${pairs[@]}"}; do
         *) environment+=("$pair") ;;
     esac
 done
-if fresh; then
-    home="$frames/home"
-else
-    home="${TMPDIR:-/tmp}/isomer-linux-home-$(basename "$app")"
-fi
+home="${TMPDIR:-/tmp}/isomer-linux-home-$(basename "$app")"
+if fresh; then rm -rf "$home"; fi
 mkdir -p "$home/.config" "$home/.local/share" "$home/.cache"
 environment+=(HOME="$home" XDG_CONFIG_HOME="$home/.config" XDG_DATA_HOME="$home/.local/share" XDG_CACHE_HOME="$home/.cache")
 pids=()
