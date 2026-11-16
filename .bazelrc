@@ -86,6 +86,13 @@ test --test_output=errors
 # malformed response". (The Apple build requires a local Xcode anyway.)
 build --strategy=SwiftCompile=local
 
+# A Clang module cache of each Swift compile's own (until rules_swift says so
+# for Android and wasm): rules_swift 4.3.0 builds those without explicit
+# modules (rules_swift#1999), so their Clang modules are built implicitly,
+# and in the shared cache two builds of one of the Swift SDK's modules
+# conflict ("module '_Builtin_stddef' is defined in both …").
+build --features=-swift.use_global_module_cache
+
 # swift_ffi's `analyzer` / `generator` are swift.org-toolchain swift_binaries
 # invoked as build actions (the analyzer aspect + ffi_generate). They need the
 # Swift runtime, which the action sandbox doesn't stage — so each host resolves

@@ -917,7 +917,11 @@ Each release's notes have an Upgrading section; these things are easy to miss:
     takes `swift.android_sdk(url = …)`, and four pull requests); your own
     override of rules_swift, if you kept one, has to be that version.
     4.3.0 builds Android and wasm targets without explicit modules
-    (rules_swift#1999).
+    (rules_swift#1999), and their Clang modules then conflict in Bazel's
+    shared module cache ("module '_Builtin_stddef' is defined in both …"):
+    add `build --features=-swift.use_global_module_cache` to your
+    `.bazelrc`, as examples/.bazelrc has it, until rules_swift turns that
+    off for them.
   - `tools/foundation/check_link.py` is gone: there is one Foundation to
     link.
 
