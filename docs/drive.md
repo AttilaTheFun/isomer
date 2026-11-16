@@ -10,7 +10,7 @@ driving is something a build opts into, never an API an app calls.
 ## The protocol and its transports
 
 shared/wire/headless.proto is the driver's protocol (ls, info, tap, type,
-set, select, swipe, back, dismiss, wait, quit); shared/wire/session.proto a
+set, select, swipe, longpress, back, dismiss, wait, quit); shared/wire/session.proto a
 head's session (drawing the app). An app serves both as an `IsomerServer`
 (drive/serving), apart from any transport; adapters carry it:
 
@@ -101,6 +101,9 @@ iso type Title "Hits"
 iso set Wi-Fi 0
 iso select Flavor Chocolate
 iso swipe Board left
+iso swipe "Weekly report" left  # a list row's trailing swipe actions, listed as buttons to tap
+iso swipe "Weekly report" left Delete   # or the one named, performed
+iso longpress "Weekly report"   # its context menu: its items are the screen's buttons
 iso back | dismiss
 iso wait "Taps: 1" --timeout 10
 iso drive                       # JSON lines on standard input
@@ -110,7 +113,16 @@ An element's name is its role and its place among that role's on the
 screen, from 1 (`button-3`, `textField-1`; `text-2` the second text): any
 command takes it as its target, resolved by the app against the screen
 as it stands, so a name from one `ls` holds until the screen changes. A
-text names the button it is in for `tap`. `--app <name>` drives another than the selected one, `--url <url>` one with
+text names the button it is in for `tap`. An element is found by the accessibility identifier and label SwiftUI gives
+it, whatever modifiers stand between: an identifier outside `.padding`, a
+`.background` or an app's own modifier is the button's (or the toggle's, the
+field's) inside; a `List(selection:)` row takes its content's; a view with an
+identifier and nothing to use in it (a text, an `.accessibilityElement(children:
+.combine)` card) is listed as a `staticText`. A disabled element is listed,
+disabled (`(disabled)` in `ls`), and a tap on it fails. A pushed page's bar
+lists its Back (identifier `BackButton`, labelled with the title of the page
+before, as UIKit's), and `back` takes it: in a sheet, the sheet's own page
+before, then the sheet. `--app <name>` drives another than the selected one, `--url <url>` one with
 no name, `--json` prints protobuf's JSON; with neither and none selected, the
 hub's apps (above). An `exec:` application is started
 on its first command and kept running on a Unix socket, so its state lasts

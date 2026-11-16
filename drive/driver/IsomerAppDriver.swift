@@ -12,9 +12,19 @@
 //   set <target> <value>        a control's value (a toggle's "1"/"0", a
 //                               picker's index)
 //   select <target> <option>    a picker's or segmented control's option, by label
-//   swipe <target> <direction>  a drag across a view that takes one (up, down,
-//                               left, right)
-//   back, dismiss               the system's back; the topmost presentation
+//   swipe <target> <direction> [<action>]
+//                               a list row's `.swipeActions` on that side (left
+//                               the trailing ones, right the leading), listed
+//                               as buttons until one is tapped, or the one
+//                               named performed; else a drag across a view
+//                               that takes one (up, down, left, right)
+//   longpress <target>          a view's `.contextMenu`, its items listed as
+//                               buttons (and nothing else, as a person sees an
+//                               open menu) until one is tapped; else its
+//                               `onLongPressGesture`
+//   back, dismiss               the page's Back (its bar's, the topmost
+//                               presentation's own navigation first), else the
+//                               system's; the topmost presentation
 //   wait <text> [timeout]       until the text shows
 //   quit                        ends the call (and a headless app)
 //
@@ -55,6 +65,43 @@ struct DriverScreen {
         /// Its node, for `inspect`; and the element it is inside, if any.
         var node: IsoFlat_Node?
         var container: Int?
+        /// Listed, but takes no input (`.disabled(true)`; a bar item's
+        /// "…Disabled" param): a tap on it fails.
+        var disabled = false
+        /// A navigation bar's Back (`BackButton`), which `back` taps.
+        var back = false
+    }
+
+    /// What an accessibility modifier says, as it reaches the elements in the
+    /// view it was applied to: SwiftUI gives `.accessibilityIdentifier` and
+    /// `.accessibilityLabel` to the element whatever modifiers stand between
+    /// (`.padding`, `.frame`, `.background`, an app's own modifier), and to
+    /// each element in a plain stack it wraps.
+    struct Accessibility {
+        var id: String?
+        var label: String?
+    }
+
+    /// A row action's item (`.contextMenu`'s or `.swipeActions`'): the index
+    /// its handler takes and its title.
+    struct RowAction {
+        var index: String
+        var title: String
+    }
+
+    /// A view a long press opens a menu on or presses (`.contextMenu`,
+    /// `onLongPressGesture`), or a row a swipe reveals actions on.
+    struct Actionable {
+        var label: String
+        var id: String?
+        /// `.contextMenu`'s handler and items; `onLongPressGesture`'s handler.
+        var menu: String?
+        var menuItems: [RowAction] = []
+        var press: String?
+        /// `.swipeActions`' handler and items, by edge.
+        var swipe: String?
+        var leading: [RowAction] = []
+        var trailing: [RowAction] = []
     }
 
     var texts: [String] = []
@@ -63,6 +110,8 @@ struct DriverScreen {
     var elements: [Element] = []
     /// The views a swipe drags, by the texts in them: (texts, id, drag handler).
     var draggables: [(label: String, id: String?, handler: String)] = []
+    /// The views that take a long press or a row swipe's actions.
+    var actionables: [Actionable] = []
     var presented: [(style: String, title: String, message: String, dismiss: String?)] = []
 
     /// Whether the width is compact: a split view then shows one column.
@@ -76,10 +125,21 @@ struct DriverScreen {
 
     /// The menu a tap opened (its handler), whose items are buttons.
     let openMenu: String?
+    /// The context menu a long press opened (its handler), and whether it is
+    /// still on the screen (its view still there): its items are then all
+    /// the screen has.
+    let openContextMenu: String?
+    private(set) var contextMenuShown = false
+    /// The row a swipe revealed the actions of (its handler) and on which
+    /// edge: they are buttons beside it.
+    let revealedSwipe: (handler: String, edge: String)?
 
-    init(_ root: IsoFlat_Node, compact: Bool = false, openMenu: String? = nil) {
+    init(_ root: IsoFlat_Node, compact: Bool = false, openMenu: String? = nil, openContextMenu: String? = nil,
+         revealedSwipe: (handler: String, edge: String)? = nil) {
         self.compact = compact
         self.openMenu = openMenu
+        self.openContextMenu = openContextMenu
+        self.revealedSwipe = revealedSwipe
         walk(root, around: [], inside: nil)
         // Something presented (a sheet, an alert, a popover) is all that can
         // be used: the screen is the topmost presentation's, as a person
@@ -90,9 +150,24 @@ struct DriverScreen {
             textNodes = []
             elements = []
             draggables = []
+            actionables = []
             splitBack = nil
             walk(top, around: [], inside: nil)
             presented = shown
+        }
+        // An open context menu is all that can be used, as the system's menu
+        // covers what is under it: its items, buttons, each sending its index.
+        if let menu = openContextMenu, let owner = actionables.last(where: { $0.menu == menu }) {
+            texts = []
+            textNodes = []
+            draggables = []
+            actionables = []
+            elements = owner.menuItems.map { item in
+                var button = Element(role: "button", label: item.title, handler: menu)
+                button.tapValue = item.index
+                return button
+            }
+            contextMenuShown = true
         }
         var counts: [String: Int] = [:]
         for index in elements.indices {
@@ -125,15 +200,61 @@ struct DriverScreen {
         return result
     }
 
+    /// The words a view reads as: its texts in order, where a view with an
+    /// `.accessibilityLabel` reads as its label instead of what is in it (an
+    /// icon-only Label's glyph as its title, as VoiceOver reads a toolbar's
+    /// `Button("New session", systemImage:)`).
     private static func textsUnder(_ node: IsoFlat_Node) -> [String] {
         var found: [String] = []
         func visit(_ node: IsoFlat_Node) {
-            if params(node)["a11yHidden"] == "1" { return }
+            let p = params(node)
+            if p["a11yHidden"] == "1" { return }
+            if let label = p["a11yLabel"], !label.isEmpty {
+                found.append(label)
+                return
+            }
             if node.kind == .text, let text = node.v, !text.isEmpty { found.append(text) }
             for child in node.ch { visit(child) }
         }
         visit(node)
         return found
+    }
+
+    /// Whether a node is an element of its own (what `walk` lists for it):
+    /// the identifier inside it is its own, not its container's.
+    private static func isElement(_ node: IsoFlat_Node) -> Bool {
+        if node.tap != nil || node.kind == .textfield || node.kind == .slider { return true }
+        if node.kind == .hostview, let kind = node.view {
+            return ["toggle", "picker", "segmented", "stepper", "datepicker", "colorpicker", "menu", "search"].contains(kind)
+        }
+        return false
+    }
+
+    /// The first accessibility identifier inside a node's content, above any
+    /// element of its own: a List(selection:) row's (the row the core makes
+    /// from `.tag` holds the content the identifier is on) or a button
+    /// label's, which SwiftUI gives the row or the button.
+    private static func innerIdentifier(_ node: IsoFlat_Node) -> String? {
+        for child in node.ch {
+            let p = params(child)
+            if p["a11yHidden"] == "1" || isElement(child) { continue }
+            if let id = p["a11yId"] { return id }
+            if let id = innerIdentifier(child) { return id }
+        }
+        return nil
+    }
+
+    /// A row action list as the encoder writes it (encodeRowActions: items
+    /// U+001F-separated, each its index, title, symbol, … U+001E-separated).
+    private static func rowActions(_ raw: String?) -> [RowAction] {
+        guard let raw, !raw.isEmpty else { return [] }
+        return raw.split(separator: "\u{1F}").compactMap { item in
+            let fields = item.split(separator: "\u{1E}", omittingEmptySubsequences: false).map(String.init)
+            guard fields.count >= 2 else { return nil }
+            // An icon-only item: its symbol's name.
+            let title = fields[1].isEmpty && fields.count > 2 ? fields[2] : fields[1]
+            return RowAction(index: fields[0], title: title)
+        }
     }
 
     /// `around`: the texts of the node's parent, a control's label when it
@@ -142,17 +263,28 @@ struct DriverScreen {
     /// container.
     /// `combined`: inside an element made one (`.accessibilityElement(children:
     /// .combine)`), whose texts were taken as one.
-    private mutating func walk(_ node: IsoFlat_Node, around: [String], inside: Int?, combined: Bool = false) {
+    /// `outer`: the identifier and label of the views around it that are no
+    /// elements of their own, which the elements in it take when they have
+    /// none (`.padding().accessibilityIdentifier("allow")` on a button).
+    private mutating func walk(_ node: IsoFlat_Node, around: [String], inside: Int?, combined: Bool = false,
+                               outer: Accessibility = Accessibility()) {
         let p = Self.params(node)
         if p["a11yHidden"] == "1" { return }
-        let id = p["a11yId"]
+        // An element's identifier and label: its own; else those of the
+        // views wrapped around it; else (an identifier) the first in its
+        // content, as a selection list's row takes its content's.
+        let ownID = p["a11yId"]
+        let elementID = ownID ?? outer.id
+        let elementLabel = p["a11yLabel"] ?? outer.label
+        let disabled = p["disabled"] == "1"
         let count = elements.count
         // A view made one accessibility element of its children: its texts
         // are one text, a line each (a code listing reads as one), as
         // VoiceOver reads it as one element.
         let combines = !combined && p["a11yChildren"] == "combine"
+        var merged = ""
         if combines {
-            let merged = Self.textsUnder(node).joined(separator: "\n")
+            merged = elementLabel ?? Self.textsUnder(node).joined(separator: "\n")
             if !merged.isEmpty {
                 texts.append(merged)
                 textNodes.append((node, inside))
@@ -160,15 +292,16 @@ struct DriverScreen {
         }
         switch node.kind {
         case .text:
-            if !combined, !combines, let text = node.v, !text.isEmpty {
+            // A text with a label reads as its label.
+            if !combined, !combines, let text = p["a11yLabel"] ?? node.v, !text.isEmpty {
                 texts.append(text)
                 textNodes.append((node, inside))
             }
         case .textfield:
-            elements.append(Element(role: "textField", label: p["a11yLabel"] ?? node.placeholder ?? "", id: id,
+            elements.append(Element(role: "textField", label: elementLabel ?? node.placeholder ?? "", id: elementID,
                                     value: node.v ?? "", handler: node.edit ?? node.id.map { "\($0).text" }))
         case .slider:
-            elements.append(Element(role: "slider", label: p["a11yLabel"] ?? p["title"] ?? "", id: id,
+            elements.append(Element(role: "slider", label: elementLabel ?? p["title"] ?? "", id: elementID,
                                     value: node.num.map { String($0) }, handler: node.edit))
         case .presentation:
             let style: String
@@ -190,18 +323,18 @@ struct DriverScreen {
                 textNodes.append((node, inside))
             }
             if ["toggle", "picker", "segmented", "stepper", "datepicker", "colorpicker"].contains(kind) {
-                var label = p["a11yLabel"] ?? p["title"] ?? Self.textsUnder(node).joined(separator: " ")
+                var label = elementLabel ?? p["title"] ?? Self.textsUnder(node).joined(separator: " ")
                 if label.isEmpty { label = around.joined(separator: " ") }
                 let role = kind == "picker" && p["style"] == "segmented" ? "segmented" : kind
-                elements.append(Element(role: role, label: label, id: id, value: node.v,
-                                        options: node.options.compactMap { $0 }, handler: node.edit))
+                elements.append(Element(role: role, label: label, id: elementID, value: node.v,
+                                        options: node.options.compactMap { $0 }, handler: node.edit, disabled: disabled))
             } else if kind == "menu" {
                 // A Menu: a button named by its label (options[0]); its
                 // actions are options[1...], sent by their 1-based place.
                 let options = node.options.compactMap { $0 }
-                let label = p["a11yLabel"] ?? options.first ?? "Menu"
-                var button = Element(role: "button", label: label, id: id, options: Array(options.dropFirst()),
-                                     handler: node.edit)
+                let label = elementLabel ?? options.first ?? "Menu"
+                var button = Element(role: "button", label: label, id: elementID, options: Array(options.dropFirst()),
+                                     handler: node.edit, disabled: disabled)
                 button.menu = true
                 elements.append(button)
                 if let handler = node.edit, handler == openMenu {
@@ -213,25 +346,41 @@ struct DriverScreen {
                 }
             } else if kind == "search" {
                 // `.searchable`'s field, named by its prompt.
-                elements.append(Element(role: "textField", label: p["a11yLabel"] ?? p["prompt"] ?? "Search", id: id,
+                elements.append(Element(role: "textField", label: elementLabel ?? p["prompt"] ?? "Search", id: elementID,
                                         value: node.v ?? "", handler: node.edit))
             } else if kind == "navbar" || kind == "navstack", let handler = node.edit {
+                // The page's Back, as the system's bar has it: a drawn bar's
+                // ("back" 1, a compact split's column root's too), a stack's
+                // above its root unless hidden. UIKit's back button: its
+                // identifier BackButton, its label the title of the page it
+                // goes back to (Back for a page with none).
+                let showsBack = kind == "navbar"
+                    ? p["back"] == "1"
+                    : (Int(p["depth"] ?? "") ?? 0) > 0 && p["backHidden"] != "1"
+                if showsBack {
+                    let title = p["backTitle"] ?? ""
+                    var back = Element(role: "button", label: title.isEmpty ? "Back" : title, id: "BackButton", handler: handler)
+                    back.tapValue = "back"
+                    back.back = true
+                    elements.append(back)
+                }
                 // The bar's items, drawn by the host from this one node (the
                 // self-drawing renderer's bar, a component renderer's
                 // navigation stack): a button each, named by its
                 // accessibility label (an icon item's title) or its title, a
-                // tap sending its place.
+                // tap sending its place. A disabled one is listed as such,
+                // as an accessibility tree lists it.
                 func items(_ titles: String?, _ labels: String?, _ ids: String?, _ disabled: String?, tap: (Int) -> String) {
                     guard let titles, !titles.isEmpty else { return }
                     let labelList = (labels ?? "").components(separatedBy: "\n")
                     let idList = (ids ?? "").components(separatedBy: "\n")
                     let disabledList = (disabled ?? "").components(separatedBy: "\n")
                     for (index, title) in titles.components(separatedBy: "\n").enumerated() {
-                        if disabledList.indices.contains(index), disabledList[index] == "1" { continue }
                         let label = labelList.indices.contains(index) && !labelList[index].isEmpty ? labelList[index] : title
                         let id = idList.indices.contains(index) && !idList[index].isEmpty ? idList[index] : nil
                         var item = Element(role: "button", label: label, id: id, handler: handler)
                         item.tapValue = tap(index)
+                        item.disabled = disabledList.indices.contains(index) && disabledList[index] == "1"
                         elements.append(item)
                     }
                 }
@@ -248,11 +397,37 @@ struct DriverScreen {
             break
         }
         if let tap = node.tap {
-            let label = p["a11yLabel"] ?? Self.textsUnder(node).joined(separator: " ")
-            elements.append(Element(role: "button", label: label, id: id, value: p["a11yValue"], handler: tap))
+            let label = elementLabel ?? Self.textsUnder(node).joined(separator: " ")
+            elements.append(Element(role: "button", label: label, id: elementID ?? Self.innerIdentifier(node), value: p["a11yValue"],
+                                    handler: tap, disabled: disabled))
         }
         if let drag = node.drag {
-            draggables.append((p["a11yLabel"] ?? Self.textsUnder(node).joined(separator: " "), id, drag))
+            draggables.append((elementLabel ?? Self.textsUnder(node).joined(separator: " "), elementID, drag))
+        }
+        // A long press's menu or gesture, a row's swipe actions.
+        if p["ctxmenu"] != nil || p["longPress"] != nil || p["swipe"] != nil {
+            var actionable = Actionable(label: elementLabel ?? Self.textsUnder(node).joined(separator: " "),
+                                        id: elementID ?? Self.innerIdentifier(node))
+            if let menu = p["ctxmenu"] {
+                actionable.menu = menu
+                actionable.menuItems = Self.rowActions(p["ctxitems"])
+            }
+            actionable.press = p["longPress"]
+            if let swipe = p["swipe"] {
+                actionable.swipe = swipe
+                actionable.leading = Self.rowActions(p["swipeLeading"])
+                actionable.trailing = Self.rowActions(p["swipeTrailing"])
+                // Revealed by a swipe: its actions are buttons beside the row,
+                // a tap sending the action's index, as a person taps one.
+                if let revealed = revealedSwipe, revealed.handler == swipe {
+                    for action in revealed.edge == "leading" ? actionable.leading : actionable.trailing {
+                        var button = Element(role: "button", label: action.title, handler: swipe)
+                        button.tapValue = action.index
+                        elements.append(button)
+                    }
+                }
+            }
+            actionables.append(actionable)
         }
         let texts = Self.textsUnder(node)
         let split = node.kind == .hostview && node.view == "navsplit"
@@ -265,9 +440,35 @@ struct DriverScreen {
             elements[index].node = node
             elements[index].container = inside
         }
-        let within = elements.count > count ? elements.count - 1 : inside
+        // A navigation stack's bar items (and its Back) stand beside its
+        // page, not around it: the page's texts are in none of them.
+        let bar = node.kind == .hostview && (node.view == "navbar" || node.view == "navstack")
+        let within = elements.count > count && !bar ? elements.count - 1 : inside
+        // What the elements inside take from here: this view's identifier
+        // and label (and those around it), through views that are no
+        // elements of their own and hold their content as it is (a box, a
+        // stack: what `.padding`, `.frame`, `.background` and an app's own
+        // modifier make). Not into a scroll, a list or a host view (a
+        // `List`'s identifier is the list's, not its rows'), nor past an
+        // element, nor out of `.accessibilityElement(children: .contain)`.
+        let passes = elements.count == count && (node.kind == .box || node.kind == .stack)
+            && p["a11yChildren"] != "contain"
+        let passed = passes ? Accessibility(id: elementID, label: elementLabel) : Accessibility()
         let children = split ? shownColumns(node, p) : node.ch
-        for child in children { walk(child, around: texts, inside: within, combined: combined || combines) }
+        for child in children {
+            walk(child, around: texts, inside: within, combined: combined || combines, outer: passed)
+        }
+        // A view with an identifier of its own and nothing to use in it (a
+        // text, a combined element, a label in a padded box), on no element:
+        // a static text a test finds by its identifier, as XCUITest's
+        // `staticTexts["id"]` finds it, labelled with what it reads as.
+        if let ownID, inside == nil, !combined, elements.count == count,
+           combines || node.kind == .text || node.kind == .box || node.kind == .stack {
+            let label = combines ? merged : (p["a11yLabel"] ?? texts.joined(separator: " "))
+            var element = Element(role: "staticText", label: label, id: ownID)
+            element.node = node
+            elements.append(element)
+        }
     }
 
     /// A name on the screen (`button-3`, `text-2`): its role and place.
@@ -299,9 +500,37 @@ struct DriverScreen {
             return roles == nil || roles!.contains(element.role) ? element : nil
         }
         let candidates = elements.filter { roles == nil || roles!.contains($0.role) }
+        // A bar's Back is labelled with the page before's title: a button of
+        // the page's own by that label comes first.
+        // A static text (a story's code listing, a card) is found by its
+        // identifier or its words exactly, not by a word in it.
+        let page = candidates.filter { !$0.back }
+        let backs = candidates.filter(\.back)
+        let usable = page.filter { $0.role != "staticText" }
         return candidates.first { $0.id == target }
-            ?? candidates.last { $0.label == target }
-            ?? candidates.last { $0.label.contains(target) }
+            ?? page.last { $0.label == target } ?? backs.last { $0.label == target }
+            ?? usable.last { $0.label.contains(target) } ?? backs.last { $0.label.contains(target) }
+    }
+
+    /// The view a long press or a row swipe acts on: by its identifier, the
+    /// words it reads as (exactly, then the innermost holding them), or a
+    /// name on the screen (`text-3`: the view holding that text; `button-2`:
+    /// the one holding that button).
+    func actionable(_ target: String, where accepts: (Actionable) -> Bool) -> Actionable? {
+        let candidates = actionables.filter(accepts)
+        var wanted = target
+        if let (role, number) = Self.parseName(target) {
+            if role.lowercased() == "text" {
+                guard number <= texts.count else { return nil }
+                wanted = texts[number - 1]
+            } else if let element = named(target) {
+                if let id = element.id, let found = candidates.last(where: { $0.id == id }) { return found }
+                wanted = element.label
+            }
+        }
+        return candidates.first { $0.id == wanted }
+            ?? candidates.last { $0.label == wanted }
+            ?? candidates.last { $0.label.contains(wanted) }
     }
 
     /// The view a swipe drags: as `element`, among those that take a drag;
@@ -368,6 +597,7 @@ struct DriverScreen {
             if let value = element.value { entry.value = value }
             entry.options = element.options
             entry.name = element.name
+            entry.disabled = element.disabled
             return entry
         }
         screen.presented = presented.map { presentation in
@@ -394,6 +624,12 @@ public final class IsomerAppDriver {
     /// The `Menu` a tap opened (its handler): its items are buttons on the
     /// next screens, until one is tapped or something else is.
     private var openMenu: String?
+    /// The context menu a long press opened (its handler): its items are the
+    /// screen's buttons until one is tapped or another command comes.
+    private var openContextMenu: String?
+    /// The row whose swipe actions a swipe revealed (its handler) and their
+    /// edge: buttons beside it until one is tapped or another command comes.
+    private var revealedSwipe: (handler: String, edge: String)?
 
     public init(info: Wire_Info, renderIfNeeded: (@MainActor () -> Void)? = nil) {
         self.info = info
@@ -425,7 +661,8 @@ public final class IsomerAppDriver {
         encoder.semantic = true
         guard let root = try? IsoFlat_Node(treeBytes: encoder.encode(root: tree)) else { return nil }
         Runtime.shared.installTreeHandlers(encoder.handlers)
-        return DriverScreen(root, compact: Runtime.shared.compactWidth, openMenu: openMenu)
+        return DriverScreen(root, compact: Runtime.shared.compactWidth, openMenu: openMenu,
+                            openContextMenu: openContextMenu, revealedSwipe: revealedSwipe)
     }
 
     /// Frames until the screen holds still (three readings in a row the same,
@@ -489,6 +726,14 @@ public final class IsomerAppDriver {
             restore = putBack
         }
         defer { restore?() }
+        // A context menu whose view has gone (its row deleted) is closed.
+        if openContextMenu != nil, before?.contextMenuShown != true { openContextMenu = nil }
+        // A context menu or a row's revealed actions stay open for the next
+        // command only: one that uses the app closes them, as a person's next
+        // tap elsewhere does (one that opens them again keeps them).
+        let closesTransient = ["tap", "type", "set", "select", "swipe", "longpress", "back", "dismiss"].contains(command.cmd)
+        var keepContextMenu = false
+        var keepSwipe = false
         // The element used is brought into sight first, as a person scrolls
         // to what they tap, so a headful app is seen to be driven; a headless
         // one draws nothing to scroll.
@@ -513,7 +758,9 @@ public final class IsomerAppDriver {
             }
             error = "no element \(target)"
         case "tap":
-            if let element = before?.element(target, roles: ["button"]), let handler = element.handler {
+            if let element = before?.element(target, roles: ["button"]), element.disabled {
+                error = "\(element.name) is disabled"
+            } else if let element = before?.element(target, roles: ["button"]), let handler = element.handler {
                 if element.menu {
                     // Opened: its items are buttons now.
                     openMenu = handler
@@ -559,7 +806,28 @@ public final class IsomerAppDriver {
                 error = "no picker \(target)"
             }
         case "swipe":
-            if let handler = before?.draggable(target) {
+            // A list row's swipe actions on the side the swipe uncovers: a
+            // swipe to the left the trailing ones, to the right the leading.
+            let edge = command.direction == "left" ? "trailing" : command.direction == "right" ? "leading" : nil
+            let row = target.isEmpty || edge == nil ? nil
+                : before?.actionable(target, where: { !(edge == "leading" ? $0.leading : $0.trailing).isEmpty })
+            if let row, let edge, let handler = row.swipe {
+                let actions = edge == "leading" ? row.leading : row.trailing
+                let wanted = command.value
+                if wanted.isEmpty {
+                    // Revealed: its actions are buttons beside it, to tap.
+                    revealedSwipe = (handler, edge)
+                    keepSwipe = true
+                } else if let action = actions.first(where: { $0.title == wanted })
+                            ?? actions.first(where: { $0.title.localizedCaseInsensitiveCompare(wanted) == .orderedSame }) {
+                    // Named: performed, as a tap on it once revealed.
+                    runtime.hostViewEvent(id: handler, value: action.index)
+                } else {
+                    error = "\(target) has no swipe action \(wanted) (it has \(actions.map(\.title).joined(separator: ", ")))"
+                }
+            } else if !command.value.isEmpty {
+                error = "\(target) has no swipe actions to the \(command.direction)"
+            } else if let handler = before?.draggable(target) {
                 let distance = 240.0
                 let (dx, dy): (Double, Double)
                 switch command.direction {
@@ -579,10 +847,44 @@ public final class IsomerAppDriver {
             } else {
                 error = target.isEmpty ? "nothing on the screen takes a swipe" : "\(target) takes no swipe"
             }
+        case "longpress":
+            if target.isEmpty {
+                error = "longpress <target>: the view to press"
+            } else if let view = before?.actionable(target, where: { $0.menu != nil || $0.press != nil }) {
+                if let menu = view.menu {
+                    // Its context menu, open: its items are the screen's.
+                    openContextMenu = menu
+                    keepContextMenu = true
+                } else if let press = view.press {
+                    // An `onLongPressGesture`: pressed, held long enough, lifted.
+                    runtime.hostViewEvent(id: press, value: "press:1")
+                    renderIfNeeded?()
+                    runtime.hostViewEvent(id: press, value: "fire")
+                    renderIfNeeded?()
+                    runtime.hostViewEvent(id: press, value: "press:0")
+                }
+            } else {
+                error = "\(target) takes no long press"
+            }
         case "back":
-            // A navigation stack's page first; then a compact split view's
-            // column, as its host goes back to the column before.
-            if !runtime.handleBackButton() {
+            if openContextMenu != nil || revealedSwipe != nil {
+                // An open menu or a row's revealed actions close first.
+                break
+            }
+            // The page's Back, as its bar has it: the topmost presentation's
+            // own (a page pushed in a sheet goes back to the sheet's page
+            // before, not out of the sheet), else the innermost page's, the
+            // last listed (a compact split's column root's goes back to the
+            // column before).
+            if let back = before?.elements.last(where: \.back), let handler = back.handler {
+                runtime.hostViewEvent(id: handler, value: back.tapValue)
+            } else if let dismiss = before?.presented.last?.dismiss {
+                // Nothing pushed in what is presented: it goes, as the
+                // system's back closes a sheet.
+                runtime.hostViewEvent(id: dismiss, value: "")
+            } else if !runtime.handleBackButton() {
+                // A navigation stack's page; then a compact split view's
+                // column, as its host goes back to the column before.
                 if let back = before?.splitBack {
                     runtime.hostViewEvent(id: back.handler, value: "compact:\(back.column):back")
                 } else {
@@ -590,7 +892,11 @@ public final class IsomerAppDriver {
                 }
             }
         case "dismiss":
-            if let dismiss = before?.presented.last?.dismiss {
+            if openContextMenu != nil || revealedSwipe != nil {
+                // An open menu or a row's revealed actions close, as Escape
+                // or a tap outside them does.
+                break
+            } else if let dismiss = before?.presented.last?.dismiss {
                 runtime.hostViewEvent(id: dismiss, value: "")
             } else {
                 error = "nothing presented"
@@ -609,6 +915,10 @@ public final class IsomerAppDriver {
             if !shown { error = "\(text) didn't show" }
         default:
             error = "unknown command: \(command.cmd)"
+        }
+        if closesTransient {
+            if !keepContextMenu { openContextMenu = nil }
+            if !keepSwipe { revealedSwipe = nil }
         }
         // The list as its host shows it again, for the answer's screen.
         restore?()
