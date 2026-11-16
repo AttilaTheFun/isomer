@@ -160,6 +160,16 @@ try {
     $repoEnv += '--override_repository=rules_swift+=C:/rs'
     $command = $Bazel[0]
     $rest = @($Bazel | Select-Object -Skip 1)
+    # swift.org's Swift for Windows is a build with assertions (Toolchains\
+    # <version>+Asserts), unlike Linux's and the Mac's, so its SIL verifiers
+    # run on every compile; one stopped the SwiftUI module ("SIL memory
+    # lifetime failure" in _GuideOffset's init), where the other platforms'
+    # compilers check nothing. Verification off for CI's build here, the
+    # finding reported apart.
+    if ($command -in @('build', 'test')) {
+        $rest = @('--swiftcopt=-Xfrontend', '--swiftcopt=-sil-verify-none',
+                  '--host_swiftcopt=-Xfrontend', '--host_swiftcopt=-sil-verify-none') + $rest
+    }
     & $tool $command @repoEnv @rest
     $status = $LASTEXITCODE
     if ($status -ne 0) {
