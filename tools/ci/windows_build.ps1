@@ -108,6 +108,13 @@ if (-not (Test-Path (Join-Path $mirror "$tools\lib.exe"))) {
     Copy-Item -Force $llvmLib (Join-Path $mirror "$tools\lib.exe")
 }
 $env:BAZEL_VC = Join-Path $mirror 'VC'
+# LLVM for the target's C and C++ (clang-cl, lld-link, llvm-lib): rules_cc
+# makes its clang-cl toolchain from it, which @isomer//tools/windows's
+# clang_cl_for_targets takes for the target platform alone (the exec tools
+# stay MSVC's). Visual Studio's own, else the image's.
+$llvm = Join-Path $vs 'VC\Tools\Llvm\ARM64'
+if (-not (Test-Path (Join-Path $llvm 'bin\clang-cl.exe'))) { $llvm = 'C:\Program Files\LLVM' }
+$env:BAZEL_LLVM = $llvm
 $vcvars = Join-Path $mirror 'VC\Auxiliary\Build\vcvarsall.bat'
 cmd /c "`"$vcvars`" arm64 >nul && set" | ForEach-Object {
     if ($_ -match '^([^=]+)=(.*)$') { Set-Item -Path "env:$($Matches[1])" -Value $Matches[2] }
@@ -120,7 +127,7 @@ $env:BAZEL_SH = "$git\bin\bash.exe"
 $env:Path = $env:Path -replace '(?i)C:\\Windows\\system32;', "$git\usr\bin;C:\Windows\system32;"
 if ($env:Path -notmatch [regex]::Escape("$git\usr\bin")) { $env:Path = "$env:Path;$git\usr\bin" }
 $repoEnv = @('SDKROOT', 'PATH', 'INCLUDE', 'LIB', 'LIBPATH', 'UniversalCRTSdkDir', 'UCRTVersion', 'WindowsSdkDir',
-             'WindowsSDKVersion', 'VCToolsInstallDir', 'VCINSTALLDIR', 'VSINSTALLDIR', 'BAZEL_VC') |
+             'WindowsSDKVersion', 'VCToolsInstallDir', 'VCINSTALLDIR', 'VSINSTALLDIR', 'BAZEL_VC', 'BAZEL_LLVM') |
     ForEach-Object { "--repo_env=$_" }
 # Bazelisk, so .bazelversion is honoured (the image's `bazel` may be a
 # release of its own).
@@ -170,6 +177,10 @@ try {
         # rules_swift's own flags (Bazel 9 has no --swiftcopt).
         $rest = @('--@rules_swift//swift:copt=-Xfrontend', '--@rules_swift//swift:copt=-sil-verify-none',
                   '--@rules_swift//swift:exec_copt=-Xfrontend', '--@rules_swift//swift:exec_copt=-sil-verify-none') + $rest
+        # The target's C and C++ by clang-cl, the exec tools' by MSVC
+        # (@isomer//tools/windows: SwiftNIO's C needs clang).
+        $rest = @('--platforms=@isomer//tools/windows:windows_arm64_clang_cl',
+                  '--extra_toolchains=@isomer//tools/windows:clang_cl_for_targets') + $rest
     }
     & $tool $command @repoEnv @rest
     $status = $LASTEXITCODE
