@@ -347,12 +347,14 @@ struct StorybookHeadlessTests {
             try app.tap("Star")
             try app.wait(for: "Starred 1 times")
         }
-        do {
+        // Kept where the platform's app keeps its defaults between launches
+        // for sure: not a web page (a browser profile of its own each
+        // launch), nor Linux's app (corelibs' UserDefaults, which a launcher
+        // stopping the app with SIGTERM gives no time to write).
+        if ["iOS", "Android", "macOS"].contains(platform) {
             let app = try HeadlessApp(launcher: launcher, environment: story, fresh: false)
             defer { app.quit() }
-            // (A page in the web's launcher has a browser profile of its own
-            // each launch: nothing to keep.)
-            try app.wait(for: platform == "Web" ? "Starred 0 times" : "Starred 1 times")
+            try app.wait(for: "Starred 1 times")
         }
         let app = try HeadlessApp(launcher: launcher, environment: story)
         defer { app.quit() }
