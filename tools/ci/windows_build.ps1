@@ -147,6 +147,15 @@ try {
     # it joins protoc's --descriptor_set_in with ":", where protoc on Windows
     # splits that list at ";" (a proto with dependencies: "No such file or
     # directory" for the whole list).
+    #
+    # Swift Testing as the installed platform carries it:
+    # <SDKROOT>\..\..\Library\Testing-<version> (its module and import
+    # libraries in usr\lib\swift\windows, its DLLs in usr\bin).
+    $testing = Get-ChildItem -Directory -Path (Join-Path $env:SDKROOT '..\..\Library') -Filter 'Testing-*' -ErrorAction SilentlyContinue |
+        Sort-Object Name | Select-Object -Last 1 -ExpandProperty FullName
+    if (-not $testing) { throw "windows_build: no Library\Testing-* beside the SDK ($env:SDKROOT)" }
+    # Its DLLs for a test that runs (Bazel's actions and tests take this PATH).
+    $env:Path = "$testing\usr\bin;$env:Path"
     & $tool fetch @repoEnv '--repo=@@rules_swift+' | Out-Host
     if ($LASTEXITCODE) { exit $LASTEXITCODE }
     $outputBase = (& $tool info @repoEnv output_base | Select-Object -Last 1)
@@ -164,6 +173,26 @@ try {
         )
         foreach ($edit in $edits) {
             if ([regex]::Matches($text, $edit[0]).Count -ne 1) { throw "windows_build: rules_swift's swift_proto_compiler.bzl isn't as expected ($($edit[0]))" }
+            $text = [regex]::Replace($text, $edit[0], $edit[1])
+        }
+        [IO.File]::WriteAllText($file, $text)
+        # Swift Testing beside XCTest. rules_swift's Windows toolchain gives
+        # a Swift compile XCTest's module directory (-I) and a link its
+        # import libraries (-LIBPATH), both under the platform's
+        # Developer\Library\XCTest-<version>, and nothing of Testing's, which
+        # the SDK keeps beside it (Developer\Library\Testing-<version>): a
+        # test that imports Testing finds no such module. Here its two
+        # directories go where XCTest's do (on Linux, @swift_windows_sdk's
+        # :testing and its compiled module do the same).
+        $file = Join-Path $patched 'swift\toolchains\swift_toolchain.bzl'
+        $text = [IO.File]::ReadAllText($file)
+        $testingSwift = "$($testing.Replace('\', '/'))/usr/lib/swift/windows"
+        $edits = @(
+            @('configurators = \[add_arg\("-sdk", sdkroot\)\],', "configurators = [add_arg(`"-sdk`", sdkroot), add_arg(`"-I$testingSwift`")],"),
+            @('"-LIBPATH:\{\}"\.format\(platform_lib_dir\),', "`"-LIBPATH:{}`".format(platform_lib_dir),`n        `"-LIBPATH:$testingSwift/{}`".format(arch),")
+        )
+        foreach ($edit in $edits) {
+            if ([regex]::Matches($text, $edit[0]).Count -ne 1) { throw "windows_build: rules_swift's swift_toolchain.bzl isn't as expected ($($edit[0]))" }
             $text = [regex]::Replace($text, $edit[0], $edit[1])
         }
         [IO.File]::WriteAllText($file, $text)
@@ -202,6 +231,11 @@ try {
     & $tool $command @repoEnv @rest
     $status = $LASTEXITCODE
     if ($status -ne 0) {
+        # What Swift Testing's directory holds (a module compiled, or its
+        # interface alone, which a compile must rebuild).
+        "Swift Testing at ${testing}:"
+        Get-ChildItem -Recurse -Depth 3 (Join-Path $testing 'usr') -ErrorAction SilentlyContinue |
+            ForEach-Object { '  ' + $_.FullName.Substring($testing.Length + 1) }
         # What a tool Bazel built for itself can't load, if one couldn't run
         # (0xC0000135, a DLL not found): each DLL it names, found on PATH or
         # not.
