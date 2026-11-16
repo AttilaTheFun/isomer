@@ -66,6 +66,10 @@
 set -euo pipefail
 # Bash 3.2 too: GitHub's Macs have no other (no mapfile, no ${!name}).
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# TEMPORARY (this pull request's test of the combined job, removed before
+# merging): the x86_64 job the current workflow runs builds what the
+# combined `container` will, from cold.
+[ "${GITHUB_JOB:-}" != container-android ] || export ISOMER_PLATFORMS="web linux android"
 
 if [ "$(uname -s)" = Darwin ]; then
     default=apple

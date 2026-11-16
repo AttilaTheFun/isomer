@@ -60,6 +60,8 @@ fail() { echo "ci_bazel: $*" >&2; exit 1; }
 case "${1:-}" in
 setup)
     cache="${2:-${ISOMER_BAZEL_CACHE:-}}"
+    # TEMPORARY (this pull request's cold test of the combined job): no cache.
+    [ "${GITHUB_JOB:-}" != container-android ] || cache=""
     mkdir -p "$ROOT/.ci"
     {
         echo 'rewrite (github\.com/.*) $1'
