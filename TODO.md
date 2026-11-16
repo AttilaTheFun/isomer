@@ -370,16 +370,24 @@ each to an Isomer version and a Swift toolchain, and the examples'
   modules do, everywhere); and its frame cost was measured only on the
   Storybook on an emulator, where Swift spends about 2 ms a frame: an app
   heavier in Swift, on a phone, may show what the Storybook couldn't.
-- **Foundation for every Swift target on Android without wrappers**: a
-  `swift_library` that imports Foundation without depending on
-  `@isomer//:foundation` finds the SDK's corelibs Foundation, and links
-  two. rules_swift's non-Apple toolchains have no implicit dependencies, so
-  this is a rules_swift change (upstream): the Android toolchain taking
-  implicit deps from a label flag, which `@isomer//:foundation`'s own
-  `one_configuration` wrapper turns off for Foundation's build (else it
-  depends on itself). Until then, consumers wrap `swift_library` or patch
-  third-party BUILD files, and `tools/foundation/check_link.py` finds a
-  leak.
+- **Foundation for every Swift target on Android without wrappers**: done
+  in 0.56 by Isomer's Swift SDKs (docs/hermetic_toolchains.md): the SDK's
+  Foundation is Isomer's, so a `swift_library` or a package that imports
+  Foundation links Isomer's with no dependency. Open there:
+  - Linux and Windows SDKs with Isomer's Foundation (their hosts and
+    Foundation tests move off corelibs), then the one-line toolchains
+    module (Apple's SDKs through rules_applecross beside them);
+  - swift-collections' modules are in the SDK under their own names
+    (DequeModule, OrderedCollections...): an app that builds
+    swift-collections itself sees two (private names in the SDK, as
+    swift.org's `_FoundationCollections`, are the likely answer);
+  - `tools/parity` reads Foundation, CoreGraphics and Combine on wasm and
+    Android from the SDK now (swift-symbolgraph-extract, as Observation's):
+    a run is due to check its report against the last, generated from
+    source;
+  - XCTest is out of the wasm SDKs (corelibs XCTest is built on corelibs
+    Foundation): SwiftPM's `--build-tests` there wants it back, built
+    against Isomer's Foundation.
 
 ## Warnings as errors, Swift 6 mode, complete concurrency checking (owner, 2026-11-13)
 
@@ -489,12 +497,14 @@ has it.
     and the system-module scan never reaches libc++'s `std` or CxxStdlib.
     Nothing in Isomer to change: an app that needs explicit modules waits
     for those.
-- **swift-foundation** (a Swift package through rules_swift_package_manager
-  at swift-6.4.2-RELEASE's commit, with patches; no fork since 0.40):
+- **swift-foundation** (built into Isomer's Swift SDKs since 0.56, from
+  AttilaTheFun/isomer_hermetic_toolchains' `isomer-6.4.2` branch:
+  swift-6.4.2-RELEASE with these patches as commits; a Swift package
+  through rules_swift_package_manager from 0.40 to 0.55):
   - swiftlang/swift-foundation#2409 (merged): `createDirectory(withIntermediateDirectories:)`
     stops at "/" (WASI); patched in until a release has it;
   - CharacterSet, NSString's string API and `String(format:)` are in
-    //foundation; upstream's own CharacterSet (#2314) arrives with the
+    Isomer's Foundation; upstream's own CharacterSet (#2314) arrives with the
     next major release, and ours then gives way;
   - (the wasi-libc emulation defines its Swift targets' Clang importer
     needs: rules_swift_package_manager#2640 passes their cSettings, as SwiftPM
@@ -502,7 +512,7 @@ has it.
   - Isomer's own, with no upstream form: ICU linked from the Swift SDK
     (not swift-foundation-icu from source), Apple's signatures and
     swift-foundation's extra declarations made internal, `package` on the
-    string helpers //foundation uses (a copy would need its 2.8 MB Unicode
+    string helpers Isomer's Foundation uses (a copy would need its 2.8 MB Unicode
     tables and the standard library's SPI: until upstream's next major
     release brings CharacterSet, #2314, and its string API). Off Darwin its
     `.diacriticInsensitive` and `.widthInsensitive` comparison is
@@ -548,7 +558,7 @@ run`), CoreGraphics and ImageIO for images.
     copy);
   - the parity reports (`tools/parity`);
   - the SwiftUI audit (`tools/swiftui_audit`, nine scripts);
-  - `tools/foundation/check_link.py` and `tools/symbols/generate.py`;
+  - `tools/symbols/generate.py`;
   - the version stamp (`examples/tools/stamp_storybook.py`);
   - the pixel benchmark.
 

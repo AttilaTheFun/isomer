@@ -14,7 +14,7 @@ swift_library(
         "//shared/no_process_host:srcs",
     ] + select({
         # FileDocument's FileWrapper, which the toolchain's Foundation lacks.
-        "@platforms//os:linux": ["//foundation:FileWrapper.swift"],
+        "@platforms//os:linux": ["//shared:swift_ui_corelibs/FileWrapper.swift"],
         "//conditions:default": [],
     }),
     # The shared core spells its own types `SwiftUI.X` where a generic

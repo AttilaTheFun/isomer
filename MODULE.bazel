@@ -40,8 +40,8 @@ bazel_dep(name = "platforms", version = "1.1.0")
 
 # Apple platform (uses the locally installed Xcode, as all Bazel apple builds do).
 # rules_swift from this project's registry (AttilaTheFun/bazel_registry,
-# listed before the BCR in .bazelrc): 4.2.2.isomer.3 is upstream's 4.2.2 with
-# six rules_swift pull requests until a release has them, each a patch in
+# listed before the BCR in .bazelrc): 4.2.2.isomer.4 is upstream's 4.2.2 with
+# seven rules_swift pull requests until a release has them, each a patch in
 # the registry entry, taken from the PR's head:
 #   * #1989 (merged after 4.2.2): C compiled for wasm gets the Swift SDK's
 #     clang resource directory, so <stdarg.h> and <stddef.h> come from the
@@ -56,12 +56,15 @@ bazel_dep(name = "platforms", version = "1.1.0")
 #     beside the shared runtime, -lc++ the static libc++).
 #   * #1985 (merged after 4.2.2): swift.org's release metadata through 6.4.2;
 #   * #2000: Android targets down to the Swift SDK's own minimum (6.4's: API
-#     23), without RELR relocations below 28.
+#     23), without RELR relocations below 28;
+#   * #2012: `swift.android_sdk(url = …, sha256 = …)`, an Android Swift SDK
+#     from any URL, as #1860 gives `swift.wasm_sdk`: how a consumer registers
+#     Isomer's Swift SDKs (README, "Upgrading isomer").
 # It sorts above the 4.2.2 rules_applecross asks for, so no override holds
-# it, here or in a consumer. A change is a new entry (4.2.2.isomer.4) made
+# it, here or in a consumer. A change is a new entry (4.2.2.isomer.5) made
 # with the registry's tools/add_version.py --fork; back to a plain BCR
 # version at the release that has them all.
-bazel_dep(name = "rules_swift", version = "4.2.2.isomer.3")
+bazel_dep(name = "rules_swift", version = "4.2.2.isomer.4")
 # rules_apple and apple_support at rules_applecross's versions, from this
 # project's registry: rules_apple 5.3.1.applecross.6 is rules_apple 5.3.1
 # with rules_applecross's patches (bundling and signing on Linux), asking
@@ -94,86 +97,59 @@ bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.1")
 # reactor + TypeScript bindings.
 
 # The macro plugins (swift_ffi's, SwiftUI's) and the source analyzer use
-# swift-syntax from the SwiftPM graph (use_repo below): the one release/6.4.x
-# swift-foundation takes, matching the toolchain.
+# swift-syntax from the SwiftPM graph (use_repo below): release/6.4.x, as
+# swift-foundation takes it, matching the toolchain.
 
-# --- Isomer's Swift package (Foundation and the frameworks off Apple) -------
+# --- Isomer's Swift package (the frameworks off Apple) ----------------------
 # Isomer's Swift libraries are a Swift package too (Package.swift, at the
-# root): Foundation, CoreGraphics, Combine and what they stand on.
-# rules_swift_package_manager builds them from it, as @swiftpkg_isomer, in
-# the application's one SwiftPM graph: an application lists isomer in its
-# Package.swift (by revision: the release's tag or a commit) beside its
-# bazel_dep here, so swift-foundation and swift-collections resolve once,
-# for its packages and Isomer's alike. This module's own graph, used when it
-# is the root (third_party/swift_packages), takes the package by path.
+# root): SwiftUI, the frameworks beneath it and, for Linux and Windows,
+# CoreGraphics and Combine. rules_swift_package_manager builds them from it,
+# as @swiftpkg_isomer, in the application's one SwiftPM graph: an
+# application lists isomer in its Package.swift (by revision: the release's
+# tag or a commit) beside its bazel_dep here, so the packages they share
+# (SwiftProtobuf, swift-syntax) resolve once, for its packages and Isomer's
+# alike. This module's own graph, used when it is the root
+# (third_party/swift_packages), takes the package by path.
 #
-# Isomer's Foundation is built over swift-foundation's FoundationEssentials
-# (and FoundationInternationalization when an app asks for it,
-# //foundation:internationalization), adding what corelibs gives Swift code
-# elsewhere (CharacterSet, NSString's string API, String(format:) and the
-# rest of foundation/). Apple platforms use Apple's Foundation.
-#
-# swift-foundation's patches: swift-foundation#2409 (merged upstream; in its
-# next release), Android's fts_open (the Android SDK's apinotes would make it
-# unneeded, but rules_swift compiles with the static resource directory,
-# which has none), Apple's signatures where swift-foundation's differ and its
-# extra declarations made internal, and `package` on the Essentials helpers
-# Foundation searches strings with (it is built in swift-foundation's package
-# for that).
+# Foundation isn't built here (since 0.56): off Apple it is the Swift SDK's.
+# Isomer's Swift SDKs for Android and the web carry Isomer's Foundation (over
+# swift-foundation's FoundationEssentials, with what corelibs gives Swift code
+# elsewhere: CharacterSet, NSString's string API, String(format:), URLSession
+# over the host's transports), FoundationNetworking, IsomerFoundation,
+# CoreGraphics and Combine, in place of corelibs' (AttilaTheFun/isomer_hermetic_toolchains,
+# docs/hermetic_toolchains.md); so every `import Foundation` there, a
+# package's or a module's, is Isomer's with no dependency declared. Linux and
+# Windows keep the toolchain's corelibs Foundation.
 #
 # The registry's 1.25.0.isomer.1: upstream 1.25.0 with three pull requests to
 # cgrindel/rules_swift_package_manager, until a release has them (MVS gives
 # it to every consumer): #2638
 # (a local package that is a Bazel module too, isomer's taken by path in its
 # own graph, is copied without its Bazel files), #2639 (no Apple minimum OS
-# versions off Apple: isomer declares iOS 16 and macOS 13 over
-# swift-foundation's 26) and #2640 (a Swift target's cSettings defines reach
-# its Clang importer, as SwiftPM passes them: swift-foundation's WASI
-# emulation macros).
+# versions off Apple: isomer declares iOS 16 and macOS 13, and a package
+# beneath it may declare more) and #2640 (a Swift target's cSettings defines
+# reach its Clang importer, as SwiftPM passes them).
 bazel_dep(name = "rules_swift_package_manager", version = "1.25.0.isomer.1")
 
 # rules_swift_package_manager's own extension, so an application's graph and
-# this module's packages are one: what isomer declares here (its patches, a
-# dependency of its Foundation) applies to the application's graph, and the
-# repositories isomer uses are that graph's. Its graph is declared only when
-# it is the root (dev_dependency, below): every module's from_package is
-# resolved, and two graphs would declare the same repositories.
+# this module's packages are one: what isomer declares here applies to the
+# application's graph, and the repositories isomer uses are that graph's. Its
+# graph is declared only when it is the root (dev_dependency, below): every
+# module's from_package is resolved, and two graphs would declare the same
+# repositories.
 swift_deps = use_extension("@rules_swift_package_manager//:extensions.bzl", "swift_deps")
-swift_deps.configure_package(
-    name = "swift-foundation",
-    patch_args = ["-p1"],
-    patches = [
-        "//tools/patches:swift_foundation_create_directory_root.patch",
-        "//tools/patches:swift_foundation_apple_interface.patch",
-        "//tools/patches:swift_foundation_package_helpers.patch",
-        "//tools/patches:swift_foundation_sdk_icu.patch",
-    ],
-)
 
-# FoundationInternationalization, re-exported by Foundation when the build
-# asks for it (`--@isomer//foundation:internationalization`, which no
-# SwiftPM condition can express): a module Foundation can import, or
-# nothing (foundation/internationalization). The generated repositories see
-# @isomer by the application's inject_repo (README: "Consuming isomer").
+# The wire protos' Swift, which the package generates with swift-protobuf's
+# build plugin, a plugin rules_swift_package_manager doesn't run:
+# swift_proto_library's modules, which IsomerSwiftUI and IsomerWire re-export
+# (//shared/wire). The generated repositories see @isomer by the
+# application's inject_repo (README: "Consuming isomer").
 swift_deps.configure_package(
     name = "isomer",
-    # And the wire protos' Swift, which the package generates with
-    # swift-protobuf's build plugin, a plugin rules_swift_package_manager
-    # doesn't run: swift_proto_library's modules, which IsomerSwiftUI and
-    # IsomerWire re-export (//shared/wire).
     target_deps = {
-        "Foundation": ["@isomer//foundation/internationalization"],
         "IsomerSwiftUI": ["@isomer//shared/wire:tree_messages"],
         "IsomerWire": ["@isomer//shared/wire:wire_messages"],
     },
-)
-# SwiftProtobuf (the render tree's wire format, shared/wire/tree.proto):
-# where Isomer's Foundation is the Foundation (the web, Android), its
-# `import Foundation` is Isomer's, as every package an application links
-# there (README).
-swift_deps.configure_package(
-    name = "swift-protobuf",
-    target_deps = {"SwiftProtobuf": ["@isomer//foundation:for_swift_packages"]},
 )
 # gRPC Swift 2 and SwiftNIO (driving an app: drive/): in every application's
 # graph, as isomer's package depends on them; built only where an app is
@@ -183,7 +159,6 @@ use_repo(
     "swiftpkg_grpc_swift_2",
     "swiftpkg_grpc_swift_nio_transport",
     "swiftpkg_isomer",
-    "swiftpkg_swift_foundation",
     "swiftpkg_swift_nio",
     "swiftpkg_swift_protobuf",
     "swiftpkg_swift_syntax",
@@ -440,12 +415,24 @@ swift.toolchain(
     name = "swift_toolchain",
     swift_version = "6.4.2",
 )
-swift.wasm_sdk()
+# Isomer's Swift SDKs (since 0.56): swift.org's 6.4.2 SDKs with corelibs
+# Foundation taken out and Isomer's put in (AttilaTheFun/isomer_hermetic_toolchains,
+# docs/hermetic_toolchains.md). isomer's own builds take the -i18n ones,
+# whose Foundation has FoundationInternationalization and ICU, so Foundation's
+# tests (foundation/tests) cover it; the examples take the plain ones, as
+# most applications do (README, "Upgrading isomer").
+swift.wasm_sdk(
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_wasm-i18n.artifactbundle.tar.gz",
+    sha256 = "d787225d4cb19003b6674272bb4643153aab751016d9f14c064ba58981e68f38",
+)
 # No wasi-threads SDK beside it since 0.41: Isomer's was a build of
 # Swift 6.3.2 with swiftlang/swift#92018, which reaches a release in 6.5;
 # reactors built for `@isomer//swift_ffi/rules:wasm32-wasip1-threads` wait
 # for it (TODO.md).
-swift.android_sdk()
+swift.android_sdk(
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_android-i18n.artifactbundle.tar.gz",
+    sha256 = "4a726a303e53529ba2d8f6c97f735ce6b880313740efc53065028a460aee0296",
+)
 use_repo(
     swift,
     # Aggregator repo: holds the registered toolchains and a host-independent

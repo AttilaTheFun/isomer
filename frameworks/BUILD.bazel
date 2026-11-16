@@ -21,16 +21,17 @@ swift_library_group(
         "@platforms//os:watchos": [],
         "@platforms//os:visionos": [],
         "//conditions:default": [
-            # Through Isomer's Foundation on wasm and Android; on Linux and
-            # Windows beside the toolchain's (core_graphics/BUILD.bazel).
+            # The Swift SDK's on wasm and Android (nothing to link); on Linux
+            # and Windows Isomer's, beside the toolchain's Foundation
+            # (core_graphics/BUILD.bazel).
             "//:core_graphics",
             "//frameworks/core_transferable",
             "//frameworks/uniform_type_identifiers",
         ],
     }) + select({
-        # Combine: on wasm and Android Isomer's Foundation brings it (one
-        # configuration of it: a second, linked beside, duplicates every
-        # symbol); on Linux and Windows the toolchain's Foundation doesn't.
+        # Combine: on wasm and Android the Swift SDK's (Isomer's Foundation
+        # re-exports it); on Linux and Windows the toolchain's Foundation has
+        # none, so Isomer's.
         "@platforms//os:linux": ["//frameworks/combine"],
         "@platforms//os:windows": ["//frameworks/combine"],
         "//conditions:default": [],

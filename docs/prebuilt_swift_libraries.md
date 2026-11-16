@@ -30,9 +30,10 @@ dependencies, and off Apple's platforms none of them promises a stable
 binary interface:
 
 - **Isomer's modules are compiled without library evolution** (README,
-  "Swift features, Java and library evolution"): Foundation (Isomer's, over
-  swift-foundation's FoundationEssentials), FoundationNetworking,
-  IsomerFoundation, CoreGraphics, Combine, SwiftUI with IsomerSwiftUI
+  "Swift features, Java and library evolution"), but for Foundation,
+  FoundationNetworking, IsomerFoundation, CoreGraphics and Combine, which
+  Isomer's Swift SDKs build resilient since 0.56 (swift-foundation's
+  FoundationEssentials beneath them stays fragile): SwiftUI with IsomerSwiftUI
   beneath it, PhotosUI, UniformTypeIdentifiers, the Isomer module, os and
   OSLog, and swift_ffi's runtime. A library that uses any of them was
   compiled against their exact layouts: a struct's size and its fields'
@@ -211,10 +212,10 @@ linked into `lib<app>_runtime_bindings.so` with the app's Swift: one
 library, its one Foundation and its one copy of Isomer, as if the code
 were the app's. `deps` must name every Isomer target the library uses:
 Bazel reads no autolink entries from a prebuilt archive, so a library it
-doesn't name is not linked (an undefined symbol at load), and a library
-imported from the Swift SDK instead of Isomer's (the SDK's own Foundation)
-would link a second Foundation (tools/foundation/check_link.py finds that
-in a build). No `extra_binary_deps`: there is no second `.so`. It works
+doesn't name is not linked (an undefined symbol at load). Foundation is
+the Swift SDK's (Isomer's, since 0.56), so the library and the app link the
+one Foundation whether `deps` names it or not; the library is built with
+the same Isomer SDK as the app. No `extra_binary_deps`: there is no second `.so`. It works
 with the platform too (the archive is linked into the app's library, which
 binds to the platform). With `--config=android_release` the linker drops
 what of the archive the app doesn't reach, as it does Isomer's.

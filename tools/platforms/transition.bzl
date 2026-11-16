@@ -8,8 +8,10 @@ _INTERNATIONALIZATION = str(Label("//foundation:internationalization"))
 def _platform_transition_impl(settings, attr):
     return {
         "//command_line_option:platforms": str(attr.platform),
-        # Isomer's Foundation with FoundationInternationalization and ICU
-        # (//foundation), when the binary asks for it or the build does.
+        # Isomer's Foundation with FoundationInternationalization and ICU,
+        # when the binary asks for it or the build does: the Swift SDK's
+        # Foundation is, the -i18n one, and the setting checks it is
+        # (foundation/BUILD.bazel).
         _INTERNATIONALIZATION: attr.internationalization or settings[_INTERNATIONALIZATION],
     }
 
@@ -30,7 +32,7 @@ transition_binary = rule(
         "platform": attr.label(mandatory = True, doc = "Platform to build `binary` for."),
         "internationalization": attr.bool(
             default = False,
-            doc = "Build Isomer's Foundation with FoundationInternationalization (ICU).",
+            doc = "Ask for Isomer's Foundation with FoundationInternationalization (ICU): the -i18n Swift SDK's.",
         ),
         "_allowlist_function_transition": attr.label(
             default = "@bazel_tools//tools/allowlists/function_transition_allowlist",

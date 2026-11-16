@@ -52,9 +52,10 @@ local_path_override(
 # --- What isomer needs from its consumer -------------------------------
 
 # rules_swift: isomer's patched version comes from the project's registry
-# (.bazelrc lists it before the BCR), patches and all: 4.2.2.isomer.3, which
-# sorts above the 4.2.2 rules_applecross asks for, so it needs no override.
-bazel_dep(name = "rules_swift", version = "4.2.2.isomer.3")
+# (.bazelrc lists it before the BCR), patches and all: 4.2.2.isomer.4, which
+# sorts above the 4.2.2 rules_applecross asks for, so it needs no override
+# (and takes `swift.android_sdk(url = …)`, below).
+bazel_dep(name = "rules_swift", version = "4.2.2.isomer.4")
 
 # swift_ffi, swift_gpu and swift_map are part of the isomer module
 # (`@isomer//swift_ffi/...`, `@isomer//swift_gpu/...`, `@isomer//swift_map/...`):
@@ -76,12 +77,24 @@ swift.toolchain(
     name = "swift_toolchain",
     swift_version = "6.4.2",
 )
-swift.wasm_sdk()
+# Isomer's Swift SDKs, whose Foundation is Isomer's (README, "Upgrading
+# isomer"): one line a platform an app builds for, each standing alone. The
+# plain SDKs, as the Storybook formats nothing with Foundation; an app that
+# formats dates or numbers takes the -i18n ones
+# (swift-6.4.2-RELEASE_<platform>-i18n.artifactbundle.tar.gz, with their
+# sha256 from the release's notes).
+swift.wasm_sdk(
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_wasm.artifactbundle.tar.gz",
+    sha256 = "d63e3f15297575b634dcc07b36e19111fb3a24b7dbac0e9b217d3c3532b3bb11",
+)
 # No wasi-threads SDK beside it since 0.41: Isomer's was a build of
 # Swift 6.3.2 with swiftlang/swift#92018, which reaches a release in 6.5;
 # reactors built for `@isomer//swift_ffi/rules:wasm32-wasip1-threads` wait
 # for it (TODO.md).
-swift.android_sdk()
+swift.android_sdk(
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz",
+    sha256 = "1fce2fe24ec9b7c54f97fe2aff41ceab01b5acbc5a09492c50cc918e1dbcdbac",
+)
 use_repo(
     swift,
     "swift_toolchain",
@@ -251,74 +264,8 @@ swift_deps.from_package(
     swift = "//third_party/swift_packages:Package.swift",
 )
 
-# On wasm and Android `import Foundation` is Isomer's (@isomer//foundation),
-# which a library reaches only by depending on it: the packages built for
-# those platforms depend on @isomer//:foundation (nothing on Apple, where
-# Foundation is the system's).
-swift_deps.configure_package(
-    name = "swift-protobuf",
-    target_deps = {"SwiftProtobuf": ["@isomer//:foundation"]},
-)
-
-swift_deps.configure_package(
-    name = "grpc-swift-2",
-    target_deps = {"GRPCCore": ["@isomer//:foundation"]},
-)
-
-swift_deps.configure_package(
-    name = "grpc-swift-protobuf",
-    target_deps = {"GRPCProtobuf": ["@isomer//:foundation"]},
-)
-
-# gRPC over HTTP/2 (the proto greeter's client): SwiftNIO, its TLS and
-# the certificate packages under it.
-swift_deps.configure_package(
-    name = "swift-nio",
-    target_deps = {
-        "NIO": ["@isomer//:foundation"],
-        "NIOPosix": ["@isomer//:foundation"],
-    },
-)
-
-swift_deps.configure_package(
-    name = "swift-nio-ssl",
-    target_deps = {"NIOSSL": ["@isomer//:foundation"]},
-)
-
-swift_deps.configure_package(
-    name = "swift-nio-extras",
-    target_deps = {"NIOCertificateReloading": ["@isomer//:foundation"]},
-)
-
-swift_deps.configure_package(
-    name = "swift-crypto",
-    target_deps = {
-        "Crypto": ["@isomer//:foundation"],
-        "CryptoBoringWrapper": ["@isomer//:foundation"],
-        "_CryptoExtras": ["@isomer//:foundation"],
-    },
-)
-
-swift_deps.configure_package(
-    name = "swift-certificates",
-    target_deps = {"X509": ["@isomer//:foundation"]},
-)
-
-swift_deps.configure_package(
-    name = "swift-asn1",
-    target_deps = {"SwiftASN1": ["@isomer//:foundation"]},
-)
-
-# UpdateKit (AttilaTheFun/update_kit): the Storybook's iPhone and Mac apps
-# write the build they are for Applications.
-# Apple's alone today, where the label resolves to nothing; on wasm and
-# Android it would be Isomer's Foundation.
-swift_deps.configure_package(
-    name = "update_kit",
-    target_deps = {
-        "UpdateKit": ["@isomer//:foundation"],
-    },
-)
+# No package here needs a Foundation dependency declared (since 0.56): on wasm
+# and Android `import Foundation` is the Swift SDK's, Isomer's (above).
 use_repo(
     swift_deps,
     "swift_package",
@@ -333,7 +280,7 @@ use_repo(
 )
 
 # The generated package repositories see rules_swift_package_manager's
-# repositories; the target_deps above (and isomer's own) name @isomer.
+# repositories; isomer's own target_deps (its wire protos) name @isomer.
 inject_repo(swift_deps, "isomer")
 
 bazel_dep(name = "rules_java", version = "9.3.0")

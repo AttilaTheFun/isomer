@@ -1,18 +1,31 @@
 # Isomer's CoreGraphics: the part of Apple's CoreGraphics that Swift code
 # (SwiftUI's interface above all) reaches for, written in Swift: geometry and
 # CGFloat, CGAffineTransform, CGColor and CGColorSpace, CGPath, line caps and
-# joins, blend modes. Built as a module named `CoreGraphics` for the
-# platforms that have no CoreGraphics (wasm, Android, Linux, Windows); Apple
-# platforms use Apple's. docs/parity/CoreGraphics.md says what is
+# joins, blend modes. A module named `CoreGraphics` for the platforms that
+# have no CoreGraphics (wasm, Android, Linux, Windows); Apple platforms use
+# Apple's. docs/parity/CoreGraphics.md says what is
 # implemented, what is not, and why.
 
-load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@rules_swift//swift:swift.bzl", "swift_library", "swift_library_group")
 load("//foundation:defs.bzl", "one_configuration")
 
 package(default_visibility = ["//visibility:public"])
 
-one_configuration(
+# Since 0.56 these sources build Linux's and Windows' CoreGraphics alone: on
+# Android and the web it is the Swift SDK's (Isomer's SDKs carry it, built
+# from isomer_hermetic_toolchains' copy, Isomer/Sources/CoreGraphics; a
+# change here goes there too), so this label is nothing to link there.
+alias(
     name = "core_graphics",
+    actual = select({
+        "@platforms//os:android": ":none",
+        "@platforms//os:wasi": ":none",
+        "//conditions:default": ":package",
+    }),
+)
+
+one_configuration(
+    name = "package",
     target_compatible_with = select({
         "@platforms//os:macos": ["@platforms//:incompatible"],
         "@platforms//os:ios": ["@platforms//:incompatible"],
@@ -24,11 +37,14 @@ one_configuration(
     actual = "@swiftpkg_isomer//:CoreGraphics",
 )
 
-# What dependents use (through @isomer//:core_graphics): built in one
-# configuration whatever theirs (//foundation:defs.bzl).
+swift_library_group(name = "none")
+
+# What dependents use (through @isomer//:core_graphics, on Linux and
+# Windows): built in one configuration whatever theirs
+# (//foundation:defs.bzl).
 one_configuration(
     name = "for_dependents",
-    actual = ":core_graphics",
+    actual = ":package",
 )
 
 # The same sources under another module name, for tests that run on the
