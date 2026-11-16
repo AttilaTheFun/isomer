@@ -152,6 +152,20 @@ apple)
         else
             run storybook_headful_ios_test "$out" --test_env=ISOMER_SIMULATOR="$udid"
         fi
+        # The driver probe's tests (Apple's driver's own checks), when CI's
+        # container built the probe and its runner: upright, and turned to
+        # landscape by the app itself on this upright simulator.
+        probe="$(dirname "$ipa")/probe"
+        if [ -f "$probe/driver_probe_headful_apple_runner" ]; then
+            for app_ipa in "$probe"/*.ipa; do
+                rm -rf "$work/probe" && mkdir -p "$work/probe" && unzip -q "$app_ipa" -d "$work/probe" &&
+                    xcrun simctl install "$udid" "$work/probe/Payload/"*.app || failures=$((failures + 1))
+            done
+            runner="$probe/driver_probe_headful_apple_runner" apple_runner driver_probe_headful_ios_test "$out" \
+                ISOMER_SIMULATOR="$udid" ISOMER_BUNDLE_ID=com.LoganShire.IsomerExamples.DriverProbe \
+                ISOMER_LANDSCAPE_BUNDLE_ID=com.LoganShire.IsomerExamples.DriverProbeLandscape \
+                ISOMER_HEADFUL_LAUNCHER="$ROOT/drive/launchers/ios_launcher.sh"
+        fi
     fi
     if [[ $parts == *" hosted "* ]]; then
         # The same tests hosted in the app: an XCTest bundle in the headful

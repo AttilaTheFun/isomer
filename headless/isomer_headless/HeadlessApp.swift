@@ -155,6 +155,9 @@ public struct HeadlessInfo: Sendable {
     public let renderer: String
     public let width: Double
     public let height: Double
+    /// The interface's orientation where the platform turns it apart from
+    /// the device (iOS: portrait, landscape-left, …), else empty.
+    public let orientation: String
 }
 
 /// An app driven a command at a time, over one call that lasts as long as
@@ -307,15 +310,25 @@ public final class HeadlessApp: @unchecked Sendable {
     /// process (a WebSocket on the loopback address, its port the system's
     /// choice). The launcher is run as
     ///
-    ///     <launcher> <the hub's ws:// URL> <the app's name> [KEY=VALUE…]
+    ///     <launcher> <the hub's ws:// URL> <the app's name> [KEY=VALUE…] [-- <argument>…]
     ///
     /// with `environment` as its KEY=VALUE arguments (the app's launch hooks:
     /// ISO_STORYBOOK_STORY, ISO_HEADLESS_WIDTH and ISO_HEADLESS_HEIGHT for
-    /// its window), and must start the app with ISO_DRIVER set to the URL and
-    /// ISO_DRIVER_NAME to the name (a web page's ISO_ query, an Android
-    /// intent's extras), then run until it is stopped (SIGTERM), when it ends
-    /// the app. `quit()` stops it. The app has `timeout` seconds to attach.
-    public convenience init(launcher: String, environment: [String: String] = [:], timeout: Double = 120) throws {
+    /// its window) and `arguments` after `--` (the app's command line: a
+    /// UserDefaults `-key value`), and must start the app with ISO_DRIVER set
+    /// to the URL and ISO_DRIVER_NAME to the name (a web page's ISO_ query,
+    /// an Android intent's extras), then run until it is stopped (SIGTERM,
+    /// or a file named `stop` among its requests), when it ends the app.
+    /// `quit()` stops it. The app has `timeout` seconds to attach.
+    ///
+    /// `fresh` (the default) starts the app with none of its data from
+    /// before, as an app built headless always starts: the launcher's
+    /// ISOMER_FRESH (the iPhone's: its defaults, files, app groups and the
+    /// simulator's keychain cleared; Android's `pm clear`; the Mac's a new
+    /// home; the web's a new browser profile, whatever this says). A test of
+    /// what lasts between launches passes `fresh: false` for the second.
+    public convenience init(launcher: String, environment: [String: String] = [:], arguments: [String] = [],
+                            fresh: Bool = true, timeout: Double = 120) throws {
         let hub = try HeadfulHub.shared()
         // A launch that never attaches is tried once more: a simulator now
         // and then loses a launch made just as the app before it quits. The
@@ -323,7 +336,8 @@ public final class HeadlessApp: @unchecked Sendable {
         var failure: HeadlessError?
         for (attempt, wait) in [timeout / 2, timeout].enumerated() {
             let name = HeadfulHub.nextName()
-            let (process, requests) = try Self.startLauncher(launcher, hub: hub.url, name: name, environment: environment)
+            let (process, requests) = try Self.startLauncher(launcher, hub: hub.url, name: name, environment: environment,
+                                                             arguments: arguments, fresh: fresh)
             let attached = try Self.blocking { () async -> Bool in
                 let deadline = Date().addingTimeInterval(wait)
                 while Date() < deadline {
@@ -355,10 +369,11 @@ public final class HeadlessApp: @unchecked Sendable {
     /// The launcher run for one launch: the hub's URL, the app's name and
     /// `environment` as its arguments, and where the test asks it for
     /// pictures (`picture`).
-    private static func startLauncher(_ launcher: String, hub: String, name: String,
-                                      environment: [String: String]) throws -> (Process, URL) {
+    private static func startLauncher(_ launcher: String, hub: String, name: String, environment: [String: String],
+                                      arguments appArguments: [String], fresh: Bool) throws -> (Process, URL) {
         let process = Process()
         let arguments = [hub, name] + environment.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }
+            + (appArguments.isEmpty ? [] : ["--"] + appArguments)
         #if os(Windows)
         // A launcher script through Git's bash (ISOMER_BASH, else Git for
         // Windows' own), as Windows runs no script by its #! line.
@@ -371,7 +386,8 @@ public final class HeadlessApp: @unchecked Sendable {
         #endif
         let requests = FileManager.default.temporaryDirectory.appendingPathComponent("isomer-requests-\(name)")
         try? FileManager.default.createDirectory(at: requests, withIntermediateDirectories: true)
-        process.environment = ProcessInfo.processInfo.environment.merging(["ISOMER_LAUNCHER_REQUESTS": requests.path]) { $1 }
+        process.environment = ProcessInfo.processInfo.environment.merging(
+            ["ISOMER_LAUNCHER_REQUESTS": requests.path, "ISOMER_FRESH": fresh ? "1" : "0"]) { $1 }
         try process.run()
         return (process, requests)
     }
@@ -379,6 +395,14 @@ public final class HeadlessApp: @unchecked Sendable {
 
     deinit {
         if let call { Task { await call.finish() } }
+        // A headful app's launcher a test left running (it threw before its
+        // `quit`): stopped, so it doesn't outlive the test with its app.
+        #if !(os(iOS) || os(tvOS) || os(watchOS) || os(visionOS))
+        if let launched, launched.isRunning {
+            if let requests { try? Data().write(to: requests.appendingPathComponent("stop")) }
+            launched.terminate()
+        }
+        #endif
     }
 
     /// The screen as it is.
@@ -390,7 +414,8 @@ public final class HeadlessApp: @unchecked Sendable {
         let answer = try exchange("info")
         let info = answer.info
         return HeadlessInfo(name: info.name, bundleIdentifier: info.bundleIdentifier, version: info.version,
-                            platform: info.platform, renderer: info.renderer, width: info.width, height: info.height)
+                            platform: info.platform, renderer: info.renderer, width: info.width, height: info.height,
+                            orientation: info.orientation)
     }
 
     /// One element or text in full (`inspect`): its kind, actions,
@@ -426,9 +451,9 @@ public final class HeadlessApp: @unchecked Sendable {
     /// A picture of the screen as it stands once settled, kept as a proof's
     /// screen (docs/drive.md, "Pictures"): its id is
     /// `<platform>/<device>/<name>` (`ios/phone/chat`), the platform the
-    /// app's, the device `device` or the platform's own (ios: phone, or
-    /// phone-landscape in a landscape window; macos, linux, windows: window;
-    /// android: phone; web: desktop). The launcher takes it (simctl, the
+    /// app's, the device `device` or the platform's own (ios and android:
+    /// phone, or phone-landscape in a landscape window; macos, linux,
+    /// windows: window; web: desktop). The launcher takes it (simctl, the
     /// Mac's window, adb, Chrome) into ISOMER_PROOF (else the test's
     /// outputs' proof folder), screens/<id>.png; a test hosted in its app
     /// draws the app's own window there (HostedPicture.swift) and hands it
@@ -444,8 +469,7 @@ public final class HeadlessApp: @unchecked Sendable {
         let landscape = info.width > info.height
         let device = device ?? {
             switch platform {
-            case "ios": landscape ? "phone-landscape" : "phone"
-            case "android": "phone"
+            case "ios", "android": landscape ? "phone-landscape" : "phone"
             case "web": "desktop"
             default: "window"
             }
@@ -461,8 +485,8 @@ public final class HeadlessApp: @unchecked Sendable {
         let file = proof.appendingPathComponent("screens/\(id).png")
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? FileManager.default.removeItem(at: file)
-        // The screen settled first.
-        _ = try screen()
+        // The screen settled first (the driver settles before it answers
+        // `info`, above).
         if hosted {
             // A test hosted in its app: the app's own window, drawn here.
             let png = Thread.isMainThread
@@ -477,7 +501,10 @@ public final class HeadlessApp: @unchecked Sendable {
         // The launcher's picture: a request naming the file, which it writes.
         asked += 1
         let request = requests.appendingPathComponent("\(asked).request")
-        try Data(file.path.utf8).write(to: request.appendingPathExtension("part"))
+        // The picture's path, then what the launcher may need to take it as
+        // the app stands (requests.sh).
+        let text = file.path + "\n" + (info.orientation.isEmpty ? "" : "orientation=\(info.orientation)\n")
+        try Data(text.utf8).write(to: request.appendingPathExtension("part"))
         try FileManager.default.moveItem(at: request.appendingPathExtension("part"), to: request)
         let deadline = Date().addingTimeInterval(60)
         while Date() < deadline {
@@ -487,7 +514,7 @@ public final class HeadlessApp: @unchecked Sendable {
                 return FileManager.default.fileExists(atPath: file.path) ? id : nil
             }
             if !launched.isRunning { break }
-            Thread.sleep(forTimeInterval: 0.1)
+            Thread.sleep(forTimeInterval: 0.02)
         }
         throw HeadlessError(message: "the launcher took no picture of \(id)", screen: nil)
     }
@@ -568,14 +595,22 @@ public final class HeadlessApp: @unchecked Sendable {
         _ = try? exchange("quit")
         if let call { try? Self.blocking { await call.finish() } }
         if let launched, launched.isRunning {
-            // A `stop` file beside the picture requests first: a launcher on
-            // Windows, which has no SIGTERM to trap, ends its app on seeing it.
+            // A `stop` file beside the picture requests, which every launcher
+            // of isomer's watches (requests.sh): on Windows, which has no
+            // SIGTERM to trap, it is how the launcher ends its app.
             if let requests { try? Data().write(to: requests.appendingPathComponent("stop")) }
+            #if os(Windows)
             var deadline = Date().addingTimeInterval(10)
-            while launched.isRunning, Date() < deadline { Thread.sleep(forTimeInterval: 0.1) }
+            while launched.isRunning, Date() < deadline { Thread.sleep(forTimeInterval: 0.05) }
             if launched.isRunning { launched.terminate() }
+            #else
+            // Elsewhere SIGTERM at once too: a launcher that doesn't watch
+            // for the file (an app's own) isn't waited for.
+            launched.terminate()
+            var deadline = Date()
+            #endif
             deadline = Date().addingTimeInterval(10)
-            while launched.isRunning, Date() < deadline { Thread.sleep(forTimeInterval: 0.1) }
+            while launched.isRunning, Date() < deadline { Thread.sleep(forTimeInterval: 0.05) }
             #if !os(Windows)
             if launched.isRunning { kill(launched.processIdentifier, SIGKILL) }
             #endif

@@ -2,11 +2,17 @@
 # A Mac app, headful, for a test's HeadlessApp (docs/drive.md): built with
 # --@isomer//drive:headful, so its driver dials out, run with ISO_DRIVER and
 # ISO_DRIVER_NAME in its environment, light, with a home of its own, until
-# this is stopped. Pictures (a test's `picture`) are its window's alone.
+# this is stopped (SIGTERM, or HeadlessApp's `stop` request). Pictures (a
+# test's `picture`) are its window's alone.
 #
-#   macos_launcher.sh <the hub's ws:// URL> <the app's name> [KEY=VALUE…]
+#   macos_launcher.sh <the hub's ws:// URL> <the app's name> [KEY=VALUE…] [-- <argument>…]
 #
-# From the test's environment: ISOMER_MAC_APP, the .app.
+# The arguments after `--` are the app's own, after the launcher's
+# (`-NSTextInsertionPointBlinkPeriodOn 100000`, a `-key value` of
+# UserDefaults' argument domain: a later one wins). From the test's
+# environment: ISOMER_MAC_APP, the .app, and ISOMER_FRESH (requests.sh: 1,
+# the default, gives each launch a new home, removed after; 0 the same home
+# every launch of the app, kept in the temporary directory).
 set -uo pipefail
 . "$(dirname "$0")/requests.sh"
 url="${1:?usage: macos_launcher.sh <hub url> <name> [KEY=VALUE…]}"
@@ -14,18 +20,30 @@ name="${2:?<name>}"
 shift 2
 app="${ISOMER_MAC_APP:?ISOMER_MAC_APP: the Mac app}"
 binary="$app/Contents/MacOS/$(defaults read "$app/Contents/Info" CFBundleExecutable)"
+split_arguments "$@"
 environment=(ISO_DRIVER="$url" ISO_DRIVER_NAME="$name")
-for pair in "$@"; do
+for pair in ${pairs[@]+"${pairs[@]}"}; do
     case "${pair%%=*}" in
         ISO_HEADLESS_WIDTH | ISO_HEADLESS_HEIGHT) ;;
         *) environment+=("$pair") ;;
     esac
 done
-home="$(mktemp -d)"
+if fresh; then
+    home="$(mktemp -d)"
+else
+    home="${TMPDIR:-/tmp}/isomer-mac-home-$(basename "$app" .app)"
+    mkdir -p "$home"
+fi
 env "${environment[@]}" CFFIXED_USER_HOME="$home" "$binary" -AppleInterfaceStyle Light \
-    -ApplePersistenceIgnoreState YES -AppleShowScrollBars WhenScrolling > "$home/app.log" 2>&1 &
+    -ApplePersistenceIgnoreState YES -AppleShowScrollBars WhenScrolling ${app_arguments[@]+"${app_arguments[@]}"} \
+    > "$home/app.log" 2>&1 &
 pid=$!
-stop() { kill "$pid" 2> /dev/null || true; wait "$pid" 2> /dev/null || true; rm -rf "$home"; exit 0; }
+stop() {
+    kill "$pid" 2> /dev/null || true
+    wait "$pid" 2> /dev/null || true
+    if fresh; then rm -rf "$home"; fi
+    exit 0
+}
 trap stop TERM INT
 # The app's largest window, by CoreGraphics' window list (no permission
 # needed), pictured alone.

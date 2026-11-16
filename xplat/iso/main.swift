@@ -32,6 +32,17 @@
 //   iso apps                             the apps attached to the hub on this machine
 //   iso hub stop                         ends the hub iso started
 //
+//   iso launch <launcher> [--name <name>] [--keep-data] [KEY=VALUE…] [-- <argument>…]
+//                                        a headful app started by one of isomer's
+//                                        launchers (drive/launchers: ios_launcher.sh,
+//                                        android_launcher.sh, …, with their environment:
+//                                        ISOMER_SIMULATOR, ISOMER_BUNDLE_ID, …), dialling
+//                                        the hub on this machine under <name> (the
+//                                        launcher's platform by default), fresh (none of
+//                                        its data from before) unless --keep-data;
+//                                        KEY=VALUE its environment, after -- its arguments
+//   iso launch stop <name>               ends it
+//
 // Options for the commands: --url <url> (an app by its URL), --app <name> (an
 // application kept by name, not the selected one), --json (each answer as
 // protobuf's JSON). URLs: grpc://, grpcs://, ws://, unix:<socket>, exec:<an
@@ -511,6 +522,80 @@ func driveInteractively(_ options: Options) async throws {
     await call.finish()
 }
 
+// MARK: - Apps started by a launcher
+
+/// `iso launch`: a launcher (drive/launchers) run in the background, its app
+/// dialling the hub on this machine, kept by name until `iso launch stop`.
+func launch(_ arguments: [String]) async throws {
+    if arguments.first == "stop" {
+        guard arguments.count >= 2 else { fail("usage: iso launch stop <name>") }
+        let files = runFiles("launch-\(arguments[1])")
+        let requests = Registry.directory.appendingPathComponent("run/launch-\(arguments[1]).requests")
+        try? Data().write(to: requests.appendingPathComponent("stop"))
+        if let pid = running(files.pid) {
+            kill(pid, SIGTERM)
+            print("stopped \(arguments[1])")
+        } else {
+            print("no app of iso's launched as \(arguments[1])")
+        }
+        try? FileManager.default.removeItem(at: files.pid)
+        return
+    }
+    let usage = "usage: iso launch <launcher> [--name <name>] [--keep-data] [KEY=VALUE…] [-- <argument>…] | iso launch stop <name>"
+    var rest = arguments[...]
+    guard let launcher = rest.popFirst() else { fail(usage) }
+    var name: String?
+    var fresh = true
+    var pairs: [String] = []
+    var appArguments: [String] = []
+    while let argument = rest.popFirst() {
+        switch argument {
+        case "--name": name = rest.popFirst()
+        case "--keep-data": fresh = false
+        case "--":
+            appArguments = Array(rest)
+            rest = []
+        default:
+            guard argument.contains("=") else { fail(usage) }
+            pairs.append(argument)
+        }
+    }
+    // ios_launcher.sh: `ios`, as the app would name itself dialling the hub.
+    let platform = URL(fileURLWithPath: launcher).deletingPathExtension().lastPathComponent
+        .replacingOccurrences(of: "_launcher", with: "")
+    let app = name ?? platform
+    _ = await ensureHub()
+    let files = runFiles("launch-\(app)")
+    if let pid = running(files.pid) { fail("\(app) is running already (pid \(pid)): iso launch stop \(app)") }
+    let requests = Registry.directory.appendingPathComponent("run/launch-\(app).requests")
+    try? FileManager.default.removeItem(at: requests)
+    try FileManager.default.createDirectory(at: requests, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: launcher)
+    process.arguments = [hubURL, app] + pairs + (appArguments.isEmpty ? [] : ["--"] + appArguments)
+    var environment = ProcessInfo.processInfo.environment
+    environment["ISOMER_FRESH"] = fresh ? "1" : "0"
+    environment["ISOMER_LAUNCHER_REQUESTS"] = requests.path
+    process.environment = environment
+    FileManager.default.createFile(atPath: files.log.path, contents: nil)
+    let log = try FileHandle(forWritingTo: files.log)
+    process.standardInput = FileHandle.nullDevice
+    process.standardOutput = log
+    process.standardError = log
+    try process.run()
+    try String(process.processIdentifier).write(to: files.pid, atomically: true, encoding: .utf8)
+    let deadline = Date().addingTimeInterval(120)
+    while Date() < deadline {
+        if (await attachedApps() ?? []).contains(where: { $0.name == app }) {
+            print("launched \(app)\(fresh ? "" : ", its data kept") (iso --app \(app) ls; iso launch stop \(app))")
+            return
+        }
+        if !process.isRunning { fail("\(launcher) ended (\(process.terminationStatus)) before \(app) attached (\(files.log.path))") }
+        try? await Task.sleep(nanoseconds: 250_000_000)
+    }
+    fail("\(app) didn't attach in 120 s (\(files.log.path)); iso launch stop \(app) ends its launcher")
+}
+
 // MARK: - The hub headful apps dial out to
 
 func hub(_ arguments: [String]) async throws {
@@ -579,7 +664,7 @@ func hub(_ arguments: [String]) async throws {
 let parsed = Options(CommandLine.arguments.dropFirst())
 let arguments = parsed.rest[...]
 guard let verb = arguments.first else {
-    print("iso ls|info|tap|type|set|select|swipe|longpress|back|dismiss|wait|drive [--app <name>[,<name>…] | --all], iso apps, iso hub [stop], iso application add|remove|select|list|stop …")
+    print("iso ls|info|tap|type|set|select|swipe|longpress|back|dismiss|wait|drive [--app <name>[,<name>…] | --all], iso apps, iso hub [stop], iso launch <launcher> | stop <name>, iso application add|remove|select|list|stop …")
     exit(2)
 }
 
@@ -623,6 +708,8 @@ do {
         }
     case "hub":
         try await hub(Array(arguments.dropFirst()))
+    case "launch":
+        try await launch(Array(arguments.dropFirst()))
     case "apps":
         _ = await ensureHub()
         for app in await attachedApps() ?? [] {

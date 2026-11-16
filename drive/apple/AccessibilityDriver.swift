@@ -205,26 +205,42 @@ final class AccessibilityDriver {
 
     /// Frames until the screen holds still (five readings alike, or the
     /// timeout): animations, transitions and the app's tasks run meanwhile.
-    func settle(timeout: Double = 3, after action: Bool = false) async -> AccessibilityScreen {
+    /// After an action (`unchanged`: the screen before it), a screen still as
+    /// it was is given a while longer to change: what a tap starts may begin
+    /// a few turns of the run loop later (a sheet presented from a sheet,
+    /// which SwiftUI presents once the one below has settled; Quick Look's
+    /// controls), and the answer is the screen it leads to.
+    func settle(timeout: Double = 3, after unchanged: AccessibilityScreen? = nil) async -> AccessibilityScreen {
         // What an action starts (a navigation's push, a sheet) begins on the
         // next turns of the run loop: a moment before reading the screen.
-        if action { try? await Task.sleep(nanoseconds: 300_000_000) }
-        let deadline = Date().addingTimeInterval(timeout)
-        // A navigation's push or pop, a sheet's coming or going: the screen
-        // is the one it ends on.
-        while Date() < deadline, transitioning() {
-            try? await Task.sleep(nanoseconds: 50_000_000)
+        if unchanged != nil { try? await Task.sleep(nanoseconds: 150_000_000) }
+        let start = Date()
+        let deadline = start.addingTimeInterval(timeout)
+        let before = unchanged?.wire
+        func busy() async {
+            // A navigation's push or pop, a sheet's coming or going: the
+            // screen is the one it ends on.
+            while Date() < deadline, transitioning() {
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
         }
+        await busy()
         var current = await screen()
         var last = current.wire
         var still = 0
         while Date() < deadline {
             try? await Task.sleep(nanoseconds: 50_000_000)
+            if transitioning() {
+                await busy()
+                still = 0
+            }
             current = await screen()
             let reading = current.wire
             if reading == last {
                 still += 1
-                if still >= 5 { break }
+                // Still as it was before the action: up to a second and a
+                // half for what it started to show.
+                if still >= 5, before != reading || Date().timeIntervalSince(start) > 1.5 { break }
             } else {
                 still = 0
                 last = reading
@@ -235,6 +251,7 @@ final class AccessibilityDriver {
 
     func handle(_ command: Wire_Command) async -> Wire_Answer {
         var error: String?
+        var waited: AccessibilityScreen?
         let target = command.target
         let before = await settle()
         switch command.cmd {
@@ -301,13 +318,16 @@ final class AccessibilityDriver {
             let text = command.text
             let deadline = Date().addingTimeInterval(command.timeout > 0 ? command.timeout : 5)
             var shown = false
-            while Date() < deadline {
-                let frame = await settle(timeout: 0.5)
+            var frame = before
+            while true {
                 if frame.texts.contains(where: { $0.text.contains(text) })
                     || frame.elements.contains(where: { $0.label.contains(text) || ($0.value ?? "").contains(text) }) {
                     shown = true
+                    waited = frame
                     break
                 }
+                if Date() >= deadline { break }
+                frame = await settle(timeout: 0.5)
             }
             if !shown { error = "\(text) didn't show" }
         default:
@@ -316,8 +336,15 @@ final class AccessibilityDriver {
         var answer = Wire_Answer()
         answer.ok = error == nil
         if let error { answer.error = error }
-        let after = await settle(after: !["ls", "info", "quit", "wait"].contains(command.cmd))
-        answer.screen = after.wire
+        // What only reads the screen answers with the reading it made; an
+        // action, with the screen it leads to.
+        if ["ls", "info", "inspect", "quit"].contains(command.cmd) {
+            answer.screen = before.wire
+        } else if command.cmd == "wait", let waited {
+            answer.screen = waited.wire
+        } else {
+            answer.screen = await settle(after: before).wire
+        }
         if command.cmd == "info" { answer.info = info }
         return answer
     }

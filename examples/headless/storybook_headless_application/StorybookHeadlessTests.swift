@@ -328,6 +328,37 @@ struct StorybookHeadlessTests {
         #expect(throws: (any Error).self) { try app.swipe("Weekly report", "left", action: "Archive") }
     }
 
+    /// A headful launch starts with none of the app's data from before (the
+    /// launchers' ISOMER_FRESH, HeadlessApp's default), as an app built
+    /// headless does; asked to, it keeps it.
+    @Test func aLaunchStartsFreshUnlessAskedToKeep() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard let launcher = environment["ISOMER_HEADFUL_LAUNCHER"], !launcher.isEmpty,
+              HeadlessApp.hostedIfAny() == nil else { return }
+        let story = ["ISO_STORYBOOK_STORY": "state.appstorage"]
+        var platform = ""
+        do {
+            let app = try HeadlessApp(launcher: launcher, environment: story)
+            defer { app.quit() }
+            platform = try app.info().platform
+            // Windows' launcher keeps an app's data as it is, for now.
+            guard platform != "Windows" else { return }
+            try app.wait(for: "Starred 0 times")
+            try app.tap("Star")
+            try app.wait(for: "Starred 1 times")
+        }
+        do {
+            let app = try HeadlessApp(launcher: launcher, environment: story, fresh: false)
+            defer { app.quit() }
+            // (A page in the web's launcher has a browser profile of its own
+            // each launch: nothing to keep.)
+            try app.wait(for: platform == "Web" ? "Starred 0 times" : "Starred 1 times")
+        }
+        let app = try HeadlessApp(launcher: launcher, environment: story)
+        defer { app.quit() }
+        try app.wait(for: "Starred 0 times")
+    }
+
     @Test func unknownTargetFailsWithTheScreen() throws {
         let app = try launch(story: "state.observableobject")
         defer { app.quit() }

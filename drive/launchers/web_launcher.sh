@@ -1,8 +1,11 @@
 #!/bin/bash
 # A web app, headful, for a test's HeadlessApp (docs/drive.md): its site
 # (built with --@isomer//drive:headful) in headless Chrome under
-# browser_check, which keeps the page open until this is stopped and takes
-# the test's pictures (`--requests`). The page dials out to the test's hub
+# browser_check, which keeps the page open until this is stopped (SIGTERM,
+# or HeadlessApp's `stop` request) and takes the test's pictures
+# (`--requests`). Each launch's Chrome has a profile of its own: the page
+# starts with nothing kept, whatever ISOMER_FRESH says, and takes no
+# arguments after `--`. The page dials out to the test's hub
 # (ISO_DRIVER, ISO_DRIVER_NAME: the page's ISO_ query, which the web host
 # reads as the app's environment).
 #
@@ -21,6 +24,7 @@ width=390
 height=844
 query="${ISOMER_WEB_QUERY:-renderer=dom}&ISO_DRIVER=$url&ISO_DRIVER_NAME=$name"
 for pair in "$@"; do
+    [ "$pair" != -- ] || break
     case "${pair%%=*}" in
         ISO_HEADLESS_WIDTH) width="${pair#*=}" ;;
         ISO_HEADLESS_HEIGHT) height="${pair#*=}" ;;

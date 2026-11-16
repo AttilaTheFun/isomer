@@ -107,6 +107,8 @@ iso longpress "Weekly report"   # its context menu: its items are the screen's b
 iso back | dismiss
 iso wait "Taps: 1" --timeout 10
 iso drive                       # JSON lines on standard input
+iso launch …/drive/launchers/ios_launcher.sh   # a headful app of a launcher's (below)
+iso launch stop ios
 ```
 
 An element's name is its role and its place among that role's on the
@@ -158,9 +160,18 @@ Apple's frameworks): with the flag, @isomer//apple/libraries/swift_ui links
 drive/apple, which a constructor starts (the app calls nothing). It answers
 the same commands from the app's accessibility tree, with the same names:
 on iOS it walks UIKit's accessibility containers once the app's
-accessibility is on, scrolls to what is off screen as a person would, waits
-out navigation transitions, and taps what takes no activation (a list's
-cell, a control) as a tap would; on the Mac it asks its own process as an
+accessibility is on (SwiftUI's own elements, a List's or a Form's rows and
+the controls in them, give their identifiers to the selector, as XCUITest
+reads them, not through UIAccessibilityIdentification; a multi-line
+`TextField` is labelled by its placeholder), scrolls to what is off screen
+as a person would, waits out navigation transitions and, after an action,
+what it starts a moment later (a sheet presented from a sheet), and taps
+what takes no activation (a list's cell, a control) as a tap would, at its
+place in the window however the app is turned. `dismiss` closes what is
+presented on top: escape, else a sheet a person may swipe away, as the
+swipe does (its `onDismiss` runs), else its own Cancel, Close or Done.
+ISO_DRIVE_TRACE=1 in the app's environment prints each reading's walk of
+the tree; on the Mac it asks its own process as an
 accessibility client would (AXUIElement), on the main thread. A list's row
 of texts is a button, as Isomer's renderers give it. Launch with simctl's
 `SIMCTL_CHILD_ISO_DRIVER=…`, or a Mac app with `ISO_DRIVER` in its
@@ -180,11 +191,29 @@ try app.tap("Tap")
 try app.wait(for: "Taps: 1")
 ```
 
-`HeadlessApp(launcher:environment:)` drives a headful app with the same
-test: the test holds a hub of its own (IsomerServing's `IsomerHub`, on a
-loopback WebSocket), and the launcher, run as `<launcher> <hub URL> <name>
-[KEY=VALUE…]`, starts the app dialling out to it (ISO_DRIVER,
-ISO_DRIVER_NAME) and ends it when stopped. A launcher a platform, beside the
+`HeadlessApp(launcher:environment:arguments:fresh:)` drives a headful app
+with the same test: the test holds a hub of its own (IsomerServing's
+`IsomerHub`, on a loopback WebSocket), and the launcher, run as
+`<launcher> <hub URL> <name> [KEY=VALUE…] [-- <argument>…]`, starts the app
+dialling out to it (ISO_DRIVER, ISO_DRIVER_NAME), its environment the
+pairs and its command line the arguments, and ends it when stopped (SIGTERM,
+or a file named `stop` among its requests, which `quit()` leaves, then
+signals: drive/launchers/requests.sh).
+
+- **Fresh by default.** A launch starts with none of the app's data from
+  before, as an app built headless does (`fresh: true`, the launcher's
+  ISOMER_FRESH=1): the iPhone's launcher clears the app's defaults (through
+  the simulator's cfprefsd), its files and its app groups' and the
+  simulator's keychain; Android's runs `pm clear`; the Mac's and Linux's
+  give the app a new home; the web's page has a new browser profile every
+  launch anyway. `fresh: false` (`iso launch --keep-data`) keeps it, for a
+  test of what lasts between launches. Windows' launcher keeps it, for now.
+- **Pictures** (`picture`) are named by the platform's device as the app
+  stands (`ios/phone-landscape/…`, `android/phone-landscape/…` in a wide
+  window). An iPhone app that turns itself to landscape on an upright
+  simulator is drawn on its side in the simulator's frame; its driver says
+  how it stands (Info's `orientation`), and the iPhone's launcher turns the
+  picture to match. A launcher a platform, beside the
 Storybook's tests (examples' headless/storybook_headless_application): the
 web's (headless Chrome under browser_check `--hold`), the iPhone's (simctl
 on a booted simulator), the Mac's, Android's (`am start` with the extras,

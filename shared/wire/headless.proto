@@ -71,6 +71,13 @@ message Info {
   // The window, in points.
   double width = 6;
   double height = 7;
+  // The interface's orientation where the platform turns it apart from the
+  // device (iOS): portrait, portrait-upside-down, landscape-left or
+  // landscape-right, as UIKit's interface orientations; empty elsewhere. A
+  // launcher turns its pictures by it (drive/launchers/ios_launcher.sh): an
+  // app that turns itself to landscape on an upright phone is drawn on its
+  // side in the device's frame.
+  string orientation = 8;
 }
 
 message Screen {

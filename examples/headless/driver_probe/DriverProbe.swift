@@ -3,8 +3,13 @@
 // lost it before (an identifier outside `.padding`, `.background` or an app's
 // own modifier; a selection list's row; a combined card; a toggle; a bottom
 // bar's icon button; a disabled toolbar item; a page pushed in a sheet; a
-// long press). PROBE_SCREEN picks the screen: the controls (the default), the
-// list, or the sheet's.
+// long press; controls in a Form's rows, a text field and a multi-line one,
+// the navigation title's own button; sheets closed by `dismiss` alone, and
+// one presented over another). PROBE_SCREEN picks the screen: the controls
+// (the default), the list, the sheet's, the form or the sheets. The same
+// source is the iPhone's probe on Apple's SwiftUI
+// (//apple/driver_probe_ios_application), which its tests drive through
+// Apple's driver, upright and turned to landscape by the app itself.
 
 import Foundation
 import SwiftUI
@@ -16,6 +21,8 @@ struct DriverProbe: App {
             switch ProcessInfo.processInfo.environment["PROBE_SCREEN"] ?? "" {
             case "list": ListScreen()
             case "sheet": SheetScreen()
+            case "form": FormScreen()
+            case "sheets": SheetsScreen()
             default: ControlsScreen()
             }
         }
@@ -130,6 +137,113 @@ struct SheetScreen: View {
                     }
                 }
                 .navigationTitle("Settings")
+            }
+        }
+    }
+}
+
+/// A form's rows as an app's settings are: controls with identifiers in
+/// them, a text field, a multi-line field, and the navigation title's own
+/// button.
+struct FormScreen: View {
+    @State private var last = "nothing yet"
+    @State private var sync = false
+    @State private var host = ""
+    @State private var message = ""
+    @AppStorage("probe.launches") private var launches = 0
+    /// A launch argument (`-probe.argument <value>`, UserDefaults' argument
+    /// domain), shown.
+    private let argument = UserDefaults.standard.string(forKey: "probe.argument") ?? "none"
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text("Last: \(last)")
+                    Text("Argument: \(argument)")
+                    Text("Launches: \(launches)")
+                }
+                Section("Computers") {
+                    Button("Add Computer") { last = "add computer" }
+                        .accessibilityIdentifier("add-computer")
+                    HStack {
+                        Text("Mac Studio")
+                        Spacer()
+                        Button("Connect") { last = "connect" }
+                            .accessibilityIdentifier("connect")
+                    }
+                    Toggle("Sync", isOn: $sync)
+                        .accessibilityIdentifier("sync")
+                    NavigationLink("Runner") {
+                        Text("Runner settings")
+                            .navigationTitle("Runner")
+                    }
+                    .accessibilityIdentifier("runner")
+                }
+                Section("Connection") {
+                    TextField("Host name", text: $host)
+                        .accessibilityIdentifier("host")
+                    TextField("Message", text: $message, axis: .vertical)
+                    Text("Host: \(host.isEmpty ? "none" : host), message: \(message.isEmpty ? "none" : message)")
+                }
+            }
+            .navigationTitle("Settings")
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Button("Session title") { last = "title" }
+                        .accessibilityIdentifier("session-title")
+                }
+            }
+        }
+        .onAppear { launches += 1 }
+    }
+}
+
+/// Sheets an app presents: one with only Done, one with nothing to close it
+/// but a swipe (closed by the driver's `dismiss`), and one presented from
+/// inside another.
+struct SheetsScreen: View {
+    @State private var done = false
+    @State private var question = false
+    @State private var outer = false
+    @State private var inner = false
+    @State private var last = "nothing yet"
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 12) {
+                Text("Last: \(last)")
+                Button("Tool calls") { done = true }
+                Button("Question") { question = true }
+                Button("Settings…") { outer = true }
+            }
+            .navigationTitle("Sheets")
+        }
+        .sheet(isPresented: $done) {
+            NavigationStack {
+                Text("Every tool call")
+                    .navigationTitle("Tool calls")
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { done = false }
+                        }
+                    }
+            }
+        }
+        .sheet(isPresented: $question, onDismiss: { last = "question closed" }) {
+            VStack {
+                Text("Which model?")
+                Text("Pick one, or swipe down")
+            }
+        }
+        .sheet(isPresented: $outer) {
+            VStack(spacing: 12) {
+                Text("Outer sheet")
+                Button("Add Computer") { inner = true }
+                    .accessibilityIdentifier("add-computer")
+            }
+            .sheet(isPresented: $inner) {
+                Text("Inner sheet")
             }
         }
     }

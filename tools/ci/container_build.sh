@@ -396,6 +396,23 @@ if has apple; then
     else
         results+=(1)
     fi
+    # The driver probe on the SwiftUI of Apple (views shaped as those of an
+    # app), upright and turned to landscape by itself, and its tests, a Mac
+    # command as for the Storybook: the checks of the Apple driver itself.
+    probe_apps=(//apple/driver_probe_ios_application:driver_probe_ios_application
+                //apple/driver_probe_ios_application:driver_probe_landscape_ios_application)
+    probe_runner=//headless/driver_probe:driver_probe_headful_apple_runner
+    if bazel build "${headful[@]}" --ios_multi_cpus=sim_arm64 "${probe_apps[@]}" && bazel build "$probe_runner"; then
+        mkdir -p "$platforms_out/headful/probe"
+        for app in "${probe_apps[@]}"; do
+            for f in $(files "${headful[@]}" --ios_multi_cpus=sim_arm64 "$app"); do
+                case "$f" in *.ipa) cp "$exec_root/$f" "$platforms_out/headful/probe/" ;; esac
+            done
+        done
+        for f in $(files "$probe_runner"); do cp "$exec_root/$f" "$platforms_out/headful/probe/driver_probe_headful_apple_runner"; done
+    else
+        results+=(1)
+    fi
     # And the tests hosted in the iPhone app: their XCTest bundle and the
     # app built to host them (headful, for the simulator), which the Mac
     # runs with an xctestrun of its own (tools/ci/hosted_headful_test.sh),
