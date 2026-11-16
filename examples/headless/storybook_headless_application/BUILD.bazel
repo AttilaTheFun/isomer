@@ -212,7 +212,9 @@ swift_test(
     ] + select({
         # Built on Linux: Swift Testing's import libraries from the Windows
         # Swift SDK (its Library/Testing-*). Built on Windows (CI's
-        # windows-11-arm job), the installed Swift's toolchain brings its own.
+        # windows-11-arm job), the installed platform's Library/Testing-*,
+        # which tools/ci/windows_build.ps1 adds to rules_swift's Windows
+        # toolchain beside XCTest.
         "@isomer//tools/windows:built_on_linux": ["@swift_windows_sdk//:testing"],
         "//conditions:default": [],
     }),

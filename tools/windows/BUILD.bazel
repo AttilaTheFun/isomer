@@ -26,3 +26,34 @@ config_setting(
     flag_values = {":on_linux": "true"},
     visibility = ["//visibility:public"],
 )
+
+# CI's Windows build on Windows itself (tools/ci/windows_build.ps1): the
+# target's C and C++ compiled by clang-cl, as SwiftPM compiles a package's C
+# on Windows (SwiftNIO's needs clang: C11 atomics, __attribute__, clang
+# builtins), the exec tools by MSVC (rules_swift's tools pass clang-cl
+# -Xclang=-fno-split-cold-code, which the image's LLVM rejects, and its ARM64
+# backend fails on protobuf's upb). The target platform is the host with
+# rules_cc's clang-cl constraint, and this toolchain, rules_cc's clang-cl one,
+# is for that target alone (rules_cc's own asks for the constraint of the
+# execution platform instead, which would take the exec tools too).
+platform(
+    name = "windows_arm64_clang_cl",
+    constraint_values = ["@rules_cc//cc/private/toolchain:clang-cl"],
+    parents = ["@platforms//host"],
+    visibility = ["//visibility:public"],
+)
+
+toolchain(
+    name = "clang_cl_for_targets",
+    exec_compatible_with = ["@platforms//os:windows"],
+    target_compatible_with = [
+        "@platforms//cpu:arm64",
+        "@platforms//os:windows",
+        "@rules_cc//cc/private/toolchain:clang-cl",
+    ],
+    # rules_cc's Windows configuration (its cc_configure extension), made
+    # with BAZEL_LLVM set.
+    toolchain = "@@rules_cc++cc_configure_extension+local_config_cc//:cc-compiler-arm64_windows-clang-cl",
+    toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
+    visibility = ["//visibility:public"],
+)
