@@ -332,6 +332,8 @@ struct StorybookHeadlessTests {
     /// launchers' ISOMER_FRESH, HeadlessApp's default), as an app built
     /// headless does; asked to, it keeps it.
     @Test func aLaunchStartsFreshUnlessAskedToKeep() throws {
+        // (Hosted in the iPhone app, there is no launcher to start one.)
+        #if !(os(iOS) || os(tvOS) || os(watchOS) || os(visionOS))
         let environment = ProcessInfo.processInfo.environment
         guard let launcher = environment["ISOMER_HEADFUL_LAUNCHER"], !launcher.isEmpty,
               HeadlessApp.hostedIfAny() == nil else { return }
@@ -359,6 +361,7 @@ struct StorybookHeadlessTests {
         let app = try HeadlessApp(launcher: launcher, environment: story)
         defer { app.quit() }
         try app.wait(for: "Starred 0 times")
+        #endif
     }
 
     @Test func unknownTargetFailsWithTheScreen() throws {
