@@ -4,7 +4,8 @@
 # Visual Studio (ARM64 MSVC) and Windows SDK, so nothing of Microsoft's is
 # redistributed (tools/windows/README.md). Built only, not run: Windows is
 # tier 2. The recipe a Windows machine has always built with
-# (tools/proof/proof.py's): Bazel in MSVC's environment (vcvarsall arm64),
+# (tools/proof/proof.py's), with LLVM's llvm-lib as MSVC's lib.exe (below):
+# Bazel in MSVC's environment (vcvarsall arm64),
 # BAZEL_SH Git's bash and Git's usr\bin ahead of System32 (rules_swift_package_manager
 # runs find, cp and od; tools/patches/rules_swift_package_manager_windows.patch
 # in the examples), and --repo_env for SDKROOT, PATH and MSVC's variables
@@ -42,8 +43,18 @@ if ($SetUp) {
     if (-not $sdkroot) { throw 'windows_build: no SDKROOT after Swift was installed' }
     "SDKROOT=$sdkroot" | Add-Content $env:GITHUB_ENV
     $paths = @([Environment]::GetEnvironmentVariable('Path', 'User'), [Environment]::GetEnvironmentVariable('Path', 'Machine')) -join ';'
-    $swiftPaths = $paths.Split(';') | Where-Object { $_ -and $_ -match '\\Swift\\' } | Select-Object -Unique
+    $swiftPaths = @($paths.Split(';') | Where-Object { $_ -and $_ -match '\\Swift\\' } | Select-Object -Unique)
     if (-not $swiftPaths) { throw 'windows_build: Swift added nothing to PATH' }
+    # The Swift runtime's DLLs (swiftCore.dll and the rest), which the tools
+    # Bazel builds for itself load when they run (protoc-gen-swift, the macro
+    # plugins): the arm64 installer's runtime is in Runtimes\<version>\usr\bin,
+    # not always on the PATH it sets.
+    $swiftRoot = if ($sdkroot -match '^(.*\\Swift)\\Platforms\\') { $Matches[1] } else { Join-Path $env:LOCALAPPDATA 'Programs\Swift' }
+    $runtime = Get-ChildItem -Recurse -Filter swiftCore.dll -Path (Join-Path $swiftRoot 'Runtimes') -ErrorAction SilentlyContinue |
+        Where-Object { $_.DirectoryName -match '\\usr\\bin$' } | Select-Object -First 1
+    if (-not $runtime) { throw "windows_build: no Swift runtime (swiftCore.dll) under $swiftRoot\Runtimes" }
+    if ($swiftPaths -notcontains $runtime.DirectoryName) { $swiftPaths = @($runtime.DirectoryName) + $swiftPaths }
+    "Swift on PATH: $($swiftPaths -join '; ')"
     $swiftPaths | Add-Content $env:GITHUB_PATH
     $env:Path = ($swiftPaths -join ';') + ';' + $env:Path
     $env:SDKROOT = $sdkroot
@@ -56,7 +67,48 @@ if ($Bazel.Count -eq 0) { throw "usage: tools/ci/windows_build.ps1 setup | <baze
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
 $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.ARM64 -property installationPath
 if (-not $vs) { throw 'windows_build: no Visual Studio with ARM64 MSVC on this runner' }
-$vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvarsall.bat'
+# Visual Studio as Bazel takes it (BAZEL_VC), with LLVM's llvm-lib as its
+# lib.exe: MSVC's lib.exe and link.exe can't open a path past 260
+# characters even with LongPathsEnabled (they aren't long-path aware), and
+# Bazel's object paths for some exec tools' archives (swift-syntax's,
+# swift-protobuf's) reach 283 from C:/b/<hash>/execroot/_main; llvm-lib
+# opens them (both checked on this runner), and makes archives MSVC's
+# link.exe reads. rules_cc takes the archiver from BAZEL_VC's
+# Tools\MSVC\<version>\bin\HostX64\arm64, so C:\v mirrors the install by
+# junctions but for that folder, copied with lib.exe replaced. (LLVM's whole
+# toolchain, rules_cc's USE_CLANG_CL, failed: rules_swift's tools pass
+# clang-cl a flag it rejects, and its ARM64 backend fails on upb's code.)
+$version = (Get-ChildItem (Join-Path $vs 'VC\Tools\MSVC') | Sort-Object Name | Select-Object -Last 1).Name
+$llvmLib = Join-Path $vs 'VC\Tools\Llvm\ARM64\bin\llvm-lib.exe'
+if (-not (Test-Path $llvmLib)) { $llvmLib = 'C:\Program Files\LLVM\bin\llvm-lib.exe' }
+if (-not (Test-Path $llvmLib)) { throw 'windows_build: no llvm-lib on this runner' }
+$mirror = 'C:\v'
+# mirror <from> <to> <the child left out>: every other child of <from> in
+# <to>, a folder by a junction, a file copied.
+function mirror($from, $to, $skip) {
+    New-Item -ItemType Directory -Force $to | Out-Null
+    foreach ($child in Get-ChildItem -Force $from) {
+        if ($child.Name -eq $skip) { continue }
+        $target = Join-Path $to $child.Name
+        if (Test-Path $target) { continue }
+        if ($child.PSIsContainer) { New-Item -ItemType Junction -Path $target -Target $child.FullName | Out-Null }
+        else { Copy-Item $child.FullName $target }
+    }
+}
+$tools = "VC\Tools\MSVC\$version\bin\HostX64\arm64"
+if (-not (Test-Path (Join-Path $mirror "$tools\lib.exe"))) {
+    mirror $vs $mirror 'VC'
+    mirror (Join-Path $vs 'VC') (Join-Path $mirror 'VC') 'Tools'
+    mirror (Join-Path $vs 'VC\Tools') (Join-Path $mirror 'VC\Tools') 'MSVC'
+    mirror (Join-Path $vs 'VC\Tools\MSVC') (Join-Path $mirror 'VC\Tools\MSVC') $version
+    mirror (Join-Path $vs "VC\Tools\MSVC\$version") (Join-Path $mirror "VC\Tools\MSVC\$version") 'bin'
+    mirror (Join-Path $vs "VC\Tools\MSVC\$version\bin") (Join-Path $mirror "VC\Tools\MSVC\$version\bin") 'HostX64'
+    mirror (Join-Path $vs "VC\Tools\MSVC\$version\bin\HostX64") (Join-Path $mirror "VC\Tools\MSVC\$version\bin\HostX64") 'arm64'
+    Copy-Item -Recurse (Join-Path $vs $tools) (Join-Path $mirror $tools)
+    Copy-Item -Force $llvmLib (Join-Path $mirror "$tools\lib.exe")
+}
+$env:BAZEL_VC = Join-Path $mirror 'VC'
+$vcvars = Join-Path $mirror 'VC\Auxiliary\Build\vcvarsall.bat'
 cmd /c "`"$vcvars`" arm64 >nul && set" | ForEach-Object {
     if ($_ -match '^([^=]+)=(.*)$') { Set-Item -Path "env:$($Matches[1])" -Value $Matches[2] }
 }
@@ -68,17 +120,65 @@ $env:BAZEL_SH = "$git\bin\bash.exe"
 $env:Path = $env:Path -replace '(?i)C:\\Windows\\system32;', "$git\usr\bin;C:\Windows\system32;"
 if ($env:Path -notmatch [regex]::Escape("$git\usr\bin")) { $env:Path = "$env:Path;$git\usr\bin" }
 $repoEnv = @('SDKROOT', 'PATH', 'INCLUDE', 'LIB', 'LIBPATH', 'UniversalCRTSdkDir', 'UCRTVersion', 'WindowsSdkDir',
-             'WindowsSDKVersion', 'VCToolsInstallDir', 'VCINSTALLDIR', 'VSINSTALLDIR') | ForEach-Object { "--repo_env=$_" }
+             'WindowsSDKVersion', 'VCToolsInstallDir', 'VCINSTALLDIR', 'VSINSTALLDIR', 'BAZEL_VC') |
+    ForEach-Object { "--repo_env=$_" }
 # Bazelisk, so .bazelversion is honoured (the image's `bazel` may be a
 # release of its own).
 $bazelisk = (Get-Command bazelisk -ErrorAction SilentlyContinue)
 $tool = if ($bazelisk) { 'bazelisk' } else { 'bazel' }
 Push-Location (Join-Path $PSScriptRoot '..\..\examples')
 try {
+    # rules_swift's proto rules as they run on Windows (an upstream fix for
+    # rules_swift to take; until then this runner's copy, by
+    # --override_repository): proto/swift_proto_compiler.bzl runs protoc with
+    # no environment at all (actions.run, no env, no use_default_shell_env),
+    # so protoc-gen-swift finds no Swift runtime on PATH (0xC0000135, a DLL
+    # not found), and runs its copy_swift_sources.sh as an executable, which
+    # Windows can't start (error 193). Here: both with the default shell
+    # environment (--action_env's PATH: the Swift runtime, Git's cp and
+    # touch), the script run by the shell (run_shell: Bazel's BAZEL_SH).
+    & $tool fetch @repoEnv '--repo=@@rules_swift+' | Out-Host
+    if ($LASTEXITCODE) { exit $LASTEXITCODE }
+    $outputBase = (& $tool info @repoEnv output_base | Select-Object -Last 1)
+    $patched = 'C:\rs'
+    if (-not (Test-Path $patched)) {
+        robocopy (Join-Path $outputBase 'external\rules_swift+') $patched /E /NFL /NDL /NJH /NJS /NP | Out-Null
+        if ($LASTEXITCODE -ge 8) { throw 'windows_build: rules_swift was not copied' }
+        $file = Join-Path $patched 'proto\swift_proto_compiler.bzl'
+        $text = [IO.File]::ReadAllText($file)
+        $edits = @(
+            @('tools = \[swift_proto_compiler_info\.internal\.plugin\],', "tools = [swift_proto_compiler_info.internal.plugin],`n        use_default_shell_env = True,"),
+            @('actions\.run\((\s+)inputs = depset\(\[temporary_output_directory\]\),', 'actions.run_shell($1inputs = depset([temporary_output_directory, copy_swift_sources_file]),'),
+            @('executable = copy_swift_sources_file,', "command = copy_swift_sources_file.path,`n        use_default_shell_env = True,")
+        )
+        foreach ($edit in $edits) {
+            if ([regex]::Matches($text, $edit[0]).Count -ne 1) { throw "windows_build: rules_swift's swift_proto_compiler.bzl isn't as expected ($($edit[0]))" }
+            $text = [regex]::Replace($text, $edit[0], $edit[1])
+        }
+        [IO.File]::WriteAllText($file, $text)
+    }
+    $repoEnv += '--override_repository=rules_swift+=C:/rs'
     $command = $Bazel[0]
     $rest = @($Bazel | Select-Object -Skip 1)
     & $tool $command @repoEnv @rest
-    exit $LASTEXITCODE
+    $status = $LASTEXITCODE
+    if ($status -ne 0) {
+        # What a tool Bazel built for itself can't load, if one couldn't run
+        # (0xC0000135, a DLL not found): each DLL it names, found on PATH or
+        # not.
+        $bin = (& $tool info @repoEnv bazel-bin 2> $null | Select-Object -Last 1)
+        $execBin = $bin -replace '-fastbuild[^/\\]*', '-opt-exec'
+        foreach ($exe in Get-ChildItem -Recurse -Filter 'protoc-gen-swift*.exe' -Path (Join-Path $execBin 'external') -ErrorAction SilentlyContinue) {
+            "$($exe.FullName) loads:"
+            $dumpbin = Join-Path $env:VCToolsInstallDir 'bin\HostX64\arm64\dumpbin.exe'
+            & $dumpbin /nologo /dependents $exe.FullName | Where-Object { $_ -match '^\s+\S+\.dll\s*$' } | ForEach-Object {
+                $dll = $_.Trim()
+                $found = (Get-Command $dll -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+                "  $dll -> $(if ($found) { $found } else { 'NOT FOUND on PATH' })"
+            }
+        }
+    }
+    exit $status
 } finally {
     Pop-Location
 }
