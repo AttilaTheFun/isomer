@@ -200,6 +200,15 @@ try {
     $repoEnv += '--override_repository=rules_swift+=C:/rs'
     $command = $Bazel[0]
     $rest = @($Bazel | Select-Object -Skip 1)
+    # CI's plain build of the Windows Storybook (each Windows job's first
+    # step) builds the libraries no app here links beside it, so they can't
+    # break unseen: the wasm delivery cell (examples/windows' wasm example
+    # links it) and mixed mode's runtime (docs/side_modules.md). Not in the
+    # headful build (--@isomer//drive:headful), which would build them again.
+    if ($command -eq 'build' -and $rest -contains '//windows/storybook_windows_application' -and
+        $rest -notcontains '--@isomer//drive:headful') {
+        $rest += @('@isomer//windows/libraries/swift_ui_wasm:host', '@isomer//shared/wasm_host:mixed_runtime')
+    }
     # swift.org's Swift for Windows is a build with assertions (Toolchains\
     # <version>+Asserts), unlike Linux's and the Mac's, so its SIL verifiers
     # run on every compile; one stopped the SwiftUI module ("SIL memory
