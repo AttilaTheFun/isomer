@@ -11,15 +11,26 @@ load("@rules_swift//swift:swift_test.bzl", "swift_test")
 # flag, as //headless/... is run:
 #
 #   bazel test --@isomer//headless //headless/driver_probe:driver_probe_test
-# Also the iPhone probe's source, on Apple's SwiftUI.
+# Also the iPhone's and the Mac's probes' source, on Apple's SwiftUI (the
+# bottom bar's placement a file a platform: the Mac has none).
 exports_files(
-    ["DriverProbe.swift"],
-    visibility = ["//apple/driver_probe_ios_application:__pkg__"],
+    [
+        "DriverProbe.swift",
+        "Placements.swift",
+        "PlacementsMac.swift",
+    ],
+    visibility = [
+        "//apple/driver_probe_ios_application:__pkg__",
+        "//apple/driver_probe_macos_application:__pkg__",
+    ],
 )
 
 swift_binary(
     name = "driver_probe",
-    srcs = ["DriverProbe.swift"],
+    srcs = [
+        "DriverProbe.swift",
+        "Placements.swift",
+    ],
     copts = ["-parse-as-library"],
     module_name = "DriverProbe",
     deps = [
