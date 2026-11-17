@@ -54,6 +54,11 @@ export function createSessionHost({
   bundleBuild = undefined,
   // `Font.custom`'s fonts (isomer_web_app's fonts/), for measuring text.
   fonts = "./fonts/",
+  // Keep the reactor's response in the page's Cache Storage and compile it
+  // from there (compileModule below): where the engine keeps the compiled
+  // code beside a cached response (Chrome's V8, Android's WebView), the next
+  // launch skips most of the compile.
+  cacheReactor = true,
 } = {}) {
   const post = (bytes) => {
     try {
@@ -134,13 +139,35 @@ export function createSessionHost({
     platformCommand(key, value) { post(serverMessage.command(key, value)); },
     epochMillis() { return Date.now(); },
     registerImage(source, bytes) { post(serverMessage.image(source, bytes)); },
-    renderTree(tree) { post(serverMessage.patch(tree)); },
+    renderTree(tree) {
+      post(serverMessage.patch(tree));
+      if (firstFrame) {
+        firstFrame = false;
+        const ms = (to, from) => Math.round(to - from);
+        console.log(`[session] the app's first frame ${ms(performance.now(), timing.begun)} ms after its start ` +
+          `(the reactor compiled in ${ms(timing.compiled, timing.begun)} ms from ${timing.source}, ` +
+          `its files and instance ${ms(timing.loaded, timing.compiled)} ms, ` +
+          `its first frame ${ms(performance.now(), timing.loaded)} ms; the page ${ms(timing.begun, 0)} ms old at the start)`);
+      }
+    },
   };
 
+  // How long the guest took to come up (logged once its first frame is out).
+  const timing = { begun: 0, compiled: 0, loaded: 0, source: "" };
+  let firstFrame = true;
+
   async function begin(start) {
-    const module = bundle
-      ? await WebAssembly.compile(bundle.wasm ?? bundle)
-      : await compile(wasmURL);
+    timing.begun = performance.now();
+    let module;
+    if (bundle) {
+      module = await WebAssembly.compile(bundle.wasm ?? bundle);
+      timing.source = "bytes";
+    } else {
+      const compiled = await compileModule(wasmURL, cacheReactor);
+      module = compiled.module;
+      timing.source = compiled.source;
+    }
+    timing.compiled = performance.now();
     const files = await filesOpening;
     await fontsLoading;
     // The head's launch environment (its ISO_ variables only, as a server
@@ -157,6 +184,7 @@ export function createSessionHost({
       dependencies: { ...browserNetworkHosts(Dependencies, { fetch: pageFetch, WebSocket: PageWebSocket }), ...dependencies },
       wasi: wasiWithFiles,
     });
+    timing.loaded = performance.now();
     // As RemoteSession.begin: the head's scale and appearance, then the
     // guest started at the head's size under the head's renderer. Its first
     // frame is the whole tree.
@@ -220,11 +248,43 @@ export function createSessionHost({
 
 // The reactor compiled as it downloads, where the scheme serves it as wasm
 // (application/wasm); whole otherwise (a scheme handler that names no type).
-async function compile(url) {
+//
+// With `cache`, the response comes from the page's Cache Storage
+// ("isomer-reactor", keyed by the reactor's URL, its `?v=` stamp the site's
+// version; the first launch puts it there, and drops a version before it):
+// Chrome's V8 keeps the code it compiled for a module streamed from a cached
+// response (128 kB or more) beside it, and takes it from there the next time
+// instead of compiling again. Where Cache Storage isn't (a page that isn't
+// a secure context) or fails, the network's response as before.
+async function compileModule(url, cache) {
+  const { response, source } = cache ? await cachedResponse(url) : { response: fetch(url), source: "the network" };
   try {
-    return await WebAssembly.compileStreaming(fetch(url));
+    return { module: await WebAssembly.compileStreaming(response), source };
   } catch (error) {
     if (!(error instanceof TypeError)) throw error;
-    return WebAssembly.compile(await (await fetch(url)).arrayBuffer());
+    return { module: await WebAssembly.compile(await (await fetch(url)).arrayBuffer()), source: "the network, whole" };
+  }
+}
+
+const REACTOR_CACHE = "isomer-reactor";
+
+async function cachedResponse(url) {
+  if (typeof caches === "undefined" || !globalThis.isSecureContext) return { response: fetch(url), source: "the network" };
+  try {
+    const key = new URL(url, location.href).href;
+    const cache = await caches.open(REACTOR_CACHE);
+    const hit = await cache.match(key);
+    if (hit) return { response: hit, source: "Cache Storage" };
+    const fetched = await fetch(key);
+    if (!fetched.ok) return { response: fetched, source: "the network" };
+    await cache.put(key, fetched);
+    for (const request of await cache.keys()) {
+      if (request.url !== key) await cache.delete(request);
+    }
+    const stored = await cache.match(key);
+    return stored ? { response: stored, source: "the network, into Cache Storage" } : { response: fetch(key), source: "the network" };
+  } catch (error) {
+    console.warn("[session] the reactor's cache:", error);
+    return { response: fetch(url), source: "the network" };
   }
 }

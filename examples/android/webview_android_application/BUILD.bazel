@@ -1,0 +1,34 @@
+load("@isomer//tools/android:defs.bzl", "flat_assets", "isomer_android_webview_app")
+
+# The Storybook in web-view mode on Android (docs/modes.md): the web
+# Storybook's site (its Swift as wasm) in the APK's assets, run in a WebView
+# the app keeps out of sight (dev.isomer.runtime.IsomerWebViewApp), drawn by
+# Isomer's Compose renderer over the session protocol. No Swift of the
+# Storybook's is compiled into the app, and it has no native library: one
+# APK for every ABI. The iPhone's peer is //apple/webview_ios_application,
+# the remote one //android/remote_android_application.
+#
+#   bazel run //android/webview_android_application
+#   adb shell am start -n com.LoganShire.IsomerExamples.WebView/.MainActivity \
+#       -e ISO_STORYBOOK_STORY state.observableobject
+#
+# tools/ci/android_webview_test.sh taps it on an emulator (verify).
+
+# The head's images by name, as the compiled Storybook's.
+flat_assets(
+    name = "flat_assets",
+    srcs = ["//shared/example_application:assets"],
+)
+
+isomer_android_webview_app(
+    name = "webview_android_application",
+    assets = ":flat_assets",
+    # Font.custom's fonts (the text.custom story), for the Compose head.
+    fonts = ["//storybook:fonts"],
+    icon = "//storybook/artwork/storybook_icon:ic_launcher.png",
+    label = "WebView",
+    min_sdk_version = 28,
+    package = "com.LoganShire.IsomerExamples.WebView",
+    site = "//web/storybook_web_application:storybook_web_application_site",
+    tags = ["manual"],
+)

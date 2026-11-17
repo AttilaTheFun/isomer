@@ -24,7 +24,7 @@ load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
 # Named apart: the macros take the app's library as `swift_library`.
 load("@rules_swift//swift:swift.bzl", swift_library_rule = "swift_library")
 load("@rules_swift//swift:swift_binary.bzl", "swift_binary")
-load("//tools/android:defs.bzl", "apk_install_run", "isomer_android_app")
+load("//tools/android:defs.bzl", "apk_install_run", "isomer_android_app", "isomer_android_webview_app")
 load("//tools/wasm:defs.bzl", "isomer_web_app")
 
 _MODES = ["compiled", "webview", "remote"]
@@ -124,10 +124,12 @@ def isomer_application(
                                        the session's URL the intent's `url`
                                        extra, else `android_remote_url`):
                                        no Swift, no native library
-        (web-view mode: Android's WebView isn't a session transport yet;
-        the target is incompatible, skipped by a wildcard build and refused
-        by name, constraint
-        //tools/application:android_web_view_transport_not_built_yet)
+        <name>_android_webview[_apk]   the web app's site in the APK's
+                                       assets, run in a WebView and drawn
+                                       by the Compose renderer
+                                       (isomer_android_webview_app,
+                                       IsomerWebViewApp): no Swift, no
+                                       native library
       <name>_web       isomer_web_app in every mode (a page is already
                        wasm): `bazel run` serves it; <name>_web_site the
                        site, which the web-view apps bundle
@@ -157,8 +159,9 @@ def isomer_application(
     build (none: the simulator's, `--ios_multi_cpus=sim_arm64`).
 
     Android: `android_icon` (a 192 × 192 PNG, as isomer_android_app's
-    `icon`), `android_assets` (the compiled app's `assets`); `fonts` and
-    `resources` go to the compiled app (the remote shell carries none yet).
+    `icon`), `android_assets` (the compiled and web-view apps' `assets`);
+    `fonts` go to the compiled and web-view apps, `resources` to the
+    compiled app (the remote shell carries none yet).
 
     Web: `web_index` the page (generated from index.html.tpl without one:
     the DOM renderer, the app's identity), `web_assets` its assets/, `fonts`
@@ -181,7 +184,7 @@ def isomer_application(
     manual = tags + ([] if "manual" in tags else ["manual"])
 
     # The web app: wasm in every mode, and the site the web-view apps bundle.
-    if "web" in platforms or "ios" in platforms or "macos" in platforms:
+    if "web" in platforms or "ios" in platforms or "macos" in platforms or "android" in platforms:
         index = web_index
         if not index:
             expand_template(
@@ -462,11 +465,19 @@ def _android(
         tags = manual,
     )
 
-    # webview: no transport yet (tools/application/BUILD.bazel).
-    native.filegroup(
+    # webview: the web app's site in the APK, Kotlin and Compose only.
+    isomer_android_webview_app(
         name = name + "_android_webview",
+        assets = assets,
+        fonts = fonts,
+        icon = icon,
+        label = display_name,
+        min_sdk_version = min_sdk_version,
+        package = package,
+        site = ":%s_web_site" % name,
         tags = manual,
-        target_compatible_with = [Label("//tools/application:android_web_view_transport_not_built_yet")],
+        version_code = build,
+        version_name = version,
     )
 
     native.alias(
@@ -483,7 +494,7 @@ def _android(
         name = name + "_android_apk",
         actual = _by_mode({
             "compiled": ":%s_android_compiled_apk" % name,
-            "webview": ":%s_android_webview" % name,
+            "webview": ":%s_android_webview_apk" % name,
             "remote": ":%s_apk" % remote,
         }),
         tags = tags,
