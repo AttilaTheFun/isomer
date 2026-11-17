@@ -62,6 +62,12 @@ def _sdk_bundle_program_impl(ctx):
     tools = _find(ctx.files._toolchain_files, triple)
     bundle = ctx.file.bundle
     out = ctx.actions.declare_file(ctx.label.name + ".wasm")
+    # And FoundationInternationalization when the SDK is the -i18n one.
+    expected = list(ctx.attr.expected_modules)
+    for f in ctx.files._toolchain_files:
+        if f.path.endswith("/wasi/FoundationInternationalization.swiftmodule/%s.swiftmodule" % triple):
+            expected.append("FoundationInternationalization")
+            break
     ctx.actions.run_shell(
         inputs = depset(
             [bundle] + ctx.files.srcs,
@@ -77,7 +83,7 @@ def _sdk_bundle_program_impl(ctx):
             tools.swift_static,
             triple,
             out.path,
-            " ".join(ctx.attr.expected_modules),
+            " ".join(expected),
         ] + [f.path for f in ctx.files.srcs],
         command = """
 set -euo pipefail
@@ -148,7 +154,7 @@ sdk_bundle_program = rule(
     attrs = {
         "bundle": attr.label(allow_single_file = True, mandatory = True, doc = "A wasm_sdk_bundle."),
         "srcs": attr.label_list(allow_files = [".swift"], mandatory = True),
-        "expected_modules": attr.string_list(doc = "Modules the bundle's manifest must list."),
+        "expected_modules": attr.string_list(doc = "Modules the bundle's manifest must list (and FoundationInternationalization, when the SDK has it)."),
         "platform": attr.label(mandatory = True, doc = "The bundle's platform: the wasm toolchains are resolved for it."),
         "_toolchain_files": attr.label(
             default = Label("//tools/wasm:wasm_toolchain_files"),

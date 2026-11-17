@@ -3,8 +3,9 @@
 # compiled and linked against it out of band (program.bzl, the Playground's
 # compiler's arguments), run as a WASI command in headless Chrome. isomer's
 # own module registers the -i18n SDK (MODULE.bazel), so the bundle carries
-# FoundationInternationalization and ICU too, and the program formats with
-# them.
+# FoundationInternationalization and ICU too (the program rule then expects
+# them), and the program formats with them; built from a module on the plain
+# SDK (the examples), the bundle and the program have neither.
 
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 load("@rules_swift//swift:swift.bzl", "swift_library")
@@ -35,7 +36,6 @@ sdk_bundle_program(
         "CoreGraphics",
         "Foundation",
         "FoundationEssentials",
-        "FoundationInternationalization",
         "FoundationNetworking",
         "SDKBundleGreeting",
     ],
