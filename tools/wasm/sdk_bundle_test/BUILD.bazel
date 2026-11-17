@@ -1,0 +1,58 @@
+# wasm_sdk_bundle's check (tools/wasm/defs.bzl): a bundle of a small library
+# and the registered wasm Swift SDK's Foundation family, and a program
+# compiled and linked against it out of band (program.bzl, the Playground's
+# compiler's arguments), run as a WASI command in headless Chrome. isomer's
+# own module registers the -i18n SDK (MODULE.bazel), so the bundle carries
+# FoundationInternationalization and ICU too, and the program formats with
+# them.
+
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("//tools/wasm:defs.bzl", "wasm_sdk_bundle")
+load(":program.bzl", "sdk_bundle_program")
+
+swift_library(
+    name = "greeting",
+    package_name = "isomer",
+    srcs = ["Greeting.swift"],
+    module_name = "SDKBundleGreeting",
+    tags = ["manual"],
+)
+
+wasm_sdk_bundle(
+    name = "sdk",
+    platform = "//swift_ffi/rules:wasm32-wasip1",
+    tags = ["manual"],
+    deps = [":greeting"],
+)
+
+sdk_bundle_program(
+    name = "program",
+    srcs = ["Program.swift"],
+    bundle = ":sdk",
+    expected_modules = [
+        "Combine",
+        "CoreGraphics",
+        "Foundation",
+        "FoundationEssentials",
+        "FoundationInternationalization",
+        "FoundationNetworking",
+        "SDKBundleGreeting",
+    ],
+    platform = "//swift_ffi/rules:wasm32-wasip1",
+    tags = ["manual"],
+)
+
+sh_test(
+    name = "sdk_bundle_test",
+    size = "small",
+    srcs = ["//foundation/tests:run_foundation_check.sh"],
+    args = [
+        "$(rootpath //tools/wasm/wasi_run_browser)",
+        "$(rootpath :program)",
+    ],
+    data = [
+        ":program",
+        "//tools/wasm/wasi_run_browser",
+    ],
+)
