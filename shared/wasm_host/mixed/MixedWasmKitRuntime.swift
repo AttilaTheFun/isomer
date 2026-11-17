@@ -114,7 +114,9 @@ final class MixedEngineThread: Thread, @unchecked Sendable {
 
     /// `body` on this thread, waited for (not from this thread).
     func sync<T>(_ body: @escaping () throws -> T) throws -> T {
-        if Thread.current == self { return try body() }
+        // Identity: Thread is NSObject's equality on Apple and corelibs, a
+        // plain Swift class in Isomer's Foundation (the Swift SDK's on Android).
+        if Thread.current === self { return try body() }
         let done = DispatchSemaphore(value: 0)
         var result: Result<T, Error>!
         post {
