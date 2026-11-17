@@ -841,8 +841,10 @@ no wamrc, no `.aot`, no `--define wamr_*`). The engine work Isomer did
   its screens match the ICU build's.
 - **Shared memory needs WasmKit's guard pages**: a 4 GiB reservation per
   memory and signal-trapped bounds checks, on macOS, Linux, iOS and
-  (WasmKit 0.5.0's #527) 64-bit Android, where `canRunThreads` is true now
-  too, though no threaded reactor is built until Swift 6.5's threads SDK.
+  (WasmKit 0.5.0's #527) 64-bit Android, whose reactors run on guard pages
+  by default; `canRunThreads` should pass there too (WasmKit makes shared
+  memory on Android), unchecked while no threaded reactor is built (Swift
+  6.5's threads SDK).
   Windows checks bounds in software and runs no threaded reactor. `WasmKitRuntime.canRunThreads` tries one; a host
   with both builds of its reactor picks the threaded one only then (an
   iPhone's address space may refuse it; nothing here has run on a device).
