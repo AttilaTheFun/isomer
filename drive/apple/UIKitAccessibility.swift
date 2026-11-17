@@ -15,13 +15,42 @@ extension AccessibilityScreen {
     /// set as each screen is read (`AccessibilityDriver.toWindow`).
     @MainActor static var window: (bounds: CGRect, fromScreen: CGAffineTransform)?
 
-    /// The screen under `roots` (the key window, or what it presents).
+    /// The screen under `roots` (the key window, or what it presents); an
+    /// alert on top read from its controller too (`addAlert`).
     @MainActor
-    init(roots: [NSObject], presented: [(style: String, title: String, message: String)]) {
+    init(roots: [NSObject], presented: [(style: String, title: String, message: String)], alert: UIAlertController? = nil) {
         self.presented = presented
         for root in roots { visit(root) }
         recoverIdentifiers(roots)
+        if let alert { addAlert(alert) }
         name()
+    }
+
+    /// An alert's (or a confirmation dialog's) title and message, buttons
+    /// and text fields, as Isomer's driver lists an alert's: what its
+    /// view's accessibility gave (its action views, its fields), and what it
+    /// didn't, from the controller itself (its actions, by title, enabled or
+    /// not; its text fields), so an alert whose views give the walk nothing
+    /// (as one of an app's did, listed with no buttons, its title alone) is
+    /// listed and used all the same.
+    @MainActor
+    private mutating func addAlert(_ alert: UIAlertController) {
+        for text in [alert.title, alert.message] {
+            if let text, !text.isEmpty, !texts.contains(where: { $0.text == text }) {
+                texts.append(Text(text: text, object: alert, kind: "UIAlertController"))
+            }
+        }
+        for field in alert.textFields ?? [] where !elements.contains(where: { $0.object === field }) {
+            add(field, role: "textField", label: field.placeholder ?? field.accessibilityLabel ?? "", value: field.text,
+                kind: String(describing: Swift.type(of: field)))
+        }
+        for action in alert.actions {
+            guard let title = action.title, !title.isEmpty,
+                  !elements.contains(where: { $0.role == "button" && $0.label == title }) else { continue }
+            add(action, role: "button", label: title, kind: "UIAlertAction",
+                params: ["style": action.style == .cancel ? "cancel" : action.style == .destructive ? "destructive" : "default"],
+                disabled: !action.isEnabled)
+        }
     }
 
     /// An element UIKit stands in for a view with (a navigation bar's button,
@@ -135,7 +164,7 @@ extension AccessibilityScreen {
                 + " element=\(object.isAccessibilityElement) traits=\(object.accessibilityTraits.rawValue)"
                 + " label=\(object.accessibilityLabel ?? "-") id=\(Self.identifier(object) ?? "-")"
                 + " children=\((object.accessibilityElements?.count).map(String.init) ?? "-")/\(object.accessibilityElementCount())"
-                + " frame=\(Int(frame.minX)),\(Int(frame.minY)),\(Int(frame.width)),\(Int(frame.height))")
+                + " frame=\(AccessibilityScreen.describe(frame, separator: ","))")
         }
         if let view = object as? UIView, view.isHidden || view.alpha < 0.01 { return }
         if object.accessibilityElementsHidden { return }
@@ -157,7 +186,7 @@ extension AccessibilityScreen {
             let kind = String(describing: Swift.type(of: object))
             let frame = object.accessibilityFrame
             var params = ["traits": String(traits.rawValue),
-                          "frame": "\(Int(frame.minX)) \(Int(frame.minY)) \(Int(frame.width)) \(Int(frame.height))"]
+                          "frame": AccessibilityScreen.describe(frame)]
             if let hint = object.accessibilityHint { params["hint"] = hint }
             let disabled = traits.contains(.notEnabled)
             func add(_ role: String, _ label: String, _ value: String?, _ options: [String] = []) {
@@ -276,13 +305,43 @@ extension AccessibilityDriver {
             }
             top = next
         }
+        // ISO_DRIVE_ALERT_FROM_CONTROLLER=1: an alert read from its
+        // controller alone (`addAlert`), as when its views can't be reached:
+        // the driver probe's check of that path.
+        if top is UIAlertController, Self.alertFromController { return ([], presented) }
         if !presented.isEmpty, let view = top?.view { return ([view], presented) }
         return ([window], presented)
     }
 
     func screen() async -> AccessibilityScreen {
         let (roots, presented) = roots()
-        return AccessibilityScreen(roots: roots, presented: presented)
+        return AccessibilityScreen(roots: roots, presented: presented, alert: presented.last?.style == "alert" ? Self.topAlert() : nil)
+    }
+
+    static let alertFromController = ProcessInfo.processInfo.environment["ISO_DRIVE_ALERT_FROM_CONTROLLER"] == "1"
+
+    /// The alert (or confirmation dialog) on top of the key window, if one is.
+    static func topAlert() -> UIAlertController? {
+        var top = keyWindow()?.rootViewController
+        while let next = top?.presentedViewController, !next.isBeingDismissed { top = next }
+        return top as? UIAlertController
+    }
+
+    /// An alert's action, chosen as its button's tap chooses it: the alert
+    /// dismissed with it, its handler run (UIKit's `_dismissWithAction:`;
+    /// else the handler run once the alert has gone, as UIKit runs it).
+    static func perform(_ action: UIAlertAction) -> Bool {
+        guard let alert = topAlert(), alert.actions.contains(where: { $0 === action }), action.isEnabled else { return false }
+        let dismiss = NSSelectorFromString("_dismissWithAction:")
+        if alert.responds(to: dismiss) {
+            alert.perform(dismiss, with: action)
+            return true
+        }
+        typealias Handler = @convention(block) (UIAlertAction) -> Void
+        let handler = action.responds(to: NSSelectorFromString("handler"))
+            ? (action.value(forKey: "handler") as AnyObject?).map { unsafeBitCast($0, to: Handler.self) } : nil
+        alert.presentingViewController?.dismiss(animated: true) { handler?(action) }
+        return true
     }
 
     /// Whether a view controller is mid-transition (pushed, popped,
@@ -361,6 +420,7 @@ extension AccessibilityDriver {
     /// reaches: a list's or a table's cell (selected, its delegate told, as
     /// a tap selects it), or a control (its touch-up action).
     func activate(_ element: AccessibilityScreen.Element) async -> Bool {
+        if let action = element.object as? UIAlertAction { return Self.perform(action) }
         guard let object = element.object as? NSObject else { return false }
         if object.accessibilityActivate() { return true }
         if let control = object as? UIControl {
@@ -599,11 +659,53 @@ extension AccessibilityDriver {
         return "\(target) has no swipe action \(action)"
     }
 
-    /// A long press (a context menu, a long-press gesture) isn't offered
-    /// through UIKit's accessibility in a way the driver can use in process:
-    /// the menu's interaction presents only through UIKit's own SPI.
+    /// A long press, as a finger gives it: the view under the element's
+    /// activation point touched, held (a second, past SwiftUI's half-second
+    /// `onLongPressGesture` and the half-second a context menu waits for)
+    /// and lifted, through UIKit's own touch delivery (`SyntheticTouch`), so
+    /// the gesture recognizers that see a person's long press see this one:
+    /// a `.contextMenu` opens (its items then the screen's buttons, as an
+    /// open menu's are), an `onLongPressGesture` fires. Should the touches
+    /// open nothing and the view have a context menu, its interaction
+    /// presents it as the long press would. A press that changes nothing on
+    /// the screen took no long press: an error, as Isomer's driver's.
     func longPress(_ screen: AccessibilityScreen, _ target: String) async -> String? {
-        "a long press isn't driven on iOS yet"
+        guard let element = await reveal(screen, { $0.element(target) ?? $0.textTarget(target) }),
+              let object = element.object as? NSObject else { return "no view \(target)" }
+        guard let window = Self.keyWindow() else { return "no window" }
+        let point = object.accessibilityActivationPoint.applying(Self.fromScreen(window))
+        let before = await self.screen()
+        if let touch = SyntheticTouch(at: point, in: window) {
+            touch.send(.began)
+            for _ in 0..<10 {
+                try? await Task.sleep(nanoseconds: 100_000_000)
+                touch.send(.stationary)
+            }
+            touch.send(.ended)
+            if await settle(after: before).wire != before.wire { return nil }
+        }
+        if Self.presentContextMenu(at: point, in: window), await settle(after: before).wire != before.wire { return nil }
+        return "\(element.name.isEmpty ? target : element.name) takes no long press"
+    }
+
+    /// The context menu of the view at `point` (its own interaction's, or a
+    /// list's cell's), presented as a long press there presents it: UIKit's
+    /// SPI (`_presentMenuAtLocation:`), the driver being linked into debug
+    /// and test builds only.
+    static func presentContextMenu(at point: CGPoint, in window: UIWindow) -> Bool {
+        var view = window.hitTest(point, with: nil)
+        let present = NSSelectorFromString("_presentMenuAtLocation:")
+        while let current = view {
+            for case let interaction as UIContextMenuInteraction in current.interactions
+            where interaction.responds(to: present) {
+                typealias Present = @convention(c) (NSObject, Selector, CGPoint) -> Void
+                let location = window.convert(point, to: interaction.view ?? current)
+                unsafeBitCast(interaction.method(for: present), to: Present.self)(interaction, present, location)
+                return true
+            }
+            view = current.superview
+        }
+        return false
     }
 
     /// Closes what is presented on top, as a person would: escape (what
@@ -718,5 +820,161 @@ extension AccessibilityDriver {
             .flatMap(\.windows).filter { !$0.isHidden }
         return windows.first(where: \.isKeyWindow) ?? windows.first
     }
+}
+
+/// One finger on the screen, delivered as UIKit delivers a person's: a
+/// UITouch on the view the point hits (SwiftUI's gesture container there,
+/// iOS 18's hit test), in the application's touches event, with the
+/// IOHIDEvent UIKit reads its digitizer data from, sent through
+/// `UIApplication.sendEvent`. UIKit's and IOKit's SPI, as KIF's touches are
+/// made (github.com/kif-framework/KIF, UITouch-KIFAdditions,
+/// IOHIDEvent+KIF); nil where this iOS lacks any of it. In process, never
+/// the device's own screen; the driver is linked into debug and test builds
+/// only.
+@MainActor
+final class SyntheticTouch {
+    private let touch: UITouch
+    private let window: UIWindow
+    private let point: CGPoint
+
+    init?(at point: CGPoint, in window: UIWindow) {
+        guard let hid = Self.hid else { return nil }
+        let touch = UITouch()
+        for name in ["setWindow:", "setView:", "setPhase:", "setTimestamp:", "setTapCount:",
+                     "_setLocationInWindow:resetPrevious:", "_setHidEvent:"]
+        where !touch.responds(to: NSSelectorFromString(name)) {
+            return nil
+        }
+        self.touch = touch
+        self.window = window
+        self.point = point
+        // The window first: setting it clears what else was set.
+        touch.perform(NSSelectorFromString("setWindow:"), with: window)
+        Self.call(touch, "setTapCount:", Int(1))
+        Self.call(touch, "_setLocationInWindow:resetPrevious:", point, true)
+        let view = Self.hitTest(window, point)
+        touch.perform(NSSelectorFromString("setView:"), with: view)
+        Self.call(touch, "setPhase:", UITouch.Phase.began.rawValue)
+        if touch.responds(to: NSSelectorFromString("_setIsFirstTouchForView:")) {
+            Self.call(touch, "_setIsFirstTouchForView:", true)
+        }
+        Self.call(touch, "setTimestamp:", ProcessInfo.processInfo.systemUptime)
+        if touch.responds(to: NSSelectorFromString("setGestureView:")) {
+            touch.perform(NSSelectorFromString("setGestureView:"), with: view)
+        }
+        touch.perform(NSSelectorFromString("_setHidEvent:"), with: hid.event(point, touching: true, moved: false))
+    }
+
+    /// The touch in `phase`, delivered.
+    func send(_ phase: UITouch.Phase) {
+        guard let hid = Self.hid,
+              let event = UIApplication.shared.perform(NSSelectorFromString("_touchesEvent"))?.takeUnretainedValue() as? UIEvent
+        else { return }
+        Self.call(touch, "setTimestamp:", ProcessInfo.processInfo.systemUptime)
+        Self.call(touch, "setPhase:", phase.rawValue)
+        event.perform(NSSelectorFromString("_clearTouches"))
+        event.perform(NSSelectorFromString("_setHIDEvent:"),
+                      with: hid.event(point, touching: phase != .ended && phase != .cancelled, moved: phase == .moved))
+        let add = NSSelectorFromString("_addTouch:forDelayedDelivery:")
+        typealias Add = @convention(c) (NSObject, Selector, UITouch, Bool) -> Void
+        unsafeBitCast(event.method(for: add), to: Add.self)(event, add, touch, false)
+        UIApplication.shared.sendEvent(event)
+    }
+
+    /// The responder a touch at `point` goes to: the hit view, or what
+    /// iOS 18's hit test with a context finds in it (SwiftUI's gesture
+    /// containers, which a plain hit test passes over).
+    private static func hitTest(_ window: UIWindow, _ point: CGPoint) -> NSObject? {
+        let hit = window.hitTest(point, with: nil)
+        let make = NSSelectorFromString("contextWithPoint:radius:")
+        let test = NSSelectorFromString("_hitTestWithContext:")
+        guard let contextClass = NSClassFromString("_UIHitTestContext") as? NSObject.Type,
+              contextClass.responds(to: make), UIView.instancesRespond(to: test) else { return hit }
+        typealias Make = @convention(c) (AnyClass, Selector, CGPoint, CGFloat) -> NSObject?
+        let makeIMP = unsafeBitCast(contextClass.method(for: make), to: Make.self)
+        guard let context = makeIMP(contextClass, make, point, 0) else { return hit }
+        var view = hit
+        while let current = view {
+            if let found = current.perform(test, with: context)?.takeUnretainedValue() as? NSObject { return found }
+            view = current.superview
+        }
+        return hit
+    }
+
+    private static func call(_ object: NSObject, _ name: String, _ value: Int) {
+        let selector = NSSelectorFromString(name)
+        typealias Set = @convention(c) (NSObject, Selector, Int) -> Void
+        unsafeBitCast(object.method(for: selector), to: Set.self)(object, selector, value)
+    }
+
+    private static func call(_ object: NSObject, _ name: String, _ value: Bool) {
+        let selector = NSSelectorFromString(name)
+        typealias Set = @convention(c) (NSObject, Selector, Bool) -> Void
+        unsafeBitCast(object.method(for: selector), to: Set.self)(object, selector, value)
+    }
+
+    private static func call(_ object: NSObject, _ name: String, _ value: Double) {
+        let selector = NSSelectorFromString(name)
+        typealias Set = @convention(c) (NSObject, Selector, Double) -> Void
+        unsafeBitCast(object.method(for: selector), to: Set.self)(object, selector, value)
+    }
+
+    private static func call(_ object: NSObject, _ name: String, _ point: CGPoint, _ flag: Bool) {
+        let selector = NSSelectorFromString(name)
+        typealias Set = @convention(c) (NSObject, Selector, CGPoint, Bool) -> Void
+        unsafeBitCast(object.method(for: selector), to: Set.self)(object, selector, point, flag)
+    }
+
+    /// IOKit's digitizer events, as a touch screen's: a hand, one finger.
+    struct HID {
+        typealias CreateHand = @convention(c) (CFAllocator?, UInt64, UInt32, UInt32, UInt32, UInt32, UInt32, Double, Double,
+                                               Double, Double, Double, UInt8, UInt8, UInt32) -> UnsafeMutableRawPointer?
+        typealias CreateFinger = @convention(c) (CFAllocator?, UInt64, UInt32, UInt32, UInt32, Double, Double, Double, Double,
+                                                 Double, Double, Double, Double, Double, Double, UInt8, UInt8,
+                                                 UInt32) -> UnsafeMutableRawPointer?
+        typealias SetInteger = @convention(c) (UnsafeMutableRawPointer, UInt32, Int32) -> Void
+        typealias Append = @convention(c) (UnsafeMutableRawPointer, UnsafeMutableRawPointer) -> Void
+        let hand: CreateHand
+        let finger: CreateFinger
+        let setInteger: SetInteger
+        let append: Append
+
+        /// kIOHIDEventFieldDigitizerIsDisplayIntegrated:
+        /// IOHIDEventFieldBase(kIOHIDEventTypeDigitizer, 11) + 25.
+        static let isDisplayIntegrated: UInt32 = (11 << 16) + 25
+
+        /// The event (an IOHIDEventRef, a CF object) for a finger at `point`.
+        func event(_ point: CGPoint, touching: Bool, moved: Bool) -> AnyObject? {
+            let time = mach_absolute_time()
+            // A hand (kIOHIDDigitizerTransducerTypeHand), touching
+            // (kIOHIDDigitizerEventTouch).
+            guard let hand = hand(nil, time, 3, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 1, 0) else { return nil }
+            setInteger(hand, Self.isDisplayIntegrated, 1)
+            // Its finger: its position when it moves, else in range and
+            // touching (or lifted).
+            let mask: UInt32 = moved ? 4 : 1 | 2
+            let down: UInt8 = touching ? 1 : 0
+            if let finger = finger(nil, time, 1, 2, mask, Double(point.x), Double(point.y), 0, 0, 0, 5, 5, 1, 1, 1,
+                                   down, down, 0) {
+                setInteger(finger, Self.isDisplayIntegrated, 1)
+                append(hand, finger)
+                Unmanaged<AnyObject>.fromOpaque(finger).release()
+            }
+            return Unmanaged<AnyObject>.fromOpaque(hand).takeRetainedValue()
+        }
+    }
+
+    static let hid: HID? = {
+        func symbol<T>(_ name: String, _ type: T.Type) -> T? {
+            guard let address = dlsym(UnsafeMutableRawPointer(bitPattern: -2), name) else { return nil }
+            return unsafeBitCast(address, to: type)
+        }
+        guard let hand = symbol("IOHIDEventCreateDigitizerEvent", HID.CreateHand.self),
+              let finger = symbol("IOHIDEventCreateDigitizerFingerEventWithQuality", HID.CreateFinger.self),
+              let setInteger = symbol("IOHIDEventSetIntegerValue", HID.SetInteger.self),
+              let append = symbol("IOHIDEventAppendEvent", HID.Append.self)
+        else { return nil }
+        return HID(hand: hand, finger: finger, setInteger: setInteger, append: append)
+    }()
 }
 #endif

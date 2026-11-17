@@ -531,9 +531,14 @@ struct DriverScreen {
                 wanted = element.label
             }
         }
-        return candidates.first { $0.id == wanted }
-            ?? candidates.last { $0.label == wanted }
-            ?? candidates.last { $0.label.contains(wanted) }
+        if let found = candidates.first(where: { $0.id == wanted }) ?? candidates.last(where: { $0.label == wanted })
+            ?? candidates.last(where: { $0.label.contains(wanted) }) {
+            return found
+        }
+        // An element's identifier (a button's, in the view the menu is on,
+        // which doesn't take it as its own): the view by that element's label.
+        guard let element = elements.first(where: { $0.id == target }), !element.label.isEmpty else { return nil }
+        return candidates.last { $0.label == element.label } ?? candidates.last { $0.label.contains(element.label) }
     }
 
     /// The view a swipe drags: as `element`, among those that take a drag;

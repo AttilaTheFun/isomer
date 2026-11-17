@@ -7,7 +7,9 @@
 // ISOMER_HEADFUL_LAUNCHER names a launcher: the iPhone's probe on Apple's
 // SwiftUI through Apple's driver (:driver_probe_headful_apple_runner, on
 // GitHub's Mac in a run by hand, tools/ci/hosted_headful_test.sh), with
-// ISOMER_LANDSCAPE_BUNDLE_ID the same probe turned to landscape by itself.
+// ISOMER_LANDSCAPE_BUNDLE_ID the same probe turned to landscape by itself;
+// and the Mac's (//apple/driver_probe_macos_application, ISOMER_MAC_APP,
+// drive/launchers/macos_launcher.sh).
 
 import Foundation
 import IsomerHeadless
@@ -21,7 +23,7 @@ struct DriverProbeTests {
     /// names (`bundle`, another app than ISOMER_BUNDLE_ID's: the landscape
     /// probe), else built headless.
     private func launch(_ screen: String = "", arguments: [String] = [], fresh: Bool = true,
-                        bundle: String? = nil) throws -> HeadlessApp {
+                        bundle: String? = nil, environment extra: [String: String] = [:]) throws -> HeadlessApp {
         let environment = ProcessInfo.processInfo.environment
         if let launcher = environment["ISOMER_HEADFUL_LAUNCHER"], !launcher.isEmpty {
             // The launcher reads the app's bundle from its environment, which
@@ -29,12 +31,12 @@ struct DriverProbeTests {
             let saved = environment["ISOMER_BUNDLE_ID"]
             if let bundle { setenv("ISOMER_BUNDLE_ID", bundle, 1) }
             defer { if bundle != nil { if let saved { setenv("ISOMER_BUNDLE_ID", saved, 1) } else { unsetenv("ISOMER_BUNDLE_ID") } } }
-            return try HeadlessApp(launcher: launcher, environment: ["PROBE_SCREEN": screen], arguments: arguments,
-                                   fresh: fresh)
+            return try HeadlessApp(launcher: launcher, environment: extra.merging(["PROBE_SCREEN": screen]) { $1 },
+                                   arguments: arguments, fresh: fresh)
         }
         let root = "\(environment["TEST_SRCDIR"] ?? "")/\(environment["TEST_WORKSPACE"] ?? "_main")"
         return try HeadlessApp(executable: "\(root)/headless/driver_probe/driver_probe",
-                               environment: ["PROBE_SCREEN": screen], arguments: arguments)
+                               environment: extra.merging(["PROBE_SCREEN": screen]) { $1 }, arguments: arguments)
     }
 
     /// An identifier or a label applied outside what wraps a button
@@ -127,7 +129,10 @@ struct DriverProbeTests {
         screen = try app.wait(for: "Advanced settings")
         let back = try #require(screen.element("BackButton"), "\(screen.elements)")
         #expect(back.role == "button")
-        #expect(back.label == "Settings")
+        // Labelled with the page it goes back to, but on the Mac, whose
+        // Back is a chevron alone.
+        let mac = try app.info().platform == "macOS"
+        #expect(back.label == (mac ? "Back" : "Settings"))
         screen = try app.back()
         #expect(screen.presented.count == 1, "the sheet is still up")
         #expect(screen.shows("General settings"), "\(screen.texts)")
@@ -144,15 +149,101 @@ struct DriverProbeTests {
         #expect(screen.shows("Home page"))
     }
 
-    /// A long press fires a view's `onLongPressGesture`.
+    /// A long press fires a view's `onLongPressGesture`, on its own and in
+    /// a list's row.
     @Test func aLongPressFiresTheGesture() throws {
-        let app = try launch()
+        do {
+            let app = try launch()
+            defer { app.quit() }
+            try app.longPress("Hold to pin")
+            try app.wait(for: "Last: pinned")
+            // A view that takes no long press: an error.
+            #expect(throws: (any Error).self) { try app.longPress("Mac Studio") }
+        }
+        let app = try launch("dialogs")
         defer { app.quit() }
-        // Apple's driver has no long press it can use in process (drive/apple).
-        guard try app.info().renderer != "SwiftUI" else { return }
-        try app.longPress("Hold to pin")
-        try app.wait(for: "Last: pinned")
-        #expect(throws: (any Error).self) { try app.longPress("Mac Studio") }
+        try app.longPress("Hold to star")
+        try app.wait(for: "Last: starred")
+    }
+
+    /// An alert's buttons and text field are the screen's while it is up,
+    /// listed, typed into and tapped by their labels, as any others; its
+    /// title and message are the presentation's. The same read from the
+    /// alert's controller alone on Apple's iPhone
+    /// (ISO_DRIVE_ALERT_FROM_CONTROLLER: as when the walk can't reach its
+    /// views); headless, as it is.
+    @Test(arguments: [false, true]) func anAlertsButtonsAndFieldAreListed(fromController: Bool) throws {
+        let app = try launch("dialogs", environment: fromController ? ["ISO_DRIVE_ALERT_FROM_CONTROLLER": "1"] : [:])
+        defer { app.quit() }
+        var screen = try app.tap("Rename…")
+        let alert = try #require(screen.presented.last, "\(screen.elements)")
+        #expect(alert.style == "alert")
+        #expect(alert.title == "Rename Session")
+        #expect(alert.message == "Give the session a name.")
+        #expect(screen.element("Rename")?.role == "button", "\(screen.elements)")
+        #expect(screen.element("Cancel")?.role == "button", "\(screen.elements)")
+        #expect(screen.element("Name")?.role == "textField", "\(screen.elements)")
+        // What is under it is not.
+        #expect(screen.element("session-alpha") == nil, "\(screen.elements)")
+        try app.type("Name", "Beta")
+        screen = try app.tap("Rename")
+        #expect(screen.presented.isEmpty, "\(screen.presented)")
+        try app.wait(for: "Last: renamed Beta")
+        // Its cancel button, by its label.
+        try app.tap("Rename…")
+        screen = try app.tap("Cancel")
+        #expect(screen.presented.isEmpty, "\(screen.presented)")
+        try app.wait(for: "Last: rename cancelled")
+    }
+
+    /// An alert presented as a page arrives (at launch, over a page with its
+    /// composer focused) is listed and used as any other.
+    @Test func anAlertAsAPageArrivesIsListed() throws {
+        let app = try launch("signin")
+        defer { app.quit() }
+        var screen = try app.wait(for: "Open Sign-In Page")
+        #expect(screen.presented.last?.title == "Sign In to Claude", "\(screen.presented)")
+        #expect(screen.element("Later")?.role == "button", "\(screen.elements)")
+        screen = try app.tap("Open Sign-In Page")
+        #expect(screen.presented.isEmpty, "\(screen.presented)")
+        try app.wait(for: "Last: opened the page")
+    }
+
+    /// A confirmation dialog's buttons are the screen's while it is up.
+    @Test func aConfirmationDialogsButtonsAreListed() throws {
+        let app = try launch("dialogs")
+        defer { app.quit() }
+        var screen = try app.tap("Delete…")
+        let dialog = try #require(screen.presented.last, "\(screen.elements)")
+        #expect(dialog.style == "alert")
+        #expect(dialog.title == "Delete the session?")
+        #expect(screen.element("Delete")?.role == "button", "\(screen.elements)")
+        screen = try app.tap("Delete")
+        #expect(screen.presented.isEmpty, "\(screen.presented)")
+        try app.wait(for: "Last: deleted")
+        // Closed without a choice, as tapping outside it closes it (on
+        // Apple's SwiftUI its cancel button's action runs then).
+        try app.tap("Delete…")
+        screen = try app.dismiss()
+        #expect(screen.presented.isEmpty, "\(screen.presented)")
+    }
+
+    /// A long press on a list's row opens its context menu, whose items are
+    /// then the screen's buttons, tapped by their titles; a tap on the row
+    /// still opens it.
+    @Test func aLongPressOpensARowsContextMenu() throws {
+        let app = try launch("dialogs")
+        defer { app.quit() }
+        var screen = try app.longPress("session-alpha")
+        #expect(screen.element("Project Settings")?.role == "button", "\(screen.elements)")
+        #expect(screen.element("Archive")?.role == "button", "\(screen.elements)")
+        // The menu is all that can be used while it is open.
+        #expect(screen.element("Rename…") == nil, "\(screen.elements)")
+        screen = try app.tap("Project Settings")
+        try app.wait(for: "Last: project settings")
+        #expect(screen.element("Project Settings") == nil, "the menu closed: \(screen.elements)")
+        try app.tap("session-alpha")
+        try app.wait(for: "Last: opened alpha")
     }
 
     /// Controls in a Form's rows, a text field and the navigation title's
@@ -265,6 +356,64 @@ struct DriverProbeTests {
         try app.scene(.active)
         let back = try app.wait(for: "Phase: active")
         #expect(!back.shows("Welcome back"), "\(back.texts)")
+    }
+
+    /// An app that opens a page in another app (Safari, on the iPhone, which
+    /// suspends the app behind it): `scene(.active)` brings it back through
+    /// the launcher, the same process, and it answers again. (The Mac's
+    /// would open the page in its browser, over the tests after it: not
+    /// there.)
+    @Test func comingBackFromAnotherApp() throws {
+        let app = try launch("scene")
+        defer { app.quit() }
+        var screen = try app.wait(for: "Phase: active")
+        guard try app.info().platform != "macOS" else { return }
+        let process = screen.texts.first { $0.hasPrefix("Process: ") }
+        try app.tap("Open Page")
+        screen = try app.scene(.active)
+        screen = try app.wait(for: "Opened: 1")
+        #expect(screen.shows("Phase: active"), "\(screen.texts)")
+        #expect(screen.texts.first { $0.hasPrefix("Process: ") } == process, "\(screen.texts)")
+        if headful {
+            // Back from the background, as the app sees it.
+            try app.wait(for: "Welcome back")
+        }
+        try app.tap("Note")
+        try app.wait(for: "notes: 1")
+        // And home and back, the launcher's way on the iPhone.
+        try app.scene(.background)
+        try app.scene(.active)
+        screen = try app.tap("Note")
+        try app.wait(for: "notes: 2")
+        #expect(screen.texts.first { $0.hasPrefix("Process: ") } == process, "\(screen.texts)")
+        // The page again, and a command at once, with no `scene`: an app iOS
+        // suspended meanwhile is brought back as the command waits (the
+        // launcher's `wake`), and answers.
+        try app.tap("Open Page")
+        try app.tap("Note")
+        screen = try app.wait(for: "notes: 3")
+        #expect(screen.texts.first { $0.hasPrefix("Process: ") } == process, "\(screen.texts)")
+    }
+
+    /// A command the app never answers (its process stopped, as iOS
+    /// suspends an app) fails within the command's timeout, naming it, and
+    /// every command after it fails at once.
+    @Test func anUnansweredCommandFailsInItsTime() throws {
+        let app = try launch("scene")
+        defer { app.quit() }
+        let screen = try app.wait(for: "Phase: active")
+        let pid = try #require(screen.texts.first { $0.hasPrefix("Process: ") }.flatMap { Int32($0.dropFirst(9)) },
+                               "\(screen.texts)")
+        app.commandTimeout = 3
+        #expect(kill(pid, SIGSTOP) == 0)
+        defer { kill(pid, SIGCONT) }
+        let started = Date()
+        let error = #expect(throws: HeadlessError.self) { try app.tap("Note") }
+        let waited = Date().timeIntervalSince(started)
+        #expect(waited >= 3 && waited < 20, "waited \(waited) s")
+        #expect(error?.message.contains("no answer to tap Note in 3 s") == true, "\(String(describing: error))")
+        let after = #expect(throws: HeadlessError.self) { try app.screen() }
+        #expect(after?.message.contains("not sent") == true, "\(String(describing: after))")
     }
 
     /// An iPhone app that turns itself to landscape on an upright phone:

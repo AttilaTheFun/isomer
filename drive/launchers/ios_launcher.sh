@@ -7,7 +7,11 @@
 # simulator's own status bar is held at 9:41 by whoever made the
 # simulator), turned to the app's interface: an app that turns itself to
 # landscape on an upright simulator is pictured on its side, as a person
-# turning the phone sees it.
+# turning the phone sees it. HeadlessApp's `scene` (requests.sh) is the
+# phone's own: background sends the app home, active brings it back to the
+# front, the same process with its state, as its icon does (inactive is the
+# driver's); and a command left unanswered (`wake`) brings back an app iOS
+# has suspended, as one that opened another app (Safari, for a link) is.
 #
 #   ios_launcher.sh <the hub's ws:// URL> <the app's name> [KEY=VALUE…] [-- <argument>…]
 #
@@ -34,6 +38,9 @@ for pair in ${pairs[@]+"${pairs[@]}"}; do
 done
 stop() { xcrun simctl terminate "$udid" "$bundle" > /dev/null 2>&1 || true; exit 0; }
 trap stop TERM INT
+# From the home screen: an app opened over another (Safari, left in front
+# by a test before) shows a "◀" link back to it in the status bar.
+xcrun simctl launch "$udid" com.apple.springboard > /dev/null 2>&1
 if fresh; then
     # The app's data as an install leaves it: its defaults, each domain
     # deleted through the simulator's cfprefsd by its file's path (the
@@ -63,8 +70,93 @@ fi
 # there; ISO_DRIVE_TRACE=1, simctl's SIMCTL_CHILD_ISO_DRIVE_TRACE, prints
 # the driver's walk of its accessibility tree).
 log="${TEST_UNDECLARED_OUTPUTS_DIR:-${TMPDIR:-/tmp}}/$name.log"
-env "${environment[@]}" xcrun simctl launch --terminate-running-process --stdout="$log" --stderr="$log" "$udid" "$bundle" \
-    ${app_arguments[@]+"${app_arguments[@]}"} > /dev/null || exit 1
+launched="$(env "${environment[@]}" xcrun simctl launch --terminate-running-process --stdout="$log" --stderr="$log" \
+    "$udid" "$bundle" ${app_arguments[@]+"${app_arguments[@]}"})" || exit 1
+# simctl's "<bundle>: <pid>": the process the test drives.
+pid="${launched##*: }"
+# Whether the launcher sent the app home (`scene background`).
+away=0
+# Whether iOS has suspended the app (seconds after it leaves the screen, a
+# background task aside), so that it answers nothing: RunningBoard's jetsam
+# state, which launchctl shows root alone (sudo where it asks no password,
+# as on GitHub's and Shireworks' Macs), else its scheduling priority, which
+# drops to 4 (darwin background) as it is suspended.
+suspended() {
+    local info priority
+    if info="$(sudo -n launchctl procinfo "$pid" 2> /dev/null)" && grep -q "^jetsam state" <<< "$info"; then
+        grep -q "^jetsam state = suspended" <<< "$info"
+        return
+    fi
+    priority="$(ps -o pri= -p "$pid" 2> /dev/null | tr -d ' ')"
+    [ -n "$priority" ] && [ "$priority" -le 4 ]
+}
+# The app brought to the front from wherever it went: the home screen
+# first (an app opened over another shows a "◀" link back to it in the
+# status bar), then the app as its icon opens it: the same process,
+# resumed, its scene through inactive to active. simctl's launch without
+# --terminate-running-process starts no other.
+bring_forward() {
+    local now
+    xcrun simctl launch "$udid" com.apple.springboard > /dev/null 2>&1
+    now="$(xcrun simctl launch "$udid" "$bundle" 2> /dev/null)" || return 1
+    away=0
+    if [ "${now##*: }" != "$pid" ]; then
+        # (iOS ended it while it was away: a new process, which no driver
+        # of the test's is attached to.)
+        echo "ios_launcher: $bundle started again (pid ${now##*: }, was $pid): what it held is gone" >&2
+        pid="${now##*: }"
+    fi
+    # Until it runs again (at most 5 s).
+    for _ in $(seq 1 50); do
+        suspended || return 0
+        sleep 0.1
+    done
+    return 0
+}
+# HeadlessApp's `scene` (requests.sh). Background: home, as the home
+# gesture goes (SpringBoard opened), until iOS suspends the app (at most
+# 3 s), answered `ok away`: the app answers nothing there, so the test asks
+# it nothing until it is back. Active: brought back if it was sent home or
+# is suspended (another app opened over it: Safari, for a link), or is
+# suspended within a moment (iOS suspends an app a second or so after
+# another opens over it; an app in front waits that out); else it is in
+# front: opened as its icon opens it all the same (nothing moves for an app
+# in front; one still behind another comes forward), and left to the
+# driver, which moves the phase from inactive (its own) to active.
+# Inactive: the driver's (iOS has no way to it from here).
+scene() {
+    case "$1" in
+    background)
+        xcrun simctl launch "$udid" com.apple.springboard > /dev/null || return 1
+        away=1
+        for _ in $(seq 1 30); do
+            suspended && break
+            sleep 0.1
+        done
+        scene_answer="ok away"
+        ;;
+    active)
+        local until=$((SECONDS + 2))
+        until [ "$away" = 1 ] || suspended; do
+            if [ "$SECONDS" -ge "$until" ]; then
+                xcrun simctl launch "$udid" "$bundle" > /dev/null 2>&1
+                return 1
+            fi
+            sleep 0.1
+        done
+        bring_forward || return 1
+        ;;
+    *) return 1 ;;
+    esac
+}
+# A command the app hasn't answered for a while (HeadlessApp's `wake`):
+# brought to the front if iOS has suspended it; otherwise it is working (a
+# long `wait`), or hung, which the test's own timeout says.
+wake() {
+    suspended || return 0
+    echo "ios_launcher: $bundle was suspended (a command waiting on it): brought to the front" >&2
+    bring_forward
+}
 # A picture, turned from the simulator's upright frame to the interface's
 # orientation (the app's driver says which, in the request) when the two
 # differ: sips turns clockwise, so landscape-right (the home indicator on

@@ -172,6 +172,34 @@ what takes no activation (a list's cell, a control) as a tap would, at its
 place in the window however the app is turned. `dismiss` closes what is
 presented on top: escape, else a sheet a person may swipe away, as the
 swipe does (its `onDismiss` runs), else its own Cancel, Close or Done.
+An alert or a confirmation dialog is the screen while it is up, as
+Isomer's driver gives it: its buttons, its text fields, its title and
+message (the presentation's, and texts), tapped and typed into by their
+labels; on iOS they are what the alert's views give accessibility, and what
+they don't give (an alert whose views the walk can't reach) is read from
+its UIAlertController (its actions, its text fields), an action chosen as
+its button chooses it (`_dismissWithAction:`; ISO_DRIVE_ALERT_FROM_CONTROLLER=1
+reads it so alone, the driver probe's check); on the Mac, its sheet's
+elements, and `dismiss` presses its cancel button (the one Escape presses).
+`longpress` on iOS is a finger's, delivered as UIKit delivers one: a
+UITouch on the view under the element (SwiftUI's gesture container there),
+in the application's touches event with the IOHIDEvent UIKit reads, held a
+second and lifted (UIKit's and IOKit's SPI, as KIF makes touches: the
+driver is never in a release), so a `.contextMenu` opens (its items then
+the screen's buttons, as an open menu's are) and an `onLongPressGesture`
+fires; should the touch open nothing where a context menu is, its
+interaction presents it as the long press would (`_presentMenuAtLocation:`).
+On the Mac, where a secondary click opens a context menu, `longpress` takes
+the menu the view gives one (`menu(for:)`) and holds it open in the driver,
+not shown, its items the screen's buttons until one is tapped or another
+command comes (a menu AppKit shows tracks the mouse in a loop on the main
+thread, where the driver's work would wait until it closed); a view with
+none is pressed with the mouse a second, by events of the app's own queue
+(the app made active first), which fires an `onLongPressGesture`. A
+long press that changes nothing on the screen is an error, as Isomer's
+driver's is for a view that takes none. What isn't driven: a long press's
+drag (a context menu's preview dragged, a reorder), a press held for a
+given time, and on the Mac a menu shown on its screen.
 `scene` moves SwiftUI's scene phase as leaving the app and coming back
 does: on iOS, SwiftUI's own scene delegate is told each step UIKit tells it
 (will resign active, did enter background, will enter foreground, did become
@@ -181,9 +209,16 @@ simulator's real trip to the home screen takes seconds and suspends the
 app); on the Mac the app is hidden (background), its windows put in the
 Dock (inactive) or shown and brought to the front (active). Isomer's own
 driver sets its runtime's phase; a test's `HeadlessApp.scene` asks the
-launcher first, and Android's sends the app home and brings it back, its
-activity stopped and resumed, as `iso scene` does for an app `iso launch`
-started. ISO_DRIVE_TRACE=1 in the app's environment prints each reading's walk of
+launcher first, as `iso scene` does for an app `iso launch` started, and
+the platform's own trip is taken where there is one: Android's launcher
+sends the app home and brings it back, its activity stopped and resumed;
+the iPhone's sends it home (SpringBoard opened: iOS suspends the app there,
+so `scene(.background)` answers an empty screen and asks the app nothing)
+and brings back the same process, its state as it was, as its icon does
+(`simctl launch` without terminating it, from the home screen, so no other
+app's "◀" link shows in the status bar), and brings back so too an app iOS
+suspended because it opened another (Safari, for a link). Inactive, and
+active from inactive, are the driver's. ISO_DRIVE_TRACE=1 in the app's environment prints each reading's walk of
 the tree; on the Mac it asks its own process as an
 accessibility client would (AXUIElement), on the main thread. A list's row
 of texts is a button, as Isomer's renderers give it. Launch with simctl's
@@ -221,6 +256,22 @@ signals: drive/launchers/requests.sh).
   give the app a new home; the web's page has a new browser profile every
   launch anyway. `fresh: false` (`iso launch --keep-data`) keeps it, for a
   test of what lasts between launches. Windows' launcher keeps it, for now.
+- **Timeouts.** A command that the app hasn't answered in
+  `commandTimeout` seconds throws, naming the command and the time waited
+  ("no answer to tap Send in 60 s … the app is hung, suspended or gone"):
+  60 s by default, ISOMER_COMMAND_TIMEOUT (seconds) in the test's
+  environment for every app (`--test_env=ISOMER_COMMAND_TIMEOUT=120`), or
+  the app's `commandTimeout` for one (`app.commandTimeout = 10`), a
+  `wait`'s own timeout added on top. The app's call is out of step after
+  one (a late answer would answer the next command), so every command
+  after it throws at once. The launch has its own (`timeout:`, 120 s to
+  attach), and so do opening the call, `layout()` (the command timeout),
+  `picture` (60 s) and the launcher's `scene` (30 s). While a command
+  waits, every 5 s, the test asks the launcher to wake the app (a `<n>.wake`
+  request, requests.sh): the iPhone's brings back an app iOS has suspended
+  (one that opened Safari, or a test's `wait` on an app sent home), and
+  says so in the test's log; the other launchers do nothing then. A test
+  hosted in its app (`hosted()`) has the same timeout on its commands.
 - **Pictures** (`picture`) are named by the platform's device as the app
   stands (`ios/phone-landscape/…`, `android/phone-landscape/…` in a wide
   window). An iPhone app that turns itself to landscape on an upright
