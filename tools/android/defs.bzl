@@ -268,8 +268,7 @@ def isomer_android_webview_app(
     its session) in the APK's assets/site/, run in a WebView the app keeps
     out of sight, and drawn by the Compose renderer over the session protocol
     (dev.isomer.runtime.IsomerWebViewApp; IsomerWebViewHost.kt). Kotlin and
-    Compose only: no Swift and no native library, so one APK runs on every
-    ABI.
+    Compose only: no Swift and no native library of Isomer's.
 
     Declares `<name>` (`bazel run`: install and launch), `<name>_apk` (the
     APK; `<name>_apk.apk`), and the generated activity (webview_activity.kt.tpl,

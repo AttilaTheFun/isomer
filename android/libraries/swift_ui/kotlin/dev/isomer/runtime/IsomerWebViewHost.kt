@@ -6,7 +6,7 @@ package dev.isomer.runtime
 // keeps out of sight; the app draws it with the Compose renderer
 // (IsomerRemote) over the session protocol, as it draws an app on a server.
 // This is the session's transport: the web view's message port instead of a
-// socket. Kotlin only: no Swift and no native library in the app.
+// socket. Kotlin only: no Swift and no native library of Isomer's in the app.
 //
 //   setContent { IsomerWebViewApp(site = "site") }
 //

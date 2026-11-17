@@ -25,11 +25,14 @@ screen() {
         a exec-out cat /sdcard/webview-ui.xml 2>/dev/null
 }
 # Waits up to $2 seconds for text $1 on the screen; the last dump in $out.
+# The story's view is below its code on the page: until its count is on the
+# screen, each look scrolls the page up by about half a screen.
 wait_for() {
     local text="$1" until=$((SECONDS + $2))
     while [ $SECONDS -lt $until ]; do
         screen >"$out/webview-ui.xml"
         grep -q "text=\"$text\"" "$out/webview-ui.xml" && return 0
+        grep -q "text=\"Taps: " "$out/webview-ui.xml" || a shell input swipe 540 1600 540 600 300
         sleep 2
     done
     return 1

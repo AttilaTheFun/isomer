@@ -448,15 +448,18 @@ if has android; then
             results+=(1)
         fi
     done
-    # The Storybook in web-view mode (its site in the APK, Kotlin only: one
-    # APK for every ABI), for the web-view test after the stories there.
+    # The Storybook in web-view mode (its site in the APK, Kotlin only; for
+    # x86_64 too, as AndroidX brings a native library of its own), for the
+    # web-view test after the stories there.
     webview=//android/webview_android_application:webview_android_application_apk
-    for f in $(files "$webview"); do
-        case "$f" in
-            *_unsigned.apk) ;;
-            *.apk) cp "$exec_root/$f" "$platforms_out/android-x86_64/webview.apk" ;;
-        esac
-    done
+    if bazel build "${x86[@]}" "$webview"; then
+        for f in $(files "${x86[@]}" "$webview"); do
+            case "$f" in
+                *_unsigned.apk) ;;
+                *.apk) cp "$exec_root/$f" "$platforms_out/android-x86_64/webview.apk" ;;
+            esac
+        done
+    fi
     [ -f "$platforms_out/android-x86_64/webview.apk" ] || { echo "no web-view APK"; results+=(1); }
 fi
 if has windows; then

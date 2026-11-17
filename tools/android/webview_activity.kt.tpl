@@ -6,7 +6,7 @@ package {PACKAGE}
 // isomer_web_app site, in this APK's assets/site/) runs in a WebView this
 // app keeps out of sight, and the Compose renderer draws it over the session
 // protocol (dev.isomer.runtime.IsomerWebViewApp). None of the app's Swift is
-// compiled into this one, and it has no native library.
+// compiled into this one, nor any native library of Isomer's.
 //
 //   adb shell am start -n {PACKAGE}/.MainActivity -e ISO_STORYBOOK_STORY …
 //

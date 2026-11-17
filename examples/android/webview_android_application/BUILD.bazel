@@ -4,9 +4,9 @@ load("@isomer//tools/android:defs.bzl", "flat_assets", "isomer_android_webview_a
 # Storybook's site (its Swift as wasm) in the APK's assets, run in a WebView
 # the app keeps out of sight (dev.isomer.runtime.IsomerWebViewApp), drawn by
 # Isomer's Compose renderer over the session protocol. No Swift of the
-# Storybook's is compiled into the app, and it has no native library: one
-# APK for every ABI. The iPhone's peer is //apple/webview_ios_application,
-# the remote one //android/remote_android_application.
+# Storybook's is compiled into the app, and it has no native library of its
+# own. The iPhone's peer is //apple/webview_ios_application, the remote one
+# //android/remote_android_application.
 #
 #   bazel run //android/webview_android_application
 #   adb shell am start -n com.LoganShire.IsomerExamples.WebView/.MainActivity \

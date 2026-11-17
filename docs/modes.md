@@ -83,17 +83,18 @@ hot-reload as wasm and ship compiled):
   page takes the reactor from its own Cache Storage ("isomer-reactor",
   keyed by its `?v=` stamped URL, put there at the first launch) and
   compiles it streaming from there, where V8 keeps the code it compiled
-  beside a cached response and takes it back at the next launch. Measured
-  in "Measured" below; `?reactorCache=0` (Android's `reactorCache` extra)
-  compiles it from the app's files every time, to compare. Each start's
+  beside a cached response and takes it back at the next launch (about
+  half the compile on Android: "Measured: web-view start" below);
+  `?reactorCache=0` (Android's `reactorCache` extra) compiles it from the
+  app's files every time, to compare. Each start's
   times go to the head as a log line (`[session] the app's first frame …`:
   logcat on Android, standard error on Apple).
 - **The examples**: examples/apple/webview_ios_application, the web
   Storybook's site bundled into an iPhone app (simulator, no profile) that
   compiles none of the Storybook's Swift, and
   examples/android/webview_android_application, the same site in an APK
-  with no Swift and no native library (one APK for every ABI,
-  `isomer_android_webview_app` in tools/android/defs.bzl); CI's container
+  with no Swift and no native library of its own
+  (`isomer_android_webview_app` in tools/android/defs.bzl); CI's container
   builds both on every pull request.
 - **Tests**: the examples' //tests/webview_session:session_test runs the page
   in headless Chrome with the Storybook's guest, as a head drives it: the
@@ -175,7 +176,7 @@ own name an alias to the one the build's mode picks:
 | Target | `compiled` | `webview` | `remote` |
 | --- | --- | --- | --- |
 | `<name>_ios`, `<name>_macos` | `_ios_compiled`: rules_apple's application over the library | `_ios_webview`: a generated shell (`IsomerWebViewAppView`) with the web app's site bundled; none of the app's Swift compiled in | `_ios_remote`: a generated shell (`IsomerRemoteView`) over the session at the Info.plist's `IsomerSessionURL` (`remote_url`), or the launch argument `-url` |
-| `<name>_android`, `<name>_android_apk` | `_android_compiled`: `isomer_android_app` | `_android_webview`: `isomer_android_webview_app`, a generated Kotlin shell (`IsomerWebViewApp`) with the web app's site in the APK's assets; no Swift, no native library | `_android_remote`: a generated Kotlin shell over `IsomerRemote` (the intent's `url` extra, else `android_remote_url`), no Swift |
+| `<name>_android`, `<name>_android_apk` | `_android_compiled`: `isomer_android_app` | `_android_webview`: `isomer_android_webview_app`, a generated Kotlin shell (`IsomerWebViewApp`) with the web app's site in the APK's assets; no Swift, no native library of Isomer's | `_android_remote`: a generated Kotlin shell over `IsomerRemote` (the intent's `url` extra, else `android_remote_url`), no Swift |
 | `<name>_web` | `isomer_web_app` | the same | the same |
 
 and `<name>_server`, the app headless (`--@isomer//headless`), serving
@@ -214,6 +215,27 @@ A feature-level choice for `IsomerView` is to come (item 4).
 Unpaced, no renderer: native 0.63 mean / 1.35 p99; mixed 1.28 / 6.7;
 interpreted 2.65–2.71 / 11. Main's WasmKit about 4% slower than #188's fork
 on the same reactor.
+
+## Measured: web-view start, the reactor's code kept (2026-11-17)
+
+The Storybook in web-view mode (its reactor 37 MB, a fastbuild), cold
+starts (the process stopped between them), each line's numbers the page's
+own (session_host.js's log): the reactor's streaming compile, then the
+app's first frame after the head's start.
+
+| Android 15 emulator (arm64, WebView 124), a shared host | compile | first frame after the start |
+| --- | --- | --- |
+| first launch (the page's caches empty) | 815–2,935 ms | 1,199–3,169 ms |
+| from Cache Storage, V8's code kept (7 starts) | 184–555 ms, median 367 | 540–1,161 ms, median 885 |
+| from the APK's assets every time (`reactorCache=0`, 5 starts) | 673–1,846 ms, median 769 | 1,111–2,322 ms, median 1,282 |
+
+V8 keeps a module's compiled code beside a Cache Storage response it was
+streamed from, across the app's processes (the WebView's "Code Cache/wasm"
+in the app's cache folder): a response `shouldInterceptRequest` answers
+never reaches the HTTP cache, so the reactor compiles from the start each
+time without it. The page loads in 0.4–1.4 s before the start (the WebView's
+own start, the runtime's modules). On the iPhone, verify's Apple job keeps
+each web-view launch's line (ios-webview-starts.txt in its artifact).
 
 ## Order
 
