@@ -245,11 +245,12 @@ own start, the runtime's modules).
 
 WKWebView (an iPhone 17 simulator on GitHub's Mac, iOS 27.1; verify's Apple
 pictures, ios-webview-starts.txt in its artifact): the page at
-`isomer-app://app/` has no Cache Storage (a scheme of the app's own is no
-secure context to WebKit), and JavaScriptCore keeps no compiled wasm a page
-could ask for again, so each launch compiles the reactor whole: 470–915 ms,
-the first frame 859–1,410 ms after the start. Nothing there to keep yet;
-the page falls back to its files at once.
+`isomer-app://app/` finds no Cache Storage (`caches` absent, or the page no
+secure context under a scheme of the app's own), and JavaScriptCore has no
+cache of compiled wasm that a page can reach in any case, so each launch
+compiles the reactor whole: 470–915 ms, the first frame 859–1,410 ms after
+the start. Nothing there to keep yet; the page falls back to its files at
+once.
 
 ## Order
 
