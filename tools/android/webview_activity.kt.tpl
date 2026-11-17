@@ -12,12 +12,16 @@ package {PACKAGE}
 //
 // Every ISO_ extra is the app's launch environment, as a compiled app takes
 // them; `reactorCache` "0" compiles the reactor without the page's Cache
-// Storage (to compare its start).
+// Storage (to compare its start). In a debuggable build, an `isomerDebug`
+// extra sent to the running app is a test's hook (IsomerWebViewHost's
+// debugCommand: `crashRenderer`).
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import dev.isomer.runtime.IsomerWebViewApp
+import dev.isomer.runtime.IsomerWebViewHost
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,5 +36,10 @@ class MainActivity : ComponentActivity() {
                 if (key == "windowTitle") title = value
             })
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        IsomerWebViewHost.debugCommand(this, intent.getStringExtra("isomerDebug"))
     }
 }
