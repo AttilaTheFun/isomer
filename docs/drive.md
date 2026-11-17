@@ -230,7 +230,12 @@ password (`launchctl procinfo`, root's alone), else from what RunningBoard
 last logged of the process in the simulator's log ("Suspending task." or
 "Resuming task.", `simctl spawn … log show`, about a second a reading),
 else from its scheduling priority (4 once suspended, though it can stay
-where it was). ISO_DRIVE_TRACE=1 in the app's environment prints each reading's walk of
+where it was). Every command the launcher runs has a deadline (15 s for
+a `simctl launch`, 5 s for `launchctl`, 10 s for the log): simctl can stop
+answering while SpringBoard is busy, and a launcher stuck in one woke the
+app no more, so the test's command timed out. Each wake is in the test's
+log with the time, and the app's driver says on standard error when its
+call ends and it dials again. ISO_DRIVE_TRACE=1 in the app's environment prints each reading's walk of
 the tree; on the Mac it asks its own process as an
 accessibility client would (AXUIElement), on the main thread. A list's row
 of texts is a button, as Isomer's renderers give it. Launch with simctl's
