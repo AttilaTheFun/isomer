@@ -38,7 +38,7 @@ After #183's verify (19 stories), what the pictures showed and part 4's answers:
 
 | Cause | Stories | State |
 | --- | --- | --- |
-| Identity `.scaleEffect(1)` / `.offset(0,0)` on every view: a half-pixel centring rounded the other way (+1 px) | layout.lazygrid, controls.progressstyle, animation.transforms, and likely images.symbols, controls.inline, layout.geometry, gestures.tap, state.appstorage | applied only where the app's view has them (`fx`: "r", "s", "o") |
+| Identity `.scaleEffect(1)` / `.offset(0,0)` on every view: a half-pixel centring rounded the other way (+1 px), and a label centred over a wider line truncated (2048's "BEST" over 100 to 109 drawn "BE…": Apple's SwiftUI does the same to a Text inside those two identity effects; layout.centred holds it) | layout.lazygrid, controls.progressstyle, animation.transforms, layout.centred, and likely images.symbols, controls.inline, layout.geometry, gestures.tap, state.appstorage | applied only where the app's view has them (`fx`: "r", "s", "o") |
 | No video player in the tree renderer (a placeholder outside the masked frame) | isomer.video | AVKit's, as the Isomer module's |
 | Rotation rounded to two decimals of a radian | animation.transforms | full precision |
 | `Color.gradient` as Isomer's guessed two stops | shapes.elliptical | the colour (`anyName`/`anyColor`), drawn as the system's own `.gradient` |

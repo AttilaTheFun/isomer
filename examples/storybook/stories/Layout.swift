@@ -41,6 +41,10 @@ extension StoryCatalog {
             "layout.priority", "Layout priority",
             summary: "Two long lines sharing a row too narrow for both: without a priority they split the room; with .layoutPriority(1) the first keeps its whole line and the other truncates."
         ) { LayoutPriorityStory() },
+        Story(
+            "layout.centred", "Centred over a wider line",
+            summary: "Two cards sharing a row, each a short label centred over a wider number: the label lands half a point off the pixel grid, and stays whole."
+        ) { CentredLabelsStory() },
     ])
 }
 
@@ -240,6 +244,37 @@ struct LayoutPriorityStory: View {
             .lineLimit(1)
         }
         .frame(width: 320, alignment: .leading)
+    }
+}
+// end story
+
+// story: layout.centred
+struct CentredLabelsStory: View {
+    var body: some View {
+        VStack(spacing: 8) {
+            ForEach([100, 104, 106, 108, 109], id: \.self) { value in
+                HStack(spacing: 16) {
+                    ScoreCard(title: "SCORE", value: value)
+                    ScoreCard(title: "BEST", value: value)
+                }
+            }
+        }
+    }
+}
+
+struct ScoreCard: View {
+    let title: String
+    let value: Int
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Text(title).font(.caption2.weight(.bold)).foregroundColor(Color(red: 0.93, green: 0.89, blue: 0.83))
+            Text("\(value)").font(.title3.weight(.bold)).foregroundColor(.white)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(Color(red: 0.55, green: 0.49, blue: 0.42))
+        .cornerRadius(10)
     }
 }
 // end story
