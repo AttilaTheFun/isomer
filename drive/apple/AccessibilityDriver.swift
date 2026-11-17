@@ -60,6 +60,15 @@ struct AccessibilityScreen {
     var elements: [Element] = []
     var presented: [(style: String, title: String, message: String)] = []
 
+    /// A frame as `inspect` shows it (`x y width height`, in points); a
+    /// frame that is null or infinite (an element UIKit places nowhere) as
+    /// "none", where converting its numbers to integers would trap.
+    static func describe(_ frame: CGRect, separator: String = " ") -> String {
+        let numbers = [frame.minX, frame.minY, frame.width, frame.height]
+        guard numbers.allSatisfy(\.isFinite) else { return "none" }
+        return numbers.map { String(Int($0)) }.joined(separator: separator)
+    }
+
     /// The names: each element's role and its place among that role's.
     mutating func name() {
         var counts: [String: Int] = [:]
@@ -190,6 +199,9 @@ struct AccessibilityScreen {
 @MainActor
 final class AccessibilityDriver {
     var info: Wire_Info
+    /// A context menu the driver holds open (the Mac's `longPress`), until a
+    /// command other than reading the screen closes it.
+    var heldMenu: AnyObject?
 
     init() {
         let bundle = Bundle.main
@@ -317,7 +329,10 @@ final class AccessibilityDriver {
         case "back":
             if !(await back(before)) { error = "nothing to go back from" }
         case "dismiss":
-            if before.presented.isEmpty {
+            if heldMenu != nil {
+                // A held menu closes, as Escape closes an open one.
+                heldMenu = nil
+            } else if before.presented.isEmpty {
                 error = "nothing presented"
             } else if !(await dismiss(before)) {
                 error = "\(before.presented.last!.style) didn't close"
@@ -341,6 +356,9 @@ final class AccessibilityDriver {
         default:
             error = "unknown command: \(command.cmd)"
         }
+        // A held menu stays open for what only reads the screen, and the
+        // long press that opened it.
+        if !["ls", "info", "inspect", "wait", "quit", "longpress"].contains(command.cmd) { heldMenu = nil }
         var answer = Wire_Answer()
         answer.ok = error == nil
         if let error { answer.error = error }

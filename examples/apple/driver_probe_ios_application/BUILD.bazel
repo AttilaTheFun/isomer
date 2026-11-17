@@ -13,7 +13,10 @@ load("@rules_swift//swift:swift.bzl", "swift_library")
 #   bazel build --@isomer//drive:headful --ios_multi_cpus=sim_arm64 //apple/driver_probe_ios_application/...
 swift_library(
     name = "driver_probe_ios_lib",
-    srcs = ["//headless/driver_probe:DriverProbe.swift"],
+    srcs = [
+        "//headless/driver_probe:DriverProbe.swift",
+        "//headless/driver_probe:Placements.swift",
+    ],
     module_name = "DriverProbeIOS",
     tags = ["manual"],
     deps = [
