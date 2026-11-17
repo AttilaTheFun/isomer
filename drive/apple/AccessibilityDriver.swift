@@ -409,7 +409,12 @@ public func isoAppleDriveAttach() {
     let context = IsomerCallContext.authorized(environment["ISO_DRIVER_TOKEN"], metadata: name.map { ["iso-target": $0] } ?? [:])
     MainActor.assumeIsolated {
         Task { @MainActor in
-            await IsomerDriving.keepAttached(to: url.absoluteString, report: { print("[iso] \($0)") }) {
+            // (On standard error, which isn't buffered: an app's log ends
+            // with what its driver last said, attached or waiting, however
+            // the app was ended.)
+            await IsomerDriving.keepAttached(to: url.absoluteString, report: {
+                FileHandle.standardError.write(Data("[iso] \($0)\n".utf8))
+            }) {
                 try await driver.dialOut(IsomerURLSessionConnection(url), context: context)
             }
         }
