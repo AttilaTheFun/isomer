@@ -192,6 +192,20 @@ consumer.
   the SDK (swift-symbolgraph-extract, as Observation's), and classes a
   declaration of swift-foundation's by its module where the SDK's modules
   carry no source locations.
+- **`wasm_sdk_bundle`** (tools/wasm/defs.bzl, the SDK the Playground's
+  compilers build a project against) carries the registered wasm SDK's
+  Foundation family itself (0.57): its deps bring no Foundation any more, so
+  the rule takes Foundation, FoundationEssentials, FoundationNetworking,
+  CoreGraphics, Combine and their helper modules (and, from the -i18n SDK,
+  FoundationInternationalization and ICU's C module) from the Swift
+  toolchain's files, with only the archives that carry them
+  (libFoundation, libFoundationEssentials, libFoundationNetworking,
+  libCoreGraphics, libCombine; with -i18n libFoundationInternationalization,
+  libIsomerFoundationInternationalization and lib_FoundationICU): the SDK's
+  archives of the helpers alone repeat what those hold. 0.56 bundled none,
+  and the Playground carried a rule of its own for them until then.
+  `//tools/wasm/sdk_bundle_test` builds a program against a bundle out of
+  band, as the Playground does, and runs it.
 
 ## Later
 
