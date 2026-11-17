@@ -272,9 +272,13 @@ public final class WasmKitRuntime: WasmRuntime {
         let home = homeDirectory
         #endif
         if let home, !home.isEmpty {
+            // URL's path API, which every Foundation an app may link here
+            // has: on Android the Swift SDK's is Isomer's, which has no NS
+            // classes (NSString's string API is String's there).
+            let homeURL = URL(fileURLWithPath: home, isDirectory: true)
             for made in ["Documents", "Library/Application Support", "Library/Caches"] {
                 try? files.createDirectory(
-                    atPath: (home as NSString).appendingPathComponent(made), withIntermediateDirectories: true)
+                    at: homeURL.appendingPathComponent(made, isDirectory: true), withIntermediateDirectories: true)
             }
             preopens.append(.init(guestPath: "/home/app", hostPath: home))
             environment["HOME"] = "/home/app"

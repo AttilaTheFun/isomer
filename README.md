@@ -22,7 +22,7 @@ It is a set of pieces, and none of them requires the others:
 | SQLite everywhere | SQLite's C API and a thin, strict-concurrency-safe Swift layer over it, the same SQLite on every platform (WebAssembly included) | [swift_sql](https://github.com/AttilaTheFun/swift_sql) |
 | Swift on every platform | Cross-compilation to WebAssembly, Android and Windows in Bazel | [rules_swift](https://github.com/bazelbuild/rules_swift) (upstream) |
 | Bridges to each platform's own language | Generated Kotlin, TypeScript and C bindings | [`swift_ffi/`](swift_ffi/) |
-| Apple's frameworks off Apple | `Foundation`, `CoreGraphics` and `Metal` with Apple's interfaces, written in Swift, for the web and Android (Metal: the web, on WebGPU, with Metal Shading Language translated to WGSL) | [`foundation/`](foundation/), [`core_graphics/`](core_graphics/), [`metal/`](metal/), [docs/parity](docs/parity/) |
+| Apple's frameworks off Apple | `Foundation`, `CoreGraphics` and `Metal` with Apple's interfaces, written in Swift, for the web and Android (Foundation in Isomer's Swift SDKs; Metal: the web, on WebGPU, with Metal Shading Language translated to WGSL) | [isomer_hermetic_toolchains](https://github.com/AttilaTheFun/isomer_hermetic_toolchains), [`core_graphics/`](core_graphics/), [`metal/`](metal/), [docs/parity](docs/parity/) |
 | Graphics and maps | One GPU abstraction (Metal, WebGPU, OpenGL, Direct3D); an OpenStreetMap renderer on it | [`swift_gpu/`](swift_gpu/), [`swift_map/`](swift_map/) |
 
 Why Swift: it rules out whole kinds of bugs when the program is compiled
@@ -107,27 +107,27 @@ Isomer: an iOS app, a web site and an Android app) is
 in `examples/playground/`, until then.
 
 **Foundation and CoreGraphics.** On wasm and Android, `import Foundation`
-is Isomer's: swift-foundation's FoundationEssentials, a Swift package at its
-swift-6.4.2-RELEASE with a few patches (MODULE.bazel lists them), with no
+is Isomer's, and it comes with the Swift SDK (since 0.56): Isomer's Swift
+SDKs ([AttilaTheFun/isomer_hermetic_toolchains](https://github.com/AttilaTheFun/isomer_hermetic_toolchains),
+[docs/hermetic_toolchains.md](docs/hermetic_toolchains.md)) are swift.org's
+with corelibs Foundation taken out and Isomer's put in, so every `import
+Foundation` built with them, your code's, a Swift package's or a Bazel
+module's, is Isomer's with no dependency declared. It is swift-foundation's
+FoundationEssentials at swift-6.4.2-RELEASE with a few patches, with no
 swift-corelibs-foundation layer (no CoreFoundation; of what corelibs gives
 Swift code only what apps reach for, written in Swift: `CharacterSet`,
 `NSString`'s string API, `String(format:)`, `NSRange`, `NSRegularExpression`, the locks, `Thread`, `FileHandle`,
-`NSNumber`) and no ICU unless an app asks for
-`--@isomer//foundation:internationalization` (FoundationInternationalization
-over the Swift SDK's ICU; `isomer_web_app(icu_locales = ["en"])` trims its
-data to the languages named). `import CoreGraphics` is
-Isomer's too (`//core_graphics`): geometry, `CGFloat` (a `Double` on every
-architecture), `CGAffineTransform`, `CGColor`, `CGPath`. `SwiftUI` re-exports
-both, as Apple's does. Any library built for those platforms that imports
-Foundation depends on `@isomer//:foundation` (a SwiftPM package through
-rules_swift_package_manager's `target_deps`); `tools/foundation/check_link.py`
-finds an app that links the Swift SDK's Foundation instead. A library that
-depends on `@isomer//:swift_ui` has Foundation through it already (SwiftUI
-re-exports it), so it needs no `@isomer//:foundation` of its own; a macro of
-yours that adds `@isomer//:foundation` to a target's `deps` must not be given
-it again, as Bazel rejects a label listed twice in one attribute. Linux and
-Windows still use the toolchain's Foundation. docs/isomer_031_plan.md has the
-plan and docs/parity/ what each module covers.
+`NSNumber`), and no ICU in the plain SDKs: an app that formats dates,
+numbers or lists registers the -i18n ones, whose Foundation has
+FoundationInternationalization over the SDK's ICU
+(`isomer_web_app(icu_locales = ["en"])` trims its data to the languages
+named). `import CoreGraphics` and `import Combine` are Isomer's too, from the
+same SDKs: geometry, `CGFloat` (a `Double` on every architecture),
+`CGAffineTransform`, `CGColor`, `CGPath`. `SwiftUI` re-exports Foundation
+and CoreGraphics, as Apple's does. Linux and Windows still use the
+toolchain's corelibs Foundation, with Isomer's CoreGraphics and Combine
+(`//core_graphics`, `//frameworks/combine`) beside it. docs/isomer_031_plan.md
+has the plan and docs/parity/ what each module covers.
 
 **Metal.** On the web, `import Metal` is Isomer's (`//metal/metal`): the
 classic Metal API, with libraries made from Metal Shading Language source,
@@ -721,23 +721,22 @@ fails saying which to do. rules_android's own Maven (its tools) is
 rules_android's to declare; docs/android_maven.md shows how to pin it with
 isomer's lock file, as the examples do.
 
-Isomer's Swift libraries are a Swift package too (since 0.43: Foundation,
-CoreGraphics, Combine and what they stand on, from isomer's root
-Package.swift), built through rules_swift_package_manager in your own
-SwiftPM graph, so swift-foundation and swift-collections resolve once for
-your packages and Isomer's. List isomer in the Package.swift your graph
-reads, at the same release, by its tag (or a commit between releases;
-swift-foundation takes its own dependencies by branch, which SwiftPM allows
-only beneath a revision pin):
+Isomer's Swift libraries are a Swift package too (since 0.43: SwiftUI and
+the frameworks it stands on, from isomer's root Package.swift), built
+through rules_swift_package_manager in your own SwiftPM graph, so
+SwiftProtobuf and swift-syntax resolve once for your packages and Isomer's.
+List isomer in the Package.swift your graph reads, at the same release, by
+its tag (or a commit between releases; isomer takes swift-syntax by branch,
+which SwiftPM allows only beneath a revision pin):
 
 ```swift
 .package(url: "https://github.com/AttilaTheFun/isomer.git", revision: "v0.43.1"),
 ```
 
 use rules_swift_package_manager's own `swift_deps` extension (not a
-re-export of your own: isomer adds its patches and a dependency of its
-Foundation to it), and let the generated package repositories see
-`@isomer`, which those additions name:
+re-export of your own: isomer adds its wire protos' modules to it), and let
+the generated package repositories see `@isomer`, which those additions
+name:
 
 ```starlark
 swift_deps = use_extension("@rules_swift_package_manager//:extensions.bzl", "swift_deps")
@@ -747,9 +746,6 @@ swift_deps.from_package(
 )
 inject_repo(swift_deps, "isomer")
 ```
-
-swift-foundation pins swift-collections exactly (1.1.6 at Swift 6.4.2), so
-your graph takes that version.
 
 **Only the root module's take effect.** `inject_repo` and `override_repo`
 are ignored in any module that is not the root (as dev dependencies are),
@@ -789,10 +785,10 @@ The isomer the root depends on and the one its Package.swift lists are the
 module's release: one isomer in the build.
 
 Nothing of isomer's needs an override in your MODULE.bazel since 0.40 (its
-rules_swift, 4.2.2.isomer.3, sorts above the version rules_applecross asks
+rules_swift, 4.3.0.isomer.1, sorts above the version rules_applecross asks
 for); you still register the toolchains, and only those of the platforms
 you build: an app for iOS, the Mac and Android declares the host toolchain
-and `swift.android_sdk()` and registers the Android Swift toolchains, with
+and Isomer's Android SDK (below) and registers the Android Swift toolchains, with
 no wasm SDK, wasm toolchains, Windows SDK or rules_swift_package_manager
 Windows patch (0.40: isomer's targets for those platforms are only
 analyzed when built). That is the whole list: the bridge generator, the GPU layer and the map
@@ -801,7 +797,53 @@ renderer are all part of this one module (`@isomer//swift_ffi/...`,
 them. SQLite (swift_sql, a Swift package: list it in the Package.swift
 your rules_swift_package_manager graph reads) left this module at 0.34; the
 examples use it. C compiled for wasm, swift_sql's included, needs
-rules_swift#1989, which the registry's rules_swift carries.
+rules_swift#1989, which rules_swift has since 4.3.0.
+
+**Isomer's Swift SDKs.** On Android and the web Foundation is the Swift
+SDK's, so an app registers Isomer's SDKs (since 0.56) in the `swift` block
+it already has, in place of `swift.android_sdk()` and `swift.wasm_sdk()`.
+One snippet a platform, each standing alone: an app that builds for
+Android alone takes the first and registers no wasm SDK.
+
+If you build for Android:
+
+```starlark
+swift.android_sdk(
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz",
+    sha256 = "557ed5ffc5c9d2a2061ea3ea24a2ec0e44dcabd6f42b37ef319e2f08198034fc",
+)
+```
+
+If you build for the web:
+
+```starlark
+swift.wasm_sdk(
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_wasm.artifactbundle.tar.gz",
+    sha256 = "3dbfc93e5c91e92d197e3660a488fd580133200df75bcaca90f3b50c5782ae93",
+)
+```
+
+If your app formats dates, numbers or lists with Foundation (`formatted()`,
+`Date.FormatStyle`, locales and calendars beyond English and the Gregorian),
+take the -i18n SDK instead, whose Foundation has FoundationInternationalization
+and ICU (tens of megabytes of data, which `icu_locales` trims on the web):
+
+```starlark
+# Android, formatting:
+swift.android_sdk(
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_android-i18n.artifactbundle.tar.gz",
+    sha256 = "9ed7cd5051cc276acd14a5210d72311f2b4b7984c4bdaa77dd25bafad2170d93",
+)
+# The web, formatting:
+swift.wasm_sdk(
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_wasm-i18n.artifactbundle.tar.gz",
+    sha256 = "cc3423d1dfa969e1fb255ed324af6a9e3c7dedc06b75d90a3ff74adcce10877c",
+)
+```
+
+The SDKs move on their own cadence (isomer_hermetic_toolchains' releases,
+whose notes carry these lines); each is the Swift release isomer's toolchain
+is (6.4.2), which `swift.toolchain`'s `swift_version` must match.
 
 **Protocol buffers.** Isomer's wire protos are compiled as you build
 (`swift_proto_library`, shared/wire), against your graph's SwiftProtobuf
@@ -851,6 +893,38 @@ build --strategy=CppArchive=local
 ### Upgrading isomer
 
 Each release's notes have an Upgrading section; these things are easy to miss:
+
+- **Foundation is the Swift SDK's on Android and the web (since 0.56).**
+  - Register Isomer's Swift SDKs ("Isomer's Swift SDKs" above): replace
+    `swift.android_sdk()` and `swift.wasm_sdk()` with the snippet of each
+    platform you build for, the plain URL, or the -i18n one if the app
+    formats dates or numbers. Without them `import Foundation` there is
+    swift.org's corelibs Foundation again, and links fail.
+  - Drop Foundation's edges: the `configure_package(target_deps = …)`
+    entries that gave a package `@isomer//:foundation`, and the
+    `@isomer//:foundation` and `@isomer//:isomer_foundation` in your
+    BUILD files' deps. Both labels stay, empty, so nothing breaks if you
+    leave them; `@isomer//foundation:for_swift_packages` and the
+    `@swiftpkg_isomer//:Foundation`, `:FoundationNetworking` and
+    `:IsomerFoundation` products are gone.
+  - `--@isomer//foundation:internationalization` no longer builds
+    FoundationInternationalization into Foundation: the -i18n SDK is what
+    has it. The setting stays, and on Android and the web it checks that
+    the SDK registered is the -i18n one (a build that sets it with the
+    plain SDK fails, saying which to register); keep it if your app sets
+    it, or drop it with the -i18n SDK in place.
+  - rules_swift is the registry's 4.3.0.isomer.1 (upstream 4.3.0, which
+    takes `swift.android_sdk(url = …)`, and four pull requests); your own
+    override of rules_swift, if you kept one, has to be that version.
+  - After changing an SDK's URL, or upgrading Isomer or rules_swift, run
+    `bazel clean` once if a build reports a module "defined in both"
+    (`module '_Builtin_stddef' is defined in both '…/_swift_module_cache/…'
+    and '…'`). Bazel keeps Swift's Clang module cache across builds, and
+    the modules cached before the change still name the old build of a
+    module the new SDK or rules_swift builds again. A clean build, as CI's
+    are, never sees it.
+  - `tools/foundation/check_link.py` is gone: there is one Foundation to
+    link.
 
 - **Isomer's AndroidX is a module of its own (since 0.54).** isomer no
   longer declares any Maven for its consumers (docs/android_maven.md):
@@ -929,7 +1003,7 @@ Each release's notes have an Upgrading section; these things are easy to miss:
   whatever version isomer asks for: bumping isomer alone silently keeps the
   old fork. Since 0.40 isomer's rules_swift needs no override (it sorts above
   rules_applecross's); delete yours, or move it to the version isomer's
-  release names (4.2.2.isomer.3 at 0.41).
+  release names (4.3.0.isomer.1 at 0.56).
 
 ### Swift features, Java and library evolution
 
@@ -949,8 +1023,7 @@ Each release's notes have an Upgrading section; these things are easy to miss:
   isomer's own REPO.bazel turns the common ones off for its packages (a
   repository's `-feature` wins over the command line's), so its modules
   build as they are tested whatever you set; it can't do so for its
-  dependencies (swift-foundation's collections fail under Swift 6's strict
-  concurrency, its FoundationEssentials under warnings-as-errors) or yours.
+  dependencies or yours.
 - **Java 17 for Android's tools.** `--java_language_version=17` and
   `--tool_java_language_version=17` (with the remote JDK 17 runtimes,
   examples/.bazelrc's four lines): rules_android's dexer is Java with
@@ -1367,8 +1440,11 @@ bazel test --@isomer//headless //headless/... //remote/...
 ```
 swift_ffi/            Swift <-> Kotlin/TypeScript/C bindings: macros, analyzer,
                       generator, Bazel rules, runtimes (and its own examples)
-core_graphics/        Isomer's CoreGraphics (wasm, Android)
-foundation/           Isomer's Foundation, over swift-foundation's Essentials
+core_graphics/        Isomer's CoreGraphics (Linux, Windows; the Swift SDKs'
+                      on wasm and Android)
+foundation/           Foundation's build settings and tests (Isomer's
+                      Foundation is in Isomer's Swift SDKs:
+                      AttilaTheFun/isomer_hermetic_toolchains)
 metal/                Isomer's Metal: the API, the MSL→WGSL translator, the
                       WebGPU backend and its JS executor
 swift_gpu/            the GPU abstraction: Metal (Apple's and Isomer's),

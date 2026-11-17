@@ -83,10 +83,9 @@ build:linux --action_env=C_INCLUDE_PATH=/usr/lib/glib-2.0/include:/usr/lib/dbus-
 
 # No `build --features=swift.…` here, and none in a consumer's .bazelrc:
 # --features apply to every repository in the build, isomer and every
-# SwiftPM package and module beneath it included (swift-foundation's
-# collections fail under swift.enable_v6/StrictConcurrency, its
-# FoundationEssentials under swift.treat_warnings_as_errors, which conflicts
-# with its own -suppress-warnings). Isomer's REPO.bazel turns the common
+# SwiftPM package and module beneath it included (a package built for
+# Swift 5 fails under swift.enable_v6/StrictConcurrency, one with its own
+# -suppress-warnings under swift.treat_warnings_as_errors). Isomer's REPO.bazel turns the common
 # ones off for its own packages, but it can't for the others. Scope Swift
 # features to your own repository instead, in its REPO.bazel:
 #   repo(features = ["swift.enable_v6", "swift.treat_warnings_as_errors"])
@@ -149,8 +148,9 @@ build:windows --action_env=PATH
 # exact versions). Don't read or write it.
 common --lockfile_mode=off
 
-# Modules from the project's registry first (isomer's rules_swift and
-# swift-foundation forks, by version), then the Bazel Central Registry.
+# Modules from the project's registry first (isomer's releases and the forks
+# it carries, rules_swift's among them, by version), then the Bazel Central
+# Registry.
 common --registry=https://raw.githubusercontent.com/AttilaTheFun/bazel_registry/main
 common --registry=https://bcr.bazel.build
 

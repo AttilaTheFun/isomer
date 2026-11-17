@@ -31,3 +31,11 @@ package(default_visibility = ["//visibility:public"])
 # The map-free default: an empty library, so the flag can sit unconditionally
 # in each platform module's deps.
 cc_library(name = "no_map_engine")
+
+# FileDocument's FileWrapper, compiled into the SwiftUI of Linux and Windows,
+# whose Foundation (the toolchain's) has none (Package.swift's SwiftUI target
+# lists the directory); and into the core's host tests on Linux.
+exports_files(
+    ["swift_ui_corelibs/FileWrapper.swift"],
+    visibility = ["//tests/snapshot:__pkg__"],
+)

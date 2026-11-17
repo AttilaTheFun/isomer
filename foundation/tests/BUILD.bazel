@@ -1,3 +1,8 @@
+# Foundation's checks, against the Swift SDK's Foundation (since 0.56,
+# Isomer's Swift SDKs carry Isomer's Foundation: the sources are
+# isomer_hermetic_toolchains'). Built for wasm and run in headless Chrome; the
+# Android ones are link checks.
+
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 load("@rules_swift//swift:swift.bzl", "swift_binary")
 load("//tools/platforms:transition.bzl", "transition_binary")
@@ -19,9 +24,10 @@ swift_binary(
         "StringsCheck.swift",
     ],
     deps = [
-        "//foundation",
-        # The transports and the store, installed as a host installs them.
-        "//foundation/isomer_foundation",
+        # The Swift SDK's Foundation (Isomer's SDKs): nothing to link, but
+        # with //foundation:internationalization the check that the SDK is
+        # the -i18n one.
+        "//:foundation",
     ],
     tags = ["manual"],
 )
@@ -53,8 +59,10 @@ sh_test(
     ],
 )
 
-# With FoundationInternationalization and ICU (the build setting
-# //foundation:internationalization, set by the transition).
+# With FoundationInternationalization and ICU: the -i18n SDK's Foundation,
+# which isomer's own module registers (MODULE.bazel), so these checks and the
+# ones above run against it. (The transition sets
+# //foundation:internationalization, which checks for that SDK.)
 swift_binary(
     name = "internationalization_check",
     package_name = "isomer",
@@ -65,7 +73,7 @@ swift_binary(
         "-Xlinker",
         "stack-size=16777216",
     ],
-    deps = ["//foundation"],
+    deps = ["//:foundation"],
     tags = ["manual"],
 )
 
@@ -107,7 +115,7 @@ swift_binary(
         "-Xlinker",
         "--no-gc-sections",
     ],
-    deps = ["//foundation"],
+    deps = ["//:foundation"],
     tags = ["manual"],
 )
 
@@ -141,7 +149,7 @@ swift_binary(
     ],
     deps = [
         ":icu_en_fr_de",
-        "//foundation",
+        "//:foundation",
     ],
     tags = ["manual"],
 )

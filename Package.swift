@@ -1,20 +1,24 @@
 // swift-tools-version:6.0
 // Isomer's Swift libraries as a Swift package, beside its Bazel module: an
 // application lists isomer in its own Package.swift, and
-// rules_swift_package_manager resolves Isomer's Swift (and swift-foundation,
-// swift-collections and the rest) in the application's one graph. The Bazel
+// rules_swift_package_manager resolves Isomer's Swift (and SwiftProtobuf,
+// swift-syntax and the rest) in the application's one graph. The Bazel
 // module keeps what isn't Swift libraries: the application macros, the
 // platform hosts and runtimes, swift_ffi's generators, the toolchains.
 //
 // Pinned by revision, the release's tag or a commit
 // (`.package(url: "https://github.com/AttilaTheFun/isomer.git", revision: "v0.43.1")`):
-// swift-foundation has no semantic versions and takes its own dependencies by
-// branch, which SwiftPM allows only beneath a revision pin.
+// swift-syntax is taken by branch, as swift-foundation takes it, which
+// SwiftPM allows only beneath a revision pin.
 //
-// The Apple-named modules are Isomer's off Apple only: on Apple platforms an
-// application uses Apple's, so its targets depend on these with
-// `.when(platforms: [.android, .wasi])` (Foundation) or the platforms that
-// lack Apple's frameworks (CoreGraphics, Combine).
+// Foundation is the Swift SDK's on every platform (since 0.56): on Android
+// and the web Isomer's Swift SDKs carry Isomer's Foundation, FoundationNetworking,
+// IsomerFoundation, CoreGraphics and Combine (AttilaTheFun/isomer_hermetic_toolchains;
+// docs/hermetic_toolchains.md), so no target here depends on a Foundation
+// and `import Foundation` anywhere is the SDK's. Linux and Windows keep the
+// toolchain's corelibs Foundation, with Isomer's CoreGraphics and Combine
+// from here beside it, until their SDKs carry Isomer's too. On Apple
+// platforms an application uses Apple's frameworks.
 import CompilerPluginSupport
 import PackageDescription
 
@@ -22,16 +26,19 @@ import PackageDescription
 // stand in.
 let offApple: [Platform] = [.android, .wasi, .linux, .windows]
 
+// Where the Swift SDK's Foundation is corelibs', which has no CoreGraphics
+// or Combine: Isomer's are built here. (On Android and the web Isomer's
+// Swift SDKs carry them.)
+let corelibsFoundation: [Platform] = [.linux, .windows]
+
 let package = Package(
     name: "isomer",
     // Where Isomer's own modules build on Apple platforms (an app compiled
-    // against Isomer's frameworks: iOS 16). Foundation and the frameworks
-    // build only off Apple, where swift-foundation's 26 means nothing.
+    // against Isomer's frameworks: iOS 16). The frameworks build only off
+    // Apple.
     platforms: [.macOS("13"), .iOS("16")],
     products: [
-        .library(name: "Foundation", targets: ["Foundation"]),
-        .library(name: "FoundationNetworking", targets: ["FoundationNetworking"]),
-        .library(name: "IsomerFoundation", targets: ["IsomerFoundation"]),
+        // Linux's and Windows' (the Swift SDKs carry them elsewhere).
         .library(name: "CoreGraphics", targets: ["CoreGraphics"]),
         .library(name: "Combine", targets: ["Combine"]),
         .library(name: "IsomerSwiftUI", targets: ["IsomerSwiftUI"]),
@@ -53,12 +60,10 @@ let package = Package(
         .executable(name: "iso", targets: ["iso"]),
     ],
     dependencies: [
-        // swift-6.4.2-RELEASE's commit: the swift-foundation the Swift SDKs'
-        // Foundation is built from.
-        .package(url: "https://github.com/swiftlang/swift-foundation.git", revision: "e4049b2d77e2d5d70c4cfcc99fd5eca32e1bcb06"), // tag: swift-6.4.2-RELEASE
         // SwiftUI's macros (@State, @Entry): swift-syntax as swift-foundation
-        // takes it, by its branch (SwiftPM reconciles no other requirement on
-        // it); the commit is Package.resolved's.
+        // takes it, by its branch, so an application whose graph has
+        // swift-foundation too resolves one (SwiftPM reconciles no other
+        // requirement on it); the commit is Package.resolved's.
         .package(url: "https://github.com/swiftlang/swift-syntax", branch: "release/6.4.x"), // as swift-foundation
         // The render tree's wire format (shared/wire/tree.proto).
         .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.38.1"),
@@ -72,6 +77,11 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.81.0"),
     ],
     targets: [
+        // Isomer's CoreGraphics and Combine beside Linux's and Windows'
+        // corelibs Foundation. The copies Isomer's Swift SDKs carry for
+        // Android and the web are isomer_hermetic_toolchains' (Isomer/Sources):
+        // a change here goes there too, until those platforms' SDKs carry
+        // them as well.
         .target(
             name: "CoreGraphics",
             path: "core_graphics",
@@ -79,53 +89,13 @@ let package = Package(
             swiftSettings: [
                 // The toolchain's corelibs Foundation declares CGFloat and the
                 // geometry types there (AGENTS.md).
-                .define("ISOMER_CORELIBS_FOUNDATION", .when(platforms: [.linux, .windows])),
+                .define("ISOMER_CORELIBS_FOUNDATION", .when(platforms: corelibsFoundation)),
             ]
         ),
         .target(
             name: "Combine",
             path: "frameworks/combine",
             exclude: ["BUILD.bazel", "tests"]
-        ),
-        .target(
-            name: "IsomerFoundation",
-            dependencies: [.product(name: "FoundationEssentials", package: "swift-foundation")],
-            path: "foundation/isomer_foundation",
-            exclude: ["BUILD.bazel"],
-            swiftSettings: [.swiftLanguageMode(.v6), .enableUpcomingFeature("ExistentialAny")]
-        ),
-        .target(
-            name: "IsomerDispatchTime",
-            path: "foundation/dispatch_time"
-        ),
-        .target(
-            name: "CWasiThreadIdentity",
-            path: "foundation/wasi_thread_identity",
-            publicHeadersPath: "."
-        ),
-        .target(
-            name: "Foundation",
-            dependencies: [
-                "Combine",
-                "CoreGraphics",
-                "IsomerFoundation",
-                .product(name: "FoundationEssentials", package: "swift-foundation"),
-                .target(name: "IsomerDispatchTime", condition: .when(platforms: [.android, .wasi])),
-                .target(name: "CWasiThreadIdentity", condition: .when(platforms: [.wasi])),
-            ],
-            path: "foundation",
-            exclude: ["BUILD.bazel", "defs.bzl", "dispatch_time", "internationalization", "isomer_foundation", "networking", "tests", "wasi_thread_identity"],
-            swiftSettings: [
-                // Built in swift-foundation's package, as the Bazel target is:
-                // its string API searches with Essentials' `package` helpers.
-                .unsafeFlags(["-package-name", "swift-foundation"]),
-            ]
-        ),
-        .target(
-            name: "FoundationNetworking",
-            dependencies: ["Foundation"],
-            path: "foundation/networking",
-            exclude: ["BUILD.bazel"]
         ),
         // The modules SwiftUI stands on, off Apple: what Isomer's SwiftUI
         // reads of its host and runtime (IsomerSwiftUI: the render tree's wire
@@ -135,7 +105,6 @@ let package = Package(
             name: "IsomerSwiftUI",
             dependencies: [
                 .product(name: "SwiftProtobuf", package: "swift-protobuf"),
-                .target(name: "Foundation", condition: .when(platforms: [.android, .wasi])),
             ],
             path: "shared/isomer_swift_ui",
             exclude: ["BUILD.bazel"],
@@ -145,19 +114,16 @@ let package = Package(
         ),
         .target(
             name: "CoreTransferable",
-            dependencies: [.target(name: "Foundation", condition: .when(platforms: [.android, .wasi]))],
             path: "frameworks/core_transferable",
             exclude: ["BUILD.bazel"]
         ),
         .target(
             name: "UniformTypeIdentifiers",
-            dependencies: [.target(name: "Foundation", condition: .when(platforms: [.android, .wasi]))],
             path: "frameworks/uniform_type_identifiers",
             exclude: ["BUILD.bazel"]
         ),
         .target(
             name: "ImageIO",
-            dependencies: [.target(name: "Foundation", condition: .when(platforms: [.android, .wasi]))],
             path: "shared/image_io",
             exclude: ["BUILD.bazel"]
         ),
@@ -187,10 +153,9 @@ let package = Package(
                 // and terminal hosts): Isomer's elsewhere.
                 .target(name: "CoreTransferable", condition: .when(platforms: offApple)),
                 .target(name: "UniformTypeIdentifiers", condition: .when(platforms: offApple)),
-                .target(name: "Foundation", condition: .when(platforms: [.android, .wasi])),
                 .target(name: "ImageIO", condition: .when(platforms: offApple)),
-                .target(name: "CoreGraphics", condition: .when(platforms: [.linux, .windows])),
-                .target(name: "Combine", condition: .when(platforms: [.linux, .windows])),
+                .target(name: "CoreGraphics", condition: .when(platforms: corelibsFoundation)),
+                .target(name: "Combine", condition: .when(platforms: corelibsFoundation)),
             ],
             path: "shared",
             exclude: ["swift_ui_core/BUILD.bazel"],
@@ -201,8 +166,9 @@ let package = Package(
                 "renderers/TreeDecoder.swift",
                 "renderers/TreeEncoder.swift",
                 // Linux's and Windows' Foundation (the toolchain's) has no
-                // FileWrapper, which FileDocument hands over: Isomer's
-                // Foundation's, compiled into SwiftUI there (the file says when).
+                // FileWrapper, which FileDocument hands over: compiled into
+                // SwiftUI there (the file says when). Isomer's Foundation, the
+                // SDK's on Android and the web, has its own.
                 "swift_ui_corelibs",
             ],
             swiftSettings: [
@@ -262,7 +228,6 @@ let package = Package(
             name: "IsomerWire",
             dependencies: [
                 .product(name: "SwiftProtobuf", package: "swift-protobuf"),
-                .target(name: "Foundation", condition: .when(platforms: [.android, .wasi])),
             ],
             path: "shared/wire/swift",
             exclude: ["BUILD.bazel"],
@@ -275,7 +240,6 @@ let package = Package(
             dependencies: [
                 "IsomerWire",
                 .product(name: "SwiftProtobuf", package: "swift-protobuf"),
-                .target(name: "Foundation", condition: .when(platforms: [.android, .wasi])),
             ],
             path: "drive/serving",
             exclude: ["BUILD.bazel"]
@@ -341,6 +305,6 @@ let package = Package(
         ),
     ],
     // Swift 5 language mode, as isomer's Bazel targets build (those that
-    // opt into 6 say so: IsomerFoundation).
+    // opt into 6 say so).
     swiftLanguageModes: [.v5]
 )

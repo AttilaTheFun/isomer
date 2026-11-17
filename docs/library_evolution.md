@@ -10,7 +10,11 @@ os and the rest, which are built without it. Swift reports each such import
     using it means binary compatibility for 'MyLibrary' can't be guaranteed
 
 `--@isomer//:library_evolution` (off by default) builds Isomer's modules
-resilient, and the report goes. This page is what it costs, measured on the
+resilient, and the report goes. (Foundation, FoundationNetworking,
+IsomerFoundation, and on Android and the web CoreGraphics and Combine, are
+the Swift SDK's since 0.56: Isomer's SDKs build them resilient whatever the
+flag, as an Apple SDK's are, so an app's library can import them publicly
+either way; docs/hermetic_toolchains.md.) This page is what it costs, measured on the
 Android Storybook, and why it stays a flag.
 
 ## The report, exactly
