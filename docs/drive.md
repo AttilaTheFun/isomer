@@ -218,7 +218,19 @@ and brings back the same process, its state as it was, as its icon does
 (`simctl launch` without terminating it, from the home screen, so no other
 app's "◀" link shows in the status bar), and brings back so too an app iOS
 suspended because it opened another (Safari, for a link). Inactive, and
-active from inactive, are the driver's. ISO_DRIVE_TRACE=1 in the app's environment prints each reading's walk of
+active from inactive, are the driver's, and after the launcher brings an
+app back `HeadlessApp.scene(.active)` has its driver make the phase active
+too: iOS can leave the scene it brought back inactive (seen on a
+Shireworks slot, whose simulators no Simulator.app shows). The driver
+steps from the phase SwiftUI's scene delegate was last told, by iOS or by
+the driver (UIKit's scene notifications, followed from the driver's
+start), so a phase the app has already moves nothing. The launcher knows
+the app is suspended from RunningBoard's jetsam state where `sudo` asks no
+password (`launchctl procinfo`, root's alone), else from what RunningBoard
+last logged of the process in the simulator's log ("Suspending task." or
+"Resuming task.", `simctl spawn … log show`, about a second a reading),
+else from its scheduling priority (4 once suspended, though it can stay
+where it was). ISO_DRIVE_TRACE=1 in the app's environment prints each reading's walk of
 the tree; on the Mac it asks its own process as an
 accessibility client would (AXUIElement), on the main thread. A list's row
 of texts is a button, as Isomer's renderers give it. Launch with simctl's

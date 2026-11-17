@@ -621,7 +621,10 @@ public final class HeadlessApp: @unchecked Sendable {
     /// in the Dock on the Mac). The screen once it settles; empty when the
     /// launcher sent the app where it answers nothing (the iPhone's home
     /// screen: iOS suspends it there until `scene(.active)` brings it back,
-    /// the same process with its state).
+    /// the same process with its state). An app the launcher brought back
+    /// is then made active by its driver too, which moves nothing where the
+    /// phase is active already: iOS can leave a scene brought back from the
+    /// home screen inactive (a simulator no Simulator.app shows).
     @discardableResult
     public func scene(_ phase: ScenePhase) throws -> HeadlessScreen {
         if local == nil, let requests, let launched, launched.isRunning {
@@ -641,7 +644,10 @@ public final class HeadlessApp: @unchecked Sendable {
             try? FileManager.default.removeItem(at: request)
             let said = (try? String(contentsOf: answer, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
             try? FileManager.default.removeItem(at: answer)
-            if said == "ok" { return try screen() }
+            if said == "ok" {
+                guard phase == .active else { return try screen() }
+                return try send("scene") { $0.value = phase.rawValue }
+            }
             if said?.hasPrefix("ok ") == true { return HeadlessScreen(Wire_Screen()) }
         }
         return try send("scene") { $0.value = phase.rawValue }
