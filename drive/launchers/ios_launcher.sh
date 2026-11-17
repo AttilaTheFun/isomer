@@ -117,11 +117,13 @@ bring_forward() {
 # gesture goes (SpringBoard opened), until iOS suspends the app (at most
 # 3 s), answered `ok away`: the app answers nothing there, so the test asks
 # it nothing until it is back. Active: brought back if it was sent home or
-# is suspended (another app opened over it: Safari, for a link); else it is
-# in front, or another app was opened over it a moment ago and iOS hasn't
-# suspended it yet: opened as its icon opens it (nothing moves for an app in
-# front) and left to the driver, which moves the phase from inactive (its
-# own) to active. Inactive: the driver's (iOS has no way to it from here).
+# is suspended (another app opened over it: Safari, for a link), or is
+# suspended within a moment (iOS suspends an app a second or so after
+# another opens over it; an app in front waits that out); else it is in
+# front: opened as its icon opens it all the same (nothing moves for an app
+# in front; one still behind another comes forward), and left to the
+# driver, which moves the phase from inactive (its own) to active.
+# Inactive: the driver's (iOS has no way to it from here).
 scene() {
     case "$1" in
     background)
@@ -134,12 +136,15 @@ scene() {
         scene_answer="ok away"
         ;;
     active)
-        if [ "$away" = 1 ] || suspended; then
-            bring_forward || return 1
-        else
-            xcrun simctl launch "$udid" "$bundle" > /dev/null 2>&1
-            return 1
-        fi
+        local until=$((SECONDS + 2))
+        until [ "$away" = 1 ] || suspended; do
+            if [ "$SECONDS" -ge "$until" ]; then
+                xcrun simctl launch "$udid" "$bundle" > /dev/null 2>&1
+                return 1
+            fi
+            sleep 0.1
+        done
+        bring_forward || return 1
         ;;
     *) return 1 ;;
     esac
