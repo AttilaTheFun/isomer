@@ -1,5 +1,5 @@
 // `WasmKitRuntime` — a `WasmRuntime` on WasmKit, the Swift WebAssembly
-// interpreter (MODULE.bazel's `wasmkit`, AttilaTheFun/WasmKit): the engine
+// interpreter (MODULE.bazel's `wasmkit`, swiftwasm/WasmKit 0.5.0): the engine
 // on every native host since 0.38, when it replaced WAMR. Apple's WasmView
 // registers it as the default; an app that configures its own registers it
 // before its first feature launches:

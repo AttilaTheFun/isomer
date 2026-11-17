@@ -43,8 +43,8 @@ doc.
   module must not use rules_js's `npm` extension (flatbuffers hands it a tag
   rules_js 3 rejects), so the web example declares the Node APIs it uses in
   `node.d.ts`.
-- **WasmKit** (MODULE.bazel's `wasmkit`, the AttilaTheFun/WasmKit fork,
-  built by `tools/wasmkit/BUILD.wasmkit.bazel`) is the engine Isomer's native
+- **WasmKit** (MODULE.bazel's `wasmkit`, swiftwasm/WasmKit 0.5.0 with
+  one patch, built by `tools/wasmkit/BUILD.wasmkit.bazel`) is the engine Isomer's native
   hosts and `//tools/wasm/wasi_run` run reactors and WASI commands on. WAMR,
   vendored as `@wamr` with wamrc built against the BCR `llvm` module until
   0.38, is gone, and the `llvm` dependency with it.

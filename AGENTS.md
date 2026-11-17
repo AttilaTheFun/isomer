@@ -755,12 +755,15 @@ acceptable.
 Since 0.33 Visor Isomer's iPhone app runs on WasmKit with interpreted
 wasi-threads Swift; since 0.38 WasmKit runs reactors on every native host
 (WAMR, Isomer's engine before it, and WAMR's AOT tier were removed then:
-no wamrc, no `.aot`, no `--define wamr_*`). The engine work is in the
-WasmKit fork (measured against WAMR on the same reactor); what is here is
-how Isomer runs it.
+no wamrc, no `.aot`, no `--define wamr_*`). The engine work Isomer did
+(measured against WAMR on the same reactor) is upstream's since WasmKit
+0.5.0; what is here is how Isomer runs it.
 
-- **WasmKit** (MODULE.bazel's `wasmkit`: AttilaTheFun/WasmKit, the fork,
-  pinned by commit; built by tools/wasmkit/BUILD.wasmkit.bazel after its
+- **WasmKit** (MODULE.bazel's `wasmkit`: swiftwasm/WasmKit 0.5.0, by tag,
+  with one patch until upstream takes it, tools/patches/
+  wasmkit_host_linking.patch: the side-modules author's host-linking API
+  and cheaper host calls, from AttilaTheFun/WasmKit's isomer/side-modules;
+  built by tools/wasmkit/BUILD.wasmkit.bazel after its
   Package.swift, default traits, optimized in every build, for macOS, iOS,
   Android, Linux and Windows) is behind `WasmKitRuntime`
   (//shared/wasm_host:wasmkit_runtime). Apple's WasmView registers it as
@@ -773,7 +776,7 @@ how Isomer runs it.
   (/tmp, /home/app, HOME and XDG_*), binds the six iso_hot callbacks and
   swift_ffi through `SwiftFFIHostRuntime` (the dependencies' register
   exports called at launch), and drains jobs on the main queue, held while
-  a tree is undrawn. Nothing of Isomer's goes into the fork. iOS 18 and
+  a tree is undrawn. Nothing of Isomer's goes into WasmKit. iOS 18 and
   macOS 15 (WasmKit's Synchronization): so, since WAMR went, WasmView and
   every app that hosts reactors (the examples' wasm cells raised with it). `ISO_WASMKIT_TRACE=1` prints each guest
   thread's instance and each swift_ffi import with the thread it came on.
@@ -826,7 +829,8 @@ how Isomer runs it.
   its screens match the ICU build's.
 - **Shared memory needs WasmKit's guard pages**: a 4 GiB reservation per
   memory and signal-trapped bounds checks, on macOS, Linux, iOS and
-  (upstream's #527, since the pin moved to upstream's main) 64-bit Android.
+  (WasmKit 0.5.0's #527) 64-bit Android, where `canRunThreads` is true now
+  too, though no threaded reactor is built until Swift 6.5's threads SDK.
   Windows checks bounds in software and runs no threaded reactor. `WasmKitRuntime.canRunThreads` tries one; a host
   with both builds of its reactor picks the threaded one only then (an
   iPhone's address space may refuse it; nothing here has run on a device).
