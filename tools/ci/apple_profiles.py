@@ -77,24 +77,39 @@ class Profile:
 
 
 def profiles_in(folder):
+    """Every profile under `folder`, at any depth (a .tar of a folder of them as much as of them)."""
     found = []
-    for name in sorted(os.listdir(folder)):
-        if not name.endswith((".mobileprovision", ".provisionprofile")):
-            continue
-        path = os.path.join(folder, name)
-        with open(path, "rb") as file:
-            info = profile_plist(file.read())
-        if info is None:
-            continue
-        try:
-            found.append(Profile(path, info))
-        except ValueError:
-            continue
+    for root, _, files in os.walk(folder):
+        for name in sorted(files):
+            if not name.endswith((".mobileprovision", ".provisionprofile")):
+                continue
+            path = os.path.join(root, name)
+            with open(path, "rb") as file:
+                info = profile_plist(file.read())
+            if info is None:
+                sys.stderr.write(f"apple_profiles: {os.path.relpath(path, folder)} isn't a profile it can read\n")
+                continue
+            try:
+                found.append(Profile(path, info))
+            except ValueError as error:
+                sys.stderr.write(f"apple_profiles: {os.path.relpath(path, folder)} left out: {error}\n")
     return found
 
 
+def described(profiles, bundle, certificate, now):
+    """What there is for `bundle`, and why none of it fits: each profile's kind, end, and whether it names the
+    certificate (its SHA-1 alone, never anything of the key)."""
+    mine = [p for p in profiles if p.bundle_id == bundle]
+    if not mine:
+        return f"no profile here is for {bundle} (there are {len(profiles)}: {', '.join(sorted({p.bundle_id for p in profiles})) or 'none'})"
+    return "; ".join(f"{p.name} ({p.kind}, {'expired' if p.expires <= now else 'until ' + p.expires.date().isoformat()}, "
+                     f"{'names' if certificate in p.certificates else 'does not name'} the signing certificate {certificate[:8]}…)"
+                     for p in mine)
+
+
 def bundle_info(bundle):
-    for relative in ("Contents/Info.plist", "Info.plist"):
+    # A Mac app's, an iPhone app's or framework's, a Mac framework's (Versions/Current/Resources, by its link).
+    for relative in ("Contents/Info.plist", "Info.plist", "Resources/Info.plist"):
         path = os.path.join(bundle, relative)
         if os.path.isfile(path):
             with open(path, "rb") as file:
@@ -283,8 +298,9 @@ def choose(profiles, bundles, kinds, certificate, now):
                 chosen[identifier] = max(candidates, key=lambda p: p.expires)
         if len(chosen) == len(set(bundles)):
             return chosen
-    missing = next((i for i in bundles if not any(p.bundle_id == i and p.kind in kinds and p.expires > now for p in profiles)), bundles[0])
-    fail(f"no {' or '.join(kinds)} profile for {missing} here naming the signing certificate")
+    missing = next((i for i in bundles if not any(p.bundle_id == i and p.kind in kinds and p.expires > now and certificate in p.certificates
+                                                   for p in profiles)), bundles[0])
+    fail(f"no {' or '.join(kinds)} profile for {missing} here naming the signing certificate: {described(profiles, missing, certificate, now)}")
 
 
 def main():
@@ -349,7 +365,7 @@ def main():
             restricted = sorted(key for key, value in own.items() if restricted_on_mac(key, value))
             if restricted:
                 fail(f"{app_id} asks for {', '.join(restricted)}, which only a Developer ID profile allows, and there's no "
-                     "profile for it here naming the signing certificate: put its Developer ID profile in the profiles")
+                     f"profile for it here naming the signing certificate: {described(profiles, app_id, certificate, now)}")
             steps.append({"path": app, "bundle": True, "entitlements": written(own, "entitlements-app.plist") if own else None,
                           "profile": None, "embed": None})
     json.dump(steps, sys.stdout, indent=1)

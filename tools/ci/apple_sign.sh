@@ -54,7 +54,8 @@
 # A .p12 is as Keychain Access exports one (3DES): rcodesign 0.29 can't open
 # OpenSSL 3's default (AES, PBKDF2), so one re-wrapped needs -legacy.
 # Linux alone (the keys go to /dev/shm). Needs bash, python3, openssl,
-# curl, tar, zstd, unzip, zip and sha256sum.
+# curl, tar, unzip, zip and sha256sum, and zstd for --dmg: any missing put in
+# with apt-get where it can be (a CI job's container, as root or with sudo).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -89,25 +90,6 @@ for i in "${!packages[@]}"; do
 done
 mkdir -p "$out"
 out="$(cd "$out" && pwd)"
-for tool in curl tar zstd unzip zip python3 openssl sha256sum; do
-  command -v "$tool" > /dev/null || fail "no $tool here"
-done
-[ -f "$HERE/apple_profiles.py" ] || fail "apple_profiles.py isn't beside this script"
-
-# The tools, pinned: rcodesign (apple-platform-rs) and dmg (rules_applecross ported-tools).
-RCODESIGN_VERSION=0.29.0
-DMG_RELEASE=ported-tools-0.0.92
-case "$(uname -m)" in
-  aarch64|arm64)
-    arch=aarch64
-    rcodesign_sha=4af92c87ddf52f5f2d1258a3b4e56c7dcb8f1b2468df744976c5f139e031961f
-    dmg_sha=e902f3beb581aee24796084d2e2284241e35540a95230e01f5c1899ee61c4d52 ;;
-  x86_64)
-    arch=x86_64
-    rcodesign_sha=dbe85cedd8ee4217b64e9a0e4c2aef92ab8bcaaa41f20bde99781ff02e600002
-    dmg_sha=67ee77b978b2b7b0875c9201bb9b09e5a5f716a49450bc53c804a7e2db4866b9 ;;
-  *) fail "no pinned tools for $(uname -m)" ;;
-esac
 
 work="$(mktemp -d)"
 secrets=""
@@ -119,26 +101,8 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-# fetch <url> <sha256> <file>
-fetch() {
-  curl -fsSL --retry 3 -o "$3" "$1"
-  echo "$2  $3" | sha256sum -c --quiet - || fail "$(basename "$3") isn't the pinned $2"
-}
-mkdir -p "$work/tools"
-fetch "https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F$RCODESIGN_VERSION/apple-codesign-$RCODESIGN_VERSION-$arch-unknown-linux-musl.tar.gz" \
-  "$rcodesign_sha" "$work/rcodesign.tar.gz"
-tar -xzf "$work/rcodesign.tar.gz" -C "$work/tools" --strip-components=1
-rcodesign="$work/tools/rcodesign"
-[ -x "$rcodesign" ] || fail "rcodesign's archive isn't as expected"
-if [ -n "$make_dmg" ]; then
-  fetch "https://github.com/apple-cross-toolchain/rules_applecross/releases/download/$DMG_RELEASE/dmg-linux-$arch.tar.zst" \
-    "$dmg_sha" "$work/dmg.tar.zst"
-  zstd -dc "$work/dmg.tar.zst" | tar -x -C "$work/tools"
-  dmg="$work/tools/bin/dmg"
-  [ -x "$dmg" ] || fail "dmg's archive isn't as expected"
-fi
-
-# The keys, into a tmpfs folder of their own: those the packages need.
+# The keys, into a tmpfs folder of their own, before anything else runs (a tool put in, a download): with
+# --key-from-env, taken from the environment and unset at once, so no process this starts inherits them (NCH).
 needed=()
 [ -z "$mac" ] || needed+=(apple-developer-id-p12 apple-developer-id-password apple-notary-key apple-notary-key-id apple-notary-issuer)
 [ -z "$ios" ] || needed+=(apple-development-p12 apple-development-password)
@@ -173,7 +137,70 @@ if [ -n "$from_env" ]; then
   done
   unset APPLE_DEVELOPER_ID_P12 APPLE_DEVELOPER_ID_PASSWORD APPLE_NOTARY_KEY APPLE_NOTARY_KEY_ID APPLE_NOTARY_ISSUER \
     APPLE_DEVELOPMENT_P12 APPLE_DEVELOPMENT_PASSWORD APPLE_PROFILES
-else
+fi
+# The tools it uses; in a CI job's own container (throwaway), any missing put in with apt-get, said so; else refused.
+tools=(curl tar unzip zip python3 openssl sha256sum)
+[ -z "$make_dmg" ] || tools+=(zstd)
+missing=()
+for tool in "${tools[@]}"; do
+  command -v "$tool" > /dev/null || missing+=("$tool")
+done
+if [ ${#missing[@]} -gt 0 ]; then
+  # Not `packages`: that's what's signed.
+  apt_packages=()
+  for tool in "${missing[@]}"; do
+    case "$tool" in sha256sum) apt_packages+=(coreutils) ;; python3) apt_packages+=(python3-minimal) ;; *) apt_packages+=("$tool") ;; esac
+  done
+  as_root=()
+  [ "$(id -u)" = 0 ] || { sudo -n true 2> /dev/null && as_root=(sudo -n); }
+  if command -v apt-get > /dev/null && { [ "$(id -u)" = 0 ] || [ ${#as_root[@]} -gt 0 ]; }; then
+    echo "apple_sign: putting in ${missing[*]} (apt-get)"
+    if ! { "${as_root[@]}" apt-get update -qq > /dev/null \
+           && "${as_root[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${apt_packages[@]}" > /dev/null; }; then
+      fail "${missing[*]} couldn't be put in"
+    fi
+  fi
+  for tool in "${missing[@]}"; do
+    command -v "$tool" > /dev/null || fail "no $tool here"
+  done
+fi
+[ -f "$HERE/apple_profiles.py" ] || fail "apple_profiles.py isn't beside this script"
+
+# The tools, pinned: rcodesign (apple-platform-rs) and dmg (rules_applecross ported-tools).
+RCODESIGN_VERSION=0.29.0
+DMG_RELEASE=ported-tools-0.0.92
+case "$(uname -m)" in
+  aarch64|arm64)
+    arch=aarch64
+    rcodesign_sha=4af92c87ddf52f5f2d1258a3b4e56c7dcb8f1b2468df744976c5f139e031961f
+    dmg_sha=e902f3beb581aee24796084d2e2284241e35540a95230e01f5c1899ee61c4d52 ;;
+  x86_64)
+    arch=x86_64
+    rcodesign_sha=dbe85cedd8ee4217b64e9a0e4c2aef92ab8bcaaa41f20bde99781ff02e600002
+    dmg_sha=67ee77b978b2b7b0875c9201bb9b09e5a5f716a49450bc53c804a7e2db4866b9 ;;
+  *) fail "no pinned tools for $(uname -m)" ;;
+esac
+
+# fetch <url> <sha256> <file>
+fetch() {
+  curl -fsSL --retry 3 -o "$3" "$1"
+  echo "$2  $3" | sha256sum -c --quiet - || fail "$(basename "$3") isn't the pinned $2"
+}
+mkdir -p "$work/tools"
+fetch "https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F$RCODESIGN_VERSION/apple-codesign-$RCODESIGN_VERSION-$arch-unknown-linux-musl.tar.gz" \
+  "$rcodesign_sha" "$work/rcodesign.tar.gz"
+tar -xzf "$work/rcodesign.tar.gz" -C "$work/tools" --strip-components=1
+rcodesign="$work/tools/rcodesign"
+[ -x "$rcodesign" ] || fail "rcodesign's archive isn't as expected"
+if [ -n "$make_dmg" ]; then
+  fetch "https://github.com/apple-cross-toolchain/rules_applecross/releases/download/$DMG_RELEASE/dmg-linux-$arch.tar.zst" \
+    "$dmg_sha" "$work/dmg.tar.zst"
+  zstd -dc "$work/dmg.tar.zst" | tar -x -C "$work/tools"
+  dmg="$work/tools/bin/dmg"
+  [ -x "$dmg" ] || fail "dmg's archive isn't as expected"
+fi
+
+if [ -z "$from_env" ]; then
   # The keys, all or nothing; then their passwords on their own, a password-less .p12 having none kept (a secret is
   # never empty): one the service doesn't hold is an empty file.
   keys=() passwords=()
