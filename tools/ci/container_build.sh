@@ -399,17 +399,23 @@ if has apple; then
         results+=(1)
     fi
     # The driver probe on the SwiftUI of Apple (views shaped as those of an
-    # app), upright and turned to landscape by itself, and its tests, a Mac
-    # command as for the Storybook: the checks of the Apple driver itself.
+    # app), upright and turned to landscape by itself, and on the Mac, and
+    # its tests, a Mac command as for the Storybook: the checks of the Apple
+    # driver itself.
     probe_apps=(//apple/driver_probe_ios_application:driver_probe_ios_application
                 //apple/driver_probe_ios_application:driver_probe_landscape_ios_application)
+    probe_mac=//apple/driver_probe_macos_application
     probe_runner=//headless/driver_probe:driver_probe_headful_apple_runner
-    if bazel build "${headful[@]}" --ios_multi_cpus=sim_arm64 "${probe_apps[@]}" && bazel build "$probe_runner"; then
+    if bazel build "${headful[@]}" --ios_multi_cpus=sim_arm64 "${probe_apps[@]}" && bazel build "${headful[@]}" "$probe_mac" &&
+        bazel build "$probe_runner"; then
         mkdir -p "$platforms_out/headful/probe"
         for app in "${probe_apps[@]}"; do
             for f in $(files "${headful[@]}" --ios_multi_cpus=sim_arm64 "$app"); do
                 case "$f" in *.ipa) cp "$exec_root/$f" "$platforms_out/headful/probe/" ;; esac
             done
+        done
+        for f in $(files "${headful[@]}" "$probe_mac"); do
+            case "$f" in *.zip) cp "$exec_root/$f" "$platforms_out/headful/probe/" ;; esac
         done
         for f in $(files "$probe_runner"); do cp "$exec_root/$f" "$platforms_out/headful/probe/driver_probe_headful_apple_runner"; done
     else

@@ -6,12 +6,14 @@
 // long press; controls in a Form's rows, a text field and a multi-line one,
 // the navigation title's own button; sheets closed by `dismiss` alone, and
 // one presented over another; the scene's phase, and what an app does on
-// coming back to the foreground). PROBE_SCREEN picks the screen: the
-// controls (the default), the list, the sheet's, the form, the sheets or the
-// scene. The same
+// coming back to the foreground; an alert with a text field, a confirmation
+// dialog, a row's context menu and a long press). PROBE_SCREEN picks the
+// screen: the controls (the default), the list, the sheet's, the form, the
+// sheets, the scene, the dialogs or the sign-in prompt. The same
 // source is the iPhone's probe on Apple's SwiftUI
 // (//apple/driver_probe_ios_application), which its tests drive through
-// Apple's driver, upright and turned to landscape by the app itself.
+// Apple's driver, upright and turned to landscape by the app itself, and the
+// Mac's (//apple/driver_probe_macos_application).
 
 import Foundation
 import SwiftUI
@@ -26,6 +28,8 @@ struct DriverProbe: App {
             case "form": FormScreen()
             case "sheets": SheetsScreen()
             case "scene": SceneScreen()
+            case "dialogs": DialogsScreen()
+            case "signin": SignInScreen()
             default: ControlsScreen()
             }
         }
@@ -86,7 +90,7 @@ struct ControlsScreen: View {
                     Button("Save") { last = "saved" }
                         .disabled(true)
                 }
-                ToolbarItem(placement: .bottomBar) {
+                ToolbarItem(placement: .probeBottomBar) {
                     Button("New session", systemImage: "square.and.pencil") { last = "new session" }
                 }
             }
@@ -281,4 +285,82 @@ struct SceneScreen: View {
     }
 
     private func name(_ phase: ScenePhase) -> String { "\(phase)" }
+}
+
+/// What an app asks with: an alert with a text field and two buttons, a
+/// confirmation dialog, a list row's context menu (a session's, opened by a
+/// long press) and a long-press gesture.
+struct DialogsScreen: View {
+    @State private var last = "nothing yet"
+    @State private var renaming = false
+    @State private var name = ""
+    @State private var deleting = false
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Text("Last: \(last)")
+                Button("Rename…") { renaming = true }
+                Button("Delete…") { deleting = true }
+                Button("Session alpha") { last = "opened alpha" }
+                    .accessibilityIdentifier("session-alpha")
+                    .contextMenu {
+                        Button("Project Settings") { last = "project settings" }
+                        Button("Archive", role: .destructive) { last = "archived" }
+                    }
+                Text("Hold to star")
+                    .onLongPressGesture { last = "starred" }
+            }
+            .navigationTitle("Dialogs")
+        }
+        .alert("Rename Session", isPresented: $renaming) {
+            TextField("Name", text: $name)
+            Button("Cancel", role: .cancel) { last = "rename cancelled" }
+            Button("Rename") { last = "renamed \(name)" }
+        } message: {
+            Text("Give the session a name.")
+        }
+        .confirmationDialog("Delete the session?", isPresented: $deleting, titleVisibility: .visible) {
+            Button("Delete", role: .destructive) { last = "deleted" }
+            Button("Keep", role: .cancel) { last = "kept" }
+        }
+    }
+}
+
+/// An alert an app asks with as a page arrives (a sign-in prompt that the
+/// session's first reading brings), over a page shown at launch, its
+/// composer focused.
+struct SignInScreen: View {
+    var body: some View {
+        NavigationStack {
+            SignInPage()
+        }
+    }
+}
+
+struct SignInPage: View {
+    @State private var asking = false
+    @State private var last = "nothing yet"
+    @State private var draft = ""
+    @FocusState private var composing: Bool
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Text("Last: \(last)")
+            TextField("Message", text: $draft)
+                .focused($composing)
+        }
+        .padding()
+        .navigationTitle("Session")
+        .onAppear {
+            composing = true
+            asking = true
+        }
+        .alert("Sign In to Claude", isPresented: $asking) {
+            Button("Open Sign-In Page") { last = "opened the page" }
+            Button("Later", role: .cancel) { last = "later" }
+        } message: {
+            Text("Sign in on the page that opens.")
+        }
+    }
 }

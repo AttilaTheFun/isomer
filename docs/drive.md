@@ -172,6 +172,34 @@ what takes no activation (a list's cell, a control) as a tap would, at its
 place in the window however the app is turned. `dismiss` closes what is
 presented on top: escape, else a sheet a person may swipe away, as the
 swipe does (its `onDismiss` runs), else its own Cancel, Close or Done.
+An alert or a confirmation dialog is the screen while it is up, as
+Isomer's driver gives it: its buttons, its text fields, its title and
+message (the presentation's, and texts), tapped and typed into by their
+labels; on iOS they are what the alert's views give accessibility, and what
+they don't give (an alert whose views the walk can't reach) is read from
+its UIAlertController (its actions, its text fields), an action chosen as
+its button chooses it (`_dismissWithAction:`; ISO_DRIVE_ALERT_FROM_CONTROLLER=1
+reads it so alone, the driver probe's check); on the Mac, its sheet's
+elements, and `dismiss` presses its cancel button (the one Escape presses).
+`longpress` on iOS is a finger's, delivered as UIKit delivers one: a
+UITouch on the view under the element (SwiftUI's gesture container there),
+in the application's touches event with the IOHIDEvent UIKit reads, held a
+second and lifted (UIKit's and IOKit's SPI, as KIF makes touches: the
+driver is never in a release), so a `.contextMenu` opens (its items then
+the screen's buttons, as an open menu's are) and an `onLongPressGesture`
+fires; should the touch open nothing where a context menu is, its
+interaction presents it as the long press would (`_presentMenuAtLocation:`).
+On the Mac, where a secondary click opens a context menu, `longpress` takes
+the menu the view gives one (`menu(for:)`) and holds it open in the driver,
+not shown, its items the screen's buttons until one is tapped or another
+command comes (a menu AppKit shows tracks the mouse in a loop on the main
+thread, where the driver's work would wait until it closed); a view with
+none is pressed with the mouse a second, by events of the app's own queue
+(the app made active first), which fires an `onLongPressGesture`. A
+long press that changes nothing on the screen is an error, as Isomer's
+driver's is for a view that takes none. What isn't driven: a long press's
+drag (a context menu's preview dragged, a reorder), a press held for a
+given time, and on the Mac a menu shown on its screen.
 `scene` moves SwiftUI's scene phase as leaving the app and coming back
 does: on iOS, SwiftUI's own scene delegate is told each step UIKit tells it
 (will resign active, did enter background, will enter foreground, did become

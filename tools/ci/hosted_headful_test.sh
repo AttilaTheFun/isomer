@@ -225,6 +225,17 @@ apple)
         else
             run storybook_headful_macos_test "$out" --test_env=ISOMER_MAC_APP="$app"
         fi
+        # The driver probe's tests on the Mac, when CI's container built the
+        # Mac's probe and its runner: the Mac's accessibility driver's checks.
+        probe="$(dirname "$ipa")/probe"
+        probe_zip="$(ls "$probe"/*.zip 2> /dev/null | head -1)"
+        if [ -f "$probe/driver_probe_headful_apple_runner" ] && [ -n "$probe_zip" ]; then
+            ditto -x -k "$probe_zip" "$work/probe-mac" || exit 1
+            runner="$probe/driver_probe_headful_apple_runner" apple_runner driver_probe_headful_macos_test "$out" \
+                ISOMER_MAC_APP="$(ls -d "$work/probe-mac/"*.app | head -1)" \
+                ISOMER_BUNDLE_ID=com.LoganShire.IsomerExamples.DriverProbe \
+                ISOMER_HEADFUL_LAUNCHER="$ROOT/drive/launchers/macos_launcher.sh"
+        fi
     fi
     ;;
 android)
