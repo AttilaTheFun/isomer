@@ -338,11 +338,13 @@ if has linux; then
     results+=($?)
     # And the checks built for wasm, each a WASI command run in headless
     # Chrome (//tools/wasm/wasi_run_browser): Foundation, Combine, OSLog,
-    # the Metal translator.
+    # the Metal translator, and a program built out of band against a
+    # wasm_sdk_bundle (the Playground SDK, the Swift SDK Foundation in it).
     run_tests --test_output=errors //tests/renderer:mock_renderer_test //tests/snapshot:snapshot_test //tests/hub:hub_test \
         //foundation/tests:foundation_test //foundation/tests:internationalization_test \
         //foundation/tests:internationalization_trimmed_test //frameworks/combine/tests:combine_test \
-        //frameworks/os_log/tests:os_log_test //metal/isomer_metal/tests:translator_test
+        //frameworks/os_log/tests:os_log_test //metal/isomer_metal/tests:translator_test \
+        //tools/wasm/sdk_bundle_test
     results+=($?)
     cd "$root/examples"
 fi
