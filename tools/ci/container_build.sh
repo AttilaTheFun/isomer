@@ -263,14 +263,19 @@ if has windows; then
     bazel build "${windows[@]}" --@isomer//drive:headful //windows/storybook_windows_application \
         //headless/storybook_headless_application:storybook_headful_windows_test
     results+=($?)
-    # The WasmKit host runtime for Windows: an app may host reactors there.
-    bazel build "${windows[@]}" @isomer//shared/wasm_host:wasmkit_runtime
+    # The WasmKit host runtime for Windows: an app may host reactors there;
+    # mixed mode over it, and the wasm cell (the Windows wasm example links
+    # it; nothing built here does).
+    bazel build "${windows[@]}" @isomer//shared/wasm_host:wasmkit_runtime @isomer//shared/wasm_host:mixed_runtime \
+        @isomer//windows/libraries/swift_ui_wasm:host
     results+=($?)
 fi
 if has android; then
     # The WasmKit host runtime for Android too: an app may host reactors
-    # there (the Playground does), though no app here does.
-    bazel build --platforms=@isomer//tools/platforms:android_arm64 @isomer//shared/wasm_host:wasmkit_runtime
+    # there (the Playground does), though no app here does; and mixed mode
+    # over it (its thread on the Foundation of the Swift SDK there).
+    bazel build --platforms=@isomer//tools/platforms:android_arm64 @isomer//shared/wasm_host:wasmkit_runtime \
+        @isomer//shared/wasm_host:mixed_runtime
     results+=($?)
     # The Windows Electron package, zipped by the jar of the hermetic JDK
     # (x86_64 on Linux, so built beside Android).
@@ -284,6 +289,14 @@ if has android; then
         //tests/swift6_app:swift6_app_test //tests/android_libcxx_shared:android_libcxx_shared_test \
         //tests/prebuilt_swift_library:prebuilt_swift_library_test \
         //tests/library_evolution:library_evolution_test
+    results+=($?)
+fi
+if has apple; then
+    # Mixed mode on the Mac (docs/side_modules.md): the Storybook as a side
+    # module over its runtime module, native code beside WasmKit, and
+    # interpreted throughout (ISO_MIXED_NATIVE=0), each rendering what its
+    # reactor renders, byte for byte. Nothing drawn.
+    run_tests --test_output=errors //tests/side_modules:mixed_render_test //tests/side_modules:mixed_interpreted_render_test
     results+=($?)
 fi
 if has web; then
@@ -319,16 +332,18 @@ if has linux; then
     results+=($?)
     cd "$root"
     # The Linux wasm cell too (the Linux Playground links it; nothing
-    # here does).
-    bazel build //swift_gpu/linux:gl_backend_test //linux/libraries/swift_ui_wasm
+    # here does), and mixed mode on Linux (its thread on corelibs Foundation).
+    bazel build //swift_gpu/linux:gl_backend_test //linux/libraries/swift_ui_wasm //shared/wasm_host:mixed_runtime
     results+=($?)
     # And the checks built for wasm, each a WASI command run in headless
     # Chrome (//tools/wasm/wasi_run_browser): Foundation, Combine, OSLog,
-    # the Metal translator.
+    # the Metal translator, and a program built out of band against a
+    # wasm_sdk_bundle (the Playground SDK, the Swift SDK Foundation in it).
     run_tests --test_output=errors //tests/renderer:mock_renderer_test //tests/snapshot:snapshot_test //tests/hub:hub_test \
         //foundation/tests:foundation_test //foundation/tests:internationalization_test \
         //foundation/tests:internationalization_trimmed_test //frameworks/combine/tests:combine_test \
-        //frameworks/os_log/tests:os_log_test //metal/isomer_metal/tests:translator_test
+        //frameworks/os_log/tests:os_log_test //metal/isomer_metal/tests:translator_test \
+        //tools/wasm/sdk_bundle_test
     results+=($?)
     cd "$root/examples"
 fi

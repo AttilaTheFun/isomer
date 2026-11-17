@@ -545,6 +545,150 @@ _wasm_platform_transition = transition(
     outputs = ["//command_line_option:platforms"],
 )
 
+_SWIFT_TOOLCHAIN_TYPE = Label("@rules_swift//toolchains:toolchain_type")
+_CC_TOOLCHAIN_TYPE = Label("@bazel_tools//tools/cpp:toolchain_type")
+
+def _wasm_toolchain_files_impl(ctx):
+    # The wasm Swift toolchain's own inputs: the Swift SDK bundle (its WASI
+    # sysroot and static resources, Foundation's family among them) and the
+    # host compiler. The bundle's filegroup is private to rules_swift's
+    # repository; toolchain resolution reaches it.
+    files = []
+    toolchain = ctx.toolchains[_SWIFT_TOOLCHAIN_TYPE].swift_toolchain
+    for config in toolchain.tool_configs.values():
+        for tool in config.additional_tools:
+            if type(tool) == "File":
+                files.append(tool)
+
+    # And the C toolchain's: the linker (lld) the Swift toolchain links with.
+    transitive = []
+    cc = ctx.toolchains[_CC_TOOLCHAIN_TYPE]
+    if cc:
+        transitive.append(cc.cc.all_files)
+    return [DefaultInfo(files = depset(files, transitive = transitive))]
+
+wasm_toolchain_files = rule(
+    implementation = _wasm_toolchain_files_impl,
+    toolchains = [
+        _SWIFT_TOOLCHAIN_TYPE,
+        config_common.toolchain_type(_CC_TOOLCHAIN_TYPE, mandatory = False),
+    ],
+    doc = "The files of the Swift and C toolchains resolved for the target " +
+          "platform (built for wasm32: the host compiler, lld and the wasm " +
+          "Swift SDK among them). wasm_sdk_bundle takes the SDK's Foundation " +
+          "from them; a check that compiles against a bundle, its tools.",
+)
+
+# The Swift SDK's Foundation family, which wasm_sdk_bundle carries. Since 0.56
+# Foundation on the web is the Swift SDK's (Isomer's Swift SDKs,
+# docs/hermetic_toolchains.md): nothing in a build depends on a Foundation
+# of Bazel's, so the bundle's deps bring none, and a compiler that carries a
+# wasm SDK's resources of its own (the Playground's staged ones: corelibs'
+# Foundation, or none) would meet another Foundation than the bundle's
+# SwiftUI was built against. So the bundle carries the registered SDK's:
+# its modules, its C modules and its archives, as it carried
+# @isomer//:foundation's before.
+#
+# Modules (wasi/<Name>.swiftmodule/<triple>.swiftmodule): the plain SDK's,
+# then the -i18n one's (FoundationInternationalization), when there.
+_SDK_FOUNDATION_MODULES = [
+    "Combine",
+    "CoreGraphics",
+    "DequeModule",
+    "Foundation",
+    "FoundationEssentials",
+    "FoundationNetworking",
+    "InternalCollectionsUtilities",
+    "IsomerDispatchTime",
+    "IsomerFoundation",
+    "OrderedCollections",
+    "_RopeModule",
+]
+_SDK_I18N_MODULES = [
+    "FoundationInternationalization",
+    "IsomerFoundationInternationalization",
+]
+
+# C modules: the SDK's directory (its headers and module map) → the
+# module's name. ICU's headers include each other as
+# <_foundation_unicode/…>, so the directory keeps its name in the bundle.
+_SDK_FOUNDATION_CLANG_MODULES = {"_FoundationCShims": "_FoundationCShims"}
+_SDK_I18N_CLANG_MODULES = {"_foundation_unicode": "_FoundationICU"}
+
+# The archives the link takes them from, in link order. Foundation's carries
+# IsomerFoundation, IsomerDispatchTime and the thread identity's C,
+# FoundationEssentials' the collections and the C shims: the SDK's archives
+# of those alone repeat them (a whole-archive link of both fails on
+# duplicate symbols), so they stay out.
+_SDK_FOUNDATION_ARCHIVES = [
+    "libFoundationNetworking.a",
+    "libFoundation.a",
+    "libFoundationEssentials.a",
+    "libCoreGraphics.a",
+    "libCombine.a",
+]
+_SDK_I18N_ARCHIVES = [
+    "libIsomerFoundationInternationalization.a",
+    "libFoundationInternationalization.a",
+    "lib_FoundationICU.a",
+]
+
+_SWIFT_STATIC = "/swift.xctoolchain/usr/lib/swift_static/"
+
+def _sdk_foundation(files):
+    """The Foundation family among the wasm toolchains' `files`: a struct of
+    `modules` (name → .swiftmodule), `clang_modules` (name → struct of the
+    bundle's directory, headers and module map) and `archives` (in link
+    order), or None when the SDK has no Foundation of Isomer's."""
+    swiftmodules = {}
+    archives = {}
+    clang_files = {}
+    for f in files:
+        if _SWIFT_STATIC not in f.path:
+            continue
+        before, rest = f.path.split(_SWIFT_STATIC, 1)
+        triple = before.split("/")[-1]
+        if not triple.startswith("wasm32-"):
+            continue
+        parts = rest.split("/")
+        if len(parts) == 3 and parts[0] == "wasi" and parts[1].endswith(".swiftmodule") and parts[2] == triple + ".swiftmodule":
+            swiftmodules[parts[1][:-len(".swiftmodule")]] = f
+        elif len(parts) == 2 and parts[0] == "wasi" and parts[1].endswith(".a"):
+            archives[parts[1]] = f
+        elif len(parts) == 2 and (parts[0] in _SDK_FOUNDATION_CLANG_MODULES or parts[0] in _SDK_I18N_CLANG_MODULES):
+            clang_files.setdefault(parts[0], []).append(f)
+    if "Foundation" not in swiftmodules or "IsomerFoundation" not in swiftmodules:
+        return None
+    module_names = list(_SDK_FOUNDATION_MODULES)
+    clang_names = dict(_SDK_FOUNDATION_CLANG_MODULES)
+    archive_names = list(_SDK_FOUNDATION_ARCHIVES)
+    if "FoundationInternationalization" in swiftmodules:
+        module_names += _SDK_I18N_MODULES
+        clang_names.update(_SDK_I18N_CLANG_MODULES)
+        archive_names += _SDK_I18N_ARCHIVES
+    missing = [name for name in module_names if name not in swiftmodules]
+    missing += [name for name in clang_names if name not in clang_files]
+    missing += [name for name in archive_names if name not in archives]
+    if missing:
+        fail("wasm_sdk_bundle: the wasm Swift SDK's Foundation has no %s (is one of Isomer's Swift SDKs registered? README, \"Isomer's Swift SDKs\")" % ", ".join(missing))
+    clang_modules = {}
+    for directory, name in clang_names.items():
+        module_map = [f for f in clang_files[directory] if f.basename == "module.modulemap"]
+        if not module_map:
+            fail("wasm_sdk_bundle: the wasm Swift SDK's %s has no module.modulemap" % directory)
+        clang_modules[name] = struct(
+            directory = directory,
+            headers = [f for f in clang_files[directory] if f.basename != "module.modulemap"],
+            module_map = module_map[0],
+            # The bundle's include/, so <_foundation_unicode/…> resolves.
+            include = "include",
+        )
+    return struct(
+        modules = {name: swiftmodules[name] for name in module_names},
+        clang_modules = clang_modules,
+        archives = [archives[name] for name in archive_names],
+    )
+
 def _wasm_sdk_bundle_impl(ctx):
     # The transitive .swiftmodules (what user code compiles AGAINST) and the
     # transitive static archives (what the user's object links WITH), in
@@ -571,7 +715,12 @@ def _wasm_sdk_bundle_impl(ctx):
                         own_map = module.clang.module_map if type(module.clang.module_map) == "File" else None
                         if own_map and any([h.dirname != own_map.dirname for h in headers]):
                             own_map = None
-                        clang_modules[module.name] = struct(headers = headers, module_map = own_map)
+                        clang_modules[module.name] = struct(
+                            directory = module.name,
+                            headers = headers,
+                            module_map = own_map,
+                            include = "include/" + module.name,
+                        )
     # One archive a library: the same library built in two configurations
     # (the slim SwiftUI's "own_swift_ui" beside the default one, whose
     # libraries below SwiftUI are the same build) is one archive, or the link
@@ -587,6 +736,18 @@ def _wasm_sdk_bundle_impl(ctx):
                     seen[file.short_path] = True
                     archives.append(file)
 
+    # The Swift SDK's Foundation family (above), unless the deps bring a
+    # Foundation of their own.
+    if ctx.attr.sdk_foundation and "Foundation" not in modules:
+        foundation = _sdk_foundation(ctx.files._toolchain_files)
+        if not foundation:
+            fail("wasm_sdk_bundle: the wasm Swift SDK has no Foundation of Isomer's (is one of Isomer's Swift SDKs registered? README, \"Isomer's Swift SDKs\"); sdk_foundation = False bundles none")
+        for name, swiftmodule in foundation.modules.items():
+            modules[name] = swiftmodule
+        for name, clang_module in foundation.clang_modules.items():
+            clang_modules[name] = clang_module
+        archives.extend(foundation.archives)
+
     out = ctx.actions.declare_directory(ctx.label.name)
     manifest = struct(
         modules = [
@@ -599,17 +760,22 @@ def _wasm_sdk_bundle_impl(ctx):
             for i, f in enumerate(archives)
         ],
         clang_modules = [
-            struct(name = name, modulemap = "include/%s/module.modulemap" % name, include = "include/%s" % name)
+            struct(
+                name = name,
+                modulemap = "include/%s/module.modulemap" % clang_modules[name].directory,
+                include = clang_modules[name].include,
+            )
             for name in sorted(clang_modules.keys())
         ],
     )
     commands = ["mkdir -p {out}/modules {out}/lib".format(out = out.path)]
     for name in sorted(clang_modules.keys()):
-        commands.append("mkdir -p {out}/include/{name}".format(out = out.path, name = name))
+        directory = clang_modules[name].directory
+        commands.append("mkdir -p {out}/include/{directory}".format(out = out.path, directory = directory))
         for h in clang_modules[name].headers:
-            commands.append("cp %s %s/include/%s/%s" % (h.path, out.path, name, h.basename))
+            commands.append("cp %s %s/include/%s/%s" % (h.path, out.path, directory, h.basename))
         if clang_modules[name].module_map:
-            commands.append("cp %s %s/include/%s/module.modulemap" % (clang_modules[name].module_map.path, out.path, name))
+            commands.append("cp %s %s/include/%s/module.modulemap" % (clang_modules[name].module_map.path, out.path, directory))
             continue
         # printf, not a heredoc: this runs mid-chain (" && "), where a
         # heredoc terminator would never match and swallow the rest.
@@ -617,10 +783,10 @@ def _wasm_sdk_bundle_impl(ctx):
             "  header \"%s\"" % h.basename
             for h in clang_modules[name].headers
         ] + ["  export *", "}"]
-        commands.append("printf '%s\\n' {lines} > {out}/include/{name}/module.modulemap".format(
+        commands.append("printf '%s\\n' {lines} > {out}/include/{directory}/module.modulemap".format(
             lines = " ".join(["'%s'" % line for line in lines]),
             out = out.path,
-            name = name,
+            directory = directory,
         ))
     for name in sorted(modules.keys()):
         commands.append("cp {src} {out}/modules/{name}.swiftmodule".format(
@@ -630,6 +796,8 @@ def _wasm_sdk_bundle_impl(ctx):
         ))
     for i, f in enumerate(archives):
         commands.append("cp %s %s/lib/%d_%s" % (f.path, out.path, i, f.basename))
+    # The SDK's files are read-only in its repository; the copies needn't be.
+    commands.append("chmod -R u+w %s" % out.path)
     # The manifest, with the host's entries ("exports") added: a link with
     # them and --gc-sections keeps what the hosts reach, not every function
     # of every archive.
@@ -666,16 +834,28 @@ wasm_sdk_bundle = rule(
             mandatory = True,
         ),
         "platform": attr.label(mandatory = True),
+        "sdk_foundation": attr.bool(
+            default = True,
+            doc = "Carry the registered wasm Swift SDK's Foundation, CoreGraphics " +
+                  "and Combine (with FoundationInternationalization and ICU from " +
+                  "the -i18n SDK): their modules, C modules and archives. On by " +
+                  "default; skipped when `deps` bring a Foundation of their own.",
+        ),
         "_sdk_exports": attr.label(
             default = Label("//tools/wasm/sdk_exports"),
             executable = True,
             cfg = "exec",
         ),
+        "_toolchain_files": attr.label(
+            default = Label("//tools/wasm:wasm_toolchain_files"),
+            cfg = _wasm_platform_transition,
+        ),
         "_allowlist_function_transition": attr.label(
             default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
         ),
     },
-    doc = "Collects `deps`' transitive wasm32 .swiftmodules + static archives " +
+    doc = "Collects `deps`' transitive wasm32 .swiftmodules + static archives, " +
+          "and the registered wasm Swift SDK's Foundation family, " +
           "into one directory with a manifest.json — the compile-against/" +
           "link-with SDK an out-of-band toolchain (the Playground app) uses " +
           "to build user Swift code into a `iso_hot` reactor without bazel.",

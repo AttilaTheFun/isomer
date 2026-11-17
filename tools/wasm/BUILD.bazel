@@ -1,3 +1,5 @@
+load(":defs.bzl", "wasm_toolchain_files")
+
 package(default_visibility = ["//visibility:public"])
 
 exports_files(["defs.bzl"])
@@ -23,4 +25,12 @@ alias(
 alias(
     name = "icu_data",
     actual = "//tools/wasm/icu_data",
+)
+
+# The Swift and C toolchains' files for the platform a dependent builds for:
+# wasm_sdk_bundle reaches it built for wasm32, for the Swift SDK's
+# Foundation family (defs.bzl), and so does its check (sdk_bundle_test).
+wasm_toolchain_files(
+    name = "wasm_toolchain_files",
+    tags = ["manual"],
 )
