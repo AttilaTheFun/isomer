@@ -66,9 +66,7 @@ func windowsWasmPaint() {
 /// Resize: refresh the D3D swapchain + host layout size, then tell the reactor
 /// so its size-dependent build (split vs. tab shell) re-runs.
 func windowsWasmResized(width: Double, height: Double) {
-    #if canImport(SwiftGPU)
-    windowsGPUSurface?.refreshSize()
-    #endif
+    windowsRefreshGPUSurface()
     // The host loop runs on the main thread, where views live: say so to
     // the runtime, which is main-actor isolated as SwiftUI is.
     MainActor.assumeIsolated {
@@ -145,10 +143,7 @@ package enum WindowsWasmLoop {
 
         cell.core = makeCore(wasmBytes, width: width, height: height)
 
-        var presentPaces = false
-        #if canImport(SwiftGPU)
-        presentPaces = windowsGPUSurface != nil
-        #endif
+        let presentPaces = windowsPresentPaces
         var lastPollMs = iso_bridge_epoch_millis()
 
         while iso_pump_events() != 0 {
