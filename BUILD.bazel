@@ -44,38 +44,38 @@ alias(
     visibility = ["//visibility:public"],
 )
 
-# Where `import Foundation` and `import CoreGraphics` come from: Apple's on
-# Apple platforms (nothing to link), Isomer's on wasm and Android. A library that
-# imports Foundation and is built for a non-Apple platform depends on
-# `@isomer//:foundation`, which an application's other libraries (a SwiftPM
-# package through rules_swift_package_manager's `target_deps`, a label flag)
-# can be pointed at.
+# Where `import Foundation` and `import CoreGraphics` come from: the Swift
+# SDK's, so nothing to link. Apple's on Apple platforms; Isomer's on Android
+# and the web, whose Swift SDKs (Isomer's, since 0.56: README, "Upgrading
+# isomer") carry Isomer's Foundation; on Linux and Windows still the
+# toolchain's corelibs Foundation (with Isomer's CoreGraphics beside it,
+# :core_graphics). No library needs to depend on this any more: it stays, an
+# empty dependency, for the BUILD files and `target_deps` that name it, and
+# on Android and the web it carries the check that
+# --@isomer//foundation:internationalization's SDK is the -i18n one
+# (foundation/BUILD.bazel).
 alias(
     name = "foundation",
     actual = select({
         # A compiled feature (apple/compiled): Apple's Foundation with
         # Isomer's Observation and Synchronization.
         "//apple/compiled:feature_on": "//apple/libraries/compiled_swift_ui:foundation",
-        "@platforms//os:wasi": "//foundation:for_dependents",
-        "@platforms//os:android": "//foundation:for_dependents",
-        # Apple's frameworks; on Linux and Windows still the toolchain's
-        # Foundation (with Isomer's CoreGraphics beside it, :core_graphics).
+        "@platforms//os:wasi": "//foundation:from_sdk",
+        "@platforms//os:android": "//foundation:from_sdk",
         "//conditions:default": ":system_framework",
     }),
     visibility = ["//visibility:public"],
 )
 
 # What a host installs beneath Isomer's Foundation (URLSession's transports,
-# UserDefaults' store): IsomerFoundation, on the platforms with Isomer's
-# Foundation; nothing on Apple platforms, where it has no place (code that
-# builds for both guards with `#if canImport(IsomerFoundation)`).
+# UserDefaults' store): IsomerFoundation, a module of Isomer's Swift SDKs on
+# Android and the web (since 0.56), so nothing to link; nothing on other
+# platforms, where it has no place (code that builds for both guards with
+# `#if canImport(IsomerFoundation)`). An empty dependency, for the BUILD
+# files that name it.
 alias(
     name = "isomer_foundation",
-    actual = select({
-        "@platforms//os:wasi": "//foundation/isomer_foundation:for_dependents",
-        "@platforms//os:android": "//foundation/isomer_foundation:for_dependents",
-        "//conditions:default": ":system_framework",
-    }),
+    actual = ":system_framework",
     visibility = ["//visibility:public"],
 )
 
@@ -99,9 +99,10 @@ alias(
 alias(
     name = "core_graphics",
     actual = select({
-        "@platforms//os:wasi": "//core_graphics:for_dependents",
-        "@platforms//os:android": "//core_graphics:for_dependents",
-        # Beside the toolchain's Foundation there: what it lacks
+        # Apple's on Apple platforms, the Swift SDK's on Android and the web
+        # (Isomer's SDKs carry Isomer's CoreGraphics): nothing to link. On
+        # Linux and Windows Isomer's, built here, beside the toolchain's
+        # Foundation there: what it lacks
         # (CGAffineTransform, CGPath, CGColor...; core_graphics/BUILD.bazel).
         "@platforms//os:linux": "//core_graphics:for_dependents",
         "@platforms//os:windows": "//core_graphics:for_dependents",

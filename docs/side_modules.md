@@ -75,9 +75,9 @@ per-feature entry and a root per feature.
 
 What it needs of WasmKit: public API to place modules in a table and memory
 (`Table.grow`, `Table.function(at:)`, `Function.reference`, …), with its
-tests: commits on AttilaTheFun/WasmKit's isomer/side-modules (the fork's
-main is swiftwasm/WasmKit's), to propose to swiftwasm/WasmKit, which isomer
-pins until then.
+tests: commits on AttilaTheFun/WasmKit's isomer/side-modules, to propose to
+swiftwasm/WasmKit. Until a release has them, isomer takes WasmKit 0.5.0 with
+those commits as a patch (tools/patches/wasmkit_host_linking.patch).
 
 ## Mixed mode
 

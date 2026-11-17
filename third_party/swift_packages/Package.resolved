@@ -82,23 +82,6 @@
       }
     },
     {
-      "identity" : "swift-foundation",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/swiftlang/swift-foundation.git",
-      "state" : {
-        "revision" : "e4049b2d77e2d5d70c4cfcc99fd5eca32e1bcb06"
-      }
-    },
-    {
-      "identity" : "swift-foundation-icu",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/apple/swift-foundation-icu",
-      "state" : {
-        "branch" : "release/6.4.x",
-        "revision" : "f986d0728da0766cf81f371521b909d4a11681d2"
-      }
-    },
-    {
       "identity" : "swift-http-structured-headers",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-http-structured-headers.git",

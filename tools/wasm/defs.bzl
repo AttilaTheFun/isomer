@@ -404,8 +404,8 @@ def isomer_web_app(
         # which 10 MB of export names), where the page calls some sixty.
         exports = "host",
         export_entries = ISOMER_HOST_ENTRIES,
-        # ICU's data, less what ICU_DROP leaves out (an app with the full
-        # Foundation; nothing for one without).
+        # ICU's data, less what ICU_DROP leaves out (an app on the -i18n
+        # Swift SDK; nothing for one on the plain SDK, which links no ICU).
         reactor_deps = [":app_bridge_icu"],
         linkopts = [
             # wasm-ld defaults the linear stack to ~1 MiB, which Swift's deeply
@@ -427,9 +427,8 @@ def isomer_web_app(
     icu_data_library(
         name = "app_bridge_icu",
         wasm = ":app_bridge_all.wasm",
-        # With ICU (the full Foundation, or Isomer's with
-        # //foundation:internationalization): only these languages' locale
-        # data, when given.
+        # With ICU (the -i18n Swift SDK's Foundation, which links the SDK's
+        # ICU): only these languages' locale data, when given.
         locales = icu_locales,
     )
 

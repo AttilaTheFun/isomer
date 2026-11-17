@@ -39,7 +39,7 @@ management. The repo is ONE Bazel module, `isomer`, plus the examples:
 | --- | --- | --- |
 | `.` | `isomer` | everything below |
 | `swift_ffi/` | (isomer) | the Swift <-> Kotlin/JavaScript/C bridge generator: macros, analyzer, generator, rules, runtimes. Labels `//swift_ffi/...` (`@isomer//swift_ffi/...` from outside). Its own examples are `swift_ffi/examples`; docs in `docs/swift_ffi/`. Every BUILD file under it carries `package(features = [swift.enable_v6, treat_warnings_as_errors, ...])` — what its REPO.bazel said when it was a repo; keep that on new packages there |
-| `core_graphics/`, `foundation/` | (isomer) | Isomer's `CoreGraphics` and `Foundation` for the platforms without Apple's (see "Apple's frameworks off Apple") |
+| `core_graphics/`, `foundation/` | (isomer) | Isomer's `CoreGraphics` for Linux and Windows, and Foundation's build settings and tests: Isomer's `Foundation`, and Android's and the web's CoreGraphics and Combine, are in Isomer's Swift SDKs since 0.56 (AttilaTheFun/isomer_hermetic_toolchains; see "Apple's frameworks off Apple") |
 | `frameworks/` | (isomer) | the other Apple frameworks SwiftUI's interface names, off Apple: `CoreTransferable`, `UniformTypeIdentifiers`, `PhotosUI`, `OSLog` (`Logger`: logcat on Android, standard error elsewhere; `@isomer//:os_log`, and in each platform's SDK group), `Combine` (since 0.42: Isomer's own, beneath Foundation). Not UIKit or Dispatch (see "Apple's frameworks off Apple") |
 | `metal/` | (isomer) | Isomer's `Metal` (`//metal/metal`), IsomerMetal (`//metal/isomer_metal`: the MSL→WGSL translator, the backend interface), the web backend (`//metal/web`, `//metal/runtime`) |
 | `swift_gpu/` | (isomer) | the GPU abstraction (`//swift_gpu/{core,metal,apple,android,wasm,linux,windows}`) |
@@ -52,7 +52,7 @@ nothing under `swift_ffi/` may depend on anything outside it but Foundation,
 and so on up. A consumer pins ONE version of isomer (by version from the
 project's registry, AttilaTheFun/bazel_registry, from 0.36.0; a commit
 between releases) and lists that registry before the BCR in its .bazelrc:
-no override of isomer's dependencies since 0.40 (rules_swift 4.2.2.isomer.3
+no override of isomer's dependencies since 0.40 (rules_swift 4.3.0.isomer.1
 sorts above the 4.2.2 rules_applecross asks for).
 
 **Versions (from 0.38).** A version is MAJOR.MINOR.BUILD; there are no
@@ -86,10 +86,10 @@ minor (MAJOR.MINOR.0) before the release's commit.
 by version at a release (a commit is fine on a branch, or on main between
 releases). Bazel modules come from bazel_registry, before the BCR: isomer's
 releases, visor's, and the forks isomer carries until upstream takes their
-changes, as patched versions (rules_swift 4.2.2.isomer.3: upstream 4.2.2
-with rules_swift#1989, #1860, #1990, #1995, #1985 and #2000, each a patch
-taken from the PR's head). A change to a fork or to those
-patches is a new entry (.isomer.4), made with the registry's
+changes, as patched versions (rules_swift 4.3.0.isomer.1: upstream 4.3.0
+with rules_swift#1860, #1990, #1995 and #2000, each a patch taken from the
+PR's head). A change to a fork or to those
+patches is a new entry (.isomer.2), made with the registry's
 tools/add_version.py --fork and approved there like any version. Swift
 packages are SwiftPM's, through rules_swift_package_manager, never Bazel
 modules. tools/released_pins.sh says whether every pin is a released
@@ -144,14 +144,19 @@ What building a whole application on the stack taught (a todos app, with a
 gRPC server over PostgreSQL, was the reference until 0.35, when it moved to
 a repository of its own):
 
-- **Foundation on wasm/Android** is Isomer's (//foundation, over
-  swift-foundation; see "Foundation and CoreGraphics" below). Every
-  SwiftPM package an app links there depends on `@isomer//:foundation`
-  through `configure_package(target_deps = ...)` in its MODULE.bazel;
-  `tools/foundation/check_link.py <app targets>` finds one that doesn't.
+- **Foundation on wasm/Android** is Isomer's, and the Swift SDK's (since
+  0.56): Isomer's Swift SDKs (AttilaTheFun/isomer_hermetic_toolchains,
+  docs/hermetic_toolchains.md) are swift.org's with corelibs Foundation out
+  and Isomer's family in, so every `import Foundation` there, a package's
+  included, is Isomer's with no dependency declared. A consumer registers
+  them by URL (`swift.android_sdk(url = …, sha256 = …)`,
+  `swift.wasm_sdk(…)`; README, "Isomer's Swift SDKs"): plain, or -i18n for
+  an app that formats (FoundationInternationalization and ICU). isomer's own
+  module registers the -i18n SDKs, the examples the plain ones.
 - **Isomer's Swift is a Swift package (0.43; SwiftUI since 0.44)**: the
-  root Package.swift beside the Bazel module: Foundation, FoundationNetworking,
-  IsomerFoundation, CoreGraphics and Combine (0.43), and SwiftUI with what it
+  root Package.swift beside the Bazel module: CoreGraphics and Combine (0.43;
+  Linux's and Windows' alone since 0.56, when Foundation, FoundationNetworking
+  and IsomerFoundation went to the SDKs), and SwiftUI with what it
   stands on (IsomerSwiftUI, CoreTransferable, UniformTypeIdentifiers, ImageIO,
   PhotosUI, the SwiftUIMacros macro target; 0.44). rules_swift_package_manager
   builds it as `@swiftpkg_isomer` in the root's one graph, under its own
@@ -161,8 +166,8 @@ a repository of its own):
   `inject_repo(swift_deps, "isomer")`. isomer's own graph
   (third_party/swift_packages, dev-only) and the examples' take the package by
   path (cgrindel/rules_swift_package_manager#2638; with #2639 and #2640 the
-  registry's 1.25.0.isomer.1). Isomer's labels (`//foundation`,
-  `//core_graphics`, `//shared/isomer_swift_ui`, each platform's
+  registry's 1.25.0.isomer.1). Isomer's labels (`//core_graphics`,
+  `//shared/isomer_swift_ui`, each platform's
   `libraries/swift_ui:core`, ...) are `one_configuration` wrappers over the
   package's products. SwiftUI is one target, the same on every platform off
   Apple: what differs is plugged in, each platform's host (IsomerWebHost,
@@ -171,9 +176,7 @@ a repository of its own):
   which the host defines) and the GPU renderer (IsomerGPURenderer), Bazel
   modules over it; `:swift_ui` is the group of SwiftUI and the host. What the
   package can't express comes from the Bazel module through configure_package
-  `target_deps`: Foundation's internationalization (a marker module Foundation
-  checks with `canImport`, `--@isomer//foundation:internationalization`),
-  and the wire protos' Swift (shared/wire): the package generates it as it
+  `target_deps`: the wire protos' Swift (shared/wire): the package generates it as it
   builds with swift-protobuf's build plugin (each target's
   swift-protobuf-config.json), a plugin rules_swift_package_manager doesn't
   run, so under Bazel swift_proto_library generates it as modules of their
@@ -211,7 +214,7 @@ a repository of its own):
   toolchain by an absolute path that Bazel's inclusion check rejects; C
   compiled for wasm had to avoid them (-nobuiltininc and shims, a
   hand-declared pthread_self). rules_swift#1989 (a patch of isomer's from
-  0.34, merged upstream after 4.2.2; in the registry's rules_swift) gives
+  0.34, in upstream's 4.3.0) gives
   compiles the Swift SDK's clang resource directory, as links already had:
   the headers come from the SDK, among the action's inputs. A package's C
   (swift_sql's amalgamation, through rules_swift_package_manager) then
@@ -549,10 +552,19 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   registered through `--extra_toolchains`, the build-time Swift tools'
   CppArchive fails in the sandbox (no apple-support-ar-wrapper);
   `--strategy=CppArchive=local` works around it.
-- **rules_swift 4.2.2.isomer.3** from the registry: upstream 4.2.2 and six
-  pull requests (MODULE.bazel). It sorts above the 4.2.2 rules_applecross
-  asks for, so MVS keeps it with no override in any root (until 0.40 the
-  fork was 4.1.0.isomer.N, held by an override every consumer repeated).
+- **rules_swift 4.3.0.isomer.1** from the registry (since 0.56):
+  upstream 4.3.0 and four pull requests, each a patch from its head:
+  #1860 and #1990 (the wasip1-threads SDK beside the single-threaded one),
+  #1995 (Swift/C++ interop on Android) and #2000 (Android below API 28,
+  merged after 4.3.0). 4.3.0 has the rest of what 4.2.2.isomer.3 carried
+  (#1989, #1985), #2012 (`swift.android_sdk(url = …)`, Isomer's Swift
+  SDKs) and #1999 (explicit C modules declared unsupported for Android and
+  wasm, which build their Clang modules implicitly, as before; after a
+  change of SDK or rules_swift, an output base's module cache can hold a
+  stale build of one, "defined in both": `bazel clean` once). It sorts
+  above the 4.2.2 rules_applecross asks for, so MVS keeps it with no
+  override in any root (until 0.40 the fork was 4.1.0.isomer.N, held by an
+  override every consumer repeated).
 - **The Apple targets build on Linux too** (rules_applecross, 2026-10-26;
   the project registry's 0.0.3.382f8c3, its main at 382f8c3, until it has a
   release in the BCR): Xcode 27.0's SDKs from an SDK archive, the Swift
@@ -755,12 +767,15 @@ acceptable.
 Since 0.33 Visor Isomer's iPhone app runs on WasmKit with interpreted
 wasi-threads Swift; since 0.38 WasmKit runs reactors on every native host
 (WAMR, Isomer's engine before it, and WAMR's AOT tier were removed then:
-no wamrc, no `.aot`, no `--define wamr_*`). The engine work is in the
-WasmKit fork (measured against WAMR on the same reactor); what is here is
-how Isomer runs it.
+no wamrc, no `.aot`, no `--define wamr_*`). The engine work Isomer did
+(measured against WAMR on the same reactor) is upstream's since WasmKit
+0.5.0; what is here is how Isomer runs it.
 
-- **WasmKit** (MODULE.bazel's `wasmkit`: AttilaTheFun/WasmKit, the fork,
-  pinned by commit; built by tools/wasmkit/BUILD.wasmkit.bazel after its
+- **WasmKit** (MODULE.bazel's `wasmkit`: swiftwasm/WasmKit 0.5.0, by tag,
+  with one patch until upstream takes it, tools/patches/
+  wasmkit_host_linking.patch: the side-modules author's host-linking API
+  and cheaper host calls, from AttilaTheFun/WasmKit's isomer/side-modules;
+  built by tools/wasmkit/BUILD.wasmkit.bazel after its
   Package.swift, default traits, optimized in every build, for macOS, iOS,
   Android, Linux and Windows) is behind `WasmKitRuntime`
   (//shared/wasm_host:wasmkit_runtime). Apple's WasmView registers it as
@@ -773,7 +788,7 @@ how Isomer runs it.
   (/tmp, /home/app, HOME and XDG_*), binds the six iso_hot callbacks and
   swift_ffi through `SwiftFFIHostRuntime` (the dependencies' register
   exports called at launch), and drains jobs on the main queue, held while
-  a tree is undrawn. Nothing of Isomer's goes into the fork. iOS 18 and
+  a tree is undrawn. Nothing of Isomer's goes into WasmKit. iOS 18 and
   macOS 15 (WasmKit's Synchronization): so, since WAMR went, WasmView and
   every app that hosts reactors (the examples' wasm cells raised with it). `ISO_WASMKIT_TRACE=1` prints each guest
   thread's instance and each swift_ffi import with the thread it came on.
@@ -815,7 +830,7 @@ how Isomer runs it.
   `_runtime(_multithreaded)`), and `SwiftFFILock` is a pthread mutex. A
   host import called on a guest thread runs on the host's main thread
   (posted when it answers nothing, waited for when it does). Foundation's
-  `Thread.isMainThread` there is foundation/wasi_thread_identity's: the
+  `Thread.isMainThread` there is CWasiThreadIdentity's (the SDK's): the
   thread that ran the constructors. WasmKit's WASI Threads is
   process-scoped: a threaded instance is kept for the life of the process
   (no teardown, no hot reload), and a trap on a guest thread ends the app.
@@ -826,7 +841,10 @@ how Isomer runs it.
   its screens match the ICU build's.
 - **Shared memory needs WasmKit's guard pages**: a 4 GiB reservation per
   memory and signal-trapped bounds checks, on macOS, Linux, iOS and
-  (upstream's #527, since the pin moved to upstream's main) 64-bit Android.
+  (WasmKit 0.5.0's #527) 64-bit Android, whose reactors run on guard pages
+  by default; `canRunThreads` should pass there too (WasmKit makes shared
+  memory on Android), unchecked while no threaded reactor is built (Swift
+  6.5's threads SDK).
   Windows checks bounds in software and runs no threaded reactor. `WasmKitRuntime.canRunThreads` tries one; a host
   with both builds of its reactor picks the threaded one only then (an
   iPhone's address space may refuse it; nothing here has run on a device).
@@ -955,15 +973,15 @@ stubs (shared/swift_ui_core/NotYet.swift, generated: the compiler says "Not
 yet in Isomer: <group>"); implementing one means running it again (or
 deleting the stub); tools/parity/stubs_skip.txt keeps one out.
 
-- **Foundation** (//foundation, `@isomer//:foundation`): built over
-  swift-foundation (swift-6.4.2-RELEASE's commit), a dependency of isomer's
-  Swift package (above; through rules_swift_package_manager since 0.40,
-  the registry's Bazel module 6.3.2.isomer.2 before), with patches
-  (MODULE.bazel says which and why). ICU is the Swift SDK's prebuilt one, a
-  patch to its manifest linking it by name, not swift-foundation-icu built
-  from source.
+- **Foundation** (the Swift SDK's on Android and the web since 0.56; its
+  sources are isomer_hermetic_toolchains' `Isomer/Sources`, which were
+  //foundation's until then; docs/hermetic_toolchains.md): built over
+  swift-foundation (swift-6.4.2-RELEASE, Isomer's patches as commits on
+  that repository's `isomer-6.4.2` branch) into Isomer's Swift SDKs, plain
+  and -i18n, by its `sdk/build.sh`. ICU is the Swift SDK's prebuilt one, linked
+  by name, not swift-foundation-icu built from source.
   FoundationEssentials, plus what corelibs has that apps reach for, written
-  in Swift here: CharacterSet, NSString's string API (searching, replacing,
+  in Swift: CharacterSet, NSString's string API (searching, replacing,
   trimming, comparing, percent encoding; built in swift-foundation's
   package, `package_name = "swift-foundation"`, to search with Essentials'
   own helpers), `String(format:)`, NSRange, NSRegularExpression
@@ -984,21 +1002,21 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
   argument domain: `-key value` among the program's arguments, or, where a
   host starts no program with arguments (Android), in ISO_ARGUMENTS
   (`am start -e ISO_ARGUMENTS '-reviews.fixture YES'`: the generated
-  activity sets each ISO_ extra in the environment). `--@isomer//foundation:internationalization`
-  adds FoundationInternationalization over the Swift SDK's prebuilt ICU
+  activity sets each ISO_ extra in the environment). The -i18n SDKs' Foundation
+  re-exports FoundationInternationalization over the Swift SDK's prebuilt ICU
   (lib_FoundationICU.a); `isomer_web_app(icu_locales = [...])` keeps only
-  those languages' ICU data (34 MB → 6-7 MB). Linux and Windows still use
-  the toolchain's corelibs Foundation; servers too.
-  - Every library that imports Foundation must depend on
-    `@isomer//:foundation` (SwiftPM packages through `configure_package(
-    target_deps = ...)`), or it finds the Swift SDK's Foundation, which
-    then links beside Isomer's (duplicate `Foundation` symbols).
-    `tools/foundation/check_link.py [<bazel flags>] <targets>` names the
-    leak; give it the flags the targets were built with (it refuses to pass
-    on autolink files that are not on disk).
+  those languages' ICU data (34 MB → 6-7 MB).
+  `--@isomer//foundation:internationalization` built that in when isomer
+  built Foundation; since 0.56 it checks that the SDK registered is the
+  -i18n one (foundation/internationalization). Isomer's modules in the SDKs
+  are built resilient (library evolution), as an Apple SDK's are. Linux and
+  Windows still use the toolchain's corelibs Foundation; servers too.
+  - `@isomer//:foundation` and `@isomer//:isomer_foundation` are empty
+    dependencies since 0.56 (a library needs neither: the SDK's modules are
+    found and autolinked), kept for the BUILD files that name them.
   - **FoundationNetworking** (0.39.15): where Isomer's Foundation is the
-    Foundation (Android, the web), `@isomer//:foundation` brings a module
-    of that name too (//foundation/networking), which re-exports Isomer's
+    Foundation (Android, the web), the SDK has a module of that name too,
+    which re-exports Isomer's
     Foundation, whose URLSession, URLRequest and URLResponse are those
     corelibs keeps there. Code written for Linux (`#if
     canImport(FoundationNetworking) import FoundationNetworking`) then sees
@@ -1010,10 +1028,10 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
     rules_swift_package_manager keeps the LAST configure_package per
     package and visits the root module first: a dependency's tag beats the
     root's.
-  - The `:foundation` aliases are `one_configuration` wrappers
-    (foundation/defs.bzl): RSPM's per-package minimum-OS transitions would
-    otherwise build Foundation twice (every Apple platform's option is
-    cleared: a web site bundled into an iOS app builds under `ios`).
+  - Isomer's package modules are reached through `one_configuration`
+    wrappers (foundation/defs.bzl): RSPM's per-package minimum-OS
+    transitions would otherwise build them twice (every Apple platform's
+    option is cleared: a web site bundled into an iOS app builds under `ios`).
   - A module renamed away (SwiftUIExtensions before 0.31) can survive as a
     stale .swiftmodule in Bazel's output directory, beside the module that
     replaced it, and shadow it: import the new name and depend on its target.
@@ -1093,8 +1111,8 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
     interface has them, without delegates (foundation/URLSession.swift says
     where each kind of URL goes). file: and data: URLs are read in Swift;
     http(s) and ws(s) go through transports a host installs in
-    **IsomerFoundation** (//foundation/isomer_foundation,
-    `@isomer//:isomer_foundation`): `IsomerNetwork.http` (an
+    **IsomerFoundation** (a module of Isomer's Swift SDKs, the toolchains'
+    `Isomer/Sources/IsomerFoundation`): `IsomerNetwork.http` (an
     `HTTPTransport`: one exchange, whole bodies, `NetworkTransportError`
     for no response) and `IsomerNetwork.webSocket` (a
     `WebSocketTransport` whose connections send text or data and receive

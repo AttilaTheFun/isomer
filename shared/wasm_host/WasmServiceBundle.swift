@@ -36,14 +36,13 @@ extension WasmBundle {
         var assets: [String: Data] = [:]
         let assetsDir = dir.appendingPathComponent("assets")
         let fm = FileManager.default
-        if let walker = fm.enumerator(at: assetsDir, includingPropertiesForKeys: [.isRegularFileKey]) {
-            for case let file as URL in walker
-            where (try? file.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true {
-                if let data = try? Data(contentsOf: file) {
-                    let key = file.path.replacingOccurrences(of: assetsDir.path + "/", with: "")
-                    assets[key] = data
-                }
-            }
+        // FileManager's path API, which every Foundation a host links has
+        // (no directory enumerator in Isomer's, the Swift SDK's on Android).
+        for path in (try? fm.subpathsOfDirectory(atPath: assetsDir.path)) ?? [] {
+            let file = assetsDir.appendingPathComponent(path)
+            guard (try? fm.attributesOfItem(atPath: file.path)[.type] as? FileAttributeType) == .typeRegular,
+                  let data = try? Data(contentsOf: file) else { continue }
+            assets[path] = data
         }
         return WasmBundle(label: label ?? dir.lastPathComponent, wasm: [UInt8](wasm), assets: assets)
     }

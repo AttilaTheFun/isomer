@@ -1,0 +1,394 @@
+WasmKit's public API for hosts that link modules together, and cheaper calls
+from the host: the side-modules author's four commits (Alex Pawlowski), on
+swiftwasm/WasmKit 0.5.0 until it takes them. From AttilaTheFun/WasmKit's
+isomer/side-modules (251975d, 9e2ced1, 78a39ad, 80894bd: Sources/ only; their
+tests are there too), whose base is 0.5.0's but for 0.5.0's version bump.
+
+diff --git a/Sources/WasmKit/Execution/Execution.swift b/Sources/WasmKit/Execution/Execution.swift
+index 739e1e1..00bf89e 100644
+--- a/Sources/WasmKit/Execution/Execution.swift
++++ b/Sources/WasmKit/Execution/Execution.swift
+@@ -17,6 +17,12 @@ struct Execution: ~Copyable {
+     ///   Swift from passing it to `invoke` in registers, and every call instruction pays for that.
+     private var trap: UnsafeMutablePointer<(error: UnsafeRawPointer, sp: Sp, pc: Pc)>? = nil
+ 
++    /// Whether the root frame's `endOfExecution` ends this execution by
++    /// halting the direct-threaded handler chain (`execute`), rather than by
++    /// throwing `EndOfExecution` (the token-threaded loop, a suspended or a
++    /// debugged execution, which catch it).
++    var returnsToHost = false
++
+     /// The stack of active exception handlers for `try_table` blocks.
+     var exceptionHandlers: [ExceptionHandler] = []
+ 
+@@ -520,6 +526,40 @@ func executeWasm(
+     }
+ }
+ 
++/// As `executeWasm`, with the arguments and results as raw 64-bit slots
++/// (`UntypedValue`'s encoding: an i32 or f32 zero-extended, an i64 or f64 as
++/// is): no arrays, no per-argument type checks. For scalar types only (no
++/// v128, whose values take two slots).
++func executeWasmUnchecked(
++    store: Store,
++    function handle: InternalFunction,
++    type: FunctionType,
++    arguments: UnsafePointer<UInt64>?,
++    results: UnsafeMutablePointer<UInt64>?,
++    stack executionStack: inout ExecutionStack
++) throws {
++    let wasSuspendable = store.isSuspendable
++    store.isSuspendable = false
++    defer { store.isSuspendable = wasSuspendable }
++    let store = StoreRef(store)
++    try Execution.with(store: store, stack: &executionStack) { (execution, base) in
++        let parameterCount = type.parameters.count, resultCount = type.results.count
++        try ParameterAreaLayout.checkFitsVRegRange(max(parameterCount, resultCount))
++        let sp = base.advanced(by: StackLayout.numberOfSavingSlots)
++        sp.previousSP = nil
++        sp.currentFunction = nil
++        sp.returnPC = nil
++        for i in 0..<parameterCount { sp[i] = UntypedValue(storage: arguments.unsafelyUnwrapped[i]) }
++        try withUnsafeTemporaryAllocation(of: CodeSlot.self, capacity: 2) { rootISeq in
++            rootISeq[0] = Instruction.endOfExecution(.init()).headSlot(
++                threadingModel: store.value.engine.configuration.threadingModel
++            )
++            try execution.execute(sp: sp, pc: rootISeq.baseAddress!, handle: handle, type: type)
++        }
++        for i in 0..<resultCount { results.unsafelyUnwrapped[i] = sp[i].storage }
++    }
++}
++
+ extension Execution {
+     /// Lays out the root frame of a call to a function of `type` at `base`, the start of a stack,
+     /// and returns the frame's stack pointer.
+@@ -663,6 +703,9 @@ extension Execution {
+         do {
+             switch self.store.value.engine.configuration.threadingModel {
+             case .direct:
++                // The root frame's endOfExecution halts the handler chain.
++                returnsToHost = true
++                defer { returnsToHost = false }
+                 try runDirectThreaded(sp: sp, pc: pc, md: md, ms: ms)
+             case .token:
+                 try startTokenThreaded(sp: sp, pc: pc, md: md, ms: ms)
+diff --git a/Sources/WasmKit/Execution/Function.swift b/Sources/WasmKit/Execution/Function.swift
+index 3f51ddc..4ab81d9 100644
+--- a/Sources/WasmKit/Execution/Function.swift
++++ b/Sources/WasmKit/Execution/Function.swift
+@@ -127,6 +127,19 @@ public struct Function: Equatable {
+         store.allocator.funcTypeInterner.resolve(handle.type)
+     }
+ 
++    /// The function as a `funcref` value: how a host places an export of one
++    /// module in a table another module calls through (``Table/subscript(_:)``
++    /// or ``Table/grow(by:value:store:)``).
++    ///
++    /// The reference names this function in this function's store and is
++    /// meaningful only there: put it only in a `funcref` table of the same
++    /// store. Read back with ``Table/function(at:store:)``, it gives this
++    /// function again (`==`). The reference keeps nothing alive; it is valid
++    /// for as long as the store is.
++    public var reference: Reference {
++        .function(from: handle)
++    }
++
+     /// Invokes a function of the given address with the given parameters.
+     ///
+     /// - Parameters:
+@@ -158,6 +171,63 @@ public struct Function: Equatable {
+         return try handle.invoke(arguments, store: store, stack: &stack)
+     }
+ 
++    /// Invokes the function with its arguments and results as raw 64-bit
++    /// slots, on a stack the caller owns, without the `[Value]` arrays and
++    /// the per-argument type checks of ``invoke(_:on:)``: for a host that
++    /// calls in very often (native code compiled from another module that
++    /// shares this one's memory and table, calling back for each function
++    /// it doesn't have).
++    ///
++    /// A slot holds a value as the interpreter stores it: an i32 or f32 in
++    /// the low 32 bits with the high 32 bits zero, an i64 or f64 as its 64
++    /// bits, a reference as a reference of this function's store encodes
++    /// (what passing it through a `Value` would give).
++    ///
++    /// Nothing about the slots is checked, so the caller must guarantee:
++    ///
++    /// - `arguments` points to one initialized slot for each of the
++    ///   function's parameters (it may be nil only if there are none), each
++    ///   of its parameter's type, encoded as above;
++    /// - `results` points to room for one slot for each of the function's
++    ///   results (it may be nil only if there are none);
++    /// - the function's store is not in use on another thread for the
++    ///   duration of the call.
++    ///
++    /// If it doesn't, the behavior is undefined: the call reads or writes
++    /// past buffers with too few slots, an i32 or f32 slot with high bits set
++    /// may be read as another value, and a reference that isn't one of the
++    /// store's may be dereferenced by the guest. Use ``invoke(_:on:)`` where the
++    /// arguments come from anywhere that cannot be trusted to match the type.
++    ///
++    /// What the function itself does is as safe as with ``invoke(_:on:)``: a
++    /// trap, an exhausted stack or an uncaught exception throws, with the
++    /// same errors, leaves `results` as it was, and leaves `stack` usable for
++    /// later calls. A host function takes the checked path (its arguments
++    /// converted to `Value`s by the parameter types).
++    ///
++    /// - Throws: A `Trap` (or another error the guest or a host function
++    ///   raises) as ``invoke(_:on:)`` does, and a `Trap` without running
++    ///   anything for a signature with a v128 parameter or result, which a
++    ///   single slot cannot hold.
++    public func invokeUnchecked(
++        arguments: UnsafePointer<UInt64>?, results: UnsafeMutablePointer<UInt64>?,
++        on stack: inout ExecutionStack
++    ) throws {
++        let type = self.type
++        guard !type.parameters.contains(.v128), !type.results.contains(.v128) else {
++            throw Trap(.message(.init("invokeUnchecked cannot pass a v128 value in a 64-bit slot: use invoke")))
++        }
++        guard handle.isWasm else {
++            let values = type.parameters.enumerated().map { (i, t) in UntypedValue(storage: arguments.unsafelyUnwrapped[i]).cast(to: t) }
++            let out = try handle.invoke(values, store: store, stack: &stack)
++            for (i, v) in out.enumerated() { results.unsafelyUnwrapped[i] = UntypedValue(v).storage }
++            return
++        }
++        try executeWasmUnchecked(
++            store: store, function: handle, type: type,
++            arguments: arguments, results: results, stack: &stack)
++    }
++
+     @discardableResult
+     public func callAsFunction(_ arguments: [Value] = []) throws -> [Value] {
+         return try invoke(arguments)
+diff --git a/Sources/WasmKit/Execution/Instances.swift b/Sources/WasmKit/Execution/Instances.swift
+index d6bb315..f578403 100644
+--- a/Sources/WasmKit/Execution/Instances.swift
++++ b/Sources/WasmKit/Execution/Instances.swift
+@@ -195,6 +195,20 @@ public struct Instance {
+         self.store = store
+     }
+ 
++    /// The instance's function at `index` in its module's function index
++    /// space (imports first, then the module's own functions in order),
++    /// exported or not: for a host that resolves functions by index (a symbol
++    /// map, or a module split into parts compiled differently whose direct
++    /// calls it routes back here).
++    ///
++    /// - Returns: The function, or `nil` when `index` is negative or not
++    ///   below the number of functions in the index space.
++    public func function(at index: Int) -> Function? {
++        let functions = handle.functions
++        guard index >= 0, index < functions.count else { return nil }
++        return Function(handle: functions[index], store: store)
++    }
++
+     /// Finds an exported entity by name.
+     ///
+     /// - Parameter name: The name of the exported entity.
+@@ -578,6 +592,71 @@ public struct Table: Equatable {
+         handle.tableType
+     }
+ 
++    /// The number of elements the table holds now: its current size, as
++    /// `table.size` answers. It changes when the guest or the host grows the
++    /// table.
++    public var count: Int {
++        handle.withValue { $0.elements.count }
++    }
++
++    /// Grows the table by `delta` elements set to `value`, as `table.grow`
++    /// does, within the table's maximum and the store's resource limiter.
++    /// A host that places modules in a shared table (a dynamic loader) uses
++    /// it to make room for each one's functions.
++    ///
++    /// - Parameters:
++    ///   - delta: The number of elements to add; zero leaves the table as it is.
++    ///   - value: What the new elements hold: null by default. Its kind must be
++    ///     the table's (a function reference for a `funcref` table, an extern
++    ///     reference for an `externref` one), and a function reference must be
++    ///     one of `store`'s (``Function/reference``).
++    ///   - store: The store the table belongs to; its resource limiter is asked.
++    /// - Returns: The index of the first new element (the old count).
++    /// - Throws: `Trap` if `delta` is negative, if the table's maximum or the
++    ///   resource limiter refuses the growth, or if `value` is of the wrong
++    ///   kind. The table is unchanged then.
++    @discardableResult
++    public func grow(by delta: Int, value: Reference = .function(nil), store: Store) throws -> Int {
++        let oldCount = count
++        guard Self.reference(value, fits: type.elementType) else {
++            throw Trap(.message(.init("a \(value) cannot be stored in a table of \(type.elementType)")))
++        }
++        guard delta >= 0,
++            try handle.withValue({
++                try $0.grow(by: UInt64(delta), value: value, resourceLimiter: store.resourceLimiter)
++            })
++        else {
++            throw Trap(.message(.init("table cannot grow by \(delta) from \(oldCount)")))
++        }
++        return oldCount
++    }
++
++    /// The function at `index` of a `funcref` table: what a host mirroring
++    /// the table elsewhere (native code that calls through a table of its
++    /// own) needs, its type included.
++    ///
++    /// - Parameter store: The store the table belongs to.
++    /// - Returns: The function, or `nil` for a null slot, an index out of the
++    ///   table's range, a table whose elements are not functions, or a `store`
++    ///   other than the table's.
++    public func function(at index: Int, store: Store) -> Function? {
++        guard store.allocator === allocator, index >= 0, index < count,
++            case .function(let address?) = self[index]
++        else { return nil }
++        return Function(handle: InternalFunction(bitPattern: address), store: store)
++    }
++
++    /// Whether `reference` is of the kind a table of `elementType` holds.
++    private static func reference(_ reference: Reference, fits elementType: ReferenceType) -> Bool {
++        switch (reference, elementType.heapType) {
++        case (.function, .abstract(.funcRef)), (.function, .concrete),
++            (.extern, .abstract(.externRef)), (.exception, .abstract(.exnRef)):
++            return true
++        default:
++            return false
++        }
++    }
++
+     /// Accesses the element at the given index.
+     public subscript(index: Int) -> Reference {
+         get { handle.withValue { $0.reference(at: index) } }
+@@ -1087,6 +1166,59 @@ public struct Memory: Equatable {
+     public var byteCount: Int {
+         handle.withValue { $0.byteCount }
+     }
++
++    /// Grows the memory by `pageCount` pages of 64 KiB, as `memory.grow`
++    /// does, within the memory's maximum and the store's resource limiter.
++    /// The new pages are zero.
++    ///
++    /// A memory whose ``unsafeBaseAddress`` is not `stable` may move when it
++    /// grows: read the address again afterwards. A guest that is running
++    /// (this called from a host function) sees the new size and address when
++    /// the host function returns.
++    ///
++    /// - Parameters:
++    ///   - pageCount: The number of pages to add; zero leaves the memory as it is.
++    ///   - store: The store the memory belongs to; its resource limiter is asked.
++    /// - Returns: The page count before growing, or -1 if it cannot grow (a
++    ///   negative `pageCount`, past the maximum, or refused by the resource
++    ///   limiter), in which case the memory is unchanged.
++    /// - Throws: An error the resource limiter throws, or a `Trap` if the host
++    ///   cannot allocate the larger memory.
++    public func grow(by pageCount: Int, store: Store) throws -> Int {
++        guard pageCount >= 0 else { return -1 }
++        let old = try handle.withValue { try $0.grow(by: pageCount, resourceLimiter: store.resourceLimiter) }
++        switch old {
++        case .i32(let pages): return Int(Int32(bitPattern: pages))
++        case .i64(let pages): return Int(Int64(bitPattern: pages))
++        default: return -1
++        }
++    }
++
++    /// The address of the memory's first byte, and whether it stays there
++    /// as the memory grows, so code outside WasmKit can access the memory in
++    /// place (native code compiled from another module that shares it).
++    ///
++    /// `stable` is true when the engine reserved address space for the
++    /// memory's whole range up front and grows it in place: a shared memory,
++    /// or a 32-bit memory under `memoryBoundsChecking` `.mprotect` on macOS,
++    /// iOS or Linux (unless the reservation failed and the engine fell back).
++    /// Then `address` stays the same for as long as the memory exists, and
++    /// the bytes from it up to ``byteCount`` are the memory's; the reservation
++    /// past them is inaccessible. `stable` is false for a memory the engine
++    /// allocated with malloc (software bounds checking, a memory64, or the
++    /// fallback): `address` is then valid only until the memory next grows,
++    /// by the guest's `memory.grow` or by ``grow(by:store:)``, which may move
++    /// the bytes and free the old allocation. Ask again after anything that
++    /// may have grown it.
++    ///
++    /// The pointer is unsafe in every case: WasmKit does not bounds-check
++    /// accesses through it, does not keep the memory alive for it (it dangles
++    /// once the memory's store is gone), and does not synchronize it with a
++    /// guest running on another thread. `address` may be nil for a memory of
++    /// zero bytes that has no allocation.
++    public var unsafeBaseAddress: (address: UnsafeMutableRawPointer?, stable: Bool) {
++        handle.withValue { ($0.baseAddress, $0.trapGuardReservationSize > 0) }
++    }
+ }
+ 
+ extension Memory: GuestMemory {
+diff --git a/Sources/WasmKit/Execution/Instructions/Control.swift b/Sources/WasmKit/Execution/Instructions/Control.swift
+index be692ab..2eb4c10 100644
+--- a/Sources/WasmKit/Execution/Instructions/Control.swift
++++ b/Sources/WasmKit/Execution/Instructions/Control.swift
+@@ -1,3 +1,5 @@
++import _CWasmKit
++
+ /// > Note:
+ /// <https://webassembly.github.io/spec/core/exec/instructions.html#control-instructions>
+ extension Execution {
+@@ -114,6 +116,9 @@ extension Execution {
+     }
+ 
+     mutating func endOfExecution(sp: inout Sp, pc: Pc) throws -> (Pc, CodeSlot) {
++        #if (arch(i386) || arch(x86_64) || arch(arm) || arch(arm64) || arch(arm64_32)) && !$Embedded
++            if returnsToHost { return (pc, wasmkit_tc_halt_slot()) }
++        #endif
+         throw EndOfExecution(sp: sp)
+     }
+ 
+diff --git a/Sources/_CWasmKit/TrapGuard.c b/Sources/_CWasmKit/TrapGuard.c
+index 8da5d6f..8640d72 100644
+--- a/Sources/_CWasmKit/TrapGuard.c
++++ b/Sources/_CWasmKit/TrapGuard.c
+@@ -93,6 +93,9 @@ static void wasmkit_install_signal_handlers_once(void) {
+   // SA_ONSTACK: use alternate signal stack if available (via sigaltstack),
+   // preventing infinite handler recursion when SA_NODEFER is set and
+   // the handler itself faults (e.g. due to stack overflow).
++  // SA_NODEFER and the empty sa_mask also keep the thread's signal mask as it
++  // was across a trap, which wasmkit_trap_guard_run relies on: its
++  // sigsetjmp saves no mask for siglongjmp to restore.
+   action.sa_flags = SA_SIGINFO | SA_NODEFER | SA_ONSTACK;
+ 
+   if (sigaction(SIGSEGV, &action, &wasmkit_prev_segv) == 0) {
+@@ -114,7 +117,14 @@ bool wasmkit_trap_guard_run(wasmkit_trap_guard_fn fn, void *ctx) {
+   wasmkit_trap_guard_t *previous_guard = wasmkit_current_trap_guard;
+ 
+   wasmkit_current_trap_guard = &guard;
+-  int jmp = sigsetjmp(guard.env, 1);
++  // No signal mask to save: the handler is installed with SA_NODEFER and an
++  // empty sa_mask, so delivering the fault blocks nothing and a trap jumps
++  // back with the mask it found (InvokeUncheckedTests checks that it does).
++  // Saving it (and, on Darwin, the alternate signal stack) costs two system
++  // calls on every entry into the guest, which a host calling in often
++  // (re-entrantly, from native code compiled from another module) pays on
++  // each call. Keep the handler's flags in step with this.
++  int jmp = sigsetjmp(guard.env, 0);
+   if (jmp == 0) {
+     fn(ctx);
+     wasmkit_current_trap_guard = previous_guard;
+diff --git a/Sources/_CWasmKit/include/_CWasmKit.h b/Sources/_CWasmKit/include/_CWasmKit.h
+index f7fa651..78ecedc 100644
+--- a/Sources/_CWasmKit/include/_CWasmKit.h
++++ b/Sources/_CWasmKit/include/_CWasmKit.h
+@@ -132,6 +132,20 @@ static inline void wasmkit_tc_start(
+ ) {
+   exec(sp, pc, md, ms, 0, 0.0, state);
+ }
++
++/// A handler that ends the chain: the root frame's `endOfExecution`, in an
++/// execution that returns to the host, continues here, and the handler that
++/// started the chain returns with nothing recorded, rather than through a
++/// thrown error the loop has to box, record and cast on every call.
++static WASMKIT_TC_CC void wasmkit_tc_halt(
++    uint64_t *WASMKIT_NONNULL sp, Pc pc, Md md, Ms ms, uint64_t ireg, double freg,
++    WASMKIT_TC_CONTEXT void *WASMKIT_NULLABLE state
++) {}
++
++/// `wasmkit_tc_halt` as a code slot.
++static inline uint64_t wasmkit_tc_halt_slot(void) {
++  return (uint64_t)(uintptr_t)&wasmkit_tc_halt;
++}
+ #endif
+ 
+ int wasmkit_address_sanitizer_enabled(void);

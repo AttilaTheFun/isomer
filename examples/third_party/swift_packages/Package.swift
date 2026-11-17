@@ -10,7 +10,7 @@ let package = Package(
     name: "isomer_examples_swift_packages",
     platforms: [.macOS("15.0")],
     dependencies: [
-        // Isomer's Swift (Foundation and the frameworks off Apple), this
+        // Isomer's Swift (SwiftUI and the frameworks off Apple), this
         // repository's: an application elsewhere lists it by revision.
         .package(path: "../../.."),
         .package(url: "https://github.com/apple/swift-protobuf.git", exact: "1.38.1"),
