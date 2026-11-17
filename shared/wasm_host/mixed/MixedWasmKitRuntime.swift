@@ -72,21 +72,34 @@ public struct MixedNativePart: Sendable {
 
 /// The guest's thread: work in order, and a way to wait (for the main
 /// thread) while still doing the work queued for it.
-final class MixedEngineThread: Thread, @unchecked Sendable {
+///
+/// It holds its `Thread` rather than being one: corelibs Foundation's
+/// `Thread` (Linux, Windows) can't be subclassed from another module (its
+/// overridable members name CoreFoundation's types, which it imports for
+/// its implementation alone), and a block runs the same on every Foundation.
+final class MixedEngineThread: @unchecked Sendable {
     private let condition = NSCondition()
     private var work: [() -> Void] = []
     /// How deep the guest's thread is in waits for the main thread.
     private var waiting = 0
     private var running = false
+    /// The thread itself, made by `start()`.
+    private var thread: Thread?
 
-    override init() {
-        super.init()
-        stackSize = 64 << 20
-        qualityOfService = .userInteractive
-        name = "isomer-mixed-guest"
+    init() {}
+
+    /// The thread made and started: 64 MiB of stack (native code recurses on
+    /// it), serving the queue for the life of the process.
+    func start() {
+        let thread = Thread { [self] in serve() }
+        thread.stackSize = 64 << 20
+        thread.qualityOfService = .userInteractive
+        thread.name = "isomer-mixed-guest"
+        self.thread = thread
+        thread.start()
     }
 
-    override func main() {
+    private func serve() {
         while true {
             condition.lock()
             running = false
@@ -116,7 +129,7 @@ final class MixedEngineThread: Thread, @unchecked Sendable {
     func sync<T>(_ body: @escaping () throws -> T) throws -> T {
         // Identity: Thread is NSObject's equality on Apple and corelibs, a
         // plain Swift class in Isomer's Foundation (the Swift SDK's on Android).
-        if Thread.current === self { return try body() }
+        if let thread, Thread.current === thread { return try body() }
         let done = DispatchSemaphore(value: 0)
         var result: Result<T, Error>!
         post {
@@ -180,6 +193,16 @@ public final class MixedWasmKitRuntime: WasmRuntime {
     /// the top of the 32-bit space (an address no guest of this size has).
     private var nextPlaceholder: UInt32 = 0xFFFF_F000
 
+    /// The interpreter's stack for each stretch of interpreted code: a
+    /// call from the host, or an interpreted function native code calls
+    /// (each depth of crossing has its own). Its frames' locals and operands
+    /// (the guest's own stack is in its memory). As `WasmKitRuntime`'s: a
+    /// render interpreted throughout (ISO_MIXED_NATIVE=0, or no guard pages)
+    /// recurses as deep as the reactor's, and the view tree an interpreted
+    /// side module builds under native code nearly as deep; WasmKit's default
+    /// (512 KiB) ran out in both on the Storybook. Read at `launch`.
+    public var stackSize = 2 << 20
+
     public init(native: MixedNativePart) {
         self.native = native
         thread.start()
@@ -202,7 +225,8 @@ public final class MixedWasmKitRuntime: WasmRuntime {
         self.ffi = ffi
         var standard: [String: SwiftFFIImport] = [:]
         for item in ffi.standardImports() { standard[item.name] = item }
-        let guest = MixedGuest(thread: thread, native: native, hostImports: hostImports, swiftFFI: standard)
+        let guest = MixedGuest(
+            thread: thread, native: native, hostImports: hostImports, swiftFFI: standard, stackSize: stackSize)
         self.guest = guest
         try thread.sync { try guest.setUp(runtime: wasm) }
         // Each dependency's register export, so the guest's proxy factories
@@ -313,6 +337,7 @@ final class MixedGuest: @unchecked Sendable {
     let native: MixedNativePart
     let hostImports: WasmHostImports
     let swiftFFI: [String: SwiftFFIImport]
+    let stackSize: Int
     private var bridge: MixedBridge!
     private var runtime: Instance!
     /// Native code runs (else the guest runs interpreted: see `setUp`).
@@ -323,11 +348,15 @@ final class MixedGuest: @unchecked Sendable {
     private let renderLock = NSLock()
     private var renderQueued = false
 
-    init(thread: MixedEngineThread, native: MixedNativePart, hostImports: WasmHostImports, swiftFFI: [String: SwiftFFIImport]) {
+    init(
+        thread: MixedEngineThread, native: MixedNativePart, hostImports: WasmHostImports,
+        swiftFFI: [String: SwiftFFIImport], stackSize: Int
+    ) {
         self.thread = thread
         self.native = native
         self.hostImports = hostImports
         self.swiftFFI = swiftFFI
+        self.stackSize = stackSize
     }
 
     /// `ISO_MIXED_TRACE=1`: what the guest's thread does, printed there.
@@ -340,7 +369,7 @@ final class MixedGuest: @unchecked Sendable {
     }
 
     func setUp(runtime runtimeBytes: [UInt8]) throws {
-        let engine = Engine(configuration: EngineConfiguration(memoryBoundsChecking: .mprotect))
+        let engine = Engine(configuration: EngineConfiguration(stackSize: stackSize, memoryBoundsChecking: .mprotect))
         let store = Store(engine: engine)
         let b = MixedBridge(engine: engine, store: store)
         mixedBridge = b

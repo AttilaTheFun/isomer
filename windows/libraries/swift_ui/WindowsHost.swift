@@ -11,7 +11,7 @@ import ImageIO
 package import IsomerSwiftUI
 internal import SwiftUI
 
-func withUTF8Pointer(_ string: String, _ body: (UnsafePointer<CChar>?, Int32) -> Void) {
+package func withUTF8Pointer(_ string: String, _ body: (UnsafePointer<CChar>?, Int32) -> Void) {
     var copy = string
     copy.withUTF8 { buffer in
         buffer.withMemoryRebound(to: CChar.self) { rebound in
@@ -290,10 +290,26 @@ package func windowsMakeHost() -> HostBridge {
 }
 
 func windowsResized(width: Double, height: Double) {
+    windowsRefreshGPUSurface()
+    MainActor.assumeIsolated { Runtime.shared.resize(width: width, height: height) }
+}
+
+/// The D3D11 swapchain resized to the window (the wasm cell's resize too,
+/// //windows/libraries/swift_ui_wasm, a module of its own).
+package func windowsRefreshGPUSurface() {
     #if canImport(SwiftGPU)
     windowsGPUSurface?.refreshSize()
     #endif
-    MainActor.assumeIsolated { Runtime.shared.resize(width: width, height: height) }
+}
+
+/// Whether presenting paces the loop (vsync on the D3D11 surface), so the
+/// loop needn't wait for a frame itself.
+package var windowsPresentPaces: Bool {
+    #if canImport(SwiftGPU)
+    return windowsGPUSurface != nil
+    #else
+    return false
+    #endif
 }
 
 /// Owns the native window and the render loop. `@main` on Windows calls
@@ -333,10 +349,7 @@ enum WindowsApp {
         let host = windowsMakeHost()
         MainActor.assumeIsolated { Runtime.shared.start(host: host, width: width, height: height) }
         _isoDriveAttach("Windows", "DirectX")
-        var presentPaces = false
-        #if canImport(SwiftGPU)
-        presentPaces = windowsGPUSurface != nil
-        #endif
+        let presentPaces = windowsPresentPaces
         while iso_pump_events() != 0 {
             isoRunMainQueue()
             iso_drain_fetches()
