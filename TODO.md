@@ -299,8 +299,28 @@ JavaScript engine, and WasmKit goes:
   feature, his WasmKit commits rebased onto upstream main (to propose
   there), the LOCREL fix to LLVM. `--@isomer//:mode` and
   `isomer_application` are in (docs/modes.md, "The setting"); open with
-  them: Android's web-view mode (its WebView as a transport), the remote
-  Android shell's assets and fonts, Linux and Windows apps in the macro.
+  them: the remote Android shell's assets and fonts, Linux and Windows apps
+  in the macro. Android's web-view mode is in (0.57: IsomerWebViewHost.kt,
+  a WebView and a WebMessagePort, drawn by the Compose renderer; the
+  reactor's compiled code kept through the page's Cache Storage).
+- **Web-view heads next (owner, 2026-11-17: "web-view heads elsewhere")**:
+  - Linux: the page in WebKitGTK (a `WebKitWebView` kept unmapped or in an
+    offscreen window, its `isomer-app://` scheme served by
+    `webkit_web_context_register_uri_scheme`, the session over a script
+    message handler one way and `webkit_web_view_evaluate_javascript` the
+    other, as WebKit's on Apple), drawn by Linux's head (the GPU renderer
+    reading the session's tree, which it doesn't yet: the Linux host draws
+    a guest in process today). JavaScriptCore's GLib API alone (no view)
+    can't: the page measures text with a canvas and keeps its files in
+    IndexedDB.
+  - Windows: the page in WebView2 (a hidden child window, the site served
+    by `SetVirtualHostNameToFolderMapping` at a stable https origin, the
+    session over `PostWebMessageAsString` and `WebMessageReceived`), drawn
+    by Windows' head (the same reading of the session's tree), and
+    `isomer_application` declaring Linux and Windows apps.
+  - Both: whether their engines keep the reactor's code beside a Cache
+    Storage response (WebView2 is Chromium's V8, as Android's: likely);
+    measured as docs/modes.md measures Android's.
 - Side modules and mixed mode (isomer#188 and #213, an outside
   contributor's; merged as #215 for 0.54, docs/side_modules.md): open, his
   WasmKit commits (AttilaTheFun/WasmKit's isomer/side-modules, a patch on

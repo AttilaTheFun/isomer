@@ -69,7 +69,10 @@ ios_shot() { xcrun simctl io "$udid" screenshot --mask=black "$1" >/dev/null 2>&
 ios_story() {
     local bundle="$1" story="$2" picture="$3" wait="$4"
     xcrun simctl terminate "$udid" "$bundle" >/dev/null 2>&1
-    SIMCTL_CHILD_ISO_STORYBOOK_STORY="$story" xcrun simctl launch "$udid" "$bundle" >/dev/null || return 2
+    # Its standard error kept beside the picture (the web-view app's page
+    # logs its start there: session_host.js through the head).
+    SIMCTL_CHILD_ISO_STORYBOOK_STORY="$story" xcrun simctl launch --stderr="${picture%.png}.log" \
+        "$udid" "$bundle" >/dev/null || return 2
     sleep 4
     # The web-view app's reactor compiled by WebKit first: a picture every
     # 2 s until one has drawn, for at most <wait> seconds.
@@ -115,6 +118,12 @@ fi
 if [ -n "$webview_ipa" ]; then
     webview_count=${#stories[@]}
     ios_stories ios-webview "$WEBVIEW_BUNDLE" "${HOSTED_WEBVIEW_WAIT:-60}"
+    # How long each launch's page took to its first frame, in launch order:
+    # the first with the page's caches empty, the rest after it (the
+    # reactor from Cache Storage where WebKit has it, session_host.js).
+    for story in "${stories[@]}"; do
+        grep -h "the app's first frame" "$out/ios-webview-$story.log" 2>/dev/null | sed "s/^/$story: /"
+    done | tee "$out/ios-webview-starts.txt"
 fi
 xcrun simctl shutdown "$udid" >/dev/null 2>&1
 xcrun simctl delete "$udid" >/dev/null 2>&1

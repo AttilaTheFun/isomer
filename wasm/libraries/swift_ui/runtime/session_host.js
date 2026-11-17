@@ -114,6 +114,10 @@ export function createSessionHost({
     onEnd(error);
   }
 
+  // How long the guest took to come up (logged once its first frame is out).
+  const timing = { begun: 0, compiled: 0, loaded: 0, source: "" };
+  let firstFrame = true;
+
   // The Swift `WebHost` protocol (wasm/libraries/swift_ui/WebBridge.swift),
   // its drawing half the head's: the tree goes out as the session's patches.
   const host = {
@@ -144,17 +148,14 @@ export function createSessionHost({
       if (firstFrame) {
         firstFrame = false;
         const ms = (to, from) => Math.round(to - from);
-        console.log(`[session] the app's first frame ${ms(performance.now(), timing.begun)} ms after its start ` +
+        // To the head, which logs it (logcat, the app's standard output).
+        post(serverMessage.log(`[session] the app's first frame ${ms(performance.now(), timing.begun)} ms after its start ` +
           `(the reactor compiled in ${ms(timing.compiled, timing.begun)} ms from ${timing.source}, ` +
           `its files and instance ${ms(timing.loaded, timing.compiled)} ms, ` +
-          `its first frame ${ms(performance.now(), timing.loaded)} ms; the page ${ms(timing.begun, 0)} ms old at the start)`);
+          `its first frame ${ms(performance.now(), timing.loaded)} ms; the page ${ms(timing.begun, 0)} ms old at the start)`));
       }
     },
   };
-
-  // How long the guest took to come up (logged once its first frame is out).
-  const timing = { begun: 0, compiled: 0, loaded: 0, source: "" };
-  let firstFrame = true;
 
   async function begin(start) {
     timing.begun = performance.now();

@@ -72,6 +72,8 @@ ISO_STORYBOOK_STORY=state.observableobject \
   interpreter: android/libraries/swift_ui/kotlin/…/RemoteIsomer.kt): the
   Compose renderer, FlatTree and IsomerWebSockets. examples/android/
   remote_android_application is an app of it: Kotlin and Compose only.
+  `IsomerRemote(channel)` takes any `IsomerSessionChannel` instead of a URL
+  (a WebSocket's, `IsomerWebSocketChannel`, or a web view's page's).
 - **The iPhone and the Mac**: `IsomerRemoteView(url:)`
   (apple/libraries/remote_head): Apple's tree renderer (IsomerTreeView, the
   real SwiftUI) over the session, starting it as a `swiftui` head, which the
@@ -94,7 +96,12 @@ can carry it. On the iPhone and the Mac, `IsomerWebViewAppView(site:)`
 (apple/libraries/webview_head) is the head and the channel: a hidden
 WKWebView, `callAsyncJavaScript` one way and a script message handler the
 other, the site served from the bundle (`isomer-app://app/`).
-examples/apple/webview_ios_application is the Storybook so.
+examples/apple/webview_ios_application is the Storybook so. On Android,
+`IsomerWebViewApp(site:)` (IsomerWebViewHost.kt): a hidden WebView, a
+WebMessagePort both ways, the site served from the APK's assets
+(`https://appassets.androidplatform.net/site/`), drawn by the Compose
+renderer; examples/android/webview_android_application is the Storybook
+so.
 
 What differs from a server: text is measured by the page's own canvas (a
 browser's fonts, not a fixed-width estimate); the app's files, networking and
@@ -136,5 +143,7 @@ And without it, beside the other tests that draw nothing:
 session (session_host.js) in headless Chrome, driven as a head drives it: the
 whole tree first, a tap, the change.
 
-Android's head was checked by hand on an emulator (drawn, tapped, typed
-into); an automated run is open (TODO.md).
+Android's head over a WebSocket was checked by hand on an emulator (drawn,
+tapped, typed into); an automated run of it is open (TODO.md). Over a web
+view's page it runs in verify's `android` job
+(tools/ci/android_webview_test.sh: drawn, tapped, the change read back).
