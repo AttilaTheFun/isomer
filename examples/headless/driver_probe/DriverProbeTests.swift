@@ -358,6 +358,64 @@ struct DriverProbeTests {
         #expect(!back.shows("Welcome back"), "\(back.texts)")
     }
 
+    /// An app that opens a page in another app (Safari, on the iPhone, which
+    /// suspends the app behind it): `scene(.active)` brings it back through
+    /// the launcher, the same process, and it answers again. (The Mac's
+    /// would open the page in its browser, over the tests after it: not
+    /// there.)
+    @Test func comingBackFromAnotherApp() throws {
+        let app = try launch("scene")
+        defer { app.quit() }
+        var screen = try app.wait(for: "Phase: active")
+        guard try app.info().platform != "macOS" else { return }
+        let process = screen.texts.first { $0.hasPrefix("Process: ") }
+        try app.tap("Open Page")
+        screen = try app.scene(.active)
+        screen = try app.wait(for: "Opened: 1")
+        #expect(screen.shows("Phase: active"), "\(screen.texts)")
+        #expect(screen.texts.first { $0.hasPrefix("Process: ") } == process, "\(screen.texts)")
+        if headful {
+            // Back from the background, as the app sees it.
+            try app.wait(for: "Welcome back")
+        }
+        try app.tap("Note")
+        try app.wait(for: "notes: 1")
+        // And home and back, the launcher's way on the iPhone.
+        try app.scene(.background)
+        try app.scene(.active)
+        screen = try app.tap("Note")
+        try app.wait(for: "notes: 2")
+        #expect(screen.texts.first { $0.hasPrefix("Process: ") } == process, "\(screen.texts)")
+        // The page again, and a command at once, with no `scene`: an app iOS
+        // suspended meanwhile is brought back as the command waits (the
+        // launcher's `wake`), and answers.
+        try app.tap("Open Page")
+        try app.tap("Note")
+        screen = try app.wait(for: "notes: 3")
+        #expect(screen.texts.first { $0.hasPrefix("Process: ") } == process, "\(screen.texts)")
+    }
+
+    /// A command the app never answers (its process stopped, as iOS
+    /// suspends an app) fails within the command's timeout, naming it, and
+    /// every command after it fails at once.
+    @Test func anUnansweredCommandFailsInItsTime() throws {
+        let app = try launch("scene")
+        defer { app.quit() }
+        let screen = try app.wait(for: "Phase: active")
+        let pid = try #require(screen.texts.first { $0.hasPrefix("Process: ") }.flatMap { Int32($0.dropFirst(9)) },
+                               "\(screen.texts)")
+        app.commandTimeout = 3
+        #expect(kill(pid, SIGSTOP) == 0)
+        defer { kill(pid, SIGCONT) }
+        let started = Date()
+        let error = #expect(throws: HeadlessError.self) { try app.tap("Note") }
+        let waited = Date().timeIntervalSince(started)
+        #expect(waited >= 3 && waited < 20, "waited \(waited) s")
+        #expect(error?.message.contains("no answer to tap Note in 3 s") == true, "\(String(describing: error))")
+        let after = #expect(throws: HeadlessError.self) { try app.screen() }
+        #expect(after?.message.contains("not sent") == true, "\(String(describing: after))")
+    }
+
     /// An iPhone app that turns itself to landscape on an upright phone:
     /// taps reach its rows, its info says how it stands, and its pictures
     /// are turned as a person sees them.
