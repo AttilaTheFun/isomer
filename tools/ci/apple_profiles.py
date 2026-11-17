@@ -168,6 +168,12 @@ def nested_code(bundle):
             if os.path.islink(path):
                 continue
             if name.rsplit(".", 1)[-1] in CODE_BUNDLES and "." in name and has_code(path):
+                # A Mac framework with versions is signed as its current version (Versions/A): rcodesign takes that for
+                # a bundle nested in the framework, which --shallow leaves alone, so signing the framework itself left
+                # its binary as it was (0.10's second run: "not signed with a valid Developer ID certificate").
+                current = os.path.join(path, "Versions", "Current")
+                if os.path.islink(current) and os.path.isdir(current):
+                    path = os.path.realpath(current)
                 found.append(path)
                 main = executable(path)
                 if main:
