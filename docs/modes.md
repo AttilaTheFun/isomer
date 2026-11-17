@@ -84,7 +84,8 @@ hot-reload as wasm and ship compiled):
   keyed by its `?v=` stamped URL, put there at the first launch) and
   compiles it streaming from there, where V8 keeps the code it compiled
   beside a cached response and takes it back at the next launch (about
-  half the compile on Android: "Measured: web-view start" below);
+  half the compile on Android; WebKit has nothing of the kind: "Measured:
+  web-view start" below);
   `?reactorCache=0` (Android's `reactorCache` extra) compiles it from the
   app's files every time, to compare. Each start's
   times go to the head as a log line (`[session] the app's first frame …`:
@@ -229,13 +230,26 @@ app's first frame after the head's start.
 | from Cache Storage, V8's code kept (7 starts) | 184–555 ms, median 367 | 540–1,161 ms, median 885 |
 | from the APK's assets every time (`reactorCache=0`, 5 starts) | 673–1,846 ms, median 769 | 1,111–2,322 ms, median 1,282 |
 
+| Android 15 emulator on GitHub's runner (x86_64, KVM; verify's `android` job) | compile | first frame after the start |
+| --- | --- | --- |
+| first launch | 396 ms | 791 ms |
+| from Cache Storage (3 starts) | 143–274 ms | 495–605 ms |
+| from the APK's assets (`reactorCache=0`, 2 starts) | 245–336 ms | 633–806 ms |
+
 V8 keeps a module's compiled code beside a Cache Storage response it was
 streamed from, across the app's processes (the WebView's "Code Cache/wasm"
 in the app's cache folder): a response `shouldInterceptRequest` answers
 never reaches the HTTP cache, so the reactor compiles from the start each
 time without it. The page loads in 0.4–1.4 s before the start (the WebView's
-own start, the runtime's modules). On the iPhone, verify's Apple job keeps
-each web-view launch's line (ios-webview-starts.txt in its artifact).
+own start, the runtime's modules).
+
+WKWebView (an iPhone 17 simulator on GitHub's Mac, iOS 27.1; verify's Apple
+pictures, ios-webview-starts.txt in its artifact): the page at
+`isomer-app://app/` has no Cache Storage (a scheme of the app's own is no
+secure context to WebKit), and JavaScriptCore keeps no compiled wasm a page
+could ask for again, so each launch compiles the reactor whole: 470–915 ms,
+the first frame 859–1,410 ms after the start. Nothing there to keep yet;
+the page falls back to its files at once.
 
 ## Order
 
