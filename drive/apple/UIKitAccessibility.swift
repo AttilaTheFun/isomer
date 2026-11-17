@@ -240,6 +240,8 @@ extension AccessibilityDriver {
               let symbol = dlsym(library, "_AXSApplicationAccessibilitySetEnabled") else { return }
         typealias SetEnabled = @convention(c) (Int32) -> Void
         unsafeBitCast(symbol, to: SetEnabled.self)(1)
+        // (And the scenes' phases followed from here on: `scene`.)
+        ScenePhases.follow()
     }
 
     /// Accessibility's screen coordinates into `window`'s: the inverse of
@@ -752,10 +754,6 @@ extension AccessibilityDriver {
         return false
     }
 
-    /// The scene phases the driver has moved its scenes to, by scene: UIKit's
-    /// own activation state stays as it was.
-    private static var phases: [ObjectIdentifier: Int] = [:]
-
     /// Moves SwiftUI's scene phase (`@Environment(\.scenePhase)`, its
     /// `.onChange`) as leaving the app and coming back does: SwiftUI's own
     /// scene delegate told, a step at a time, what UIKit tells it then
@@ -765,7 +763,12 @@ extension AccessibilityDriver {
     /// The app stays on screen and is still driven (a simulator's real trip
     /// to the home screen takes seconds and suspends the app). Posting the
     /// notifications alone moves nothing: SwiftUI's phase follows its
-    /// delegate.
+    /// delegate. Each step is from the phase SwiftUI was last told
+    /// (`ScenePhases`: by iOS, or by the driver), so a phase it already
+    /// has moves nothing, and one iOS left short of it is finished: a scene
+    /// the launcher brought back from the home screen that iOS leaves
+    /// inactive (as a simulator with no Simulator.app showing it does) is
+    /// made active.
     func scene(_ phase: String) async -> String? {
         let order = ["background": 0, "inactive": 1, "active": 2]
         guard let wanted = order[phase] else { return "no scene phase \(phase)" }
@@ -774,14 +777,7 @@ extension AccessibilityDriver {
         let center = NotificationCenter.default
         let application = UIApplication.shared
         for scene in scenes {
-            let key = ObjectIdentifier(scene)
-            var current = Self.phases[key] ?? {
-                switch scene.activationState {
-                case .foregroundActive: return 2
-                case .foregroundInactive: return 1
-                default: return 0
-                }
-            }()
+            var current = ScenePhases.shared.phase(scene)
             while current != wanted {
                 let delegate = scene.delegate
                 switch (current, wanted > current) {
@@ -809,7 +805,6 @@ extension AccessibilityDriver {
                 // A turn of the run loop between steps, as UIKit's come.
                 try? await Task.sleep(nanoseconds: 100_000_000)
             }
-            Self.phases[key] = current
         }
         return nil
     }
@@ -819,6 +814,54 @@ extension AccessibilityDriver {
         let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
             .flatMap(\.windows).filter { !$0.isHidden }
         return windows.first(where: \.isKeyWindow) ?? windows.first
+    }
+}
+
+/// The phase each scene's delegate was last told, as SwiftUI's scene phase
+/// follows it: from UIKit's notifications of each step, which iOS posts as
+/// it moves the scene (the app sent home and brought back, another app
+/// opened over it) and the driver after each step it tells the delegate
+/// (`scene`). A scene not heard of since the driver started is as UIKit
+/// has it. (UIKit's own activation state alone isn't SwiftUI's phase once
+/// the driver has moved it, and a memo of what the driver last set goes
+/// stale as soon as iOS moves the scene: then `scene(.active)` did nothing
+/// for a scene iOS had left inactive on its way back.)
+@MainActor
+final class ScenePhases: NSObject {
+    static let shared = ScenePhases()
+    private var phases: [ObjectIdentifier: Int] = [:]
+
+    override private init() {
+        super.init()
+        let center = NotificationCenter.default
+        for name in [UIScene.willDeactivateNotification, UIScene.didEnterBackgroundNotification,
+                     UIScene.willEnterForegroundNotification, UIScene.didActivateNotification,
+                     UIScene.didDisconnectNotification] {
+            center.addObserver(self, selector: #selector(moved(_:)), name: name, object: nil)
+        }
+    }
+
+    /// Follows the scenes from now on (the driver's start).
+    static func follow() { _ = shared }
+
+    func phase(_ scene: UIScene) -> Int {
+        if let phase = phases[ObjectIdentifier(scene)] { return phase }
+        switch scene.activationState {
+        case .foregroundActive: return 2
+        case .foregroundInactive: return 1
+        default: return 0
+        }
+    }
+
+    @objc private func moved(_ notification: Notification) {
+        guard let scene = notification.object as? UIScene else { return }
+        let key = ObjectIdentifier(scene)
+        switch notification.name {
+        case UIScene.willDeactivateNotification, UIScene.willEnterForegroundNotification: phases[key] = 1
+        case UIScene.didEnterBackgroundNotification: phases[key] = 0
+        case UIScene.didActivateNotification: phases[key] = 2
+        default: phases[key] = nil
+        }
     }
 }
 

@@ -70,6 +70,9 @@ fi
 # there; ISO_DRIVE_TRACE=1, simctl's SIMCTL_CHILD_ISO_DRIVE_TRACE, prints
 # the driver's walk of its accessibility tree).
 log="${TEST_UNDECLARED_OUTPUTS_DIR:-${TMPDIR:-/tmp}}/$name.log"
+# (From when the simulator's log is read for RunningBoard's word on it:
+# `suspended`.)
+started="$(date '+%Y-%m-%d %H:%M:%S')"
 launched="$(env "${environment[@]}" xcrun simctl launch --terminate-running-process --stdout="$log" --stderr="$log" \
     "$udid" "$bundle" ${app_arguments[@]+"${app_arguments[@]}"})" || exit 1
 # simctl's "<bundle>: <pid>": the process the test drives.
@@ -79,12 +82,23 @@ away=0
 # Whether iOS has suspended the app (seconds after it leaves the screen, a
 # background task aside), so that it answers nothing: RunningBoard's jetsam
 # state, which launchctl shows root alone (sudo where it asks no password,
-# as on GitHub's and Shireworks' Macs), else its scheduling priority, which
-# drops to 4 (darwin background) as it is suspended.
+# as on GitHub's Macs and Shireworks' VMs); else what RunningBoard last
+# logged of the process in the simulator's own log ("Suspending task." or
+# "Resuming task.", read as any user in a second or so: a Shireworks slot
+# asks a password for sudo, and there an app's scheduling priority can stay
+# where it was as it is suspended); else that priority, which drops to 4
+# (darwin background) as it is suspended.
 suspended() {
-    local info priority
+    local info last priority
     if info="$(sudo -n launchctl procinfo "$pid" 2> /dev/null)" && grep -q "^jetsam state" <<< "$info"; then
         grep -q "^jetsam state = suspended" <<< "$info"
+        return
+    fi
+    if info="$(xcrun simctl spawn "$udid" log show --start "$started" --style compact --predicate \
+        "process == \"runningboardd\" AND eventMessage CONTAINS \":$pid] \" AND (eventMessage ENDSWITH \"Suspending task.\" OR eventMessage ENDSWITH \"Resuming task.\")" \
+        2> /dev/null)"; then
+        last="$(grep -E '(Suspending|Resuming) task\.$' <<< "$info" | tail -1)"
+        [[ "$last" == *"Suspending task." ]]
         return
     fi
     priority="$(ps -o pri= -p "$pid" 2> /dev/null | tr -d ' ')"
@@ -106,8 +120,9 @@ bring_forward() {
         echo "ios_launcher: $bundle started again (pid ${now##*: }, was $pid): what it held is gone" >&2
         pid="${now##*: }"
     fi
-    # Until it runs again (at most 5 s).
-    for _ in $(seq 1 50); do
+    # Until it runs again (at most 5 s; a check can take a second).
+    local until=$((SECONDS + 5))
+    while [ "$SECONDS" -lt "$until" ]; do
         suspended || return 0
         sleep 0.1
     done
@@ -122,14 +137,20 @@ bring_forward() {
 # another opens over it; an app in front waits that out); else it is in
 # front: opened as its icon opens it all the same (nothing moves for an app
 # in front; one still behind another comes forward), and left to the
-# driver, which moves the phase from inactive (its own) to active.
-# Inactive: the driver's (iOS has no way to it from here).
+# driver, which moves the phase from inactive (its own) to active. An app
+# brought back is answered `ok`, and HeadlessApp has its driver make the
+# phase active then too: iOS can leave a scene brought back from the home
+# screen inactive (seen on a Shireworks slot, whose simulators no
+# Simulator.app shows), and the driver finishes the step (nothing moves
+# where the phase is active already). Inactive: the driver's (iOS has no
+# way to it from here).
 scene() {
     case "$1" in
     background)
         xcrun simctl launch "$udid" com.apple.springboard > /dev/null || return 1
         away=1
-        for _ in $(seq 1 30); do
+        local until=$((SECONDS + 3))
+        while [ "$SECONDS" -lt "$until" ]; do
             suspended && break
             sleep 0.1
         done

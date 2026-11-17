@@ -334,7 +334,8 @@ struct DriverProbeTests {
 
     /// `scene` moves the app's scene phase as leaving it and coming back
     /// does: its `.onChange(of: scenePhase)` sees each step, and what it
-    /// opens on coming back (a sign-in prompt) is there.
+    /// opens on coming back (a sign-in prompt, once the phase is active
+    /// again) is there.
     @Test func sceneLeavesAndComesBack() throws {
         let app = try launch("scene")
         defer { app.quit() }
@@ -377,12 +378,18 @@ struct DriverProbeTests {
         if headful {
             // Back from the background, as the app sees it.
             try app.wait(for: "Welcome back")
+            try app.tap("sign-in")
         }
         try app.tap("Note")
         try app.wait(for: "notes: 1")
-        // And home and back, the launcher's way on the iPhone.
+        // And home and back, the launcher's way on the iPhone: the phase
+        // active again (iOS can leave a scene brought back from the home
+        // screen inactive, after a trip to another app: the driver finishes
+        // the step), and what the app opens then is there.
         try app.scene(.background)
         try app.scene(.active)
+        screen = try app.wait(for: "Welcome back")
+        #expect(screen.shows("Phase: active"), "\(screen.texts)")
         screen = try app.tap("Note")
         try app.wait(for: "notes: 2")
         #expect(screen.texts.first { $0.hasPrefix("Process: ") } == process, "\(screen.texts)")

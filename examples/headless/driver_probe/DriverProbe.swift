@@ -259,7 +259,9 @@ struct SheetsScreen: View {
 
 /// The scene's phase as the app sees it, each change it was told of, and
 /// what an app does on coming back from the background (a sign-in prompt
-/// opened on `.onChange(of: scenePhase)`); a page opened in another app
+/// opened on `.onChange(of: scenePhase)` once the phase is `.active` again,
+/// as an app that asks again on `.active` does: a scene left inactive on
+/// its way back never shows it); a page opened in another app
 /// (Safari, on the iPhone, in front of the app), the app's process (the
 /// same when it comes back) and a button to use when it has.
 struct SceneScreen: View {
@@ -267,6 +269,7 @@ struct SceneScreen: View {
     @Environment(\.openURL) private var openURL
     @State private var changes: [String] = []
     @State private var welcome = false
+    @State private var away = false
     @State private var opened = 0
     @State private var notes = 0
 
@@ -293,7 +296,11 @@ struct SceneScreen: View {
         }
         .onChange(of: phase) { old, new in
             changes.append(name(new))
-            if old == .background, new != .background { welcome = true }
+            if new == .background { away = true }
+            if new == .active, away {
+                away = false
+                welcome = true
+            }
         }
     }
 
