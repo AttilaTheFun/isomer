@@ -18,15 +18,15 @@ Not the `swift.enable_library_evolution` feature: isomer's REPO.bazel turns
 that off for its packages, and one_configuration drops it from the
 package's modules' configuration (foundation/defs.bzl), so that a
 consumer's `--features` never changes how Isomer is built; and it would
-reach swift-foundation, its collections and SwiftProtobuf beneath Isomer's
-package too, which an app doesn't import. Copts, for Isomer's modules only:
+reach SwiftProtobuf and the other packages beneath Isomer's package too,
+which an app doesn't import. Copts, for Isomer's modules only:
 
 - isomer's own swift_library targets (the Isomer module, the hosts, os and
   OSLog, IsomerFFI, SwiftGPU, SwiftMap, Metal, ...) add
   `LIBRARY_EVOLUTION_COPTS` to their copts: a select on the flag, so the
   module is resilient in whatever configuration it is built;
-- the modules of isomer's Swift package (Foundation, SwiftUI, Combine,
-  CoreGraphics, PhotosUI, ...) are generated targets of
+- the modules of isomer's Swift package (SwiftUI, PhotosUI, and on Linux
+  and Windows CoreGraphics and Combine, ...) are generated targets of
   rules_swift_package_manager's, whose copts nothing here writes. Every
   dependent reaches them through `one_configuration` (`@isomer//:foundation`,
   `@isomer//:swift_ui`, each platform's `libraries/swift_ui:core`), whose
@@ -35,6 +35,10 @@ package too, which an app doesn't import. Copts, for Isomer's modules only:
   (`--@rules_swift//swift:per_module_swiftcopt=<label>=<copt>`, keyed by
   each target's canonical label) name the package's targets with
   `-enable-library-evolution`.
+
+Foundation, FoundationNetworking, IsomerFoundation, and on Android and the
+web CoreGraphics and Combine, are the Swift SDK's (since 0.56), which Isomer's
+SDKs build with library evolution whatever the flag, as an Apple SDK's are.
 
 The module stays resilient through the copt alone: rules_swift doesn't
 know of it, so no .swiftinterface is emitted (an app links Isomer from
@@ -62,13 +66,9 @@ _PACKAGE_TARGETS = [
     "Combine",
     "CoreGraphics",
     "CoreTransferable",
-    "Foundation",
-    "FoundationNetworking",
     "ImageIO",
     "Isomer",
-    "IsomerDispatchTime",
     "IsomerDriver",
-    "IsomerFoundation",
     "IsomerGRPCTransport",
     "IsomerProcessTransport",
     "IsomerRemote",

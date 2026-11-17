@@ -1,29 +1,35 @@
-# FoundationInternationalization for Isomer's Foundation, when the build asks
-# for it (`--@isomer//foundation:internationalization`): a module that
-# re-exports it, which Foundation re-exports in turn when it can import it
-# (Foundation.swift), or nothing. MODULE.bazel adds this to the Foundation
-# target of isomer's Swift package: no SwiftPM condition can follow a Bazel
-# flag. Foundation asks for this module by name, not for
-# FoundationInternationalization: the Android Swift SDK has one of its own,
-# importable whatever the build.
+# What `--@isomer//foundation:internationalization` adds on Android and the
+# web, whose Foundation is the Swift SDK's (since 0.56): a module that
+# compiles only against the -i18n SDK's Foundation (it has
+# FoundationInternationalization, re-exported through
+# IsomerFoundationInternationalization), and fails with what to register
+# otherwise. Before 0.56 this was the module that added
+# FoundationInternationalization to the Foundation isomer built from source.
 
 load("@rules_swift//swift:swift.bzl", "swift_library", "swift_library_group")
+load("//foundation:defs.bzl", "one_configuration")
 
 alias(
     name = "internationalization",
     actual = select({
-        "//foundation:with_internationalization": ":module",
+        "//foundation:with_internationalization": ":check",
         "//conditions:default": ":none",
     }),
     visibility = ["//visibility:public"],
 )
 
+# Built once, whatever its dependents' configurations (a package's minimum
+# OS: defs.bzl).
+one_configuration(
+    name = "check",
+    actual = ":check_module",
+)
+
 swift_library(
-    name = "module",
+    name = "check_module",
     package_name = "isomer",
-    srcs = ["IsomerFoundationInternationalization.swift"],
-    module_name = "IsomerFoundationInternationalization",
-    deps = ["@swiftpkg_swift_foundation//:FoundationInternationalization"],
+    srcs = ["SDKInternationalization.swift"],
+    module_name = "IsomerSDKInternationalizationCheck",
 )
 
 swift_library_group(name = "none")

@@ -1,4 +1,4 @@
-load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@rules_swift//swift:swift.bzl", "swift_library", "swift_library_group")
 
 load("//foundation:defs.bzl", "one_configuration")
 
@@ -18,8 +18,23 @@ filegroup(
 # what isn't here). It sits beneath Foundation, which imports it as Apple's
 # does, so it depends on nothing but the standard library and the C
 # library's mutexes (Lock.swift); no Dispatch, which wasm lacks.
-one_configuration(
+# Since 0.56 these sources build Linux's and Windows' Combine alone: on
+# Android and the web it is the Swift SDK's (Isomer's SDKs carry it, built
+# from isomer_hermetic_toolchains' copy, Isomer/Sources/Combine; a change
+# here goes there too), so this label is nothing to link there.
+alias(
     name = "combine",
+    actual = select({
+        "@platforms//os:android": ":none",
+        "@platforms//os:wasi": ":none",
+        "//conditions:default": ":package",
+    }),
+)
+
+swift_library_group(name = "none")
+
+one_configuration(
+    name = "package",
     target_compatible_with = select({
         "@platforms//os:macos": ["@platforms//:incompatible"],
         "@platforms//os:ios": ["@platforms//:incompatible"],

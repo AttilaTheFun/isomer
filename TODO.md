@@ -370,16 +370,24 @@ each to an Isomer version and a Swift toolchain, and the examples'
   modules do, everywhere); and its frame cost was measured only on the
   Storybook on an emulator, where Swift spends about 2 ms a frame: an app
   heavier in Swift, on a phone, may show what the Storybook couldn't.
-- **Foundation for every Swift target on Android without wrappers**: a
-  `swift_library` that imports Foundation without depending on
-  `@isomer//:foundation` finds the SDK's corelibs Foundation, and links
-  two. rules_swift's non-Apple toolchains have no implicit dependencies, so
-  this is a rules_swift change (upstream): the Android toolchain taking
-  implicit deps from a label flag, which `@isomer//:foundation`'s own
-  `one_configuration` wrapper turns off for Foundation's build (else it
-  depends on itself). Until then, consumers wrap `swift_library` or patch
-  third-party BUILD files, and `tools/foundation/check_link.py` finds a
-  leak.
+- **Foundation for every Swift target on Android without wrappers**: done
+  in 0.56 by Isomer's Swift SDKs (docs/hermetic_toolchains.md): the SDK's
+  Foundation is Isomer's, so a `swift_library` or a package that imports
+  Foundation links Isomer's with no dependency. Open there:
+  - Linux and Windows SDKs with Isomer's Foundation (their hosts and
+    Foundation tests move off corelibs), then the one-line toolchains
+    module (Apple's SDKs through rules_applecross beside them);
+  - swift-collections' modules are in the SDK under their own names
+    (DequeModule, OrderedCollections...): an app that builds
+    swift-collections itself sees two (private names in the SDK, as
+    swift.org's `_FoundationCollections`, are the likely answer);
+  - `tools/parity` reads Foundation, CoreGraphics and Combine on wasm and
+    Android from the SDK now (swift-symbolgraph-extract, as Observation's):
+    a run is due to check its report against the last, generated from
+    source;
+  - XCTest is out of the wasm SDKs (corelibs XCTest is built on corelibs
+    Foundation): SwiftPM's `--build-tests` there wants it back, built
+    against Isomer's Foundation.
 
 ## Warnings as errors, Swift 6 mode, complete concurrency checking (owner, 2026-11-13)
 
@@ -422,7 +430,7 @@ with NDK r30, so its own fallbacks are compiled in (the runtime's
 `posix_spawn`) and no shim of Isomer's is needed. An app sets
 `android.ndk(api_level = 23)` and `isomer_android_app(min_sdk_version = 23)`
 (README, "Android below API 28"); rules_swift#2000 (in the registry's
-4.2.2.isomer.3) reads the SDK's minimum and leaves out RELR below 28.
+4.3.0.isomer.1) reads the SDK's minimum and leaves out RELR below 28.
 Isomer's Kotlin calls above 23 are behind version checks (#96).
 
 - Open: Shireworks' api23 emulator config doesn't boot yet (Shireworks),
@@ -461,21 +469,22 @@ project's own modules. Every change we carry has an upstream PR now
 (2026-11-04, drafts unless noted); each patch or fork goes when a release
 has it.
 
-- **rules_swift** (the registry's 4.2.2.isomer.3: upstream 4.2.2 and a
-  patch per PR, from its head):
+- **rules_swift** (the registry's 4.3.0.isomer.1 since 0.56: upstream 4.3.0,
+  which has #1985, #1989, #1998, #1999 and #2012, and a patch per PR, from
+  its head):
   - bazelbuild/rules_swift#1860 (open): the metadata-driven wasm SDK and its
     wasip1-threads variant;
   - #1990 (open, on #1860): a single-threaded and a threads wasm SDK side
     by side;
-  - #1989 (merged after 4.2.2): the wasm SDK's clang resource directory for
-    C compiles;
   - #1995 (open): Swift/C++ interop on Android;
-  - #1985 (merged after 4.2.2): swift.org's release metadata through 6.4.2;
-  - #2000 (open, rebased over #1998 at ab75b825): Android down to the
-    Swift SDK's own minimum (6.4's: 23), no RELR below 28. Upstream main
-    has #1998 (merged 2026-11-06, b7e99a5b), which fails below API 28: a
-    rules_swift release with #1998 and not #2000 needs the registry's patch
-    to remove `_check_android_api` and its call too (#2000's head does);
+  - #2000 (merged after 4.3.0, e901d23b): Android down to the Swift SDK's
+    own minimum (6.4's: 23), no RELR below 28; 4.3.0 alone (#1998) fails
+    any target below 28;
+  - #2016 (open): the Android and wasm compiles' implicit Clang module
+    cache goes stale when the SDK (or rules_swift) changes under an output
+    base ("module '_Builtin_stddef' is defined in both"): a cache keyed by
+    the SDK, or none; until then `bazel clean` once (README, "Upgrading
+    isomer");
   - #1988 (draft): `swift.windows_sdk`, Windows built on Linux with the
     builder's own SDKs (Isomer's tools/windows, upstream's
     tools/windows_sdk), which tools/windows then gives way to.
@@ -489,12 +498,14 @@ has it.
     and the system-module scan never reaches libc++'s `std` or CxxStdlib.
     Nothing in Isomer to change: an app that needs explicit modules waits
     for those.
-- **swift-foundation** (a Swift package through rules_swift_package_manager
-  at swift-6.4.2-RELEASE's commit, with patches; no fork since 0.40):
+- **swift-foundation** (built into Isomer's Swift SDKs since 0.56, from
+  AttilaTheFun/isomer_hermetic_toolchains' `isomer-6.4.2` branch:
+  swift-6.4.2-RELEASE with these patches as commits; a Swift package
+  through rules_swift_package_manager from 0.40 to 0.55):
   - swiftlang/swift-foundation#2409 (merged): `createDirectory(withIntermediateDirectories:)`
     stops at "/" (WASI); patched in until a release has it;
   - CharacterSet, NSString's string API and `String(format:)` are in
-    //foundation; upstream's own CharacterSet (#2314) arrives with the
+    Isomer's Foundation; upstream's own CharacterSet (#2314) arrives with the
     next major release, and ours then gives way;
   - (the wasi-libc emulation defines its Swift targets' Clang importer
     needs: rules_swift_package_manager#2640 passes their cSettings, as SwiftPM
@@ -502,7 +513,7 @@ has it.
   - Isomer's own, with no upstream form: ICU linked from the Swift SDK
     (not swift-foundation-icu from source), Apple's signatures and
     swift-foundation's extra declarations made internal, `package` on the
-    string helpers //foundation uses (a copy would need its 2.8 MB Unicode
+    string helpers Isomer's Foundation uses (a copy would need its 2.8 MB Unicode
     tables and the standard library's SPI: until upstream's next major
     release brings CharacterSet, #2314, and its string API). Off Darwin its
     `.diacriticInsensitive` and `.widthInsensitive` comparison is
@@ -548,7 +559,7 @@ run`), CoreGraphics and ImageIO for images.
     copy);
   - the parity reports (`tools/parity`);
   - the SwiftUI audit (`tools/swiftui_audit`, nine scripts);
-  - `tools/foundation/check_link.py` and `tools/symbols/generate.py`;
+  - `tools/symbols/generate.py`;
   - the version stamp (`examples/tools/stamp_storybook.py`);
   - the pixel benchmark.
 

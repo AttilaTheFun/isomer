@@ -56,7 +56,7 @@ MODULES = [
         "sources": ["foundation"],
         "apple": [("Foundation", None)],
         "isomer": ["Foundation", "FoundationEssentials", "FoundationInternationalization"],
-        "isomer_where": "`foundation/` (module `Foundation`) over swift-foundation's FoundationEssentials (swift-6.4.2-RELEASE, patched), and its FoundationInternationalization with ICU when an app builds with `--@isomer//foundation:internationalization`",
+        "isomer_where": "Isomer's Swift SDKs (module `Foundation`, from isomer_hermetic_toolchains' `Isomer/Sources/Foundation`) over swift-foundation's FoundationEssentials (swift-6.4.2-RELEASE, patched), and its FoundationInternationalization with ICU in the -i18n SDKs",
     },
     {
         "name": "SwiftUI",
@@ -190,12 +190,12 @@ def isomer_graphs():
              "-include-spi-symbols",
              "-DISOMER_PARITY_%d" % int(datetime.datetime.now().timestamp())]
     subprocess.run(
-        # Foundation as an app that opts into FoundationInternationalization
-        # has it (what the report counts says so).
+        # isomer's own module registers the -i18n SDKs: Foundation as an app
+        # that opts into FoundationInternationalization has it (what the
+        # report counts says so).
         ["bazel", "build", "--platforms=//tools/platforms:wasm32", "--//foundation:internationalization"]
         + ["--@rules_swift//swift:copt=%s" % c for c in copts]
-        + ["//wasm/libraries/swift_ui:swift_ui", "//foundation:foundation", "//metal/metal:metal",
-           "//frameworks/combine",
+        + ["//wasm/libraries/swift_ui:swift_ui", "//metal/metal:metal",
            "//frameworks/core_transferable", "//frameworks/uniform_type_identifiers",
            "//wasm/libraries/swift_ui:photos_ui",
            # The Isomer umbrella and the Isomer* modules beneath it: what
@@ -206,8 +206,7 @@ def isomer_graphs():
     # directory of its own (the modules have the same names).
     for directory, flags, targets in (
             (ISOMER_ANDROID_DIR, ["--platforms=//tools/platforms:android_arm64", "--//foundation:internationalization"],
-             ["//android/libraries/swift_ui:swift_ui", "//android/libraries/swift_ui:photos_ui",
-              "//foundation:foundation", "//frameworks/combine"]),
+             ["//android/libraries/swift_ui:swift_ui", "//android/libraries/swift_ui:photos_ui"]),
             (ISOMER_CLI_DIR, [], ["//cli/libraries/swift_ui:swift_ui"])):
         if os.path.isdir(directory):
             shutil.rmtree(directory)
@@ -216,14 +215,21 @@ def isomer_graphs():
             ["bazel", "build"] + flags
             + ["--@rules_swift//swift:copt=%s" % c.replace(ISOMER_DIR, directory) for c in copts] + targets,
             cwd=ROOT, check=True)
-    # Observation and Synchronization: the wasm SDK's own modules.
+    # Observation and Synchronization: the wasm SDK's own modules. And since
+    # 0.56 Foundation (with swift-foundation's FoundationEssentials and
+    # FoundationInternationalization beneath it), FoundationNetworking,
+    # IsomerFoundation, CoreGraphics and Combine: Isomer's Swift SDK carries
+    # them (docs/hermetic_toolchains.md), built from
+    # isomer_hermetic_toolchains' sources.
     base = bazel_output_base()
     bundle = glob.glob(os.path.join(
         base, "external", "rules_swift++swift+swift_toolchain_wasm_sdk_*", "*.artifactbundle", "*",
         "wasm32-unknown-wasip1"))[0]
     extractor = glob.glob(os.path.join(
         base, "external", "rules_swift++swift+swift_toolchain_*", "usr", "bin", "swift-symbolgraph-extract"))[0]
-    for module in ("Observation", "Synchronization"):
+    for module in ("Observation", "Synchronization", "Foundation", "FoundationEssentials",
+                   "FoundationInternationalization", "FoundationNetworking", "IsomerFoundation",
+                   "CoreGraphics", "Combine"):
         subprocess.run(
             [extractor, "-module-name", module, "-target", "wasm32-unknown-wasip1",
              "-sdk", os.path.join(bundle, "WASI.sdk"),
@@ -831,14 +837,22 @@ def compare(apple, isomer, apple_elsewhere=()):
     return implemented, missing, set_aside, additions, partial, retyped
 
 
-# Where an addition comes from: swift-foundation as upstream has it (its
-# package's repository, rules_swift_package_manager's), or Isomer.
+# Where an addition comes from: swift-foundation as upstream has it, or
+# Isomer. Built from source, its package's repository
+# (rules_swift_package_manager's) says; read from the Swift SDK's modules
+# (since 0.56), which carry no source locations, the module declaring it.
+UPSTREAM_MODULES = {"FoundationEssentials", "FoundationInternationalization"}
+
+
 def from_upstream(symbol, isomer_by_path):
     location = (symbol.get("location") or {}).get("uri", "")
     if not location:
         parent = isomer_by_path.get(tuple(symbol["pathComponents"][:-1]))
         location = (parent.get("location") or {}).get("uri", "") if parent else ""
-    return "swiftpkg_swift_foundation/" in location
+    if location:
+        return "swiftpkg_swift_foundation/" in location
+    precise = symbol.get("identifier", {}).get("precise", "")
+    return owners([precise]).get(precise) in UPSTREAM_MODULES
 
 
 _MODIFIERS = r"(?:(?:final|static|class|override|mutating|nonisolated(?:\(unsafe\))?|indirect|required|convenience)\s+)*"
@@ -1202,10 +1216,13 @@ def write_missing(spec, sdk_version, missing, isomer, reasons, commit, partial=(
 
 # What the other builds' modules are compared as: Android's, as the wasm
 # build's (the same sources, their own hosts and #if branches), and the
-# CLI's SwiftUI (the core with the terminal host, on macOS).
+# CLI's SwiftUI (the core with the terminal host, on macOS). Foundation,
+# CoreGraphics and Combine are the Swift SDKs' since 0.56, built for Android
+# and wasm from the same sources by the same script (isomer_hermetic_toolchains'
+# sdk/build.sh): only the wasm SDK's are read.
 OTHER_BUILDS = [
-    ("Android", ISOMER_ANDROID_DIR, ["SwiftUI", "PhotosUI", "Foundation", "CoreGraphics", "ImageIO",
-                                     "CoreTransferable", "UniformTypeIdentifiers", "Combine"]),
+    ("Android", ISOMER_ANDROID_DIR, ["SwiftUI", "PhotosUI", "ImageIO",
+                                     "CoreTransferable", "UniformTypeIdentifiers"]),
     ("The CLI (macOS)", ISOMER_CLI_DIR, ["SwiftUI"]),
 ]
 

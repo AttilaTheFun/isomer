@@ -6,17 +6,18 @@ package's own minimum OS version for the Apple platform type in effect
 (SwiftProtobuf's macOS 10.13), and it does so on every platform, wasm and
 Android included: `--apple_platform_type` stays `macos` there, or is `ios`
 when the wasm build is a resource of an iOS app (an app's web site inside
-its iOS app; a package declaring iOS 17 beside an app at 18). A library such a package depends on, Isomer's
-Foundation through `@isomer//:foundation`, would then be built twice, at the
+its iOS app; a package declaring iOS 17 beside an app at 18). A library such a package depends on (Isomer's
+SwiftUI through `@isomer//:swift_ui`, Foundation through `@isomer//:foundation`
+until 0.56 made it the Swift SDK's) would then be built twice, at the
 package's minimum and at the rest of the build's, and both copies linked:
 duplicate symbols. Reached through this rule it is built once, with the
 minimum OS versions cleared (they mean nothing off Apple platforms, where
 these libraries build), and without the Swift language features a consumer
 may set for its whole build (`--features=swift.enable_v6`, upcoming ones,
-warnings as errors, library evolution): Foundation and what it is built
-from (swift-foundation, its bundled collections) are a module of their own,
-which a consumer's REPO.bazel can't reach, and they build in the language
-mode and with the warnings they are tested with. Other features pass
+warnings as errors, library evolution): Isomer's package's modules and what
+they are built from are a repository of their own, which a consumer's
+REPO.bazel can't reach, and they build in the language mode and with the
+warnings they are tested with. Other features pass
 through as given. Isomer's own modules among them are built resilient only
 when the build asks with `--@isomer//:library_evolution`, which this
 rule's transition carries to them as rules_swift's per-module copts
