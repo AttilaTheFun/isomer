@@ -4,7 +4,10 @@
 // standard input and output), one served at a URL (grpc://, ws://, unix:), a
 // headful app attached to a hub, or a server in the test's own process. Each
 // call sends one command (shared/wire/headless.proto) and returns the screen
-// once the UI has settled, or throws with the screen as it was.
+// once the UI has settled, or throws with the screen as it was, or throws
+// when the app hasn't answered in `commandTimeout` seconds (60, or
+// ISOMER_COMMAND_TIMEOUT), so a hung or suspended app fails the test rather
+// than holding it.
 //
 //   let app = try HeadlessApp(executable: path, environment: ["ISO_STORYBOOK_STORY": "state.observableobject"])
 //   try app.tap("Tap")
@@ -194,6 +197,28 @@ public final class HeadlessApp: @unchecked Sendable {
     /// The socket an app this object started listens on, removed when it goes.
     private var socket: String?
 
+    /// How long a command may wait for the app's answer, in seconds (a
+    /// `wait`'s own timeout on top), before it throws, naming the command
+    /// and the time waited: the app is hung, or suspended (an iPhone app
+    /// another app was opened over), or gone. Every command after one left
+    /// unanswered throws at once, as an answer that comes late would answer
+    /// the wrong command. `defaultCommandTimeout` to begin with.
+    public var commandTimeout: Double = HeadlessApp.defaultCommandTimeout
+
+    /// ISOMER_COMMAND_TIMEOUT (seconds), else 60: an app's command answers
+    /// once its UI has settled, in a few seconds at most.
+    public static var defaultCommandTimeout: Double {
+        ProcessInfo.processInfo.environment["ISOMER_COMMAND_TIMEOUT"].flatMap(Double.init).flatMap { $0 > 0 ? $0 : nil } ?? 60
+    }
+
+    /// How long a command waits before the launcher is asked to wake the app
+    /// (`wake`, requests.sh: the iPhone's brings back an app iOS suspended),
+    /// and again as often while it waits.
+    private static let wakeAfter: Double = 5
+
+    /// The command left unanswered, after which the call is out of step.
+    private var unanswered: String?
+
     /// Starts `executable` (an app built with --@isomer//headless), listening
     /// on a Unix socket of its own (ISO_DRIVE_LISTEN), so the driver's call
     /// and its layout's (`layout()`) reach the same app. `environment` adds to
@@ -246,7 +271,10 @@ public final class HeadlessApp: @unchecked Sendable {
     /// An app reached through any connection: one in this process
     /// (`IsomerLocalConnection`), a transport's.
     public init(connection: any IsomerConnection, context: IsomerCallContext = .init()) throws {
-        let opened = try Self.blocking { try await connection.drive(context: context) }
+        let timeout = Self.defaultCommandTimeout
+        guard let opened = try Self.blocking(within: timeout, { try await connection.drive(context: context) }) else {
+            throw HeadlessError(message: "the app's driver didn't take the call in \(Self.seconds(timeout))", screen: nil)
+        }
         call = opened
         answers = opened.inbound.makeAsyncIterator()
         local = nil
@@ -590,7 +618,10 @@ public final class HeadlessApp: @unchecked Sendable {
     /// home and brought back, its activity stopped and resumed); else the
     /// app's driver's (headless.proto's `scene`: Isomer's runtime's phase,
     /// SwiftUI's scene delegate told on iOS, the app hidden or its windows
-    /// in the Dock on the Mac). The screen once it settles.
+    /// in the Dock on the Mac). The screen once it settles; empty when the
+    /// launcher sent the app where it answers nothing (the iPhone's home
+    /// screen: iOS suspends it there until `scene(.active)` brings it back,
+    /// the same process with its state).
     @discardableResult
     public func scene(_ phase: ScenePhase) throws -> HeadlessScreen {
         if local == nil, let requests, let launched, launched.isRunning {
@@ -600,7 +631,9 @@ public final class HeadlessApp: @unchecked Sendable {
             try Data("scene:\(phase.rawValue)\n".utf8).write(to: request.appendingPathExtension("part"))
             try FileManager.default.moveItem(at: request.appendingPathExtension("part"), to: request)
             // Answered (requests.sh): `ok` in <n>.answer when the launcher
-            // moved it; why not, or nothing, when it didn't.
+            // moved it (`ok away`: to where the app answers nothing until
+            // it is back, the iPhone's home screen, so nothing is asked of
+            // it: an empty screen); why not, or nothing, when it didn't.
             let deadline = Date().addingTimeInterval(30)
             while FileManager.default.fileExists(atPath: request.path), Date() < deadline, launched.isRunning {
                 Thread.sleep(forTimeInterval: 0.02)
@@ -609,6 +642,7 @@ public final class HeadlessApp: @unchecked Sendable {
             let said = (try? String(contentsOf: answer, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
             try? FileManager.default.removeItem(at: answer)
             if said == "ok" { return try screen() }
+            if said?.hasPrefix("ok ") == true { return HeadlessScreen(Wire_Screen()) }
         }
         return try send("scene") { $0.value = phase.rawValue }
     }
@@ -627,8 +661,9 @@ public final class HeadlessApp: @unchecked Sendable {
     public func quit() {
         // The app a test is hosted in runs on: there is nothing to end.
         guard local == nil else { return }
-        _ = try? exchange("quit")
-        if let call { try? Self.blocking { await call.finish() } }
+        // (Nothing more is asked of an app that left a command unanswered.)
+        if unanswered == nil { _ = try? exchange("quit") }
+        if let call { _ = try? Self.blocking(within: 10, { await call.finish() }) }
         if let launched, launched.isRunning {
             // A `stop` file beside the picture requests, which every launcher
             // of isomer's watches (requests.sh): on Windows, which has no
@@ -664,15 +699,18 @@ public final class HeadlessApp: @unchecked Sendable {
             throw HeadlessError(message: "the app this test is hosted in has no layout to ask for", screen: nil)
         }
         let context = context
-        let layout = try Self.blocking { () -> Wire_Layout? in
+        let timeout = commandTimeout
+        guard let answered = try Self.blocking(within: timeout, { () -> Wire_Layout? in
             let call = try await connection.layout(context: context)
             try await call.write(Wire_LayoutRequest())
             var inbound = call.inbound.makeAsyncIterator()
             let layout = try await inbound.next()
             await call.finish()
             return layout
+        }) else {
+            throw HeadlessError(message: "no answer to layout in \(Self.seconds(timeout)) (HeadlessApp.commandTimeout, ISOMER_COMMAND_TIMEOUT)", screen: nil)
         }
-        guard let layout else { throw HeadlessError(message: "the app ended without its layout", screen: nil) }
+        guard let layout = answered else { throw HeadlessError(message: "the app ended without its layout", screen: nil) }
         return HeadlessLayout(layout)
     }
 
@@ -689,43 +727,126 @@ public final class HeadlessApp: @unchecked Sendable {
         var command = Wire_Command()
         command.cmd = cmd
         fill(&command)
+        let what = command.target.isEmpty ? cmd : "\(cmd) \(command.target)"
+        if let unanswered {
+            throw HeadlessError(message: "\(what): not sent, as \(unanswered) went unanswered (the call is out of step: launch the app again)",
+                                screen: nil)
+        }
         let sent = command
+        // The command's own time (a `wait`'s) on top of the answer's.
+        let timeout = commandTimeout + (cmd == "wait" ? (command.timeout > 0 ? command.timeout : 5) : 0)
         let answer: Wire_Answer?
         if let local {
             #if !os(WASI) && !os(Android)
             if Thread.isMainThread {
-                answer = MainActor.assumeIsolated { local.send(sent) }
+                guard let answered = MainActor.assumeIsolated({ local.send(sent, timeout: timeout) }) else {
+                    throw unansweredError(what, timeout)
+                }
+                answer = answered
             } else {
-                answer = try Self.blocking { await local.answer(sent) }
+                guard let answered = try Self.blocking(within: timeout, { await local.answer(sent) }) else {
+                    throw unansweredError(what, timeout)
+                }
+                answer = answered
             }
             #else
-            answer = try Self.blocking { await local.answer(sent) }
+            guard let answered = try Self.blocking(within: timeout, { await local.answer(sent) }) else {
+                throw unansweredError(what, timeout)
+            }
+            answer = answered
             #endif
         } else if let call {
-            answer = try Self.blocking { [self] in
+            // Waiting, the launcher is asked now and then to wake the app
+            // (an iPhone app iOS suspended, brought back to the front).
+            guard let answered = try Self.blocking(within: timeout, every: Self.wakeAfter, waiting: { self.askToWake() }, { [self] in
                 try await call.write(sent)
                 return try await self.answers?.next()
+            }) else {
+                throw unansweredError(what, timeout)
             }
+            answer = answered
         } else {
             answer = nil
         }
         guard let answer else {
-            throw HeadlessError(message: "the app ended without answering \(cmd) \(command.target)", screen: nil)
+            throw HeadlessError(message: "the app ended without answering \(what)", screen: nil)
         }
         return answer
+    }
+
+    /// A command that had no answer in `timeout` seconds: the error, and the
+    /// call marked out of step.
+    private func unansweredError(_ what: String, _ timeout: Double) -> HeadlessError {
+        unanswered = what
+        return HeadlessError(message: "no answer to \(what) in \(Self.seconds(timeout)) (HeadlessApp.commandTimeout, "
+            + "ISOMER_COMMAND_TIMEOUT): the app is hung, suspended or gone", screen: nil)
+    }
+
+    /// Asks a headful app's launcher to bring the app back if its platform
+    /// suspended it (requests.sh's `wake`, in a file of its own, <n>.wake,
+    /// which launchers that don't know it never see), and doesn't wait.
+    private func askToWake() {
+        guard let requests, let launched, launched.isRunning else { return }
+        asked += 1
+        let wake = requests.appendingPathComponent("\(asked).wake")
+        try? Data("wake\n".utf8).write(to: wake.appendingPathExtension("part"))
+        try? FileManager.default.moveItem(at: wake.appendingPathExtension("part"), to: wake)
+    }
+
+    static func seconds(_ time: Double) -> String {
+        time == time.rounded() ? "\(Int(time)) s" : String(format: "%.1f s", time)
     }
 
     /// Runs `body` and waits for it: the tests' API is synchronous, and no
     /// client work needs the caller's thread.
     private static func blocking<T>(_ body: @escaping @Sendable () async throws -> T) throws -> T {
+        try blocking(within: .infinity, body)!
+    }
+
+    /// The same, giving up after `timeout` seconds: nil then (the work is
+    /// cancelled, and what it ends with dropped). `waiting` runs every
+    /// `interval` seconds while it waits.
+    private static func blocking<T>(within timeout: Double, every interval: Double = .infinity, waiting: () -> Void = {},
+                                    _ body: @escaping @Sendable () async throws -> T) throws -> T? {
         let done = DispatchSemaphore(value: 0)
-        nonisolated(unsafe) var result: Result<T, any Error>?
-        Task {
-            do { result = .success(try await body()) } catch { result = .failure(error) }
+        let result = Outcome<T>()
+        let task = Task {
+            let outcome: Result<T, any Error>
+            do { outcome = .success(try await body()) } catch { outcome = .failure(error) }
+            result.set(outcome)
             done.signal()
         }
-        done.wait()
-        return try result!.get()
+        guard timeout.isFinite else {
+            done.wait()
+            return try result.get()!.get()
+        }
+        let deadline = Date().addingTimeInterval(timeout)
+        while true {
+            let left = deadline.timeIntervalSinceNow
+            if left <= 0 {
+                task.cancel()
+                return nil
+            }
+            if done.wait(timeout: .now() + min(left, interval)) == .success { return try result.get()!.get() }
+            if deadline.timeIntervalSinceNow > 0 { waiting() }
+        }
+    }
+
+    /// What a blocking call's work ended with, set on the work's thread and
+    /// read on the caller's.
+    private final class Outcome<T>: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value: Result<T, any Error>?
+        func set(_ value: Result<T, any Error>) {
+            lock.lock()
+            defer { lock.unlock() }
+            self.value = value
+        }
+        func get() -> Result<T, any Error>? {
+            lock.lock()
+            defer { lock.unlock() }
+            return value
+        }
     }
 }
 
@@ -761,7 +882,9 @@ private final class HeadfulHub: @unchecked Sendable {
                 listening.signal()
             }
         }
-        listening.wait()
+        guard listening.wait(timeout: .now() + 30) == .success else {
+            throw HeadlessError(message: "the hub for headful apps didn't listen in 30 s", screen: nil)
+        }
         if let failure { throw failure }
         let made = HeadfulHub(hub: hub, url: "ws://127.0.0.1:\(port)")
         started = made

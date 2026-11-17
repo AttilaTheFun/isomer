@@ -6,7 +6,8 @@
 // long press; controls in a Form's rows, a text field and a multi-line one,
 // the navigation title's own button; sheets closed by `dismiss` alone, and
 // one presented over another; the scene's phase, and what an app does on
-// coming back to the foreground; an alert with a text field, a confirmation
+// coming back to the foreground, from the home screen or from a page it
+// opened in another app (Safari), its process shown; an alert with a text field, a confirmation
 // dialog, a row's context menu and a long press). PROBE_SCREEN picks the
 // screen: the controls (the default), the list, the sheet's, the form, the
 // sheets, the scene, the dialogs or the sign-in prompt. The same
@@ -258,11 +259,16 @@ struct SheetsScreen: View {
 
 /// The scene's phase as the app sees it, each change it was told of, and
 /// what an app does on coming back from the background (a sign-in prompt
-/// opened on `.onChange(of: scenePhase)`).
+/// opened on `.onChange(of: scenePhase)`); a page opened in another app
+/// (Safari, on the iPhone, in front of the app), the app's process (the
+/// same when it comes back) and a button to use when it has.
 struct SceneScreen: View {
     @Environment(\.scenePhase) private var phase
+    @Environment(\.openURL) private var openURL
     @State private var changes: [String] = []
     @State private var welcome = false
+    @State private var opened = 0
+    @State private var notes = 0
 
     var body: some View {
         NavigationStack {
@@ -274,6 +280,13 @@ struct SceneScreen: View {
                     Button("Sign in") { welcome = false }
                         .accessibilityIdentifier("sign-in")
                 }
+                Text("Process: \(String(ProcessInfo.processInfo.processIdentifier))")
+                Text("Opened: \(opened), notes: \(notes)")
+                Button("Open Page") {
+                    opened += 1
+                    openURL(URL(string: "https://example.com/")!)
+                }
+                Button("Note") { notes += 1 }
             }
             .padding()
             .navigationTitle("Scene")

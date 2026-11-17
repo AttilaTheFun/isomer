@@ -40,13 +40,20 @@ public final class IsomerLocalServer {
     /// main run loop, as XCUITest's waits do, so the app keeps drawing and
     /// its tasks keep running meanwhile.
     public func send(_ command: Wire_Command) -> Wire_Answer {
+        send(command, timeout: .infinity)!
+    }
+
+    /// The same, giving up after `timeout` seconds: nil if the driver hasn't
+    /// answered by then (its work goes on, and its answer is dropped).
+    public func send(_ command: Wire_Command, timeout: Double) -> Wire_Answer? {
         let answer = Answer()
         let handle = handle
         Task { @MainActor in answer.value = await handle(command) }
-        while answer.value == nil {
+        let deadline = Date(timeIntervalSinceNow: timeout)
+        while answer.value == nil, Date() < deadline {
             RunLoop.main.run(mode: .default, before: Date(timeIntervalSinceNow: 0.01))
         }
-        return answer.value!
+        return answer.value
     }
 
     /// The app's own driver, waiting up to `timeout` seconds (turning the
