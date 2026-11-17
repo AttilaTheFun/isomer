@@ -916,12 +916,13 @@ Each release's notes have an Upgrading section; these things are easy to miss:
   - rules_swift is the registry's 4.3.0.isomer.1 (upstream 4.3.0, which
     takes `swift.android_sdk(url = …)`, and four pull requests); your own
     override of rules_swift, if you kept one, has to be that version.
-    4.3.0 builds Android and wasm targets without explicit modules
-    (rules_swift#1999), and their Clang modules then conflict in Bazel's
-    shared module cache ("module '_Builtin_stddef' is defined in both …"):
-    add `build --features=-swift.use_global_module_cache` to your
-    `.bazelrc`, as examples/.bazelrc has it, until rules_swift turns that
-    off for them.
+  - After changing an SDK's URL, or upgrading Isomer or rules_swift, run
+    `bazel clean` once if a build reports a module "defined in both"
+    (`module '_Builtin_stddef' is defined in both '…/_swift_module_cache/…'
+    and '…'`). Bazel keeps Swift's Clang module cache across builds, and
+    the modules cached before the change still name the old build of a
+    module the new SDK or rules_swift builds again. A clean build, as CI's
+    are, never sees it.
   - `tools/foundation/check_link.py` is gone: there is one Foundation to
     link.
 

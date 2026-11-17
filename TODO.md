@@ -480,6 +480,11 @@ has it.
   - #2000 (merged after 4.3.0, e901d23b): Android down to the Swift SDK's
     own minimum (6.4's: 23), no RELR below 28; 4.3.0 alone (#1998) fails
     any target below 28;
+  - #2016 (open): the Android and wasm compiles' implicit Clang module
+    cache goes stale when the SDK (or rules_swift) changes under an output
+    base ("module '_Builtin_stddef' is defined in both"): a cache keyed by
+    the SDK, or none; until then `bazel clean` once (README, "Upgrading
+    isomer");
   - #1988 (draft): `swift.windows_sdk`, Windows built on Linux with the
     builder's own SDKs (Isomer's tools/windows, upstream's
     tools/windows_sdk), which tools/windows then gives way to.

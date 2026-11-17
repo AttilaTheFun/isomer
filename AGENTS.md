@@ -558,7 +558,10 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   #1995 (Swift/C++ interop on Android) and #2000 (Android below API 28,
   merged after 4.3.0). 4.3.0 has the rest of what 4.2.2.isomer.3 carried
   (#1989, #1985), #2012 (`swift.android_sdk(url = …)`, Isomer's Swift
-  SDKs) and #1999 (no explicit modules for Android and wasm). It sorts
+  SDKs) and #1999 (explicit C modules declared unsupported for Android and
+  wasm, which build their Clang modules implicitly, as before; after a
+  change of SDK or rules_swift, an output base's module cache can hold a
+  stale build of one, "defined in both": `bazel clean` once). It sorts
   above the 4.2.2 rules_applecross asks for, so MVS keeps it with no
   override in any root (until 0.40 the fork was 4.1.0.isomer.N, held by an
   override every consumer repeated).

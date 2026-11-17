@@ -58,7 +58,10 @@ bazel_dep(name = "platforms", version = "1.1.0")
 # amalgamation builds as is), #1985 (swift.org's release metadata through
 # 6.4.2) and #2012 (`swift.android_sdk(url = …, sha256 = …)`, how a consumer
 # registers Isomer's Swift SDKs: README, "Isomer's Swift SDKs"); and #1999,
-# which turns explicit modules off for Android and wasm.
+# which declares explicit C modules unsupported for Android and wasm (they
+# build their Clang modules implicitly, as they did before). After a change
+# of SDK or rules_swift a build that kept its output base may report a
+# module "defined in both": `bazel clean` once (README, "Upgrading isomer").
 # It sorts above the 4.2.2 rules_applecross asks for, so no override holds
 # it, here or in a consumer. A change is a new entry (4.3.0.isomer.2) made
 # with the registry's tools/add_version.py --fork; back to a plain BCR

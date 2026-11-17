@@ -144,6 +144,15 @@ swift.wasm_sdk(
 and the `-i18n` URL (with its own sha256) if the app formats dates or
 numbers. An app that builds for Android alone registers no wasm SDK.
 
+After changing an SDK's URL (or upgrading Isomer or rules_swift), a build
+that kept its output base may report a module "defined in both" (`module
+'_Builtin_stddef' is defined in both '…/_swift_module_cache/…' and '…'`):
+`bazel clean` once. Android and wasm compiles build their Clang modules
+implicitly, into a module cache Bazel keeps across builds a configuration
+each, and the modules cached before the change still name the old build of
+one the new SDK builds again. A clean build, as CI's are, never sees it.
+rules_swift#2016 is where a cache keyed by the SDK is being discussed.
+
 `swift.wasm_sdk` takes `url` through rules_swift#1860 (a patch of the
 registry's rules_swift 4.3.0.isomer.1) and `swift.android_sdk` through
 rules_swift#2012 (in rules_swift 4.3.0; generic: any Swift SDK artifact bundle
