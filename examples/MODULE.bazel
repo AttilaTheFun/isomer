@@ -30,7 +30,7 @@ module(
 #   git_override(module_name = "isomer",
 #                remote = "https://github.com/AttilaTheFun/isomer.git",
 #                commit = "<commit>")
-bazel_dep(name = "isomer", version = "0.55.0")
+bazel_dep(name = "isomer", version = "0.56.0")
 local_path_override(
     module_name = "isomer",
     path = "..",
@@ -43,7 +43,7 @@ local_path_override(
 # registry by version (each isomer release has it), or, beside a
 # git_override of isomer, overrides it from the same commit with
 # `strip_prefix = "android/maven_module"`.
-bazel_dep(name = "isomer_android_maven", version = "0.55.0")
+bazel_dep(name = "isomer_android_maven", version = "0.56.0")
 local_path_override(
     module_name = "isomer_android_maven",
     path = "../android/maven_module",
