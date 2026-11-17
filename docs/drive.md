@@ -181,9 +181,16 @@ simulator's real trip to the home screen takes seconds and suspends the
 app); on the Mac the app is hidden (background), its windows put in the
 Dock (inactive) or shown and brought to the front (active). Isomer's own
 driver sets its runtime's phase; a test's `HeadlessApp.scene` asks the
-launcher first, and Android's sends the app home and brings it back, its
-activity stopped and resumed, as `iso scene` does for an app `iso launch`
-started. ISO_DRIVE_TRACE=1 in the app's environment prints each reading's walk of
+launcher first, as `iso scene` does for an app `iso launch` started, and
+the platform's own trip is taken where there is one: Android's launcher
+sends the app home and brings it back, its activity stopped and resumed;
+the iPhone's sends it home (SpringBoard opened: iOS suspends the app there,
+so `scene(.background)` answers an empty screen and asks the app nothing)
+and brings back the same process, its state as it was, as its icon does
+(`simctl launch` without terminating it, from the home screen, so no other
+app's "◀" link shows in the status bar), and brings back so too an app iOS
+suspended because it opened another (Safari, for a link). Inactive, and
+active from inactive, are the driver's. ISO_DRIVE_TRACE=1 in the app's environment prints each reading's walk of
 the tree; on the Mac it asks its own process as an
 accessibility client would (AXUIElement), on the main thread. A list's row
 of texts is a button, as Isomer's renderers give it. Launch with simctl's
@@ -221,6 +228,22 @@ signals: drive/launchers/requests.sh).
   give the app a new home; the web's page has a new browser profile every
   launch anyway. `fresh: false` (`iso launch --keep-data`) keeps it, for a
   test of what lasts between launches. Windows' launcher keeps it, for now.
+- **Timeouts.** A command that the app hasn't answered in
+  `commandTimeout` seconds throws, naming the command and the time waited
+  ("no answer to tap Send in 60 s … the app is hung, suspended or gone"):
+  60 s by default, ISOMER_COMMAND_TIMEOUT (seconds) in the test's
+  environment for every app (`--test_env=ISOMER_COMMAND_TIMEOUT=120`), or
+  the app's `commandTimeout` for one (`app.commandTimeout = 10`), a
+  `wait`'s own timeout added on top. The app's call is out of step after
+  one (a late answer would answer the next command), so every command
+  after it throws at once. The launch has its own (`timeout:`, 120 s to
+  attach), and so do opening the call, `layout()` (the command timeout),
+  `picture` (60 s) and the launcher's `scene` (30 s). While a command
+  waits, every 5 s, the test asks the launcher to wake the app (a `<n>.wake`
+  request, requests.sh): the iPhone's brings back an app iOS has suspended
+  (one that opened Safari, or a test's `wait` on an app sent home), and
+  says so in the test's log; the other launchers do nothing then. A test
+  hosted in its app (`hosted()`) has the same timeout on its commands.
 - **Pictures** (`picture`) are named by the platform's device as the app
   stands (`ios/phone-landscape/…`, `android/phone-landscape/…` in a wide
   window). An iPhone app that turns itself to landscape on an upright

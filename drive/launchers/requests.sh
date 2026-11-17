@@ -1,5 +1,6 @@
-# Sourced by the launchers: the test's requests (HeadlessApp's `picture`
-# and `quit`), files in ISOMER_LAUNCHER_REQUESTS.
+# Sourced by the launchers: the test's requests (HeadlessApp's `picture`,
+# `scene` and `quit`, and its `wake` as it waits for an answer), files in
+# ISOMER_LAUNCHER_REQUESTS.
 #
 # - <n>.request: a picture, its first line the path to write it to, then
 #   lines of KEY=VALUE about the app as it stands (orientation=<the
@@ -7,9 +8,15 @@
 #   landscape-right; none where the platform has no such thing>).
 #   Or, its first line `scene:<phase>` (HeadlessApp's `scene`): the app's
 #   scene moved by the platform itself (active, inactive, background), by a
-#   launcher that defines `scene <phase>` (Android's: the app sent home and
-#   brought back); answered in <n>.answer, `ok`, or why not, when the
-#   test's driver command moves it instead.
+#   launcher that defines `scene <phase>` (Android's and the iPhone's: the
+#   app sent home and brought back); answered in <n>.answer, `ok` (or what
+#   `scene` set `scene_answer` to: `ok away`, the app sent where it answers
+#   nothing until it is brought back, as iOS suspends it), or why not, when
+#   the test's driver command moves it instead.
+# - <n>.wake: a command has gone unanswered a while (HeadlessApp asks every
+#   few seconds as it waits): the app brought forward if the platform has
+#   suspended it, by a launcher that defines `wake` (the iPhone's). Not
+#   answered; removed once seen.
 # - stop: the test is done with the app (`quit`), seen within a poll: the
 #   launcher ends, as SIGTERM ends it, so a test needn't wait out a signal
 #   that a platform (Windows) doesn't deliver.
@@ -32,8 +39,9 @@ serve_requests() {
                 path="$(head -1 "$request")"
                 case "$path" in
                 scene:*)
+                    scene_answer=ok
                     if declare -F scene > /dev/null && scene "${path#scene:}"; then
-                        echo ok > "${request%.request}.answer"
+                        echo "$scene_answer" > "${request%.request}.answer"
                     else
                         echo "the launcher doesn't move the scene to ${path#scene:}" > "${request%.request}.answer"
                     fi
@@ -43,6 +51,11 @@ serve_requests() {
                     "$take" "$path" "$orientation" || echo "launcher: no picture for $path" >&2
                     ;;
                 esac
+                rm -f "$request"
+            done
+            for request in "$ISOMER_LAUNCHER_REQUESTS"/*.wake; do
+                [ -e "$request" ] || continue
+                if declare -F wake > /dev/null; then wake; fi
                 rm -f "$request"
             done
         fi

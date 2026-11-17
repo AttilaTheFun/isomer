@@ -448,12 +448,18 @@ func render(_ answer: Wire_Answer, for command: Wire_Command, _ options: Options
 
 /// Sends `commands` over one call, answers in order; the answers so far and
 /// the error that ended them early, if one did.
-func send(_ commands: [Wire_Command], over endpoint: IsomerRemote.Endpoint, context: IsomerCallContext) async -> ([Wire_Answer], String?) {
+/// `answered`: answers already had, by the command's index, which aren't sent.
+func send(_ commands: [Wire_Command], over endpoint: IsomerRemote.Endpoint, context: IsomerCallContext,
+          answered: [Int: Wire_Answer] = [:]) async -> ([Wire_Answer], String?) {
     var answers: [Wire_Answer] = []
     do {
         let call = try await endpoint.connection.drive(context: context)
         var inbound = call.inbound.makeAsyncIterator()
-        for command in commands {
+        for (index, command) in commands.enumerated() {
+            if let answer = answered[index] {
+                answers.append(answer)
+                continue
+            }
             try await call.write(command)
             guard let answer = try await inbound.next() else { return (answers, "the app ended the call") }
             answers.append(answer)
@@ -481,14 +487,23 @@ func run(_ commands: [Wire_Command], _ options: Options) async throws -> Bool {
         let results = await withTaskGroup(of: (String, [Wire_Answer], String?).self) { group in
             for target in targets {
                 group.addTask {
-                    // A scene an app's launcher moved: the screen it leads to.
-                    let commands = commands.map { command in
-                        guard command.cmd == "scene", launcherScene(target, command.value) else { return command }
+                    // A scene an app's launcher moved: the screen it leads to,
+                    // or, where the app answers nothing until it is back (an
+                    // iPhone app sent home: `ok away`), an empty one.
+                    var answered: [Int: Wire_Answer] = [:]
+                    let commands = commands.enumerated().map { index, command -> Wire_Command in
+                        guard command.cmd == "scene", let said = launcherScene(target, command.value) else { return command }
+                        if said != "ok" {
+                            var away = Wire_Answer()
+                            away.ok = true
+                            answered[index] = away
+                        }
                         var ls = Wire_Command()
                         ls.cmd = "ls"
                         return ls
                     }
-                    let (answers, error) = await send(commands, over: endpoint, context: endpoint.context(token: nil, metadata: ["iso-target": target]))
+                    let (answers, error) = await send(commands, over: endpoint, context: endpoint.context(token: nil, metadata: ["iso-target": target]),
+                                                      answered: answered)
                     return (target, answers, error)
                 }
             }
@@ -545,23 +560,25 @@ func driveInteractively(_ options: Options) async throws {
 
 /// `scene` for an app `iso launch` started, by its launcher where the
 /// platform's own moves the scene (drive/launchers/requests.sh: Android's
-/// sends the app home and brings it back): true if it did, false for the
-/// app's driver to.
-func launcherScene(_ app: String, _ phase: String) -> Bool {
+/// and the iPhone's send the app home and bring it back): its answer if it
+/// did (`ok`, or `ok away` where the app answers nothing until it is back),
+/// nil for the app's driver to.
+func launcherScene(_ app: String, _ phase: String) -> String? {
     let requests = Registry.directory.appendingPathComponent("run/launch-\(app).requests")
-    guard running(runFiles("launch-\(app)").pid) != nil, FileManager.default.fileExists(atPath: requests.path) else { return false }
+    guard running(runFiles("launch-\(app)").pid) != nil, FileManager.default.fileExists(atPath: requests.path) else { return nil }
     let id = "scene-\(getpid())"
     let request = requests.appendingPathComponent("\(id).request")
     let answer = requests.appendingPathComponent("\(id).answer")
     let part = request.appendingPathExtension("part")
     guard (try? Data("scene:\(phase)\n".utf8).write(to: part)) != nil,
-          (try? FileManager.default.moveItem(at: part, to: request)) != nil else { return false }
+          (try? FileManager.default.moveItem(at: part, to: request)) != nil else { return nil }
     let deadline = Date().addingTimeInterval(30)
     while FileManager.default.fileExists(atPath: request.path), Date() < deadline { usleep(20_000) }
     try? FileManager.default.removeItem(at: request)
     let said = (try? String(contentsOf: answer, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
     try? FileManager.default.removeItem(at: answer)
-    return said == "ok"
+    guard let said, said == "ok" || said.hasPrefix("ok ") else { return nil }
+    return said
 }
 
 /// `iso launch`: a launcher (drive/launchers) run in the background, its app
