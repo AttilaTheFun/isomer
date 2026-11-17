@@ -303,8 +303,8 @@ JavaScript engine, and WasmKit goes:
   Android shell's assets and fonts, Linux and Windows apps in the macro.
 - Side modules and mixed mode (isomer#188 and #213, an outside
   contributor's; merged as #215 for 0.54, docs/side_modules.md): open, his
-  WasmKit commits (AttilaTheFun/WasmKit's isomer/side-modules) proposed to
-  swiftwasm/WasmKit, then a WasmKit release pinned; the wasm-ld LOCREL fix
+  WasmKit commits (AttilaTheFun/WasmKit's isomer/side-modules, a patch on
+  WasmKit 0.5.0 here) proposed to swiftwasm/WasmKit; the wasm-ld LOCREL fix
   to LLVM; one mixed runtime and one feature per process until the runtime
   has a root per feature; the routed list is still the Storybook's; Android
   reactors on WasmKit's guard pages (upstream's #527) checked on an
@@ -518,11 +518,12 @@ has it.
     release brings CharacterSet, #2314, and its string API). Off Darwin its
     `.diacriticInsensitive` and `.widthInsensitive` comparison is
     `fatalError("not implemented yet")`: worth reporting upstream.
-- **WasmKit** (AttilaTheFun's fork): upstream has taken #513, #516, #517,
-  #518 and #529, and #527 and its MSVC change in place of #514 and #515; the
-  fork's main is upstream's. Left: the side-modules author's commits
-  (isomer/side-modules: the host-linking API and cheaper host calls), to
-  propose upstream; then pin a WasmKit release.
+- **WasmKit**: 0.5.0, by tag, has the fork's engine work (#513, #516,
+  #517, #518, #529, and #527 and #528 in place of #514 and #515). Left: the
+  side-modules author's commits (AttilaTheFun/WasmKit's isomer/side-modules:
+  the host-linking API and cheaper host calls), carried as
+  tools/patches/wasmkit_host_linking.patch, to propose upstream; then the
+  patch goes at the release that has them.
 - **rules_swift_package_manager**: cgrindel/rules_swift_package_manager#2621
   (draft): Windows hosts.
 - **hermetic_android_toolchains**: keith/hermetic_android_toolchains#110

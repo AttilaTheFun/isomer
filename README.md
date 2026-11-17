@@ -960,9 +960,10 @@ Each release's notes have an Upgrading section; these things are easy to miss:
     `:<name>`, `:<name>_js` and `:<name>_runtime_js` are the same files.
   - A page that imported the bindings' `.ts` sources through its own
     TypeScript build imports the `.js` module, typed by the `.d.ts`.
-- **WasmKit is upstream's (since 0.54).** isomer pins AttilaTheFun/WasmKit
-  at swiftwasm/WasmKit's main and the side-modules commits, without the two
-  patches it carried: 64-bit Android reactors use WasmKit's guard pages, as
+- **WasmKit is upstream's (since 0.54).** isomer pins swiftwasm/WasmKit's
+  0.5.0 release by tag (AttilaTheFun/WasmKit at upstream's main until
+  then), the side-modules commits a patch on it until upstream takes them,
+  without the two patches it carried before 0.54: 64-bit Android reactors use WasmKit's guard pages, as
   macOS, Linux and iOS do, and an out-of-bounds memory access from a host
   (`Memory.withUnsafe(Mutable)BufferPointer(offset:count:)`) throws a trap
   rather than reading past the memory. A host that calls those directly adds

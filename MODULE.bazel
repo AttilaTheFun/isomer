@@ -180,34 +180,35 @@ inject_repo(swift_deps_root, "isomer")
 # CLI parsing for the analyzer / generator tools.
 bazel_dep(name = "swift_argument_parser", version = "1.7.0")
 
-# WasmKit (AttilaTheFun/WasmKit, a fork of swiftwasm/WasmKit) — the Swift
-# WebAssembly interpreter behind `WasmKitRuntime` (//shared/wasm_host),
-# Isomer's engine on every native host (Apple, Android, Linux, Windows) since
-# 0.38, when it replaced WAMR. The fork's main is swiftwasm/WasmKit's main
-# (6558e71), which has taken the fork's engine work (#513, #516, #517, #518,
-# #529), guard pages on Android (#527) and C for MSVC: the two patches Isomer
-# carried for those are gone. The pin is the fork's isomer/side-modules, main
-# and the side-modules author's commits, proposed upstream with their tests:
+# WasmKit (swiftwasm/WasmKit 0.5.0) — the Swift WebAssembly interpreter
+# behind `WasmKitRuntime` (//shared/wasm_host), Isomer's engine on every
+# native host (Apple, Android, Linux, Windows) since 0.38, when it replaced
+# WAMR. 0.5.0 has the engine work Isomer's fork (AttilaTheFun/WasmKit)
+# carried: shared memory and WASI Threads on iOS (#513), the interpreter's
+# fusions and call paths (#516, #517, #518, #529), guard pages on 64-bit
+# Android (#527) and C for MSVC (#528). One patch is left, until upstream
+# takes it: the side-modules author's commits (docs/side_modules.md), from the
+# fork's isomer/side-modules, whose tests are there:
 #   - the public API a dynamic loader needs, which WasmKit has inside but
-#     didn't expose: `Table.count`, `Table.grow(by:value:store:)`,
+#     doesn't expose: `Table.count`, `Table.grow(by:value:store:)`,
 #     `Table.function(at:store:)`, `Function.reference`, `Instance.function(at:)`,
 #     `Memory.grow(by:store:)` and `Memory.unsafeBaseAddress` (side modules);
 #   - cheaper calls for a host that calls in very often (mixed mode's native
 #     code): `Function.invokeUnchecked` (raw slots, no type checks), no signal
 #     mask saved on each entry, and a return to the host that halts the
 #     direct-threaded handler chain instead of throwing.
-# The pins before this one stay reachable by the fork's tags
-# isomer-main-before-upstream-rebase (285def1) and isomer-pin-5fbb9db. Nothing
-# of Isomer's is in the fork: the Bazel build is ours
-# (tools/wasmkit/BUILD.wasmkit.bazel, after its Package.swift). Not in the BCR.
+# The Bazel build is ours (tools/wasmkit/BUILD.wasmkit.bazel, after its
+# Package.swift). Not in the BCR.
 wasmkit_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 wasmkit_archive(
     name = "wasmkit",
     build_file = "//tools/wasmkit:BUILD.wasmkit.bazel",
-    sha256 = "1da7cf769be40bd2ead12d21a56ed3299b035ee1c1ca7bbdf172dbe0c30ffc95",
-    strip_prefix = "WasmKit-80894bd08a7dba02fe7279f2a77db2a04058c13f",
-    url = "https://github.com/AttilaTheFun/WasmKit/archive/80894bd08a7dba02fe7279f2a77db2a04058c13f.tar.gz",
+    patch_args = ["-p1"],
+    patches = ["//tools/patches:wasmkit_host_linking.patch"],
+    sha256 = "1bc11e9a46cdbd80ccaa22544c11afe25646983af16f4fb0475a11c1fb0c54ea",
+    strip_prefix = "WasmKit-0.5.0",
+    url = "https://github.com/swiftwasm/WasmKit/archive/refs/tags/0.5.0.tar.gz",
 )
 
 # Binaryen and WABT for mixed mode's native part (tools/wasm/mixed.bzl:

@@ -1,13 +1,13 @@
-# WasmKit (AttilaTheFun/WasmKit, the Swift WebAssembly interpreter) built by
-# Bazel the way its Package.swift builds it: each SwiftPM target a library of
+# WasmKit (swiftwasm/WasmKit 0.5.0, the Swift WebAssembly interpreter) built
+# by Bazel the way its Package.swift builds it: each SwiftPM target a library of
 # the same module name, every Swift one in package `WasmKit` (its `package`
 # declarations cross modules) with the package's default traits as
 # compilation conditions (SwiftPM passes enabled traits to every target),
 # and the engine with the RawLayout feature its Cell needs. Only what a host
 # embeds is here: the engine, its parser and types, WASI, and WASI Threads.
 # Every native platform Isomer hosts reactors on: macOS, iOS, Android, Linux,
-# Windows (guard-page bounds checks and shared memory on Apple's and Linux;
-# software checks, and no threads, on Android and Windows).
+# Windows (guard-page bounds checks and shared memory on Apple's, Linux and
+# 64-bit Android; software checks, and no threads, on Windows).
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_swift//swift:swift_interop_hint.bzl", "swift_interop_hint")
