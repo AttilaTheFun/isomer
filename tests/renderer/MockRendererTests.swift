@@ -2943,6 +2943,7 @@ struct Main {
         checkDrawnSplitDetailPath(mock)
         checkFieldOnPathScreen(mock)
         checkTextEditFrames()
+        checkPresentFromPartialFrame()
 
         // Row actions: the tagged row is a tap target and carries its menu.
         Runtime.shared.installRootView { RowScreen() }
@@ -3395,4 +3396,68 @@ func checkTextEditFrames() {
     Runtime.shared.verifyPartialFrames = false
     // Nothing written, nothing asked for: no frame comes on its own.
     expect(!Runtime.shared.wantsFrame, "an idle screen asks for no frame")
+}
+
+// MARK: - Presenting from a frame built in place
+
+/// Its parent, kept for reuse: a frame after the sheet is presented must
+/// not hand back the parent's last build, which held no sheet.
+struct EditSheetParent: View {
+    var body: some View {
+        VStack {
+            Text("Above")
+            EditSheetScreen()
+        }
+    }
+}
+
+struct EditSheetScreen: View {
+    @State private var showing = false
+    var body: some View {
+        VStack {
+            Button("Show sheet") { showing = true }
+            RoundedRectangle(cornerRadius: 8).fill(Color.gray).frame(height: 20)
+        }
+        .sheet(isPresented: $showing) {
+            EditSheetContent()
+        }
+    }
+}
+
+struct EditSheetContent: View {
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        VStack {
+            Text("A sheet")
+            Button("Done") { dismiss() }
+        }
+    }
+}
+
+/// A sheet presented by a state write in a tree that is built in place:
+/// shown with its content, and dismissed by its own button.
+@MainActor
+func checkPresentFromPartialFrame() {
+    let previous = Renderer.current
+    Renderer.bind(JetpackComposeRenderer(send: { _ in }))
+    defer { Renderer.bind(previous) }
+    Runtime.shared.installRootView { NavigationStack { EditSheetParent() } }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    func settle() { var n = 0; while Runtime.shared.wantsFrame && n < 20 { Runtime.shared.renderFrame(); n += 1 } }
+    settle()
+    func frame() -> HostFrame { HostFrame(Runtime.shared.retainedTree!) }
+    guard let show = frame().tapTarget("Show sheet") else { return expect(false, "the button is a tap target") }
+    Runtime.shared.installTreeHandlers(frame().encoder.handlers)
+    Runtime.shared.hostViewEvent(id: show, value: "")
+    settle()
+    // A whole frame after it (an animation's, a resize's): still presented.
+    Runtime.shared.setNeedsRender()
+    settle()
+    let shown = frame()
+    expect(shown.shows("A sheet"), "the sheet's content shows")
+    guard let done = shown.tapTarget("Done") else { return expect(false, "the sheet's button is a tap target") }
+    Runtime.shared.installTreeHandlers(shown.encoder.handlers)
+    Runtime.shared.hostViewEvent(id: done, value: "")
+    settle()
+    expect(!frame().shows("A sheet"), "Done dismisses the sheet")
 }

@@ -268,6 +268,7 @@ extension Runtime {
             buildCacheInnerStack.append([])
             buildEffectStack.append([])
             let readsBefore = _bindingReadKeys.count
+            let volatilityBefore = buildVolatility
             var node = _buildCompositeAlone(site.view, ctx: &ctx, asPart: site.asPart)
             if let built = node {
                 for mutator in site.mutators {
@@ -301,8 +302,10 @@ extension Runtime {
             // The cached views above it hold its subtree now: what it read
             // through bindings, the cached views in it and its registrations
             // (local ones) are theirs too. One that read a binding of unknown
-            // state makes them rebuild when next reached.
-            let unknownRead = reads.contains("")
+            // state, or whose build was volatile (a sheet it now presents,
+            // registered by building it, which reusing the views above
+            // would not make again), makes them rebuild when next reached.
+            let unknownRead = reads.contains("") || buildVolatility != volatilityBefore
             var prefix = Substring(site.path)
             while let slash = prefix.lastIndex(of: "/") {
                 prefix = prefix[..<slash]
