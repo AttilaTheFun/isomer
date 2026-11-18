@@ -6,8 +6,9 @@ update this file.
 
 ## The name
 
-Isomer's icon is `.github/Isomer.icon` (Icon Composer), rendered to
-`.github/icon.png` (`ictool .github/Isomer.icon --export-image --output-file
+The repository's icon is the Storybook's (the owner, 2026-11-18): `.github/Storybook.icon`, a copy of
+examples/storybook/artwork/storybook_icon/Storybook.icon (Icon Composer), rendered to
+`.github/icon.png`, which Reviews shows beside each release (`ictool .github/Storybook.icon --export-image --output-file
 .github/icon.png --platform iOS --rendition Default --width 512 --height 512
 --scale 1`; `ictool` is in Xcode's Icon Composer.app): repositories' icons
 live in `.github/`, apps' in their application's folder.
