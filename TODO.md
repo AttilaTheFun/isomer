@@ -310,9 +310,10 @@ JavaScript engine, and WasmKit goes:
   reactors on WasmKit's guard pages (upstream's #527) checked on an
   emulator.
 - The Playground: an end-to-end test of the web-view engine; caching a
-  feature's compiled module; "BE…" (a score truncated, seen on the
-  owner's iPhone 15 Pro at the standard text size, not reproduced on an
-  iPhone 15 Pro simulator: Display Zoom, or an older build, to rule out).
+  feature's compiled module. ("BE…", 2048's BEST label truncated on the
+  owner's iPhone, was the tree renderer's identity scale and offset on
+  every view, gone since 0.52 (#189); the Storybook's layout.centred holds
+  it.)
 
 ## wasi-threads (Swift 6.5)
 
