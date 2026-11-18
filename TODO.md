@@ -463,8 +463,15 @@ the candidate pre-release). Still open:
 - **Every cell in CI**: plain and -i18n at API 23 and 28 build and run on
   GitHub's x86_64 KVM emulator; arm64 runs only on Apple silicon (the
   hermetic emulator with Google's API 23 image, README, "Android below API
-  28", or a Shireworks `android` lease), so it isn't in CI. armv7 links in
-  every cell but runs nowhere.
+  28", or a Shireworks `android` lease), so it isn't in CI.
+- **armv7 through rules_swift**: the fixture's `//:smoke_android_armv7_so`
+  fails to compile: rules_swift's Android toolchain gives Swift the NDK's
+  triple, `arm-unknown-linux-android`, and the SDK's modules are
+  `armv7-unknown-linux-android` ("could not find module 'Swift' for target
+  'arm-unknown-linux-android'"). An upstream fix (the triple mapped to
+  armv7 for Swift), for the Upstream session; isomer has never built
+  armeabi-v7a ("Android below API 28": later, if an app needs it). The
+  SDK's armv7 libraries are linked and checked by its own build.
 - **The web in a browser**: the WASI command runs under WasmKit; running it
   in headless Chrome as well (//tools/wasm/wasi_run_browser) would cover
   the web's own WASI.

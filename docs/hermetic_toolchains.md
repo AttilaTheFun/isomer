@@ -172,7 +172,8 @@ everything at 23, and these guard the SDKs from then on:
   -i18n SDK dates and numbers formatted. `sdk_smoke cell` writes what a
   consumer's upgrade changes (cell.MODULE.bazel and cell.bzl: isomer, the
   SDKs' URLs and checksums from their .sha256 files, the NDK's API level);
-  `sdk_smoke build` links the JNI library for aarch64, x86_64 and armv7,
+  `sdk_smoke build` links the JNI library for aarch64 and x86_64 (armv7
+  once rules_swift builds it: TODO.md; the SDK's own checks cover it),
   builds the APKs, and runs the same checks as a WASI command under WasmKit;
   `sdk_smoke run-android` runs an APK on an emulator and reads the checks
   from its log. CI's `run: sdk-smoke` (build.yml) builds each cell, plain

@@ -97,21 +97,8 @@ register_toolchains(
     dev_dependency = True,
 )
 
-# rules_android's tools' Maven, pinned by isomer's lock file
-# (docs/android_maven.md), as the examples do.
-bazel_dep(name = "rules_jvm_external", version = "7.1")
-maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
-maven.install(
-    name = "rules_android_maven",
-    aar_import_bzl_label = "@rules_android//rules:rules.bzl",
-    known_contributing_modules = ["rules_android"],
-    lock_file = "@isomer//:rules_android_maven_install.json",
-    repositories = [
-        "https://maven.google.com",
-        "https://repo1.maven.org/maven2",
-    ],
-    use_starlark_android_rules = True,
-)
+# rules_android's tools' Maven is rules_android's own to resolve: isomer's
+# lock file (docs/android_maven.md) is 0.7.3's artifacts, not 0.6.0's.
 
 # Isomer's Swift (README, "Consuming isomer"): isomer in the Package.swift
 # the root's graph reads.
