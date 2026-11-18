@@ -47,12 +47,15 @@ child=""
 # A child command, given at most <seconds>: run in the background and
 # waited for a tenth of a second at a time, so that SIGTERM's trap (`stop`)
 # runs at once (bash runs a trap only once the child in front returns), and
-# ended (TERM, then KILL) if it overruns, said so, 124 returned. simctl can
-# stop answering (SpringBoard busy: a cold Safari opening, a simulator
-# under load) and so can launchctl; a launcher stuck in one answered no
-# more requests and woke the app no more, so its test's command went
-# unanswered until it timed out, and the launcher outlived its test until
-# HeadlessApp's SIGKILL.
+# ended (TERM, then KILL) if it overruns, said so (with the Mac's load),
+# 124 returned. simctl can stop answering (SpringBoard busy: a cold Safari
+# opening) and so can launchctl; a launcher stuck in one answered no more
+# requests and woke the app no more, so its test's command went unanswered
+# until it timed out, and the launcher outlived its test until HeadlessApp's
+# SIGKILL. The deadlines are for a call that hangs, not one that is slow:
+# on GitHub's Mac runners a simctl launch can take more than 15 s, and
+# launchctl more than 5, for minutes on end, and a SpringBoard launch ended
+# early sent the app nowhere.
 #
 #   bounded <seconds> <what> <command>…
 bounded() {
@@ -68,7 +71,7 @@ bounded() {
             kill -KILL "$child" 2> /dev/null
             wait "$child" 2> /dev/null
             child=""
-            echo "ios_launcher: $(date +%T) $what gave no answer in $seconds s: ended" >&3
+            echo "ios_launcher: $(date +%T) $what gave no answer in $seconds s: ended (load $(sysctl -n vm.loadavg 2> /dev/null))" >&3
             return 124
         fi
         sleep 0.1
@@ -78,16 +81,31 @@ bounded() {
     child=""
     return $status
 }
+# A simctl call given a minute, and a minute again if it was ended: the
+# launcher's way to the app (SpringBoard, the app opened, ended) doesn't
+# hang on one call.
+#
+#   patient <what> <command>…
+patient() {
+    local status
+    bounded 60 "$@"
+    status=$?
+    [ "$status" = 124 ] || return "$status"
+    echo "ios_launcher: $(date +%T) $1: once more" >&3
+    bounded 60 "$@"
+}
 stop() {
     [ -n "$child" ] && kill -KILL "$child" 2> /dev/null
-    bounded 10 "simctl terminate" xcrun simctl terminate "$udid" "$bundle" > /dev/null 2>&1
+    # (Within HeadlessApp's 10 s before its SIGKILL: the next launch ends
+    # an app left running anyway.)
+    bounded 8 "simctl terminate" xcrun simctl terminate "$udid" "$bundle" > /dev/null 2>&1
     rm -rf "$scratch"
     exit 0
 }
 trap stop TERM INT
 # From the home screen: an app opened over another (Safari, left in front
 # by a test before) shows a "◀" link back to it in the status bar.
-bounded 15 "simctl launch SpringBoard" xcrun simctl launch "$udid" com.apple.springboard > /dev/null 2>&1
+patient "simctl launch SpringBoard" xcrun simctl launch "$udid" com.apple.springboard > /dev/null 2>&1
 if fresh; then
     # The app's data as an install leaves it: its defaults, each domain
     # deleted through the simulator's cfprefsd by its file's path (the
@@ -97,7 +115,7 @@ if fresh; then
     # kept, with their metadata), and the simulator's keychain (an app's
     # items outlive it, as on a phone). The simulator is the test's: nothing
     # else of its is touched.
-    bounded 15 "simctl terminate" xcrun simctl terminate "$udid" "$bundle" > /dev/null 2>&1
+    patient "simctl terminate" xcrun simctl terminate "$udid" "$bundle" > /dev/null 2>&1
     clear_container() {
         [ -n "$1" ] && [ -d "$1" ] || return 0
         local plist
@@ -111,7 +129,7 @@ if fresh; then
     xcrun simctl get_app_container "$udid" "$bundle" groups 2> /dev/null | while IFS=$'\t' read -r group path; do
         clear_container "$path"
     done
-    bounded 15 "simctl keychain reset" xcrun simctl keychain "$udid" reset > /dev/null 2>&1
+    patient "simctl keychain reset" xcrun simctl keychain "$udid" reset > /dev/null 2>&1
 fi
 # The app's output kept with the test's (an app that never attached says why
 # there; ISO_DRIVE_TRACE=1, simctl's SIMCTL_CHILD_ISO_DRIVE_TRACE, prints
@@ -120,7 +138,7 @@ log="${TEST_UNDECLARED_OUTPUTS_DIR:-${TMPDIR:-/tmp}}/$name.log"
 # (From when the simulator's log is read for RunningBoard's word on it:
 # `suspended`.)
 started="$(date '+%Y-%m-%d %H:%M:%S')"
-bounded 60 "simctl launch" env "${environment[@]}" xcrun simctl launch --terminate-running-process --stdout="$log" \
+bounded 180 "simctl launch" env "${environment[@]}" xcrun simctl launch --terminate-running-process --stdout="$log" \
     --stderr="$log" "$udid" "$bundle" ${app_arguments[@]+"${app_arguments[@]}"} > "$scratch/launched" ||
     { rm -rf "$scratch"; exit 1; }
 # simctl's "<bundle>: <pid>": the process the test drives.
@@ -139,12 +157,12 @@ away=0
 # (darwin background) as it is suspended.
 suspended() {
     local last priority
-    if bounded 5 "launchctl procinfo" sudo -n launchctl procinfo "$pid" > "$scratch/procinfo" 2> /dev/null &&
+    if bounded 20 "launchctl procinfo" sudo -n launchctl procinfo "$pid" > "$scratch/procinfo" 2> /dev/null &&
         grep -q "^jetsam state" "$scratch/procinfo"; then
         grep -q "^jetsam state = suspended" "$scratch/procinfo"
         return
     fi
-    if bounded 10 "the simulator's log" xcrun simctl spawn "$udid" log show --start "$started" --style compact --predicate \
+    if bounded 20 "the simulator's log" xcrun simctl spawn "$udid" log show --start "$started" --style compact --predicate \
         "process == \"runningboardd\" AND eventMessage CONTAINS \":$pid] \" AND (eventMessage ENDSWITH \"Suspending task.\" OR eventMessage ENDSWITH \"Resuming task.\")" \
         > "$scratch/log" 2> /dev/null; then
         last="$(grep -E '(Suspending|Resuming) task\.$' "$scratch/log" | tail -1)"
@@ -158,12 +176,12 @@ suspended() {
 # first (an app opened over another shows a "◀" link back to it in the
 # status bar), then the app as its icon opens it: the same process,
 # resumed, its scene through inactive to active. simctl's launch without
-# --terminate-running-process starts no other. Each launch given 15 s: one
-# that gives no answer is ended, and the next wake tries again.
+# --terminate-running-process starts no other. Each launch `patient`: a
+# minute, twice; and should both give no answer, the next wake tries again.
 bring_forward() {
     local now
-    bounded 15 "simctl launch SpringBoard" xcrun simctl launch "$udid" com.apple.springboard > /dev/null 2>&1
-    bounded 15 "simctl launch" xcrun simctl launch "$udid" "$bundle" > "$scratch/launch" 2> /dev/null || return 1
+    patient "simctl launch SpringBoard" xcrun simctl launch "$udid" com.apple.springboard > /dev/null 2>&1
+    patient "simctl launch" xcrun simctl launch "$udid" "$bundle" > "$scratch/launch" 2> /dev/null || return 1
     now="$(cat "$scratch/launch")"
     away=0
     if [ "${now##*: }" != "$pid" ]; then
@@ -199,7 +217,7 @@ bring_forward() {
 scene() {
     case "$1" in
     background)
-        bounded 15 "simctl launch SpringBoard" xcrun simctl launch "$udid" com.apple.springboard > /dev/null || return 1
+        patient "simctl launch SpringBoard" xcrun simctl launch "$udid" com.apple.springboard > /dev/null || return 1
         away=1
         local until=$((SECONDS + 3))
         while [ "$SECONDS" -lt "$until" ]; do
@@ -212,7 +230,7 @@ scene() {
         local until=$((SECONDS + 2))
         until [ "$away" = 1 ] || suspended; do
             if [ "$SECONDS" -ge "$until" ]; then
-                bounded 15 "simctl launch" xcrun simctl launch "$udid" "$bundle" > /dev/null 2>&1
+                patient "simctl launch" xcrun simctl launch "$udid" "$bundle" > /dev/null 2>&1
                 return 1
             fi
             sleep 0.1
@@ -241,7 +259,7 @@ wake() {
 # the right, the phone turned anticlockwise) is 270.
 take() {
     local path="$1" orientation="${2:-}" turn="" width height
-    bounded 30 "simctl io screenshot" xcrun simctl io "$udid" screenshot --mask=black "$path" > /dev/null 2>&1 || return 1
+    bounded 60 "simctl io screenshot" xcrun simctl io "$udid" screenshot --mask=black "$path" > /dev/null 2>&1 || return 1
     case "$orientation" in
         landscape-right) turn=270 ;;
         landscape-left) turn=90 ;;

@@ -637,7 +637,10 @@ public final class HeadlessApp: @unchecked Sendable {
             // moved it (`ok away`: to where the app answers nothing until
             // it is back, the iPhone's home screen, so nothing is asked of
             // it: an empty screen); why not, or nothing, when it didn't.
-            let deadline = Date().addingTimeInterval(30)
+            // Five minutes: the iPhone's launcher gives each simctl call a
+            // minute, and a second if the first was ended, as a slow Mac
+            // runner needs.
+            let deadline = Date().addingTimeInterval(300)
             while FileManager.default.fileExists(atPath: request.path), Date() < deadline, launched.isRunning {
                 Thread.sleep(forTimeInterval: 0.02)
             }

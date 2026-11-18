@@ -67,7 +67,10 @@ apple_runner() {
         # run again (Swift Testing's --filter), at most twice. A test that
         # fails with the simulator up still fails.
         [ -n "$udid" ] && [ "$attempt" -lt 2 ] || break
-        if hosted_sim_healthy && ! grep -qE "CoreSimulatorService: Connection interrupted|device is not booted" "$log"; then
+        # A launcher's simctl call that gave no answer (ios_launcher.sh's
+        # `bounded`) is CoreSimulator's trouble too: started again, and
+        # the tests that failed run again.
+        if hosted_sim_healthy && ! grep -qE "CoreSimulatorService: Connection interrupted|device is not booted|ios_launcher: .* gave no answer in [0-9]+ s" "$log"; then
             break
         fi
         hosted_sim_recover "$out" || break

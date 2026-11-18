@@ -230,10 +230,15 @@ password (`launchctl procinfo`, root's alone), else from what RunningBoard
 last logged of the process in the simulator's log ("Suspending task." or
 "Resuming task.", `simctl spawn … log show`, about a second a reading),
 else from its scheduling priority (4 once suspended, though it can stay
-where it was). Every command the launcher runs has a deadline (15 s for
-a `simctl launch`, 5 s for `launchctl`, 10 s for the log): simctl can stop
-answering while SpringBoard is busy, and a launcher stuck in one woke the
-app no more, so the test's command timed out. Each wake is in the test's
+where it was). Every command the launcher runs has a deadline, for a
+call that hangs rather than one that is slow (a minute for a `simctl
+launch` or `terminate`, tried once more if it was ended; 20 s for
+`launchctl` and for the log): simctl can stop answering while SpringBoard
+is busy, and a launcher stuck in one woke the app no more, so the test's
+command timed out; GitHub's Mac runners are at times slow enough that
+shorter deadlines (15 s) ended calls that would have answered. In CI
+(tools/ci/hosted_headful_test.sh) a test that failed while a launcher's
+call gave no answer runs again, CoreSimulator started again first. Each wake is in the test's
 log with the time, and the app's driver says on standard error when its
 call ends and it dials again. ISO_DRIVE_TRACE=1 in the app's environment prints each reading's walk of
 the tree; on the Mac it asks its own process as an
@@ -283,7 +288,7 @@ signals: drive/launchers/requests.sh).
   one (a late answer would answer the next command), so every command
   after it throws at once. The launch has its own (`timeout:`, 120 s to
   attach), and so do opening the call, `layout()` (the command timeout),
-  `picture` (60 s) and the launcher's `scene` (30 s). While a command
+  `picture` (60 s) and the launcher's `scene` (300 s). While a command
   waits, every 5 s, the test asks the launcher to wake the app (a `<n>.wake`
   request, requests.sh): the iPhone's brings back an app iOS has suspended
   (one that opened Safari, or a test's `wait` on an app sent home), and
