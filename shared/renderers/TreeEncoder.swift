@@ -187,18 +187,12 @@ package final class FlatTreeEncoder {
             Runtime.shared.host?.log("[encode] flattened \(passStats.nodes) nodes | cached subtrees replayed \(passStats.hits), flattened again \(passStats.stale.count): \(stale.isEmpty ? "-" : stale) | new \(passStats.fresh.count): \(passStats.fresh.prefix(4).joined(separator: ", "))")
         }
         var patch = Wire_Patch()
-        diffedNodes = 0
         diff(previous, tree, path: "n", &patch.ops)
         previous = tree
-        Runtime.shared.noteFrameDiff(nodes: diffedNodes, ops: patch.ops.count)
         return Self.bytes(patch)
     }
 
     // MARK: - Diff
-
-    /// The nodes the last `encodePatch` compared (the render log's, and
-    /// tests'): a subtree kept from last frame as it was counts nothing.
-    package private(set) var diffedNodes = 0
 
     /// Walks old/new together, appending the minimal set of `PatchOp`s. A
     /// kind change replaces the whole subtree; an own-attribute change
@@ -216,14 +210,12 @@ package final class FlatTreeEncoder {
         _ old: FlatNode?, _ new: FlatNode, path: String, _ ops: inout [Wire_PatchOp]
     ) {
         guard let old, old.kind == new.kind else {
-            diffedNodes &+= 1
             ops.append(op(path, serialize(new, includeChildren: true), attrsOnly: false))
             return
         }
         // The same cached subtree as last frame (a reused view's): nothing
         // in it changed.
         if new.subtreeToken != 0, new.subtreeToken == old.subtreeToken { return }
-        diffedNodes &+= 1
         if !old.sameOwnAttributes(as: new) {
             ops.append(op(path, serialize(new, includeChildren: false), attrsOnly: true))
         }
@@ -388,7 +380,7 @@ package final class FlatTreeEncoder {
     /// written relative to.
     private func flatten(_ node: RenderNode, ident: String, anchor: String?) -> FlatNode {
         if semantic, let original = node.semanticNode { return flatten(original, ident: ident, anchor: anchor) }
-        guard node.keepsItsBuild else { return flattenNode(node, ident: ident, anchor: anchor) }
+        guard node.isReusedSubtreeRoot else { return flattenNode(node, ident: ident, anchor: anchor) }
         let id = ObjectIdentifier(node)
         if let entry = flattenCache[id], entry.ident == ident, entry.anchor == anchor, entry.stillLive {
             flattenCacheReached.insert(id)
@@ -1490,7 +1482,7 @@ package final class FlatTreeEncoder {
         for (index, child) in children.enumerated() {
             // A reused subtree reached the same way as last pass: its keyed
             // form as it was.
-            if child.keepsItsBuild, let path = child.buildPath {
+            if child.isReusedSubtreeRoot, let path = child.buildPath {
                 let id = ObjectIdentifier(child)
                 if let entry = flattenCache[id], let keyed = entry.keyed, entry.keyAnchor == anchor, entry.ident == path,
                    entry.stillLive {
@@ -1519,7 +1511,7 @@ package final class FlatTreeEncoder {
             }
             var flat = flatten(child, ident: child.buildPath ?? "\(ident)/#\(index)", anchor: anchor)
             flat.setKey(key, fallback: "#\(index)")
-            if child.keepsItsBuild, child.buildPath != nil {
+            if child.isReusedSubtreeRoot, child.buildPath != nil {
                 let id = ObjectIdentifier(child)
                 if let entry = flattenCache[id] {
                     entry.keyed = flat
@@ -1546,7 +1538,7 @@ package final class FlatTreeEncoder {
         if let known = greedinessMemo[ObjectIdentifier(node)] { return (known.w, known.h) }
         // A reused subtree's root, flattened before: as it was (its subtree is
         // the same), without walking it again.
-        if node.keepsItsBuild, let entry = flattenCache[ObjectIdentifier(node)], entry.node === node,
+        if node.isReusedSubtreeRoot, let entry = flattenCache[ObjectIdentifier(node)], entry.node === node,
            entry.epoch == node.contentEpoch {
             return (entry.flat.growW, entry.flat.growH)
         }

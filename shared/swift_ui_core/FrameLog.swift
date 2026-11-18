@@ -81,7 +81,6 @@ extension Runtime {
 
 /// Notes a composite view built (not reused), with why.
 func _frameLogBuilt(_ view: any View, ctx: BuildContext) {
-    Runtime.shared.compositeBuildCount &+= 1
     guard let log = Runtime.shared.frameLog else { return }
     let runtime = Runtime.shared
     let reason: String
@@ -158,100 +157,4 @@ func _frameLogVolatile(_ view: any View) {
     var name = _typeName(type(of: view), qualified: false)
     if let modified = view as? _ModifiedView { name = "." + modified.descend }
     log.volatileBy[String(name.prefix(70)), default: 0] += 1
-}
-
-// The render log: with `ISO_RENDER_LOG` in the host's environment, one line
-// a frame, for finding frames that build or diff more than they should (a
-// keystroke that builds the whole tree, frames that keep coming with
-// nothing changed), without a profiler:
-//
-//   [render] frame 41 partial (DraftSend) | written 1 | built 1 | diffed 12 nodes, 1 op | events text | 0.4 ms
-//   [render] frame 42 whole (a volatile build) | written 1 | built 38 | diffed 210 nodes, 3 ops | events tap | 6.1 ms
-//   [render] frame 43 partial (nothing) | written 0 | built 0 | diffed 5 nodes, 0 ops | events geo ×2 | 0.1 ms
-//   [render] frame 44 relayout | diffed 5 nodes, 0 ops | events - | 0.2 ms
-//
-// A frame is `partial` (built in place, InPlace.swift: the views it built
-// in parentheses, "nothing" when no build read what was written), `whole`
-// (built from the root: why in parentheses) or `relayout` (the last tree
-// handed to the renderer again, a resize's). `written` is the state written
-// since the frame before, `built` the composite views whose bodies ran,
-// `diffed` the nodes a component-system renderer's encoder compared with
-// last frame's and the patch operations it sent (none from the self-drawing
-// renderer), `events` the host's events since the frame before, by kind
-// (the last part of their ids: "text" a field's edit, "tap", "geo" a
-// geometry reader's size, "focus"). A run of frames with nothing written is
-// a render loop to find: its events say what keeps asking.
-// The same counts are kept with the log off (`Runtime.frameStats`), for
-// tests. ISO_FRAME_LOG (above) says, for one frame, which views were built
-// and why.
-
-/// What a frame did: the render log's line, and what tests read.
-package struct FrameStats: Equatable, Sendable {
-    package enum Kind: String, Sendable { case partial, whole, relayout }
-    package var kind: Kind = .whole
-    /// The views a partial frame built, or why a frame was built whole.
-    package var detail = ""
-    package var written = 0
-    package var built = 0
-    package var diffedNodes = 0
-    package var patchOps = 0
-    package init() {}
-}
-
-extension Runtime {
-    /// Whether the host asked for the render log (checked once).
-    var renderLogOn: Bool {
-        if !renderLogChecked {
-            renderLogChecked = true
-            renderLogEnabled = host?.hostValue("env:ISO_RENDER_LOG") != nil
-        }
-        return renderLogEnabled
-    }
-
-    /// A host event that may ask for a frame (its id's last part: "text",
-    /// "tap", "geo", "focus"), for the render log's `events`.
-    func noteFrameRequest(_ id: String) {
-        guard renderLogOn else { return }
-        let kind = id.lastIndex(of: ".").map { String(id[id.index(after: $0)...]) } ?? id
-        frameRequests[kind, default: 0] += 1
-    }
-
-    /// A frame's build starts: what it starts from.
-    func renderStatsBegin(kind: FrameStats.Kind) {
-        currentFrame = FrameStats()
-        currentFrame.kind = kind
-        currentFrame.written = dirtyStateKeys.count
-        frameBuildsAtStart = compositeBuildCount
-        frameStartedAt = renderLogOn ? (host?.now() ?? 0) : 0
-    }
-
-    /// Why this frame is built whole, or what a partial one built.
-    func noteFrameDetail(_ detail: @autoclosure () -> String) {
-        guard renderLogOn else { return }
-        currentFrame.detail = detail()
-    }
-
-    /// A component-system renderer's encoder diffed the frame's tree.
-    package func noteFrameDiff(nodes: Int, ops: Int) {
-        currentFrame.diffedNodes += nodes
-        currentFrame.patchOps += ops
-    }
-
-    /// The frame was handed to the renderer: kept, and logged.
-    func renderStatsEnd() {
-        currentFrame.built = compositeBuildCount &- frameBuildsAtStart
-        frameStats = currentFrame
-        renderedFrameCount &+= 1
-        if currentFrame.kind == .whole { wholeFrameCount &+= 1 }
-        guard renderLogOn, let host else { return }
-        let stats = currentFrame
-        let ms = (host.now() - frameStartedAt) * 1000
-        let detail = stats.detail.isEmpty ? "" : " (\(stats.detail))"
-        let built = stats.kind == .relayout ? "" : " | written \(stats.written) | built \(stats.built)"
-        let ops = stats.patchOps == 1 ? "1 op" : "\(stats.patchOps) ops"
-        let events = frameRequests.isEmpty ? "-" : frameRequests.sorted { $0.key < $1.key }
-            .map { $0.value == 1 ? $0.key : "\($0.key) ×\($0.value)" }.joined(separator: ", ")
-        frameRequests = [:]
-        host.log("[render] frame \(renderedFrameCount) \(stats.kind.rawValue)\(detail)\(built) | diffed \(stats.diffedNodes) nodes, \(ops) | events \(events) | \((ms * 10).rounded() / 10) ms")
-    }
 }

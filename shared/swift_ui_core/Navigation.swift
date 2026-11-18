@@ -1600,9 +1600,7 @@ extension _NavigationTitleView: _PrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let nav = ctx.navigation, title = title, level = ctx.navigationLevel
-        Runtime.shared.registerFrameEffect(same: _sameEffect("title", nav.map(ObjectIdentifier.init), level, title)) {
-            nav?.setTitle(title, level: level)
-        }
+        Runtime.shared.registerFrameEffect { nav?.setTitle(title, level: level) }
         var sub = ctx.descend("navtitle")
         return buildNode(view: child, ctx: &sub)
     }
@@ -1620,9 +1618,7 @@ extension _NavigationSubtitleView: _PrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let nav = ctx.navigation, subtitle = subtitle, level = ctx.navigationLevel
-        Runtime.shared.registerFrameEffect(same: _sameEffect("subtitle", nav.map(ObjectIdentifier.init), level, subtitle)) {
-            nav?.setSubtitle(subtitle, level: level)
-        }
+        Runtime.shared.registerFrameEffect { nav?.setSubtitle(subtitle, level: level) }
         var sub = ctx.descend("navsubtitle")
         return buildNode(view: child, ctx: &sub)
     }
@@ -2191,9 +2187,7 @@ extension _BackButtonHiddenView: _PrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let nav = ctx.navigation, hidden = hidden
-        Runtime.shared.registerFrameEffect(same: _sameEffect("backhidden", nav.map(ObjectIdentifier.init), hidden)) {
-            if hidden { nav?.backButtonHidden = true }
-        }
+        Runtime.shared.registerFrameEffect { if hidden { nav?.backButtonHidden = true } }
         var sub = ctx.descend("backhidden")
         return buildNode(view: child, ctx: &sub)
     }
