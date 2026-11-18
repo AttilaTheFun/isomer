@@ -5,6 +5,9 @@ common --registry=https://bcr.bazel.build
 common --lockfile_mode=off
 # The dependency module's swift_deps is an isolated usage (dep/MODULE.bazel).
 common --experimental_isolated_extension_usages
+# rules_android 0.6.0 (MODULE.bazel) names CcInfo unloaded, which Bazel 8
+# took out of the language: rules_cc's symbols loaded for it.
+common --incompatible_autoload_externally=+@rules_cc
 common --repo_env=ACCEPTED_ANDROID_NDK_LICENSE_VERSION=r30
 common --repo_env=ACCEPTED_ANDROID_SDK_LICENSE_VERSION=35
 common --java_language_version=17
