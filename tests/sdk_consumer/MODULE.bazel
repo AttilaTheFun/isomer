@@ -45,6 +45,12 @@ single_version_override(
 # 0.6.0: .1 loaded string_flag from rules_android's helper.bzl, which only
 # 0.7 has.
 
+# Hermetic Go 1.24 for rules_android's Go tools (the APKs' deploy_info), as
+# the examples pin it: the host's Go is never asked.
+bazel_dep(name = "rules_go", version = "0.61.1")
+go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk")
+go_sdk.download(version = "1.24.12")
+
 # A dependency module with Swift packages of its own, in an isolated
 # swift_deps graph (dep/MODULE.bazel).
 bazel_dep(name = "sdk_consumer_dep", version = "0.0.0")
