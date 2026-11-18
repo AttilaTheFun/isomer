@@ -44,8 +44,10 @@ scratch="$(mktemp -d "${TMPDIR:-/tmp}/ios_launcher.XXXXXX")"
 exec 3>&2
 # The child `bounded` waits on.
 child=""
-# A wake's bringing the app forward, in the background, and since when.
+# A wake's bringing the app forward, in the background, and since when;
+# and every wake's still running, which `stop` ends.
 waking=""
+wakers=""
 waking_since=0
 wakes=0
 # A child command, given at most <seconds>: run in the background and
@@ -59,20 +61,25 @@ wakes=0
 # SIGKILL. The deadlines are for a call that hangs, not one that is slow:
 # on GitHub's Mac runners a simctl launch can take more than 15 s, and
 # launchctl more than 5, for minutes on end, and a SpringBoard launch ended
-# early sent the app nowhere.
+# early sent the app nowhere. The child leads a process group of its own
+# (monitor mode, for the moment it starts), and it is ended as a group, so
+# what it started goes with it (simctl, should xcrun not exec it; a test's
+# fake xcrun's own children).
 #
 #   bounded <seconds> <what> <command>…
 bounded() {
     local seconds="$1" what="$2" until status
     shift 2
+    set -m
     "$@" &
     child=$!
+    set +m
     until=$((SECONDS + seconds))
     while kill -0 "$child" 2> /dev/null; do
         if [ "$SECONDS" -ge "$until" ]; then
-            kill -TERM "$child" 2> /dev/null
+            kill -TERM -- -"$child" 2> /dev/null
             sleep 0.2
-            kill -KILL "$child" 2> /dev/null
+            kill -KILL -- -"$child" 2> /dev/null
             wait "$child" 2> /dev/null
             child=""
             echo "ios_launcher: $(date +%T) $what gave no answer in $seconds s: ended (load $(sysctl -n vm.loadavg 2> /dev/null))" >&3
@@ -99,8 +106,20 @@ patient() {
     bounded 60 "$@"
 }
 stop() {
-    [ -n "$child" ] && kill -KILL "$child" 2> /dev/null
-    [ -n "$waking" ] && kill -KILL "$waking" 2> /dev/null
+    local waker tries=0
+    [ -n "$child" ] && kill -KILL -- -"$child" 2> /dev/null
+    # The wakes' launches, in the background: each wake's subshell ends its
+    # own child's group on TERM (within a tenth of a second: it waits in
+    # `bounded`), then is ended itself if it hasn't gone in a second. Killed
+    # outright, it left its simctl launch running, orphaned, past the test.
+    for waker in $wakers; do kill -TERM "$waker" 2> /dev/null; done
+    for waker in $wakers; do
+        while kill -0 "$waker" 2> /dev/null && [ "$tries" -lt 10 ]; do
+            sleep 0.1
+            tries=$((tries + 1))
+        done
+        kill -KILL "$waker" 2> /dev/null
+    done
     # (Within HeadlessApp's 10 s before its SIGKILL: the next launch ends
     # an app left running anyway.)
     bounded 8 "simctl terminate" xcrun simctl terminate "$udid" "$bundle" > /dev/null 2>&1
@@ -279,11 +298,16 @@ wake() {
     away=0
     wakes=$((wakes + 1))
     (
+        # Ended by `stop` (TERM): the launch it waits on ended with it, and
+        # what that started (its group).
+        child=""
+        trap '[ -n "$child" ] && kill -KILL -- -"$child" 2> /dev/null; exit 0' TERM
         bounded 60 "simctl launch SpringBoard" xcrun simctl launch "$udid" com.apple.springboard > /dev/null 2>&1
         bounded 60 "simctl launch" xcrun simctl launch "$udid" "$bundle" > "$scratch/woken.$wakes" 2> /dev/null &&
             mv "$scratch/woken.$wakes" "$scratch/woken"
     ) &
     waking=$!
+    wakers="$wakers $waking"
     waking_since=$SECONDS
 }
 # A picture, turned from the simulator's upright frame to the interface's
