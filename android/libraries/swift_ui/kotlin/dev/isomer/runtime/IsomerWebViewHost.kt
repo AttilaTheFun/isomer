@@ -26,6 +26,15 @@ package dev.isomer.runtime
 //   transparent, attached to the window: a WebView that isn't attached gets
 //   no animation frames (session_host.js falls back to a timer, a frame
 //   later).
+// - It never leaves the site: a navigation the page starts (a link, a
+//   redirect, `location`, `window.open`) to anywhere but the site's own
+//   folder is refused; a link the person could have followed goes to the
+//   system's browser instead (HostServices.openUrl), as the app's own
+//   `openURL` does.
+// - When the page's renderer process goes (Android takes it back for memory,
+//   or it crashes), its WebView is removed and destroyed, as Android
+//   requires, and IsomerWebViewApp makes a new host: a new session, its
+//   first frame the whole tree, as a remote app's reconnect.
 //
 // Why a WebView and not JavaScriptSandbox (androidx.javascriptengine, the
 // same V8 without a view): the page measures and lays out text with a canvas
@@ -58,7 +67,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
@@ -82,12 +95,46 @@ class IsomerWebViewHost(
     context: Context,
     private val site: String = "site",
     pageQuery: Map<String, String> = emptyMap(),
+    /** The page's renderer process went: this host is spent (its web view
+     *  destroyed), and `drew` says whether its session had drawn. An owner
+     *  makes a new host for a new session (IsomerWebViewApp does). */
+    private val onGone: (drew: Boolean) -> Unit = {},
 ) {
     companion object {
         /** The site's origin: AndroidX's WebViewAssetLoader's, reserved for an
          *  app's own files. */
         const val ORIGIN = "https://appassets.androidplatform.net"
         private const val TAG = "Isomer"
+
+        /** The live hosts, for the debug hook below. */
+        private val live = java.util.Collections.newSetFromMap(java.util.WeakHashMap<IsomerWebViewHost, Boolean>())
+
+        /**
+         * A test's hook, honoured only in a debuggable app: `crashRenderer`
+         * crashes every live host's renderer (`chrome://crash`), as Android
+         * does when it takes the process back, so a test sees the app come
+         * back; `navigateAway` has each page send itself to another site,
+         * which must be refused (the session goes on). The generated
+         * activity passes its intent's `isomerDebug` extra here:
+         *
+         *   adb shell am start -n <package>/.MainActivity --es isomerDebug crashRenderer
+         */
+        fun debugCommand(context: Context, command: String?) {
+            if (command == null) return
+            if (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) return
+            when (command) {
+                "crashRenderer" -> for (host in live.toList()) {
+                    if (!host.destroyed) {
+                        Log.i(TAG, "[webview] crashing the page's renderer (isomerDebug)")
+                        host.webView.loadUrl("chrome://crash")
+                    }
+                }
+                "navigateAway" -> for (host in live.toList()) {
+                    if (!host.destroyed) host.webView.evaluateJavascript("location.assign('https://example.com/')", null)
+                }
+                else -> Log.w(TAG, "[webview] no debug command $command")
+            }
+        }
     }
 
     /** The page's view: kept in the app's window, behind what it draws
@@ -110,7 +157,10 @@ class IsomerWebViewHost(
     private val waiting = ArrayList<String>()
     private var loadedAt = 0L
     private var firstMessage = true
+    /** The web view destroyed (by its owner, or after its renderer went). */
     private var destroyed = false
+    /** The renderer went: nothing more of this host's runs. */
+    private var gone = false
 
     init {
         val info = context.applicationContext.applicationInfo
@@ -150,18 +200,22 @@ class IsomerWebViewHost(
                 return true
             }
         }
+        live.add(this)
     }
 
-    /** The web view's end, with the composable that showed it. */
+    /** The web view's end, with the composable that showed it (or after its
+     *  renderer went): out of its window, then destroyed, as Android asks. */
     fun destroy() {
         if (destroyed) return
-        end()
         destroyed = true
+        end()
+        live.remove(this)
+        (webView.parent as? android.view.ViewGroup)?.removeView(webView)
         webView.destroy()
     }
 
     private fun open(start: ByteArray, onMessage: (ByteArray) -> Unit, onClosed: () -> Unit) {
-        if (destroyed) {
+        if (destroyed || gone) {
             onClosed()
             return
         }
@@ -277,13 +331,37 @@ class IsomerWebViewHost(
         }
 
         /** The page's process went (its memory taken back, or a crash): the
-         *  guest with it. The web view can't be used again; the app's next
-         *  session is a new host's. */
+         *  guest with it. The web view can't be used again: it is removed and
+         *  destroyed, and the owner told, to make a new host. */
         override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+            if (gone) return true
+            gone = true
+            val drew = !firstMessage
+            Log.w(TAG, "[webview] the page's renderer went (${if (detail.didCrash()) "crashed" else "taken back"}); a new web view follows")
             end("the web view's process ended")
-            destroyed = true
+            destroy()
+            main.post { onGone(drew) }
             return true
         }
+
+        /** A navigation the page starts: only within the site. */
+        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
+            refuse(request.url, followed = request.isForMainFrame && request.hasGesture() && !request.isRedirect)
+
+        @Deprecated("Android 6.0's; the request's form above from 7.0")
+        override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean =
+            refuse(Uri.parse(url), followed = false)
+    }
+
+    /** Whether a navigation the page starts is refused: anything but the
+     *  site's own folder. One the person followed (a link tapped, never a
+     *  redirect or a script's) to the web goes to the system's browser. */
+    private fun refuse(url: Uri, followed: Boolean): Boolean {
+        val path = url.path ?: ""
+        if (url.scheme == "https" && url.host == Uri.parse(ORIGIN).host && path.startsWith(root)) return false
+        Log.w(TAG, "[webview] refused a navigation off the site: $url")
+        if (followed && (url.scheme == "https" || url.scheme == "http")) HostServices.openUrl(url.toString())
+        return true
     }
 
     /** A file of the site, from the APK's assets, as a browser needs it: its
@@ -345,10 +423,22 @@ fun IsomerWebViewApp(
     onCommand: (String, String) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
-    val host = remember(site) { IsomerWebViewHost(context, site, pageQuery) }
+    // A new host (and session) each time the page's renderer goes; three in
+    // a row without a frame drawn, and it stops (a page that can't start).
+    var generation by remember { mutableStateOf(0) }
+    var failures by remember { mutableStateOf(0) }
+    val host = remember(site, generation) {
+        IsomerWebViewHost(context, site, pageQuery) { drew ->
+            failures = if (drew) 0 else failures + 1
+            if (failures < 3) generation++
+            else Log.e("Isomer", "[webview] the page's renderer went three times without drawing: not started again")
+        }
+    }
     DisposableEffect(host) { onDispose { host.destroy() } }
     Box(modifier.fillMaxSize()) {
-        AndroidView(factory = { host.webView }, modifier = Modifier.size(1.dp).alpha(0.01f))
-        IsomerRemote(host.channel, Modifier.fillMaxSize(), environment, onCommand)
+        key(host) {
+            AndroidView(factory = { host.webView }, modifier = Modifier.size(1.dp).alpha(0.01f))
+            IsomerRemote(host.channel, Modifier.fillMaxSize(), environment, onCommand)
+        }
     }
 }

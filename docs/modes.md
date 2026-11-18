@@ -73,7 +73,13 @@ hot-reload as wasm and ship compiled):
   session message's bytes as base64 (webview.html takes either channel,
   WebKit's handler or a port). `IsomerWebViewApp(site:)` keeps the web view
   1 × 1 dp and nearly transparent, attached, behind `IsomerRemote(channel)`,
-  the Compose renderer. A WebView rather than JavaScriptSandbox
+  the Compose renderer. The page never leaves the site: a navigation it
+  starts anywhere else (a link, a redirect, `location`) is refused, and one
+  the person followed goes to the system's browser. When its renderer
+  process goes (taken back for memory, or crashed), the web view is removed
+  and destroyed, as Android requires, and a new host starts a new session
+  (its first frame the whole tree, as a remote app's reconnect; three in a
+  row without drawing and it stops). A WebView rather than JavaScriptSandbox
   (androidx.javascriptengine, the same V8 with no view): the page measures
   text with a canvas and keeps the app's files in IndexedDB, and its
   runtime is ES modules and fetch, none of which the sandbox has; and the
@@ -106,8 +112,12 @@ hot-reload as wasm and ship compiled):
   there taps yet. On Android, verify's `android` job (GitHub's emulator,
   after the Storybook's stories) opens the web-view app on
   state.observableobject, taps its button and reads the count change on the
-  screen (tools/ci/android_webview_test.sh, uiautomator), then starts it
-  cold again with and without the reactor's cache, keeping the times.
+  screen (tools/ci/android_webview_test.sh, uiautomator); sends the page
+  off its site (refused, a second tap still counts) and crashes its
+  renderer (the app draws again and takes a tap), through a debuggable
+  build's hooks (`--es isomerDebug navigateAway|crashRenderer`); then
+  starts it cold again with and without the reactor's cache, keeping the
+  times.
 - **Open**: Linux's and Windows' heads (WebKitGTK or JavaScriptCore, and
   WebView2, as transports: TODO.md); the platform services the page lacks
   (the app's container for files, the keychain, the clipboard, networking
