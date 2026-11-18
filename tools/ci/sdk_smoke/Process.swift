@@ -33,7 +33,7 @@ func run(_ arguments: [String], in directory: String? = nil, capture: Bool = fal
     var captured: URL?
     if capture {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("sdk-smoke-\(UUID().uuidString)")
-        FileManager.default.createFile(atPath: url.path, contents: nil)
+        _ = FileManager.default.createFile(atPath: url.path, contents: nil)
         let handle = try FileHandle(forWritingTo: url)
         process.standardOutput = handle
         captured = url
@@ -49,6 +49,7 @@ func run(_ arguments: [String], in directory: String? = nil, capture: Bool = fal
     return (process.terminationStatus, output)
 }
 
+@discardableResult
 func runChecked(_ arguments: [String], in directory: String? = nil, capture: Bool = false) throws -> String {
     let result = try run(arguments, in: directory, capture: capture)
     guard result.status == 0 else {

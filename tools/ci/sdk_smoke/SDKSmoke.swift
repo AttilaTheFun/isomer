@@ -173,20 +173,28 @@ struct Build: ParsableCommand {
     @Option(name: .customLong("bazel-arg"), help: "A Bazel build option. Repeatable.")
     var bazelArgs: [String] = []
 
+    // armv7 isn't among the defaults: rules_swift's Android toolchain names
+    // it by the NDK's triple, arm-unknown-linux-android, where the SDK's
+    // modules are armv7-unknown-linux-android ("could not find module
+    // 'Swift'"; TODO.md). The SDK's own build links and checks armv7.
+    @Option(name: .customLong("arch"), help: "An Android architecture to link the JNI library for (aarch64, x86_64; armv7 once rules_swift builds it). Repeatable.")
+    var arches: [String] = ["aarch64", "x86_64"]
+
     @Flag(help: "Leave out the APKs (the JNI libraries alone).")
     var noApks = false
 
     @Flag(help: "Leave out the WASI command.")
     var noWasm = false
 
+    @discardableResult
     func bazelCommand(_ command: String, _ arguments: [String], capture: Bool = false) throws -> String {
         try runChecked([bazel] + startupArgs + [command] + bazelArgs + arguments, in: fixture.path, capture: capture)
     }
 
     func run() throws {
         let cell = try fixture.cell()
-        try bazelCommand("build", ["//:smoke_android_aarch64_so", "//:smoke_android_x86_64_so", "//:smoke_android_armv7_so"])
-        print("PASS the JNI library links for aarch64, x86_64 and armv7 at Android API \(cell.api)")
+        try bazelCommand("build", arches.map { "//:smoke_android_\($0)_so" })
+        print("PASS the JNI library links for \(arches.joined(separator: ", ")) at Android API \(cell.api)")
         if !noApks {
             for (arch, abi) in [("aarch64", "arm64-v8a"), ("x86_64", "x86_64")] {
                 try bazelCommand("build", ["//:smoke_apk_\(arch)", "--android_platforms=@rules_android//:\(abi)"])
@@ -242,6 +250,7 @@ struct RunAndroid: ParsableCommand {
     @Option(help: "How long to wait for the checks, in seconds.")
     var timeout: Int = 120
 
+    @discardableResult
     func adbRun(_ arguments: [String], capture: Bool = false) throws -> String {
         try runChecked([adb, "-s", serial] + arguments, capture: capture)
     }
