@@ -236,7 +236,9 @@ launch` or `terminate`, tried once more if it was ended; 20 s for
 `launchctl` and for the log): simctl can stop answering while SpringBoard
 is busy, and a launcher stuck in one woke the app no more, so the test's
 command timed out; GitHub's Mac runners are at times slow enough that
-shorter deadlines (15 s) ended calls that would have answered. In CI
+shorter deadlines (15 s) ended calls that would have answered. A
+wake's launches run in the background, beside the test's requests, and a
+wake 20 s after one that hasn't answered starts another beside it. In CI
 (tools/ci/hosted_headful_test.sh) a test that failed while a launcher's
 call gave no answer runs again, CoreSimulator started again first. Each wake is in the test's
 log with the time, and the app's driver says on standard error when its

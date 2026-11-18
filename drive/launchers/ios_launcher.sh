@@ -44,6 +44,10 @@ scratch="$(mktemp -d "${TMPDIR:-/tmp}/ios_launcher.XXXXXX")"
 exec 3>&2
 # The child `bounded` waits on.
 child=""
+# A wake's bringing the app forward, in the background, and since when.
+waking=""
+waking_since=0
+wakes=0
 # A child command, given at most <seconds>: run in the background and
 # waited for a tenth of a second at a time, so that SIGTERM's trap (`stop`)
 # runs at once (bash runs a trap only once the child in front returns), and
@@ -96,6 +100,7 @@ patient() {
 }
 stop() {
     [ -n "$child" ] && kill -KILL "$child" 2> /dev/null
+    [ -n "$waking" ] && kill -KILL "$waking" 2> /dev/null
     # (Within HeadlessApp's 10 s before its SIGKILL: the next launch ends
     # an app left running anyway.)
     bounded 8 "simctl terminate" xcrun simctl terminate "$udid" "$bundle" > /dev/null 2>&1
@@ -244,14 +249,42 @@ scene() {
 # brought to the front if iOS has suspended it; otherwise it is working (a
 # long `wait`), or hung, which the test's own timeout says. Each one said
 # in the test's log, with the time.
+#
+# The wake's launches run in the background, beside the requests: on a
+# slow runner a launch can take more than the command's own timeout to
+# answer, and one that hangs mustn't keep the next wake from trying. While
+# one is under 20 s old the next wake leaves it be; after that another
+# starts beside it (the first not ended: it may only be slow).
 wake() {
+    local now
+    # (The process a wake's launch found: iOS may have ended the app while
+    # it was away.)
+    if [ -s "$scratch/woken" ]; then
+        now="$(cat "$scratch/woken")"
+        rm -f "$scratch/woken"
+        if [ -n "${now##*: }" ] && [ "${now##*: }" != "$pid" ]; then
+            echo "ios_launcher: $bundle started again (pid ${now##*: }, was $pid): what it held is gone" >&2
+            pid="${now##*: }"
+        fi
+    fi
     if ! suspended; then
         echo "ios_launcher: $(date +%T) wake: $bundle isn't suspended (a command waiting on it: working, or hung)" >&2
         return 0
     fi
+    if [ -n "$waking" ] && kill -0 "$waking" 2> /dev/null && [ $((SECONDS - waking_since)) -lt 20 ]; then
+        echo "ios_launcher: $(date +%T) wake: $bundle is being brought to the front (for $((SECONDS - waking_since)) s)" >&2
+        return 0
+    fi
     echo "ios_launcher: $(date +%T) wake: $bundle was suspended (a command waiting on it): brought to the front" >&2
-    bring_forward && return 0
-    echo "ios_launcher: $(date +%T) wake: $bundle not brought to the front: again at the next wake" >&2
+    away=0
+    wakes=$((wakes + 1))
+    (
+        bounded 60 "simctl launch SpringBoard" xcrun simctl launch "$udid" com.apple.springboard > /dev/null 2>&1
+        bounded 60 "simctl launch" xcrun simctl launch "$udid" "$bundle" > "$scratch/woken.$wakes" 2> /dev/null &&
+            mv "$scratch/woken.$wakes" "$scratch/woken"
+    ) &
+    waking=$!
+    waking_since=$SECONDS
 }
 # A picture, turned from the simulator's upright frame to the interface's
 # orientation (the app's driver says which, in the request) when the two
