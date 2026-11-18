@@ -1,0 +1,37 @@
+load("@rules_swift//swift:swift.bzl", "swift_binary", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# Every module of Isomer's Swift SDKs touched (Checks.swift), through plain
+# imports: no Foundation dependency declared anywhere, as a consumer writes.
+swift_library(
+    name = "checks",
+    srcs = ["Checks.swift"],
+    module_name = "SDKSmoke",
+    deps = [
+        "@isomer//:isomer",
+        "@sdk_consumer_dep//:dep",
+    ],
+)
+
+# The checks as a JNI library's export (BUILD.bazel's kt_swift_library).
+swift_library(
+    name = "bridge",
+    srcs = ["Bridge.swift"],
+    module_name = "SmokeBridgeSwift",
+    deps = [
+        ":checks",
+        "@isomer//swift_ffi/swift_ffi",
+    ],
+)
+
+# The checks as a WASI command (wasm32-unknown-wasip1), run under WasmKit by
+# tools/ci/sdk_smoke. A wasm program needs a 16 MiB stack (isomer's
+# AGENTS.md).
+swift_binary(
+    name = "smoke_command",
+    srcs = ["main.swift"],
+    linkopts = ["-Wl,-z,stack-size=16777216"],
+    target_compatible_with = ["@platforms//os:wasi"],
+    deps = [":checks"],
+)

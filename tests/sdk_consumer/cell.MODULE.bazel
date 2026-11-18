@@ -1,0 +1,20 @@
+# What a consumer's upgrade changes: isomer's version, Isomer's Swift SDKs
+# and the NDK's API level. tools/ci/sdk_smoke writes this file for each cell
+# it builds; as committed, the release consumers have now.
+bazel_dep(name = "isomer", version = "0.57.1")
+
+_swift = use_extension("@rules_swift//swift:extensions.bzl", "swift")
+_swift.android_sdk(
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_android-i18n.artifactbundle.tar.gz",
+    sha256 = "9ed7cd5051cc276acd14a5210d72311f2b4b7984c4bdaa77dd25bafad2170d93",
+)
+_swift.wasm_sdk(
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_wasm-i18n.artifactbundle.tar.gz",
+    sha256 = "cc3423d1dfa969e1fb255ed324af6a9e3c7dedc06b75d90a3ff74adcce10877c",
+)
+
+_android = use_extension("@hermetic_android_toolchains//:extensions.bzl", "android", dev_dependency = True)
+_android.ndk(
+    api_level = 23,
+    version = "r30",
+)

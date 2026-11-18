@@ -1,0 +1,124 @@
+"""A consumer of isomer's release and of Isomer's Swift SDKs, shaped as an
+app outside this repository is (docs/hermetic_toolchains.md, "The SDKs'
+checks"): isomer by version from the project's registry, Android at
+minSdk 23 on the -i18n SDK, a kt_swift_library's JNI library
+(swift_binary(linkshared)), a dependency module with an isolated swift_deps
+graph of its own, an older bazel_features and rules_android held at the root, on Bazel 8.
+
+What a consumer changes when it upgrades (isomer's version, the SDKs' URLs
+and checksums, the NDK's API level) is cell.MODULE.bazel and cell.bzl:
+tools/ci/sdk_smoke writes them for each cell it builds (the previous
+release, then the candidate, in one output base, as a consumer upgrades),
+and the files here are the release consumers have now.
+
+    cd tests/sdk_consumer && bazel build //:smoke_android_aarch64_so
+"""
+
+module(name = "isomer_sdk_consumer")
+
+# isomer, the SDKs and the NDK's API level: what an upgrade changes.
+include("//:cell.MODULE.bazel")
+
+# rules_swift: isomer's, from the registry by version (README).
+bazel_dep(name = "rules_swift", version = "4.3.0.isomer.1")
+bazel_dep(name = "rules_swift_package_manager", version = "1.25.0.isomer.1")
+bazel_dep(name = "rules_kotlin", version = "2.2.2")
+bazel_dep(name = "rules_java", version = "9.3.0")
+bazel_dep(name = "rules_cc", version = "0.2.18")
+bazel_dep(name = "platforms", version = "1.1.0")
+bazel_dep(name = "bazel_skylib", version = "1.9.0")
+
+# An older bazel_features held at the root, as an app that pins one does:
+# the oldest rules_swift 4.3.0 asks for. isomer and its dependencies must
+# build with it.
+bazel_dep(name = "bazel_features", version = "1.54.0")
+single_version_override(
+    module_name = "bazel_features",
+    version = "1.54.0",
+)
+
+# An older rules_android held at the root, as an app on a fork of 0.6.0
+# does (isomer asks for 0.7.3). hermetic_android_toolchains 0.5.0.isomer.2
+# makes @androidsdk load with it: .1 loaded string_flag from rules_android's
+# helper.bzl, which only 0.7 has.
+bazel_dep(name = "rules_android", version = "0.6.0")
+single_version_override(
+    module_name = "rules_android",
+    version = "0.6.0",
+)
+
+# A dependency module with Swift packages of its own, in an isolated
+# swift_deps graph (dep/MODULE.bazel).
+bazel_dep(name = "sdk_consumer_dep", version = "0.0.0")
+local_path_override(
+    module_name = "sdk_consumer_dep",
+    path = "dep",
+)
+
+swift = use_extension("@rules_swift//swift:extensions.bzl", "swift")
+swift.toolchain(
+    name = "swift_toolchain",
+    swift_version = "6.4.2",
+)
+use_repo(swift, "swift_toolchain")
+
+# Only the platforms built: Android's three architectures and the web.
+register_toolchains(
+    "@swift_toolchain//:swift_toolchain_exec_ubuntu24.04",
+    "@swift_toolchain//:swift_toolchain_exec_ubuntu24.04-aarch64",
+    "@swift_toolchain//:cc_toolchain_wasm32_ubuntu24.04",
+    "@swift_toolchain//:cc_toolchain_wasm32_ubuntu24.04-aarch64",
+    "@swift_toolchain//:swift_toolchain_wasm32_ubuntu24.04",
+    "@swift_toolchain//:swift_toolchain_wasm32_ubuntu24.04-aarch64",
+    "@swift_toolchain//:swift_toolchain_android_aarch64_ubuntu24.04",
+    "@swift_toolchain//:swift_toolchain_android_aarch64_ubuntu24.04-aarch64",
+    "@swift_toolchain//:swift_toolchain_android_x86_64_ubuntu24.04",
+    "@swift_toolchain//:swift_toolchain_android_x86_64_ubuntu24.04-aarch64",
+    "@swift_toolchain//:swift_toolchain_android_armv7_ubuntu24.04",
+    "@swift_toolchain//:swift_toolchain_android_armv7_ubuntu24.04-aarch64",
+)
+
+bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.2")
+android = use_extension("@hermetic_android_toolchains//:extensions.bzl", "android", dev_dependency = True)
+android.sdk(
+    build_tools_version = "35.0.0",
+    version = "35",
+)
+use_repo(android, "androidndk", "androidsdk")
+rules_android_sdk = use_extension(
+    "@rules_android//rules/android_sdk_repository:rule.bzl",
+    "android_sdk_repository_extension",
+    dev_dependency = True,
+)
+override_repo(rules_android_sdk, "androidsdk")
+register_toolchains(
+    "@androidndk//:all",
+    "@androidsdk//:all",
+    dev_dependency = True,
+)
+
+# rules_android's tools' Maven, pinned by isomer's lock file
+# (docs/android_maven.md), as the examples do.
+bazel_dep(name = "rules_jvm_external", version = "7.1")
+maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
+maven.install(
+    name = "rules_android_maven",
+    aar_import_bzl_label = "@rules_android//rules:rules.bzl",
+    known_contributing_modules = ["rules_android"],
+    lock_file = "@isomer//:rules_android_maven_install.json",
+    repositories = [
+        "https://maven.google.com",
+        "https://repo1.maven.org/maven2",
+    ],
+    use_starlark_android_rules = True,
+)
+
+# Isomer's Swift (README, "Consuming isomer"): isomer in the Package.swift
+# the root's graph reads.
+swift_deps = use_extension("@rules_swift_package_manager//:extensions.bzl", "swift_deps")
+swift_deps.from_package(
+    resolved = "//third_party/swift_packages:Package.resolved",
+    swift = "//third_party/swift_packages:Package.swift",
+)
+use_repo(swift_deps, "swift_package")
+inject_repo(swift_deps, "isomer")
