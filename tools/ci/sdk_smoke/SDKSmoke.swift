@@ -252,7 +252,11 @@ struct Build: ParsableCommand {
             let platform = "--platforms=@isomer//swift_ffi/rules:wasm32-wasip1"
             try bazelCommand("build", ["//smoke:smoke_command", platform])
             let module = try output(of: "//smoke:smoke_command", [platform], suffix: ".wasm")
-            let output = try runChecked([bazel] + startupArgs + ["run"] + bazelArgs + ["@isomer//tools/wasm/wasi_run", "--", module],
+            // A /tmp of its own (FileManager's check reads it), as the web gives one.
+            let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("sdk-smoke-wasi-\(UUID().uuidString)").path
+            try FileManager.default.createDirectory(atPath: tmp, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(atPath: tmp) }
+            let output = try runChecked([bazel] + startupArgs + ["run"] + bazelArgs + ["@isomer//tools/wasm/wasi_run", "--", "--map-dir=/tmp::\(tmp)", module],
                                         in: fixture.path, capture: true)
             try check(lines: output.split(separator: "\n").map(String.init), i18n: cell.i18n, where: "the WASI command under WasmKit")
         }
