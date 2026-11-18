@@ -894,6 +894,17 @@ build --strategy=CppArchive=local
 
 Each release's notes have an Upgrading section; these things are easy to miss:
 
+- **`wasm_sdk_bundle` carries Foundation again (since 0.57).** 0.56's bundle
+  had no Foundation, CoreGraphics or Combine (they left the package for the
+  Swift SDK); 0.57's takes them from the registered wasm SDK
+  (`sdk_foundation = False` leaves them out). A rule of your own that added
+  them, as the Playground's `wasm_sdk_foundation` did, can go.
+- **Web-view mode on Android (since 0.57).** `isomer_application` builds an
+  Android app in `--@isomer//:mode=webview` (`isomer_android_webview_app`):
+  the app's site in its APK, run in a WebView it keeps out of sight and drawn
+  by the Compose renderer (docs/modes.md). Android 6's own WebView runs no
+  wasm: such an app needs an updated WebView there.
+
 - **Foundation is the Swift SDK's on Android and the web (since 0.56).**
   - Register Isomer's Swift SDKs ("Isomer's Swift SDKs" above): replace
     `swift.android_sdk()` and `swift.wasm_sdk()` with the snippet of each
