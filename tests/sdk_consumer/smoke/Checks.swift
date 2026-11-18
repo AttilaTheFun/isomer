@@ -14,7 +14,9 @@ import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
+#if canImport(Isomer)
 import Isomer
+#endif
 import SDKConsumerDep
 
 public enum SmokeChecks {
@@ -91,10 +93,12 @@ public enum SmokeChecks {
             let object = try JSONSerialization.jsonObject(with: Data(#"{"n":7}"#.utf8)) as? [String: Any]
             return object?["n"] as? Int == 7 ? nil : "n \(String(describing: object?["n"]))"
         }
+        #if canImport(Isomer)
         check("Isomer's Bridge") {
             Bridge.log("sdk smoke")
             return Bridge.epochMilliseconds() > 0 ? nil : "epoch"
         }
+        #endif
         check("a Swift package from an isolated graph") {
             SDKConsumerDep.chunked([1, 2, 3, 4, 5]) == [[1, 2], [3, 4], [5]] ? nil : "chunks"
         }
