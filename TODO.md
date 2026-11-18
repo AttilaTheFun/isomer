@@ -321,6 +321,12 @@ JavaScript engine, and WasmKit goes:
   - Both: whether their engines keep the reactor's code beside a Cache
     Storage response (WebView2 is Chromium's V8, as Android's: likely);
     measured as docs/modes.md measures Android's.
+- Android's web view, hardening (from #245's review): it refuses
+  navigations off the site in `shouldOverrideUrlLoading`, which WebView
+  doesn't call for every subframe load. Our bundled site frames nothing
+  off-site, so it holds today; should a page ever iframe something
+  off-site, `shouldInterceptRequest` should refuse frames' subresources that
+  aren't the site's, the airtight version.
 - Side modules and mixed mode (isomer#188 and #213, an outside
   contributor's; merged as #215 for 0.54, docs/side_modules.md): open, his
   WasmKit commits (AttilaTheFun/WasmKit's isomer/side-modules, a patch on
