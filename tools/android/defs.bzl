@@ -209,10 +209,14 @@ def _app_assets_impl(ctx):
     whole, or a file, by its basename) at the root, each of `fonts` in
     `fonts/` by its basename, where the runtime looks for `Font.custom`'s
     typefaces (HostServices.bundledTypeface), and each of `resources` in
-    `bundle/`, which the runtime unpacks as Bundle.main (AppDirectories.kt).
+    `bundle/`, which the runtime unpacks as Bundle.main (AppDirectories.kt);
+    `site` (an isomer_web_app's `<name>_site` directory) in `site/`, where an
+    app in web-view mode serves it from (IsomerWebViewHost.kt).
     """
     out = ctx.actions.declare_directory(ctx.label.name)
     cmds = ['mkdir -p "%s/fonts"' % out.path]
+    for f in ctx.files.site:
+        cmds.append('mkdir -p "%s/site" && cp -RL "%s/." "%s/site/"' % (out.path, f.path, out.path))
     for f in ctx.files.assets:
         if f.is_directory:
             cmds.append('cp -R "%s/." "%s/"' % (f.path, out.path))
@@ -227,7 +231,7 @@ def _app_assets_impl(ctx):
         place = "bundle/%s/%s" % (folder, f.basename) if folder.endswith(".lproj") else "bundle/" + f.basename
         cmds.append('mkdir -p "$(dirname "%s/%s")" && cp "%s" "%s/%s"' % (out.path, place, f.path, out.path, place))
     ctx.actions.run_shell(
-        inputs = ctx.files.assets + ctx.files.fonts + ctx.files.resources,
+        inputs = ctx.files.assets + ctx.files.fonts + ctx.files.resources + ctx.files.site,
         outputs = [out],
         command = " && ".join(cmds),
         mnemonic = "AppAssets",
@@ -241,9 +245,131 @@ _app_assets = rule(
         "assets": attr.label_list(allow_files = True),
         "fonts": attr.label_list(allow_files = [".ttf", ".otf"]),
         "resources": attr.label_list(allow_files = True),
+        "site": attr.label_list(allow_files = True),
     },
-    doc = "An app's assets/ directory: its assets at the root, its fonts in fonts/, its bundle resources in bundle/.",
+    doc = "An app's assets/ directory: its assets at the root, its fonts in fonts/, its bundle resources in bundle/, a web app's site in site/.",
 )
+
+def isomer_android_webview_app(
+        name,
+        site,
+        package,
+        label = "Isomer",
+        assets = None,
+        fonts = [],
+        icon = None,
+        version_name = None,
+        version_code = None,
+        min_sdk_version = 28,
+        tags = [],
+        visibility = None):
+    """An Android app in web-view mode (docs/modes.md): `site` (an
+    isomer_web_app's `<name>_site`: its Swift as wasm, webview.html serving
+    its session) in the APK's assets/site/, run in a WebView the app keeps
+    out of sight, and drawn by the Compose renderer over the session protocol
+    (dev.isomer.runtime.IsomerWebViewApp; IsomerWebViewHost.kt). Kotlin and
+    Compose only: no Swift and no native library of Isomer's.
+
+    Declares `<name>` (`bazel run`: install and launch), `<name>_apk` (the
+    APK; `<name>_apk.apk`), and the generated activity (webview_activity.kt.tpl,
+    which passes every ISO_ extra of its intent to the app as its launch
+    environment).
+
+    `assets` (a `flat_assets` directory, or files) are the head's images by
+    name and `fonts` its `Font.custom` typefaces, as isomer_android_app's;
+    the page measures text with the site's own fonts/. `icon` a 192 × 192
+    PNG. The system WebView needs WebAssembly (Chrome 57 or later: any
+    updated WebView; Android 6.0's own is too old).
+    """
+    expand_template(
+        name = name + "_activity",
+        out = "generated/%s/MainActivity.kt" % name,
+        substitutions = {"{PACKAGE}": package},
+        tags = tags,
+        template = Label("//tools/android:webview_activity.kt.tpl"),
+    )
+    application_attrs = ""
+    kt_kwargs = {}
+    if icon:
+        copy_file(
+            name = name + "_icon",
+            src = icon,
+            out = "generated/%s/res/mipmap-xxxhdpi/ic_launcher.png" % name,
+            tags = tags,
+        )
+        application_attrs += '\n        android:icon="@mipmap/ic_launcher"'
+        application_attrs += '\n        android:roundIcon="@mipmap/ic_launcher"'
+        kt_kwargs["resource_files"] = [":%s_icon" % name]
+    version_attrs = ""
+    if version_code != None:
+        version_attrs += '\n    android:versionCode="%d"' % version_code
+    if version_name != None:
+        version_attrs += '\n    android:versionName="%s"' % version_name
+    expand_template(
+        name = name + "_manifest",
+        out = "generated/%s/AndroidManifest.xml" % name,
+        substitutions = {
+            "{PACKAGE}": package,
+            "{LABEL}": label,
+            "{EXTRA_INTENT_FILTERS}": "",
+            "{EXTRA_PERMISSIONS}": "",
+            "{APPLICATION_ATTRS}": application_attrs,
+            "{VERSION_ATTRS}": version_attrs,
+            "{MIN_SDK}": str(min_sdk_version),
+            "{EXTRA_APPLICATION}": "",
+        },
+        tags = tags,
+        template = Label("//tools/android:manifest.xml.tpl"),
+    )
+
+    # One assets/ directory: the site in site/, the head's images at the
+    # root and its fonts in fonts/.
+    asset_list = assets if type(assets) == "list" else ([assets] if assets else [])
+    _app_assets(
+        name = name + "_assets",
+        assets = asset_list,
+        fonts = fonts,
+        site = [site],
+        tags = tags,
+    )
+    androidx = Label("//android/maven:androidx")
+    kt_android_library(
+        name = name + "_lib",
+        srcs = [
+            ":%s_activity" % name,
+            # The Compose renderer as Kotlin alone (IsomerRemote and the tree
+            # it draws), and the web view the app runs in.
+            Label("//android/libraries/swift_ui:interpreter_kotlin"),
+            Label("//android/libraries/swift_ui:webview_head_kotlin"),
+        ],
+        assets = [":%s_assets" % name],
+        assets_dir = name + "_assets",
+        custom_package = package,
+        manifest = ":%s_manifest" % name,
+        plugins = [Label("//android/libraries/swift_ui:compose_compiler_plugin")],
+        tags = tags,
+        deps = [androidx],
+        **kt_kwargs
+    )
+    android_binary(
+        name = name + "_apk",
+        manifest = ":%s_manifest" % name,
+        # The reactor stored, not deflated: read as it is from the APK.
+        nocompress_extensions = [".wasm"],
+        tags = tags,
+        visibility = visibility,
+        deps = [
+            ":%s_lib" % name,
+            androidx,
+        ],
+    )
+    apk_install_run(
+        name = name,
+        activity = "%s/.MainActivity" % package,
+        apk = ":%s_apk.apk" % name,
+        tags = tags,
+        visibility = visibility,
+    )
 
 def apk_install_run(name, apk, activity, extras = "", **kwargs):
     """`bazel run`-able target: installs the APK via adb and launches it.

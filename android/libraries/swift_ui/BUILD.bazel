@@ -203,6 +203,16 @@ filegroup(
     ],
 )
 
+# An app in web-view mode (docs/modes.md): its Swift as wasm in a WebView the
+# app keeps out of sight (its isomer_web_app site in the APK's assets, the
+# page serving its session over a WebMessagePort), drawn by the interpreter
+# above (IsomerRemote): IsomerWebViewHost and IsomerWebViewApp. Kotlin and the
+# platform's android.webkit only; compiled beside :interpreter_kotlin.
+filegroup(
+    name = "webview_head_kotlin",
+    srcs = ["kotlin/dev/isomer/runtime/IsomerWebViewHost.kt"],
+)
+
 # What Isomer's Foundation asks of an Android host, in Kotlin and
 # Swift-free: HTTP over HttpURLConnection (IsomerHTTP), a WebSocket client
 # (IsomerWebSockets) and the app's directories in the environment
@@ -259,6 +269,7 @@ filegroup(
             "kotlin/dev/isomer/runtime/HostServices.kt",
             "kotlin/dev/isomer/runtime/ImagePickerHost.kt",
             "kotlin/dev/isomer/runtime/MediaPickerHost.kt",
+            "kotlin/dev/isomer/runtime/IsomerWebViewHost.kt",
             "kotlin/dev/isomer/runtime/RemoteIsomer.kt",
             "kotlin/dev/isomer/runtime/UNode.kt",
         ],

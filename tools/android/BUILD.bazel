@@ -9,6 +9,7 @@ exports_files([
     "defs.bzl",
     "extensions.bzl",
     "main_activity.kt.tpl",
+    "webview_activity.kt.tpl",
     "manifest.xml.tpl",
 ])
 

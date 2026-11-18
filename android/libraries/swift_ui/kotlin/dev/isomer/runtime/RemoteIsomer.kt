@@ -1,12 +1,18 @@
 package dev.isomer.runtime
 
-// Android's thin client for a remote session (shared/wire/session.proto): the
-// app's SwiftUI runs on a server, built headless; the phone holds only the
-// Compose renderer, the tree reader and a WebSocket (IsomerWebSockets). No
-// Swift and no native library: what the person does goes to the server as a
-// ClientMessage, each frame comes back as a tree.proto Patch.
+// Android's head for a session (shared/wire/session.proto): the app's SwiftUI
+// runs elsewhere, and the phone holds only the Compose renderer and the tree
+// reader. What the person does goes to the app as a ClientMessage, each frame
+// comes back as a tree.proto Patch. Elsewhere is a server, the app built
+// headless, over a WebSocket (IsomerWebSockets): no Swift and no native
+// library here.
 //
 //   setContent { IsomerRemote("ws://10.0.2.2:8090/session") }
+//
+// or the app's own page, its Swift as wasm in a web view this app keeps out
+// of sight (web-view mode, docs/modes.md; IsomerWebViewHost.kt), over the
+// web view's message port: `IsomerRemote(channel)` with any
+// IsomerSessionChannel.
 //
 // One session a process: the frames go to the interpreter's one tree
 // (ComposeTreeState), as a WasmView's do. The system's back goes to the app,
@@ -76,14 +82,80 @@ object SessionMessages {
     fun back() = Writer().message(12, Writer()).done()
 }
 
-/** One session with an app served headless: its socket, and the frames it brings into
- *  the interpreter's tree. */
-class RemoteSession(private val url: String, private val environment: Map<String, String>) {
-    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+/**
+ * A session's transport (docs/remote_sessions.md): carries the head's
+ * ClientMessages to the app and the app's ServerMessages back, each one
+ * message's bytes, in order. A WebSocket to an app served headless
+ * ([IsomerWebSocketChannel]), or the page of an app in web-view mode, in a
+ * web view this app owns (IsomerWebViewHost's `channel`).
+ */
+interface IsomerSessionChannel {
+    /** Opens the session: [start] is its first message. Each ServerMessage goes
+     *  to [onMessage] (on any thread), and [onClosed] is called once when the
+     *  session can't go on (the app ended it, or the channel broke). */
+    fun open(start: ByteArray, onMessage: (ByteArray) -> Unit, onClosed: () -> Unit)
+    /** One ClientMessage, after the start; what is sent before the channel is
+     *  up is sent once it is, in order. */
+    fun send(message: ByteArray)
+    /** The head's end of the session. */
+    fun close()
+}
+
+/** A session with an app served headless, over a WebSocket to its `url`. */
+class IsomerWebSocketChannel(private val url: String) : IsomerSessionChannel {
     @Volatile private var socket = 0
     @Volatile private var closed = false
     /** What was sent before the socket opened, sent once it is. */
     private val waiting = mutableListOf<ByteArray>()
+
+    override fun open(start: ByteArray, onMessage: (ByteArray) -> Unit, onClosed: () -> Unit) {
+        IsomerWebSockets.open(url, emptyList(), emptyList(), 30.0) { result ->
+            val id = result.getOrNull()
+            if (id == null || closed) {
+                if (id != null) IsomerWebSockets.close(id, 1000, "")
+                onClosed()
+                return@open
+            }
+            IsomerWebSockets.sendData(id, start) {}
+            synchronized(waiting) {
+                socket = id
+                for (message in waiting) IsomerWebSockets.sendData(id, message) {}
+                waiting.clear()
+            }
+            receive(id, onMessage, onClosed)
+        }
+    }
+
+    override fun send(message: ByteArray) {
+        synchronized(waiting) {
+            if (socket == 0) waiting.add(message) else IsomerWebSockets.sendData(socket, message) {}
+        }
+    }
+
+    override fun close() {
+        closed = true
+        if (socket != 0) IsomerWebSockets.close(socket, 1000, "")
+    }
+
+    private fun receive(id: Int, onMessage: (ByteArray) -> Unit, onClosed: () -> Unit) {
+        IsomerWebSockets.next(id) { result ->
+            val event = result.getOrNull()
+            if (event == null || event.kind == 2) {
+                onClosed()
+                return@next
+            }
+            if (event.kind == 1) onMessage(event.data)
+            receive(id, onMessage, onClosed)
+        }
+    }
+}
+
+/** One session with an app (served headless, or in a web view's page): its
+ *  channel, and the frames it brings into the interpreter's tree. */
+class RemoteSession(private val channel: IsomerSessionChannel) {
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+
+    constructor(url: String) : this(IsomerWebSocketChannel(url))
 
     var onCommand: (String, String) -> Unit = { _, _ -> }
     var onClosed: () -> Unit = {}
@@ -93,45 +165,16 @@ class RemoteSession(private val url: String, private val environment: Map<String
         IsoEventRouter.sink = { id, value -> send(SessionMessages.event(id, value)) }
         // The app's answer comes too late to keep a key from its field.
         IsoEventRouter.keySink = { id, value -> send(SessionMessages.event(id, value, key = true)); false }
-        IsomerWebSockets.open(url, emptyList(), emptyList(), 30.0) { result ->
-            val id = result.getOrNull()
-            if (id == null || closed) {
-                if (id != null) IsomerWebSockets.close(id, 1000, "")
-                main.post { onClosed() }
-                return@open
-            }
-            IsomerWebSockets.sendData(id, start) {}
-            synchronized(waiting) {
-                socket = id
-                for (message in waiting) IsomerWebSockets.sendData(id, message) {}
-                waiting.clear()
-            }
-            receive(id)
-        }
+        channel.open(
+            start,
+            onMessage = { bytes -> main.post { handle(bytes) } },
+            onClosed = { main.post { onClosed() } },
+        )
     }
 
-    fun send(message: ByteArray) {
-        synchronized(waiting) {
-            if (socket == 0) waiting.add(message) else IsomerWebSockets.sendData(socket, message) {}
-        }
-    }
+    fun send(message: ByteArray) = channel.send(message)
 
-    fun close() {
-        closed = true
-        if (socket != 0) IsomerWebSockets.close(socket, 1000, "")
-    }
-
-    private fun receive(id: Int) {
-        IsomerWebSockets.next(id) { result ->
-            val event = result.getOrNull()
-            if (event == null || event.kind == 2) {
-                main.post { onClosed() }
-                return@next
-            }
-            if (event.kind == 1) main.post { handle(event.data) }
-            receive(id)
-        }
-    }
+    fun close() = channel.close()
 
     /** A ServerMessage, on the main thread. */
     private fun handle(bytes: ByteArray) {
@@ -192,6 +235,23 @@ fun IsomerRemote(
     environment: Map<String, String> = emptyMap(),
     onCommand: (String, String) -> Unit = { _, _ -> },
 ) {
+    val channel = remember(url) { IsomerWebSocketChannel(url) }
+    IsomerRemote(channel, modifier, environment, onCommand)
+}
+
+/**
+ * An app's SwiftUI drawn here over a session channel of the caller's (a web
+ * view's page: IsomerWebViewApp): opened once the view has its size, each
+ * frame drawn with the Compose renderer. `environment` is the app's launch
+ * environment (its ISO_ entries).
+ */
+@Composable
+fun IsomerRemote(
+    channel: IsomerSessionChannel,
+    modifier: Modifier = Modifier,
+    environment: Map<String, String> = emptyMap(),
+    onCommand: (String, String) -> Unit = { _, _ -> },
+) {
     val context = LocalContext.current
     val density = LocalDensity.current.density
     val dark = isSystemInDarkTheme()
@@ -201,7 +261,7 @@ fun IsomerRemote(
     HostServices.onImageLoaded = {
         android.os.Handler(android.os.Looper.getMainLooper()).post { ComposeTreeState.imageTick.value++ }
     }
-    val session = remember(url, environment) { RemoteSession(url, environment) }
+    val session = remember(channel, environment) { RemoteSession(channel) }
     session.onCommand = onCommand
     DisposableEffect(session) { onDispose { session.close() } }
     var started by remember(session) { mutableStateOf(false) }

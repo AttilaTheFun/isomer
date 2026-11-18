@@ -5,16 +5,23 @@
   serves its session (runtime/session_host.js); the native app draws it.
   Every isomer_web_app site has it beside index.html.
 
-  The channel is WebKit's: the native app sends each ClientMessage with
-  `callAsyncJavaScript("isomerSession.receive(message)")`, its bytes as
-  base64, and takes each ServerMessage, base64 too, from the `isomer`
-  message handler (apple/libraries/webview_head). Besides the messages the
-  handler gets `{ ready: true }` once the page can take the session's start,
-  and `{ error }` if the app ends it.
+  The channel is the native app's:
+  - WebKit's (the iPhone and the Mac, apple/libraries/webview_head): the app
+    sends each ClientMessage with
+    `callAsyncJavaScript("isomerSession.receive(message)")`, its bytes as
+    base64, and takes each ServerMessage, base64 too, from the `isomer`
+    message handler. Besides the messages the handler gets `{ ready: true }`
+    once the page can take the session's start, and `{ error }` if the app
+    ends it.
+  - A MessagePort (Android's WebView, IsomerWebViewHost.kt): once the page
+    has loaded, the app posts it "isomer" with one end of a message channel;
+    every message either way on that port is a string: a session message's
+    bytes as base64, or the same `{"ready":true}` and `{"error":…}` as JSON.
 
   The query names the app (`?bundleIdentifier=…&bundleName=…&bundleVersion=…
   &bundleBuild=…`, Bundle.main's values in the guest; its files are kept
-  under its identifier).
+  under its identifier); `reactorCache=0` compiles the reactor without the
+  page's Cache Storage (session_host.js's `cacheReactor`), to compare.
 -->
 <html>
 <head>
@@ -27,19 +34,35 @@
 import { createSessionHost } from "./runtime/session_host.js";
 import { fromBase64, toBase64 } from "./runtime/session_messages.js";
 
-const channel = window.webkit?.messageHandlers?.isomer;
-if (!channel) throw new Error("webview.html: no `isomer` message handler (WebKit's) to serve the session over");
+// The native app's channel: WebKit's message handler, or a MessagePort the
+// app hands the page (a web view without WebKit's handlers: Android's).
+const webkit = window.webkit?.messageHandlers?.isomer;
+const channel = webkit
+  ? { post: (message) => webkit.postMessage(message), control: (message) => webkit.postMessage(message),
+      listen: (receive) => { window.isomerSession = { receive }; } }
+  : await new Promise((resolve) => {
+      window.addEventListener("message", function take(event) {
+        const port = event.data === "isomer" ? event.ports?.[0] : undefined;
+        if (!port) return;
+        window.removeEventListener("message", take);
+        resolve({ post: (message) => port.postMessage(message), control: (message) => port.postMessage(JSON.stringify(message)),
+                  listen: (receive) => { port.onmessage = (event) => receive(event.data); } });
+      });
+    });
 const query = new URLSearchParams(location.search);
 const host = createSessionHost({
-  send: (bytes) => channel.postMessage(toBase64(bytes)),
-  onEnd: (error) => channel.postMessage({ error: String(error?.stack ?? error) }),
+  send: (bytes) => channel.post(toBase64(bytes)),
+  onEnd: (error) => channel.control({ error: String(error?.stack ?? error) }),
   bundleIdentifier: query.get("bundleIdentifier") ?? undefined,
   bundleName: query.get("bundleName") ?? undefined,
   bundleVersion: query.get("bundleVersion") ?? undefined,
   bundleBuild: query.get("bundleBuild") ?? undefined,
+  // The reactor compiled from the page's Cache Storage (session_host.js);
+  // `?reactorCache=0` compiles it from the app's files every time.
+  cacheReactor: query.get("reactorCache") !== "0",
 });
-window.isomerSession = { receive: (message) => host.receive(fromBase64(message)) };
-channel.postMessage({ ready: true });
+channel.listen((message) => host.receive(fromBase64(message)));
+channel.control({ ready: true });
 </script>
 </body>
 </html>
