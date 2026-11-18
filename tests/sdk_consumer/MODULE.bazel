@@ -37,15 +37,13 @@ single_version_override(
     version = "1.54.0",
 )
 
-# An older rules_android held at the root, as an app on a fork of 0.6.0
-# does (isomer asks for 0.7.3). hermetic_android_toolchains 0.5.0.isomer.2
-# makes @androidsdk load with it: .1 loaded string_flag from rules_android's
-# helper.bzl, which only 0.7 has.
-bazel_dep(name = "rules_android", version = "0.6.0")
-single_version_override(
-    module_name = "rules_android",
-    version = "0.6.0",
-)
+# rules_android is the cell's (cell.MODULE.bazel): 0.6.0 held at the root,
+# as an app on a fork of it does (isomer asks for 0.7.3), for the JNI
+# library's link; 0.7.3 for the APKs, whose tools' Maven isomer's lock file
+# pins (0.6.0's, unpinned, needs a host JDK to resolve).
+# hermetic_android_toolchains 0.5.0.isomer.2 makes @androidsdk load with
+# 0.6.0: .1 loaded string_flag from rules_android's helper.bzl, which only
+# 0.7 has.
 
 # A dependency module with Swift packages of its own, in an isolated
 # swift_deps graph (dep/MODULE.bazel).
@@ -96,9 +94,6 @@ register_toolchains(
     "@androidsdk//:all",
     dev_dependency = True,
 )
-
-# rules_android's tools' Maven is rules_android's own to resolve: isomer's
-# lock file (docs/android_maven.md) is 0.7.3's artifacts, not 0.6.0's.
 
 # Isomer's Swift (README, "Consuming isomer"): isomer in the Package.swift
 # the root's graph reads.

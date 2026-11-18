@@ -42,18 +42,20 @@ struct FixtureOption: ParsableArguments {
     var path: String { absolute(fixture) }
 
     /// The cell the fixture is set to: cell.bzl's values.
-    func cell() throws -> (api: Int, i18n: Bool) {
+    func cell() throws -> (api: Int, i18n: Bool, rulesAndroid: String) {
         let text = try String(contentsOfFile: "\(path)/cell.bzl", encoding: .utf8)
         var api = 0
         var i18n = false
+        var rulesAndroid = ""
         for line in text.split(separator: "\n") {
             let parts = line.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
             guard parts.count == 2 else { continue }
             if parts[0] == "MIN_SDK_VERSION" { api = Int(parts[1]) ?? 0 }
             if parts[0] == "I18N" { i18n = parts[1] == "True" }
+            if parts[0] == "RULES_ANDROID" { rulesAndroid = parts[1].trimmingCharacters(in: CharacterSet(charactersIn: "\"")) }
         }
         guard api > 0 else { throw ToolFailure("\(path)/cell.bzl names no MIN_SDK_VERSION") }
-        return (api, i18n)
+        return (api, i18n, rulesAndroid)
     }
 }
 
@@ -76,6 +78,9 @@ struct Cell: ParsableCommand {
 
     @Option(help: "The NDK's API level and the APK's minSdkVersion.")
     var api: Int
+
+    @Option(help: "rules_android, held at the root: 0.6.0 (an older one, as an app may hold; the JNI library and the WASI command only) or 0.7.3 (isomer's; the APKs too, its tools' Maven pinned by isomer's lock file).")
+    var rulesAndroid: String = "0.6.0"
 
     @Option(help: "The SDKs' Swift release.")
     var swiftVersion: String = "6.4.2"
@@ -112,17 +117,35 @@ struct Cell: ParsableCommand {
             packageLine = ".package(url: \"https://github.com/AttilaTheFun/isomer.git\", revision: \"v\(isomer)\"),"
         }
 
-        let header = "# Written by tools/ci/sdk_smoke cell (--isomer \(isomer) --variant \(variant.rawValue) --api \(api))."
-        let module = [header, "# What a consumer's upgrade changes: isomer, Isomer's Swift SDKs, the NDK's API level."]
+        // rules_android held at the root; with isomer's own (0.7.x), its
+        // tools' Maven pinned by isomer's lock file, as the examples do.
+        var rulesAndroidLines = [
+            "", "bazel_dep(name = \"rules_android\", version = \"\(rulesAndroid)\")",
+            "single_version_override(", "    module_name = \"rules_android\",", "    version = \"\(rulesAndroid)\",", ")",
+        ]
+        if rulesAndroid.hasPrefix("0.7.") {
+            rulesAndroidLines += [
+                "", "bazel_dep(name = \"rules_jvm_external\", version = \"7.1\")",
+                "_maven = use_extension(\"@rules_jvm_external//:extensions.bzl\", \"maven\")",
+                "_maven.install(", "    name = \"rules_android_maven\",",
+                "    aar_import_bzl_label = \"@rules_android//rules:rules.bzl\",",
+                "    known_contributing_modules = [\"rules_android\"],",
+                "    lock_file = \"@isomer//:rules_android_maven_install.json\",",
+                "    repositories = [\"https://maven.google.com\", \"https://repo1.maven.org/maven2\"],",
+                "    use_starlark_android_rules = True,", ")",
+            ]
+        }
+        let header = "# Written by tools/ci/sdk_smoke cell (--isomer \(isomer) --variant \(variant.rawValue) --api \(api) --rules-android \(rulesAndroid))."
+        let module = [header, "# What a consumer's upgrade changes: isomer, Isomer's Swift SDKs, the NDK's API level, rules_android."]
             + isomerLines + ["", "_swift = use_extension(\"@rules_swift//swift:extensions.bzl\", \"swift\")"] + sdkLines + [
                 "",
                 "_android = use_extension(\"@hermetic_android_toolchains//:extensions.bzl\", \"android\", dev_dependency = True)",
                 "_android.ndk(", "    api_level = \(api),", "    version = \"r30\",", ")",
-            ]
+            ] + rulesAndroidLines
         try (module.joined(separator: "\n") + "\n").write(toFile: "\(root)/cell.MODULE.bazel", atomically: true, encoding: .utf8)
         let bzl = [
             "\"\"\"The cell's Android API level and SDK variant (\(header.dropFirst(2)))\"\"\"", "",
-            "MIN_SDK_VERSION = \(api)", "I18N = \(variant == .i18n ? "True" : "False")",
+            "MIN_SDK_VERSION = \(api)", "I18N = \(variant == .i18n ? "True" : "False")", "RULES_ANDROID = \"\(rulesAndroid)\"",
         ]
         try (bzl.joined(separator: "\n") + "\n").write(toFile: "\(root)/cell.bzl", atomically: true, encoding: .utf8)
         let package = """
@@ -159,7 +182,7 @@ struct Cell: ParsableCommand {
 /// The fixture built for every architecture, and its WASI command run.
 struct Build: ParsableCommand {
     static let configuration = CommandConfiguration(
-        abstract: "Builds the fixture's JNI libraries (aarch64, x86_64, armv7), its APKs and its WASI command, and runs the command."
+        abstract: "Builds the fixture's JNI libraries (aarch64, x86_64), its APKs (with rules_android 0.7) and its WASI command, and runs the command."
     )
 
     @OptionGroup var fixture: FixtureOption
@@ -195,7 +218,9 @@ struct Build: ParsableCommand {
         let cell = try fixture.cell()
         try bazelCommand("build", arches.map { "//:smoke_android_\($0)_so" })
         print("PASS the JNI library links for \(arches.joined(separator: ", ")) at Android API \(cell.api)")
-        if !noApks {
+        if !noApks && !cell.rulesAndroid.hasPrefix("0.7.") {
+            print("(no APKs with rules_android \(cell.rulesAndroid): its tools' Maven is unpinned; a cell with --rules-android 0.7.3 builds them)")
+        } else if !noApks {
             for (arch, abi) in [("aarch64", "arm64-v8a"), ("x86_64", "x86_64")] {
                 try bazelCommand("build", ["//:smoke_apk_\(arch)", "--android_platforms=@rules_android//:\(abi)"])
             }
