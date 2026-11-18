@@ -120,6 +120,28 @@ extension List: _ReusableBuild {}
 /// text; the rest is its inputs and the environment.
 extension TextField: _ReusableBuild {}
 extension TextEditor: _ReusableBuild {}
+/// A secure field is a text field's node, marked secure.
+extension SecureField: _ReusableBuild {}
+
+/// Shapes filled or stroked, as the bare shapes above: their node is their
+/// kind, their style or the environment's colour, and their stroke. A
+/// `.fill(Color)` anywhere in a screen (a card's background) was a build
+/// that read runtime state, so every frame of the screen was built whole: a
+/// keystroke in a field rebuilt and diffed it all.
+extension _ShapeFill: _ReusableBuild {}
+extension _ForegroundFill: _ReusableBuild {}
+extension _ForegroundStroke: _ReusableBuild {}
+extension _StrokedShape: _ReusableBuild {}
+extension _TrimmedShape: _ReusableBuild {}
+extension StrokeShapeView: _ReusableBuild {}
+extension Ellipse: _ReusableBuild {}
+extension EllipticalGradient: _ReusableBuild {}
+
+/// A form and its sections are their rows, in cards over the grouped
+/// background, under the environment: built purely (the rows are boxed,
+/// not changed, so a row built again alone is put back in its card).
+extension Form: _ReusableBuild {}
+extension Section: _ReusableBuild {}
 
 /// A file or photo picker while closed is its child, as a presentation is.
 extension _PickerRequest: _ReusableBuild {
@@ -155,7 +177,15 @@ struct _FrameEffect {
     let run: @MainActor () -> Void
     /// Read by no container: the build's own bookkeeping.
     let local: Bool
+    /// What it registers, for a registration made the same way each time
+    /// (a navigation title: the stack, the level and the title): a view
+    /// whose build registers just what it did last time can be built again
+    /// alone (InPlace.swift). Nil: not comparable.
+    var same: AnyHashable? = nil
 }
+
+/// A registration's `same`: its parts, compared together.
+func _sameEffect(_ parts: AnyHashable?...) -> AnyHashable { AnyHashable(parts) }
 
 /// One reusable subtree: the view and what it was built under, the node it
 /// built, and the reusable views built inside it (kept alive while it is).
@@ -189,9 +219,11 @@ extension Runtime {
     /// list's cells kept); any other reaches the views above it, and a view
     /// holding one is not built again alone (InPlace.swift).
     @MainActor
-    func registerFrameEffect(local: Bool = false, _ effect: @escaping @MainActor () -> Void) {
+    func registerFrameEffect(local: Bool = false, same: AnyHashable? = nil, _ effect: @escaping @MainActor () -> Void) {
         effect()
-        if !buildEffectStack.isEmpty { buildEffectStack[buildEffectStack.count - 1].append(_FrameEffect(run: effect, local: local)) }
+        if !buildEffectStack.isEmpty {
+            buildEffectStack[buildEffectStack.count - 1].append(_FrameEffect(run: effect, local: local, same: same))
+        }
     }
 
     /// A reused entry's registrations, made again, and kept with the views
@@ -405,7 +437,7 @@ func finishCompositeBuild(_ build: _CompositeBuild, view: any View, ctx: BuildCo
         // view is built with this one (InPlace.swift).
         if let innerSite = node.rebuildSite, innerSite.node === node, innerSite.path != ctx.path { innerSite.pinned = true }
         let site = _RebuildSite(path: ctx.path, view: view, ctx: ctx, stacks: stacks, asPart: build.asPart,
-                                reachesUp: effects.contains { !$0.local }, node: node)
+                                reachingEffects: effects.filter { !$0.local }.map(\.same), node: node)
         node.rebuildSite = site
         runtime.rebuildSites[ctx.path] = site
     }
