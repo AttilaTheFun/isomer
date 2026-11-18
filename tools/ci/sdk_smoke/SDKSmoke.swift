@@ -238,7 +238,7 @@ struct Build: ParsableCommand {
                 let flags = ["--android_platforms=@rules_android//:\(abi)"]
                 try bazelCommand("build", ["//:smoke_apk_\(arch)"] + flags)
                 if let out {
-                    let apk = try output(of: "//:smoke_apk_\(arch)", flags, suffix: ".apk")
+                    let apk = try output(of: "//:smoke_apk_\(arch)", flags, suffix: "/smoke_apk_\(arch).apk")
                     try FileManager.default.createDirectory(atPath: absolute(out), withIntermediateDirectories: true)
                     let destination = "\(absolute(out))/smoke_\(arch).apk"
                     try? FileManager.default.removeItem(atPath: destination)
