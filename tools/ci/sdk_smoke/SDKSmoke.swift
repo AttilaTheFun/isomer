@@ -209,6 +209,19 @@ struct Build: ParsableCommand {
     @Flag(help: "Leave out the WASI command.")
     var noWasm = false
 
+    @Option(help: "A directory to copy the APKs into (smoke_<arch>.apk), for an emulator elsewhere.")
+    var out: String?
+
+    /// A target's output, by cquery, as a path outside Bazel's tree.
+    func output(of target: String, _ arguments: [String], suffix: String) throws -> String {
+        let execroot = try bazelCommand("info", ["execution_root"], capture: true).trimmingCharacters(in: .whitespacesAndNewlines)
+        let files = try bazelCommand("cquery", ["--output=files", target] + arguments, capture: true)
+        guard let relative = files.split(separator: "\n").first(where: { $0.hasSuffix(suffix) }) else {
+            throw ToolFailure("no \(suffix) among \(target)'s outputs: \(files)")
+        }
+        return "\(execroot)/\(relative)"
+    }
+
     @discardableResult
     func bazelCommand(_ command: String, _ arguments: [String], capture: Bool = false) throws -> String {
         try runChecked([bazel] + startupArgs + [command] + bazelArgs + arguments, in: fixture.path, capture: capture)
@@ -222,18 +235,23 @@ struct Build: ParsableCommand {
             print("(no APKs with rules_android \(cell.rulesAndroid): its tools' Maven is unpinned; a cell with --rules-android 0.7.3 builds them)")
         } else if !noApks {
             for (arch, abi) in [("aarch64", "arm64-v8a"), ("x86_64", "x86_64")] {
-                try bazelCommand("build", ["//:smoke_apk_\(arch)", "--android_platforms=@rules_android//:\(abi)"])
+                let flags = ["--android_platforms=@rules_android//:\(abi)"]
+                try bazelCommand("build", ["//:smoke_apk_\(arch)"] + flags)
+                if let out {
+                    let apk = try output(of: "//:smoke_apk_\(arch)", flags, suffix: ".apk")
+                    try FileManager.default.createDirectory(atPath: absolute(out), withIntermediateDirectories: true)
+                    let destination = "\(absolute(out))/smoke_\(arch).apk"
+                    try? FileManager.default.removeItem(atPath: destination)
+                    try FileManager.default.copyItem(atPath: apk, toPath: destination)
+                    print("\(destination): \(apk)")
+                }
             }
             print("PASS the APKs (arm64-v8a, x86_64), minSdkVersion \(cell.api)")
         }
         if !noWasm {
             let platform = "--platforms=@isomer//swift_ffi/rules:wasm32-wasip1"
             try bazelCommand("build", ["//smoke:smoke_command", platform])
-            let files = try bazelCommand("cquery", ["--output=files", "//smoke:smoke_command", platform], capture: true)
-            guard let relative = files.split(separator: "\n").first(where: { $0.hasSuffix(".wasm") }) ?? files.split(separator: "\n").first else {
-                throw ToolFailure("no WASI command among \(files)")
-            }
-            let module = "\(fixture.path)/\(relative)"
+            let module = try output(of: "//smoke:smoke_command", [platform], suffix: ".wasm")
             let output = try runChecked([bazel] + startupArgs + ["run"] + bazelArgs + ["@isomer//tools/wasm/wasi_run", "--", module],
                                         in: fixture.path, capture: true)
             try check(lines: output.split(separator: "\n").map(String.init), i18n: cell.i18n, where: "the WASI command under WasmKit")
