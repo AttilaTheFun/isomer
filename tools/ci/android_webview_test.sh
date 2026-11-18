@@ -4,8 +4,11 @@
 # app keeps out of sight, drawn by the Compose renderer over the session).
 # Opened on state.observableobject, the story's "Taps: 0" must be drawn, a
 # tap on its Tap button must make it "Taps: 1" (the event through the page,
-# the app's next frame back), as //tests/webview_session does in Chrome. Then
-# the app is started cold a few more times, and how long its page took each
+# the app's next frame back), as //tests/webview_session does in Chrome. The
+# page sent off its site must be refused with the session going on, and the
+# page's renderer crashed must bring a new web view and session that draw
+# and take a tap (the app's debug hooks, IsomerWebViewHost.debugCommand).
+# Then the app is started cold a few more times, and how long its page took each
 # time (the reactor's compile from the page's Cache Storage after the first,
 # session_host.js) is kept, from the page's own log. Run after
 # tools/ci/android_test.sh on the same phone (tools/ci/hosted_android_test.sh).
@@ -37,6 +40,16 @@ wait_for() {
     done
     return 1
 }
+# Taps the story's Tap button and waits for "Taps: <$1>".
+tap_count() {
+    local bounds x1 y1 x2 y2
+    wait_for "Taps: $(($1 - 1))" 30 || return 1
+    bounds="$(grep -o '<node [^>]*text="Tap"[^>]*>' "$out/webview-ui.xml" | head -1 | grep -o 'bounds="[^"]*"')"
+    read -r x1 y1 x2 y2 <<<"$(sed -E 's/bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]"/\1 \2 \3 \4/' <<<"$bounds")"
+    [ -n "${y2:-}" ] || return 1
+    a shell input tap $(((x1 + x2) / 2)) $(((y1 + y2) / 2))
+    wait_for "Taps: $1" 30
+}
 # The page's start, from its log: the session's own line and the host's.
 starts() { a logcat -d -s Isomer:I 2>/dev/null | grep -E "\[session\] the app's first frame|\[webview\]"; }
 launch() {
@@ -62,6 +75,28 @@ else
         a shell input tap $(((x1 + x2) / 2)) $(((y1 + y2) / 2))
         wait_for "Taps: 1" 30 || failure="the tap didn't change the count"
     fi
+fi
+# The page sent off the site (its own script, isomerDebug navigateAway):
+# refused, and the session goes on (a second tap counts).
+if [ -z "$failure" ]; then
+    a shell am start -n "$BUNDLE/.MainActivity" --es isomerDebug navigateAway >/dev/null
+    tap_count 2 || failure="after a navigation off the site, the tap didn't count"
+    a logcat -d -s Isomer:W 2>/dev/null | grep -q "refused a navigation off the site" ||
+        { [ -n "$failure" ] || failure="the navigation off the site was not refused"; }
+fi
+# The page's renderer gone (isomerDebug crashRenderer, chrome://crash): the
+# app destroys its web view, makes a new one and a new session, whose story
+# starts again at "Taps: 0", and a tap there counts.
+if [ -z "$failure" ]; then
+    a shell am start -n "$BUNDLE/.MainActivity" --es isomerDebug crashRenderer >/dev/null
+    if ! wait_for "Taps: 0" 90; then
+        failure="after its renderer went, the app didn't draw again"
+    else
+        tap_count 1 || failure="after its renderer went, the tap didn't count"
+    fi
+    a logcat -d -s Isomer:W 2>/dev/null | grep -q "the page's renderer went" ||
+        { [ -n "$failure" ] || failure="the app drew, but its log says no renderer went"; }
+    [ -n "$(a shell pidof "$BUNDLE")" ] || { [ -n "$failure" ] || failure="the app ended with its renderer"; }
 fi
 a exec-out screencap -p >"$out/android-webview-$STORY.png"
 starts >"$out/starts.txt"
