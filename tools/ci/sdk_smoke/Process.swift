@@ -19,9 +19,13 @@ func run(_ arguments: [String], in directory: String? = nil, capture: Bool = fal
     process.arguments = arguments
     process.standardInput = FileHandle.nullDevice
     if let directory { process.currentDirectoryURL = URL(fileURLWithPath: directory) }
-    if !environment.isEmpty {
-        process.environment = ProcessInfo.processInfo.environment.merging(environment) { $1 }
+    // What `bazel run` sets for this program is not the fixture's: Bazelisk's
+    // BAZEL_REAL (isomer's Bazel 9) would run there in place of its
+    // .bazelversion's 8, and the runfiles variables point into isomer's tree.
+    let inherited = ProcessInfo.processInfo.environment.filter { name, _ in
+        !(name.hasPrefix("BAZEL") || name.hasPrefix("BUILD_") || name.hasPrefix("RUNFILES") || name == "JAVA_RUNFILES")
     }
+    process.environment = inherited.merging(environment) { $1 }
     var captured: URL?
     if capture {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("sdk-smoke-\(UUID().uuidString)")
