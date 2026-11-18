@@ -39,6 +39,17 @@
 #   top-level outputs (Bazel's default, the files the jobs copy and run); a
 #   writer downloads them all, so the disk cache GitHub's cache keeps
 #   (above) stays whole for the runs that have no key.
+# BuildBuddy's cache is partitioned by the dependency graph
+# (--remote_instance_name, a hash of both modules' MODULE.bazel and both
+# SwiftPM graphs' Package.resolved): a cache from before a Swift SDK
+# change served the changed tree a stale object (the Playground's CI,
+# isomer 0.55.1's cache to 0.56.1: the Android link failed on the old
+# Foundation's symbols). Its cause isn't pinned down: the SDK's files are
+# SwiftCompile's inputs (rules_swift 4.3.0; a wasm SDK swapped, the compile
+# ran again), but SwiftCompile runs unsandboxed here (.bazelrc), so a file
+# it reads undeclared is outside its key. So one graph's outputs are never
+# served to another's. The disk cache GitHub keeps is restored by the same
+# graph alone (.github/actions/bazel_cache).
 # Never the Apple targets on Linux (.bazelrc's apple_on_linux, which takes
 # Xcode's SDK archive): Apple's SDKs may not be redistributed, so CI builds
 # the Apple targets on GitHub's Macs with their own Xcode (the owner,
@@ -94,8 +105,17 @@ setup)
         secret_rc="$secret_dir/buildbuddy.bazelrc"
         (umask 077 && : > "$secret_rc")
         chmod 600 "$secret_rc"
+        # The graph's hash (above): the files that exist of the four, in
+        # this order, so a missing one changes the hash rather than failing.
+        graph="$(for file in MODULE.bazel examples/MODULE.bazel \
+                third_party/swift_packages/Package.resolved \
+                examples/third_party/swift_packages/Package.resolved; do
+                    if [ -f "$ROOT/$file" ]; then echo "== $file"; cat "$ROOT/$file"; fi
+                done |
+            { if command -v sha256sum > /dev/null; then sha256sum; else shasum -a 256; fi; } | cut -c1-16)"
         {
             echo "common --config=buildbuddy"
+            echo "common --remote_instance_name=isomer-$graph"
             printf 'common --remote_header=x-buildbuddy-api-key=%s\n' "$BUILDBUDDY_API_KEY"
             printf 'common --bes_header=x-buildbuddy-api-key=%s\n' "$BUILDBUDDY_API_KEY"
             if [ $writer -eq 1 ]; then

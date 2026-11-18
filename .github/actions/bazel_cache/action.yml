@@ -4,7 +4,8 @@
 # Linux and Android, built together on x86_64 Ubuntu), apple or windows
 # (where it builds, so what it caches is of use to it), keyed by
 # MODULE.bazel and the SwiftPM graphs, the disk cache by commit too, the
-# newest of the group's restored when this commit's isn't there. Only main's
+# newest of the group's with the same MODULE.bazel and graphs restored when
+# this commit's isn't there. Only main's
 # builds write them (.github/actions/bazel_cache_save); every other job reads them.
 # They live in the home directory, outside the checkout (Bazel 9 refuses a
 # repository contents cache inside the main repository), or where the job's
@@ -44,9 +45,15 @@ runs:
       with:
         path: ${{ env.ISOMER_BAZEL_CACHE || '~/.cache/isomer-bazel' }}/disk
         key: bazel-disk-${{ inputs.group }}-${{ hashFiles('MODULE.bazel', 'examples/MODULE.bazel', '**/Package.resolved') }}-${{ github.sha }}
+        # Only a disk cache of the same MODULE.bazel and SwiftPM graphs: one
+        # from before a Swift SDK change gave the changed tree a stale object
+        # (the Playground's CI, isomer 0.55.1's cache to 0.56.1: the Android
+        # app's link failed on the old Foundation's symbols; why, in
+        # tools/ci/ci_bazel.sh). After a change the build starts from the
+        # repository cache (downloads, checked by their hashes) and
+        # BuildBuddy's, partitioned the same way.
         restore-keys: |
           bazel-disk-${{ inputs.group }}-${{ hashFiles('MODULE.bazel', 'examples/MODULE.bazel', '**/Package.resolved') }}-
-          bazel-disk-${{ inputs.group }}-
     - name: Bazel's settings
       shell: bash
       env:
