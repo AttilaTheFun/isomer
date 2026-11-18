@@ -10,15 +10,11 @@ struct ToolFailure: Error, CustomStringConvertible {
 
 /// Runs a program with standard input closed (adb on Android 6.0 copies an
 /// open one to the device until it closes), its output passed through or
-/// captured.
+/// captured. By posix_spawn and waitpid: Foundation's Process on Linux was
+/// seen to leave an exited Bazel client unreaped and wait on it forever.
 @discardableResult
 func run(_ arguments: [String], in directory: String? = nil, capture: Bool = false,
          environment: [String: String] = [:]) throws -> (status: Int32, output: String) {
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-    process.arguments = arguments
-    process.standardInput = FileHandle.nullDevice
-    if let directory { process.currentDirectoryURL = URL(fileURLWithPath: directory) }
     // What `bazel run` sets for this program is not the fixture's: Bazelisk
     // puts the Bazel it ran (isomer's 9) first on PATH, where `bazel` would
     // find it in place of the fixture's .bazelversion (8), and the runfiles
@@ -29,27 +25,41 @@ func run(_ arguments: [String], in directory: String? = nil, capture: Bool = fal
     if let path = inherited["PATH"] {
         inherited["PATH"] = path.split(separator: ":").filter { !$0.contains("/bazelisk/downloads/") }.joined(separator: ":")
     }
-    process.environment = inherited.merging(environment) { $1 }
-    var captured: URL?
-    if capture {
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("sdk-smoke-\(UUID().uuidString)")
-        _ = FileManager.default.createFile(atPath: url.path, contents: nil)
-        let handle = try FileHandle(forWritingTo: url)
-        process.standardOutput = handle
-        captured = url
-    }
+    let env = inherited.merging(environment) { $1 }.map { "\($0.key)=\($0.value)" }
+    let captured = capture
+        ? FileManager.default.temporaryDirectory.appendingPathComponent("sdk-smoke-\(UUID().uuidString)").path : nil
+
     print("+ \(arguments.joined(separator: " "))\(directory.map { "   (in \($0))" } ?? "")")
     // What this printed before, ahead of the program's own output (a log's
     // standard output is buffered).
     fflush(stdout)
-    try process.run()
-    process.waitUntilExit()
+
+    var actions = posix_spawn_file_actions_t()
+    posix_spawn_file_actions_init(&actions)
+    defer { posix_spawn_file_actions_destroy(&actions) }
+    posix_spawn_file_actions_addopen(&actions, 0, "/dev/null", O_RDONLY, 0)
+    if let captured { posix_spawn_file_actions_addopen(&actions, 1, captured, O_WRONLY | O_CREAT | O_TRUNC, 0o644) }
+    // In `directory` by the shell (posix_spawn's chdir action is a GNU and
+    // Darwin extension Swift may not import), then the program by PATH.
+    let command = directory.map { ["/bin/sh", "-c", "cd \"$0\" && exec \"$@\"", $0] } ?? ["/usr/bin/env"]
+    let argv = (command + arguments).map { strdup($0) } + [nil]
+    let envp = env.map { strdup($0) } + [nil]
+    defer { (argv + envp).forEach { free($0) } }
+    var pid = pid_t()
+    let spawned = posix_spawn(&pid, command[0], &actions, nil, argv, envp)
+    guard spawned == 0 else { throw ToolFailure("\(arguments.first ?? "") couldn't start: \(String(cString: strerror(spawned)))") }
+    var status: Int32 = 0
+    while waitpid(pid, &status, 0) == -1 {
+        guard errno == EINTR else { throw ToolFailure("waitpid: \(String(cString: strerror(errno)))") }
+    }
+    // WIFEXITED / WEXITSTATUS, which Swift doesn't import as functions.
+    let exitCode = (status & 0x7f) == 0 ? (status >> 8) & 0xff : 128 + (status & 0x7f)
     var output = ""
     if let captured {
-        output = String(decoding: try Data(contentsOf: captured), as: UTF8.self)
-        try? FileManager.default.removeItem(at: captured)
+        output = String(decoding: try Data(contentsOf: URL(fileURLWithPath: captured)), as: UTF8.self)
+        try? FileManager.default.removeItem(atPath: captured)
     }
-    return (process.terminationStatus, output)
+    return (exitCode, output)
 }
 
 @discardableResult
