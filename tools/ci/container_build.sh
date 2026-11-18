@@ -138,8 +138,9 @@ elif [ $# -eq 0 ] || [ "$*" = all ] || [ "$*" = pr ] || [ "$*" = headful ]; then
     fi
     if has android; then
         apps+=(//android/storybook_android_application:storybook_android_application
-               //android/storybook_android_application:storybook_android_application_apk)
-        add_probes android_compiled_apk android_remote_apk
+               //android/storybook_android_application:storybook_android_application_apk
+               //android/webview_android_application:webview_android_application_apk)
+        add_probes android_compiled_apk android_webview_apk android_remote_apk
     fi
     has linux && apps+=(//linux/storybook_linux_application:storybook_linux_application)
     set -- --ios_multi_cpus=sim_arm64 ${apps[@]+"${apps[@]}"}
@@ -196,7 +197,6 @@ if [ "$mode" != headful ]; then
     has android && mode_platforms+=(android_apk)
     for app_mode in webview remote; do
         for platform in ${mode_platforms[@]+"${mode_platforms[@]}"}; do
-            [ "$app_mode" = webview ] && [ "$platform" = android_apk ] && continue
             target=//shared/selection_probe_application:selection_probe_$platform
             want="${target%_apk}_${app_mode}"
             [ "$platform" = android_apk ] && want="${want}_apk"
@@ -209,20 +209,6 @@ if [ "$mode" != headful ]; then
             fi
         done
     done
-    # And no Android app in web-view mode: incompatible, refused by name.
-    # Refused for that reason only: any other failure (a broken target)
-    # fails the check too, its output shown.
-    if has android; then
-        if refusal="$(bazel build --nobuild --@isomer//:mode=webview \
-            //shared/selection_probe_application:selection_probe_android_apk 2>&1)"; then
-            echo "container_build.sh: an Android app in web-view mode was not refused" >&2
-            picked=1
-        elif ! grep -q "android_web_view_transport_not_built_yet" <<< "$refusal"; then
-            echo "container_build.sh: an Android app in web-view mode failed, but not as incompatible:" >&2
-            tail -30 <<< "$refusal" >&2
-            picked=1
-        fi
-    fi
 fi
 results+=($built $picked)
 # all: the tests built, not run (main: builds alone, to fill the cache).
@@ -477,6 +463,19 @@ if has android; then
             results+=(1)
         fi
     done
+    # The Storybook in web-view mode (its site in the APK, Kotlin only; for
+    # x86_64 too, as AndroidX brings a native library of its own), for the
+    # web-view test after the stories there.
+    webview=//android/webview_android_application:webview_android_application_apk
+    if bazel build "${x86[@]}" "$webview"; then
+        for f in $(files "${x86[@]}" "$webview"); do
+            case "$f" in
+                *_unsigned.apk) ;;
+                *.apk) cp "$exec_root/$f" "$platforms_out/android-x86_64/webview.apk" ;;
+            esac
+        done
+    fi
+    [ -f "$platforms_out/android-x86_64/webview.apk" ] || { echo "no web-view APK"; results+=(1); }
 fi
 if has windows; then
     # The plain app kept before its headful build (above), for

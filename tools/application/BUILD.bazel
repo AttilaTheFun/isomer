@@ -11,16 +11,3 @@ exports_files([
     "remote_app.swift.tpl",
     "webview_app.swift.tpl",
 ])
-
-# What no platform has: an Android web-view transport (Android's WebView
-# carrying the session, as WebKit's message channel does on the iPhone and
-# the Mac) isn't built yet. An app's Android target in web-view mode
-# requires this constraint, so a wildcard build skips it, and one asked for
-# by name stops with "didn't satisfy constraint
-# …//tools/application:android_web_view_transport_not_built_yet".
-constraint_setting(name = "web_view_transport")
-
-constraint_value(
-    name = "android_web_view_transport_not_built_yet",
-    constraint_setting = ":web_view_transport",
-)

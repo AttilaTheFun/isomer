@@ -11,11 +11,11 @@ load("@isomer//tools/application:defs.bzl", "isomer_application")
 #   bazel run //shared/selection_probe_application:selection_probe_web
 #
 # or each mode's by name (selection_probe_ios_compiled, _ios_webview,
-# _ios_remote, _android_compiled, _android_remote; tools/application/defs.bzl
-# lists them). Drive the web's with tools/testing/cdp.py (click the field,
-# type, ArrowLeft, click Complete) and read the page's text and the
-# textarea's selection; Android's on the emulator with adb input, reading
-# the probe's text with uiautomator.
+# _ios_remote, _android_compiled, _android_webview, _android_remote;
+# tools/application/defs.bzl lists them). Drive the web's with
+# tools/testing/cdp.py (click the field, type, ArrowLeft, click Complete)
+# and read the page's text and the textarea's selection; Android's on the
+# emulator with adb input, reading the probe's text with uiautomator.
 #
 # In remote mode the apps draw the probe served headless:
 #

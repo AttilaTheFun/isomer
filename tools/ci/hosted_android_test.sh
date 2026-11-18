@@ -3,7 +3,9 @@
 # KVM: free for a public repository), where CI runs them. The phone is
 # tools/ci/hosted_android_emulator.sh's; the app is the x86_64 test APK CI's
 # Android build made (tools/ci/container_build.sh with ISOMER_PLATFORMS=android,
-# on GitHub's x86_64 Ubuntu runner). Then tools/ci/android_test.sh.
+# on GitHub's x86_64 Ubuntu runner). Then tools/ci/android_test.sh, and, with
+# the Storybook in web-view mode beside it (webview.apk), on the same phone
+# tools/ci/android_webview_test.sh.
 #
 #   tools/ci/hosted_android_test.sh <storybook .apk> <out>
 set -euo pipefail
@@ -20,4 +22,13 @@ stories=($(sed -n 's/^ *"\([a-z]*\.[a-z]*\)",$/\1/p' "$ROOT/examples/tests/platf
 sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:?no Android SDK on this runner}}"
 "$ROOT/tools/ci/hosted_android_emulator.sh" "$out/emulator.log" "$out/serial" < /dev/null > /dev/null
 serial="$(cat "$out/serial")"
-exec "$ROOT/tools/ci/android_test.sh" "$sdk/platform-tools/adb" "$serial" "$apk" "$out" "${stories[@]}"
+status=0
+"$ROOT/tools/ci/android_test.sh" "$sdk/platform-tools/adb" "$serial" "$apk" "$out" "${stories[@]}" || status=1
+webview="$(dirname "$apk")/webview.apk"
+if [ -f "$webview" ]; then
+    "$ROOT/tools/ci/android_webview_test.sh" "$sdk/platform-tools/adb" "$serial" "$webview" "$out/webview" || status=1
+else
+    echo "hosted_android_test.sh: no web-view app beside the Storybook ($webview)" >&2
+    status=1
+fi
+exit $status

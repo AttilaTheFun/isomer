@@ -116,7 +116,11 @@ public final class IsomerRemoteSession {
             if let url = URL(string: link) { onOpenURL(url) }
         case .dark(let dark):
             appDark = dark
-        case .textInput, .endTextInput, .log, nil:
+        case .log(let line):
+            // The app's log (its Swift's `print` in a web view's page, a
+            // server's) on the head's standard error, unbuffered.
+            FileHandle.standardError.write(Data("[swiftui] \(line)\n".utf8))
+        case .textInput, .endTextInput, nil:
             // Text input is a self-drawing head's; the tree renderer's
             // fields are the system's own.
             break

@@ -664,9 +664,9 @@ the mode `--@isomer//:mode` names (docs/modes.md):
 
 - `compiled` (the default): the app's Swift in each platform's app
   (rules_apple's applications, `isomer_android_app`, `isomer_web_app`);
-- `webview`: the app's Swift as wasm in a web view the iPhone or Mac app
-  keeps out of sight, drawn by Isomer's tree renderer over the session
-  protocol (Android's web-view transport isn't built yet);
+- `webview`: the app's Swift as wasm in a web view the iPhone, Mac or
+  Android app keeps out of sight, drawn by Isomer's tree renderer (Apple)
+  or Compose renderer (Android) over the session protocol;
 - `remote`: the app served headless elsewhere (`<name>_server`, built with
   `--@isomer//headless`), the apps only heads drawing its session.
 
