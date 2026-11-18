@@ -2942,6 +2942,7 @@ struct Main {
         checkSplitDetailPath(mock)
         checkDrawnSplitDetailPath(mock)
         checkFieldOnPathScreen(mock)
+        checkTextEditFrames()
 
         // Row actions: the tagged row is a tap target and carries its menu.
         Runtime.shared.installRootView { RowScreen() }
@@ -3250,4 +3251,148 @@ func checkFieldOnPathScreen(_ mock: MockRenderer) {
     _ = settle()
     expect(fieldPathWrites == writesBefore + 1, "a value the path can't hold left the binding unwritten (\(fieldPathWrites - writesBefore - 1) writes)")
     Runtime.shared.resize(width: 411, height: 914)
+}
+
+// MARK: - Text edits from a component-system renderer
+
+/// A sign-in screen: two fields, a button whose state reads both, a title
+/// and rows the edits never touch, and the `.task`/`.onChange` an app's form
+/// has.
+nonisolated(unsafe) var editScreenBuilds = 0
+nonisolated(unsafe) var editRowsBuilds = 0
+nonisolated(unsafe) var editChanges = 0
+
+struct EditRoot: View {
+    var body: some View {
+        NavigationStack { EditScreen() }
+    }
+}
+
+struct EditScreen: View {
+    @State private var email = ""
+    @State private var password = ""
+    @State private var loaded = false
+    var body: some View {
+        let _ = editScreenBuilds += 1
+        ScrollView {
+            VStack(spacing: 12) {
+                EditRows(count: 30)
+                TextField("Email", text: $email)
+                SecureField("Password", text: $password)
+                EditSubmit(email: $email, password: $password)
+            }
+            // A card behind the form (a filled shape, as the Storybook's
+            // pages have).
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.gray))
+        }
+        .navigationTitle("Sign in")
+        .task { loaded = true }
+        .onChange(of: email) { _, _ in editChanges += 1 }
+    }
+}
+
+struct EditRows: View {
+    let count: Int
+    var body: some View {
+        let _ = editRowsBuilds += 1
+        // One node (a body of several views is built with the view around
+        // it: InPlace.swift).
+        VStack {
+            ForEach(0..<count, id: \.self) { index in
+                HStack { Text("Row \(index)"); Spacer(); Text("detail") }
+            }
+        }
+    }
+}
+
+struct EditSubmit: View {
+    @Binding var email: String
+    @Binding var password: String
+    var body: some View {
+        Button(email.isEmpty || password.isEmpty ? "Fill in both" : "Sign in") {}
+    }
+}
+
+/// Each keystroke, as Compose's field (or the web's) reports it: the
+/// field's edit handler with the field's whole text, then the frames that
+/// follow. One frame a keystroke, built in place (the views reading the
+/// field, not the views beside them), its patch diffed only along the
+/// changed path.
+@MainActor
+func checkTextEditFrames() {
+    let previous = Renderer.current
+    let compose = JetpackComposeRenderer(send: { _ in })
+    Renderer.bind(compose)
+    let verifying = Runtime.shared.verifyPartialFrames
+    Runtime.shared.verifyPartialFrames = false
+    defer {
+        Runtime.shared.verifyPartialFrames = verifying
+        Renderer.bind(previous)
+    }
+    Runtime.shared.installRootView { EditRoot() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    func settle(_ limit: Int = 20) -> Int {
+        var frames = 0
+        while Runtime.shared.wantsFrame && frames < limit {
+            Runtime.shared.renderFrame()
+            frames += 1
+        }
+        return frames
+    }
+    // The render log on (its frames' details), its lines to the stub host.
+    let logging = (Runtime.shared.renderLogEnabled, Runtime.shared.renderLogChecked)
+    (Runtime.shared.renderLogEnabled, Runtime.shared.renderLogChecked) = (true, true)
+    defer { (Runtime.shared.renderLogEnabled, Runtime.shared.renderLogChecked) = logging }
+    _ = settle()
+    // The tree's size: what a diff of all of it compares.
+    func count(_ node: IsoFlat_Node) -> Int { 1 + node.ch.reduce(0) { $0 + count($1) } }
+    let whole = count(HostFrame(Runtime.shared.retainedTree!).root)
+    expect(whole > 60, "the screen's tree is big enough to tell (\(whole) nodes)")
+    func editHandler(_ placeholder: String) -> String? {
+        let frame = HostFrame(Runtime.shared.retainedTree!)
+        func walk(_ node: IsoFlat_Node) -> String? {
+            if node.kind == .textfield, node.placeholder == placeholder, let edit = node.edit { return edit }
+            for child in node.ch { if let found = walk(child) { return found } }
+            return nil
+        }
+        return walk(frame.root)
+    }
+    for (field, text) in [("Email", "ada@example.com"), ("Password", "hunter22")] {
+        guard let edit = editHandler(field) else { return expect(false, "the \(field) field takes edits") }
+        var typed = ""
+        for character in text {
+            typed.append(character)
+            let screens = editScreenBuilds, rows = editRowsBuilds
+            let frames = Runtime.shared.renderedFrameCount, wholeFrames = Runtime.shared.wholeFrameCount
+            Runtime.shared.hostViewEvent(id: edit, value: typed)
+            let settled = settle()
+            let stats = Runtime.shared.frameStats
+            let label = "typing \"\(typed)\" into \(field)"
+            expect(settled == 1 && Runtime.shared.renderedFrameCount == frames + 1, "\(label): one frame (\(settled))")
+            expect(Runtime.shared.wholeFrameCount == wholeFrames && stats.kind == .partial,
+                   "\(label): built in place, not whole (\(stats.kind.rawValue): \(stats.detail))")
+            // The screen reads the email (its `.onChange`), as SwiftUI's
+            // body would: built again, its rows reused.
+            expect(editScreenBuilds - screens <= 1 && editRowsBuilds == rows,
+                   "\(label): only the views reading the field are built, not the rows (\(editScreenBuilds - screens), \(editRowsBuilds - rows))")
+            expect(stats.built <= 3, "\(label): only the views reading the field are built (\(stats.built))")
+            expect(stats.diffedNodes * 4 < whole, "\(label): the patch diffs the changed path, not the tree (\(stats.diffedNodes) of \(whole) nodes)")
+        }
+    }
+    expect(editChanges == "ada@example.com".count, "the screen's onChange saw every edit of the email (\(editChanges))")
+    // The same edits, each frame built in place checked against a whole
+    // build of it.
+    Runtime.shared.verifyPartialFrames = true
+    let mismatches = Runtime.shared.partialMismatches
+    if let edit = editHandler("Email") {
+        for typed in ["ada@example.co", "ada@example.c", ""] {
+            Runtime.shared.hostViewEvent(id: edit, value: typed)
+            _ = settle()
+        }
+    }
+    expect(Runtime.shared.partialMismatches == mismatches, "edits built in place match their whole builds")
+    expect(findTextInTree(Runtime.shared.retainedTree!, "Fill in both"), "clearing the email shows in the button")
+    Runtime.shared.verifyPartialFrames = false
+    // Nothing written, nothing asked for: no frame comes on its own.
+    expect(!Runtime.shared.wantsFrame, "an idle screen asks for no frame")
 }

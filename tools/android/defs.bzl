@@ -682,6 +682,7 @@ def isomer_android_app(
         extra_application = "",
         icon = None,
         debug_key = None,
+        minify = False,
         libcxx = None,
         shared_platform = None,
         tags = [],
@@ -748,7 +749,17 @@ def isomer_android_app(
     `extra_binary_deps`) sets it: docs/prebuilt_swift_libraries.md.
 
     `debug_key` is the keystore a debug build is signed with (android_binary's
-    `debug_key`; rules_android's own debug key without one). `tags`,
+    `debug_key`; rules_android's own debug key without one).
+
+    `minify = True` shrinks the APK's dex with R8 (android_binary's
+    `proguard_specs`): only what the app's Kotlin, the runtime and the
+    libraries' own consumer rules reach is dexed, the runtime and the
+    bindings (which JNI finds by name) kept whole and nothing renamed, so
+    stack traces read as written. Without it every class of Compose and
+    AndroidX is dexed, about 22 MB (README, "Android release size"): on a
+    small emulator dex2oat can run out of space compiling it, and ART then
+    interprets the app. A build with it takes R8's time (tens of seconds);
+    an app that ships its own rules gives them in `proguard_specs`. `tags`,
     `target_compatible_with` and `exec_compatible_with` go to the APK and
     the run target (`tags = ["manual"]` keeps a wildcard build from building
     the app; the targets beneath them are manual already), `testonly` to
@@ -911,6 +922,25 @@ def isomer_android_app(
     )
 
     androidx = Label("//android/maven:androidx")
+    binary_kwargs = {}
+    if minify:
+        write_file(
+            name = name + "_keep",
+            out = "generated/%s/keep.pro" % name,
+            content = [
+                "# isomer_android_app(minify = True): JNI looks Isomer's and the",
+                "# bindings' classes up by name; the libraries' own rules come",
+                "# with their AARs. Shrunk only: nothing renamed.",
+                "-keep class dev.isomer.** { *; }",
+                "-keep class swiftffi.** { *; }",
+                "-keep class %s.** { *; }" % package,
+                "-dontobfuscate",
+                "",
+            ],
+            tags = ["manual"],
+            testonly = testonly,
+        )
+        binary_kwargs["proguard_specs"] = [":%s_keep" % name]
     android_binary(
         name = name + "_apk",
         manifest = ":%s_manifest" % name,
@@ -924,7 +954,7 @@ def isomer_android_app(
             # broadcast target.
             androidx,
         ] + _without(extra_binary_deps, [androidx]),
-        **outer
+        **dict(outer, **binary_kwargs)
     )
 
     apk_install_run(

@@ -53,8 +53,15 @@ final class _RebuildSite {
     /// Built as the one view its body came to among a container's children
     /// (`appendChildren`), not through `buildNode`.
     let asPart: Bool
+    /// What the registrations in its build that reach the views above it
+    /// registered (`_FrameEffect.same`, nil where not comparable).
+    let reachingEffects: [AnyHashable?]
     /// A registration in its build reaches the views above it.
-    let reachesUp: Bool
+    var reachesUp: Bool { !reachingEffects.isEmpty }
+    /// It can still be built alone: what it registers for the views above
+    /// it (a screen's navigation title) is compared with this build's, and
+    /// the frame is partial only when they are the same.
+    var reachesUpComparably: Bool { reachingEffects.allSatisfy { $0 != nil } }
     weak var node: RenderNode?
     /// What the modifiers around it did to its node in place after it was
     /// built (or reused), in order: made again on a new node.
@@ -63,13 +70,13 @@ final class _RebuildSite {
     /// node is an enclosing view's too: it is built with what is around it.
     var pinned = false
 
-    init(path: String, view: any View, ctx: BuildContext, stacks: _BuildStacks, asPart: Bool, reachesUp: Bool, node: RenderNode) {
+    init(path: String, view: any View, ctx: BuildContext, stacks: _BuildStacks, asPart: Bool, reachingEffects: [AnyHashable?], node: RenderNode) {
         self.path = path
         self.view = view
         self.ctx = ctx
         self.stacks = stacks
         self.asPart = asPart
-        self.reachesUp = reachesUp
+        self.reachingEffects = reachingEffects
         self.node = node
     }
 }
@@ -204,7 +211,7 @@ extension Runtime {
     private func rebuildSite(atOrAbove start: String) -> _RebuildSite? {
         var path = Substring(start)
         while !path.isEmpty, path != "root" {
-            if let site = rebuildSites[String(path)], site.node != nil, !site.pinned, !site.reachesUp {
+            if let site = rebuildSites[String(path)], site.node != nil, !site.pinned, site.reachesUpComparably {
                 return site
             }
             guard let slash = path.lastIndex(of: "/") else { return nil }
@@ -228,8 +235,17 @@ extension Runtime {
     }
 
     private func notePartialRefused(_ reason: @autoclosure () -> String?) {
-        guard let log = frameLog, let reason = reason() else { return }
-        log.partial = "whole: " + reason
+        guard frameLog != nil || renderLogOn, let reason = reason() else { return }
+        noteBuiltWhole(reason)
+    }
+
+    /// Why this frame is built whole after all, for the frame and render
+    /// logs (FrameLog.swift).
+    func noteBuiltWhole(_ reason: @autoclosure () -> String) {
+        guard frameLog != nil || renderLogOn else { return }
+        let reason = reason()
+        frameLog?.partial = "whole: " + reason
+        noteFrameDetail(reason)
     }
 
     /// Builds `sites` again where they stand in `tree`. False when one could
@@ -241,7 +257,7 @@ extension Runtime {
         defer { buildStacks = outside }
         for site in sites {
             guard let old = site.node, let trail = _trail(to: old, in: tree), let parent = trail.last else {
-                frameLog?.partial = "whole: \(typeName(site.view)) not in the tree"
+                noteBuiltWhole("\(typeName(site.view)) not in the tree")
                 return false
             }
             buildStacks = site.stacks
@@ -263,15 +279,18 @@ extension Runtime {
             let inner = buildCacheInnerStack.removeLast()
             let reads = Array(_bindingReadKeys[min(readsBefore, _bindingReadKeys.count)...])
             guard let node else {
-                frameLog?.partial = "whole: \(typeName(site.view)) came to another node"
+                noteBuiltWhole("\(typeName(site.view)) came to another node")
                 return false
             }
-            if effects.contains(where: { !$0.local }) {
-                frameLog?.partial = "whole: \(typeName(site.view)) registers for a view above it"
+            // What it registers for the views above it (a title) must be
+            // what it registered before: those views are not built again.
+            let reaching = effects.filter { !$0.local }.map(\.same)
+            if !reaching.isEmpty, reaching.contains(where: { $0 == nil }) || reaching != site.reachingEffects {
+                noteBuiltWhole("\(typeName(site.view)) registers for a view above it")
                 return false
             }
             guard _sameLayout(old, node) else {
-                frameLog?.partial = "whole: \(typeName(site.view)) changed kind or size behaviour"
+                noteBuiltWhole("\(typeName(site.view)) changed kind or size behaviour")
                 return false
             }
             // The views around it are as they were: what they did to its node
@@ -295,7 +314,9 @@ extension Runtime {
                 }
                 entry.bindingDependencies.formUnion(reads)
                 entry.inner += inner
-                entry.effects += effects
+                // Its registrations for the views above are theirs already
+                // (the same as before); its own bookkeeping is added.
+                entry.effects += effects.filter(\.local)
                 buildCache[path] = entry
             }
             frameLog?.inPlace.append(typeName(site.view))
