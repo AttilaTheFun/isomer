@@ -58,10 +58,14 @@ on:
   workflow_dispatch:
     inputs:
       run:
-        description: "What to run: verify (the tests, no proof), prerelease or release on main (verify on a branch to bisect); proof (the screenshot proof alone); experiment on any but a release branch; waydroid-probe (a probe of Waydroid on the hosted runner) on any"
+        description: "What to run: verify (the tests, no proof), prerelease or release on main (verify on a branch to bisect); proof (the screenshot proof alone); experiment on any but a release branch; waydroid-probe (a probe of Waydroid on the hosted runner) on any; sdk-smoke (a consumer of Isomer's Swift SDKs at sdk_base_url) on any"
         type: choice
-        options: [verify, proof, prerelease, release, experiment, waydroid-probe]
+        options: [verify, proof, prerelease, release, experiment, waydroid-probe, sdk-smoke]
         default: verify
+      sdk_base_url:
+        description: "sdk-smoke: where Isomer's Swift SDKs are (a candidate's download URL, …/releases/download/isomer-<version>-rc<N>); empty for the ones isomer registers"
+        type: string
+        default: ""
       kind:
         description: The proof's kind
         type: choice
@@ -318,6 +322,89 @@ jobs:
           //apple/storybook_ios_application:storybook_ios_sim_application
           //apple/storybook_isomer_ios_application
           //apple/storybook_macos_application:storybook_macos_application
+
+  # --- By hand: Isomer's Swift SDKs as a consumer links them -------------
+
+  # tests/sdk_consumer (docs/hermetic_toolchains.md, "The SDKs' checks"), a
+  # consumer shaped as an app outside this repository (Bazel 8, minSdk 23,
+  # a kt_swift_library's JNI library, an isolated swift_deps graph, an older
+  # bazel_features), built at the previous release first and then upgraded
+  # in the same output base to this commit's isomer and the SDKs at
+  # sdk_base_url (a candidate, isomer_hermetic_toolchains' isomer-*-rc<N>
+  # pre-release), by the lines a consumer's upgrade changes
+  # (tools/ci/sdk_smoke cell). Each cell: the JNI library for aarch64 and
+  # x86_64, the APKs, the WASI command run under WasmKit; then the x86_64
+  # APK on an emulator at the cell's API (sdk-smoke-android).
+  sdk-smoke:
+    if: github.event_name == 'workflow_dispatch' && (inputs.run == 'sdk-smoke' || inputs.run == 'release')
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [plain, i18n]
+        api: [23, 28]
+    runs-on: ubuntu-24.04
+    container:
+      image: swift:6.4.2-noble@sha256:23d9b28ad97fb1cf1999edc3a0cb265ee915ed42299a9344e7173d5a6d2b05f4
+      volumes: ["/mnt:/mnt"]
+    timeout-minutes: 120
+    env:
+      ISOMER_PLATFORMS: android
+      # The release consumers upgrade from (README, "Upgrading isomer"),
+      # moved on at each release.
+      PREVIOUS_ISOMER: "0.57.1"
+      PREVIOUS_SDK: https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1
+      SDK_BASE_URL: ${{ inputs.sdk_base_url }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: The job's tools
+        run: tools/ci/job_tools.sh
+      # The previous release at API 28, where it linked (isomer-6.4.2.1's
+      # SDKs were compiled for 28), its output base kept for the upgrade.
+      - name: The consumer at the previous release
+        run: |
+          bazel run //tools/ci/sdk_smoke -- cell --isomer "$PREVIOUS_ISOMER" --sdk-base-url "$PREVIOUS_SDK" --variant ${{ matrix.variant }} --api 28
+          bazel run //tools/ci/sdk_smoke -- build --no-apks --no-wasm --startup-arg=--output_base=/mnt/consumer
+      - name: Upgraded to this commit and the candidate SDKs
+        run: |
+          base="${SDK_BASE_URL:-$(sed -n 's|^ *url = "\(.*\)/swift-6.4.2-RELEASE_android.*|\1|p' examples/MODULE.bazel | head -1)}"
+          bazel run //tools/ci/sdk_smoke -- cell --isomer "$PWD" --sdk-base-url "$base" --variant ${{ matrix.variant }} --api ${{ matrix.api }}
+          bazel run //tools/ci/sdk_smoke -- build --startup-arg=--output_base=/mnt/consumer
+          # The APKs with rules_android 0.7.3 (0.6.0's tools' Maven is unpinned).
+          bazel run //tools/ci/sdk_smoke -- cell --isomer "$PWD" --sdk-base-url "$base" --variant ${{ matrix.variant }} --api ${{ matrix.api }} --rules-android 0.7.3
+          bazel run //tools/ci/sdk_smoke -- build --no-wasm --out "$RUNNER_TEMP/apks" --startup-arg=--output_base=/mnt/consumer
+          cp "$RUNNER_TEMP/apks/smoke_x86_64.apk" "$RUNNER_TEMP/smoke.apk"
+          cp tests/sdk_consumer/cell.bzl "$RUNNER_TEMP/cell.bzl"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-smoke-${{ matrix.variant }}-${{ matrix.api }}
+          path: |
+            ${{ runner.temp }}/smoke.apk
+            ${{ runner.temp }}/cell.bzl
+          retention-days: 1
+
+  sdk-smoke-android:
+    # The cell's x86_64 APK on an emulator at its API, on GitHub's KVM
+    # (tools/ci/hosted_android_emulator.sh with the API's AOSP image).
+    needs: sdk-smoke
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.run == 'sdk-smoke' || inputs.run == 'release') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [plain, i18n]
+        api: [23, 28]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdk-smoke-${{ matrix.variant }}-${{ matrix.api }}
+          path: .ci/sdk-smoke
+      - name: The checks on Android ${{ matrix.api }}
+        run: |
+          cp .ci/sdk-smoke/cell.bzl tests/sdk_consumer/cell.bzl
+          tools/ci/hosted_android_emulator.sh .ci/emulator.log .ci/serial "system-images;android-${{ matrix.api }};default;x86_64" < /dev/null > /dev/null
+          bazel run //tools/ci/sdk_smoke -- run-android --adb "$ANDROID_HOME/platform-tools/adb" --serial "$(cat .ci/serial)" --apk "$PWD/.ci/sdk-smoke/smoke.apk"
 
   # --- By hand: verify (the GUI tests) ------------------------------------
 
