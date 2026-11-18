@@ -163,17 +163,21 @@ everything at 23, and these guard the SDKs from then on:
   repository: isomer by version from the registry (or this checkout for a
   candidate), Bazel 8, Android at minSdk 23 on the -i18n SDK, a
   kt_swift_library's JNI library (swift_binary(linkshared)), a dependency
-  module whose swift_deps usage is `isolate = True`, and bazel_features held
-  at the root to the oldest rules_swift asks for. Its library touches every
+  module whose swift_deps usage is `isolate = True`, bazel_features held at
+  the root to the oldest rules_swift asks for, and rules_android to 0.6.0
+  (its tools' Maven unpinned, so the APKs are built in a second pass at
+  0.7.3, isomer's, with isomer's lock file). Its library touches every
   module the SDKs carry: Foundation's globals and statics, FileManager's
   attributes (the owner and group lookups), NotificationCenter's Combine
   publisher, Combine, CoreGraphics, FoundationNetworking, numbers bridged to
-  NSNumber, Isomer's `Bridge`, a package of the isolated graph, and with the
-  -i18n SDK dates and numbers formatted. `sdk_smoke cell` writes what a
-  consumer's upgrade changes (cell.MODULE.bazel and cell.bzl: isomer, the
-  SDKs' URLs and checksums from their .sha256 files, the NDK's API level);
-  `sdk_smoke build` links the JNI library for aarch64 and x86_64 (armv7
-  once rules_swift builds it: TODO.md; the SDK's own checks cover it),
+  NSNumber, Isomer's `Bridge` (on Android: Isomer's modules want a host's
+  functions a bare WASI runtime hasn't), a package of the isolated graph,
+  and with the -i18n SDK dates and numbers formatted. `sdk_smoke cell`
+  writes what a consumer's upgrade changes (cell.MODULE.bazel and cell.bzl:
+  isomer, the SDKs' URLs and checksums from their .sha256 files, the NDK's
+  API level, rules_android); `sdk_smoke build` links the JNI library for
+  aarch64 and x86_64 (armv7 once rules_swift builds it: TODO.md; the SDK's
+  own checks cover it),
   builds the APKs, and runs the same checks as a WASI command under WasmKit;
   `sdk_smoke run-android` runs an APK on an emulator and reads the checks
   from its log. CI's `run: sdk-smoke` (build.yml) builds each cell, plain
