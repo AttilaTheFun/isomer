@@ -768,7 +768,7 @@ swift_deps.from_package(
 inject_repo(swift_deps, "isomer")
 
 # Android: the NDK and SDK, and rules_android pointed at that SDK.
-bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.1")
+bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.2")
 android = use_extension("@hermetic_android_toolchains//:extensions.bzl", "android")
 android.sdk(build_tools_version = "35.0.0", version = "35")
 android.ndk(api_level = 28, version = "r30")
@@ -1126,7 +1126,7 @@ MODULE.bazel declares it, at API 23 and under a name of its own (the
 host's NDK may be `@androidndk` already):
 
 ```starlark
-bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.1")
+bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.2")
 android = use_extension("@hermetic_android_toolchains//:extensions.bzl", "android")
 android.sdk(build_tools_version = "35.0.0", version = "35")
 android.ndk(api_level = 23, version = "r30")
