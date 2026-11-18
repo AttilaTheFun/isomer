@@ -39,6 +39,9 @@ func run(_ arguments: [String], in directory: String? = nil, capture: Bool = fal
         captured = url
     }
     print("+ \(arguments.joined(separator: " "))\(directory.map { "   (in \($0))" } ?? "")")
+    // What this printed before, ahead of the program's own output (a log's
+    // standard output is buffered).
+    fflush(stdout)
     try process.run()
     process.waitUntilExit()
     var output = ""
