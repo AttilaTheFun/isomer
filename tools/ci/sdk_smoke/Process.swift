@@ -19,10 +19,10 @@ func run(_ arguments: [String], in directory: String? = nil, capture: Bool = fal
     process.arguments = arguments
     process.standardInput = FileHandle.nullDevice
     if let directory { process.currentDirectoryURL = URL(fileURLWithPath: directory) }
-    // What `bazel run` sets for this program is not the fixture's: Bazelisk's    // BAZEL_REAL (isomer's Bazel 9) would run there in place of its
-    // .bazelversion's 8, and the runfiles variables point into isomer's tree.
-    // Bazelisk also puts the Bazel it ran first on PATH, where `bazel` would
-    // find it before Bazelisk.
+    // What `bazel run` sets for this program is not the fixture's: Bazelisk
+    // puts the Bazel it ran (isomer's 9) first on PATH, where `bazel` would
+    // find it in place of the fixture's .bazelversion (8), and the runfiles
+    // and BUILD_ variables point into isomer's tree.
     var inherited = ProcessInfo.processInfo.environment.filter { name, _ in
         !(name.hasPrefix("BAZEL") || name.hasPrefix("BUILD_") || name.hasPrefix("RUNFILES") || name == "JAVA_RUNFILES")
     }
