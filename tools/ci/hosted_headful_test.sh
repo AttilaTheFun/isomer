@@ -37,7 +37,8 @@ cleanup() {
     rm -rf "$work"
 }
 trap cleanup EXIT
-printf '%s\n' 'rewrite (github\.com/.*) $1' 'rewrite (github\.com/.*) mirror.bazel.build/$1' > "$work/downloader.cfg"
+# CI's mirrors: GitHub's at Bazel's mirror, Maven Central's at Google's.
+cp "$ROOT/tools/ci/downloader.cfg" "$work/downloader.cfg"
 package=//headless/storybook_headless_application
 failures=0
 # The iPhone's and the Mac's tests as CI's container built them, a Mac

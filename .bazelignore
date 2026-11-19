@@ -1,3 +1,4 @@
 examples
 android/maven_module
 .claude
+tests/sdk_consumer

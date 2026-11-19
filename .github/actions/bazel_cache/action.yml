@@ -7,6 +7,11 @@
 # newest of the group's with the same MODULE.bazel and graphs restored when
 # this commit's isn't there. Only main's
 # builds write them (.github/actions/bazel_cache_save); every other job reads them.
+# The ubuntu group also restores the Maven artifacts' cache (<cache>/maven,
+# keyed by the Maven lock files and MODULE.bazel, any older one restored
+# when this one isn't there: its entries are checked by their hashes), which
+# tools/ci/ci_bazel.sh setup copies into the repository cache: small, so
+# GitHub keeps it when it evicts the repository cache.
 # They live in the home directory, outside the checkout (Bazel 9 refuses a
 # repository contents cache inside the main repository), or where the job's
 # ISOMER_BAZEL_CACHE says (a runner's second disk).
@@ -40,6 +45,18 @@ runs:
         path: ${{ env.ISOMER_BAZEL_CACHE || '~/.cache/isomer-bazel' }}/repository
         key: bazel-repository-${{ inputs.group }}-${{ hashFiles('MODULE.bazel', 'examples/MODULE.bazel', '**/Package.resolved') }}
         restore-keys: bazel-repository-${{ inputs.group }}-
+    - id: maven
+      if: inputs.group == 'ubuntu'
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ env.ISOMER_BAZEL_CACHE || '~/.cache/isomer-bazel' }}/maven
+        key: bazel-maven-${{ hashFiles('MODULE.bazel', 'examples/MODULE.bazel', '**/*_install.json') }}
+        restore-keys: bazel-maven-
+    # Whether the Maven cache's own key was found, for bazel_cache_save (the
+    # job's later steps see it; the workflow passes nothing on).
+    - if: inputs.group == 'ubuntu'
+      shell: bash
+      run: echo "ISOMER_MAVEN_CACHE_HIT=${{ steps.maven.outputs.cache-hit == 'true' }}" >> "$GITHUB_ENV"
     - if: inputs.disk != 'false'
       uses: actions/cache/restore@v4
       with:

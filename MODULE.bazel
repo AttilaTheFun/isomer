@@ -392,7 +392,30 @@ local_path_override(
 # docs/android_maven.md says where the pin writes it).
 #   REPIN=1 bazel run @isomer_maven//:pin
 #   REPIN=1 bazel run @rules_android_maven//:pin
+#   REPIN=1 bazel run @@rules_jvm_external++maven+android_ide_common_30_1_3//:pin
+#   REPIN=1 bazel run @@rules_jvm_external++maven+bazel_worker_maven//:pin
 maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven", dev_dependency = True)
+# rules_android's android_ide_common and bazel_worker_java's Maven (the
+# Android tools' persistent workers), unpinned there: resolved by coursier
+# from Maven Central at every fetch, past Bazel's downloader (its mirrors,
+# its repository cache) and failing when Central does (CI, 2026-11-19).
+# Pinned here and in the examples by these lock files.
+maven.install(
+    name = "android_ide_common_30_1_3",
+    aar_import_bzl_label = "@rules_android//rules:rules.bzl",
+    known_contributing_modules = ["rules_android"],
+    lock_file = "//:android_ide_common_30_1_3_install.json",
+    repositories = [
+        "https://maven.google.com",
+        "https://repo1.maven.org/maven2",
+    ],
+    use_starlark_android_rules = True,
+)
+maven.install(
+    name = "bazel_worker_maven",
+    known_contributing_modules = ["bazel_worker_java"],
+    lock_file = "//:bazel_worker_maven_install.json",
+)
 maven.install(
     name = "rules_android_maven",
     aar_import_bzl_label = "@rules_android//rules:rules.bzl",
