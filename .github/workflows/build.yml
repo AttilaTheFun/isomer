@@ -379,15 +379,18 @@ jobs:
           bazel run --symlink_prefix=/ //tools/ci/sdk_smoke -- build --startup-arg=--output_base=/mnt/consumer
           # The APKs with rules_android 0.7.3 (0.6.0's tools' Maven is unpinned).
           bazel run --symlink_prefix=/ //tools/ci/sdk_smoke -- cell --isomer "$PWD" --sdk-base-url "$base" --variant ${{ matrix.variant }} --api ${{ matrix.api }} --rules-android 0.7.3
-          bazel run --symlink_prefix=/ //tools/ci/sdk_smoke -- build --no-wasm --out "$RUNNER_TEMP/apks" --startup-arg=--output_base=/mnt/consumer
-          cp "$RUNNER_TEMP/apks/smoke_x86_64.apk" "$RUNNER_TEMP/smoke.apk"
-          cp tests/sdk_consumer/cell.bzl "$RUNNER_TEMP/cell.bzl"
+          bazel run --symlink_prefix=/ //tools/ci/sdk_smoke -- build --no-wasm --out "$GITHUB_WORKSPACE/.ci/sdk-smoke" --startup-arg=--output_base=/mnt/consumer
+          cp tests/sdk_consumer/cell.bzl "$GITHUB_WORKSPACE/.ci/sdk-smoke/"
+      # One directory, named relative to the workspace (.ci/, which git
+      # ignores, as verify's artifacts are): in a container job
+      # ${{ runner.temp }} names the runner's directory, not the container's
+      # /__w/_temp, and of two such paths only one was found (the least
+      # common ancestor "/", the APK alone; release run 44635158410).
       - uses: actions/upload-artifact@v4
         with:
           name: sdk-smoke-${{ matrix.variant }}-${{ matrix.api }}
-          path: |
-            ${{ runner.temp }}/smoke.apk
-            ${{ runner.temp }}/cell.bzl
+          path: .ci/sdk-smoke/
+          if-no-files-found: error
           retention-days: 1
 
   sdk-smoke-android:
@@ -404,15 +407,26 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
+      # The sdk-smoke job's .ci/sdk-smoke/ (smoke_x86_64.apk, cell.bzl), at
+      # the same path here.
       - uses: actions/download-artifact@v4
         with:
           name: sdk-smoke-${{ matrix.variant }}-${{ matrix.api }}
           path: .ci/sdk-smoke
-      - name: The checks on Android ${{ matrix.api }}
+      # sdk_smoke is built here, on the runner itself (the emulator wants its
+      # KVM): its FoundationNetworking links libcurl, whose development
+      # package the runner's image hasn't.
+      - name: The tool's libcurl
+        run: sudo apt-get install -y -qq libcurl4-openssl-dev > /dev/null
+      # The downloads' mirrors and retries for sdk_smoke's build (no cache).
+      - name: Bazel's settings
+        run: tools/ci/ci_bazel.sh setup
+      - name: The emulator at API ${{ matrix.api }}
         run: |
           cp .ci/sdk-smoke/cell.bzl tests/sdk_consumer/cell.bzl
           tools/ci/hosted_android_emulator.sh .ci/emulator.log .ci/serial "system-images;android-${{ matrix.api }};default;x86_64" < /dev/null > /dev/null
-          bazel run --symlink_prefix=/ //tools/ci/sdk_smoke -- run-android --adb "$ANDROID_HOME/platform-tools/adb" --serial "$(cat .ci/serial)" --apk "$PWD/.ci/sdk-smoke/smoke.apk"
+      - name: The checks on Android ${{ matrix.api }}
+        run: bazel run --symlink_prefix=/ //tools/ci/sdk_smoke -- run-android --adb "$ANDROID_HOME/platform-tools/adb" --serial "$(cat .ci/serial)" --apk "$PWD/.ci/sdk-smoke/smoke_x86_64.apk"
 
   # --- By hand: verify (the GUI tests) ------------------------------------
 
