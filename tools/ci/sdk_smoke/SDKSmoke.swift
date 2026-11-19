@@ -113,17 +113,23 @@ struct Cell: ParsableCommand {
             // excluded: SwiftPM takes the examples' .lproj under them for
             // resources and `swift package describe` fails ("manifest property
             // 'defaultLocalization' not set"). Run this with
-            // `bazel run --symlink_prefix=/`, which makes none.
-            let links = try FileManager.default.contentsOfDirectory(atPath: checkout).filter { name in
-                name.hasPrefix("bazel-")
-                    && (try? FileManager.default.destinationOfSymbolicLink(atPath: "\(checkout)/\(name)")) != nil
-            }
-            guard links.isEmpty else {
-                throw ToolFailure("""
-                    \(checkout) has Bazel's convenience symlinks (\(links.sorted().joined(separator: ", "))), which SwiftPM \
-                    would read as isomer's package's resources: remove them, and run this with \
-                    `bazel run --symlink_prefix=/ //tools/ci/sdk_smoke -- …`
-                    """)
+            // `bazel run --symlink_prefix=/`, which makes none. And none in the
+            // fixture, a directory of that checkout (tests/): rules_swift_package_manager
+            // copies the local package whole into the fixture's output base,
+            // and a link into that output base can't be copied there (`build`
+            // passes --symlink_prefix=/ too).
+            for directory in [checkout, fixture.path] {
+                let links = try FileManager.default.contentsOfDirectory(atPath: directory).filter { name in
+                    name.hasPrefix("bazel-")
+                        && (try? FileManager.default.destinationOfSymbolicLink(atPath: "\(directory)/\(name)")) != nil
+                }
+                guard links.isEmpty else {
+                    throw ToolFailure("""
+                        \(directory) has Bazel's convenience symlinks (\(links.sorted().joined(separator: ", "))), which \
+                        isomer's package can't have in it: remove them, and run this with \
+                        `bazel run --symlink_prefix=/ //tools/ci/sdk_smoke -- …`
+                        """)
+                }
             }
             let module = try String(contentsOfFile: "\(checkout)/MODULE.bazel", encoding: .utf8)
             guard let version = Self.moduleVersion(module) else { throw ToolFailure("\(checkout)/MODULE.bazel names no version") }
@@ -244,7 +250,10 @@ struct Build: ParsableCommand {
 
     @discardableResult
     func bazelCommand(_ command: String, _ arguments: [String], capture: Bool = false) throws -> String {
-        try runChecked([bazel] + startupArgs + [command] + bazelArgs + arguments, in: fixture.path, capture: capture)
+        // No convenience symlinks in the fixture: isomer's package, a local
+        // package of the fixture's graph, is copied whole (tests/ with it)
+        // into the output base, and a link into that output base can't be.
+        try runChecked([bazel] + startupArgs + [command, "--symlink_prefix=/"] + bazelArgs + arguments, in: fixture.path, capture: capture)
     }
 
     func run() throws {
@@ -276,7 +285,7 @@ struct Build: ParsableCommand {
             let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("sdk-smoke-wasi-\(UUID().uuidString)").path
             try FileManager.default.createDirectory(atPath: tmp, withIntermediateDirectories: true)
             defer { try? FileManager.default.removeItem(atPath: tmp) }
-            let output = try runChecked([bazel] + startupArgs + ["run"] + bazelArgs + ["@isomer//tools/wasm/wasi_run", "--", "--map-dir=/tmp::\(tmp)", module],
+            let output = try runChecked([bazel] + startupArgs + ["run", "--symlink_prefix=/"] + bazelArgs + ["@isomer//tools/wasm/wasi_run", "--", "--map-dir=/tmp::\(tmp)", module],
                                         in: fixture.path, capture: true)
             try check(lines: output.split(separator: "\n").map(String.init), i18n: cell.i18n, where: "the WASI command under WasmKit")
         }
