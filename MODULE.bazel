@@ -210,9 +210,20 @@ bazel_dep(name = "swift_argument_parser", version = "1.7.0")
 #     `Table.function(at:store:)`, `Function.reference`, `Instance.function(at:)`,
 #     `Memory.grow(by:store:)` and `Memory.unsafeBaseAddress` (side modules);
 #   - cheaper calls for a host that calls in very often (mixed mode's native
-#     code): `Function.invokeUnchecked` (raw slots, no type checks), no signal
-#     mask saved on each entry, and a return to the host that halts the
-#     direct-threaded handler chain instead of throwing.
+#     code): `Function.invokeUnchecked` (raw slots, no type checks) and a
+#     return to the host that halts the direct-threaded handler chain instead
+#     of throwing;
+#   - a trap guard that saves no signal mask on each entry (two system calls
+#     saved per call from the host) and leaves its signal handler by
+#     returning to a landing function, so the kernel restores the mask and the
+#     alternate signal stack (the side-modules commits' version jumped out of
+#     the handler, which left a Darwin thread marked as on its alternate
+#     signal stack after a trap);
+#   - malloc-backed memories (software bounds checking, which
+#     `WasmKitRuntime` gives single-threaded reactors) grown by `realloc`
+#     rather than by copying the whole memory on each `memory.grow`.
+# The last two are proposed upstream on their own (pawlowskialex/WasmKit's
+# trap-guard-without-mask-save and grow-malloc-memory-in-place).
 # The Bazel build is ours (tools/wasmkit/BUILD.wasmkit.bazel, after its
 # Package.swift). Not in the BCR.
 wasmkit_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
