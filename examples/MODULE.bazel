@@ -269,6 +269,7 @@ swift_deps.from_package(
 use_repo(
     swift_deps,
     "swift_package",
+    "swiftpkg_build_tools",
     "swiftpkg_grpc_swift_2",
     "swiftpkg_grpc_swift_nio_transport",
     "swiftpkg_grpc_swift_protobuf",
@@ -435,4 +436,41 @@ exports_files(["umd/react-dom.production.min.js"])
     sha256 = "031d4427a99f2f3f6cac18bbbf308594a67e4f47d10f4896fdec446505b040e0",
     strip_prefix = "package",
     url = "https://registry.npmjs.org/react-dom/-/react-dom-18.3.1.tgz",
+)
+
+# The signing jobs' own tools (//tools/ci_tools), pinned by SHA-256 for each
+# Linux architecture: rcodesign (apple-platform-rs), which build_tools'
+# `sign apple` signs and notarizes Apple apps with, and rules_applecross's
+# `dmg` (its ported tools' release), which makes a Mac app's disk image.
+# Linux binaries alone: the signing jobs run on GitHub's Linux runners.
+signing_tool_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+signing_tool_archive(
+    name = "rcodesign_linux_aarch64",
+    build_file_content = 'exports_files(["rcodesign"])',
+    sha256 = "4af92c87ddf52f5f2d1258a3b4e56c7dcb8f1b2468df744976c5f139e031961f",
+    strip_prefix = "apple-codesign-0.29.0-aarch64-unknown-linux-musl",
+    url = "https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F0.29.0/apple-codesign-0.29.0-aarch64-unknown-linux-musl.tar.gz",
+)
+
+signing_tool_archive(
+    name = "rcodesign_linux_x86_64",
+    build_file_content = 'exports_files(["rcodesign"])',
+    sha256 = "dbe85cedd8ee4217b64e9a0e4c2aef92ab8bcaaa41f20bde99781ff02e600002",
+    strip_prefix = "apple-codesign-0.29.0-x86_64-unknown-linux-musl",
+    url = "https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F0.29.0/apple-codesign-0.29.0-x86_64-unknown-linux-musl.tar.gz",
+)
+
+signing_tool_archive(
+    name = "dmg_linux_aarch64",
+    build_file_content = 'exports_files(["bin/dmg"])',
+    sha256 = "e902f3beb581aee24796084d2e2284241e35540a95230e01f5c1899ee61c4d52",
+    url = "https://github.com/apple-cross-toolchain/rules_applecross/releases/download/ported-tools-0.0.92/dmg-linux-aarch64.tar.zst",
+)
+
+signing_tool_archive(
+    name = "dmg_linux_x86_64",
+    build_file_content = 'exports_files(["bin/dmg"])',
+    sha256 = "67ee77b978b2b7b0875c9201bb9b09e5a5f716a49450bc53c804a7e2db4866b9",
+    url = "https://github.com/apple-cross-toolchain/rules_applecross/releases/download/ported-tools-0.0.92/dmg-linux-x86_64.tar.zst",
 )

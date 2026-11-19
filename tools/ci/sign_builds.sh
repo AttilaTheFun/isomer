@@ -1,44 +1,55 @@
 #!/bin/bash
 # A publishing job's builds signed and saved as a release's assets, on
 # GitHub's own Linux runner, with nothing of the project's own servers: each
-# package signed in the job itself by the signers copied byte for byte from
-# AttilaTheFun/shireworks (tools/ci/android_sign.sh, tools/ci/apple_sign.sh
-# with apple_profiles.py), its keys from the job's GitHub environment
-# (`release`: main and v* tags), then its builds.json line written from the
-# signed package (tools/ci/release_assets.sh's release_asset_file), as
-# Applications and Reviews read a release (the private
-# AttilaTheFun/applications' docs/RELEASE_ASSETS.md): <App>-<version>-<platform>.<ext>
-# and builds.json, in <out>, for tools/ci/attach_release.sh.
+# package signed in the job itself by AttilaTheFun/build_tools' `sign`
+# (third_party/swift_packages, pinned exact), its keys from the job's GitHub
+# environment (`release`: main and v* tags), then its builds.json line
+# written from the signed package (tools/ci/release_assets.sh's
+# release_asset_file), as Applications and Reviews read a release (the
+# private AttilaTheFun/applications' docs/RELEASE_ASSETS.md):
+# <App>-<version>-<platform>.<ext> and builds.json, in <out>, for
+# tools/ci/attach_release.sh.
 #
 #   tools/ci/sign_builds.sh --variant Alpha|Production --app <app> --out <dir>
 #       [--ipa-kind development|production] [--dmg]
 #       [--android-key <name> --android-pin <sha256>] <package>…
 #   tools/ci/sign_builds.sh --unsigned --app <app> --out <dir> <package>…
 #
-# - .ipa (the iPhone and iPad app): apple_sign.sh --ipa-kind (development
-#   for an Alpha, the default; production for a release: ad hoc, else
-#   enterprise, else development profiles), with APPLE_DEVELOPMENT_P12,
-#   APPLE_DEVELOPMENT_PASSWORD (empty or unset: a .p12 with no password)
-#   and APPLE_PROFILES;
-# - .zip (a Mac app): apple_sign.sh, Developer ID, notarized and stapled,
-#   with --dmg its disk image too, with APPLE_DEVELOPER_ID_P12,
-#   APPLE_DEVELOPER_ID_PASSWORD (empty or unset: no password), APPLE_NOTARY_KEY, APPLE_NOTARY_KEY_ID,
-#   APPLE_NOTARY_ISSUER and APPLE_PROFILES (an empty one when unset: a Mac
-#   app with no profile of its own needs none);
-# - .apk: android_sign.sh with the release key --android-key names, its
+# The tools are built before: a step of the job's own with no secret in its
+# environment builds //tools/ci_tools:all in the examples' module and writes
+# each one's path into the job's environment (BUILD_TOOLS_SIGN,
+# BUILD_TOOLS_RCODESIGN, BUILD_TOOLS_DMG, BUILD_TOOLS_JAVA,
+# BUILD_TOOLS_APKSIGNER, BUILD_TOOLS_AAPT2), so no Bazel runs here, where
+# the keys are (build_tools' README: Bazel's server and its build events
+# see its client's environment). `sign` is run directly, never `bazel run`.
+#
+# - .ipa (the iPhone and iPad app): `sign apple --ipa-kind development`,
+#   with APPLE_DEVELOPMENT_P12, APPLE_DEVELOPMENT_PASSWORD (empty or unset:
+#   a .p12 with no password) and APPLE_PROFILES. An Alpha's and a release's
+#   alike (--ipa-kind production is kept for the workflows' calls): the
+#   environment has the development identity alone, and the order the copied
+#   apple_sign.sh tried for production (ad hoc, else enterprise, else
+#   development) found only development profiles naming it;
+# - .zip (a Mac app): `sign apple`, Developer ID, notarized and stapled,
+#   with --dmg its disk image too (rules_applecross's dmg), with
+#   APPLE_DEVELOPER_ID_P12, APPLE_DEVELOPER_ID_PASSWORD (empty or unset: no
+#   password), APPLE_NOTARY_KEY, APPLE_NOTARY_KEY_ID, APPLE_NOTARY_ISSUER and
+#   APPLE_PROFILES (an empty one when unset: a Mac app with no profile of its
+#   own needs none);
+# - .apk: `sign android` with the release key --android-key names, its
 #   certificate pinned (--android-pin), with ANDROID_SIGNING_KEYSTORE and
-#   ANDROID_SIGNING_PASSWORD; the JDK and apksigner.jar the examples'
-#   Bazel pins (@hermetic_jdk, @android_build_tools), and its builds.json
-#   line read with that build-tools' aapt2. On an x86_64 Linux alone: the
-#   JDK and build tools Bazel has for Linux are x86_64.
+#   ANDROID_SIGNING_PASSWORD; the JDK and apksigner.jar the examples' Bazel
+#   pins (@hermetic_jdk, @android_build_tools), and its builds.json line read
+#   with that build-tools' aapt2. On an x86_64 Linux alone: the JDK and build
+#   tools Bazel has for Linux are x86_64.
 #
 # Production (a release's promotion): each Apple package's BuildVariant made
-# Production by apple_sign.sh --variant as it is signed again (a Mac app's
+# Production by `sign apple --variant` as it is signed again (a Mac app's
 # stapled ticket dropped first, as Shireworks' signing service's promotion
 # does); an .apk is the release's own production build (--config=prod), its
 # line Production.
 # APPLE_PROFILES may be a gzipped .tar (GitHub caps a secret at 48 KB), as
-# apple_sign.sh reads it.
+# `sign apple` reads it.
 #
 # A platform whose secrets aren't all set is skipped, with a warning in the
 # log and the job's summary, never failing the job: a fork, or a
@@ -89,6 +100,12 @@ done
 case "$ipa_kind" in development | production) ;; *) fail "--ipa-kind is development or production" ;; esac
 mkdir -p "$out"
 out="$(cd "$out" && pwd)"
+# A tool built before this step (above), by its BUILD_TOOLS_<NAME>.
+built() {
+    local name="BUILD_TOOLS_$1"
+    [ -n "${!name:-}" ] && [ -e "${!name}" ] || fail "no $1: $name names none (the workflow's step building //tools/ci_tools)"
+    printf '%s' "${!name}"
+}
 # shellcheck source=tools/ci/release_assets.sh
 . "$CI/release_assets.sh"
 
@@ -149,7 +166,7 @@ fi
 # A release's Apple packages made Production as they are signed.
 promote=()
 [ "$variant" != Production ] || promote=(--variant Production)
-# APPLE_PROFILES as apple_sign.sh reads it (a .tar or .tar.gz, base64;
+# APPLE_PROFILES as `sign apple` reads it (a .tar or .tar.gz, base64;
 # APPLE_PROFILES_2 … _9 beside it, where they are set): an empty .tar when
 # unset, which a Mac app with no profile of its own signs with.
 profiles_or_empty() {
@@ -163,12 +180,15 @@ PROFILES=(APPLE_PROFILES APPLE_PROFILES_2 APPLE_PROFILES_3 APPLE_PROFILES_4 APPL
 
 if [ ${#ipas[@]} -gt 0 ]; then
     # Its .p12's password may be empty (a .p12 exported with none), passed
-    # on as unset, which apple_sign.sh takes for no password.
+    # on as unset, which `sign apple` takes for no password.
     if name="$(missing APPLE_DEVELOPMENT_P12 APPLE_PROFILES)"; then
         skip "the iPhone app" "$name"
     else
+        sign="$(built SIGN)" rcodesign="$(built RCODESIGN)"
+        # Development, whichever was asked (above).
         with_secrets APPLE_DEVELOPMENT_P12 APPLE_DEVELOPMENT_PASSWORD "${PROFILES[@]}" -- \
-            "$CI/apple_sign.sh" --key-from-env --ipa-kind "$ipa_kind" ${promote[@]+"${promote[@]}"} --out "$work/signed-ios" "${ipas[@]}"
+            "$sign" apple --key-from-env --rcodesign "$rcodesign" --ipa-kind development \
+            ${promote[@]+"${promote[@]}"} --out "$work/signed-ios" "${ipas[@]}"
         for package in "${ipas[@]}"; do
             release_asset_file "$work/signed-ios/$(basename "$package")" "$out" "$app"
         done
@@ -180,9 +200,16 @@ if [ ${#zips[@]} -gt 0 ]; then
         skip "the Mac app" "$name"
     else
         profiles_or_empty
+        sign="$(built SIGN)" rcodesign="$(built RCODESIGN)"
+        disk_image=()
+        if [ -n "$dmg" ]; then
+            dmg_tool="$(built DMG)"
+            disk_image=(--dmg "$dmg_tool")
+        fi
         with_secrets APPLE_DEVELOPER_ID_P12 APPLE_DEVELOPER_ID_PASSWORD APPLE_NOTARY_KEY \
             APPLE_NOTARY_KEY_ID APPLE_NOTARY_ISSUER "${PROFILES[@]}" -- \
-            "$CI/apple_sign.sh" --key-from-env ${dmg:+--dmg} ${promote[@]+"${promote[@]}"} --out "$work/signed-mac" "${zips[@]}"
+            "$sign" apple --key-from-env --rcodesign "$rcodesign" ${disk_image[@]+"${disk_image[@]}"} \
+            ${promote[@]+"${promote[@]}"} --out "$work/signed-mac" "${zips[@]}"
         for package in "${zips[@]}"; do
             signed="$work/signed-mac/$(basename "$package")"
             release_asset_file "$signed" "$out" "$app"
@@ -197,21 +224,13 @@ if [ ${#apks[@]} -gt 0 ]; then
         skip "the Android app" "$name"
     else
         [ -n "$android_key" ] && [ -n "$android_pin" ] || fail "an .apk takes --android-key and --android-pin"
-        # The examples' pinned JDK and build tools, by Bazel's own paths:
-        # Bazel (and the repository rules it runs) started after the keys
-        # left the environment (above), so they never see one.
-        tools=(@hermetic_jdk//:java_bin @android_build_tools//:lib/apksigner.jar @android_build_tools//:aapt2)
-        (cd "$ROOT/examples" && bazel build "${tools[@]}" > /dev/null 2>&1) || fail "the JDK and build tools didn't fetch"
-        base="$(cd "$ROOT/examples" && bazel info output_base)"
-        tool() { (cd "$ROOT/examples" && bazel cquery "$1" --output=files 2> /dev/null) | head -1 | sed "s|^|$base/|"; }
-        java="$(tool @hermetic_jdk//:java_bin)"
-        apksigner="$(tool @android_build_tools//:lib/apksigner.jar)"
-        aapt2="$(tool @android_build_tools//:aapt2)"
-        [ -x "$java" ] && [ -f "$apksigner" ] && [ -x "$aapt2" ] || fail "no JDK or build tools at $java, $apksigner, $aapt2"
+        # The examples' pinned JDK and build tools, built before (above).
+        sign="$(built SIGN)" java="$(built JAVA)" apksigner="$(built APKSIGNER)" aapt2="$(built AAPT2)"
         for package in "${apks[@]}"; do
             signed="$work/signed-android/$(basename "$package")"
+            mkdir -p "$work/signed-android"
             with_secrets ANDROID_SIGNING_KEYSTORE ANDROID_SIGNING_PASSWORD -- \
-                "$CI/android_sign.sh" --key-from-env --app "$android_key" --pin "$android_pin" \
+                "$sign" android --key-from-env --app "$android_key" --pin "$android_pin" \
                 --java "$java" --apksigner "$apksigner" "$package" "$signed"
             # Its line as Shireworks' signing service answered for an APK
             # (release_asset_answer_describe): the package, its version and

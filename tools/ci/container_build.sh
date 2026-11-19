@@ -141,6 +141,10 @@ elif [ $# -eq 0 ] || [ "$*" = all ] || [ "$*" = pr ] || [ "$*" = headful ]; then
                //android/storybook_android_application:storybook_android_application_apk
                //android/webview_android_application:webview_android_application_apk)
         add_probes android_compiled_apk android_webview_apk android_remote_apk
+        # The release jobs' tools (build_tools' sign and proof-diff, and
+        # what they run), built where the release jobs build them: a pull
+        # request that breaks them fails here, not at a release.
+        apps+=(//tools/ci_tools:all)
     fi
     has linux && apps+=(//linux/storybook_linux_application:storybook_linux_application)
     set -- --ios_multi_cpus=sim_arm64 ${apps[@]+"${apps[@]}"}

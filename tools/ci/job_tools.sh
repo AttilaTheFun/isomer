@@ -27,6 +27,9 @@ packages=(ca-certificates)
 for pair in "${wanted[@]}"; do
     command -v "${pair%%:*}" > /dev/null || packages+=("${pair#*:}")
 done
+# zlib's headers: build_tools' proof-diff (examples' //tools/ci_tools)
+# reads PNGs and zips through the system's zlib.
+[ -f /usr/include/zlib.h ] || packages+=(zlib1g-dev)
 # Isomer's Linux apps' libraries (linux/libraries/swift_ui), by pkg-config.
 platforms=" ${ISOMER_PLATFORMS:-linux} "
 if [[ $platforms == *" linux "* ]] &&
