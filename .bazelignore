@@ -1,4 +1,5 @@
 examples
 android/maven_module
+apple/module
 .claude
 tests/sdk_consumer

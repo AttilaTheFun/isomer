@@ -173,8 +173,10 @@ interpreted:
 
 `--@isomer//:mode=compiled|webview|remote` (a string flag at isomer's root,
 with config settings `@isomer//:mode_compiled`, `:mode_webview` and
-`:mode_remote`) for a whole app, which `isomer_application`
-(tools/application/defs.bzl) takes on every platform. The examples'
+`:mode_remote`) for a whole app, which `isomer_application` takes on every
+platform: isomer's (tools/application/defs.bzl) declares Android's and the
+web's apps, isomer_apple's (`@isomer_apple//:defs.bzl`, apple/module, since
+0.58: docs/platform_modules.md) the iPhone's and the Mac's beside them. The examples'
 .bazelrc names two: `--config=webview_mode`, `--config=remote_mode`.
 
 `isomer_application(name, swift_library, bundle_id, display_name, …)`
@@ -192,8 +194,9 @@ own name an alias to the one the build's mode picks:
 
 and `<name>_server`, the app headless (`--@isomer//headless`), serving
 itself for the remote apps (ISO_DRIVE_LISTEN, ISO_HEADLESS_PROTOCOL=serve).
-The shells are generated from templates beside the macro
-(webview_app.swift.tpl, remote_app.swift.tpl, remote_activity.kt.tpl; the
+The shells are generated from templates beside the macros
+(isomer_apple's webview_app.swift.tpl and remote_app.swift.tpl in
+apple/module, isomer's remote_activity.kt.tpl in tools/application; the
 Android web-view one, tools/android/webview_activity.kt.tpl, beside
 isomer_android_webview_app), as is the web page of an app without one of
 its own (index.html.tpl). A mode
