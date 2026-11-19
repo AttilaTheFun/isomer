@@ -9,7 +9,10 @@
 # caller's `$(…)` would wait for the emulator and adb's server, which keep
 # the output open, to end.)
 #
-#   tools/ci/hosted_android_emulator.sh <emulator log> <serial file>
+#   tools/ci/hosted_android_emulator.sh <emulator log> <serial file> [<system image>]
+#
+# <system image> is the sdkmanager package to boot (Android 15's AOSP x86_64
+# image by default; tools/ci/sdk_smoke's cells boot API 23's and 28's).
 set -euo pipefail
 # Nothing here reads standard input, and adb mustn't either: on a device
 # without adb's shell protocol (Android 6.0, API 23) `adb shell` copies
@@ -28,7 +31,7 @@ sudo udevadm trigger --name-match=kvm
 
 # `yes` ends by SIGPIPE when sdkmanager stops reading, which pipefail
 # would take for a failure.
-image="system-images;android-35;default;x86_64"
+image="${3:-system-images;android-35;default;x86_64}"
 { yes || true; } | "$sdk/cmdline-tools/latest/bin/sdkmanager" --install emulator platform-tools "$image" > /dev/null
 # The AVD where both avdmanager and the emulator look (the runner's own
 # defaults differ).

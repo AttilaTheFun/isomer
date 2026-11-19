@@ -7,13 +7,21 @@
 #
 #   tools/ci/ci_bazel.sh setup [<cache>]   # the settings (<cache>: ISOMER_BAZEL_CACHE)
 #   tools/ci/ci_bazel.sh trim <cache> <GB> # the disk cache cut to <GB>, before it is saved
+#   tools/ci/ci_bazel.sh maven <cache>     # the Maven artifacts' cache, before it is saved
 #
 # setup writes:
 # - Bazel's disk cache and repository cache in <cache>/disk and
 #   <cache>/repository, which the workflow keeps in GitHub's cache
-#   (actions/cache, by job and MODULE.bazel), when a cache is named;
+#   (actions/cache, by job and MODULE.bazel), when a cache is named; the
+#   Maven artifacts' cache (<cache>/maven, below) copied into the
+#   repository cache first;
+# - the same downloads and repository cache for tests/sdk_consumer (a
+#   consumer's module, which tools/ci/sdk_smoke builds), and nothing else
+#   of CI's there: its builds are a consumer's own;
 # - GitHub's downloads tried at GitHub, then at Bazel's mirror (GitHub's
-#   release downloads have failed with 504s for hours), each retried;
+#   release downloads have failed with 504s for hours), and Maven Central's
+#   at Central, then at Google's mirror of it (Central has answered 404 for
+#   artifacts it has), each retried: tools/ci/downloader.cfg;
 # - Bazel's tree (--output_user_root) in ISOMER_BAZEL_ROOT when it is set
 #   and can be made: the x86_64 runner's second disk (/mnt), its first
 #   being too small for an Android build's; C:/b on Windows (short paths);
@@ -57,6 +65,14 @@
 # .bazelrc.user of its own, as tools/linux/build.sh does.
 # It refuses to replace a .bazelrc.user it didn't write (a builder's own).
 #
+# maven: the Maven artifacts the job's builds downloaded, out of the
+# repository cache into <cache>/maven (the repository cache's own layout),
+# which .github/actions/bazel_cache_save keeps in GitHub's cache on its
+# own, by the Maven lock files: tools/ci/maven_cache.swift. It is small
+# (Maven's jars, no toolchains), so it outlasts the repository cache, which
+# GitHub's 10 GB a repository evicts (main's ubuntu one has been, while
+# Central answered 404: every Maven artifact then came from Central again).
+#
 # trim: Bazel collects its disk cache's garbage only when its server is
 # idle, which a CI job's seldom is, so the oldest entries (Bazel touches an
 # entry each time it is read) are removed until the cache is under <GB>:
@@ -73,10 +89,7 @@ case "${1:-}" in
 setup)
     cache="${2:-${ISOMER_BAZEL_CACHE:-}}"
     mkdir -p "$ROOT/.ci"
-    {
-        echo 'rewrite (github\.com/.*) $1'
-        echo 'rewrite (github\.com/.*) mirror.bazel.build/$1'
-    } > "$ROOT/.ci/downloader.cfg"
+    cp "$ROOT/tools/ci/downloader.cfg" "$ROOT/.ci/downloader.cfg"
     # No bazel-* convenience symlinks in the checkout: rules_swift_package_manager
     # copies the local isomer package with `cp -RL`, which follows them into
     # Bazel's output tree and its dangling links, and fails the fetch.
@@ -139,10 +152,24 @@ setup)
         # write whatever a pull request's scripts ask.
         echo "ci_bazel: no BUILDBUDDY_API_KEY: no remote cache, GitHub's cache alone"
     fi
+    consumer=("$MARK" "common --downloader_config=$ROOT/.ci/downloader.cfg"
+              "common --experimental_repository_downloader_retries=5")
     if [ -n "$cache" ]; then
         mkdir -p "$cache/disk" "$cache/repository"
         cache="$(cd "$cache" && here)"
         lines+=("common --disk_cache=$cache/disk" "common --repository_cache=$cache/repository")
+        consumer+=("common --repository_cache=$cache/repository")
+        # The Maven artifacts' cache (bazel_cache restored it), into the
+        # repository cache: both are content_addressable/sha256/<hex>/,
+        # an entry named by its file's checksum (one already there is kept).
+        if [ -d "$cache/maven/content_addressable/sha256" ]; then
+            mkdir -p "$cache/repository/content_addressable/sha256"
+            for entry in "$cache/maven/content_addressable/sha256"/*; do
+                [ -e "$cache/repository/content_addressable/sha256/${entry##*/}" ] ||
+                    cp -R "$entry" "$cache/repository/content_addressable/sha256/"
+            done
+            echo "ci_bazel: the Maven artifacts' cache, $(find "$cache/maven/content_addressable" -name file | wc -l | tr -d ' ') files, in the repository cache"
+        fi
     fi
     # sdks <ISOMER_*_SDKS's value> <placeholder host> <rewrite of it>: a
     # folder as a distdir, a URL as the placeholder's rewrite.
@@ -158,14 +185,18 @@ setup)
     if [ -n "${ISOMER_WINDOWS_SDKS:-}" ]; then
         sdks "$ISOMER_WINDOWS_SDKS" ISOMER_WINDOWS_SDKS "rewrite windows-sdks\\.invalid/sha256/(.*) @URL@/\$1"
     fi
-    for module in "$ROOT" "$ROOT/examples"; do
+    for module in "$ROOT" "$ROOT/examples" "$ROOT/tests/sdk_consumer"; do
         rc="$module/.bazelrc.user"
         if [ -e "$rc" ] && ! head -1 "$rc" | grep -qxF "$MARK"; then
             fail "$rc is a builder's own: not replaced"
         fi
-        printf '%s\n' "${lines[@]}" > "$rc"
+        if [ "$module" = "$ROOT/tests/sdk_consumer" ]; then
+            printf '%s\n' "${consumer[@]}" > "$rc"
+        else
+            printf '%s\n' "${lines[@]}" > "$rc"
+        fi
     done
-    echo "ci_bazel: Bazel's settings written ($ROOT/.bazelrc.user, $ROOT/examples/.bazelrc.user):"
+    echo "ci_bazel: Bazel's settings written ($ROOT/.bazelrc.user, $ROOT/examples/.bazelrc.user; $ROOT/tests/sdk_consumer/.bazelrc.user its downloads alone):"
     sed 's/^/  /' "$ROOT/examples/.bazelrc.user"
     ;;
 trim)
@@ -206,8 +237,23 @@ for _, size, path in entries:
 print(f"ci_bazel: the disk cache is {kept / 2**30:.2f} GB ({removed / 2**30:.2f} GB of its oldest entries removed)")
 PY
     ;;
+maven)
+    cache="${2:?usage: ci_bazel.sh maven <cache>}"
+    [ -d "$cache/repository" ] || { echo "ci_bazel: no repository cache in $cache"; exit 0; }
+    # The lock files: the checkout's, and those of the modules the builds
+    # fetched (rules_jvm_external's own tools'), in each module's output base.
+    externals=()
+    for module in "$ROOT" "$ROOT/examples"; do
+        base="$(cd "$module" && bazel info output_base 2> /dev/null)" && [ -d "$base/external" ] && externals+=("$base/external")
+    done
+    work="$(mktemp -d)"
+    swiftc -O -o "$work/maven_cache" "$ROOT/tools/ci/maven_cache.swift"
+    rm -rf "$cache/maven"
+    "$work/maven_cache" "$cache/repository" "$cache/maven" "$ROOT" ${externals[@]+"${externals[@]}"}
+    rm -rf "$work"
+    ;;
 *)
-    echo "usage: tools/ci/ci_bazel.sh setup [<cache>] | trim <cache> <GB>" >&2
+    echo "usage: tools/ci/ci_bazel.sh setup [<cache>] | trim <cache> <GB> | maven <cache>" >&2
     exit 2
     ;;
 esac

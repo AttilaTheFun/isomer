@@ -325,6 +325,13 @@ package final class RenderNode {
     /// The composite view whose build ended with this node, kept to build it
     /// again alone (InPlace.swift); nil for nodes no composite returned.
     var rebuildSite: _RebuildSite?
+    /// Last frame's node for what it shows, while it is in the tree: a
+    /// reused subtree's root, or the node a composite view's build ended
+    /// with, which a frame built in place (InPlace.swift) keeps unless it
+    /// builds that view again (`contentEpoch` says when a view below it
+    /// was). An encoder may keep what it derived from it: on a keystroke
+    /// the patch is diffed along the changed path, not the whole tree.
+    package var keepsItsBuild: Bool { isReusedSubtreeRoot || rebuildSite?.node === self }
     /// Bumped when a node below this one is replaced in place (InPlace.swift):
     /// what an encoder kept of this node's subtree is stale then.
     var contentEpoch = 0
