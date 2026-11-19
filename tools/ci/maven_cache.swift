@@ -12,7 +12,10 @@
 // <folder> (the checkout; an output base's external/, the lock files of the
 // modules the builds fetched, rules_jvm_external's own tools' among them),
 // at most two folders down from it (`external/<module>/<lock file>`). One
-// that the repository cache doesn't hold (not fetched) is left out.
+// that the repository cache doesn't hold (not fetched) is left out. Maven
+// artifacts a module's extension declares with no lock file (rules_kotlin's
+// kotlin-build-tools-impl and kotlinx-serialization jars) aren't among them:
+// those have Google's mirror alone after Central (tools/ci/downloader.cfg).
 import Foundation
 
 func fail(_ message: String) -> Never {
