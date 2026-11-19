@@ -2,7 +2,8 @@
 # jobs alone): the disk cache trimmed first to its group's share of GitHub's
 # 10 GB a repository (tools/ci/ci_bazel.sh trim), then saved under this
 # commit's key; the repository cache saved only when its key wasn't found
-# (a key is written once).
+# (a key is written once); the ubuntu group's Maven artifacts' cache
+# (tools/ci/ci_bazel.sh maven) when bazel_cache didn't find its key.
 name: Bazel's cache, saved
 description: Trims and saves the job group's Bazel caches
 inputs:
@@ -30,3 +31,12 @@ runs:
       with:
         path: ${{ env.ISOMER_BAZEL_CACHE || '~/.cache/isomer-bazel' }}/repository
         key: bazel-repository-${{ inputs.group }}-${{ hashFiles('MODULE.bazel', 'examples/MODULE.bazel', '**/Package.resolved') }}
+    - if: inputs.group == 'ubuntu' && env.ISOMER_MAVEN_CACHE_HIT != 'true'
+      name: The Maven artifacts' cache
+      shell: bash
+      run: tools/ci/ci_bazel.sh maven "${ISOMER_BAZEL_CACHE:-$HOME/.cache/isomer-bazel}" || echo "::warning::the Maven artifacts' cache was not made"
+    - if: inputs.group == 'ubuntu' && env.ISOMER_MAVEN_CACHE_HIT != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ env.ISOMER_BAZEL_CACHE || '~/.cache/isomer-bazel' }}/maven
+        key: bazel-maven-${{ hashFiles('MODULE.bazel', 'examples/MODULE.bazel', '**/*_install.json') }}
