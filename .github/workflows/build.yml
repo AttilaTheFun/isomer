@@ -332,6 +332,10 @@ jobs:
   # isomer_sdk.yml). Each cell: the JNI library for aarch64 and
   # x86_64, the APKs, the WASI command run under WasmKit; then the x86_64
   # APK on an emulator at the cell's API (sdk-smoke-android).
+  # `bazel run --symlink_prefix=/`: no convenience symlinks at isomer's root,
+  # where Package.swift's Isomer target (path ".") would take the
+  # examples' .lproj under them for resources (tools/ci/sdk_smoke refuses
+  # them).
   sdk-smoke:
     if: github.event_name == 'workflow_dispatch' && (inputs.run == 'sdk-smoke' || inputs.run == 'release')
     strategy:
@@ -358,16 +362,16 @@ jobs:
       # SDKs were compiled for 28), its output base kept for the upgrade.
       - name: The consumer at the previous release
         run: |
-          bazel run //tools/ci/sdk_smoke -- cell --isomer "$PREVIOUS_ISOMER" --sdk-base-url "$PREVIOUS_SDK" --variant ${{ matrix.variant }} --api 28
-          bazel run //tools/ci/sdk_smoke -- build --no-apks --no-wasm --startup-arg=--output_base=/mnt/consumer
+          bazel run --symlink_prefix=/ //tools/ci/sdk_smoke -- cell --isomer "$PREVIOUS_ISOMER" --sdk-base-url "$PREVIOUS_SDK" --variant ${{ matrix.variant }} --api 28
+          bazel run --symlink_prefix=/ //tools/ci/sdk_smoke -- build --no-apks --no-wasm --startup-arg=--output_base=/mnt/consumer
       - name: Upgraded to this commit and the SDKs it registers
         run: |
           base="$(sed -n 's|^ *url = "\(.*\)/swift-6.4.2-RELEASE_android.*|\1|p' examples/MODULE.bazel | head -1)"
-          bazel run //tools/ci/sdk_smoke -- cell --isomer "$PWD" --sdk-base-url "$base" --variant ${{ matrix.variant }} --api ${{ matrix.api }}
-          bazel run //tools/ci/sdk_smoke -- build --startup-arg=--output_base=/mnt/consumer
+          bazel run --symlink_prefix=/ //tools/ci/sdk_smoke -- cell --isomer "$PWD" --sdk-base-url "$base" --variant ${{ matrix.variant }} --api ${{ matrix.api }}
+          bazel run --symlink_prefix=/ //tools/ci/sdk_smoke -- build --startup-arg=--output_base=/mnt/consumer
           # The APKs with rules_android 0.7.3 (0.6.0's tools' Maven is unpinned).
-          bazel run //tools/ci/sdk_smoke -- cell --isomer "$PWD" --sdk-base-url "$base" --variant ${{ matrix.variant }} --api ${{ matrix.api }} --rules-android 0.7.3
-          bazel run //tools/ci/sdk_smoke -- build --no-wasm --out "$RUNNER_TEMP/apks" --startup-arg=--output_base=/mnt/consumer
+          bazel run --symlink_prefix=/ //tools/ci/sdk_smoke -- cell --isomer "$PWD" --sdk-base-url "$base" --variant ${{ matrix.variant }} --api ${{ matrix.api }} --rules-android 0.7.3
+          bazel run --symlink_prefix=/ //tools/ci/sdk_smoke -- build --no-wasm --out "$RUNNER_TEMP/apks" --startup-arg=--output_base=/mnt/consumer
           cp "$RUNNER_TEMP/apks/smoke_x86_64.apk" "$RUNNER_TEMP/smoke.apk"
           cp tests/sdk_consumer/cell.bzl "$RUNNER_TEMP/cell.bzl"
       - uses: actions/upload-artifact@v4
@@ -400,7 +404,7 @@ jobs:
         run: |
           cp .ci/sdk-smoke/cell.bzl tests/sdk_consumer/cell.bzl
           tools/ci/hosted_android_emulator.sh .ci/emulator.log .ci/serial "system-images;android-${{ matrix.api }};default;x86_64" < /dev/null > /dev/null
-          bazel run //tools/ci/sdk_smoke -- run-android --adb "$ANDROID_HOME/platform-tools/adb" --serial "$(cat .ci/serial)" --apk "$PWD/.ci/sdk-smoke/smoke.apk"
+          bazel run --symlink_prefix=/ //tools/ci/sdk_smoke -- run-android --adb "$ANDROID_HOME/platform-tools/adb" --serial "$(cat .ci/serial)" --apk "$PWD/.ci/sdk-smoke/smoke.apk"
 
   # --- By hand: verify (the GUI tests) ------------------------------------
 
