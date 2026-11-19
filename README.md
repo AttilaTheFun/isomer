@@ -879,15 +879,27 @@ license acceptance, `--strategy=SwiftCompile=local`, …) and
 `.bazelversion` for the Bazel release.
 
 **Bazel 8.** isomer builds with 9.1.1; a consumer may build with 8.5.0 or
-later (MODULE.bazel's `bazel_compatibility`). One known apple_support issue
-there: a Mac host that builds Isomer's build-time Swift tools (the bridge
-generator, the macros) with apple_support's C toolchain, registered through
-`--extra_toolchains`, fails their static archives in the sandbox
+later (MODULE.bazel's `bazel_compatibility`). One issue seen there: a Mac
+host that builds Isomer's build-time Swift tools (the bridge generator, the
+macros) with apple_support's C toolchain, registered through
+`--extra_toolchains`, failed their static archives in the sandbox
 (`CppArchive`: "execvp(…/apple_support+/crosstool/apple-support-ar-wrapper):
-No such file or directory"). Archive locally until apple_support fixes it:
+No such file or directory"), and built them with:
 
 ```
 build --strategy=CppArchive=local
+```
+
+It doesn't happen with the examples on Bazel 8.8.1 and apple_support 2.11.0
+(the Android Storybook, the tools built for the Mac, the toolchain given by
+`--extra_toolchains` too), so it depends on something else in that build's
+flags; the flag is harmless either way. To see whether a build has it, look
+at an archive action's inputs: the sandbox can run the wrapper only when it
+is among them (a count of 0 here, with the wrapper in the command line, is
+the failure).
+
+```sh
+bazel aquery 'mnemonic(CppArchive, @isomer//swift_ffi/swift_ffi)' | grep 'Inputs:' | grep -c apple-support-ar-wrapper
 ```
 
 ### Upgrading isomer
@@ -1196,6 +1208,24 @@ The Storybook (every story of the SwiftUI API, the Isomer module, the map
 engine and FlatBuffers), measured at 0.42: 34.5 MB at `-c opt` (24,116
 exported symbols), 16.2 MB with `--config=android_release` (46, all JNI),
 in a 15.6 MB APK. Link-time optimization is not part of it yet.
+
+**Dex in debug builds.** Without shrinking, an APK dexes every class of
+what it links: Isomer's Android runtime brings Compose (runtime, ui,
+foundation, Material 3 and the Material icons Material 3 1.3 depends on),
+AndroidX's activity, fragment and lifecycle, and Kotlin's coroutines. The
+Storybook's debug APK at 0.57: 22.8 MB of dex in two files, 13,667 classes.
+On Android 6 (API 23) the whole dex is compiled to native code when the app
+is installed, so a small emulator needs about 0.5 GB free for each such app;
+without it dex2oat fails, and ART interprets the app (seconds per keystroke
+in a text field). Later Android versions compile in the background, from a
+profile. `isomer_android_app(..., minify = True)` runs R8 over the debug
+build too: only what the app's Kotlin, the runtime and the libraries' own
+consumer rules reach is dexed, Isomer's runtime and the bindings (which JNI
+finds by name) kept whole, nothing renamed. The Storybook with it: 3.1 MB
+of dex, 3,450 classes, a 16.5 MB APK instead of 23.3 MB, for about 15 s of
+R8 per build. An app with its own Proguard rules, or a release build,
+gives them to its android_binary's `proguard_specs` as usual (the keep
+rules `minify` writes are the three lines in tools/android/defs.bzl).
 
 ### One C++ runtime with other libraries
 
