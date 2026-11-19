@@ -45,8 +45,17 @@ func run(_ arguments: [String], in directory: String? = nil, capture: Bool = fal
     let argv = (command + arguments).map { strdup($0) } + [nil]
     let envp = env.map { strdup($0) } + [nil]
     defer { (argv + envp).forEach { free($0) } }
+    // With a deadline, in a process group of its own, so that what it started
+    // (a shell's children) is killed with it and holds no pipe open after.
+    var attributes = posix_spawnattr_t()
+    posix_spawnattr_init(&attributes)
+    defer { posix_spawnattr_destroy(&attributes) }
+    if timeout != nil {
+        posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETPGROUP))
+        posix_spawnattr_setpgroup(&attributes, 0)
+    }
     var pid = pid_t()
-    let spawned = posix_spawn(&pid, command[0], &actions, nil, argv, envp)
+    let spawned = posix_spawn(&pid, command[0], &actions, &attributes, argv, envp)
     guard spawned == 0 else { throw ToolFailure("\(arguments.first ?? "") couldn't start: \(String(cString: strerror(spawned)))") }
     var status: Int32 = 0
     // With a deadline, a program that outlives it is killed: a hang fails
@@ -60,7 +69,7 @@ func run(_ arguments: [String], in directory: String? = nil, capture: Bool = fal
             continue
         }
         if let deadline, Date() >= deadline {
-            kill(pid, SIGKILL)
+            kill(-pid, SIGKILL)
             while waitpid(pid, &status, 0) == -1 && errno == EINTR {}
             print("(\(arguments.joined(separator: " ")) took longer than \(Int(timeout ?? 0)) s: killed)")
             fflush(stdout)
