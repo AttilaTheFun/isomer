@@ -14,7 +14,7 @@ struct ToolFailure: Error, CustomStringConvertible {
 /// seen to leave an exited Bazel client unreaped and wait on it forever.
 @discardableResult
 func run(_ arguments: [String], in directory: String? = nil, capture: Bool = false,
-         environment: [String: String] = [:]) throws -> (status: Int32, output: String) {
+         environment: [String: String] = [:], timeout: TimeInterval? = nil) throws -> (status: Int32, output: String) {
     // What `bazel run` sets for this program is not the fixture's: Bazelisk
     // puts the Bazel it ran (isomer's 9) first on PATH, where `bazel` would
     // find it in place of the fixture's .bazelversion (8), and the runfiles
@@ -49,8 +49,24 @@ func run(_ arguments: [String], in directory: String? = nil, capture: Bool = fal
     let spawned = posix_spawn(&pid, command[0], &actions, nil, argv, envp)
     guard spawned == 0 else { throw ToolFailure("\(arguments.first ?? "") couldn't start: \(String(cString: strerror(spawned)))") }
     var status: Int32 = 0
-    while waitpid(pid, &status, 0) == -1 {
-        guard errno == EINTR else { throw ToolFailure("waitpid: \(String(cString: strerror(errno)))") }
+    // With a deadline, a program that outlives it is killed: a hang fails
+    // fast (`timedOut`) rather than at the job's limit.
+    let deadline = timeout.map { Date().addingTimeInterval($0) }
+    while true {
+        let reaped = waitpid(pid, &status, deadline == nil ? 0 : WNOHANG)
+        if reaped == pid { break }
+        if reaped == -1 {
+            guard errno == EINTR else { throw ToolFailure("waitpid: \(String(cString: strerror(errno)))") }
+            continue
+        }
+        if let deadline, Date() >= deadline {
+            kill(pid, SIGKILL)
+            while waitpid(pid, &status, 0) == -1 && errno == EINTR {}
+            print("(\(arguments.joined(separator: " ")) took longer than \(Int(timeout ?? 0)) s: killed)")
+            fflush(stdout)
+            return (timedOut, "")
+        }
+        Thread.sleep(forTimeInterval: 0.2)
     }
     // WIFEXITED / WEXITSTATUS, which Swift doesn't import as functions.
     let exitCode = (status & 0x7f) == 0 ? (status >> 8) & 0xff : 128 + (status & 0x7f)
@@ -62,11 +78,16 @@ func run(_ arguments: [String], in directory: String? = nil, capture: Bool = fal
     return (exitCode, output)
 }
 
+/// The status `run` returns for a program it killed at its deadline (as
+/// timeout(1) does).
+let timedOut: Int32 = 124
+
 @discardableResult
-func runChecked(_ arguments: [String], in directory: String? = nil, capture: Bool = false) throws -> String {
-    let result = try run(arguments, in: directory, capture: capture)
+func runChecked(_ arguments: [String], in directory: String? = nil, capture: Bool = false,
+                timeout: TimeInterval? = nil) throws -> String {
+    let result = try run(arguments, in: directory, capture: capture, timeout: timeout)
     guard result.status == 0 else {
-        throw ToolFailure("\(arguments.joined(separator: " ")) failed with exit code \(result.status)")
+        throw ToolFailure("\(arguments.joined(separator: " ")) \(result.status == timedOut ? "timed out" : "failed with exit code \(result.status)")")
     }
     return result.output
 }

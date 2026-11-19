@@ -337,20 +337,47 @@ struct RunAndroid: ParsableCommand {
     @Option(help: "The APK (bazel-bin/smoke_apk_<arch>.apk).")
     var apk: String
 
-    @Option(help: "How long to wait for the checks, in seconds.")
-    var timeout: Int = 120
+    @Option(help: "How long to wait for the checks after the launch, in seconds.")
+    var timeout: Int = 180
 
+    /// adb, never waited on past `deadline` seconds (an install's are a
+    /// cold emulator's; anything else answers in seconds).
     @discardableResult
-    func adbRun(_ arguments: [String], capture: Bool = false) throws -> String {
-        try runChecked([adb, "-s", serial] + arguments, capture: capture)
+    func adbRun(_ arguments: [String], capture: Bool = false, deadline: TimeInterval = 60) throws -> String {
+        try runChecked([adb, "-s", serial] + arguments, capture: capture, timeout: deadline)
     }
 
     func run() throws {
+        do {
+            try launchAndCheck()
+        } catch {
+            // A failure, a crash or a hang ends here with its evidence, in the
+            // job's log and the proof's: the crash buffer, the app's log, and
+            // what the activity manager says of it.
+            print("run-android failed: \(error)")
+            for (title, arguments) in [
+                ("logcat -b crash", ["logcat", "-b", "crash", "-d"]),
+                ("logcat -b main", ["logcat", "-b", "main", "-d"]),
+                ("dumpsys activity", ["shell", "dumpsys", "activity"]),
+            ] {
+                print("--- \(title) ---")
+                let result = try? run([adb, "-s", serial] + arguments, capture: true, timeout: 60)
+                print(result.map { $0.status == 0 ? $0.output : "(exit \($0.status))\n\($0.output)" } ?? "(adb could not run)")
+            }
+            fflush(stdout)
+            throw error
+        }
+    }
+
+    func launchAndCheck() throws {
         let cell = try fixture.cell()
         let apkPath = apk.hasPrefix("/") ? apk : "\(fixture.path)/\(apk)"
-        try adbRun(["install", "-r", "-t", apkPath])
+        try adbRun(["install", "-r", "-t", apkPath], deadline: 300)
         try adbRun(["logcat", "-c"])
-        try adbRun(["shell", "am", "start", "-W", "-n", "dev.isomer.sdksmoke/.SmokeActivity"])
+        // Not `am start -W`: it waits for the activity to be drawn, and the
+        // smoke activity finishes in onCreate, never drawn, so -W waits on
+        // for as long as anyone lets it (CI's release run hung there an hour).
+        try adbRun(["shell", "am", "start", "-n", "dev.isomer.sdksmoke/.SmokeActivity"])
         let deadline = Date().addingTimeInterval(TimeInterval(timeout))
         var lines: [String] = []
         while Date() < deadline {
@@ -364,9 +391,9 @@ struct RunAndroid: ParsableCommand {
             if lines.contains(where: { $0.hasPrefix("SDKSMOKE ") }) { break }
             Thread.sleep(forTimeInterval: 2)
         }
-        if lines.isEmpty {
-            print(try adbRun(["logcat", "-d", "-t", "200"], capture: true))
-            throw ToolFailure("the app logged no checks in \(timeout) s (crashed at load?)")
+        guard lines.contains(where: { $0.hasPrefix("SDKSMOKE ") }) else {
+            for line in lines { print("  | \(line)") }
+            throw ToolFailure("the app logged \(lines.isEmpty ? "no checks" : "no result") in \(timeout) s (crashed, or hung?)")
         }
         let version = try adbRun(["shell", "getprop", "ro.build.version.sdk"], capture: true).trimmingCharacters(in: .whitespacesAndNewlines)
         try check(lines: lines, i18n: cell.i18n, where: "the APK on \(serial) (API \(version))")
