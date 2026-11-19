@@ -1,0 +1,66 @@
+# The consumer's targets: a library touching every module of Isomer's Swift
+# SDKs (smoke/), linked for each Android architecture into a
+# kt_swift_library's JNI library (swift_binary(linkshared)), an APK for each
+# architecture an emulator runs, and a WASI command of the same checks.
+
+load("@isomer//swift_ffi/rules:kt_swift_library.bzl", "kt_swift_library")
+load("@rules_android//rules:rules.bzl", "android_binary")
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
+load(":cell.bzl", "MIN_SDK_VERSION")
+
+ARCHES = {
+    "aarch64": "@platforms//cpu:aarch64",
+    "x86_64": "@platforms//cpu:x86_64",
+    "armv7": "@platforms//cpu:armv7",
+}
+
+[platform(
+    name = "android-" + arch,
+    constraint_values = [
+        cpu,
+        "@platforms//os:android",
+    ],
+) for arch, cpu in ARCHES.items()]
+
+# One kt_swift_library an architecture (its platform is fixed), the same
+# Kotlin facade (dev.isomer.sdksmoke.SmokeBridge) in each.
+[kt_swift_library(
+    name = "smoke_android_" + arch,
+    java_class = "SmokeBridge",
+    java_package = "dev.isomer.sdksmoke",
+    platform = ":android-" + arch,
+    swift = "//smoke:bridge",
+) for arch in ARCHES]
+
+# The JNI libraries alone, what the link matrix builds.
+[alias(
+    name = "smoke_android_%s_so" % arch,
+    actual = ":libsmoke_android_%s.so" % arch,
+) for arch in ARCHES]
+
+# An APK for each architecture an emulator runs (arm64 on Apple silicon,
+# x86_64 on GitHub's KVM). Its activity logs the checks under SDKSMOKE.
+[cc_library(
+    name = "smoke_native_" + arch,
+    srcs = [":libsmoke_android_%s.so" % arch],
+    target_compatible_with = ["@platforms//os:android"],
+) for arch in ["aarch64", "x86_64"]]
+
+[kt_android_library(
+    name = "smoke_activity_" + arch,
+    srcs = ["android/kotlin/dev/isomer/sdksmoke/SmokeActivity.kt"],
+    custom_package = "dev.isomer.sdksmoke",
+    manifest = "android/AndroidManifest.xml",
+    deps = [":smoke_android_" + arch],
+) for arch in ["aarch64", "x86_64"]]
+
+[android_binary(
+    name = "smoke_apk_" + arch,
+    manifest = "android/AndroidManifest.xml",
+    manifest_values = {"minSdkVersion": str(MIN_SDK_VERSION)},
+    deps = [
+        ":smoke_activity_" + arch,
+        ":smoke_native_" + arch,
+    ],
+) for arch in ["aarch64", "x86_64"]]

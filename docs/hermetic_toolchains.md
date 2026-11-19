@@ -80,12 +80,14 @@ On that branch, beside swift-foundation's sources:
   Foundation` autolinks, that the program has Isomer's Foundation and
   nothing of corelibs', that a resilient library at `-library-level api`
   can publicly import Foundation, CoreGraphics and Combine, and on wasm the
-  program and two swift-testing tests run under the toolchain's WasmKit.
+  program and two swift-testing tests run under the toolchain's WasmKit;
+  then sdk/check's `sdk-check` on the bundle ("The SDKs' checks", below).
   Reproducible: the same bundle from any checkout, its file times those of
   the last commit to what goes into it.
-- `.github/workflows/isomer_sdk.yml`: the four SDKs built on each push to an
-  `isomer-*` branch, and on an `isomer-*` tag a draft release with them,
-  their `.sha256` files, and notes giving the consumer's lines.
+- `.github/workflows/isomer_sdk.yml`: the four SDKs built and checked on
+  each push to an `isomer-*` branch, and a release run by hand (`run:
+  release`) that also builds a consumer against them and drafts the release
+  ("The SDKs' checks").
 
 ## The SDKs
 
@@ -99,6 +101,11 @@ Each a swift.org 6.4.2 SDK with the family switched in, in two variants:
 released as `isomer-6.4.2.N` (from .1), at
 `https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.N/<name>`.
 
+- **Minimum**: the Android SDKs' is API 23, swift.org's: every library in
+  them is compiled for `<arch>-unknown-linux-android23` (from
+  isomer-6.4.2.2; isomer-6.4.2.1's for 28), and their swift-sdk.json's
+  lowest triple says so, which rules_swift#2000 reads to fail a target
+  below it. The SDK's build fails if the two differ.
 - **Plain**: Foundation without FoundationInternationalization, and no ICU
   linked: `Calendar`'s symbols English, formatting and parsing absent, as
   isomer's Foundation was without `--@isomer//foundation:internationalization`.
@@ -121,6 +128,95 @@ released as `isomer-6.4.2.N` (from .1), at
   FoundationXML, and, on Android, curl, libxml2 and OpenSSL, which only
   corelibs' FoundationNetworking used. The Android SDKs' dynamic resources
   stay swift.org's: rules_swift links Swift statically.
+
+## The SDKs' checks (0.58)
+
+isomer-6.4.2.1, the first release, failed an app at minSdk 23: its Android
+SDKs' libraries were compiled for API 28 (sdk/build.sh's `API`), while
+their swift-sdk.json, swift.org's, named 23 as the lowest, which is what
+rules_swift#2000 reads as the SDK's minimum. FoundationEssentials then took
+Bionic's `getgrgid_r` and `getgrnam_r` (API 24), where swift.org's build at
+23 compiles swift-foundation's fallback, and the link failed with both
+undefined, on every architecture, plain and -i18n. isomer-6.4.2.2 builds
+everything at 23, and these guard the SDKs from then on:
+
+- **In the SDK's build** (isomer_hermetic_toolchains' sdk/build.sh, every
+  CI build): `sdk-check` (its sdk/check, a Swift program built by the
+  build's toolchain), for each architecture and each module the build made,
+  on the packed bundle:
+  - `autolink`: `import M` autolinks `-lM`, and every library an import
+    names is in the SDK or the platform's sysroot (Bazel lists no SDK
+    archive: an import that names nothing links nothing);
+  - `pairing`: a client referencing every public global, static and
+    conformance of the module needs nothing its archives don't define, so
+    the binary module and its archive come from one build (a module from a
+    build without library evolution, beside an archive from one with it,
+    leaves the stored properties' addressors undefined);
+  - `undefined`: every archive's undefined symbols resolve against the
+    SDK's archives and the platform's libraries at its minimum (the NDK's
+    API-23 libc, libm, libdl and liblog stubs, its static C++ runtime,
+    compiler-rt and the unwinder; on wasm WASI's libc).
+  And the build fails if the swift-sdk.json's lowest triple isn't the API
+  the libraries are compiled for (isomer_hermetic_toolchains' sdk/README.md).
+- **A consumer's build** (tests/sdk_consumer, driven by
+  `bazel run //tools/ci/sdk_smoke`): a module shaped as an app outside this
+  repository: isomer by version from the registry (or this checkout for a
+  candidate), Bazel 8, Android at minSdk 23 on the -i18n SDK, a
+  kt_swift_library's JNI library (swift_binary(linkshared)), a dependency
+  module whose swift_deps usage is `isolate = True`, bazel_features held at
+  the root to the oldest rules_swift asks for, and rules_android to 0.6.0
+  (its tools' Maven unpinned, so the APKs are built in a second pass at
+  0.7.3, isomer's, with isomer's lock file). Its library touches every
+  module the SDKs carry: Foundation's globals and statics, FileManager's
+  attributes (the owner and group lookups), NotificationCenter's Combine
+  publisher, Combine, CoreGraphics, FoundationNetworking, numbers bridged to
+  NSNumber, Isomer's `Bridge` (on Android: Isomer's modules want a host's
+  functions a bare WASI runtime hasn't), a package of the isolated graph,
+  and with the -i18n SDK dates and numbers formatted. `sdk_smoke cell`
+  writes what a consumer's upgrade changes (cell.MODULE.bazel and cell.bzl:
+  isomer, the SDKs' URLs and checksums from their .sha256 files, the NDK's
+  API level, rules_android); `sdk_smoke build` links the JNI library for
+  aarch64 and x86_64 (armv7 once rules_swift builds it: TODO.md; the SDK's
+  own checks cover it),
+  builds the APKs, and runs the same checks as a WASI command under WasmKit;
+  `sdk_smoke run-android` runs an APK on an emulator and reads the checks
+  from its log. isomer's CI (`run: sdk-smoke` and `run: release`,
+  build.yml) builds each cell, plain and -i18n at API 23 and 28, first at
+  the previous release and then upgraded in the same output base to the
+  commit, with the SDKs isomer registers, and runs the x86_64 APK on
+  GitHub's KVM emulator at the cell's API.
+- **A release of the SDKs** goes as isomer's do (AttilaTheFun/reviews'
+  docs/RELEASE_PROCESS.md): isomer_hermetic_toolchains' isomer_sdk.yml,
+  dispatched by hand with `run: release` on the release branch
+  (isomer-6.4.2), builds and checks the four SDKs, then runs this consumer
+  against them before any release exists, as an app fetches them, by URL
+  and sha256: isomer main's tests/sdk_consumer, the SDKs served from the job
+  (a draft's assets need a token), each cell upgraded from the SDKs isomer
+  registers now, its x86_64 APK on the emulator. Then `sdk-check draft`
+  (its sdk/check) drafts the release, `isomer-6.4.2.N` (N from the
+  repository's releases and tags, as isomer's version_from_tags.sh finds
+  its own), with the SDKs, their `.sha256` files, and notes listing the
+  checks passed, the checksums and the consumer's lines; never over a
+  published release. The owner publishes it in Reviews, which makes the
+  tag; isomer's pins then move to its URLs.
+
+What looked like two more faults of isomer-6.4.2.1's -i18n SDK was an
+output base kept from isomer 0.55 or earlier: Foundation.swiftmodule (and
+FoundationNetworking's and IsomerFoundation's), built by
+rules_swift_package_manager from isomer's package then, stay in the
+package's output directory after 0.56 took them out of the package, and
+Swift compiles run unsandboxed (`--strategy=SwiftCompile=local`) with that
+directory on their search path, so every module beside Isomer's found the
+old Foundation before the SDK's: built without library evolution or link
+names, it made its importers call stored properties' addressors
+(`FileHandle.standardError`, `NSLocalizedDescriptionKey`) and
+`NotificationCenter.Publisher`'s witness table directly, which the SDK's
+resilient archive doesn't export, and autolink no -lFoundation, -lIsomerFoundation
+or -lCombine. Reproduced by building the consumer at 0.55.1 and then at
+0.57.1 without `bazel clean`; a clean build, and sdk-check on the bundle,
+show neither. `bazel clean` once after upgrading from 0.55 or earlier
+(README, "Upgrading isomer"); the consumer's upgrade build is what catches
+the next one of the kind.
 
 ## What a consumer writes
 
