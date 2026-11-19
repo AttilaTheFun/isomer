@@ -84,3 +84,8 @@ func absolute(_ path: String) -> String {
     let base = ProcessInfo.processInfo.environment["BUILD_WORKING_DIRECTORY"] ?? FileManager.default.currentDirectoryPath
     return URL(fileURLWithPath: base).appendingPathComponent(path).standardizedFileURL.path
 }
+
+/// `run`, by a name a command's own `run()` doesn't hide.
+func runStatus(_ arguments: [String], in directory: String? = nil, capture: Bool = false) throws -> (status: Int32, output: String) {
+    try run(arguments, in: directory, capture: capture)
+}

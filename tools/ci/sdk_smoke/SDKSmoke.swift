@@ -238,6 +238,13 @@ struct Build: ParsableCommand {
     @Option(help: "A directory to copy the APKs into (smoke_<arch>.apk), for an emulator elsewhere.")
     var out: String?
 
+    // Maven Central has answered 404 for an artifact it has (CI's runs,
+    // 2026-11-19), which Bazel takes for permanent: a build that fails is run
+    // again, as a person would, before the cell fails. A real failure fails
+    // twice, the second time from Bazel's cache in seconds.
+    @Option(help: "How many times a build is tried before it fails the cell.")
+    var attempts: Int = 2
+
     /// A target's output, by cquery, as a path outside Bazel's tree.
     func output(of target: String, _ arguments: [String], suffix: String) throws -> String {
         let execroot = try bazelCommand("info", ["execution_root"], capture: true).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -253,7 +260,14 @@ struct Build: ParsableCommand {
         // No convenience symlinks in the fixture: isomer's package, a local
         // package of the fixture's graph, is copied whole (tests/ with it)
         // into the output base, and a link into that output base can't be.
-        try runChecked([bazel] + startupArgs + [command, "--symlink_prefix=/"] + bazelArgs + arguments, in: fixture.path, capture: capture)
+        let line = [bazel] + startupArgs + [command, "--symlink_prefix=/"] + bazelArgs + arguments
+        guard command == "build" else { return try runChecked(line, in: fixture.path, capture: capture) }
+        for attempt in 1..<max(attempts, 1) {
+            let result = try runStatus(line, in: fixture.path, capture: capture)
+            if result.status == 0 { return result.output }
+            print("(the build failed with exit code \(result.status); trying again, \(attempt + 1) of \(attempts): a download may have failed)")
+        }
+        return try runChecked(line, in: fixture.path, capture: capture)
     }
 
     func run() throws {
