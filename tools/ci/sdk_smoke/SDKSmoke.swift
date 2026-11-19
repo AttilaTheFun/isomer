@@ -160,6 +160,23 @@ struct Cell: ParsableCommand {
                 "    repositories = [\"https://maven.google.com\", \"https://repo1.maven.org/maven2\"],",
                 "    use_starlark_android_rules = True,", ")",
             ]
+            // The two Maven repositories the APKs' tools take that their
+            // modules leave unpinned (coursier asks Maven Central at each
+            // fetch), pinned by isomer's lock files where isomer has them (a
+            // checkout here; the releases after 0.57.1 have them too).
+            if isomer.contains("/") {
+                rulesAndroidLines += [
+                    "_maven.install(", "    name = \"android_ide_common_30_1_3\",",
+                    "    aar_import_bzl_label = \"@rules_android//rules:rules.bzl\",",
+                    "    known_contributing_modules = [\"rules_android\"],",
+                    "    lock_file = \"@isomer//:android_ide_common_30_1_3_install.json\",",
+                    "    repositories = [\"https://maven.google.com\", \"https://repo1.maven.org/maven2\"],",
+                    "    use_starlark_android_rules = True,", ")",
+                    "_maven.install(", "    name = \"bazel_worker_maven\",",
+                    "    known_contributing_modules = [\"bazel_worker_java\"],",
+                    "    lock_file = \"@isomer//:bazel_worker_maven_install.json\",", ")",
+                ]
+            }
         }
         let header = "# Written by tools/ci/sdk_smoke cell (--isomer \(isomer) --variant \(variant.rawValue) --api \(api) --rules-android \(rulesAndroid))."
         let module = [header, "# What a consumer's upgrade changes: isomer, Isomer's Swift SDKs, the NDK's API level, rules_android."]
