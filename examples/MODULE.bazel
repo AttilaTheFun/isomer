@@ -49,6 +49,20 @@ local_path_override(
     path = "../android/maven_module",
 )
 
+# Isomer's iPhone and Mac apps (docs/platform_modules.md): the isomer_apple
+# module, at isomer's version, with rules_apple, rules_applecross and
+# apple_support for them, and isomer_application with its Apple half
+# (`load("@isomer_apple//:defs.bzl", "isomer_application")`). An app on
+# Android and the web alone leaves it out, and resolves none of that. A real
+# consumer takes it from the registry by version (each isomer release from
+# 0.58 has it), or, beside a git_override of isomer, overrides it from the
+# same commit with `strip_prefix = "apple/module"`.
+bazel_dep(name = "isomer_apple", version = "0.57.0")
+local_path_override(
+    module_name = "isomer_apple",
+    path = "../apple/module",
+)
+
 # --- What isomer needs from its consumer -------------------------------
 
 # rules_swift: isomer's patched version comes from the project's registry
@@ -212,7 +226,8 @@ bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "platforms", version = "1.1.0")
 # rules_apple and apple_support at rules_applecross's versions: the
 # registry's preset rules_apple 5.3.1.applecross.6 (rules_applecross's
-# patches) and the BCR's apple_support 2.11.0, as in isomer's MODULE.bazel.
+# patches) and the BCR's apple_support 2.11.0, as isomer_apple asks for
+# (the examples' own Apple apps load rules_apple directly).
 bazel_dep(name = "rules_apple", version = "5.3.1.applecross.6", repo_name = "build_bazel_rules_apple")
 bazel_dep(name = "apple_support", version = "2.11.0")
 

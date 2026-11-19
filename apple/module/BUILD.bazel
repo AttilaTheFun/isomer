@@ -1,0 +1,10 @@
+package(default_visibility = ["//visibility:public"])
+
+# isomer_application (defs.bzl): isomer's, with the iPhone's and the Mac's
+# apps. The shells it generates for the web-view and remote modes (one
+# source for both) are these templates.
+exports_files([
+    "defs.bzl",
+    "remote_app.swift.tpl",
+    "webview_app.swift.tpl",
+])

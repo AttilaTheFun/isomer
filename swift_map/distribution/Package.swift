@@ -3,8 +3,8 @@
 // Swift package wrapping the XCFramework.
 //
 // Populate the .xcframework next to this manifest first:
-//   bazel build //swift_map/apple/xcframework:SwiftMap
-//   ditto -x -k bazel-bin/apple/xcframework/SwiftMap.xcframework.zip distribution/
+//   (cd examples && bazel build //swift_map/xcframework:SwiftMap)
+//   ditto -x -k examples/bazel-bin/swift_map/xcframework/SwiftMap.xcframework.zip swift_map/distribution/
 // (For a hosted release, switch the binaryTarget to url: + checksum: from
 // `swift package compute-checksum SwiftMap.xcframework.zip`.)
 
