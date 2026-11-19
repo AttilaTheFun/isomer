@@ -179,10 +179,11 @@ register_toolchains(
 
 # The hermetic Android NDK/SDK (the extension requires root-module tags even
 # for Apple-only builds; accept the licenses in .bazelrc).
-# The project registry's 0.5.0.isomer.1 (isomer's, with Linux hosts of any
-# CPU), which isomer asks for: no override (before 0.42 each consumer carried
-# the patch in its own).
-bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.1")
+# The project registry's 0.5.0.isomer.2 (isomer's, with Linux hosts of any
+# CPU and an SDK repository that loads on any rules_android), which isomer
+# asks for: no override (before 0.42 each consumer carried the patch in its
+# own).
+bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.2")
 # A dev dependency (hermetic_android_toolchains 0.5.0 reports its repositories
 # so; it reads the root module's tags alone): each root declares its own.
 android = use_extension("@hermetic_android_toolchains//:extensions.bzl", "android", dev_dependency = True)
