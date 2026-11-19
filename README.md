@@ -830,8 +830,8 @@ If you build for Android:
 
 ```starlark
 swift.android_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz",
-    sha256 = "557ed5ffc5c9d2a2061ea3ea24a2ec0e44dcabd6f42b37ef319e2f08198034fc",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.2/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz",
+    sha256 = "19094e58e92669d26a4ce31e5a05f85963eeb5af9cafa35475f2a55e4d69451c",
 )
 ```
 
@@ -839,8 +839,8 @@ If you build for the web:
 
 ```starlark
 swift.wasm_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_wasm.artifactbundle.tar.gz",
-    sha256 = "3dbfc93e5c91e92d197e3660a488fd580133200df75bcaca90f3b50c5782ae93",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.2/swift-6.4.2-RELEASE_wasm.artifactbundle.tar.gz",
+    sha256 = "9bd7e1808fc9fb5027b89becbf2559946e19e9a365aac6876eedf834cceb68cf",
 )
 ```
 
@@ -852,13 +852,13 @@ and ICU (tens of megabytes of data, which `icu_locales` trims on the web):
 ```starlark
 # Android, formatting:
 swift.android_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_android-i18n.artifactbundle.tar.gz",
-    sha256 = "9ed7cd5051cc276acd14a5210d72311f2b4b7984c4bdaa77dd25bafad2170d93",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.2/swift-6.4.2-RELEASE_android-i18n.artifactbundle.tar.gz",
+    sha256 = "ab250666b10586a507abf4b80b55bf453ddeae1a7d499c788c4d347d5b55ce93",
 )
 # The web, formatting:
 swift.wasm_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_wasm-i18n.artifactbundle.tar.gz",
-    sha256 = "cc3423d1dfa969e1fb255ed324af6a9e3c7dedc06b75d90a3ff74adcce10877c",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.2/swift-6.4.2-RELEASE_wasm-i18n.artifactbundle.tar.gz",
+    sha256 = "86cb53c7af7808fd0b07e2f37b7a66a7a64f379b18348aedaaff7ddab24fb36b",
 )
 ```
 
@@ -943,11 +943,12 @@ Each release's notes have an Upgrading section; these things are easy to miss:
     (`examples/swift_map/…`), not `@isomer//swift_map/apple/applications`
     and `@isomer//swift_map/apple/xcframework`.
 - **Isomer's Swift SDKs isomer-6.4.2.2 (since 0.58): Android at API 23.**
-  isomer-6.4.2.1's Android SDKs were compiled for API 28, so an app at
-  minSdk 23 failed to link (`getgrgid_r` and `getgrnam_r` undefined in
-  libFoundationEssentials.a). Move both `swift.android_sdk` and
-  `swift.wasm_sdk` to isomer-6.4.2.2's lines ("Isomer's Swift SDKs" above,
-  or the release's notes). From then on every SDK build checks its
+  isomer-6.4.2.2's Android SDKs are built at API 23; move to it: both
+  `swift.android_sdk` and `swift.wasm_sdk` to its lines ("Isomer's Swift
+  SDKs" above, or the release's notes), as isomer's own builds have.
+  isomer-6.4.2.1's were compiled for API 28, so an app at minSdk 23 failed
+  to link (`getgrgid_r` and `getgrnam_r` undefined in
+  libFoundationEssentials.a). From then on every SDK build checks its
   libraries against its minimum API (docs/hermetic_toolchains.md, "The
   SDKs' checks").
 - **Upgrading from 0.55 or earlier: `bazel clean` once.** 0.56 took

@@ -100,6 +100,8 @@ Each a swift.org 6.4.2 SDK with the family switched in, in two variants:
 
 released as `isomer-6.4.2.N` (from .1), at
 `https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.N/<name>`.
+isomer registered isomer-6.4.2.1 in 0.56 and 0.57, and isomer-6.4.2.2
+(its Android SDKs at API 23, "The SDKs' checks") since 0.58.
 
 - **Minimum**: the Android SDKs' is API 23, swift.org's: every library in
   them is compiled for `<arch>-unknown-linux-android23` (from
@@ -229,12 +231,12 @@ has them with their checksums):
 ```starlark
 # If you build for Android:
 swift.android_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.2/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz",
     sha256 = "…",
 )
 # If you build for the web:
 swift.wasm_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_wasm.artifactbundle.tar.gz",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.2/swift-6.4.2-RELEASE_wasm.artifactbundle.tar.gz",
     sha256 = "…",
 )
 ```
