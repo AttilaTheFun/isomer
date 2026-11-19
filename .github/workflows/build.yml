@@ -358,6 +358,14 @@ jobs:
       - uses: actions/checkout@v5
       - name: The job's tools
         run: tools/ci/job_tools.sh
+      # The downloads' mirrors and the repository cache with the Maven
+      # artifacts' cache in it, for isomer's Bazel and the consumer's
+      # (tools/ci/ci_bazel.sh writes the consumer's .bazelrc.user too); no
+      # disk cache: the consumer's builds are its own.
+      - uses: ./.github/actions/bazel_cache
+        with:
+          group: ubuntu
+          disk: "false"
       # The previous release at API 28, where it linked (isomer-6.4.2.1's
       # SDKs were compiled for 28), its output base kept for the upgrade.
       - name: The consumer at the previous release
