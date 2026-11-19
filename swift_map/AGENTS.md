@@ -61,8 +61,8 @@ rules_swift  <  swift_ffi  <  swift_gpu  <  swift_map  <  isomer
 bazel test //swift_map/tests:core_tests          # engine unit tests
 bazel build //...                                # full wildcard build works
 bazel run //swift_map/apple/tools/map_snapshot -- /tmp/map.png   # offscreen Metal + real tiles
-bazel run //swift_map/apple/applications/example_metal_macos_application
-bazel build //swift_map/apple/applications/example_metal_ios_application --ios_multi_cpus=sim_arm64
+(cd examples && bazel run //swift_map/example_metal_macos_application)   # the Apple apps are the examples' (0.58)
+(cd examples && bazel build //swift_map/example_metal_ios_application --ios_multi_cpus=sim_arm64)
 bazel run //swift_map/web/applications/example_webgpu_web_application    # append `-- --no-open` args AFTER the built-ins; port is fixed at 8080
 bazel run //swift_map/android/applications/example_opengl_android_application  # tails logcat; doesn't exit
 ```

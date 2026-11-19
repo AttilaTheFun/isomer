@@ -78,15 +78,18 @@ for module in $(git ls-files 'MODULE.bazel' '*/MODULE.bazel'); do
     esac
   done
 done
-# isomer_android_maven (android/maven_module, docs/android_maven.md) is
-# released with isomer, from its tag: its module() and its dependency on
-# isomer both say isomer's committed version, which the registry stamps.
+# isomer_android_maven (android/maven_module, docs/android_maven.md) and
+# isomer_apple (apple/module, docs/platform_modules.md) are released with
+# isomer, from its tag: each one's module() and its dependency on isomer
+# say isomer's committed version, which the registry stamps.
 isomer_version=$(sed -n '/^module(/,/^)/s/^[[:space:]]*version = "\([^"]*\)",*$/\1/p' MODULE.bazel)
-module_versions=$(sed -n -e '/^module(/,/^)/s/^[[:space:]]*version = "\([^"]*\)",*$/\1/p' \
-  -e 's/^bazel_dep(name = "isomer", version = "\([^"]*\)".*/\1/p' android/maven_module/MODULE.bazel)
-if [ -z "$isomer_version" ] || [ "$(printf '%s\n' "$module_versions" | grep -c -x -F "$isomer_version")" != 2 ]; then
-  echo "android/maven_module/MODULE.bazel: its version and its isomer dependency must both be isomer's ($isomer_version), not:" $module_versions >&2
-  status=1
-fi
+for within in android/maven_module apple/module; do
+  module_versions=$(sed -n -e '/^module(/,/^)/s/^[[:space:]]*version = "\([^"]*\)",*$/\1/p' \
+    -e 's/^bazel_dep(name = "isomer", version = "\([^"]*\)".*/\1/p' "$within/MODULE.bazel")
+  if [ -z "$isomer_version" ] || [ "$(printf '%s\n' "$module_versions" | grep -c -x -F "$isomer_version")" != 2 ]; then
+    echo "$within/MODULE.bazel: its version and its isomer dependency must both be isomer's ($isomer_version), not:" $module_versions >&2
+    status=1
+  fi
+done
 [ "$status" = 0 ] && echo "Every dependency is pinned to a released version."
 exit "$status"

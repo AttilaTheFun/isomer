@@ -9,11 +9,11 @@ load("@rules_swift//swift:swift.bzl", "swift_library")
 swift_library(
     name = "swift_map_distribution",
     srcs = [
-        "//swift_map/apple/libraries/swift_map:srcs",
-        "//swift_map/swift_map/core:srcs",
-        "//swift_map/swift_map/renderer:srcs",
-        "//swift_gpu/apple:srcs",
-        "//swift_gpu/core:srcs",
+        "@isomer//swift_map/apple/libraries/swift_map:srcs",
+        "@isomer//swift_map/swift_map/core:srcs",
+        "@isomer//swift_map/swift_map/renderer:srcs",
+        "@isomer//swift_gpu/apple:srcs",
+        "@isomer//swift_gpu/core:srcs",
     ],
     features = [
         "swift.enable_library_evolution",
@@ -25,9 +25,11 @@ swift_library(
 
 # The binary distribution for non-Bazel consumers: a static SwiftMap
 # framework for iOS (device + simulator) and macOS, with .swiftinterface
-# (library evolution). `bazel build //swift_map/apple/xcframework:SwiftMap` produces
-# SwiftMap.xcframework.zip; distribution/Package.swift wraps it as a binary
-# Swift package (see README).
+# (library evolution). `bazel build //swift_map/xcframework:SwiftMap` (in
+# the examples' module: isomer itself has no rules_apple for its consumers,
+# docs/platform_modules.md) produces SwiftMap.xcframework.zip; isomer's
+# swift_map/distribution/Package.swift wraps it as a binary Swift package
+# (swift_map/README.md).
 apple_xcframework(
     name = "SwiftMap",
     bundle_id = "dev.swiftmap.SwiftMap",

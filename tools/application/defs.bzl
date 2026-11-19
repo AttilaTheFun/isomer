@@ -12,24 +12,29 @@ Swift runs is a build's choice, not the app's code:
 The macro declares each platform's app once a mode, and, under the
 platform's own name, the one `--@isomer//:mode` picks; the web is wasm in
 every mode.
+
+This is Android's and the web's (isomer's own rules alone). The iPhone's
+and the Mac's apps are the isomer_apple module's (apple/module here, since
+0.58: rules_apple and what it brings, which an app on Android and the web
+alone never resolves): an app with them loads isomer_application from
+`@isomer_apple//:defs.bzl`, which declares the same targets as this one and
+the Apple ones beside them (docs/platform_modules.md).
 """
 
 load("@bazel_skylib//rules:copy_file.bzl", "copy_file")
 load("@bazel_skylib//rules:expand_template.bzl", "expand_template")
-load("@bazel_skylib//rules:write_file.bzl", "write_file")
-load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
-load("@build_bazel_rules_apple//apple:macos.bzl", "macos_application")
 load("@rules_android//rules:rules.bzl", "android_binary")
 load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
-# Named apart: the macros take the app's library as `swift_library`.
-load("@rules_swift//swift:swift.bzl", swift_library_rule = "swift_library")
 load("@rules_swift//swift:swift_binary.bzl", "swift_binary")
 load("//tools/android:defs.bzl", "apk_install_run", "isomer_android_app", "isomer_android_webview_app")
 load("//tools/wasm:defs.bzl", "isomer_web_app")
 
 _MODES = ["compiled", "webview", "remote"]
 
-_PLATFORMS = ["ios", "macos", "android", "web"]
+_PLATFORMS = ["android", "web"]
+
+# isomer_apple's: named here only to say where they are.
+_APPLE_PLATFORMS = ["ios", "macos"]
 
 def _by_mode(targets):
     """A select() over --@isomer//:mode: `targets` maps each mode to what
@@ -38,29 +43,6 @@ def _by_mode(targets):
         Label("//:mode_" + mode): targets[mode]
         for mode in _MODES
     })
-
-def _plist(name, entries, tags):
-    """An Info.plist of `entries` (each a key's XML and its value's), merged
-    by rules_apple with the app's own `infoplists`."""
-    write_file(
-        name = name,
-        out = name + ".plist",
-        content = [
-            '<?xml version="1.0" encoding="UTF-8"?>',
-            '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
-            '<plist version="1.0">',
-            "<dict>",
-        ] + entries + [
-            "</dict>",
-            "</plist>",
-            "",
-        ],
-        tags = tags,
-    )
-
-def _identifier(name):
-    """`name` as a Swift module name: letters, digits and underscores."""
-    return "".join([c if c.isalnum() else "_" for c in name.elems()])
 
 def isomer_application(
         name,
@@ -71,14 +53,8 @@ def isomer_application(
         version = "1.0",
         build = 1,
         platforms = _PLATFORMS,
-        minimum_ios_version = "18.0",
-        minimum_macos_version = "15.0",
-        families = ["iphone", "ipad"],
-        app_icons = [],
-        infoplists = [],
         resources = [],
         fonts = [],
-        ios_provisioning_profile = None,
         android_icon = None,
         android_assets = None,
         min_sdk_version = 28,
@@ -88,8 +64,10 @@ def isomer_application(
         android_remote_url = None,
         tags = [],
         visibility = None):
-    """One Isomer app's targets on every platform, in each mode
-    (docs/modes.md, "The setting").
+    """One Isomer app's targets on Android and the web, in each mode
+    (docs/modes.md, "The setting"). The iPhone's and the Mac's are
+    isomer_apple's isomer_application, which takes these arguments and
+    Apple's and calls this one (docs/platform_modules.md).
 
     `swift_library` is the app: its SwiftUI `@main App`, `alwayslink`
     (the only reference to its `main` comes from an archive linked after
@@ -101,21 +79,8 @@ def isomer_application(
     meaning). One isomer_application to a package: the web app's reactor
     is the package's `app_bridge` (isomer_web_app).
 
-    Declares, for each platform in `platforms`:
+    Declares, for each platform in `platforms` (`android`, `web`):
 
-      <name>_ios       the iPhone and iPad app, in the build's mode:
-        <name>_ios_compiled  the library compiled in (ios_application)
-        <name>_ios_webview   the web app's site bundled, run in a web view
-                             and drawn by Isomer's tree renderer
-                             (IsomerWebViewAppView), from a generated shell
-                             (webview_app.swift.tpl): none of the app's
-                             Swift compiled in
-        <name>_ios_remote    a generated shell drawing the app's session
-                             (IsomerRemoteView; remote_app.swift.tpl): the
-                             session's URL is the Info.plist's
-                             IsomerSessionURL (`remote_url`), or the launch
-                             argument `-url <url>`
-      <name>_macos     the Mac's, the same three (macos_application)
       <name>_android   `bazel run`: install and launch, in the build's mode;
       <name>_android_apk  the APK:
         <name>_android_compiled[_apk]  isomer_android_app
@@ -132,7 +97,9 @@ def isomer_application(
                                        native library
       <name>_web       isomer_web_app in every mode (a page is already
                        wasm): `bazel run` serves it; <name>_web_site the
-                       site, which the web-view apps bundle
+                       site, which the web-view apps bundle (declared
+                       whatever `platforms` says: the iPhone's and the
+                       Mac's web-view apps bundle it too)
       <name>_server    the app headless, serving itself, for the remote
                        apps to draw (always declared, manual): build it
                        with --@isomer//headless and run it with
@@ -143,20 +110,10 @@ def isomer_application(
     own names, in its mode. Every mode's can be built by name in one build
     (CI builds the three of an example so).
 
-    Identity: `bundle_id` (Apple), `package` (Android; `bundle_id` without
-    one, also the web page's app key), `display_name` (under the icon),
-    `version` (CFBundleShortVersionString, versionName) and `build`
-    (CFBundleVersion, versionCode). `minimum_ios_version` and
-    `minimum_macos_version` are every mode's (the heads, IsomerRemoteHead
-    and IsomerWebViewHead, need iOS 17 and macOS 14; the defaults are what
-    the remote and web-view examples are built at), `min_sdk_version`
-    Android's.
-
-    Apple: `app_icons` (an asset catalog's app icon), `infoplists` (merged
-    over the generated ones), `resources` and `fonts` go in every mode's app
-    (in web-view and remote modes the head loads a bundled image by name and
-    lays text out in its own fonts), `ios_provisioning_profile` for a device
-    build (none: the simulator's, `--ios_multi_cpus=sim_arm64`).
+    Identity: `bundle_id` (Apple's, with isomer_apple), `package` (Android;
+    `bundle_id` without one, also the web page's app key), `display_name`
+    (under the icon), `version` (versionName) and `build` (versionCode).
+    `min_sdk_version` is Android's.
 
     Android: `android_icon` (a 192 × 192 PNG, as isomer_android_app's
     `icon`), `android_assets` (the compiled and web-view apps' `assets`);
@@ -170,8 +127,7 @@ def isomer_application(
     `remote_url` is the remote apps' session (an app on the building
     machine, by default); `android_remote_url` Android's, by default
     `remote_url` with its loopback host as an emulator reaches it
-    (10.0.2.2). The Apple shells allow plain ws:// to the local network
-    only (NSAllowsLocalNetworking): a session elsewhere is wss://.
+    (10.0.2.2).
 
     `tags` go to every target the macro makes (`manual` on the platforms'
     names keeps a wildcard build from making the app), `visibility` to the
@@ -179,33 +135,36 @@ def isomer_application(
     """
     package = package or bundle_id
     for platform in platforms:
+        if platform in _APPLE_PLATFORMS:
+            fail(("isomer_application: the iPhone's and the Mac's apps (%s) are the isomer_apple " +
+                  "module's since 0.58: add bazel_dep(name = \"isomer_apple\", version = <isomer's>) and " +
+                  "load isomer_application from @isomer_apple//:defs.bzl (docs/platform_modules.md)") % platform)
         if platform not in _PLATFORMS:
-            fail("isomer_application: platforms are %s, not %s" % (_PLATFORMS, platform))
+            fail("isomer_application: platforms are %s, not %s" % (_PLATFORMS + _APPLE_PLATFORMS, platform))
     manual = tags + ([] if "manual" in tags else ["manual"])
 
     # The web app: wasm in every mode, and the site the web-view apps bundle.
-    if "web" in platforms or "ios" in platforms or "macos" in platforms or "android" in platforms:
-        index = web_index
-        if not index:
-            expand_template(
-                name = name + "_web_index",
-                out = "generated/%s/index.html" % name,
-                substitutions = {
-                    "{TITLE}": display_name,
-                    "{BUNDLE_ID}": package,
-                },
-                tags = manual,
-                template = Label("//tools/application:index.html.tpl"),
-            )
-            index = ":%s_web_index" % name
-        isomer_web_app(
-            name = name + "_web",
-            assets = web_assets,
-            fonts = fonts,
-            index = index,
-            swift_library = swift_library,
-            visibility = visibility,
+    index = web_index
+    if not index:
+        expand_template(
+            name = name + "_web_index",
+            out = "generated/%s/index.html" % name,
+            substitutions = {
+                "{TITLE}": display_name,
+                "{BUNDLE_ID}": package,
+            },
+            tags = manual,
+            template = Label("//tools/application:index.html.tpl"),
         )
+        index = ":%s_web_index" % name
+    isomer_web_app(
+        name = name + "_web",
+        assets = web_assets,
+        fonts = fonts,
+        index = index,
+        swift_library = swift_library,
+        visibility = visibility,
+    )
 
     # The app headless, serving itself: what a remote app draws.
     swift_binary(
@@ -213,28 +172,6 @@ def isomer_application(
         tags = manual,
         deps = [swift_library],
     )
-
-    if "ios" in platforms or "macos" in platforms:
-        _apple(
-            name = name,
-            swift_library = swift_library,
-            bundle_id = bundle_id,
-            display_name = display_name,
-            version = version,
-            build = build,
-            platforms = platforms,
-            minimum_ios_version = minimum_ios_version,
-            minimum_macos_version = minimum_macos_version,
-            families = families,
-            app_icons = app_icons,
-            infoplists = infoplists,
-            resources = resources + fonts,
-            ios_provisioning_profile = ios_provisioning_profile,
-            remote_url = remote_url,
-            tags = tags,
-            manual = manual,
-            visibility = visibility,
-        )
 
     if "android" in platforms:
         _android(
@@ -252,110 +189,6 @@ def isomer_application(
             remote_url = android_remote_url or remote_url.replace("127.0.0.1", "10.0.2.2").replace("localhost", "10.0.2.2"),
             tags = tags,
             manual = manual,
-            visibility = visibility,
-        )
-
-def _apple(
-        name,
-        swift_library,
-        bundle_id,
-        display_name,
-        version,
-        build,
-        platforms,
-        minimum_ios_version,
-        minimum_macos_version,
-        families,
-        app_icons,
-        infoplists,
-        resources,
-        ios_provisioning_profile,
-        remote_url,
-        tags,
-        manual,
-        visibility):
-    # The shells, one source for the iPhone and the Mac.
-    expand_template(
-        name = name + "_webview_shell_swift",
-        out = "generated/%s/WebViewShell.swift" % name,
-        substitutions = {"{SITE}": name + "_web_site"},
-        tags = manual,
-        template = Label("//tools/application:webview_app.swift.tpl"),
-    )
-    swift_library_rule(
-        name = name + "_webview_shell",
-        srcs = [":%s_webview_shell_swift" % name],
-        module_name = _identifier(name) + "_WebViewShell",
-        tags = manual,
-        deps = [Label("//apple/libraries/webview_head")],
-    )
-    expand_template(
-        name = name + "_remote_shell_swift",
-        out = "generated/%s/RemoteShell.swift" % name,
-        substitutions = {"{REMOTE_URL}": remote_url},
-        tags = manual,
-        template = Label("//tools/application:remote_app.swift.tpl"),
-    )
-    swift_library_rule(
-        name = name + "_remote_shell",
-        srcs = [":%s_remote_shell_swift" % name],
-        module_name = _identifier(name) + "_RemoteShell",
-        tags = manual,
-        deps = [Label("//apple/libraries/remote_head")],
-    )
-
-    # What every mode's Info.plist has; the remote shells' session and the
-    # plain ws:// a session on the local network takes.
-    versions = [
-        "<key>CFBundlePackageType</key><string>APPL</string>",
-        "<key>CFBundleShortVersionString</key><string>%s</string>" % version,
-        "<key>CFBundleVersion</key><string>%s</string>" % build,
-    ]
-    _plist(name + "_ios_plist", versions + ["<key>UILaunchScreen</key><dict/>"], manual)
-    _plist(name + "_macos_plist", versions, manual)
-    _plist(name + "_remote_plist", [
-        "<key>IsomerSessionURL</key><string>%s</string>" % remote_url,
-        "<key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>",
-        "<key>NSLocalNetworkUsageDescription</key><string>%s runs on a computer on your network.</string>" % display_name,
-    ], manual)
-
-    # Each mode's app: its code, the site a web-view app runs, the session a
-    # remote app draws.
-    modes = {
-        "compiled": struct(deps = [swift_library], resources = [], plists = []),
-        "webview": struct(deps = [":%s_webview_shell" % name], resources = [":%s_web_site" % name], plists = []),
-        "remote": struct(deps = [":%s_remote_shell" % name], resources = [], plists = [":%s_remote_plist" % name]),
-    }
-    for platform in ["ios", "macos"]:
-        if platform not in platforms:
-            continue
-        for mode, parts in modes.items():
-            common = dict(
-                name = "%s_%s_%s" % (name, platform, mode),
-                app_icons = app_icons,
-                bundle_id = bundle_id,
-                bundle_name = display_name,
-                infoplists = [":%s_%s_plist" % (name, platform)] + parts.plists + infoplists,
-                resources = parts.resources + resources,
-                tags = manual,
-                deps = parts.deps,
-            )
-            if platform == "ios":
-                ios_application(
-                    families = families,
-                    minimum_os_version = minimum_ios_version,
-                    provisioning_profile = ios_provisioning_profile,
-                    **common
-                )
-            else:
-                macos_application(
-                    minimum_os_version = minimum_macos_version,
-                    **common
-                )
-        native.alias(
-            name = "%s_%s" % (name, platform),
-            actual = _by_mode({mode: ":%s_%s_%s" % (name, platform, mode) for mode in _MODES}),
-            tags = tags,
             visibility = visibility,
         )
 
