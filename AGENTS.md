@@ -45,6 +45,7 @@ management. The repo is ONE Bazel module, `isomer`, plus the examples:
 | `metal/` | (isomer) | Isomer's `Metal` (`//metal/metal`), IsomerMetal (`//metal/isomer_metal`: the MSL→WGSL translator, the backend interface), the web backend (`//metal/web`, `//metal/runtime`) |
 | `swift_gpu/` | (isomer) | the GPU abstraction (`//swift_gpu/{core,metal,apple,android,wasm,linux,windows}`) |
 | `swift_map/` | (isomer) | the OpenStreetMap renderer (`//swift_map/swift_map/{core,renderer}`, platform libraries under `//swift_map/<platform>/libraries/...`, its example apps and their small tools) |
+| `apple/module/` | `isomer_apple` | the iPhone's and the Mac's apps, a module of its own since 0.58 (docs/platform_modules.md): rules_apple 5.3.1.applecross.6, rules_applecross, apple_support 2.11.0, and isomer_application with its Apple half (`@isomer_apple//:defs.bzl`, calling isomer's `@isomer//tools/application:defs.bzl` for Android and the web). Released with isomer at its version, as isomer_android_maven is; the examples take it by `local_path_override` |
 | `examples/` | `isomer_examples` | Isomer's applications: the Storybook (`examples/storybook`, its apps `examples/<platform>/storybook_<platform>_application`), and the example apps and probes. A module of its own: it consumes isomer the way an outside application does. |
 
 Layering still points one way: CoreGraphics < Foundation < swift_ffi <
@@ -575,7 +576,13 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   a Mac app's nested code). rules_apple is the registry's preset 5.3.1.applecross.6
   (rules_apple 5.3.1 with rules_applecross's patches, asking for that
   rules_applecross, which asks for it back), apple_support the BCR's
-  2.11.0: no override of either in any root, since 0.40. MODULE.bazel names the SDK archive and the
+  2.11.0: no override of either in any root, since 0.40. Since 0.58 they
+  are isomer_apple's (apple/module) and isomer's development dependencies:
+  isomer asks its consumers for no Apple rules (apple_support only at
+  rules_swift's 2.9.1, for the ranking below), so an app on Android and the
+  web alone resolves none of rules_applecross's graph
+  (docs/platform_modules.md, which maps every non-dev dependency to its
+  platform; keep it current when one is added). MODULE.bazel names the SDK archive and the
   tools by placeholders (`https://apple-sdks.invalid/…`,
   `https://ported-tools.invalid/sha256/{sha256}`): each builder's untracked
   .bazelrc.user resolves them, with `--distdir=<a folder with them>` or a
@@ -597,7 +604,10 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   with no profile (`storybook_ios_sim_application`).
 - **`apple_support` must be declared BEFORE `rules_cc`** in MODULE.bazel, or
   rules_cc's local darwin toolchain (no `CC_TARGET_TRIPLE`) outranks it and
-  Swift compiles fail with "Invalid target triple: local".
+  Swift compiles fail with "Invalid target triple: local". So isomer keeps
+  a non-dev apple_support (at rules_swift's version, raising nothing) ahead
+  of its rules_cc: toolchains rank in the module graph's breadth-first
+  order, where rules_swift's own would come a level below isomer's rules_cc.
 - **Maven (0.54)**: isomer declares no Maven for its consumers (a module
   extension reads every module's tags, and an embedding app's older
   rules_jvm_external couldn't read isomer's). Isomer's AndroidX is the
@@ -610,7 +620,9 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   module's tag to android/maven/extensions.bzl points at its set; with no
   module there it fails, saying to add it or set the flags.
   rules_android_maven, rules_jvm_external and rules_xcodeproj are dev-only.
-  docs/android_maven.md.
+  docs/android_maven.md. isomer_apple (apple/module, 0.58) is released the
+  same way; tools/released_pins.sh checks both modules' versions, and the
+  registry's tools/add_releases.py follows each (`FOLLOWED`, `WITHIN`).
 - **Android C/C++** comes from `hermetic_android_toolchains` (keith's):
   `@androidndk//:all` supplies the cc toolchains the Swift Android toolchain
   links through (NDK r30, API 28); `@androidsdk` (SDK 35 / build-tools

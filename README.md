@@ -657,10 +657,14 @@ For full-application adoption, `isomer_android_app` and
 platform-specific modifiers (`.androidStatusBarStyle`, `.webDocumentTitle`,
 …) over a generic `platformCommand` channel.
 
-`isomer_application` (`@isomer//tools/application:defs.bzl`) declares one
-app's targets on every platform from one Swift library: `<name>_ios`,
-`<name>_macos`, `<name>_android` (and `_apk`) and `<name>_web`, built in
-the mode `--@isomer//:mode` names (docs/modes.md):
+`isomer_application` declares one app's targets on every platform from one
+Swift library: `<name>_ios`, `<name>_macos`, `<name>_android` (and `_apk`)
+and `<name>_web`, built in the mode `--@isomer//:mode` names
+(docs/modes.md). The iPhone's and the Mac's are the isomer_apple module's
+(since 0.58, docs/platform_modules.md): an app with them loads it from
+`@isomer_apple//:defs.bzl`; an app on Android and the web alone loads
+isomer's own, `@isomer//tools/application:defs.bzl`, and never resolves
+rules_apple's graph. The modes:
 
 - `compiled` (the default): the app's Swift in each platform's app
   (rules_apple's applications, `isomer_android_app`, `isomer_web_app`);
@@ -674,7 +678,7 @@ The web is wasm in every mode. Each mode's app is also there by name
 (`<name>_ios_webview`, `<name>_android_remote`, …).
 
 ```starlark
-load("@isomer//tools/application:defs.bzl", "isomer_application")
+load("@isomer_apple//:defs.bzl", "isomer_application")  # Android and the web alone: @isomer//tools/application:defs.bzl
 
 isomer_application(
     name = "notes",
@@ -717,7 +721,24 @@ bazel_dep(name = "isomer_android_maven", version = "0.54.1")
 
 and an app with AndroidX of its own leaves the module out and points both
 flags at its own set in its `.bazelrc`. With neither, an Android build
-fails saying which to do. rules_android's own Maven (its tools) is
+fails saying which to do.
+
+**The iPhone and the Mac: isomer_apple** (since 0.58;
+[docs/platform_modules.md](docs/platform_modules.md)). isomer asks for no
+Apple rules: an app on Android and the web alone resolves rules_apple only
+at the version rules_swift_package_manager asks for, and none of
+rules_applecross's graph. An app whose iPhone and Mac apps come from
+`isomer_application` adds the module released with each isomer, at the same
+version, and loads the macro from it (`@isomer_apple//:defs.bzl`):
+
+```starlark
+bazel_dep(name = "isomer_apple", version = "0.58.1")
+```
+
+It brings rules_apple 5.3.1.applecross.6 (as `build_bazel_rules_apple`),
+rules_applecross and apple_support 2.11.0; the root still registers the
+bundling toolchains ("Upgrading isomer", 0.40). An app that declares its
+Apple applications with rules_apple itself needs no isomer_apple. rules_android's own Maven (its tools) is
 rules_android's to declare; docs/android_maven.md shows how to pin it with
 isomer's lock file, as the examples do.
 
@@ -893,6 +914,22 @@ build --strategy=CppArchive=local
 ### Upgrading isomer
 
 Each release's notes have an Upgrading section; these things are easy to miss:
+
+- **The iPhone's and the Mac's apps are isomer_apple's (since 0.58,
+  docs/platform_modules.md).** isomer no longer asks for rules_apple or
+  apple_support 2.11.0 (apple_support only at rules_swift's 2.9.1):
+  - an app that loads `isomer_application` and builds the iPhone's or the
+    Mac's apps adds `bazel_dep(name = "isomer_apple", version = …)` at
+    isomer's version and changes its load to
+    `load("@isomer_apple//:defs.bzl", "isomer_application")`: the same
+    arguments and targets. isomer's own `isomer_application` builds Android
+    and the web, and refuses `ios` and `macos`, naming the module;
+  - an app that relied on isomer for rules_apple 5.3.1.applecross.6 or
+    apple_support 2.11.0 asks for them itself (an app with Apple apps of
+    its own already does: nothing changes for it);
+  - swift_map's Apple example apps and XCFramework are the examples'
+    (`examples/swift_map/…`), not `@isomer//swift_map/apple/applications`
+    and `@isomer//swift_map/apple/xcframework`.
 
 - **`wasm_sdk_bundle` carries Foundation again (since 0.57).** 0.56's bundle
   had no Foundation, CoreGraphics or Combine (they left the package for the
@@ -1463,8 +1500,11 @@ metal/                Isomer's Metal: the API, the MSL→WGSL translator, the
 swift_gpu/            the GPU abstraction: Metal (Apple's and Isomer's),
                       OpenGL (ES), Direct3D
 swift_map/            the OpenStreetMap renderer behind `Map`
-examples/             the example applications: the one other Bazel module,
+examples/             the example applications: a Bazel module of their own,
                       consuming this one as an outside application does
+apple/module/         isomer_apple, the module of the iPhone's and the Mac's
+                      apps (rules_apple; isomer_application's Apple half)
+android/maven_module/ isomer_android_maven, Isomer's AndroidX
 shared/
   swift_ui_core/      SwiftUI reimplementation (platform-agnostic): views,
                       ViewBuilder, @State via Mirror reflection, layout
