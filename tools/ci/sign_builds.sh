@@ -100,10 +100,12 @@ done
 case "$ipa_kind" in development | production) ;; *) fail "--ipa-kind is development or production" ;; esac
 mkdir -p "$out"
 out="$(cd "$out" && pwd)"
-# A tool built before this step (above), by its BUILD_TOOLS_<NAME>.
+# A tool built before this step (above), by its BUILD_TOOLS_<NAME>: a
+# file, executable but for apksigner.jar (which java runs).
 built() {
     local name="BUILD_TOOLS_$1"
-    [ -n "${!name:-}" ] && [ -e "${!name}" ] || fail "no $1: $name names none (the workflow's step building //tools/ci_tools)"
+    [ -n "${!name:-}" ] && [ -f "${!name}" ] && { [ "$1" = APKSIGNER ] || [ -x "${!name}" ]; } ||
+        fail "no $1: $name names no tool (the workflow's step building //tools/ci_tools)"
     printf '%s' "${!name}"
 }
 # shellcheck source=tools/ci/release_assets.sh
