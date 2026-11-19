@@ -455,11 +455,11 @@ docs/hermetic_toolchains.md, "The SDKs' checks", has what is in place
 (sdk-check in the SDKs' build, tests/sdk_consumer with tools/ci/sdk_smoke,
 the candidate pre-release). Still open:
 
-- **The workflows**: isomer_hermetic_toolchains' isomer_sdk.yml (the
-  `-rc<N>` pre-release, the release matched to it) and build.yml's
-  `sdk-smoke` and `sdk-smoke-android` jobs are committed by New Container
-  Helper (agents can't push workflow files); until then the checks run by
-  hand in a lease (`bazel run //tools/ci/sdk_smoke`).
+- **The workflows**: isomer_hermetic_toolchains' isomer_sdk.yml (its
+  release run: the consumer against the SDKs served from the job, then
+  `sdk-check draft`) is committed by New Container Helper (agents can't push
+  workflow files); it checks out isomer main, so this repository's
+  tests/sdk_consumer and tools/ci/sdk_smoke must be on main first.
 - **Every cell in CI**: plain and -i18n at API 23 and 28 build and run on
   GitHub's x86_64 KVM emulator; arm64 runs only on Apple silicon (the
   hermetic emulator with Google's API 23 image, README, "Android below API
@@ -494,11 +494,6 @@ the candidate pre-release). Still open:
   "this SDK requires Android API N; min_sdk_version is M". Today a bundle
   whose triples overstate it (isomer-6.4.2.1's) passes analysis and fails
   at link; the SDK's own build now refuses to make one.
-- **The fixture's rules_android at 0.6.0** needs the registry's
-  hermetic_android_toolchains 0.5.0.isomer.2 (its @androidsdk no longer
-  loads rules_android 0.7's helper.bzl): until it is merged there, the
-  fixture resolves only with that branch's registry listed first
-  (tests/sdk_consumer/.bazelrc.user).
 - **Bazel 8.5.0, the floor**: the fixture runs on 8.8.1 (.bazelversion);
   the bazel8 job keeps building the Storybooks with 8.5.0.
 

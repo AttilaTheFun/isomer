@@ -17,7 +17,7 @@ struct SDKSmoke: ParsableCommand {
             the candidate, in one output base.
 
               sdk_smoke cell --fixture tests/sdk_consumer --isomer 0.57.1 \\
-                  --sdk-base-url https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.2-rc1 \\
+                  --sdk-base-url https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1 \\
                   --variant i18n --api 23
               sdk_smoke build --fixture tests/sdk_consumer
               sdk_smoke run-android --fixture tests/sdk_consumer --adb adb --serial emulator-5554 \\

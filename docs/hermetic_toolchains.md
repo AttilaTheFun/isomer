@@ -84,10 +84,10 @@ On that branch, beside swift-foundation's sources:
   then sdk/check's `sdk-check` on the bundle ("The SDKs' checks", below).
   Reproducible: the same bundle from any checkout, its file times those of
   the last commit to what goes into it.
-- `.github/workflows/isomer_sdk.yml`: the four SDKs built on each push to an
-  `isomer-*` branch, and on an `isomer-*` tag a draft release with them,
-  their `.sha256` files, and notes giving the consumer's lines (an
-  `isomer-*-rc<N>` tag a published pre-release: "The SDKs' checks").
+- `.github/workflows/isomer_sdk.yml`: the four SDKs built and checked on
+  each push to an `isomer-*` branch, and a release run by hand (`run:
+  release`) that also builds a consumer against them and drafts the release
+  ("The SDKs' checks").
 
 ## The SDKs
 
@@ -180,19 +180,25 @@ everything at 23, and these guard the SDKs from then on:
   own checks cover it),
   builds the APKs, and runs the same checks as a WASI command under WasmKit;
   `sdk_smoke run-android` runs an APK on an emulator and reads the checks
-  from its log. CI's `run: sdk-smoke` (build.yml) builds each cell, plain
-  and -i18n at API 23 and 28, first at the previous release and then
-  upgraded in the same output base to the commit and the candidate SDKs
-  (`sdk_base_url`), and runs the x86_64 APK on GitHub's KVM emulator at the
-  cell's API.
-- **A candidate before a release**: isomer_hermetic_toolchains' CI publishes
-  an `isomer-<version>-rc<N>` tag's SDKs as a pre-release (published, so
-  its assets download without a token, as a consumer's do), isomer's
-  `run: sdk-smoke` builds and runs the consumer against its URL, and the
-  `isomer-<version>` tag on the same commit then builds them again and
-  drafts the release only if they are the candidate's byte for byte (the
-  builds are reproducible). isomer's pins move to the release's URL, whose
-  checksums are the candidate's.
+  from its log. isomer's CI (`run: sdk-smoke` and `run: release`,
+  build.yml) builds each cell, plain and -i18n at API 23 and 28, first at
+  the previous release and then upgraded in the same output base to the
+  commit, with the SDKs isomer registers, and runs the x86_64 APK on
+  GitHub's KVM emulator at the cell's API.
+- **A release of the SDKs** goes as isomer's do (AttilaTheFun/reviews'
+  docs/RELEASE_PROCESS.md): isomer_hermetic_toolchains' isomer_sdk.yml,
+  dispatched by hand with `run: release` on the release branch
+  (isomer-6.4.2), builds and checks the four SDKs, then runs this consumer
+  against them before any release exists, as an app fetches them, by URL
+  and sha256: isomer main's tests/sdk_consumer, the SDKs served from the job
+  (a draft's assets need a token), each cell upgraded from the SDKs isomer
+  registers now, its x86_64 APK on the emulator. Then `sdk-check draft`
+  (its sdk/check) drafts the release, `isomer-6.4.2.N` (N from the
+  repository's releases and tags, as isomer's version_from_tags.sh finds
+  its own), with the SDKs, their `.sha256` files, and notes listing the
+  checks passed, the checksums and the consumer's lines; never over a
+  published release. The owner publishes it in Reviews, which makes the
+  tag; isomer's pins then move to its URLs.
 
 What looked like two more faults of isomer-6.4.2.1's -i18n SDK was an
 output base kept from isomer 0.55 or earlier: Foundation.swiftmodule (and
