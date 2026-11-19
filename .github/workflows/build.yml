@@ -58,14 +58,10 @@ on:
   workflow_dispatch:
     inputs:
       run:
-        description: "What to run: verify (the tests, no proof), prerelease or release on main (verify on a branch to bisect); proof (the screenshot proof alone); experiment on any but a release branch; waydroid-probe (a probe of Waydroid on the hosted runner) on any; sdk-smoke (a consumer of Isomer's Swift SDKs at sdk_base_url) on any"
+        description: "What to run: verify (the tests, no proof), prerelease or release on main (verify on a branch to bisect); proof (the screenshot proof alone); experiment on any but a release branch; waydroid-probe (a probe of Waydroid on the hosted runner) on any; sdk-smoke (a consumer of Isomer's Swift SDKs, the ones this commit registers) on any"
         type: choice
         options: [verify, proof, prerelease, release, experiment, waydroid-probe, sdk-smoke]
         default: verify
-      sdk_base_url:
-        description: "sdk-smoke: where Isomer's Swift SDKs are (a candidate's download URL, …/releases/download/isomer-<version>-rc<N>); empty for the ones isomer registers"
-        type: string
-        default: ""
       kind:
         description: The proof's kind
         type: choice
@@ -329,10 +325,11 @@ jobs:
   # consumer shaped as an app outside this repository (Bazel 8, minSdk 23,
   # a kt_swift_library's JNI library, an isolated swift_deps graph, an older
   # bazel_features), built at the previous release first and then upgraded
-  # in the same output base to this commit's isomer and the SDKs at
-  # sdk_base_url (a candidate, isomer_hermetic_toolchains' isomer-*-rc<N>
-  # pre-release), by the lines a consumer's upgrade changes
-  # (tools/ci/sdk_smoke cell). Each cell: the JNI library for aarch64 and
+  # in the same output base to this commit's isomer and the SDKs it
+  # registers (examples/MODULE.bazel's), by the lines a consumer's upgrade
+  # changes (tools/ci/sdk_smoke cell); isomer_hermetic_toolchains' release
+  # run builds the same consumer against SDKs not yet released (its
+  # isomer_sdk.yml). Each cell: the JNI library for aarch64 and
   # x86_64, the APKs, the WASI command run under WasmKit; then the x86_64
   # APK on an emulator at the cell's API (sdk-smoke-android).
   sdk-smoke:
@@ -353,7 +350,6 @@ jobs:
       # moved on at each release.
       PREVIOUS_ISOMER: "0.57.1"
       PREVIOUS_SDK: https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1
-      SDK_BASE_URL: ${{ inputs.sdk_base_url }}
     steps:
       - uses: actions/checkout@v5
       - name: The job's tools
@@ -364,9 +360,9 @@ jobs:
         run: |
           bazel run //tools/ci/sdk_smoke -- cell --isomer "$PREVIOUS_ISOMER" --sdk-base-url "$PREVIOUS_SDK" --variant ${{ matrix.variant }} --api 28
           bazel run //tools/ci/sdk_smoke -- build --no-apks --no-wasm --startup-arg=--output_base=/mnt/consumer
-      - name: Upgraded to this commit and the candidate SDKs
+      - name: Upgraded to this commit and the SDKs it registers
         run: |
-          base="${SDK_BASE_URL:-$(sed -n 's|^ *url = "\(.*\)/swift-6.4.2-RELEASE_android.*|\1|p' examples/MODULE.bazel | head -1)}"
+          base="$(sed -n 's|^ *url = "\(.*\)/swift-6.4.2-RELEASE_android.*|\1|p' examples/MODULE.bazel | head -1)"
           bazel run //tools/ci/sdk_smoke -- cell --isomer "$PWD" --sdk-base-url "$base" --variant ${{ matrix.variant }} --api ${{ matrix.api }}
           bazel run //tools/ci/sdk_smoke -- build --startup-arg=--output_base=/mnt/consumer
           # The APKs with rules_android 0.7.3 (0.6.0's tools' Maven is unpinned).
