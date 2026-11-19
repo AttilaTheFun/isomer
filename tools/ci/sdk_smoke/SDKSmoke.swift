@@ -14,14 +14,16 @@ struct SDKSmoke: ParsableCommand {
             Android's three architectures, its APKs and its WASI command, and runs
             the command under WasmKit; `run-android` runs an APK on an emulator.
             An upgrade is `cell` and `build` for the previous release, then for
-            the candidate, in one output base.
+            the candidate, in one output base. Run it with
+            `bazel run --symlink_prefix=/ //tools/ci/sdk_smoke -- …`: a cell with isomer
+            a checkout refuses one with Bazel's convenience symlinks at its root.
 
               sdk_smoke cell --fixture tests/sdk_consumer --isomer 0.57.1 \\
                   --sdk-base-url https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1 \\
                   --variant i18n --api 23
-              sdk_smoke build --fixture tests/sdk_consumer
+              sdk_smoke build --fixture tests/sdk_consumer --out /tmp/apks
               sdk_smoke run-android --fixture tests/sdk_consumer --adb adb --serial emulator-5554 \\
-                  --apk bazel-bin/smoke_apk_x86_64.apk
+                  --apk /tmp/apks/smoke_x86_64.apk
             """,
         subcommands: [Cell.self, Build.self, RunAndroid.self]
     )
@@ -105,6 +107,30 @@ struct Cell: ParsableCommand {
         let packageLine: String
         if isomer.contains("/") {
             let checkout = absolute(isomer)
+            // Bazel's convenience symlinks at the checkout's root (bazel-bin,
+            // bazel-<directory>, …) are inside the Isomer target of its
+            // Package.swift, whose path is "." with its other directories
+            // excluded: SwiftPM takes the examples' .lproj under them for
+            // resources and `swift package describe` fails ("manifest property
+            // 'defaultLocalization' not set"). Run this with
+            // `bazel run --symlink_prefix=/`, which makes none. And none in the
+            // fixture, a directory of that checkout (tests/): rules_swift_package_manager
+            // copies the local package whole into the fixture's output base,
+            // and a link into that output base can't be copied there (`build`
+            // passes --symlink_prefix=/ too).
+            for directory in [checkout, fixture.path] {
+                let links = try FileManager.default.contentsOfDirectory(atPath: directory).filter { name in
+                    name.hasPrefix("bazel-")
+                        && (try? FileManager.default.destinationOfSymbolicLink(atPath: "\(directory)/\(name)")) != nil
+                }
+                guard links.isEmpty else {
+                    throw ToolFailure("""
+                        \(directory) has Bazel's convenience symlinks (\(links.sorted().joined(separator: ", "))), which \
+                        isomer's package can't have in it: remove them, and run this with \
+                        `bazel run --symlink_prefix=/ //tools/ci/sdk_smoke -- …`
+                        """)
+                }
+            }
             let module = try String(contentsOfFile: "\(checkout)/MODULE.bazel", encoding: .utf8)
             guard let version = Self.moduleVersion(module) else { throw ToolFailure("\(checkout)/MODULE.bazel names no version") }
             isomerLines = [
@@ -224,7 +250,10 @@ struct Build: ParsableCommand {
 
     @discardableResult
     func bazelCommand(_ command: String, _ arguments: [String], capture: Bool = false) throws -> String {
-        try runChecked([bazel] + startupArgs + [command] + bazelArgs + arguments, in: fixture.path, capture: capture)
+        // No convenience symlinks in the fixture: isomer's package, a local
+        // package of the fixture's graph, is copied whole (tests/ with it)
+        // into the output base, and a link into that output base can't be.
+        try runChecked([bazel] + startupArgs + [command, "--symlink_prefix=/"] + bazelArgs + arguments, in: fixture.path, capture: capture)
     }
 
     func run() throws {
@@ -256,7 +285,7 @@ struct Build: ParsableCommand {
             let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("sdk-smoke-wasi-\(UUID().uuidString)").path
             try FileManager.default.createDirectory(atPath: tmp, withIntermediateDirectories: true)
             defer { try? FileManager.default.removeItem(atPath: tmp) }
-            let output = try runChecked([bazel] + startupArgs + ["run"] + bazelArgs + ["@isomer//tools/wasm/wasi_run", "--", "--map-dir=/tmp::\(tmp)", module],
+            let output = try runChecked([bazel] + startupArgs + ["run", "--symlink_prefix=/"] + bazelArgs + ["@isomer//tools/wasm/wasi_run", "--", "--map-dir=/tmp::\(tmp)", module],
                                         in: fixture.path, capture: true)
             try check(lines: output.split(separator: "\n").map(String.init), i18n: cell.i18n, where: "the WASI command under WasmKit")
         }
