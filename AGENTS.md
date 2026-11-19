@@ -442,7 +442,7 @@ _PASSWORD (the iPhone app); APPLE_PROFILES (a base64 .tar or .tar.gz of
 their profiles). `sign` writes each signed package as
 <App>-<version>-<platform>.<ext> and its line of builds.json (`--builds`,
 the Mac app's icon beside it); a platform whose keys aren't set is skipped
-(`sign apple --skip-missing-keys`; Android's step checks its own), saying
+(`sign … --skip-missing-keys`), saying
 so in the log and the job's summary, never failing the job. An experiment
 saves its build as built (`sign apple --unsigned`: AdHoc, unsigned). The Apple
 Alphas are built on a Mac (`alpha-apple`), unsigned, and signed in `alpha`

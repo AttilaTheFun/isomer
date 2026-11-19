@@ -30,6 +30,6 @@ let package = Package(
         // iPhone app, with the release environment's keys) and `proof-diff`
         // (the proof's comparison, proof-diff.json). CI's alone: no app or
         // library of Isomer's depends on it.
-        .package(url: "https://github.com/AttilaTheFun/build_tools.git", exact: "0.4.0"),
+        .package(url: "https://github.com/AttilaTheFun/build_tools.git", exact: "0.4.1"),
     ]
 )
