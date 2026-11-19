@@ -107,6 +107,7 @@ func absolute(_ path: String) -> String {
 }
 
 /// `run`, by a name a command's own `run()` doesn't hide.
-func runStatus(_ arguments: [String], in directory: String? = nil, capture: Bool = false) throws -> (status: Int32, output: String) {
-    try run(arguments, in: directory, capture: capture)
+func runStatus(_ arguments: [String], in directory: String? = nil, capture: Bool = false,
+               timeout: TimeInterval? = nil) throws -> (status: Int32, output: String) {
+    try run(arguments, in: directory, capture: capture, timeout: timeout)
 }

@@ -361,7 +361,7 @@ struct RunAndroid: ParsableCommand {
                 ("dumpsys activity", ["shell", "dumpsys", "activity"]),
             ] {
                 print("--- \(title) ---")
-                let result = try? run([adb, "-s", serial] + arguments, capture: true, timeout: 60)
+                let result = try? runStatus([adb, "-s", serial] + arguments, capture: true, timeout: 60)
                 print(result.map { $0.status == 0 ? $0.output : "(exit \($0.status))\n\($0.output)" } ?? "(adb could not run)")
             }
             fflush(stdout)
