@@ -598,9 +598,11 @@ package final class Runtime {
         // host relays out natively either way). Rebuild only before the first
         // frame, when nothing is retained yet.
         if let tree = retainedTree {
+            renderStatsBegin(kind: .relayout)
             renderingTree = true
             Renderer.current.render(tree: tree)
             renderingTree = false
+            renderStatsEnd()
             // What the hand-over queued (a reader's `.onChange` at the new
             // size) runs in the next frame.
             if !deferredActions.isEmpty { requestFrame() }
@@ -655,6 +657,8 @@ package final class Runtime {
                 treeVolatile = buildVolatility != volatility
                 endReuseFrame(partial: true)
                 partialFrameCount &+= 1
+                currentFrame.kind = .partial
+                noteFrameDetail(sites.isEmpty ? "nothing" : sites.map { typeName($0.view) }.joined(separator: ", "))
                 frameLogEnd()
                 if verifyPartialFrames {
                     // The same changes built whole, to compare with: what the
@@ -678,6 +682,7 @@ package final class Runtime {
             dirtyStateKeys.formUnion(buildDirtyKeys)
             buildDirtyKeys = []
         }
+        currentFrame.kind = .whole
         return buildWholeFrameTree(makeRootView)
     }
 
@@ -841,6 +846,20 @@ package final class Runtime {
     /// The frame log (FrameLog.swift), when the host asked for one.
     var frameLog: _FrameLog?
     var frameLogChecked = false
+    /// The render log (FrameLog.swift) and the frame counts it reads, kept
+    /// with it off too: what the last frame did, the frames handed to the
+    /// renderer, those built whole, and the composite views built.
+    package var renderLogEnabled = false
+    package var renderLogChecked = false
+    var currentFrame = FrameStats()
+    package internal(set) var frameStats = FrameStats()
+    package internal(set) var renderedFrameCount = 0
+    package internal(set) var wholeFrameCount = 0
+    var compositeBuildCount = 0
+    var frameBuildsAtStart = 0
+    var frameStartedAt = 0.0
+    /// The host's events since the last frame, by kind (the render log's).
+    var frameRequests: [String: Int] = [:]
 
     @MainActor
     public func renderFrame() {
@@ -863,6 +882,7 @@ package final class Runtime {
         // work does.
         forgetTreeIfRendererChanged()
         buildingFrame = true
+        renderStatsBegin(kind: .whole)
         var root = buildFrameTree(makeRootView)
         var passes = 1
         while !onChangeActions.isEmpty && passes < 4 {
@@ -902,6 +922,7 @@ package final class Runtime {
         renderingTree = true
         Renderer.current.render(tree: root)
         renderingTree = false
+        renderStatsEnd()
 
         syncWindowTitle()
         dispatchExternalURLs()
@@ -1695,6 +1716,7 @@ package final class Runtime {
 
     /// A native widget reported a new value (host -> runtime).
     public func hostViewEvent(id: String, value: String) {
+        noteFrameRequest(id)
         if let handler = treeHandlers[id] {
             handler(value)
         } else if id.hasSuffix(".geo") {
