@@ -449,6 +449,54 @@ app first, first:
    Bazel-only modules (the hosts, the renderers, drive/).
 5. **Warnings as errors** once each is clean, as swift_ffi's packages are.
 
+## Isomer's Swift SDKs: the checks' open items (0.58)
+
+docs/hermetic_toolchains.md, "The SDKs' checks", has what is in place
+(sdk-check in the SDKs' build, tests/sdk_consumer with tools/ci/sdk_smoke,
+the candidate pre-release). Still open:
+
+- **The workflows**: isomer_hermetic_toolchains' isomer_sdk.yml (its
+  release run: the consumer against the SDKs served from the job, then
+  `sdk-check draft`) is committed by New Container Helper (agents can't push
+  workflow files); it checks out isomer main, so this repository's
+  tests/sdk_consumer and tools/ci/sdk_smoke must be on main first.
+- **Every cell in CI**: plain and -i18n at API 23 and 28 build and run on
+  GitHub's x86_64 KVM emulator; arm64 runs only on Apple silicon (the
+  hermetic emulator with Google's API 23 image, README, "Android below API
+  28", or a Shireworks `android` lease), so it isn't in CI.
+- **armv7 through rules_swift**: the fixture's `//:smoke_android_armv7_so`
+  fails to compile: rules_swift's Android toolchain gives Swift the NDK's
+  triple, `arm-unknown-linux-android`, and the SDK's modules are
+  `armv7-unknown-linux-android` ("could not find module 'Swift' for target
+  'arm-unknown-linux-android'"). An upstream fix (the triple mapped to
+  armv7 for Swift), for the Upstream session; isomer has never built
+  armeabi-v7a ("Android below API 28": later, if an app needs it). The
+  SDK's armv7 libraries are linked and checked by its own build.
+- **The web in a browser**: the WASI command runs under WasmKit; running it
+  in headless Chrome as well (//tools/wasm/wasi_run_browser) would cover
+  the web's own WASI.
+- **A stale Foundation found before the SDK's** (an output base kept from
+  isomer 0.55 or earlier: README, "Upgrading isomer"). Documented, and the
+  consumer's upgrade build catches the kind. A guard that names the cause
+  at compile time: build the SDK's Isomer modules with
+  `-user-module-version <the SDK's version>` and have IsomerSwiftUI (whose
+  compiles have the package's output directory on their search path) fail
+  with `#if !canImport(Foundation, _version: …) #error("…bazel clean…")`
+  on Android and the web. Changes no public interface; needs an SDK
+  release and isomer together.
+- **rules_swift: the SDK's minimum stated, not inferred** (for the Upstream
+  session to propose): rules_swift#2000 takes the lowest API among
+  swift-sdk.json's target triples. A bundle could state it
+  (swift-sdk.json's triples are swift.org's format; an extra
+  `"minimumAndroidAPI"`-style key, or SwiftPM's own metadata if it grows
+  one), and the check could also compare an android_binary's
+  min_sdk_version where rules_android exposes it, failing at analysis with
+  "this SDK requires Android API N; min_sdk_version is M". Today a bundle
+  whose triples overstate it (isomer-6.4.2.1's) passes analysis and fails
+  at link; the SDK's own build now refuses to make one.
+- **Bazel 8.5.0, the floor**: the fixture runs on 8.8.1 (.bazelversion);
+  the bazel8 job keeps building the Storybooks with 8.5.0.
+
 ## Android below API 28 (2026-11-06)
 
 Done with Swift 6.4 (0.41): swift.org's 6.4 Android SDK is built at API 23

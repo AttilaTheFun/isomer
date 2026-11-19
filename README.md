@@ -906,6 +906,25 @@ bazel aquery 'mnemonic(CppArchive, @isomer//swift_ffi/swift_ffi)' | grep 'Inputs
 
 Each release's notes have an Upgrading section; these things are easy to miss:
 
+- **Isomer's Swift SDKs isomer-6.4.2.2 (since 0.58): Android at API 23.**
+  isomer-6.4.2.1's Android SDKs were compiled for API 28, so an app at
+  minSdk 23 failed to link (`getgrgid_r` and `getgrnam_r` undefined in
+  libFoundationEssentials.a). Move both `swift.android_sdk` and
+  `swift.wasm_sdk` to isomer-6.4.2.2's lines ("Isomer's Swift SDKs" above,
+  or the release's notes). From then on every SDK build checks its
+  libraries against its minimum API (docs/hermetic_toolchains.md, "The
+  SDKs' checks").
+- **Upgrading from 0.55 or earlier: `bazel clean` once.** 0.56 took
+  Foundation, FoundationNetworking and IsomerFoundation out of isomer's
+  Swift package (the SDK's are used instead), but an output base that built
+  them keeps their `.swiftmodule`s in the package's output directory, where
+  Swift's unsandboxed compiles find them before the SDK's. The link then
+  fails with Foundation's stored properties' addressors undefined
+  (`$s10Foundation10FileHandleC13standardErrorACvau`,
+  `$s10Foundation25NSLocalizedDescriptionKeySSvau`) and
+  `NotificationCenter.Publisher`'s Combine witness table, and objects that
+  import Foundation autolink no `-lFoundation`. A clean build has neither.
+
 - **`wasm_sdk_bundle` carries Foundation again (since 0.57).** 0.56's bundle
   had no Foundation, CoreGraphics or Combine (they left the package for the
   Swift SDK); 0.57's takes them from the registered wasm SDK
@@ -1460,6 +1479,34 @@ layout and rendering regressions fail fast with a readable diff, no GPU or
 browser involved. Regenerate goldens after an intentional change with
 `bazel test //tests/snapshot:snapshot_test --test_env=ISO_RECORD=1 --test_output=all`
 and paste the printed blocks.
+
+### Frames: what each one built and diffed
+
+`ISO_RENDER_LOG` in an app's environment logs a line per frame through the
+host (logcat's `Isomer` tag on Android, the console on the web, standard
+error elsewhere), with no profiler:
+
+```
+[render] frame 7 partial (SecureFieldStory) | written 1 | built 1 | diffed 51 nodes, 2 ops | events text | 3.9 ms
+```
+
+the frame built in place (only the views reading what changed:
+shared/swift_ui_core/InPlace.swift) or whole (and why), the state written
+since the frame before, the composite views built, the nodes the
+component-system renderer's encoder compared and the patch operations it
+sent, and the host's events that asked for it ("text" a field's edit,
+"tap", "geo" a geometry report). A run of frames with nothing written is a
+render loop, and its events say what keeps asking. `ISO_FRAME_LOG` adds,
+per frame, which views were built and why. On Android they are the launch
+intent's extras (`am start … --es ISO_RENDER_LOG 1`), on the web the page's
+query (`?ISO_RENDER_LOG=1`); any host whose `hostValue("env:…")` isn't its
+own reads the process's environment. Tests read the same counts from
+`Runtime.frameStats`, `renderedFrameCount` and `wholeFrameCount`.
+
+A keystroke in a field is one frame, built in place: the Storybook's
+TextField story on Android at 0.58 builds no view (the field shows its own
+text) and diffs 52 of its nodes, where 0.57 built the page's 107 views and
+diffed all of it (a filled shape on the page made every frame whole).
 
 ### Headless, and on a server
 

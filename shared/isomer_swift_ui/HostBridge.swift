@@ -165,7 +165,14 @@ extension HostBridge {
         measureText(text, fontSize: fontSize, weight: weight, wrapWidth: wrapWidth)
     }
     public func registerImage(_ source: String, bytes: [UInt8]) {}
-    public func hostValue(_ key: String) -> String? { nil }
+    /// "env:<NAME>" is the process's environment variable (the runtime's
+    /// debug switches: ISO_FRAME_LOG, ISO_RENDER_LOG, ISO_VERIFY_PARTIAL,
+    /// ISO_PARTIAL), set on Android from the launch intent's ISO_ extras;
+    /// nothing else by default.
+    public func hostValue(_ key: String) -> String? {
+        guard key.hasPrefix("env:") else { return nil }
+        return ProcessInfo.processInfo.environment[String(key.dropFirst(4))]
+    }
     // The drawing half. Only a self-drawing renderer (Isomer's
     // `SwiftGPURenderer`) implements these, over swift_gpu. The service
     // bridges (Windows, Linux, wasm, Android) are wrapped by it for their
