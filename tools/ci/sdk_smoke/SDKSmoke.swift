@@ -14,14 +14,16 @@ struct SDKSmoke: ParsableCommand {
             Android's three architectures, its APKs and its WASI command, and runs
             the command under WasmKit; `run-android` runs an APK on an emulator.
             An upgrade is `cell` and `build` for the previous release, then for
-            the candidate, in one output base.
+            the candidate, in one output base. Run it with
+            `bazel run --symlink_prefix=/ //tools/ci/sdk_smoke -- …`: a cell with isomer
+            a checkout refuses one with Bazel's convenience symlinks at its root.
 
               sdk_smoke cell --fixture tests/sdk_consumer --isomer 0.57.1 \\
                   --sdk-base-url https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1 \\
                   --variant i18n --api 23
-              sdk_smoke build --fixture tests/sdk_consumer
+              sdk_smoke build --fixture tests/sdk_consumer --out /tmp/apks
               sdk_smoke run-android --fixture tests/sdk_consumer --adb adb --serial emulator-5554 \\
-                  --apk bazel-bin/smoke_apk_x86_64.apk
+                  --apk /tmp/apks/smoke_x86_64.apk
             """,
         subcommands: [Cell.self, Build.self, RunAndroid.self]
     )
@@ -105,6 +107,24 @@ struct Cell: ParsableCommand {
         let packageLine: String
         if isomer.contains("/") {
             let checkout = absolute(isomer)
+            // Bazel's convenience symlinks at the checkout's root (bazel-bin,
+            // bazel-<directory>, …) are inside the Isomer target of its
+            // Package.swift, whose path is "." with its other directories
+            // excluded: SwiftPM takes the examples' .lproj under them for
+            // resources and `swift package describe` fails ("manifest property
+            // 'defaultLocalization' not set"). Run this with
+            // `bazel run --symlink_prefix=/`, which makes none.
+            let links = try FileManager.default.contentsOfDirectory(atPath: checkout).filter { name in
+                name.hasPrefix("bazel-")
+                    && (try? FileManager.default.destinationOfSymbolicLink(atPath: "\(checkout)/\(name)")) != nil
+            }
+            guard links.isEmpty else {
+                throw ToolFailure("""
+                    \(checkout) has Bazel's convenience symlinks (\(links.sorted().joined(separator: ", "))), which SwiftPM \
+                    would read as isomer's package's resources: remove them, and run this with \
+                    `bazel run --symlink_prefix=/ //tools/ci/sdk_smoke -- …`
+                    """)
+            }
             let module = try String(contentsOfFile: "\(checkout)/MODULE.bazel", encoding: .utf8)
             guard let version = Self.moduleVersion(module) else { throw ToolFailure("\(checkout)/MODULE.bazel names no version") }
             isomerLines = [

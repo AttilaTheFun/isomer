@@ -159,8 +159,10 @@ everything at 23, and these guard the SDKs from then on:
   And the build fails if the swift-sdk.json's lowest triple isn't the API
   the libraries are compiled for (isomer_hermetic_toolchains' sdk/README.md).
 - **A consumer's build** (tests/sdk_consumer, driven by
-  `bazel run //tools/ci/sdk_smoke`): a module shaped as an app outside this
-  repository: isomer by version from the registry (or this checkout for a
+  `bazel run --symlink_prefix=/ //tools/ci/sdk_smoke`: no convenience
+  symlinks at isomer's root, where Package.swift's Isomer target, whose
+  path is ".", would take what is under them for resources): a module
+  shaped as an app outside this repository: isomer by version from the registry (or this checkout for a
   candidate), Bazel 8, Android at minSdk 23 on the -i18n SDK, a
   kt_swift_library's JNI library (swift_binary(linkshared)), a dependency
   module whose swift_deps usage is `isolate = True`, bazel_features held at

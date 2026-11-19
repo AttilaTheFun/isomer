@@ -4,7 +4,9 @@ load("@rules_swift//swift:swift_binary.bzl", "swift_binary")
 # checks"): it sets tests/sdk_consumer's cell (isomer, Isomer's Swift SDKs,
 # the NDK's API level), builds the consumer there, runs its WASI command
 # under WasmKit and its APK on an emulator.
-#   bazel run //tools/ci/sdk_smoke -- --help
+#   bazel run --symlink_prefix=/ //tools/ci/sdk_smoke -- --help
+# (no convenience symlinks at the root: isomer's Package.swift would take
+# what is under them for its Isomer target's resources)
 swift_binary(
     name = "sdk_smoke",
     srcs = glob(["*.swift"]),
