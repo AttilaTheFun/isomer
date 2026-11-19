@@ -49,7 +49,7 @@ struct FixtureOption: ParsableArguments {
         var api = 0
         var i18n = false
         var rulesAndroid = ""
-        for line in text.split(separator: "\n") {
+        for line in text.split(whereSeparator: { $0.isNewline }) {
             let parts = line.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
             guard parts.count == 2 else { continue }
             if parts[0] == "MIN_SDK_VERSION" { api = Int(parts[1]) ?? 0 }
@@ -266,7 +266,7 @@ struct Build: ParsableCommand {
     func output(of target: String, _ arguments: [String], suffix: String) throws -> String {
         let execroot = try bazelCommand("info", ["execution_root"], capture: true).trimmingCharacters(in: .whitespacesAndNewlines)
         let files = try bazelCommand("cquery", ["--output=files", target] + arguments, capture: true)
-        guard let relative = files.split(separator: "\n").first(where: { $0.hasSuffix(suffix) }) else {
+        guard let relative = files.split(whereSeparator: { $0.isNewline }).first(where: { $0.hasSuffix(suffix) }) else {
             throw ToolFailure("no \(suffix) among \(target)'s outputs: \(files)")
         }
         return "\(execroot)/\(relative)"
@@ -318,7 +318,7 @@ struct Build: ParsableCommand {
             defer { try? FileManager.default.removeItem(atPath: tmp) }
             let output = try runChecked([bazel] + startupArgs + ["run", "--symlink_prefix=/"] + bazelArgs + ["@isomer//tools/wasm/wasi_run", "--", "--map-dir=/tmp::\(tmp)", module],
                                         in: fixture.path, capture: true)
-            try check(lines: output.split(separator: "\n").map(String.init), i18n: cell.i18n, where: "the WASI command under WasmKit")
+            try check(lines: output.split(whereSeparator: { $0.isNewline }).map(String.init), i18n: cell.i18n, where: "the WASI command under WasmKit")
         }
     }
 }
@@ -400,7 +400,11 @@ struct RunAndroid: ParsableCommand {
         while Date() < deadline {
             let log = try adbRun(["logcat", "-d", "-s", "SDKSMOKE:I"], capture: true)
             // "I/SDKSMOKE( 1234): ok …" or the threadtime format's "… I SDKSMOKE: ok …".
-            lines = log.split(separator: "\n").compactMap { line in
+            // A line at a time by any newline: Android 6's adb, with no shell
+            // protocol, ends its lines "\r\n", which Swift holds as one
+            // Character, not "\n", so splitting at "\n" left the whole log one
+            // line, and its result unseen (the release run's API-23 cells).
+            lines = log.split(whereSeparator: { $0.isNewline }).compactMap { line in
                 guard let range = line.range(of: "SDKSMOKE") else { return nil }
                 let rest = line[range.upperBound...].drop { $0 != ":" }.dropFirst()
                 return rest.trimmingCharacters(in: .whitespaces)
