@@ -251,7 +251,17 @@ a repository of its own):
   compares each partial frame with a whole build and logs differences
   (`[partial] differs`); a value the app deliberately leaves untracked
   (Visor's `SessionTranscript` batching) can show up there legitimately.
-  `ISO_PARTIAL=0` turns partial frames off for comparison.
+  `ISO_PARTIAL=0` turns partial frames off for comparison. A registration
+  made the same way each time (a navigation title: `registerFrameEffect(same:)`)
+  doesn't keep its view from being built alone when it registers what it
+  did last time. `ISO_RENDER_LOG=1` logs each frame's kind (partial, whole
+  and why, relayout), the state written, views built, nodes diffed and the
+  host's events (README, "Frames"); the env switches work in every host
+  (HostBridge's default `hostValue` reads the process's environment; on
+  Android the launch intent's ISO_ extras). An encoder keeps the flattened
+  form of every node a composite's build ended with while it is in the tree
+  (`RenderNode.keepsItsBuild`), so a partial frame's patch is diffed along
+  the changed path only.
 
 ## What this repo is
 

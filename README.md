@@ -1450,6 +1450,34 @@ browser involved. Regenerate goldens after an intentional change with
 `bazel test //tests/snapshot:snapshot_test --test_env=ISO_RECORD=1 --test_output=all`
 and paste the printed blocks.
 
+### Frames: what each one built and diffed
+
+`ISO_RENDER_LOG` in an app's environment logs a line per frame through the
+host (logcat's `Isomer` tag on Android, the console on the web, standard
+error elsewhere), with no profiler:
+
+```
+[render] frame 7 partial (SecureFieldStory) | written 1 | built 1 | diffed 51 nodes, 2 ops | events text | 3.9 ms
+```
+
+the frame built in place (only the views reading what changed:
+shared/swift_ui_core/InPlace.swift) or whole (and why), the state written
+since the frame before, the composite views built, the nodes the
+component-system renderer's encoder compared and the patch operations it
+sent, and the host's events that asked for it ("text" a field's edit,
+"tap", "geo" a geometry report). A run of frames with nothing written is a
+render loop, and its events say what keeps asking. `ISO_FRAME_LOG` adds,
+per frame, which views were built and why. On Android they are the launch
+intent's extras (`am start … --es ISO_RENDER_LOG 1`), on the web the page's
+query (`?ISO_RENDER_LOG=1`); any host whose `hostValue("env:…")` isn't its
+own reads the process's environment. Tests read the same counts from
+`Runtime.frameStats`, `renderedFrameCount` and `wholeFrameCount`.
+
+A keystroke in a field is one frame, built in place: the Storybook's
+TextField story on Android at 0.58 builds no view (the field shows its own
+text) and diffs 52 of its nodes, where 0.57 built the page's 107 views and
+diffed all of it (a filled shape on the page made every frame whole).
+
 ### Headless, and on a server
 
 An app built with `--@isomer//headless` runs with nothing drawn, its UI read
