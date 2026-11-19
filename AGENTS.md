@@ -429,21 +429,22 @@ is the examples' SwiftPM graph's (examples/third_party/swift_packages,
 pinned exact; CI's alone, never a dependency of isomer's module), and
 `sign` and what it runs are examples/tools/ci_tools, built in a step of
 their own before any key is in a step's environment, their paths handed to
-the signing step (BUILD_TOOLS_SIGN and the rest), which runs `sign`
+the signing steps (BUILD_TOOLS_SIGN and the rest), which run `sign`
 directly, never `bazel run` (build_tools' README: Bazel's server and build
-events see its client's environment). `sign` is linked to Swift's runtime
-dynamically (tools/ci_tools/defs.bzl: a statically linked Foundation can't
-write a Bool into a property list). The keys are the `release`
+events see its client's environment). The keys are the `release`
 environment's secrets (main and v* tags), named only in
-the alpha and release jobs' signing steps: ANDROID_SIGNING_KEYSTORE and
+the alpha and release jobs' signing steps (the Apple apps' and Android's
+apart, each with its own keys alone): ANDROID_SIGNING_KEYSTORE and
 _PASSWORD (the Storybook's release key, its certificate pinned in
 build.yml); APPLE_DEVELOPER_ID_P12 and _PASSWORD, APPLE_NOTARY_KEY, _KEY_ID
 and _ISSUER (the Mac app, notarized and stapled); APPLE_DEVELOPMENT_P12 and
 _PASSWORD (the iPhone app); APPLE_PROFILES (a base64 .tar or .tar.gz of
-their profiles). tools/ci/sign_builds.sh runs `sign` and writes each signed
-package's builds.json line (tools/ci/release_assets.sh's
-release_asset_file); a platform whose keys aren't set is skipped, saying
-so in the log and the job's summary, never failing the job. The Apple
+their profiles). `sign` writes each signed package as
+<App>-<version>-<platform>.<ext> and its line of builds.json (`--builds`,
+the Mac app's icon beside it); a platform whose keys aren't set is skipped
+(`sign apple --skip-missing-keys`; Android's step checks its own), saying
+so in the log and the job's summary, never failing the job. An experiment
+saves its build as built (`sign apple --unsigned`: AdHoc, unsigned). The Apple
 Alphas are built on a Mac (`alpha-apple`), unsigned, and signed in `alpha`
 (Swift's image on x86_64, where Android's Alpha and the site are built).
 A release is approved by publishing its draft in Reviews (which makes its
@@ -452,9 +453,9 @@ and was verified (tools/ci/verified.sh), takes the proposal's iPhone and
 Mac Alphas of that commit (tools/ci/release_alphas.sh: nothing Apple
 rebuilt, since 0.40) and signs them again as Production (`sign apple
 --variant Production`, as the old signing service's promotion did; the
-iPhone's with its development profile, as the old service signed it, there
-being no distribution identity: sign_builds.sh's `--ipa-kind production`
-is `sign apple --ipa-kind development`; the Mac's with its disk image), builds
+iPhone's with `--ipa-kind ad-hoc,development`, an ad hoc profile when a
+distribution identity is set, else its development profile, as the old
+service signed it; the Mac's with its disk image), builds
 Android's for production and signs it, and attaches the release's assets:
 the signed builds as Applications reads them (tools/ci/attach_release.sh,
 from the private AttilaTheFun/applications' docs/RELEASE_ASSETS.md:

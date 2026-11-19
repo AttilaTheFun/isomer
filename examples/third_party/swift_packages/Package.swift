@@ -26,10 +26,10 @@ let package = Package(
         // (ApplicationUpdates in AttilaTheFun/applications until 0.10.45.)
         .package(url: "https://github.com/AttilaTheFun/update_kit.git", exact: "0.11.0"),
         // build_tools: CI's shared tools, built here and run by the release
-        // jobs (tools/ci/sign_builds.sh): `sign` (an APK, a Mac app, an
+        // jobs: `sign` (an APK, a Mac app, an
         // iPhone app, with the release environment's keys) and `proof-diff`
         // (the proof's comparison, proof-diff.json). CI's alone: no app or
         // library of Isomer's depends on it.
-        .package(url: "https://github.com/AttilaTheFun/build_tools.git", exact: "0.2.0"),
+        .package(url: "https://github.com/AttilaTheFun/build_tools.git", exact: "0.4.0"),
     ]
 )

@@ -60,7 +60,7 @@
 # Flags as --name=value (--compilation_mode=opt, not -c opt): every argument
 # that doesn't start with "-" is taken for a target. An Android app's files
 # are its .apk (signed by its build with a debug key, which
-# tools/ci/sign_builds.sh replaces with the release key), its unsigned one
+# build_tools' `sign android` replaces with the release key), its unsigned one
 # and its deploy jar; only the first is copied. A .tar.gz (the web site) is
 # copied as is.
 set -euo pipefail

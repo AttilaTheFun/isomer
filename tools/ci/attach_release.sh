@@ -1,5 +1,5 @@
 #!/bin/bash
-# Attaches a folder of signed builds (tools/ci/sign_builds.sh's --out) to
+# Attaches a folder of signed builds (build_tools' `sign --out`) to
 # the repository's release `<tag>`, a
 # draft or published: every file but builds.lines, builds.json last, so a
 # reader that finds builds.json finds the files it names. An asset of the

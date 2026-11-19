@@ -3,25 +3,22 @@
 # environment's keys (AttilaTheFun/build_tools' README: a signer's keys never
 # go through Bazel, whose server and build events see its client's
 # environment). The workflow builds :all and writes each tool's path into
-# the job's environment (BUILD_TOOLS_<NAME>), which tools/ci/sign_builds.sh
-# reads; nothing here is ever `bazel run` with a key set.
-
-load(":defs.bzl", "swift_tool")
+# the job's environment (BUILD_TOOLS_<NAME>), which the signing steps run;
+# nothing here is ever `bazel run` with a key set.
 
 package(default_visibility = ["//visibility:private"])
 
 # build_tools' `sign` (an APK, a Mac app, an iPhone app) and `proof-diff`
 # (the proof's comparison with the release before's: proof-diff.json),
-# from third_party/swift_packages (build_tools, pinned exact), linked to
-# Swift's runtime dynamically (defs.bzl says why).
-swift_tool(
+# from third_party/swift_packages (build_tools, pinned exact).
+alias(
     name = "sign",
-    binary = "@swiftpkg_build_tools//:sign",
+    actual = "@swiftpkg_build_tools//:sign",
 )
 
-swift_tool(
+alias(
     name = "proof_diff",
-    binary = "@swiftpkg_build_tools//:proof-diff",
+    actual = "@swiftpkg_build_tools//:proof-diff",
 )
 
 # What `sign apple` runs (MODULE.bazel's signing tools): rcodesign, and
@@ -42,8 +39,8 @@ alias(
     }),
 )
 
-# What `sign android` runs, and what reads a signed APK's manifest for its
-# builds.json line: the pinned JDK and build tools (x86_64 Linux's, as
+# What `sign android` runs, and what reads the signed APK's manifest for its
+# builds.json line (--aapt2): the pinned JDK and build tools (x86_64 Linux's, as
 # isomer's android_tools has them).
 alias(
     name = "java",
