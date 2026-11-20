@@ -1,6 +1,6 @@
 load("@rules_android//rules:rules.bzl", "android_binary")
 load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
-load("@isomer//tools/android:defs.bzl", "apk_install_run")
+load("@isomer_android//:defs.bzl", "apk_install_run")
 
 # Isomer's Android thin client (dev.isomer.runtime.IsomerRemote): an app's
 # SwiftUI running on a server (an app built headless, serving itself),
@@ -13,7 +13,7 @@ kt_android_library(
     ],
     custom_package = "dev.isomer.remote",
     manifest = "AndroidManifest.xml",
-    plugins = ["@isomer//android/libraries/swift_ui:compose_compiler_plugin"],
+    plugins = ["@isomer_android//swift_ui:compose_compiler_plugin"],
     tags = ["manual"],
     deps = [
         "@isomer//android/maven:androidx",

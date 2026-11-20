@@ -1,6 +1,6 @@
 load("@rules_android//rules:rules.bzl", "android_binary")
 load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
-load("@isomer//tools/android:defs.bzl", "apk_install_run")
+load("@isomer_android//:defs.bzl", "apk_install_run")
 
 # The NATIVE Jetpack Compose baseline for the minimal counter benchmark — the
 # performance "ceiling". Shares NO Isomer code (no Swift, no wasm, no IsoNode
@@ -16,7 +16,7 @@ kt_android_library(
     ],
     custom_package = "dev.isomer.tapcounter.native",
     manifest = "AndroidManifest.xml",
-    plugins = ["@isomer//android/libraries/swift_ui:compose_compiler_plugin"],
+    plugins = ["@isomer_android//swift_ui:compose_compiler_plugin"],
     tags = ["manual"],
     deps = [
         "@isomer//android/maven:androidx",

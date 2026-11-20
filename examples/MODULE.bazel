@@ -51,8 +51,8 @@ local_path_override(
 
 # Isomer's iPhone and Mac apps (docs/platform_modules.md): the isomer_apple
 # module, at isomer's version, with rules_apple, rules_applecross and
-# apple_support for them, and isomer_application with its Apple half
-# (`load("@isomer_apple//:defs.bzl", "isomer_application")`). An app on
+# apple_support for them, and isomer_application's Apple platforms
+# (`load("@isomer_apple//:defs.bzl", "IOS", "MACOS")`). An app on
 # Android and the web alone leaves it out, and resolves none of that. A real
 # consumer takes it from the registry by version (each isomer release from
 # 0.58 has it), or, beside a git_override of isomer, overrides it from the
@@ -61,6 +61,20 @@ bazel_dep(name = "isomer_apple", version = "0.58.0")
 local_path_override(
     module_name = "isomer_apple",
     path = "../apple/module",
+)
+
+# Isomer's Android apps (docs/platform_modules.md): the isomer_android
+# module, at isomer's version, with rules_android, rules_kotlin, rules_java
+# and hermetic_android_toolchains for them, its macros
+# (`load("@isomer_android//:defs.bzl", "isomer_android_app", ...)`),
+# kt_swift_library and isomer_application's Android platform (ANDROID). An
+# app on the web, the iPhone and the Mac alone leaves it out. A real
+# consumer takes it from the registry by version (each isomer release from
+# 0.59 has it), or overrides it from the same checkout as isomer.
+bazel_dep(name = "isomer_android", version = "0.58.0")
+local_path_override(
+    module_name = "isomer_android",
+    path = "../android/module",
 )
 
 # --- What isomer needs from its consumer -------------------------------

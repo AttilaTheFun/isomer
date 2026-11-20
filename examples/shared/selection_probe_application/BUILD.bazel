@@ -1,5 +1,7 @@
 load("@rules_swift//swift:swift.bzl", "swift_library")
-load("@isomer_apple//:defs.bzl", "isomer_application")
+load("@isomer//tools/application:defs.bzl", "WEB", "isomer_application")
+load("@isomer_android//:defs.bzl", "ANDROID")
+load("@isomer_apple//:defs.bzl", "IOS", "MACOS")
 
 # A text field's selection (`TextField(_:text:selection:)`): the field
 # reporting where its caret is and showing a selection the app sets. One
@@ -12,8 +14,8 @@ load("@isomer_apple//:defs.bzl", "isomer_application")
 #
 # or each mode's by name (selection_probe_ios_compiled, _ios_webview,
 # _ios_remote, _android_compiled, _android_webview, _android_remote;
-# isomer_apple's defs.bzl lists them; isomer's
-# tools/application/defs.bzl Android's and the web's). Drive the web's with
+# isomer_apple's and isomer_android's defs.bzl list theirs, isomer's
+# tools/application/defs.bzl the web's). Drive the web's with
 # tools/testing/cdp.py (click the field, type, ArrowLeft, click Complete)
 # and read the page's text and the textarea's selection; Android's on the
 # emulator with adb input, reading the probe's text with uiautomator.
@@ -47,6 +49,7 @@ isomer_application(
     minimum_ios_version = "18.0",
     minimum_macos_version = "15.0",
     package = "dev.isomer.selectionprobe",
+    platforms = [IOS, MACOS, ANDROID, WEB],
     swift_library = ":selection_probe_lib",
 )
 

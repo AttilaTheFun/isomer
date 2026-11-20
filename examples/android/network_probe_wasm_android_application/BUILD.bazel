@@ -2,7 +2,7 @@ load("@rules_android//rules:rules.bzl", "android_binary")
 load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
 load("@rules_swift//swift:swift.bzl", "swift_binary", "swift_library")
 load("@isomer//swift_ffi/rules:swift_wasm_reactor.bzl", "transition_binary")
-load("@isomer//tools/android:defs.bzl", "flat_assets")
+load("@isomer_android//:defs.bzl", "flat_assets")
 
 # The network probe (//android/network_probe_android_application) in the wasm
 # delivery: NetworkProbe.swift as a reactor on the full SwiftUI, run on
@@ -75,10 +75,10 @@ kt_android_library(
     ],
     custom_package = "dev.isomer.networkprobe.wasm",
     manifest = "AndroidManifest.xml",
-    plugins = ["@isomer//android/libraries/swift_ui:compose_compiler_plugin"],
+    plugins = ["@isomer_android//swift_ui:compose_compiler_plugin"],
     tags = ["manual"],
     deps = [
-        "@isomer//android/libraries/wasm_view:wasm_engine_bindings",
+        "@isomer_android//wasm_view:wasm_engine_bindings",
         "@isomer//android/maven:androidx",
     ],
 )
@@ -91,6 +91,6 @@ android_binary(
     visibility = ["//android/network_probe_android_application:__pkg__"],
     deps = [
         ":host_app",
-        "@isomer//android/libraries/wasm_view:engine_native",
+        "@isomer_android//wasm_view:engine_native",
     ],
 )

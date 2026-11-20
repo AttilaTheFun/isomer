@@ -1,0 +1,5 @@
+package(default_visibility = ["//visibility:public"])
+
+# Android's macros and rules (defs.bzl: isomer_android_app and its family,
+# apk_install_run, and ANDROID, isomer_application's Android half).
+exports_files(["defs.bzl"])

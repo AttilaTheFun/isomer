@@ -1,5 +1,5 @@
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
-load("@isomer//tools/android:defs.bzl", "isomer_android_app", "isomer_android_shared_library")
+load("@isomer_android//:defs.bzl", "isomer_android_app", "isomer_android_shared_library")
 load("@rules_cc//cc:cc_import.bzl", "cc_import")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")

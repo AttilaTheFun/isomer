@@ -94,7 +94,8 @@ bazel_dep(name = "rules_cc", version = "0.2.18")
 
 # Hermetic Android NDK for the Swift Android cross-compile toolchain. rules_swift
 # consumes the stock @androidndk (only targets it already exposes), so no
-# override is needed here.
+# override is needed here. A development dependency since 0.59: the
+# isomer_android module asks for it for Android apps (android/module).
 # The project registry's 0.5.0.isomer.2: upstream 0.5.0 with
 # keith/hermetic_android_toolchains#110, so any Linux takes Google's x86_64
 # SDK and NDK tools (an arm64 Linux, a container on a Mac, runs them under
@@ -106,7 +107,7 @@ bazel_dep(name = "rules_cc", version = "0.2.18")
 # version above 0.5.0, so MVS gives it to every consumer with no override
 # (one was root-only, and each consumer carried its own copy of the patch
 # until 0.42).
-bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.2")
+bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.2", dev_dependency = True)
 
 # --- swift_ffi (//swift_ffi/...) ---------------------------------------------
 # The idiomatic Swift <-> Kotlin/TypeScript/C bridge layer. The wasm and
@@ -357,19 +358,30 @@ bazel_dep(name = "rules_xcodeproj", version = "4.1.0", dev_dependency = True)
 # Shell rules for the adb install/run wrapper.
 bazel_dep(name = "rules_shell", version = "0.8.0")
 
-# Real-world Android APK assembly for the example app: rules_android's
-# `android_binary` + rules_kotlin's `kt_android_library` (what people actually
-# ship with), replacing the bespoke hermetic kotlinc/d8/aapt2 pipeline in
-# //tools/android. rules_jvm_external resolves rules_android's own Maven graph.
-bazel_dep(name = "rules_android", version = "0.7.3")
-bazel_dep(name = "rules_java", version = "9.3.0")
-bazel_dep(name = "rules_kotlin", version = "2.2.2")
+# No Android or Kotlin rules for a consumer (since 0.59,
+# docs/platform_modules.md): Android's macros and rules, and what of
+# Android's libraries loads rules_kotlin (the Compose compiler plugin, the
+# shared platform library, the engine's bindings, swift_ffi's
+# kt_swift_library and Kotlin runtime), are the isomer_android module's
+# (android/module), which brings rules_android 0.7.3, rules_kotlin 2.2.2,
+# rules_java 9.3.0 and hermetic_android_toolchains. An app on the web, the
+# iPhone and the Mac alone resolves them only at the versions its other
+# modules ask for. Android's Swift libraries stay here (rules_cc and
+# rules_swift alone). isomer's own builds take the module from this checkout.
+bazel_dep(name = "rules_android", version = "0.7.3", dev_dependency = True)
+bazel_dep(name = "rules_java", version = "9.3.0", dev_dependency = True)
+bazel_dep(name = "rules_kotlin", version = "2.2.2", dev_dependency = True)
+bazel_dep(name = "isomer_android", version = "0.58.0", dev_dependency = True)
+local_path_override(
+    module_name = "isomer_android",
+    path = "android/module",
+)
 # Only isomer's own builds use rules_jvm_external (Maven, below): a
 # consumer's is its own, or rules_android's.
 bazel_dep(name = "rules_jvm_external", version = "7.1", dev_dependency = True)
 
 # rules_java's host JDK + java tools (needed by rules_android's Java actions).
-rules_java_toolchains = use_extension("@rules_java//java:extensions.bzl", "toolchains")
+rules_java_toolchains = use_extension("@rules_java//java:extensions.bzl", "toolchains", dev_dependency = True)
 use_repo(rules_java_toolchains, "remote_java_tools")
 
 # Maven (docs/android_maven.md). A module extension reads every module's
@@ -623,6 +635,10 @@ register_toolchains(
 wasm_tools = use_extension("//tools/wasm:extensions.bzl", "wasm_tools")
 use_repo(wasm_tools, "electron", "electron_win64")
 
+# Android's tools (the emulator runner, isomer_android's hand-built APKs) and
+# the JDK the web's Electron packaging runs (tools/wasm/defs.bzl): plain
+# http_archives, fetched only by a build that uses one, so no cost to an app
+# that doesn't (isomer_android names them too, for its macros).
 android_tools = use_extension("//tools/android:extensions.bzl", "android_tools")
 use_repo(
     android_tools,

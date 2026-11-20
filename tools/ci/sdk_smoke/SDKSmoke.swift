@@ -105,6 +105,7 @@ struct Cell: ParsableCommand {
         // a checkout (its MODULE.bazel's version, overridden by path).
         let isomerLines: [String]
         let packageLine: String
+        let androidModule: Bool
         if isomer.contains("/") {
             let checkout = absolute(isomer)
             // Bazel's convenience symlinks at the checkout's root (bazel-bin,
@@ -133,13 +134,26 @@ struct Cell: ParsableCommand {
             }
             let module = try String(contentsOfFile: "\(checkout)/MODULE.bazel", encoding: .utf8)
             guard let version = Self.moduleVersion(module) else { throw ToolFailure("\(checkout)/MODULE.bazel names no version") }
-            isomerLines = [
+            var lines = [
                 "bazel_dep(name = \"isomer\", version = \"\(version)\")",
                 "local_path_override(", "    module_name = \"isomer\",", "    path = \"\(checkout)\",", ")",
             ]
+            // Android's rules are the isomer_android module's since 0.59
+            // (android/module of the checkout).
+            androidModule = FileManager.default.fileExists(atPath: "\(checkout)/android/module/MODULE.bazel")
+            if androidModule {
+                lines += [
+                    "bazel_dep(name = \"isomer_android\", version = \"\(version)\")",
+                    "local_path_override(", "    module_name = \"isomer_android\",",
+                    "    path = \"\(checkout)/android/module\",", ")",
+                ]
+            }
+            isomerLines = lines
             packageLine = ".package(path: \"\(checkout)\"),"
         } else {
+            androidModule = Self.hasAndroidModule(release: isomer)
             isomerLines = ["bazel_dep(name = \"isomer\", version = \"\(isomer)\")"]
+                + (androidModule ? ["bazel_dep(name = \"isomer_android\", version = \"\(isomer)\")"] : [])
             packageLine = ".package(url: \"https://github.com/AttilaTheFun/isomer.git\", revision: \"v\(isomer)\"),"
         }
 
@@ -188,7 +202,13 @@ struct Cell: ParsableCommand {
         try (module.joined(separator: "\n") + "\n").write(toFile: "\(root)/cell.MODULE.bazel", atomically: true, encoding: .utf8)
         let bzl = [
             "\"\"\"The cell's Android API level and SDK variant (\(header.dropFirst(2)))\"\"\"", "",
+            // kt_swift_library, from where the cell's isomer has it.
+            androidModule
+                ? "load(\"@isomer_android//swift_ffi:kt_swift_library.bzl\", _kt_swift_library = \"kt_swift_library\")"
+                : "load(\"@isomer//swift_ffi/rules:kt_swift_library.bzl\", _kt_swift_library = \"kt_swift_library\")",
+            "",
             "MIN_SDK_VERSION = \(api)", "I18N = \(variant == .i18n ? "True" : "False")", "RULES_ANDROID = \"\(rulesAndroid)\"",
+            "kt_swift_library = _kt_swift_library",
         ]
         try (bzl.joined(separator: "\n") + "\n").write(toFile: "\(root)/cell.bzl", atomically: true, encoding: .utf8)
         let package = """
@@ -211,6 +231,14 @@ struct Cell: ParsableCommand {
             try runChecked([swift, "package", "resolve"], in: "\(root)/\(directory)")
         }
         print("cell: isomer \(isomer), the \(variant.rawValue) SDKs from \(base), Android API \(api)")
+    }
+
+    /// Whether a release of isomer has Android's rules in the isomer_android
+    /// module (0.59 on) rather than in isomer.
+    static func hasAndroidModule(release: String) -> Bool {
+        let parts = release.split(separator: ".").compactMap { Int($0) }
+        guard parts.count >= 2 else { return false }
+        return parts[0] > 0 || parts[1] >= 59
     }
 
     static func moduleVersion(_ module: String) -> String? {
