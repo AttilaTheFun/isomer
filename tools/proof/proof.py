@@ -1060,10 +1060,23 @@ def android(review, story_list, builds):
         sh(adb + ["shell", "cmd", "uimode", "night", "no"], check=False)
         # Gesture navigation, as the emulator's (hosted_android_emulator.sh):
         # Waydroid's Android comes up with three buttons, a bar twice as tall
-        # in every picture. (It restarts SystemUI, which forgets demo mode's
-        # status bar: cropped off below anyway.)
+        # in every picture. Switching restarts SystemUI, which forgets demo
+        # mode, so the whole sequence is sent again (~/Developer/AGENTS.md's),
+        # twice a few seconds apart: the status bar is cropped off below, but
+        # the clock shows in the switcher and nothing else should move.
+        # (Until Shireworks' android-start does both itself: TODO.md.)
         sh(adb + ["shell", "cmd", "overlay", "enable", "com.android.internal.systemui.navbar.gestural"], check=False)
-        time.sleep(3)
+        time.sleep(5)
+        sh(adb + ["shell", "settings", "put", "global", "sysui_demo_allowed", "1"], check=False)
+        for _ in range(2):
+            for command in (["exit"], ["enter"], ["clock", "-e", "hhmm", "0941"],
+                            ["battery", "-e", "level", "100", "-e", "plugged", "false"],
+                            ["network", "-e", "wifi", "show", "-e", "level", "4", "-e", "fully", "true"],
+                            ["network", "-e", "mobile", "hide"], ["network", "-e", "nosim", "hide"],
+                            ["notifications", "-e", "visible", "false"]):
+                sh(adb + ["shell", "am", "broadcast", "-a", "com.android.systemui.demo", "-e", "command", *command],
+                   check=False)
+            time.sleep(3)
         # UTC, as every platform's pictures (HELD_ENVIRONMENT).
         sh(adb + ["shell", "cmd", "alarm", "set-timezone", "UTC"], check=False)
         # The status bar is cropped off every picture, as the desktops' shots

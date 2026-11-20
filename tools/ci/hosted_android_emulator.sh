@@ -27,7 +27,7 @@ sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:?no Android SDK on this runner}}"
 # The phone is Waydroid's (tools/ci/hosted_waydroid.sh: Android 13 in a
 # container on the runner's kernel, no emulator) unless ISOMER_ANDROID_PHONE
 # is `emulator` or a system image is named (sdk_smoke's API 23 and 28 cells:
-# Waydroid runs Android 13 alone).
+# Waydroid's images are API 30 and 33 alone).
 if [ -z "${3:-}" ] && [ "${ISOMER_ANDROID_PHONE:-waydroid}" = waydroid ]; then
     exec "$(dirname "$0")/hosted_waydroid.sh" "$log" "$serial_file"
 fi

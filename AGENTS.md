@@ -735,7 +735,7 @@ acceptable.
     tools/ci/hosted_android_test.sh, tools/ci/android_test.sh;
     ISOMER_ANDROID_PHONE=emulator gives the x86_64 Android 15 emulator on
     the runner's KVM instead, which sdk_smoke's API 23 and 28 cells keep:
-    Waydroid runs Android 13 alone). A Cuttlefish
+    Waydroid's images are API 30 and 33 alone). A Cuttlefish
     phone in a container with its own KVM (Shireworks' API 22;
     tools/ci/android_device.sh, in git's history) boots far on a Mac but
     doesn't finish: Virtualization's vCPU threads oversleep every timed

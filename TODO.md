@@ -58,9 +58,9 @@ Left:
 - **Production promoted, not rebuilt**: the release job asks Applications
   Server to stamp the release commit's Alpha (BuildVariant rewritten,
   re-signed) once it has that route; it rebuilds with `--config=prod` today.
-- **Android on a slot**: the proof's Android part still uses an emulator on
-  Shireworks' Mac. It moves when Shireworks has an Ubuntu primary VM (held
-  for the Mac Studio) or Android emulators in containers (being tried).
+- **Android on a slot**: done (2026-11-20): the proof's Android part leases
+  Waydroid in a container (`android --config=waydroid`), not the Mac's
+  emulator, and on GitHub's runner it runs under Waydroid too (below).
 
 ## The platforms' tests in containers (2026-11-04): what's left
 
@@ -81,8 +81,11 @@ container with its own KVM, the iPhone and the Mac on slots. Left:
   minute, and tools/proof/proof.py leases it (2026-11-20: the Storybook's
   test stories and its whole proof on it, every picture within 1% of the
   x86_64 emulator's, the GPU renderer drawn on ANGLE over SwiftShader).
-  An arm64 APK only; API 33, so the API 23 fixture still wants an emulator.
-  Before it, CI tested
+  An arm64 APK only; Waydroid's images are API 30 and 33, so the API 23
+  fixture and sdk_smoke's API 23 and 28 cells stay on GitHub's KVM emulator.
+  GitHub's runner runs it too since 2026-11-20 (tools/ci/hosted_waydroid.sh:
+  binder from the runner's kernel, Android 13 x86_64; the `android` job and
+  the proof's Android pictures). Before it, CI tested
   a private copy's Android on an emulator leased from Shireworks (the Mac's
   own hypervisor); since 2026-11-15 CI tests on GitHub's Ubuntu KVM alone.
   Cuttlefish in a container with its own KVM (tools/ci/android_device.sh, in git's history)
@@ -94,6 +97,26 @@ container with its own KVM, the iPhone and the Mac on slots. Left:
   Android's timeouts scaled by 20 and the container's CPUs kept from idling
   got the system server from 75 to 18 minutes into a boot. On a Linux host
   with KVM the container is the fast path.
+- **Waydroid's pins** (tools/ci/hosted_waydroid.sh's head): its repository's
+  key by fingerprint, its packages by version (waydroid 1.6.3,
+  python3-gbinder 1.3.1, libgbinder 1.1.45, libglibutil 1.0.80), and its
+  images by file name and SHA-256 (LineageOS 20 x86_64: system VANILLA
+  2026-09-27, vendor MAINLINE 2026-10-22). Moving the images changes every
+  Android proof picture: move them in a change of their own, say so in the
+  release's notes, and expect Reviews to show every Android item changed.
+  The script's comment says where the newer entries are.
+- **Remove proof.py's demo-mode sequence** (its android(), after the switch
+  to gesture navigation) once Shireworks' android-start switches a Waydroid
+  lease to gesture navigation and holds its status bar itself (promised
+  with its image's rebuild). Until then the switch restarts SystemUI and
+  proof.py sends the whole sequence again. Its screenshots stay Shireworks'
+  own (`screenshot`): `adb exec-out` through Shireworks' API is text until
+  it has a base64 output.
+- **Swift ports of the hosted phones** (the owner's tooling rule of
+  2026-11-18, the Isomer session's): tools/ci/hosted_waydroid.sh and
+  tools/ci/hosted_android_emulator.sh as Swift executables in this
+  repository's workspace, run through Bazel, with their callers
+  (hosted_android_test.sh, hosted_headful_test.sh, proof.sh) after them.
 - **The Windows cross toolchain upstream**: bazelbuild/rules_swift#1988
   (`swift.windows_sdk`, draft); tools/windows gives way to it once released.
 - **The build image**: container_build.sh installs Xvfb, Mesa's drivers and

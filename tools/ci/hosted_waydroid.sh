@@ -49,39 +49,74 @@ if ! mountpoint -q /dev/binderfs; then
     step 30 binderfs sudo mount -t binder binder /dev/binderfs
 fi
 
-# Waydroid from its own apt repository. A runner on AWS fetches Ubuntu's
-# packages from an EC2 mirror that stalled this install past ten minutes in
-# two probes of four: Ubuntu's own archives are asked first.
+# What this phone is made of, pinned, so the same commit makes the same
+# phone and its pictures change only when a pin is moved here:
+#
+# - Waydroid's apt repository's signing key, by its fingerprint (Czarek
+#   Nakamoto <ci@mrcyjanek.net>, RSA 3072, made 2023-08-03; the one
+#   keyserver.ubuntu.com and keys.openpgp.org have under it). The key is
+#   fetched, checked, and named by the repository's `signed-by=`: nothing
+#   fetched here runs as a script (repo.waydro.id's own setup script is not
+#   used), and apt then installs only what that key signed.
+# - The packages from that repository, by version (Waydroid and the binder
+#   libraries it brings; the repository keeps older versions). To move:
+#   https://repo.waydro.id/dists/<codename>/main/binary-all/Packages.
+# - The images (LineageOS 20 for Waydroid, x86_64: system VANILLA of
+#   2026-09-27, vendor MAINLINE of 2026-10-22), by file name and SHA-256 (the
+#   `filename` and `id` of their entries in Waydroid's OTA index). A new
+#   build would change every Android proof picture, so it is taken only by
+#   moving these: pick the entries from
+#   https://ota.waydro.id/system/lineage/waydroid_x86_64/VANILLA.json and
+#   https://ota.waydro.id/vendor/waydroid_x86_64/MAINLINE.json, set both
+#   here, and expect the next release's proof to show every Android picture
+#   changed (TODO.md, "Waydroid's pins").
+waydroid_key=7CE0331F71E0A238BB1002D70E406D181DCEE19C
+waydroid_packages=(waydroid=1.6.3 python3-gbinder=1.3.1 libgbinder=1.1.45 libglibutil=1.0.80)
+system_zip=lineage-20.0-20260927-VANILLA-waydroid_x86_64-system.zip
+system_sha256=053552725bf4ae25e2d3f7e6f1947203294aa9d73dc17fe1f3abe646e5d3bd8a
+vendor_zip=lineage-20.0-20261022-MAINLINE-waydroid_x86_64-vendor.zip
+vendor_sha256=91663c337013145208b6c533d7e1fa2a915a9864ddc8fc56966f40cd759648ac
+
+# A runner on AWS fetches Ubuntu's packages from an EC2 mirror that stalled
+# Waydroid's install past ten minutes in two probes of four: Ubuntu's own
+# archives are asked first.
 if [ -f /etc/apt/apt-mirrors.txt ] && grep -q ec2.archive /etc/apt/apt-mirrors.txt; then
     { printf 'http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\nhttp://archive.ubuntu.com/ubuntu/\tpriority:2\n'
       grep -v ec2.archive /etc/apt/apt-mirrors.txt; } > "$logs/apt-mirrors.txt"
     sudo cp "$logs/apt-mirrors.txt" /etc/apt/apt-mirrors.txt
 fi
-step 180 repository bash -c 'curl -fsSL --retry 3 https://repo.waydro.id | sudo bash'
+# The key: exactly one primary key in the file, and that one the pinned.
+step 60 key curl -fsSL --proto '=https' --tlsv1.2 --retry 3 -o "$logs/waydroid.gpg" https://repo.waydro.id/waydroid.gpg
+keys="$(GNUPGHOME="$(mktemp -d)" gpg --batch --show-keys --with-colons "$logs/waydroid.gpg" 2> /dev/null |
+    awk -F: '$1 == "pub" { primary = 1; next } $1 == "sub" { primary = 0 } $1 == "fpr" && primary { print $10 }')"
+[ "$keys" = "$waydroid_key" ] || fail "Waydroid's repository key isn't the one pinned ($waydroid_key): $(echo "$keys" | tr '\n' ' ')"
+sudo install -m 644 "$logs/waydroid.gpg" /usr/share/keyrings/waydroid.gpg
+codename="$(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")"
+echo "deb [signed-by=/usr/share/keyrings/waydroid.gpg] https://repo.waydro.id/ $codename main" |
+    sudo tee /etc/apt/sources.list.d/waydroid.list > /dev/null
+step 300 repository sudo apt-get update -q -o Acquire::http::Timeout=30 -o Acquire::Retries=5
 step 600 install sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
-    -o Acquire::http::Timeout=30 -o Acquire::Retries=5 waydroid weston dbus-daemon
+    -o Acquire::http::Timeout=30 -o Acquire::Retries=5 "${waydroid_packages[@]}" weston dbus-daemon
 
-# Its images fetched here rather than by `waydroid init`, whose download
-# from SourceForge stalled past ten minutes on an AWS runner: Waydroid's OTA
-# index names each (the newest first), curl gives up on a mirror that slows
-# below 1 MB/s for 20 s and asks again (each ask may go to another mirror),
-# and each is checked against its SHA-256. They go where Waydroid takes
-# preinstalled images from (/etc/waydroid-extra/images: then `waydroid init`
-# downloads nothing; its -i only says where its downloads go).
+# The images, fetched here rather than by `waydroid init` (whose download
+# from SourceForge stalled past ten minutes on an AWS runner): curl gives up
+# on a mirror that slows below 1 MB/s for 20 s and asks again (each ask may
+# go to another mirror), and each is checked against its pinned SHA-256.
+# They go where Waydroid takes preinstalled images from
+# (/etc/waydroid-extra/images: then `waydroid init` downloads nothing; its
+# -i only says where its downloads go).
 images=/etc/waydroid-extra/images
 sudo mkdir -p "$images" && sudo chown "$(id -u)" "$images"
-fetch_image() { # <OTA index URL> <image name>
-    local entry url sha zip="$images/$2.zip"
-    entry="$(curl -fsSL --retry 3 "$1" |
-        python3 -c 'import json, sys; e = json.load(sys.stdin)["response"][0]; print(e["url"], e["id"])')" || return 1
-    read -r url sha <<< "$entry"
-    curl -fsSL --retry 8 --retry-all-errors --speed-limit 1000000 --speed-time 20 -o "$zip" "$url" &&
-        echo "$sha  $zip" | sha256sum -c - && unzip -o -q "$zip" -d "$images" && rm -f "$zip"
+fetch_image() { # <its folder on SourceForge> <zip> <sha256>
+    local zip="$images/$2"
+    curl -fsSL --proto '=https' --retry 8 --retry-all-errors --speed-limit 1000000 --speed-time 20 -o "$zip" \
+        "https://sourceforge.net/projects/waydroid/files/images/$1/$2/download" &&
+        echo "$3  $zip" | sha256sum -c - && unzip -o -q "$zip" -d "$images" && rm -f "$zip"
 }
 export -f fetch_image
 export images
-step 600 system bash -c 'fetch_image https://ota.waydro.id/system/lineage/waydroid_x86_64/VANILLA.json system'
-step 600 vendor bash -c 'fetch_image https://ota.waydro.id/vendor/waydroid_x86_64/MAINLINE.json vendor'
+step 600 system bash -c "fetch_image system/lineage/waydroid_x86_64 $system_zip $system_sha256"
+step 600 vendor bash -c "fetch_image vendor/waydroid_x86_64 $vendor_zip $vendor_sha256"
 step 300 init sudo waydroid init
 step 90 container sudo systemctl restart waydroid-container
 
@@ -171,5 +206,5 @@ for _ in 1 2 3; do
     demo notifications -e visible false
     sleep 5
 done
-say "$(a shell getprop ro.product.model | tr -d '\r'), Android $(a shell getprop ro.build.version.release | tr -d '\r') (API $(a shell getprop ro.build.version.sdk | tr -d '\r')), EGL $(a shell getprop ro.hardware.egl | tr -d '\r'), suspend $(a shell getprop persist.waydroid.suspend | tr -d '\r'), $(a shell wm size | tail -1 | tr -d '\r'), $(a shell wm density | tail -1 | tr -d '\r') at $serial"
+say "$(a shell getprop ro.product.model | tr -d '\r'), $(a shell getprop ro.lineage.version | tr -d '\r'), Android $(a shell getprop ro.build.version.release | tr -d '\r') (API $(a shell getprop ro.build.version.sdk | tr -d '\r')), EGL $(a shell getprop ro.hardware.egl | tr -d '\r'), suspend $(a shell getprop persist.waydroid.suspend | tr -d '\r'), $(a shell wm size | tail -1 | tr -d '\r'), $(a shell wm density | tail -1 | tr -d '\r') at $serial"
 echo "$serial" > "$serial_file"
