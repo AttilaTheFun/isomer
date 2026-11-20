@@ -1,7 +1,7 @@
 load("@rules_swift//swift:swift.bzl", "swift_library")
 load("@rules_android//rules:rules.bzl", "android_binary")
 load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
-load("@isomer//tools/android:defs.bzl", "apk_install_run", "isomer_android_library")
+load("@isomer_android//:defs.bzl", "apk_install_run", "isomer_android_library")
 
 # Level 3 adoption (docs/adoption_levels.md): a NORMAL Kotlin/Compose app —
 # its own MainActivity, Material chrome, native screens — that embeds one
@@ -36,7 +36,7 @@ kt_android_library(
     srcs = glob(["kotlin/**/*.kt"]),
     custom_package = "dev.isomer.embeddedexample",
     manifest = "AndroidManifest.xml",
-    plugins = ["@isomer//android/libraries/swift_ui:compose_compiler_plugin"],
+    plugins = ["@isomer_android//swift_ui:compose_compiler_plugin"],
     tags = ["manual"],
     deps = [
         ":isomer",

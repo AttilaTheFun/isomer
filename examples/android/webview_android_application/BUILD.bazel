@@ -1,4 +1,4 @@
-load("@isomer//tools/android:defs.bzl", "flat_assets", "isomer_android_webview_app")
+load("@isomer_android//:defs.bzl", "flat_assets", "isomer_android_webview_app")
 
 # The Storybook in web-view mode on Android (docs/modes.md): the web
 # Storybook's site (its Swift as wasm) in the APK's assets, run in a WebView

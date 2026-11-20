@@ -89,7 +89,7 @@ Using swift_ffi alone builds nothing else of Isomer.
 Annotate a `swift_library`, then wrap it for your platform:
 
 ```starlark
-load("@isomer//swift_ffi/rules:kt_swift_library.bzl", "kt_swift_library")
+load("@isomer_android//swift_ffi:kt_swift_library.bzl", "kt_swift_library")
 load("@isomer//swift_ffi/rules:js_swift_wasm_library.bzl", "js_swift_wasm_library")
 load("@isomer//swift_ffi/rules:cc_swift_library.bzl", "cc_swift_library")
 
@@ -111,7 +111,7 @@ from the same sources). Ship the platform's `lib<name>.so` beside them; the
 Kotlin bindings load it first.
 
 ```starlark
-load("@isomer//swift_ffi/rules:kt_swift_library.bzl", "kt_swift_library", "kt_swift_platform")
+load("@isomer_android//swift_ffi:kt_swift_library.bzl", "kt_swift_library", "kt_swift_platform")
 
 kt_swift_platform(name = "shared_swift", deps = [":common"])
 

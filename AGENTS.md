@@ -45,7 +45,8 @@ management. The repo is ONE Bazel module, `isomer`, plus the examples:
 | `metal/` | (isomer) | Isomer's `Metal` (`//metal/metal`), IsomerMetal (`//metal/isomer_metal`: the MSL→WGSL translator, the backend interface), the web backend (`//metal/web`, `//metal/runtime`) |
 | `swift_gpu/` | (isomer) | the GPU abstraction (`//swift_gpu/{core,metal,apple,android,wasm,linux,windows}`) |
 | `swift_map/` | (isomer) | the OpenStreetMap renderer (`//swift_map/swift_map/{core,renderer}`, platform libraries under `//swift_map/<platform>/libraries/...`, its example apps and their small tools) |
-| `apple/module/` | `isomer_apple` | the iPhone's and the Mac's apps, a module of its own since 0.58 (docs/platform_modules.md): rules_apple 5.3.1.applecross.6, rules_applecross, apple_support 2.11.0, and isomer_application with its Apple half (`@isomer_apple//:defs.bzl`, calling isomer's `@isomer//tools/application:defs.bzl` for Android and the web). Released with isomer at its version, as isomer_android_maven is; the examples take it by `local_path_override` |
+| `apple/module/` | `isomer_apple` | the iPhone's and the Mac's apps, a module of its own since 0.58 (docs/platform_modules.md): rules_apple 5.3.1.applecross.6, rules_applecross, apple_support 2.11.0, and isomer_application's `IOS` and `MACOS` (`@isomer_apple//:defs.bzl`; isomer_application is isomer's `@isomer//tools/application:defs.bzl`, taking platforms as values since 0.59). Released with isomer at its version, as isomer_android_maven is; the examples take it by `local_path_override` |
+| `android/module/` | `isomer_android` | Android's macros and rules, a module of its own since 0.59 (docs/platform_modules.md): rules_android, rules_kotlin, rules_java, hermetic_android_toolchains; `@isomer_android//:defs.bzl` (`isomer_android_app` and its family, `apk_install_run`, isomer_application's `ANDROID`), `//swift_ffi:kt_swift_library.bzl` and swift_ffi's Kotlin runtime, and the Kotlin targets of android/libraries (`//swift_ui:compose_compiler_plugin`, `:isomer_platform`, `//wasm_view:wasm_engine_bindings`, `:engine_native`). Android's Swift libraries stay isomer's. Released with isomer at its version; isomer's own builds and the examples take it by `local_path_override` |
 | `examples/` | `isomer_examples` | Isomer's applications: the Storybook (`examples/storybook`, its apps `examples/<platform>/storybook_<platform>_application`), and the example apps and probes. A module of its own: it consumes isomer the way an outside application does. |
 
 Layering still points one way: CoreGraphics < Foundation < swift_ffi <
@@ -673,8 +674,9 @@ swift-ffi-integration, and adoption-levels workstreams are all merged and
 pushed (docs/*_plan.md files record how each landed). Android builds with
 rules_android's `android_binary` + rules_kotlin's `kt_android_library`; the
 old bespoke kotlinc/d8/aapt2 pipeline is gone from use, but `tools/android`
-still hosts the emulator runner (`apk_install_run`) and the Level 4 codegen
-templates. iOS device builds need the team's Xcode-managed wildcard
+still hosts the emulator runner and the Level 4 codegen templates; the
+macros (`apk_install_run` among them) are isomer_android's since 0.59
+(android/module). iOS device builds need the team's Xcode-managed wildcard
 profile ('iOS Team Provisioning Profile: *'); a machine without it fails
 them — an environment issue, not code; exclude iOS from wildcard
 verification builds. The Storybook is com.LoganShire.IsomerStorybook; the

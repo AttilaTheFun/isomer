@@ -1,6 +1,6 @@
 load("@rules_android//rules:rules.bzl", "android_binary")
 load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
-load("@isomer//tools/android:defs.bzl", "apk_install_run")
+load("@isomer_android//:defs.bzl", "apk_install_run")
 
 # The NATIVE Jetpack Compose baseline — the benchmarking "ceiling" for the
 # Android [full|partial] x [compiled|wasm] matrix. Unlike the four matrix apps,
@@ -15,7 +15,7 @@ kt_android_library(
     srcs = glob(["kotlin/**/*.kt"]),
     custom_package = "dev.isomer.nativefull",
     manifest = "AndroidManifest.xml",
-    plugins = ["@isomer//android/libraries/swift_ui:compose_compiler_plugin"],
+    plugins = ["@isomer_android//swift_ui:compose_compiler_plugin"],
     tags = ["manual"],
     deps = [
         "@isomer//android/maven:androidx",

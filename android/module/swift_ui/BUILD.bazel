@@ -1,0 +1,27 @@
+load("@rules_kotlin//kotlin:core.bzl", "kt_compiler_plugin")
+load("//swift_ffi:kt_swift_library.bzl", "kt_swift_platform")
+
+package(default_visibility = ["//visibility:public"])
+
+# The parts of Android's SwiftUI (isomer's android/libraries/swift_ui) that
+# need rules_kotlin, which isomer itself doesn't ask for
+# (docs/platform_modules.md).
+
+# Isomer's shared platform library (libisomer_platform.so): the Swift
+# runtime, the standard library, Foundation and the SDK, linked once, for
+# apps whose libraries link against it (isomer_android_library's
+# `shared_platform`, through --@isomer//tools/android:shared_platform).
+kt_swift_platform(
+    name = "isomer_platform",
+    deps = ["@isomer//android/libraries/swift_ui:sdk"],
+)
+
+# The Compose compiler (matching rules_kotlin's kotlinc release), shared by
+# every kt_android_library the macros declare: Isomer's, or the app's
+# (@isomer//android/maven:compose_compiler).
+kt_compiler_plugin(
+    name = "compose_compiler_plugin",
+    id = "androidx.compose.compiler",
+    target_embedded_compiler = True,
+    deps = ["@isomer//android/maven:compose_compiler"],
+)

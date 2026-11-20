@@ -5,7 +5,8 @@ dependencies of the platforms it builds, beside rules_swift and
 rules_swift_package_manager, which every Isomer app needs (it is all
 Swift). This is the audit of what isomer's module asks of its consumers,
 platform by platform, the layout that follows from it, and what 0.58 does
-of it: the Apple half is the `isomer_apple` module.
+of it: the Apple half is the `isomer_apple` module (0.58), Android's the
+`isomer_android` module (0.59).
 
 ## What a consumer pays for
 
@@ -77,8 +78,9 @@ from the build fails the load, whatever is used):
 | `@isomer//tools/android:defs.bzl` (`isomer_android_app`, `isomer_android_library`, `isomer_android_webview_app`, `apk_install_run`) | bazel_skylib, rules_android, rules_cc, rules_java, rules_kotlin, rules_shell, rules_swift |
 | `@isomer//tools/wasm:defs.bzl` (`isomer_web_app`, `wasm_sdk_bundle`, …) | bazel_skylib, rules_cc, rules_shell, rules_swift |
 | `@isomer//tools/wasm:mixed.bzl`, `:side_modules.bzl` | rules_cc (rules_swift) |
-| `@isomer//tools/application:defs.bzl` | 0.57: the Android set and **rules_apple**; 0.58: the Android set alone |
-| `@isomer_apple//:defs.bzl` (0.58) | the Android set and rules_apple |
+| `@isomer//tools/application:defs.bzl` | 0.57: the Android set and **rules_apple**; 0.58: the Android set alone; 0.59: the web's (bazel_skylib, rules_cc, rules_shell, rules_swift) |
+| `@isomer_apple//:defs.bzl` (0.58) | 0.58: the Android set and rules_apple; 0.59: rules_apple and the web's |
+| `@isomer_android//:defs.bzl` (0.59) | the Android set and the web's |
 | `@isomer//swift_ffi/rules:kt_swift_library.bzl` | rules_cc, rules_kotlin, rules_swift |
 | `@isomer//swift_ffi/rules:rs_swift_library.bzl` | rules_rust (the app's own: not a dependency of isomer) |
 | the other swift_ffi rules (`js_swift_wasm_library`, `swift_wasm_reactor`, `cc_swift_library`, …) | rules_cc, rules_swift |
@@ -123,7 +125,7 @@ the NDK's modules.
 | --- | --- | --- | --- |
 | `isomer` | `.` | the Swift package, the platforms' Swift libraries, swift_ffi, the web's rules; bazel_skylib, platforms, rules_swift, rules_swift_package_manager, rules_cc, rules_shell, protobuf, swift_argument_parser, apple_support at rules_swift's version | (core) |
 | `isomer_apple` | `apple/module` | rules_apple 5.3.1.applecross.6, rules_applecross, apple_support 2.11.0, isomer_application with the iPhone's and the Mac's apps | 0.58 |
-| `isomer_android` | `android/module` | rules_android, rules_java, rules_kotlin, hermetic_android_toolchains; tools/android's macros, android/libraries' BUILD files, `kt_swift_library`; absorbing isomer_android_maven's set or beside it | proposed |
+| `isomer_android` | `android/module` | rules_android 0.7.3, rules_java 9.3.0, rules_kotlin 2.2.2, hermetic_android_toolchains 0.5.0.isomer.2; Android's macros and rules (tools/android's defs.bzl), `kt_swift_library`, swift_ffi's Kotlin runtime, the Kotlin targets of android/libraries; `ANDROID` for isomer_application. isomer_android_maven stays beside it | 0.59 |
 | `isomer_web` | — | not worth a module: wabt alone (above); mixed mode's tools could be prebuilt `http_archive`s instead (lazy), Binaryen's are already | not proposed |
 | `isomer_linux`, `isomer_windows` | — | nothing to carry: their libraries need rules_cc and rules_swift alone, the Windows SDK is a repository rule | not proposed |
 
@@ -166,17 +168,15 @@ as isomer_android_maven is:
     isomer_apple;
   - `//swift_map/apple/applications/…` and `//swift_map/apple/xcframework`
     are the examples' `//swift_map/…`.
-- **isomer_android (proposed).** Large: tools/android (1,250 lines of
-  Starlark, the templates, the emulator runner), the BUILD files of
-  android/libraries (the Swift host's and the Kotlin runtime's: the sources
-  stay where the Swift package reads them), `kt_swift_library`, Android's
-  half of isomer_application, swift_map's Android packages, and four
-  `bazel_dep`s with the Java toolchains' extension. For a consumer: every
-  Android app adds the module and changes the loads of
+- **isomer_android (0.59).** Smaller than first sized: Android's Swift
+  libraries need only rules_cc and rules_swift, so they stay, and only what
+  loads rules_android, rules_kotlin or rules_java moved (below). For a
+  consumer: every Android app adds the module and changes the loads of
   `@isomer//tools/android:defs.bzl` and
-  `@isomer//swift_ffi/rules:kt_swift_library.bzl`; `@isomer//:swift_ui`
-  and the other labels stay as they are (below). Saves a web or Linux app
-  six modules and the raise of rules_android, rules_kotlin and rules_java.
+  `@isomer//swift_ffi/rules:kt_swift_library.bzl`, and the five labels that
+  moved; `@isomer//:swift_ui`, the flags and every other label stay as they
+  are. Saves a web or Apple app the raise of rules_android, rules_kotlin and
+  rules_java, and hermetic_android_toolchains' graph.
 - **isomer_web, isomer_linux, isomer_windows**: not proposed (above).
 
 ### Hard parts
@@ -184,26 +184,22 @@ as isomer_android_maven is:
 - **One label, every platform.** `@isomer//:swift_ui` (and `:isomer`,
   `:foundation`, `//android/maven:androidx`) select each platform's package
   inside isomer. A package that moves to a platform module can't be named
-  from isomer, which doesn't depend on it. The way through is the one
-  isomer_android_maven took: isomer's `select` points at a repository an
-  extension of isomer's makes, which the platform module fills by a tag
-  carrying its own labels (canonical once written into the generated
-  BUILD file), and which, without the module, holds targets that fail
-  saying to add it. isomer_apple needs none of this: Apple's libraries
-  (apple/libraries) are plain Swift and stay in isomer; only the
-  applications needed rules_apple. Android's libraries load rules_android
-  and rules_kotlin, so isomer_android does.
+  from isomer, which doesn't depend on it. The way through, where it is
+  needed, is the one isomer_android_maven took: isomer's `select` points at
+  a repository an extension of isomer's makes, which the platform module
+  fills by a tag carrying its own labels, and which, without the module,
+  holds targets that fail saying to add it. Neither platform module needed
+  it: Apple's libraries (apple/libraries) are plain Swift, and Android's
+  Swift libraries load rules_cc and rules_swift alone, so both stay in
+  isomer; only the targets that load rules_apple, rules_android or
+  rules_kotlin moved, and nothing in isomer names them.
 - **Rule files that load several platforms' rules.** isomer_application
-  loads every platform's macros. In 0.58 the Apple half is isomer_apple's
-  macro, which calls isomer's for Android and the web: one load line for an
-  Apple app. With a second platform module that stops composing (an app
-  with Apple and Android would need a macro in a module depending on both).
-  Then isomer_application should take the platforms' halves as values,
-  `isomer_application(…, platforms = [isomer_apple_platforms,
-  isomer_android_platforms, "web"])`, each module exporting a struct of its
-  own half, so no file loads another platform's rules. Likewise
-  tools/android/defs.bzl loads swift_ffi's `kt_swift_library`, which moves
-  with it.
+  loaded every platform's macros. In 0.58 the Apple half was isomer_apple's
+  macro, calling isomer's for Android and the web; with a second platform
+  module that stops composing (an app with Apple and Android would need a
+  macro in a module depending on both). So since 0.59 isomer_application
+  takes the platforms' halves as values, each module exporting its own
+  (isomer_android, below), and no file loads another platform's rules.
 - **Toolchain ranking on a Mac.** apple_support's C toolchain must rank
   above rules_cc's local darwin one for the build's own Swift tools on a
   Mac, and toolchains rank in breadth-first order of the module graph:
@@ -243,3 +239,62 @@ as isomer_android_maven is:
   45 modules, with rules_apple 4.3.3 and no rules_applecross, and builds
   its APKs from isomer's isomer_application; the examples build their
   Apple apps as before (CI's container and container-apple).
+
+## isomer_android (0.59)
+
+What loads rules_android, rules_kotlin or rules_java moved; what loads
+rules_cc and rules_swift alone stayed. So Android's Swift libraries
+(`@isomer//:swift_ui` on Android, the host, the GPU renderer, WasmView's
+engine) are still isomer's, and `@isomer//:swift_ui`'s `select` points at
+the same packages: no repository filled by a tag (isomer_android_maven's
+way) is needed. Sources the Swift package reads, and the Kotlin sources,
+stay where they were.
+
+- android/module (`isomer_android`, at isomer's version):
+  - MODULE.bazel: rules_android 0.7.3, rules_java 9.3.0, rules_kotlin
+    2.2.2, hermetic_android_toolchains 0.5.0.isomer.2 (to raise an Android
+    app to the patched version, as isomer did), bazel_skylib, platforms,
+    rules_cc, rules_shell, rules_swift, isomer; isomer's
+    `//tools/android:extensions.bzl` (the hand-built APK's and the
+    emulator's tools, lazy);
+  - defs.bzl: what tools/android/defs.bzl was (`isomer_android_app`,
+    `isomer_android_library`, `isomer_android_webview_app`,
+    `isomer_android_aar`, `isomer_android_shared_library`,
+    `isomer_wasm_android_library`, `apk_install_run`, `flat_assets`,
+    `android_apk`), and `ANDROID`, isomer_application's Android half;
+  - swift_ffi: `kt_swift_library.bzl` (was swift_ffi/rules') and `:kotlin`,
+    swift_ffi's Kotlin runtime over isomer's swift_ffi/runtime/kotlin
+    sources;
+  - swift_ui: `:compose_compiler_plugin` and `:isomer_platform` (the shared
+    platform library), from android/libraries/swift_ui;
+  - wasm_view: `:wasm_engine_bindings` and `:engine_native`, from
+    android/libraries/wasm_view.
+- isomer: rules_android, rules_java, rules_kotlin and
+  hermetic_android_toolchains are development dependencies, as is the
+  `android_tools` extension; isomer_android a development dependency by
+  `local_path_override`, android/module in .bazelignore. The templates, the
+  debug keystore, the AAR's assembly, the emulator runner and the flags
+  (`--@isomer//tools/android:shared_platform`, `:aar_libcxx_shared`) stay
+  in tools/android: they load nothing of Android's. tools/android/defs.bzl
+  and swift_ffi/rules/kt_swift_library.bzl stay as stubs whose macros fail,
+  naming the new load.
+- isomer_application is isomer's again, and takes its platforms as values
+  (the doc's earlier proposal): `WEB` (isomer's), `IOS` and `MACOS`
+  (isomer_apple's), `ANDROID` (isomer_android's). A value is a struct of
+  `name`, `module`, `attrs` (its own arguments, with defaults) and
+  `declare(app, platforms, **attrs)`; isomer_application declares the web's
+  apps and `<name>_server`, then calls each module's `declare` once with
+  the common arguments and the names asked for. So no file loads another
+  platform's rules, and an app with every platform has three load lines.
+  isomer_apple's `isomer_application` (0.58) fails, naming the new form.
+- The examples depend on isomer_android by `local_path_override`; isomer's
+  own Android examples (swift_ffi's, swift_map's) load
+  `@isomer_android//swift_ffi:kt_swift_library.bzl` through its development
+  dependency. tests/sdk_consumer's `cell.bzl` (tools/ci/sdk_smoke writes
+  it) loads kt_swift_library from where the cell's isomer has it, and
+  `cell.MODULE.bazel` adds isomer_android for 0.59 on.
+- tools/released_pins.sh checks android/module's version and isomer
+  dependency with the others'.
+- The project registry adds isomer_android with each release, as
+  isomer_apple's (a `WITHIN` entry, `"isomer_android": ("android/module",
+  "0.59")`, and `FOLLOWED`, in its tools/add_releases.py).

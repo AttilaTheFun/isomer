@@ -13,7 +13,7 @@ load("@rules_android//rules:rules.bzl", "android_binary")
 load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
-load("//swift_ffi/rules:kt_swift_library.bzl", "kt_swift_library")
+load("@isomer_android//swift_ffi:kt_swift_library.bzl", "kt_swift_library")
 
 package(
     features = [

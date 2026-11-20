@@ -1,0 +1,14 @@
+load("@rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["kt_swift_library.bzl"])
+
+# The shared Kotlin half of swift_ffi's bridge runtime (package `swiftffi`,
+# isomer's swift_ffi/runtime/kotlin). Pure JVM Kotlin, so it serves
+# kt_jvm_library and kt_android_library consumers alike; every
+# kt_swift_library's bindings depend on it.
+kt_jvm_library(
+    name = "kotlin",
+    srcs = ["@isomer//swift_ffi/runtime/kotlin:srcs"],
+)

@@ -1,6 +1,6 @@
 load("@rules_android//rules:rules.bzl", "android_binary")
 load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
-load("@isomer//tools/android:defs.bzl", "apk_install_run", "flat_assets")
+load("@isomer_android//:defs.bzl", "apk_install_run", "flat_assets")
 
 # Level 3 adoption, the "wasm" cell of the Android [full|partial] x
 # [compiled|wasm] matrix: a plain Kotlin/Compose app that embeds one wasm
@@ -36,10 +36,10 @@ kt_android_library(
     ],
     custom_package = "dev.isomer.wasmexample",
     manifest = "AndroidManifest.xml",
-    plugins = ["@isomer//android/libraries/swift_ui:compose_compiler_plugin"],
+    plugins = ["@isomer_android//swift_ui:compose_compiler_plugin"],
     tags = ["manual"],
     deps = [
-        "@isomer//android/libraries/wasm_view:wasm_engine_bindings",
+        "@isomer_android//wasm_view:wasm_engine_bindings",
         "@isomer//android/maven:androidx",
     ],
 )
@@ -52,7 +52,7 @@ android_binary(
     deps = [
         ":host_app",
         # The ONLY native library: the engine (WasmKit, libwasm_engine_bindings.so).
-        "@isomer//android/libraries/wasm_view:engine_native",
+        "@isomer_android//wasm_view:engine_native",
     ],
 )
 

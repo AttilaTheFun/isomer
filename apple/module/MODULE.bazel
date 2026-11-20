@@ -8,9 +8,10 @@ with iPhone or Mac apps depends on this module, at isomer's version:
 
     bazel_dep(name = "isomer_apple", version = "<isomer's version>")
 
-and loads isomer_application from here rather than from isomer:
+and names the iPhone and the Mac among isomer_application's platforms:
 
-    load("@isomer_apple//:defs.bzl", "isomer_application")
+    load("@isomer//tools/application:defs.bzl", "WEB", "isomer_application")
+    load("@isomer_apple//:defs.bzl", "IOS", "MACOS")
 
 Released with isomer, from isomer's tag (this directory of it): the
 registry's entry asks for the same release of isomer. Its version moves
@@ -40,6 +41,6 @@ bazel_dep(name = "rules_applecross", version = "0.0.3.382f8c3")
 bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "rules_swift", version = "4.3.0.isomer.1")
 
-# The isomer this half of isomer_application calls into (its Android and web
-# half, the heads the shells link), the same release.
+# The isomer whose isomer_application declares these platforms (and the
+# heads the shells link), the same release.
 bazel_dep(name = "isomer", version = "0.58.0")

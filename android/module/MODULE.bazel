@@ -1,0 +1,64 @@
+"""isomer_android: Isomer's Android apps, as a module of its own (isomer's
+docs/platform_modules.md).
+
+isomer itself asks for no Android or Kotlin rules: an app on the web, the
+iPhone and the Mac alone resolves rules_android, rules_kotlin and rules_java
+only at the versions its other modules ask for, and no
+hermetic_android_toolchains. An app with Android apps depends on this
+module, at isomer's version:
+
+    bazel_dep(name = "isomer_android", version = "<isomer's version>")
+
+and loads Android's macros and rules from here:
+
+    load("@isomer_android//:defs.bzl", "ANDROID", "isomer_android_app", ...)
+    load("@isomer_android//swift_ffi:kt_swift_library.bzl", "kt_swift_library")
+
+Android's Swift libraries (`@isomer//:swift_ui` on Android, the host, the
+engine) stay isomer's: they need rules_cc and rules_swift alone. What is
+here is what loads rules_android or rules_kotlin.
+
+Released with isomer, from isomer's tag (this directory of it): the
+registry's entry asks for the same release of isomer. Its version moves
+with isomer's MODULE.bazel (tools/released_pins.sh checks it).
+"""
+
+module(
+    name = "isomer_android",
+    version = "0.58.0",
+)
+
+# rules_android's `android_binary` and rules_kotlin's `kt_android_library`
+# assemble the APKs (defs.bzl); rules_java's providers.
+bazel_dep(name = "rules_android", version = "0.7.3")
+bazel_dep(name = "rules_java", version = "9.3.0")
+bazel_dep(name = "rules_kotlin", version = "2.2.2")
+
+# Asked for only to raise every Android app to the patched version (MVS): its
+# extension is the root's, which declares its NDK and SDK (isomer's
+# MODULE.bazel says what the version carries).
+bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.2")
+
+bazel_dep(name = "bazel_skylib", version = "1.9.0")
+bazel_dep(name = "platforms", version = "1.1.0")
+bazel_dep(name = "rules_cc", version = "0.2.18")
+bazel_dep(name = "rules_shell", version = "0.8.0")
+bazel_dep(name = "rules_swift", version = "4.3.0.isomer.1")
+
+# The isomer these macros build on (Android's Swift libraries, the Kotlin
+# runtime's sources, isomer_application), the same release.
+bazel_dep(name = "isomer", version = "0.58.0")
+
+# The tools defs.bzl's hand-built APKs and the emulator runner use (lazy:
+# fetched only by a build that uses them).
+android_tools = use_extension("@isomer//tools/android:extensions.bzl", "android_tools")
+use_repo(
+    android_tools,
+    "android_build_tools",
+    "android_emulator",
+    "android_platform_jar",
+    "android_platform_tools",
+    "android_system_image",
+    "hermetic_jdk",
+    "kotlin_compiler",
+)

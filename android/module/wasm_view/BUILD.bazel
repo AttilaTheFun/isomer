@@ -1,0 +1,26 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("//swift_ffi:kt_swift_library.bzl", "kt_swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# WasmView's engine (isomer's android/libraries/wasm_view:engine, WasmKit),
+# as a native library of its own with a generated Kotlin bridge
+# (WasmEngineBridge) whose `wasmKit*` functions WasmKitRuntime.kt calls. An
+# app that runs reactors depends on both: the Kotlin bindings, and
+# :engine_native for the .so.
+kt_swift_library(
+    name = "wasm_engine_bindings",
+    java_package = "dev.isomer.runtime",
+    swift = "@isomer//android/libraries/wasm_view:engine",
+    tags = ["manual"],
+)
+
+cc_library(
+    name = "engine_native",
+    srcs = [":libwasm_engine_bindings.so"],
+    # Its C++ runtime, libc++_shared.so with
+    # --@isomer//swift_ffi/rules:libcxx=shared (nothing otherwise).
+    deps = ["@isomer//swift_ffi/rules:cxx_runtime"],
+    tags = ["manual"],
+    target_compatible_with = ["@platforms//os:android"],
+)

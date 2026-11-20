@@ -51,7 +51,7 @@ root.render(React.createElement(Isomer, { wasmURL: "./app.wasm", renderer: "reac
 ```
 
 Build the embeddable pieces with `isomer_android_library`
-(tools/android/defs.bzl) or `isomer_web_app` (tools/wasm/defs.bzl)
+(android/module/defs.bzl) or `isomer_web_app` (tools/wasm/defs.bzl)
 around a `swift_library` holding your SwiftUI code. Embedded surfaces
 forward the host lifecycle to `@Environment(\.scenePhase)` but never
 reconfigure the host's window/page (no title changes).
