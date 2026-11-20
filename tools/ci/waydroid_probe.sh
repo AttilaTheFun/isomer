@@ -119,7 +119,10 @@ row "binder available" "$binder" "$(tr '\n' ' ' < "$LOGS/lsmod.log" | cut -c1-20
 [ "$binder" = yes ] || { verdict="no binder in this kernel: Waydroid cannot run here"; }
 
 # 3. Waydroid, from its official repository, and its images.
-if run 180 repository bash -c 'curl -fsSL --retry 3 https://repo.waydro.id | sudo bash' && run 300 install sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -q waydroid weston adb; then
+# (A mirror stalled for minutes on one package once: apt's own timeout and
+# retries, and only what the three need.)
+if run 180 repository bash -c 'curl -fsSL --retry 3 https://repo.waydro.id | sudo bash' && run 480 install sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
+        -o Acquire::http::Timeout=30 -o Acquire::Retries=5 waydroid weston adb; then
     row "waydroid installed" ok "$(dpkg-query -W -f '${Version}' waydroid 2> /dev/null)"
 else
     row "waydroid installed" failed "$(tail -2 "$LOGS/install.log" 2> /dev/null | tr '\n' ' ')"
