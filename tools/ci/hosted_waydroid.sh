@@ -65,9 +65,11 @@ step 600 install sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -q -
 # from SourceForge stalled past ten minutes on an AWS runner: Waydroid's OTA
 # index names each (the newest first), curl gives up on a mirror that slows
 # below 1 MB/s for 20 s and asks again (each ask may go to another mirror),
-# and each is checked against its SHA-256.
-images="${RUNNER_TEMP:-/tmp}/waydroid-images"
-mkdir -p "$images"
+# and each is checked against its SHA-256. They go where Waydroid takes
+# preinstalled images from (/etc/waydroid-extra/images: then `waydroid init`
+# downloads nothing; its -i only says where its downloads go).
+images=/etc/waydroid-extra/images
+sudo mkdir -p "$images" && sudo chown "$(id -u)" "$images"
 fetch_image() { # <OTA index URL> <image name>
     local entry url sha zip="$images/$2.zip"
     entry="$(curl -fsSL --retry 3 "$1" |
@@ -80,7 +82,7 @@ export -f fetch_image
 export images
 step 600 system bash -c 'fetch_image https://ota.waydro.id/system/lineage/waydroid_x86_64/VANILLA.json system'
 step 600 vendor bash -c 'fetch_image https://ota.waydro.id/vendor/waydroid_x86_64/MAINLINE.json vendor'
-step 300 init sudo waydroid init -f -i "$images"
+step 300 init sudo waydroid init
 step 90 container sudo systemctl restart waydroid-container
 
 # The display: a headless Weston the phone's size (Waydroid's Android takes
