@@ -584,12 +584,16 @@ jobs:
           retention-days: 14
 
   android:
-    # The Android Storybook's tests on GitHub's own Ubuntu runner, the
-    # emulator on its KVM (tools/ci/hosted_android_test.sh).
+    # The Android Storybook's tests on GitHub's own Ubuntu runner, Android 13
+    # under Waydroid in a container on the runner's own kernel
+    # (tools/ci/hosted_android_test.sh, tools/ci/hosted_waydroid.sh);
+    # ISOMER_ANDROID_PHONE: emulator for the emulator on its KVM instead.
     needs: verify
     if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    env:
+      ISOMER_ANDROID_PHONE: waydroid
     steps:
       - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
@@ -729,8 +733,9 @@ jobs:
   # The proof pictured on GitHub's own machines, free for a public
   # repository (tools/ci/proof.sh --stage shoot, tools/proof/proof.py
   # --here): the iPhone (a simulator made for the run) and the Mac on
-  # `xcode-27` Macs, the Android Storybook on an emulator under Ubuntu's
-  # KVM, the web in Ubuntu's Chrome. Each its own part, whatever came back:
+  # `xcode-27` Macs, the Android Storybook under Waydroid on Ubuntu's own
+  # kernel (ISOMER_ANDROID_PHONE: emulator for the emulator on its KVM), the
+  # web in Ubuntu's Chrome. Each its own part, whatever came back:
   # a broken screen is what the proof is for.
   proof-shoot:
     needs: [proof, proof-apple, proof-android]
@@ -749,6 +754,8 @@ jobs:
             runner: ubuntu-24.04
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
+    env:
+      ISOMER_ANDROID_PHONE: waydroid
     steps:
       - uses: actions/checkout@v5
         with:
