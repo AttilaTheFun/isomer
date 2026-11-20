@@ -1034,8 +1034,8 @@ def android(review, story_list, builds):
     """On Android under Waydroid, in a container leased from Shireworks
     (`--config=waydroid`: Android 13, arm64, 1080x2400 at 420 dpi; the Mac's
     own emulator is not leased), or --here the phone this machine's adb sees
-    (PROOF_ADB, PROOF_ANDROID_SERIAL: GitHub's Ubuntu runner's emulator,
-    tools/ci/hosted_android_emulator.sh)."""
+    (PROOF_ADB, PROOF_ANDROID_SERIAL: GitHub's Ubuntu runner's, Waydroid's
+    unless ISOMER_ANDROID_PHONE=emulator, tools/ci/hosted_android_emulator.sh)."""
     env = None if HERE else lease("android", "--config=waydroid")
     try:
         if HERE:
@@ -1100,7 +1100,8 @@ def android(review, story_list, builds):
                             request=lambda story: sh(adb + ["shell", "am", "start", "-a", "android.intent.action.VIEW",
                                                             "-d", shlex.quote(f"iso://story/{story}"), bundle]),
                             shoot=shot, settle=1.5)
-        shoot_apps(review, "android", "Android phone (emulator)" if HERE else "Android phone (Waydroid)", "portrait", launcher, story_list,
+        shoot_apps(review, "android", "Android phone (emulator)" if HERE and os.environ.get("ISOMER_ANDROID_PHONE") == "emulator"
+                   else "Android phone (Waydroid)", "portrait", launcher, story_list,
                    {"open": 6, "story": 5}, switcher)
         for app in APPS.values():
             sh(adb + ["shell", "am", "force-stop", app["bundle"]], check=False)

@@ -345,8 +345,10 @@ web, and `proof-android`: Android for x86_64, in Swift's image on GitHub's
 x86_64 Ubuntu; `proof-apple`: the iPhone and the Mac on an `xcode-27` Mac
 with its own Xcode), then pictured: the iPhone (a
 simulator made for the run) and the Mac on `xcode-27` runners, the Android
-Storybook on an emulator under Ubuntu's KVM
-(tools/ci/hosted_android_emulator.sh: API 35, 1080×2400, 420 dpi, gesture
+Storybook on Android 13 under Waydroid in a container on Ubuntu's own
+kernel (tools/ci/hosted_waydroid.sh, by way of hosted_android_emulator.sh,
+whose emulator under the runner's KVM is the other choice:
+ISOMER_ANDROID_PHONE=emulator; both 1080×2400, 420 dpi, gesture
 navigation) and the web in Ubuntu's Chrome (the `proof-shoot` jobs), then
 written in the container (`proof-compare`). Where each platform builds
 (tools/ci/container_build.sh's ISOMER_PLATFORMS): the web, Linux and
@@ -726,9 +728,14 @@ acceptable.
     the examples);
   - Android, built in Swift's image on GitHub's x86_64 Ubuntu (Google's SDK
     and NDK tools and the hermetic JDK for Linux are x86_64, and GitHub's
-    arm64 runners have no Rosetta), tested on an x86_64 emulator on that
-    runner's KVM (the workflow's `android` job,
-    tools/ci/hosted_android_test.sh, tools/ci/android_test.sh). A Cuttlefish
+    arm64 runners have no Rosetta), tested on that runner under Waydroid:
+    Android 13 x86_64 in an LXC container on the runner's own kernel, its
+    binder module loaded, ready in under three minutes from nothing
+    (tools/ci/hosted_waydroid.sh; the workflow's `android` job,
+    tools/ci/hosted_android_test.sh, tools/ci/android_test.sh;
+    ISOMER_ANDROID_PHONE=emulator gives the x86_64 Android 15 emulator on
+    the runner's KVM instead, which sdk_smoke's API 23 and 28 cells keep:
+    Waydroid runs Android 13 alone). A Cuttlefish
     phone in a container with its own KVM (Shireworks' API 22;
     tools/ci/android_device.sh, in git's history) boots far on a Mac but
     doesn't finish: Virtualization's vCPU threads oversleep every timed
