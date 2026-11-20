@@ -78,17 +78,21 @@ row "/dev/binder*, /dev/binderfs, /dev/ashmem before" info "$(tr '\n' ' ' < "$LO
 filesystems="$(grep binder /proc/filesystems)"
 row "binder in /proc/filesystems before" "${filesystems:+yes}${filesystems:-no}" "$filesystems"
 
-# 2. Binder (and ashmem).
-modprobe_binder() { sudo modprobe binder_linux devices=binder,hwbinder,vndbinder; }
-if run 60 modprobe-binder modprobe_binder; then
+# 2. Binder (and ashmem). (`timeout` runs programs, not this script's
+# functions: each step below is a command line of its own.)
+find "/lib/modules/$kernel" -name 'binder*' > "$LOGS/binder-modules.log" 2>&1
+row "binder modules shipped" info "$(tr '\n' ' ' < "$LOGS/binder-modules.log" | cut -c1-300)"
+modprobe_binder=(sudo modprobe binder_linux devices=binder,hwbinder,vndbinder)
+if run 60 modprobe-binder "${modprobe_binder[@]}"; then
     row "modprobe binder_linux" ok ""
 else
     row "modprobe binder_linux" failed "$(tail -2 "$LOGS/modprobe-binder.log" | tr '\n' ' ')"
     # The module ships in the kernel's extra modules, which the runner's
     # image may leave out.
+    run 300 apt-update sudo apt-get update -q
     if run 300 modules-extra sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -q "linux-modules-extra-$kernel"; then
         row "linux-modules-extra-$kernel" installed ""
-        if run 60 modprobe-binder-again modprobe_binder; then
+        if run 60 modprobe-binder-again "${modprobe_binder[@]}"; then
             row "modprobe binder_linux, again" ok ""
         else
             row "modprobe binder_linux, again" failed "$(tail -2 "$LOGS/modprobe-binder-again.log" | tr '\n' ' ')"
@@ -115,8 +119,7 @@ row "binder available" "$binder" "$(tr '\n' ' ' < "$LOGS/lsmod.log" | cut -c1-20
 [ "$binder" = yes ] || { verdict="no binder in this kernel: Waydroid cannot run here"; }
 
 # 3. Waydroid, from its official repository, and its images.
-add_repository() { curl -fsSL --retry 3 https://repo.waydro.id | sudo bash; }
-if run 180 repository add_repository && run 300 install sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -q waydroid weston adb; then
+if run 180 repository bash -c 'curl -fsSL --retry 3 https://repo.waydro.id | sudo bash' && run 300 install sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -q waydroid weston adb; then
     row "waydroid installed" ok "$(dpkg-query -W -f '${Version}' waydroid 2> /dev/null)"
 else
     row "waydroid installed" failed "$(tail -2 "$LOGS/install.log" 2> /dev/null | tr '\n' ' ')"

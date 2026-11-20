@@ -1018,7 +1018,7 @@ def macos_vm(review, story_list, builds):
         release(env)
 
 
-# --- Android (an emulator lease)
+# --- Android (a Waydroid lease)
 
 def build_android(abi=None):
     """The Storybook, for `abi` if given (x86_64, for GitHub's Ubuntu
@@ -1031,10 +1031,12 @@ def build_android(abi=None):
 
 
 def android(review, story_list, builds):
-    """On an emulator leased from Shireworks, or --here the one this
-    machine's adb sees (PROOF_ADB, PROOF_ANDROID_SERIAL: GitHub's Ubuntu
-    runner's, tools/ci/hosted_android_emulator.sh)."""
-    env = None if HERE else lease("android")
+    """On Android under Waydroid, in a container leased from Shireworks
+    (`--config=waydroid`: Android 13, arm64, 1080x2400 at 420 dpi; the Mac's
+    own emulator is not leased), or --here the phone this machine's adb sees
+    (PROOF_ADB, PROOF_ANDROID_SERIAL: GitHub's Ubuntu runner's emulator,
+    tools/ci/hosted_android_emulator.sh)."""
+    env = None if HERE else lease("android", "--config=waydroid")
     try:
         if HERE:
             adb = [os.environ.get("PROOF_ADB", "adb"), "-s", os.environ["PROOF_ANDROID_SERIAL"]]
@@ -1056,6 +1058,12 @@ def android(review, story_list, builds):
 
         # Light, as every platform's shots are.
         sh(adb + ["shell", "cmd", "uimode", "night", "no"], check=False)
+        # Gesture navigation, as the emulator's (hosted_android_emulator.sh):
+        # Waydroid's Android comes up with three buttons, a bar twice as tall
+        # in every picture. (It restarts SystemUI, which forgets demo mode's
+        # status bar: cropped off below anyway.)
+        sh(adb + ["shell", "cmd", "overlay", "enable", "com.android.internal.systemui.navbar.gestural"], check=False)
+        time.sleep(3)
         # UTC, as every platform's pictures (HELD_ENVIRONMENT).
         sh(adb + ["shell", "cmd", "alarm", "set-timezone", "UTC"], check=False)
         # The status bar is cropped off every picture, as the desktops' shots
@@ -1063,9 +1071,11 @@ def android(review, story_list, builds):
         # one run and not the next (the cellular icon drawn two ways, then the
         # Wi-Fi icon gone, then no status bar at all, on one emulator image),
         # and every such run changed every Android picture. Its height is
-        # the phone's own (the statusBars inset: 63 px on the 420 dpi phone).
+        # the phone's own (the statusBars inset: 63 px on the 420 dpi
+        # emulator, 74 px under Waydroid).
         windows = sh(adb + ["shell", "dumpsys", "window"], check=False).stdout
-        inset = re.search(r"type=statusBars frame=\[0,0\]\[\d+,(\d+)\]", windows)
+        # Android 14 and later name it statusBars, 13 (Waydroid's) ITYPE_STATUS_BAR.
+        inset = re.search(r"type=(?:statusBars|ITYPE_STATUS_BAR) frame=\[0,0\]\[\d+,(\d+)\]", windows)
         if not inset:
             raise SystemExit("proof: no status bar inset in the Android phone's dumpsys window")
         status_bar = int(inset.group(1))
@@ -1090,7 +1100,7 @@ def android(review, story_list, builds):
                             request=lambda story: sh(adb + ["shell", "am", "start", "-a", "android.intent.action.VIEW",
                                                             "-d", shlex.quote(f"iso://story/{story}"), bundle]),
                             shoot=shot, settle=1.5)
-        shoot_apps(review, "android", "Android phone (emulator)", "portrait", launcher, story_list,
+        shoot_apps(review, "android", "Android phone (emulator)" if HERE else "Android phone (Waydroid)", "portrait", launcher, story_list,
                    {"open": 6, "story": 5}, switcher)
         for app in APPS.values():
             sh(adb + ["shell", "am", "force-stop", app["bundle"]], check=False)
