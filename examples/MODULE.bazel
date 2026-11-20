@@ -250,16 +250,16 @@ bazel_dep(name = "rules_xcodeproj", version = "4.1.0")
 # //third_party/swift_packages): SwiftProtobuf/gRPC for the proto greeter
 # (swift_proto_library with a custom swift_proto_compiler whose plugin +
 # runtime come from the package — cross-compiled to iOS, wasm32, Android).
-bazel_dep(name = "rules_swift_package_manager", version = "1.25.0.isomer.1")
+bazel_dep(name = "rules_swift_package_manager", version = "1.26.0")
 
-# rules_swift_package_manager on Windows (the Windows Storybook): tools/patches/rules_swift_package_manager_windows.patch says
-# what it changes; over the registry's 1.25.0.isomer.1 (isomer's
-# MODULE.bazel says what that carries).
+# The examples take isomer's package by path, a local package that is a Bazel
+# module too: cgrindel/rules_swift_package_manager#2638 copies it without its
+# Bazel files (isomer's MODULE.bazel says more).
 single_version_override(
     module_name = "rules_swift_package_manager",
     patch_strip = 1,
     patches = [
-        "//tools/patches:rules_swift_package_manager_windows.patch",
+        "//tools/patches:rules_swift_package_manager_local_bazel_package.patch",
     ],
 )
 

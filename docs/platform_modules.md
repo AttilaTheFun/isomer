@@ -44,7 +44,7 @@ Every non-dev directive, by the platform that needs it.
 | --- | --- | --- |
 | `bazel_skylib` 1.9.0, `platforms` 1.1.0 | core | every rule file |
 | `rules_swift` 4.3.0.isomer.1 | core | Swift everywhere (also brings apple_support 2.9.1, protobuf 34) |
-| `rules_swift_package_manager` 1.25.0.isomer.1, its `swift_deps` (`configure_package`, `use_repo`) | core | Isomer's Swift package (also brings rules_apple 4.3.3, apple_support 1.24.2) |
+| `rules_swift_package_manager` 1.26.0, its `swift_deps` (`configure_package`, `use_repo`) | core | Isomer's Swift package (also brings rules_apple 4.3.3, apple_support 1.24.2) |
 | `swift_argument_parser` 1.7.0 | core | the bridge generator and analyzer (swift_ffi) |
 | `protobuf` 27.0 | core | the wire protos (shared/wire); rules_swift asks for 34 anyway |
 | `rules_cc` 0.2.18 | core | C in swift_ffi, the web's and Linux's and Windows' libraries |
