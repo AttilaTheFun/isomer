@@ -16,12 +16,11 @@
 #     with the kernel's linux-modules-extra package installed if the module
 #     isn't there, and binderfs mounted; ashmem (Waydroid uses memfd where
 #     ashmem is missing);
-#  3. Waydroid from its official apt repository (repo.waydro.id), and
-#     `waydroid init` (the LineageOS system and vendor images);
-#  4. the container (waydroid-container's service), then a session under a
-#     headless Weston (Waydroid draws into a Wayland compositor);
-#  5. Android booted: `waydroid status`, sys.boot_completed, and adb over
-#     Waydroid's IP (`adb connect <ip>:5555`, `adb devices`).
+#  3. the phone CI's Android jobs use, made as they make it
+#     (tools/ci/hosted_waydroid.sh: Waydroid from its apt repository, its
+#     images, a session under a headless Weston, adb let in, the phone
+#     shaped and its status bar held still), then a screenshot, an app
+#     started and a tap over adb, and the phone's insets.
 # Run on the runner itself (not in a job container), with sudo.
 set -u
 LOGS="${1:-${RUNNER_TEMP:-/tmp}/waydroid-probe}"
@@ -118,133 +117,37 @@ binder=no
 row "binder available" "$binder" "$(tr '\n' ' ' < "$LOGS/lsmod.log" | cut -c1-200)"
 [ "$binder" = yes ] || { verdict="no binder in this kernel: Waydroid cannot run here"; }
 
-# 3. Waydroid, from its official repository, and its images.
-# GitHub's runners on AWS fetch Ubuntu's packages from an EC2 mirror that
-# stalled Waydroid's install past its limit in two runs of four (those on
-# Azure finished it in seconds): Ubuntu's own archives are asked first.
-if [ -f /etc/apt/apt-mirrors.txt ] && grep -q ec2.archive /etc/apt/apt-mirrors.txt; then
-    { printf 'http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\nhttp://archive.ubuntu.com/ubuntu/\tpriority:2\n'
-      grep -v ec2.archive /etc/apt/apt-mirrors.txt; } > "$LOGS/apt-mirrors.txt"
-    sudo cp "$LOGS/apt-mirrors.txt" /etc/apt/apt-mirrors.txt
-    row "apt mirrors" "Ubuntu's first" "$(tr '\n' ' ' < "$LOGS/apt-mirrors.txt" | cut -c1-200)"
-fi
-# (A mirror stalled for minutes on one package once: apt's own timeout and
-# retries, and only what the three need.)
-if run 180 repository bash -c 'curl -fsSL --retry 3 https://repo.waydro.id | sudo bash' && run 600 install sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
-        -o Acquire::http::Timeout=30 -o Acquire::Retries=5 waydroid weston adb dbus-daemon; then
-    row "waydroid installed" ok "$(dpkg-query -W -f '${Version}' waydroid 2> /dev/null)"
-else
-    row "waydroid installed" failed "$(tail -2 "$LOGS/install.log" 2> /dev/null | tr '\n' ' ')"
-    exit 0
-fi
+# 3. The phone CI's Android jobs use (tools/ci/hosted_waydroid.sh: Waydroid
+# installed, its images, a session under a headless Weston, adb let in, the
+# phone's shape and status bar), then what the tests ask of it: a
+# screenshot, an app started, a tap.
 [ "$binder" = yes ] || exit 0
-# Its images fetched here rather than by `waydroid init`, whose download
-# from SourceForge stalled past ten minutes on an AWS runner (24 s on an
-# Azure one): Waydroid's OTA index names each (the newest first), curl gives
-# up on a mirror that slows below 1 MB/s for 20 s and asks again (each ask
-# may be sent to another mirror), and each is checked against its SHA-256.
-images="$LOGS/../waydroid-images"
-mkdir -p "$images"
-fetch_image() { # <OTA index URL> <image name>
-    local entry url sha zip="$images/$2.zip"
-    entry="$(curl -fsSL --retry 3 "$1" | python3 -c 'import json, sys; e = json.load(sys.stdin)["response"][0]; print(e["url"], e["id"])')" || return 1
-    read -r url sha <<< "$entry"
-    curl -fL --retry 8 --retry-all-errors --speed-limit 1000000 --speed-time 20 -o "$zip" "$url" &&
-        echo "$sha  $zip" | sha256sum -c - && unzip -o -q "$zip" -d "$images" && rm -f "$zip"
-}
-fetch_images() {
-    fetch_image https://ota.waydro.id/system/lineage/waydroid_x86_64/VANILLA.json system &&
-        fetch_image https://ota.waydro.id/vendor/waydroid_x86_64/MAINLINE.json vendor &&
-        ls -la "$images"
-}
-export -f fetch_image fetch_images
-export images
-if run 600 images bash -c fetch_images && [ -f "$images/system.img" ] && [ -f "$images/vendor.img" ]; then
-    row "images fetched" ok "$(grep -E "OK$" "$LOGS/images.log" | tr '\n' ' ' | cut -c1-200)"
-    init=(sudo waydroid init -i "$images")
+sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+adb="$sdk/platform-tools/adb"
+started=$SECONDS
+if "$(dirname "$0")/hosted_waydroid.sh" "$LOGS/phone.log" "$LOGS/serial" > /dev/null 2>&1; then
+    row "phone (hosted_waydroid.sh)" ok "$((SECONDS - started)) s: $(grep -v "^hosted_waydroid: [a-z-]* ([0-9]* s)$" "$LOGS/phone.log" | tr '\n' ' ' | cut -c1-300)"
 else
-    row "images fetched" failed "$(tail -2 "$LOGS/images.log" | tr '\n' ' ' | cut -c1-300); waydroid init downloads them"
-    init=(sudo waydroid init)
-fi
-if run 600 init "${init[@]}"; then
-    row "waydroid init" ok "$(grep -iE "system|vendor" "$LOGS/init.log" | tail -2 | tr '\n' ' ' | cut -c1-200)"
-else
-    row "waydroid init" failed "$(tail -3 "$LOGS/init.log" | tr '\n' ' ')"
+    row "phone (hosted_waydroid.sh)" failed "$(tail -3 "$LOGS/phone.log" | tr '\n' ' ' | cut -c1-400)"
+    sudo timeout 10 cat /var/lib/waydroid/waydroid.log > "$LOGS/waydroid.log" 2>&1
     exit 0
 fi
-
-# 4. The container, and a session under a headless Weston.
-if run 90 container sudo systemctl restart waydroid-container; then
-    sleep 5
-    row "container" "$(systemctl is-active waydroid-container)" "$(sudo waydroid status 2> /dev/null | tr '\n' ' ')"
-else
-    row "container" failed "$(sudo journalctl -u waydroid-container --no-pager 2> /dev/null | tail -3 | tr '\n' ' ')"
-fi
-export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-[ -d "$XDG_RUNTIME_DIR" ] || { sudo mkdir -p "$XDG_RUNTIME_DIR" && sudo chown "$(id -u)" "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"; }
-weston --backend=headless --socket=wayland-probe --width=1080 --height=1920 > "$LOGS/weston.log" 2>&1 &
-weston_pid=$!
-sleep 5
-if kill -0 "$weston_pid" 2> /dev/null; then
-    row "weston (headless)" ok ""
-else
-    row "weston (headless)" failed "$(tail -2 "$LOGS/weston.log" | tr '\n' ' ')"
-fi
-# Waydroid binds the session's PulseAudio socket into the container
-# whether or not there is one (tools/helpers/lxc.py, 1.6.3: a mount entry
-# with a destination isn't checked), and lxc refuses to start without it
-# ("Failed to mount /run/user/<uid>/pulse/native"). A runner plays no sound:
-# a socket that nothing answers is enough for the mount.
-pulse="${PULSE_RUNTIME_PATH:-$XDG_RUNTIME_DIR/pulse}"
-if [ ! -S "$pulse/native" ]; then
-    mkdir -p "$pulse" && rm -f "$pulse/native" &&
-        python3 -c 'import socket, sys; socket.socket(socket.AF_UNIX).bind(sys.argv[1])' "$pulse/native"
-fi
-row "PulseAudio socket" "$([ -S "$pulse/native" ] && echo present || echo absent)" "$pulse/native"
-
-# 5. Android booted, and adb. The session tried as it is, then (should it
-# end) under a D-Bus session bus of its own: Waydroid's user session talks
-# to one, and a runner's job has none.
-booted=no
-deadline=$((SECONDS + 300))
-for way in plain dbus-run-session; do
-    if [ "$way" = plain ]; then
-        WAYLAND_DISPLAY=wayland-probe waydroid session start > "$LOGS/session-$way.log" 2>&1 &
-    else
-        command -v dbus-run-session > /dev/null || break
-        WAYLAND_DISPLAY=wayland-probe dbus-run-session -- waydroid session start > "$LOGS/session-$way.log" 2>&1 &
-    fi
-    session_pid=$!
-    while [ $SECONDS -lt $deadline ]; do
-        if [ "$(sudo timeout 20 waydroid shell getprop sys.boot_completed 2> /dev/null | tr -d '\r\n')" = 1 ]; then booted=yes; break; fi
-        kill -0 "$session_pid" 2> /dev/null || break
-        sleep 10
-    done
-    kill -0 "$session_pid" 2> /dev/null && state=running || state=ended
-    row "session ($way)" "$state" "$(tail -4 "$LOGS/session-$way.log" | tr '\n' ' ' | cut -c1-400)"
-    [ "$booted" = yes ] || [ "$state" = running ] && break
-done
-status="$(sudo waydroid status 2> /dev/null)"
-echo "$status" > "$LOGS/status.log"
-row "waydroid status" info "$(tr '\n' ' ' <<< "$status")"
-row "sys.boot_completed" "$booted" "after $((SECONDS - deadline + 300)) s"
-ip="$(awk '/IP address/ {print $NF}' <<< "$status")"
-if [ -n "$ip" ] && [ "$ip" != UNKNOWN ]; then
-    timeout 30 adb connect "$ip:5555" > "$LOGS/adb.log" 2>&1
-    timeout 30 adb devices -l >> "$LOGS/adb.log" 2>&1
-    model="$(timeout 20 adb -s "$ip:5555" shell getprop ro.product.model 2> /dev/null | tr -d '\r')"
-    release="$(timeout 20 adb -s "$ip:5555" shell getprop ro.build.version.release 2> /dev/null | tr -d '\r')"
-    row "adb devices" "$(grep -q "$ip:5555.*device" "$LOGS/adb.log" && echo connected || echo "not connected")" "$(tr '\n' ' ' < "$LOGS/adb.log" | cut -c1-200)"
-    [ -n "$release" ] && row "Android" ok "$model, Android $release"
-else
-    row "adb devices" skipped "no IP from waydroid status"
-fi
-[ "$booted" = yes ] && verdict="Android booted under Waydroid on the hosted runner: GUI tests could run in the same job"
+row "phone's steps" info "$(grep -oE "^hosted_waydroid: [a-z-]* \([0-9]* s\)" "$LOGS/phone.log" | sed 's/^hosted_waydroid: //' | tr '\n' ' ')"
+serial="$(cat "$LOGS/serial")"
+a() { timeout 60 "$adb" -s "$serial" "$@"; }
+a exec-out screencap -p > "$LOGS/home.png"
+row "screenshot" "$(file -b "$LOGS/home.png" | cut -d, -f1-2)" "$(wc -c < "$LOGS/home.png") bytes"
+a shell am start -W -a android.settings.SETTINGS > "$LOGS/settings.log" 2>&1
+sleep 3
+a exec-out screencap -p > "$LOGS/settings.png"
+a shell input tap 540 1200
+sleep 2
+a exec-out screencap -p > "$LOGS/after-tap.png"
+row "an app and a tap" "$(grep -q "Status: ok" "$LOGS/settings.log" && echo started || echo "not started")" \
+    "$(cmp -s "$LOGS/settings.png" "$LOGS/after-tap.png" && echo "the tap changed nothing" || echo "the tap changed the screen"); top: $(a shell dumpsys activity activities 2> /dev/null | grep -m1 topResumedActivity | tr -s ' ' | cut -c1-120)"
+a shell dumpsys window > "$LOGS/window.log" 2>&1
+row "insets" info "$(grep -oE "type=(ITYPE_STATUS_BAR|ITYPE_NAVIGATION_BAR|statusBars|navigationBars) frame=\[[0-9,]+\]\[[0-9,]+\]" "$LOGS/window.log" | sort -u | tr '\n' ' ')"
+verdict="Android booted under Waydroid on the hosted runner, adb in: GUI tests can run in the same job"
 sudo timeout 10 cat /var/lib/waydroid/waydroid.log > "$LOGS/waydroid.log" 2>&1
-row "waydroid.log" info "$(grep -iE "error|fail|exception" "$LOGS/waydroid.log" | tail -4 | tr '\n' ' ' | cut -c1-400)"
 sudo dmesg 2> /dev/null | tail -200 > "$LOGS/dmesg.log"
-# Stopped by their own PIDs and the service.
-timeout 30 waydroid session stop > /dev/null 2>&1
-kill "${session_pid:-}" "$weston_pid" 2> /dev/null
-sudo systemctl stop waydroid-container > /dev/null 2>&1
 exit 0

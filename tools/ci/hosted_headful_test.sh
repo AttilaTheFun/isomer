@@ -255,9 +255,9 @@ android)
         { sudo apt-get update -qq > /dev/null &&
           sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
               libcurl4-openssl-dev libxml2-dev > /dev/null; }
-    # The job's phone if one is up already (the picture tests leave theirs
+    # The job's phone (an emulator or Waydroid's) if one is up already (the picture tests leave theirs
     # running), else one booted here.
-    serial="$("$adb" devices | awk '$2 == "device" && $1 ~ /^emulator-/ { print $1; exit }')"
+    serial="$("$adb" devices | awk 'NR > 1 && $2 == "device" { print $1; exit }')"
     if [ -z "$serial" ]; then
         "$ROOT/tools/ci/hosted_android_emulator.sh" "$out/emulator.log" "$work/serial" < /dev/null > /dev/null || exit 1
         serial="$(cat "$work/serial")"

@@ -1,6 +1,7 @@
 #!/bin/bash
 # An Android phone on GitHub's own Ubuntu runner (x86_64, with KVM: free for
-# a public repository), for the Android Storybook's tests
+# a public repository): Waydroid's by default (below), else this emulator,
+# for the Android Storybook's tests
 # (tools/ci/hosted_android_test.sh) and pictures (tools/ci/proof.sh): the
 # runner's Android SDK's emulator, an x86_64 Android 15 (the AOSP image)
 # shaped as Shireworks' android leases are (1080×2400, 420 dpi), so its
@@ -22,6 +23,14 @@ log="${1:?usage: hosted_android_emulator.sh <emulator log> <serial file>}"
 serial_file="${2:?usage: hosted_android_emulator.sh <emulator log> <serial file>}"
 mkdir -p "$(dirname "$log")"
 sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:?no Android SDK on this runner}}"
+
+# The phone is Waydroid's (tools/ci/hosted_waydroid.sh: Android 13 in a
+# container on the runner's kernel, no emulator) unless ISOMER_ANDROID_PHONE
+# is `emulator` or a system image is named (sdk_smoke's API 23 and 28 cells:
+# Waydroid runs Android 13 alone).
+if [ -z "${3:-}" ] && [ "${ISOMER_ANDROID_PHONE:-waydroid}" = waydroid ]; then
+    exec "$(dirname "$0")/hosted_waydroid.sh" "$log" "$serial_file"
+fi
 
 # KVM for the runner's user.
 echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' |
