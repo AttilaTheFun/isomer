@@ -2945,6 +2945,7 @@ struct Main {
         checkTextEditFrames()
         checkPresentFromPartialFrame()
         checkVolatileSites()
+        checkOpenURLAfterPartialFrames()
 
         // Row actions: the tagged row is a tap target and carries its menu.
         Runtime.shared.installRootView { RowScreen() }
@@ -3572,5 +3573,73 @@ func checkVolatileSites() {
         expect(HostFrame(Runtime.shared.retainedTree!).shows("Sheet body"), "the sheet stays\(label)")
         frame("the sheet dismissed", inPlace: false) { volatileSheet?.wrappedValue = false }
         expect(!HostFrame(Runtime.shared.retainedTree!).shows("Sheet body"), "the sheet is gone\(label)")
+    }
+}
+
+
+// MARK: - URL handlers after partial frames
+
+/// A view holding `.onOpenURL`, whose closure reads its state, built again
+/// as that state changes: a URL delivered later reaches the handler of the
+/// view as it is now. Two things hold it today, and this test holds them
+/// to it: `.onOpenURL`'s registration reaches the views above it and isn't
+/// comparable, so no site holding one is built alone (its changes build the
+/// whole frame); and a delivered URL asks for a whole build, so the handlers
+/// dispatched to are that frame's own. (Partial frames keep the handlers the
+/// last whole build registered, `_FrameRegistrations` comparing their count:
+/// a handler replaced in place would go unseen there.)
+nonisolated(unsafe) var openURLSeenCounts: [Int] = []
+nonisolated(unsafe) var openURLHolderCount: Binding<Int>?
+
+struct OpenURLAfterPartialRoot: View {
+    let pass: Int
+    var body: some View {
+        if pass == 0 { OpenURLAfterPartialScreen() } else { OpenURLAfterPartialScreen() }
+    }
+}
+
+struct OpenURLAfterPartialScreen: View {
+    var body: some View {
+        VStack {
+            OpenURLHolder()
+            Text("Beside")
+        }
+    }
+}
+
+struct OpenURLHolder: View {
+    @State private var count = 0
+    var body: some View {
+        let _ = (openURLHolderCount = $count)
+        Text("Held \(count)")
+            .onOpenURL { _ in openURLSeenCounts.append(count) }
+    }
+}
+
+@MainActor
+func checkOpenURLAfterPartialFrames() {
+    let previous = Renderer.current
+    Renderer.bind(JetpackComposeRenderer(send: { _ in }))
+    defer { Renderer.bind(previous) }
+    let verifying = Runtime.shared.verifyPartialFrames
+    defer { Runtime.shared.verifyPartialFrames = verifying }
+    for verify in [true, false] {
+        Runtime.shared.verifyPartialFrames = verify
+        openURLSeenCounts = []
+        Runtime.shared.installRootView { NavigationStack { OpenURLAfterPartialRoot(pass: verify ? 0 : 1) } }
+        Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+        func settle() { var n = 0; while Runtime.shared.wantsFrame && n < 20 { Runtime.shared.renderFrame(); n += 1 } }
+        settle()
+        let label = verify ? " (checked against a whole build)" : ""
+        let mismatches = Runtime.shared.partialMismatches
+        openURLHolderCount?.wrappedValue = 1
+        settle()
+        openURLHolderCount?.wrappedValue = 2
+        settle()
+        expect(Runtime.shared.partialMismatches == mismatches, "the frames built in place are the whole builds'\(label)")
+        expect(findTextInTree(Runtime.shared.retainedTree!, "Held 2"), "the holder shows its count\(label)")
+        Runtime.shared.openURL(external: "isomer-tests://open")
+        settle()
+        expect(openURLSeenCounts == [2], "the URL reaches the handler of the view as it is now\(label) (got \(openURLSeenCounts))")
     }
 }
