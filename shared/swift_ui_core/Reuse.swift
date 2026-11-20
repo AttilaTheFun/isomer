@@ -584,6 +584,9 @@ func _generalComparison(of type: Any.Type) -> _GeneralComparison {
     return made
 }
 
+// Unguarded: read and written only by builds, which all run on the main
+// actor. A build off the main thread (encoding a snapshot elsewhere, say)
+// would race it: guard it with a lock, or make it the runtime's, first.
 nonisolated(unsafe) private var _generalComparisons: [ObjectIdentifier: _GeneralComparison] = [:]
 
 private func _sameByEquatable<T: Equatable>(_: T.Type) -> (Any, Any) -> Bool {
