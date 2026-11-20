@@ -153,6 +153,18 @@ if kill -0 "$weston_pid" 2> /dev/null; then
 else
     row "weston (headless)" failed "$(tail -2 "$LOGS/weston.log" | tr '\n' ' ')"
 fi
+# Waydroid binds the session's PulseAudio socket into the container
+# whether or not there is one (tools/helpers/lxc.py, 1.6.3: a mount entry
+# with a destination isn't checked), and lxc refuses to start without it
+# ("Failed to mount /run/user/<uid>/pulse/native"). A runner plays no sound:
+# a socket that nothing answers is enough for the mount.
+pulse="${PULSE_RUNTIME_PATH:-$XDG_RUNTIME_DIR/pulse}"
+if [ ! -S "$pulse/native" ]; then
+    mkdir -p "$pulse" && rm -f "$pulse/native" &&
+        python3 -c 'import socket, sys; socket.socket(socket.AF_UNIX).bind(sys.argv[1])' "$pulse/native"
+fi
+row "PulseAudio socket" "$([ -S "$pulse/native" ] && echo present || echo absent)" "$pulse/native"
+
 # 5. Android booted, and adb. The session tried as it is, then (should it
 # end) under a D-Bus session bus of its own: Waydroid's user session talks
 # to one, and a runner's job has none.
