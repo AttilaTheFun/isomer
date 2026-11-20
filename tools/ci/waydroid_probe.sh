@@ -147,6 +147,31 @@ row "an app and a tap" "$(grep -q "Status: ok" "$LOGS/settings.log" && echo star
     "$(cmp -s "$LOGS/settings.png" "$LOGS/after-tap.png" && echo "the tap changed nothing" || echo "the tap changed the screen"); top: $(a shell dumpsys activity activities 2> /dev/null | grep -m1 topResumedActivity | tr -s ' ' | cut -c1-120)"
 a shell dumpsys window > "$LOGS/window.log" 2>&1
 row "insets" info "$(grep -oE "type=(ITYPE_STATUS_BAR|ITYPE_NAVIGATION_BAR|statusBars|navigationBars) frame=\[[0-9,]+\]\[[0-9,]+\]" "$LOGS/window.log" | sort -u | tr '\n' ' ')"
+# Screenshots, many in a row (the Storybook's tests and proof hung on one
+# over adb's TCP connection): over adb (exec-out, each given 20 s), and
+# written on the phone then read from the host (its /data is the session
+# user's ~/.local/share/waydroid/data).
+shots() { # <way> <count>
+    local way=$1 n=$2 ok=0 hung=0 short=0 i t0 size
+    t0=$SECONDS
+    for i in $(seq 1 "$n"); do
+        rm -f "$LOGS/shot.png"
+        case "$way" in
+            exec-out) timeout 20 "$adb" -s "$serial" exec-out screencap -p > "$LOGS/shot.png" ;;
+            file) timeout 20 "$adb" -s "$serial" shell screencap -p /data/local/tmp/shot.png &&
+                sudo timeout 10 cat "$HOME/.local/share/waydroid/data/local/tmp/shot.png" > "$LOGS/shot.png" ;;
+        esac
+        case $? in
+            0) size=$(wc -c < "$LOGS/shot.png"); [ "$size" -gt 100000 ] && ok=$((ok + 1)) || short=$((short + 1)) ;;
+            124) hung=$((hung + 1)) ;;
+            *) short=$((short + 1)) ;;
+        esac
+        [ $((i % 3)) -eq 0 ] && a shell input swipe 540 1600 540 900 200 > /dev/null 2>&1
+    done
+    row "screenshots ($way)" "$ok of $n" "$hung hung past 20 s, $short short or failed, $((SECONDS - t0)) s in all"
+}
+shots exec-out 30
+shots file 30
 verdict="Android booted under Waydroid on the hosted runner, adb in: GUI tests can run in the same job"
 sudo timeout 10 cat /var/lib/waydroid/waydroid.log > "$LOGS/waydroid.log" 2>&1
 sudo dmesg 2> /dev/null | tail -200 > "$LOGS/dmesg.log"
