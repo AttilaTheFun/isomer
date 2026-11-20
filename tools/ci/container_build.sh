@@ -60,7 +60,7 @@
 # Flags as --name=value (--compilation_mode=opt, not -c opt): every argument
 # that doesn't start with "-" is taken for a target. An Android app's files
 # are its .apk (signed by its build with a debug key, which
-# tools/ci/sign_builds.sh replaces with the release key), its unsigned one
+# build_tools' `sign android` replaces with the release key), its unsigned one
 # and its deploy jar; only the first is copied. A .tar.gz (the web site) is
 # copied as is.
 set -euo pipefail
@@ -141,6 +141,10 @@ elif [ $# -eq 0 ] || [ "$*" = all ] || [ "$*" = pr ] || [ "$*" = headful ]; then
                //android/storybook_android_application:storybook_android_application_apk
                //android/webview_android_application:webview_android_application_apk)
         add_probes android_compiled_apk android_webview_apk android_remote_apk
+        # The release jobs' tools (build_tools' sign and proof-diff, and
+        # what they run), built where the release jobs build them: a pull
+        # request that breaks them fails here, not at a release.
+        apps+=(//tools/ci_tools:all)
     fi
     has linux && apps+=(//linux/storybook_linux_application:storybook_linux_application)
     set -- --ios_multi_cpus=sim_arm64 ${apps[@]+"${apps[@]}"}

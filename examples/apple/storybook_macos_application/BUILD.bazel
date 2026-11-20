@@ -10,7 +10,7 @@ BUNDLE_ID = "com.LoganShire.IsomerStorybook"
 
 # BuildVariant and the name under its icon (//tools/variant), as the
 # iPhone's. No entitlements here: Applications' app group comes with the
-# Developer ID profile CI signs it with (tools/ci/apple_sign.sh), as Reviews' Mac
+# Developer ID profile CI signs it with (build_tools' `sign apple`), as Reviews' Mac
 # app's; until then AppUpdates.start() logs that there is no container.
 variant_infoplist(
     name = "variant_plist",

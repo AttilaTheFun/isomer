@@ -221,7 +221,7 @@ build:prod --//tools/variant:variant=production
 build:adhoc --//tools/variant:variant=adhoc
 # CI's iPhone and iPad apps: a device build, signed ad hoc with a placeholder
 # profile (//tools/ci_device), which CI signs again with the team's identity
-# and the bundle id's profile (tools/ci/sign_builds.sh) before it is published.
+# and the bundle id's profile (build_tools' `sign apple`) before it is published.
 build:ci_device --ios_multi_cpus=arm64
 build:ci_device --ios_signing_cert_name=-
 
