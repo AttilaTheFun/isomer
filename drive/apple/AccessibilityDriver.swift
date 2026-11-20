@@ -379,11 +379,15 @@ final class AccessibilityDriver {
     /// the call ends.
     func dialOut(_ connection: any IsomerConnection, context: IsomerCallContext) async throws {
         let call = try await connection.attach(context: context)
-        _ = await screen()
+        // The hello first: a connection is made as it's written, so with no
+        // hub there this fails before anything is read. Reading the screen
+        // (every window, every menu opened) on each try kept an app with no
+        // hub busy.
         var hello = Wire_Answer()
         hello.ok = true
         hello.info = info
         try await call.write(hello)
+        _ = await screen()
         for try await command in call.inbound {
             try await call.write(await handle(command))
             if command.cmd == "quit" { break }

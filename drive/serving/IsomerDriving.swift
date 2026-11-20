@@ -36,28 +36,34 @@ public enum IsomerDriving {
     }
 
     /// Attaches with `attach`, and again whenever that ends or fails (the hub
-    /// not there yet, or gone), a second apart, for as long as the app runs:
-    /// so it doesn't matter whether the app or the hub starts first. `report`
-    /// is told when it attaches and when it's waiting, not of every try.
+    /// not there yet, or gone), for as long as the app runs: so it doesn't
+    /// matter whether the app or the hub starts first. While no hub answers,
+    /// the tries back off from a second apart to `longestWait` seconds; once
+    /// one has attached they start again from a second. `report` is told when
+    /// it attaches and when it's waiting, not of every try.
     public static func keepAttached(
         to address: String,
+        longestWait: Double = 5,
         report: @escaping @Sendable (String) -> Void,
         attach: @escaping @Sendable () async throws -> Void
     ) async {
         var waiting = false
+        var wait: Double = 1
         while !Task.isCancelled {
             let started = Date()
             do {
                 try await attach()
                 report("driver at \(address): the call ended")
                 waiting = false
+                wait = 1
             } catch {
                 if !waiting { report("driver: waiting for a hub at \(address) (\(error))") }
                 waiting = true
             }
             // An attachment that lasted a while ended: dial again at once.
             if Date().timeIntervalSince(started) < 1 {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+                if waiting { wait = min(wait * 2, longestWait) }
             }
         }
     }
