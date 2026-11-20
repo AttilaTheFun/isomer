@@ -911,6 +911,10 @@ jobs:
     container:
       image: swift:6.4.2-noble@sha256:23d9b28ad97fb1cf1999edc3a0cb265ee915ed42299a9344e7173d5a6d2b05f4
       volumes: ["/mnt:/mnt"]
+      # /dev/shm with room for an APK: build_tools' `sign android` writes
+      # the signed APK in its keys' folder there, and Docker's default is
+      # 64 MB (the Storybook's APK is 19 MB, the Playground's 157 MB).
+      options: --shm-size=1g
     environment: release
     timeout-minutes: 180
     permissions:
@@ -1151,6 +1155,10 @@ jobs:
     container:
       image: swift:6.4.2-noble@sha256:23d9b28ad97fb1cf1999edc3a0cb265ee915ed42299a9344e7173d5a6d2b05f4
       volumes: ["/mnt:/mnt"]
+      # /dev/shm with room for an APK: build_tools' `sign android` writes
+      # the signed APK in its keys' folder there, and Docker's default is
+      # 64 MB (the Storybook's APK is 19 MB, the Playground's 157 MB).
+      options: --shm-size=1g
     environment: release
     timeout-minutes: 120
     permissions:
