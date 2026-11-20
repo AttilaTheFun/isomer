@@ -424,31 +424,41 @@ it is taken (tools/proof/masks.txt). The proof's own leased modes
 (proof.py on Shireworks' leases, PROOF_MAC, PROOF_IOS) are a builder's, by
 hand, never CI's.
 
-**Signing (2026-11-15).** CI signs in the job itself, with the signers
-copied byte for byte from AttilaTheFun/shireworks (tools/ci/android_sign.sh;
-tools/ci/apple_sign.sh with apple_profiles.py, rcodesign and Apple Cross's
-`dmg`, pinned by SHA-256), on Linux alone (the keys go to /dev/shm), their
-keys the `release` environment's secrets (main and v* tags), named only in
-the alpha and release jobs' signing steps: ANDROID_SIGNING_KEYSTORE and
+**Signing (2026-11-15; build_tools since 2026-11-19).** CI signs in the job
+itself, with AttilaTheFun/build_tools' `sign` (`sign android`, `sign
+apple`: rcodesign and Apple Cross's `dmg`, pinned by SHA-256 in
+examples/MODULE.bazel), on Linux alone (the keys go to /dev/shm). build_tools
+is the examples' SwiftPM graph's (examples/third_party/swift_packages,
+pinned exact; CI's alone, never a dependency of isomer's module), and
+`sign` and what it runs are examples/tools/ci_tools, built in a step of
+their own before any key is in a step's environment, their paths handed to
+the signing steps (BUILD_TOOLS_SIGN and the rest), which run `sign`
+directly, never `bazel run` (build_tools' README: Bazel's server and build
+events see its client's environment). The keys are the `release`
+environment's secrets (main and v* tags), named only in
+the alpha and release jobs' signing steps (the Apple apps' and Android's
+apart, each with its own keys alone): ANDROID_SIGNING_KEYSTORE and
 _PASSWORD (the Storybook's release key, its certificate pinned in
 build.yml); APPLE_DEVELOPER_ID_P12 and _PASSWORD, APPLE_NOTARY_KEY, _KEY_ID
 and _ISSUER (the Mac app, notarized and stapled); APPLE_DEVELOPMENT_P12 and
 _PASSWORD (the iPhone app); APPLE_PROFILES (a base64 .tar or .tar.gz of
-their profiles). tools/ci/sign_builds.sh runs them and writes each signed
-package's builds.json line (tools/ci/release_assets.sh's
-release_asset_file); a platform whose keys aren't set is skipped, saying
-so in the log and the job's summary, never failing the job. The Apple
+their profiles). `sign` writes each signed package as
+<App>-<version>-<platform>.<ext> and its line of builds.json (`--builds`,
+the Mac app's icon beside it); a platform whose keys aren't set is skipped
+(`sign … --skip-missing-keys`), saying
+so in the log and the job's summary, never failing the job. An experiment
+saves its build as built (`sign apple --unsigned`: AdHoc, unsigned). The Apple
 Alphas are built on a Mac (`alpha-apple`), unsigned, and signed in `alpha`
 (Swift's image on x86_64, where Android's Alpha and the site are built).
 A release is approved by publishing its draft in Reviews (which makes its
 tag): the Build workflow's `release` job checks that its commit is main's
 and was verified (tools/ci/verified.sh), takes the proposal's iPhone and
 Mac Alphas of that commit (tools/ci/release_alphas.sh: nothing Apple
-rebuilt, since 0.40) and signs them again as Production (apple_sign.sh
---variant Production, as the old signing service's promotion did; the
-iPhone's with `--ipa-kind production`, which falls back to its development
-profile, as the old service signed it, there being no distribution
-identity; the Mac's with its disk image), builds
+rebuilt, since 0.40) and signs them again as Production (`sign apple
+--variant Production`, as the old signing service's promotion did; the
+iPhone's with `--ipa-kind ad-hoc,development`, an ad hoc profile when a
+distribution identity is set, else its development profile, as the old
+service signed it; the Mac's with its disk image), builds
 Android's for production and signs it, and attaches the release's assets:
 the signed builds as Applications reads them (tools/ci/attach_release.sh,
 from the private AttilaTheFun/applications' docs/RELEASE_ASSETS.md:
@@ -461,7 +471,9 @@ isomer-site.tar.gz (the web Storybook,
 pages.yml. A proposal's draft carries its Alphas the same way (alpha's
 attach_release.sh). The Mac icon's dark appearance is read on Linux
 (tools/ci/check_mac_icons.sh), and pages.yml, pins.yml and the proof-diff
-backfill run on GitHub's Ubuntu runner.
+backfill run on GitHub's Ubuntu runner. The proof's comparison
+(proof-diff.json) is build_tools' `proof-diff` (examples'
+//tools/ci_tools:proof_diff), made in `proof-compare` and by the backfill.
 
 **Adoption levels** (docs/adoption_levels.md): (1) rules_swift — raw Swift
 on the platform; (2) swift_ffi — idiomatic bindings; (3) embedded Isomer

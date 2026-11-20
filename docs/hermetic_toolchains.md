@@ -188,7 +188,14 @@ everything at 23, and these guard the SDKs from then on:
   build.yml) builds each cell, plain and -i18n at API 23 and 28, first at
   the previous release and then upgraded in the same output base to the
   commit, with the SDKs isomer registers, and runs the x86_64 APK on
-  GitHub's KVM emulator at the cell's API.
+  GitHub's KVM emulator at the cell's API. The build's job (in a
+  container) hands the emulator's job (on the runner itself, for its KVM)
+  the APK and its cell.bzl as one artifact, the workspace's `.ci/sdk-smoke/`
+  named relative to the workspace: in a container job `${{ runner.temp }}`
+  is the runner's directory, not the container's, and of two files named
+  under it only one was found. The emulator's job builds sdk_smoke there,
+  whose FoundationNetworking links libcurl, so it installs libcurl's
+  development package first (the runner's image hasn't it).
 - **A release of the SDKs** goes as isomer's do (AttilaTheFun/reviews'
   docs/RELEASE_PROCESS.md): isomer_hermetic_toolchains' isomer_sdk.yml,
   dispatched by hand with `run: release` on the release branch

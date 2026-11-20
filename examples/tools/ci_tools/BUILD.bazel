@@ -1,0 +1,58 @@
+# CI's release tools, built in a step of their own with no secret in the
+# environment, then run directly by the next step, which has the release
+# environment's keys (AttilaTheFun/build_tools' README: a signer's keys never
+# go through Bazel, whose server and build events see its client's
+# environment). The workflow builds :all and writes each tool's path into
+# the job's environment (BUILD_TOOLS_<NAME>), which the signing steps run;
+# nothing here is ever `bazel run` with a key set.
+
+package(default_visibility = ["//visibility:private"])
+
+# build_tools' `sign` (an APK, a Mac app, an iPhone app) and `proof-diff`
+# (the proof's comparison with the release before's: proof-diff.json),
+# from third_party/swift_packages (build_tools, pinned exact).
+alias(
+    name = "sign",
+    actual = "@swiftpkg_build_tools//:sign",
+)
+
+alias(
+    name = "proof_diff",
+    actual = "@swiftpkg_build_tools//:proof-diff",
+)
+
+# What `sign apple` runs (MODULE.bazel's signing tools): rcodesign, and
+# rules_applecross's dmg for a Mac app's disk image.
+alias(
+    name = "rcodesign",
+    actual = select({
+        "@platforms//cpu:aarch64": "@rcodesign_linux_aarch64//:rcodesign",
+        "@platforms//cpu:x86_64": "@rcodesign_linux_x86_64//:rcodesign",
+    }),
+)
+
+alias(
+    name = "dmg",
+    actual = select({
+        "@platforms//cpu:aarch64": "@dmg_linux_aarch64//:bin/dmg",
+        "@platforms//cpu:x86_64": "@dmg_linux_x86_64//:bin/dmg",
+    }),
+)
+
+# What `sign android` runs, and what reads the signed APK's manifest for its
+# builds.json line (--aapt2): the pinned JDK and build tools (x86_64 Linux's, as
+# isomer's android_tools has them).
+alias(
+    name = "java",
+    actual = "@hermetic_jdk//:java_bin",
+)
+
+alias(
+    name = "apksigner",
+    actual = "@android_build_tools//:lib/apksigner.jar",
+)
+
+alias(
+    name = "aapt2",
+    actual = "@android_build_tools//:aapt2",
+)
