@@ -52,11 +52,16 @@ protocol _PrimitiveView {
     /// type, yes or no, scanned every conformance in the program.
     static var _isReusableBuild: Bool { get }
     func _buildIsPure(_ ctx: BuildContext) -> Bool
+    /// An impure build of it only registers for the frame (a presentation
+    /// open): made afresh by each whole build, kept by a partial frame that
+    /// doesn't build it, so it isn't built again every frame (InPlace.swift).
+    static var _impureBuildRegistersForFrame: Bool { get }
 }
 
 extension _PrimitiveView {
     static var _isReusableBuild: Bool { false }
     func _buildIsPure(_ ctx: BuildContext) -> Bool { false }
+    static var _impureBuildRegistersForFrame: Bool { false }
 }
 
 extension _PrimitiveView where Self: _ReusableBuild {

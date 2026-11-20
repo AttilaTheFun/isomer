@@ -65,6 +65,12 @@ extension ShareLink: _ReusableBuild {}
 /// change to report, as SwiftUI's does not when it skips a body.
 extension _OnChangeView: _ReusableBuild {}
 
+/// `.animation(_:value:)` compares its value with the one stored at its
+/// path, as `.onChange` does: reused unchanged, its value is the stored one
+/// and it arms nothing (an animation in flight is marked changed each frame
+/// on its own).
+extension _AnimationValueModifier: _ReusableBuild {}
+
 /// `.task` runs from its node's appearance (a reused node keeps its own),
 /// and its id is one of the inputs compared.
 extension _TaskModifier: _ReusableBuild {}
@@ -146,6 +152,7 @@ extension Section: _ReusableBuild {}
 /// A file or photo picker while closed is its child, as a presentation is.
 extension _PickerRequest: _ReusableBuild {
     func _buildsPurely(_ ctx: BuildContext) -> Bool { !isPresented.wrappedValue }
+    static var _impureBuildRegistersForFrame: Bool { true }
 }
 
 /// A presentation while closed is its child; open, it registers what it
@@ -153,6 +160,7 @@ extension _PickerRequest: _ReusableBuild {
 /// read, so a view holding a binding to it from above is rebuilt as before.
 extension _PresentationModifier: _ReusableBuild {
     func _buildsPurely(_ ctx: BuildContext) -> Bool { !isPresented.wrappedValue }
+    static var _impureBuildRegistersForFrame: Bool { true }
 }
 
 /// Interpolated modifiers are pure while their own value is not animating:
@@ -208,7 +216,14 @@ struct _BuildCacheEntry {
 extension Runtime {
     /// Marks the build in progress as reading or registering runtime state:
     /// no view around it is reused.
-    func markBuildVolatile() { buildVolatility &+= 1 }
+    /// The composite it is in is built again every frame (InPlace.swift),
+    /// unless the build only `registersForFrame` (a presentation open, the
+    /// preferred colour scheme): what a whole build makes afresh and a
+    /// partial frame keeps.
+    func markBuildVolatile(registersForFrame: Bool = false) {
+        buildVolatility &+= 1
+        if !registersForFrame { volatileOwnersBuilding.insert(compositePathStack.last ?? "root") }
+    }
 
     /// Makes a registration the frame's build expects (a navigation title,
     /// toolbar items, a search field, a URL handler: what a container reads
@@ -328,6 +343,7 @@ extension Runtime {
         compositeStateReads = [:]
         keysReadOutsideBuild = []
         treeVolatile = true
+        volatileOwners = []
         lastRootEnv = nil
         buildCacheTouched = []
         dirtyStateKeys = []
@@ -420,6 +436,7 @@ func beginCompositeBuild(_ view: any View, ctx: BuildContext) -> _CompositeBuild
     runtime.buildCacheInnerStack.append([])
     runtime.buildEffectStack.append([])
     runtime.stateReadStack.append([])
+    runtime.compositePathStack.append(ctx.path)
     connectDynamicProperties(of: view, path: ctx.path, storage: ctx.storage, env: ctx.env)
     return build
 }
@@ -432,6 +449,7 @@ func finishCompositeBuild(_ build: _CompositeBuild, view: any View, ctx: BuildCo
     let inner = runtime.buildCacheInnerStack.removeLast()
     let effects = runtime.popFrameEffects()
     runtime.noteStateReads(path: ctx.path, runtime.stateReadStack.removeLast())
+    runtime.compositePathStack.removeLast()
     if let stacks = build.stacks, ctx.path != "root" {
         // Its node is also the one an inner view's build ended with: that
         // view is built with this one (InPlace.swift).
@@ -472,6 +490,11 @@ func abandonCompositeBuild(_ build: _CompositeBuild) {
     // Read by a view that is several rows: the view around it reads it.
     let reads = runtime.stateReadStack.removeLast()
     if !runtime.stateReadStack.isEmpty { runtime.stateReadStack[runtime.stateReadStack.count - 1] += reads }
+    // Its volatile builds are the view's around it.
+    let path = runtime.compositePathStack.removeLast()
+    if runtime.volatileOwnersBuilding.remove(path) != nil {
+        runtime.volatileOwnersBuilding.insert(runtime.compositePathStack.last ?? "root")
+    }
     for entry in inner { runtime.noteInnerCacheEntry(entry) }
 }
 
