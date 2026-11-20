@@ -657,10 +657,14 @@ For full-application adoption, `isomer_android_app` and
 platform-specific modifiers (`.androidStatusBarStyle`, `.webDocumentTitle`,
 …) over a generic `platformCommand` channel.
 
-`isomer_application` (`@isomer//tools/application:defs.bzl`) declares one
-app's targets on every platform from one Swift library: `<name>_ios`,
-`<name>_macos`, `<name>_android` (and `_apk`) and `<name>_web`, built in
-the mode `--@isomer//:mode` names (docs/modes.md):
+`isomer_application` declares one app's targets on every platform from one
+Swift library: `<name>_ios`, `<name>_macos`, `<name>_android` (and `_apk`)
+and `<name>_web`, built in the mode `--@isomer//:mode` names
+(docs/modes.md). The iPhone's and the Mac's are the isomer_apple module's
+(since 0.58, docs/platform_modules.md): an app with them loads it from
+`@isomer_apple//:defs.bzl`; an app on Android and the web alone loads
+isomer's own, `@isomer//tools/application:defs.bzl`, and never resolves
+rules_apple's graph. The modes:
 
 - `compiled` (the default): the app's Swift in each platform's app
   (rules_apple's applications, `isomer_android_app`, `isomer_web_app`);
@@ -674,7 +678,7 @@ The web is wasm in every mode. Each mode's app is also there by name
 (`<name>_ios_webview`, `<name>_android_remote`, …).
 
 ```starlark
-load("@isomer//tools/application:defs.bzl", "isomer_application")
+load("@isomer_apple//:defs.bzl", "isomer_application")  # Android and the web alone: @isomer//tools/application:defs.bzl
 
 isomer_application(
     name = "notes",
@@ -717,7 +721,24 @@ bazel_dep(name = "isomer_android_maven", version = "0.54.1")
 
 and an app with AndroidX of its own leaves the module out and points both
 flags at its own set in its `.bazelrc`. With neither, an Android build
-fails saying which to do. rules_android's own Maven (its tools) is
+fails saying which to do.
+
+**The iPhone and the Mac: isomer_apple** (since 0.58;
+[docs/platform_modules.md](docs/platform_modules.md)). isomer asks for no
+Apple rules: an app on Android and the web alone resolves rules_apple only
+at the version rules_swift_package_manager asks for, and none of
+rules_applecross's graph. An app whose iPhone and Mac apps come from
+`isomer_application` adds the module released with each isomer, at the same
+version, and loads the macro from it (`@isomer_apple//:defs.bzl`):
+
+```starlark
+bazel_dep(name = "isomer_apple", version = "0.58.1")
+```
+
+It brings rules_apple 5.3.1.applecross.6 (as `build_bazel_rules_apple`),
+rules_applecross and apple_support 2.11.0; the root still registers the
+bundling toolchains ("Upgrading isomer", 0.40). An app that declares its
+Apple applications with rules_apple itself needs no isomer_apple. rules_android's own Maven (its tools) is
 rules_android's to declare; docs/android_maven.md shows how to pin it with
 isomer's lock file, as the examples do.
 
@@ -768,7 +789,7 @@ swift_deps.from_package(
 inject_repo(swift_deps, "isomer")
 
 # Android: the NDK and SDK, and rules_android pointed at that SDK.
-bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.1")
+bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.2")
 android = use_extension("@hermetic_android_toolchains//:extensions.bzl", "android")
 android.sdk(build_tools_version = "35.0.0", version = "35")
 android.ndk(api_level = 28, version = "r30")
@@ -809,8 +830,8 @@ If you build for Android:
 
 ```starlark
 swift.android_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz",
-    sha256 = "557ed5ffc5c9d2a2061ea3ea24a2ec0e44dcabd6f42b37ef319e2f08198034fc",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.2/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz",
+    sha256 = "19094e58e92669d26a4ce31e5a05f85963eeb5af9cafa35475f2a55e4d69451c",
 )
 ```
 
@@ -818,8 +839,8 @@ If you build for the web:
 
 ```starlark
 swift.wasm_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_wasm.artifactbundle.tar.gz",
-    sha256 = "3dbfc93e5c91e92d197e3660a488fd580133200df75bcaca90f3b50c5782ae93",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.2/swift-6.4.2-RELEASE_wasm.artifactbundle.tar.gz",
+    sha256 = "9bd7e1808fc9fb5027b89becbf2559946e19e9a365aac6876eedf834cceb68cf",
 )
 ```
 
@@ -831,13 +852,13 @@ and ICU (tens of megabytes of data, which `icu_locales` trims on the web):
 ```starlark
 # Android, formatting:
 swift.android_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_android-i18n.artifactbundle.tar.gz",
-    sha256 = "9ed7cd5051cc276acd14a5210d72311f2b4b7984c4bdaa77dd25bafad2170d93",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.2/swift-6.4.2-RELEASE_android-i18n.artifactbundle.tar.gz",
+    sha256 = "ab250666b10586a507abf4b80b55bf453ddeae1a7d499c788c4d347d5b55ce93",
 )
 # The web, formatting:
 swift.wasm_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_wasm-i18n.artifactbundle.tar.gz",
-    sha256 = "cc3423d1dfa969e1fb255ed324af6a9e3c7dedc06b75d90a3ff74adcce10877c",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.2/swift-6.4.2-RELEASE_wasm-i18n.artifactbundle.tar.gz",
+    sha256 = "86cb53c7af7808fd0b07e2f37b7a66a7a64f379b18348aedaaff7ddab24fb36b",
 )
 ```
 
@@ -879,27 +900,55 @@ license acceptance, `--strategy=SwiftCompile=local`, …) and
 `.bazelversion` for the Bazel release.
 
 **Bazel 8.** isomer builds with 9.1.1; a consumer may build with 8.5.0 or
-later (MODULE.bazel's `bazel_compatibility`). One known apple_support issue
-there: a Mac host that builds Isomer's build-time Swift tools (the bridge
-generator, the macros) with apple_support's C toolchain, registered through
-`--extra_toolchains`, fails their static archives in the sandbox
+later (MODULE.bazel's `bazel_compatibility`). One issue seen there: a Mac
+host that builds Isomer's build-time Swift tools (the bridge generator, the
+macros) with apple_support's C toolchain, registered through
+`--extra_toolchains`, failed their static archives in the sandbox
 (`CppArchive`: "execvp(…/apple_support+/crosstool/apple-support-ar-wrapper):
-No such file or directory"). Archive locally until apple_support fixes it:
+No such file or directory"), and built them with:
 
 ```
 build --strategy=CppArchive=local
+```
+
+It doesn't happen with the examples on Bazel 8.8.1 and apple_support 2.11.0
+(the Android Storybook, the tools built for the Mac, the toolchain given by
+`--extra_toolchains` too), so it depends on something else in that build's
+flags; the flag is harmless either way. To see whether a build has it, look
+at an archive action's inputs: the sandbox can run the wrapper only when it
+is among them (a count of 0 here, with the wrapper in the command line, is
+the failure).
+
+```sh
+bazel aquery 'mnemonic(CppArchive, @isomer//swift_ffi/swift_ffi)' | grep 'Inputs:' | grep -c apple-support-ar-wrapper
 ```
 
 ### Upgrading isomer
 
 Each release's notes have an Upgrading section; these things are easy to miss:
 
+- **The iPhone's and the Mac's apps are isomer_apple's (since 0.58,
+  docs/platform_modules.md).** isomer no longer asks for rules_apple or
+  apple_support 2.11.0 (apple_support only at rules_swift's 2.9.1):
+  - an app that loads `isomer_application` and builds the iPhone's or the
+    Mac's apps adds `bazel_dep(name = "isomer_apple", version = …)` at
+    isomer's version and changes its load to
+    `load("@isomer_apple//:defs.bzl", "isomer_application")`: the same
+    arguments and targets. isomer's own `isomer_application` builds Android
+    and the web, and refuses `ios` and `macos`, naming the module;
+  - an app that relied on isomer for rules_apple 5.3.1.applecross.6 or
+    apple_support 2.11.0 asks for them itself (an app with Apple apps of
+    its own already does: nothing changes for it);
+  - swift_map's Apple example apps and XCFramework are the examples'
+    (`examples/swift_map/…`), not `@isomer//swift_map/apple/applications`
+    and `@isomer//swift_map/apple/xcframework`.
 - **Isomer's Swift SDKs isomer-6.4.2.2 (since 0.58): Android at API 23.**
-  isomer-6.4.2.1's Android SDKs were compiled for API 28, so an app at
-  minSdk 23 failed to link (`getgrgid_r` and `getgrnam_r` undefined in
-  libFoundationEssentials.a). Move both `swift.android_sdk` and
-  `swift.wasm_sdk` to isomer-6.4.2.2's lines ("Isomer's Swift SDKs" above,
-  or the release's notes). From then on every SDK build checks its
+  isomer-6.4.2.2's Android SDKs are built at API 23; move to it: both
+  `swift.android_sdk` and `swift.wasm_sdk` to its lines ("Isomer's Swift
+  SDKs" above, or the release's notes), as isomer's own builds have.
+  isomer-6.4.2.1's were compiled for API 28, so an app at minSdk 23 failed
+  to link (`getgrgid_r` and `getgrnam_r` undefined in
+  libFoundationEssentials.a). From then on every SDK build checks its
   libraries against its minimum API (docs/hermetic_toolchains.md, "The
   SDKs' checks").
 - **Upgrading from 0.55 or earlier: `bazel clean` once.** 0.56 took
@@ -1145,7 +1194,7 @@ MODULE.bazel declares it, at API 23 and under a name of its own (the
 host's NDK may be `@androidndk` already):
 
 ```starlark
-bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.1")
+bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.2")
 android = use_extension("@hermetic_android_toolchains//:extensions.bzl", "android")
 android.sdk(build_tools_version = "35.0.0", version = "35")
 android.ndk(api_level = 23, version = "r30")
@@ -1196,6 +1245,24 @@ The Storybook (every story of the SwiftUI API, the Isomer module, the map
 engine and FlatBuffers), measured at 0.42: 34.5 MB at `-c opt` (24,116
 exported symbols), 16.2 MB with `--config=android_release` (46, all JNI),
 in a 15.6 MB APK. Link-time optimization is not part of it yet.
+
+**Dex in debug builds.** Without shrinking, an APK dexes every class of
+what it links: Isomer's Android runtime brings Compose (runtime, ui,
+foundation, Material 3 and the Material icons Material 3 1.3 depends on),
+AndroidX's activity, fragment and lifecycle, and Kotlin's coroutines. The
+Storybook's debug APK at 0.57: 22.8 MB of dex in two files, 13,667 classes.
+On Android 6 (API 23) the whole dex is compiled to native code when the app
+is installed, so a small emulator needs about 0.5 GB free for each such app;
+without it dex2oat fails, and ART interprets the app (seconds per keystroke
+in a text field). Later Android versions compile in the background, from a
+profile. `isomer_android_app(..., minify = True)` runs R8 over the debug
+build too: only what the app's Kotlin, the runtime and the libraries' own
+consumer rules reach is dexed, Isomer's runtime and the bindings (which JNI
+finds by name) kept whole, nothing renamed. The Storybook with it: 3.1 MB
+of dex, 3,450 classes, a 16.5 MB APK instead of 23.3 MB, for about 15 s of
+R8 per build. An app with its own Proguard rules, or a release build,
+gives them to its android_binary's `proguard_specs` as usual (the keep
+rules `minify` writes are the three lines in tools/android/defs.bzl).
 
 ### One C++ runtime with other libraries
 
@@ -1510,8 +1577,11 @@ metal/                Isomer's Metal: the API, the MSL→WGSL translator, the
 swift_gpu/            the GPU abstraction: Metal (Apple's and Isomer's),
                       OpenGL (ES), Direct3D
 swift_map/            the OpenStreetMap renderer behind `Map`
-examples/             the example applications: the one other Bazel module,
+examples/             the example applications: a Bazel module of their own,
                       consuming this one as an outside application does
+apple/module/         isomer_apple, the module of the iPhone's and the Mac's
+                      apps (rules_apple; isomer_application's Apple half)
+android/maven_module/ isomer_android_maven, Isomer's AndroidX
 shared/
   swift_ui_core/      SwiftUI reimplementation (platform-agnostic): views,
                       ViewBuilder, @State via Mirror reflection, layout

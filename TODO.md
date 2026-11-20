@@ -455,11 +455,6 @@ docs/hermetic_toolchains.md, "The SDKs' checks", has what is in place
 (sdk-check in the SDKs' build, tests/sdk_consumer with tools/ci/sdk_smoke,
 the candidate pre-release). Still open:
 
-- **The workflows**: isomer_hermetic_toolchains' isomer_sdk.yml (its
-  release run: the consumer against the SDKs served from the job, then
-  `sdk-check draft`) is committed by New Container Helper (agents can't push
-  workflow files); it checks out isomer main, so this repository's
-  tests/sdk_consumer and tools/ci/sdk_smoke must be on main first.
 - **Every cell in CI**: plain and -i18n at API 23 and 28 build and run on
   GitHub's x86_64 KVM emulator; arm64 runs only on Apple silicon (the
   hermetic emulator with Google's API 23 image, README, "Android below API
@@ -507,6 +502,11 @@ with NDK r30, so its own fallbacks are compiled in (the runtime's
 (README, "Android below API 28"); rules_swift#2000 (in the registry's
 4.3.0.isomer.1) reads the SDK's minimum and leaves out RELR below 28.
 Isomer's Kotlin calls above 23 are behind version checks (#96).
+Isomer's own Swift SDKs (0.56) broke it in isomer-6.4.2.1, whose Android
+libraries were compiled for 28 (`getgrgid_r`/`getgrnam_r` undefined at
+minSdk 23); isomer-6.4.2.2, registered since 0.58, builds them at 23 as
+swift.org's does, and its release run built and ran the consumer
+(tests/sdk_consumer) at 23 on an emulator.
 
 - Open: Shireworks' api23 emulator config doesn't boot yet (Shireworks),
   so CI tests at 28+; draft isomer#92 ran the Storybook on Android 6.0.
@@ -604,7 +604,11 @@ has it.
 - **hermetic_android_toolchains**: keith/hermetic_android_toolchains#110
   (draft): Linux hosts of any CPU. Carried as the registry's
   0.5.0.isomer.1 (bazel_registry#42) since 0.42, so consumers need no
-  override; the entry goes when a release has #110.
+  override; 0.5.0.isomer.2 adds the SDK repository's own helper.bzl
+  (0.5.0 links rules_android's private one, which only rules_android 0.7.3
+  has string_flag in, so a root on an older rules_android failed loading
+  @androidsdk//:all), to propose upstream too; the entry goes when a
+  release has both.
 - **rules_apple** (rules_applecross's patches): bazelbuild/rules_apple #3114
   to #3124 (drafts, tracked in apple-cross-toolchain/rules_applecross#273);
   three workarounds stay in rules_applecross until upstream fixes exist.

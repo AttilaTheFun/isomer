@@ -58,3 +58,12 @@ Benchmark protocol (uniform ART state, realistic presses, the frame-accurate
 
 Renderer (`--es renderer …`) and init-threading (`--ez …`) switches are intent
 extras, not build flags: one APK, chosen at launch.
+
+## Debug APKs on small emulators
+
+A debug APK dexes all of Compose and AndroidX unshrunk (the Storybook's:
+22.8 MB of dex, 13,667 classes). Android 6 (API 23) compiles all of it when
+the app is installed: give an emulator at that level about 0.5 GB free per
+app, or dex2oat fails and the app runs interpreted. `isomer_android_app(...,
+minify = True)` shrinks a debug build with R8 (3.1 MB of dex for the
+Storybook): README, "Android release size".

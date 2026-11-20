@@ -19,7 +19,7 @@ struct SDKSmoke: ParsableCommand {
             a checkout refuses one with Bazel's convenience symlinks at its root.
 
               sdk_smoke cell --fixture tests/sdk_consumer --isomer 0.57.1 \\
-                  --sdk-base-url https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1 \\
+                  --sdk-base-url https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.2 \\
                   --variant i18n --api 23
               sdk_smoke build --fixture tests/sdk_consumer --out /tmp/apks
               sdk_smoke run-android --fixture tests/sdk_consumer --adb adb --serial emulator-5554 \\
@@ -49,7 +49,7 @@ struct FixtureOption: ParsableArguments {
         var api = 0
         var i18n = false
         var rulesAndroid = ""
-        for line in text.split(separator: "\n") {
+        for line in text.split(whereSeparator: { $0.isNewline }) {
             let parts = line.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
             guard parts.count == 2 else { continue }
             if parts[0] == "MIN_SDK_VERSION" { api = Int(parts[1]) ?? 0 }
@@ -160,6 +160,23 @@ struct Cell: ParsableCommand {
                 "    repositories = [\"https://maven.google.com\", \"https://repo1.maven.org/maven2\"],",
                 "    use_starlark_android_rules = True,", ")",
             ]
+            // The two Maven repositories the APKs' tools take that their
+            // modules leave unpinned (coursier asks Maven Central at each
+            // fetch), pinned by isomer's lock files where isomer has them (a
+            // checkout here; the releases after 0.57.1 have them too).
+            if isomer.contains("/") {
+                rulesAndroidLines += [
+                    "_maven.install(", "    name = \"android_ide_common_30_1_3\",",
+                    "    aar_import_bzl_label = \"@rules_android//rules:rules.bzl\",",
+                    "    known_contributing_modules = [\"rules_android\"],",
+                    "    lock_file = \"@isomer//:android_ide_common_30_1_3_install.json\",",
+                    "    repositories = [\"https://maven.google.com\", \"https://repo1.maven.org/maven2\"],",
+                    "    use_starlark_android_rules = True,", ")",
+                    "_maven.install(", "    name = \"bazel_worker_maven\",",
+                    "    known_contributing_modules = [\"bazel_worker_java\"],",
+                    "    lock_file = \"@isomer//:bazel_worker_maven_install.json\",", ")",
+                ]
+            }
         }
         let header = "# Written by tools/ci/sdk_smoke cell (--isomer \(isomer) --variant \(variant.rawValue) --api \(api) --rules-android \(rulesAndroid))."
         let module = [header, "# What a consumer's upgrade changes: isomer, Isomer's Swift SDKs, the NDK's API level, rules_android."]
@@ -249,7 +266,7 @@ struct Build: ParsableCommand {
     func output(of target: String, _ arguments: [String], suffix: String) throws -> String {
         let execroot = try bazelCommand("info", ["execution_root"], capture: true).trimmingCharacters(in: .whitespacesAndNewlines)
         let files = try bazelCommand("cquery", ["--output=files", target] + arguments, capture: true)
-        guard let relative = files.split(separator: "\n").first(where: { $0.hasSuffix(suffix) }) else {
+        guard let relative = files.split(whereSeparator: { $0.isNewline }).first(where: { $0.hasSuffix(suffix) }) else {
             throw ToolFailure("no \(suffix) among \(target)'s outputs: \(files)")
         }
         return "\(execroot)/\(relative)"
@@ -301,7 +318,7 @@ struct Build: ParsableCommand {
             defer { try? FileManager.default.removeItem(atPath: tmp) }
             let output = try runChecked([bazel] + startupArgs + ["run", "--symlink_prefix=/"] + bazelArgs + ["@isomer//tools/wasm/wasi_run", "--", "--map-dir=/tmp::\(tmp)", module],
                                         in: fixture.path, capture: true)
-            try check(lines: output.split(separator: "\n").map(String.init), i18n: cell.i18n, where: "the WASI command under WasmKit")
+            try check(lines: output.split(whereSeparator: { $0.isNewline }).map(String.init), i18n: cell.i18n, where: "the WASI command under WasmKit")
         }
     }
 }
@@ -337,26 +354,57 @@ struct RunAndroid: ParsableCommand {
     @Option(help: "The APK (bazel-bin/smoke_apk_<arch>.apk).")
     var apk: String
 
-    @Option(help: "How long to wait for the checks, in seconds.")
-    var timeout: Int = 120
+    @Option(help: "How long to wait for the checks after the launch, in seconds.")
+    var timeout: Int = 180
 
+    /// adb, never waited on past `deadline` seconds (an install's are a
+    /// cold emulator's; anything else answers in seconds).
     @discardableResult
-    func adbRun(_ arguments: [String], capture: Bool = false) throws -> String {
-        try runChecked([adb, "-s", serial] + arguments, capture: capture)
+    func adbRun(_ arguments: [String], capture: Bool = false, deadline: TimeInterval = 60) throws -> String {
+        try runChecked([adb, "-s", serial] + arguments, capture: capture, timeout: deadline)
     }
 
     func run() throws {
+        do {
+            try launchAndCheck()
+        } catch {
+            // A failure, a crash or a hang ends here with its evidence, in the
+            // job's log and the proof's: the crash buffer, the app's log, and
+            // what the activity manager says of it.
+            print("run-android failed: \(error)")
+            for (title, arguments) in [
+                ("logcat -b crash", ["logcat", "-b", "crash", "-d"]),
+                ("logcat -b main", ["logcat", "-b", "main", "-d"]),
+                ("dumpsys activity", ["shell", "dumpsys", "activity"]),
+            ] {
+                print("--- \(title) ---")
+                let result = try? runStatus([adb, "-s", serial] + arguments, capture: true, timeout: 60)
+                print(result.map { $0.status == 0 ? $0.output : "(exit \($0.status))\n\($0.output)" } ?? "(adb could not run)")
+            }
+            fflush(stdout)
+            throw error
+        }
+    }
+
+    func launchAndCheck() throws {
         let cell = try fixture.cell()
         let apkPath = apk.hasPrefix("/") ? apk : "\(fixture.path)/\(apk)"
-        try adbRun(["install", "-r", "-t", apkPath])
+        try adbRun(["install", "-r", "-t", apkPath], deadline: 300)
         try adbRun(["logcat", "-c"])
-        try adbRun(["shell", "am", "start", "-W", "-n", "dev.isomer.sdksmoke/.SmokeActivity"])
+        // Not `am start -W`: it waits for the activity to be drawn, and the
+        // smoke activity finishes in onCreate, never drawn, so -W waits on
+        // for as long as anyone lets it (CI's release run hung there an hour).
+        try adbRun(["shell", "am", "start", "-n", "dev.isomer.sdksmoke/.SmokeActivity"])
         let deadline = Date().addingTimeInterval(TimeInterval(timeout))
         var lines: [String] = []
         while Date() < deadline {
             let log = try adbRun(["logcat", "-d", "-s", "SDKSMOKE:I"], capture: true)
             // "I/SDKSMOKE( 1234): ok …" or the threadtime format's "… I SDKSMOKE: ok …".
-            lines = log.split(separator: "\n").compactMap { line in
+            // A line at a time by any newline: Android 6's adb, with no shell
+            // protocol, ends its lines "\r\n", which Swift holds as one
+            // Character, not "\n", so splitting at "\n" left the whole log one
+            // line, and its result unseen (the release run's API-23 cells).
+            lines = log.split(whereSeparator: { $0.isNewline }).compactMap { line in
                 guard let range = line.range(of: "SDKSMOKE") else { return nil }
                 let rest = line[range.upperBound...].drop { $0 != ":" }.dropFirst()
                 return rest.trimmingCharacters(in: .whitespaces)
@@ -364,9 +412,9 @@ struct RunAndroid: ParsableCommand {
             if lines.contains(where: { $0.hasPrefix("SDKSMOKE ") }) { break }
             Thread.sleep(forTimeInterval: 2)
         }
-        if lines.isEmpty {
-            print(try adbRun(["logcat", "-d", "-t", "200"], capture: true))
-            throw ToolFailure("the app logged no checks in \(timeout) s (crashed at load?)")
+        guard lines.contains(where: { $0.hasPrefix("SDKSMOKE ") }) else {
+            for line in lines { print("  | \(line)") }
+            throw ToolFailure("the app logged \(lines.isEmpty ? "no checks" : "no result") in \(timeout) s (crashed, or hung?)")
         }
         let version = try adbRun(["shell", "getprop", "ro.build.version.sdk"], capture: true).trimmingCharacters(in: .whitespacesAndNewlines)
         try check(lines: lines, i18n: cell.i18n, where: "the APK on \(serial) (API \(version))")

@@ -42,22 +42,25 @@ One example app per platform/renderer pair, named
 
 | Platform | Renderer  | Target                                                       |
 | -------- | --------- | ------------------------------------------------------------ |
-| macOS    | Metal     | `//swift_map/apple/applications/example_metal_macos_application`       |
-| iOS      | Metal     | `//swift_map/apple/applications/example_metal_ios_application`         |
+| macOS    | Metal     | `//swift_map/example_metal_macos_application` (isomer's examples)      |
+| iOS      | Metal     | `//swift_map/example_metal_ios_application` (isomer's examples)        |
 | Web      | WebGPU    | `//swift_map/web/applications/example_webgpu_web_application`          |
 | Android  | OpenGL ES | `//swift_map/android/applications/example_opengl_android_application`  |
 
 Everything except the Apple builds is hermetic (no ANDROID_HOME, no host
 JDK, no npm; Apple builds use the local Xcode, as all Bazel Apple builds do).
+The Apple apps and the XCFramework are in isomer's examples module (since
+0.58: isomer has no rules_apple for its consumers, docs/platform_modules.md),
+so they build from `examples/`.
 
 ```sh
 # macOS — a windowed Metal map (drag / scroll to pan, pinch or double-click
 # to zoom).
-bazel run //swift_map/apple/applications/example_metal_macos_application
+(cd examples && bazel run //swift_map/example_metal_macos_application)
 
 # iOS — build for the simulator, then install with simctl:
-bazel build //swift_map/apple/applications/example_metal_ios_application --ios_multi_cpus=sim_arm64
-ditto -x -k bazel-bin/apple/applications/example_metal_ios_application/example_metal_ios_application.ipa /tmp/swiftmap_ios
+(cd examples && bazel build //swift_map/example_metal_ios_application --ios_multi_cpus=sim_arm64)
+ditto -x -k examples/bazel-bin/swift_map/example_metal_ios_application/example_metal_ios_application.ipa /tmp/swiftmap_ios
 xcrun simctl install booted /tmp/swiftmap_ios/Payload/example_metal_ios_application.app
 xcrun simctl launch booted dev.swiftmap.example.ios
 
@@ -80,8 +83,8 @@ XCFramework (static, library evolution enabled, `.swiftinterface` included)
 wrapped in a binary Swift package:
 
 ```sh
-bazel build //swift_map/apple/xcframework:SwiftMap
-ditto -x -k bazel-bin/apple/xcframework/SwiftMap.xcframework.zip distribution/
+(cd examples && bazel build //swift_map/xcframework:SwiftMap)
+ditto -x -k examples/bazel-bin/swift_map/xcframework/SwiftMap.xcframework.zip swift_map/distribution/
 ```
 
 Then depend on the package at `distribution/` (or publish the zip and switch

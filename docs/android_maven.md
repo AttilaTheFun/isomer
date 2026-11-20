@@ -185,6 +185,40 @@ maven.install(
 (or a lock file of its own, pinned with `REPIN=1 bazel run
 @rules_android_maven//:pin`).
 
+Two more repositories an Android build takes are unpinned in their
+modules: rules_android's `android_ide_common_30_1_3` and bazel_worker_java's
+`bazel_worker_maven` (the Android tools' persistent workers). An unpinned
+repository is resolved by coursier, which asks Maven Central itself at every
+fetch, past Bazel's downloader (its mirrors, `--downloader_config`) and its
+repository cache, so a build fails whenever Central does (it has answered
+404 for artifacts it has). isomer pins both with lock files of its own,
+`android_ide_common_30_1_3_install.json` and
+`bazel_worker_maven_install.json`, as the examples do and an app may:
+
+```starlark
+maven.install(
+    name = "android_ide_common_30_1_3",
+    aar_import_bzl_label = "@rules_android//rules:rules.bzl",
+    known_contributing_modules = ["rules_android"],
+    lock_file = "@isomer//:android_ide_common_30_1_3_install.json",
+    repositories = [
+        "https://maven.google.com",
+        "https://repo1.maven.org/maven2",
+    ],
+    use_starlark_android_rules = True,
+)
+maven.install(
+    name = "bazel_worker_maven",
+    known_contributing_modules = ["bazel_worker_java"],
+    lock_file = "@isomer//:bazel_worker_maven_install.json",
+)
+```
+
+Repinned from isomer's root by their canonical names (isomer doesn't
+import them): `REPIN=1 bazel run
+@@rules_jvm_external++maven+android_ide_common_30_1_3//:pin` and
+`@@rules_jvm_external++maven+bazel_worker_maven//:pin`.
+
 ## In this repository
 
 - `android/maven_module/`: the `isomer_android_maven` module: `MODULE.bazel`
@@ -207,6 +241,7 @@ maven.install(
   the extension their defaults come from.
 - `examples/MODULE.bazel`: the examples consume isomer as an app does, the
   module included (`local_path_override` on `../android/maven_module`), and
-  pin `rules_android_maven` with isomer's lock file; their own repository,
+  pin `rules_android_maven`, `android_ide_common_30_1_3` and
+  `bazel_worker_maven` with isomer's lock files; their own repository,
   `examples_maven`, holds only the Android benchmark's harness and its
   tests (the benchmark's instrumentation APK, not an app's).

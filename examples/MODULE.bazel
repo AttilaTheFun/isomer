@@ -30,7 +30,7 @@ module(
 #   git_override(module_name = "isomer",
 #                remote = "https://github.com/AttilaTheFun/isomer.git",
 #                commit = "<commit>")
-bazel_dep(name = "isomer", version = "0.57.0")
+bazel_dep(name = "isomer", version = "0.58.0")
 local_path_override(
     module_name = "isomer",
     path = "..",
@@ -43,10 +43,24 @@ local_path_override(
 # registry by version (each isomer release has it), or, beside a
 # git_override of isomer, overrides it from the same commit with
 # `strip_prefix = "android/maven_module"`.
-bazel_dep(name = "isomer_android_maven", version = "0.57.0")
+bazel_dep(name = "isomer_android_maven", version = "0.58.0")
 local_path_override(
     module_name = "isomer_android_maven",
     path = "../android/maven_module",
+)
+
+# Isomer's iPhone and Mac apps (docs/platform_modules.md): the isomer_apple
+# module, at isomer's version, with rules_apple, rules_applecross and
+# apple_support for them, and isomer_application with its Apple half
+# (`load("@isomer_apple//:defs.bzl", "isomer_application")`). An app on
+# Android and the web alone leaves it out, and resolves none of that. A real
+# consumer takes it from the registry by version (each isomer release from
+# 0.58 has it), or, beside a git_override of isomer, overrides it from the
+# same commit with `strip_prefix = "apple/module"`.
+bazel_dep(name = "isomer_apple", version = "0.58.0")
+local_path_override(
+    module_name = "isomer_apple",
+    path = "../apple/module",
 )
 
 # --- What isomer needs from its consumer -------------------------------
@@ -84,16 +98,16 @@ swift.toolchain(
 # (swift-6.4.2-RELEASE_<platform>-i18n.artifactbundle.tar.gz, with their
 # sha256 from the release's notes).
 swift.wasm_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_wasm.artifactbundle.tar.gz",
-    sha256 = "3dbfc93e5c91e92d197e3660a488fd580133200df75bcaca90f3b50c5782ae93",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.2/swift-6.4.2-RELEASE_wasm.artifactbundle.tar.gz",
+    sha256 = "9bd7e1808fc9fb5027b89becbf2559946e19e9a365aac6876eedf834cceb68cf",
 )
 # No wasi-threads SDK beside it since 0.41: Isomer's was a build of
 # Swift 6.3.2 with swiftlang/swift#92018, which reaches a release in 6.5;
 # reactors built for `@isomer//swift_ffi/rules:wasm32-wasip1-threads` wait
 # for it (TODO.md).
 swift.android_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.1/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz",
-    sha256 = "557ed5ffc5c9d2a2061ea3ea24a2ec0e44dcabd6f42b37ef319e2f08198034fc",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.2/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz",
+    sha256 = "19094e58e92669d26a4ce31e5a05f85963eeb5af9cafa35475f2a55e4d69451c",
 )
 use_repo(
     swift,
@@ -165,10 +179,11 @@ register_toolchains(
 
 # The hermetic Android NDK/SDK (the extension requires root-module tags even
 # for Apple-only builds; accept the licenses in .bazelrc).
-# The project registry's 0.5.0.isomer.1 (isomer's, with Linux hosts of any
-# CPU), which isomer asks for: no override (before 0.42 each consumer carried
-# the patch in its own).
-bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.1")
+# The project registry's 0.5.0.isomer.2 (isomer's, with Linux hosts of any
+# CPU and an SDK repository that loads on any rules_android), which isomer
+# asks for: no override (before 0.42 each consumer carried the patch in its
+# own).
+bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.2")
 # A dev dependency (hermetic_android_toolchains 0.5.0 reports its repositories
 # so; it reads the root module's tags alone): each root declares its own.
 android = use_extension("@hermetic_android_toolchains//:extensions.bzl", "android", dev_dependency = True)
@@ -212,7 +227,8 @@ bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "platforms", version = "1.1.0")
 # rules_apple and apple_support at rules_applecross's versions: the
 # registry's preset rules_apple 5.3.1.applecross.6 (rules_applecross's
-# patches) and the BCR's apple_support 2.11.0, as in isomer's MODULE.bazel.
+# patches) and the BCR's apple_support 2.11.0, as isomer_apple asks for
+# (the examples' own Apple apps load rules_apple directly).
 bazel_dep(name = "rules_apple", version = "5.3.1.applecross.6", repo_name = "build_bazel_rules_apple")
 bazel_dep(name = "apple_support", version = "2.11.0")
 
@@ -326,6 +342,25 @@ maven.install(
         "https://repo1.maven.org/maven2",
     ],
     use_starlark_android_rules = True,
+)
+# rules_android's android_ide_common and bazel_worker_java's Maven, pinned
+# by isomer's lock files too: they are unpinned there, resolved by coursier
+# from Maven Central at every fetch (isomer's MODULE.bazel).
+maven.install(
+    name = "android_ide_common_30_1_3",
+    aar_import_bzl_label = "@rules_android//rules:rules.bzl",
+    known_contributing_modules = ["rules_android"],
+    lock_file = "@isomer//:android_ide_common_30_1_3_install.json",
+    repositories = [
+        "https://maven.google.com",
+        "https://repo1.maven.org/maven2",
+    ],
+    use_starlark_android_rules = True,
+)
+maven.install(
+    name = "bazel_worker_maven",
+    known_contributing_modules = ["bazel_worker_java"],
+    lock_file = "@isomer//:bazel_worker_maven_install.json",
 )
 maven.install(
     name = "examples_maven",
