@@ -1044,6 +1044,11 @@ Each release's notes have an Upgrading section; these things are easy to miss:
   - rules_swift is the registry's 4.3.0.isomer.1 (upstream 4.3.0, which
     takes `swift.android_sdk(url = …)`, and four pull requests); your own
     override of rules_swift, if you kept one, has to be that version.
+    It asks for **bazel_features 1.54.0** or later: a root that holds
+    bazel_features lower with a `single_version_override` fails as
+    `@rules_swift//swift` loads, with "'struct' value has no field or
+    method 'label_build_setting_has_scope'". Raise that override to 1.54.0
+    (or drop it).
   - After changing an SDK's URL, or upgrading Isomer or rules_swift, run
     `bazel clean` once if a build reports a module "defined in both"
     (`module '_Builtin_stddef' is defined in both '…/_swift_module_cache/…'
@@ -1133,7 +1138,10 @@ Each release's notes have an Upgrading section; these things are easy to miss:
   whatever version isomer asks for: bumping isomer alone silently keeps the
   old fork. Since 0.40 isomer's rules_swift needs no override (it sorts above
   rules_applecross's); delete yours, or move it to the version isomer's
-  release names (4.3.0.isomer.1 at 0.56).
+  release names (4.3.0.isomer.1 at 0.56). The same goes for an override of
+  one of rules_swift's own dependencies: an override below what rules_swift
+  asks for (bazel_features 1.54.0 for 4.3.0) wins too, and fails in
+  rules_swift's files.
 
 ### Swift features, Java and library evolution
 
