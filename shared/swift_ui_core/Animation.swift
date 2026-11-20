@@ -367,8 +367,28 @@ extension _AnimatableBoxModifier: _PrimitiveView {
         var sub = ctx.descend(descend)
         let inner = buildNode(view: child, ctx: &sub)
         let box = RenderNode.box(child: inner)
-        configure(box, ctx.env, ctx.path, Runtime.shared.animationTime)
+        let runtime = Runtime.shared
+        configure(box, ctx.env, ctx.path, runtime.animationTime)
+        // Animating: moved where it stands each frame (InPlace.swift).
+        if runtime.animator.isAnimating(at: ctx.path) {
+            runtime.animatedBoxes[ctx.path] = _AnimatedBox(node: box, env: ctx.env, configure: configure)
+        }
         return box
+    }
+}
+
+/// A transform animating (a rotation, a scale, an offset, a position): its
+/// node and what sets its value, to set it again each frame without
+/// building the view it is in.
+final class _AnimatedBox {
+    weak var node: RenderNode?
+    let env: EnvironmentValues
+    let configure: (RenderNode, EnvironmentValues, String, Double) -> Void
+
+    init(node: RenderNode, env: EnvironmentValues, configure: @escaping (RenderNode, EnvironmentValues, String, Double) -> Void) {
+        self.node = node
+        self.env = env
+        self.configure = configure
     }
 }
 

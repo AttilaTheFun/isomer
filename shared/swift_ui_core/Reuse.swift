@@ -174,11 +174,9 @@ extension _AnimatableEnvModifier: _ReusableBuild {
     }
 }
 
-extension _AnimatableBoxModifier: _ReusableBuild {
-    func _buildsPurely(_ ctx: BuildContext) -> Bool {
-        !Runtime.shared.animator.isAnimating(at: ctx.path)
-    }
-}
+/// A transform animating is pure too: its node is moved where it stands
+/// each frame built in place, and its view built again in a whole one.
+extension _AnimatableBoxModifier: _ReusableBuild {}
 
 /// A per-frame registration (`registerFrameEffect`), kept to be made again.
 struct _FrameEffect {

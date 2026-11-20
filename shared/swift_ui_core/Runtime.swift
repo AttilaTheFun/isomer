@@ -639,8 +639,22 @@ package final class Runtime {
             if host?.hostValue("env:ISO_PARTIAL") == "0" { partialFramesEnabled = false }
         }
         // A value mid-animation moves each frame: the view it is in builds
-        // again (the rest are reused).
-        for key in animator.animatingKeys { stateDidChange(key: key) }
+        // again (the rest are reused). A transform's node is moved where it
+        // stands instead when the frame is built in place (InPlace.swift).
+        var moved: [String: _AnimatedBox] = [:]
+        var movedKeys: [String] = []
+        for key in animator.animatingKeys {
+            // (In the tree built in place: not a presented layer's content.)
+            if keepsRebuildSites, let tree = retainedTree, let hash = key.lastIndex(of: "#"),
+               let box = animatedBoxes[String(key[..<hash])],
+               moved[String(key[..<hash])] != nil || box.node.map({ _trail(to: $0, in: tree) != nil }) == true {
+                moved[String(key[..<hash])] = box
+                movedKeys.append(key)
+            } else {
+                stateDidChange(key: key)
+            }
+        }
+        if animatedBoxes.count > moved.count { animatedBoxes = moved }
         // The scheme the last whole build resolved holds while its views
         // (a `.preferredColorScheme` among them) are not built again.
         var rootEnv = EnvironmentValues()
@@ -649,10 +663,11 @@ package final class Runtime {
         frameLogBegin()
         // Only the views whose state changed, where they stand (InPlace.swift).
         if let tree = retainedTree, let sites = planPartialFrame(rootEnv: rootEnv) {
-            let written = dirtyStateKeys
+            let written = dirtyStateKeys.union(movedKeys)
             let lists = verifyPartialFrames ? listWindowState : nil
             beginReuseFrame()
             if buildInPlace(sites, in: tree) {
+                moveAnimatedBoxes(Array(moved.keys), in: tree)
                 endReuseFrame(partial: true)
                 partialFrameCount &+= 1
                 currentFrame.kind = .partial
@@ -680,6 +695,8 @@ package final class Runtime {
             dirtyStateKeys.formUnion(buildDirtyKeys)
             buildDirtyKeys = []
         }
+        // Built whole: the animating transforms' views are built again.
+        dirtyStateKeys.formUnion(movedKeys)
         currentFrame.kind = .whole
         return buildWholeFrameTree(makeRootView)
     }
@@ -806,6 +823,8 @@ package final class Runtime {
     /// The same, for the build in progress, and the composites being built,
     /// innermost last (whose build a volatile one is in).
     var volatileOwnersBuilding: Set<String> = []
+    /// The transforms animating, by the path of the modifier setting each.
+    var animatedBoxes: [String: _AnimatedBox] = [:]
     var compositePathStack: [String] = []
     /// `setNeedsRender` asked for the next frame to be built whole.
     var wholeFrameRequested = true
