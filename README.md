@@ -1602,6 +1602,36 @@ TextField story on Android at 0.58 builds no view (the field shows its own
 text) and diffs 52 of its nodes, where 0.57 built the page's 107 views and
 diffed all of it (a filled shape on the page made every frame whole).
 
+Measure with an optimized build (`-c opt`): a debug build's frames and
+start-up are several times slower, and say little about a release's.
+
+**Views built every frame.** `ISO_FRAME_LOG` says why each view built was
+not reused. Two reasons are the app's to change:
+
+- `uncomparable`: the view stores a value that can't be compared with
+  last frame's, most often a closure (a button's action, a callback passed
+  down), or a class instance that isn't an `@Observable` model. Isomer
+  compares a view's stored properties as SwiftUI does (Equatable values by
+  `==`, other structs field by field) and can't tell whether two closures do
+  the same thing, so such a view is built again whenever the view around it
+  is. The views inside it can still be reused. Keep closures out of the
+  views that are built often, or make them comparable:
+  - pass an identifier and take the handler from the environment
+    (`@Environment(\.openChat) var openChat`, then `openChat(chat.id)`),
+    so the view stores only the identifier;
+  - wrap the action in an `Equatable` type whose equality is what it acts
+    on: `struct Action: Equatable { let id: Chat.ID; let run: (Chat.ID) ->
+    Void; static func == (a: Self, b: Self) -> Bool { a.id == b.id } }`;
+  - or keep the state the closure would change in an `@Observable` model
+    the view holds, and call its method.
+- `volatile`: the view's own build read runtime state (a control reading
+  its binding, an `@AppStorage`, a value animating). It is built again
+  every frame, alone, the rest of the frame built in place; a large view
+  that is volatile costs its whole build each frame, so keep what reads
+  runtime state in small views of its own. A transform animating (a
+  `.rotationEffect`, `.scaleEffect`, `.offset` or `.position` with an
+  animation, a spinner's) builds nothing: its node is moved where it stands.
+
 ### Headless, and on a server
 
 An app built with `--@isomer//headless` runs with nothing drawn, its UI read
