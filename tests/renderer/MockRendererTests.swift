@@ -2944,6 +2944,7 @@ struct Main {
         checkFieldOnPathScreen(mock)
         checkTextEditFrames()
         checkPresentFromPartialFrame()
+        checkVolatileSites()
 
         // Row actions: the tagged row is a tap target and carries its menu.
         Runtime.shared.installRootView { RowScreen() }
@@ -3460,4 +3461,116 @@ func checkPresentFromPartialFrame() {
     Runtime.shared.hostViewEvent(id: done, value: "")
     settle()
     expect(!frame().shows("A sheet"), "Done dismisses the sheet")
+}
+
+
+// MARK: - Volatile builds as sites of their own
+
+/// A screen with views whose builds read runtime state (a toggle, an
+/// `@AppStorage`) beside a counter, presenting a sheet: a frame that changes
+/// the counter is built in place, the volatile views built again with it,
+/// the rest not; with the sheet open too.
+nonisolated(unsafe) var volatileToggleBuilds = 0
+nonisolated(unsafe) var volatileStoredBuilds = 0
+nonisolated(unsafe) var volatileSiblingBuilds = 0
+nonisolated(unsafe) var volatileSheet: Binding<Bool>?
+nonisolated(unsafe) var volatileCount: Binding<Int>?
+
+/// Each pass at a place of its own (state is kept by place).
+struct VolatileRoot: View {
+    let pass: Int
+    var body: some View {
+        if pass == 0 { VolatileScreen() } else { VolatileScreen() }
+    }
+}
+
+struct VolatileScreen: View {
+    @State private var sheet = false
+    var body: some View {
+        let _ = (volatileSheet = $sheet)
+        VStack {
+            VolatileCounter()
+            VolatileTogglePane()
+            VolatileStoredPane()
+            VolatileSibling(title: "Beside")
+        }
+        .sheet(isPresented: $sheet) { Text("Sheet body") }
+    }
+}
+
+struct VolatileCounter: View {
+    @State private var count = 0
+    var body: some View {
+        let _ = (volatileCount = $count)
+        Text("Count \(count)")
+    }
+}
+
+/// A toggle's build reads runtime state: built again every frame.
+struct VolatileTogglePane: View {
+    @State private var on = false
+    var body: some View {
+        let _ = volatileToggleBuilds += 1
+        Toggle("Switch", isOn: $on)
+    }
+}
+
+/// An `@AppStorage`'s value can change outside any state: built every frame.
+struct VolatileStoredPane: View {
+    @AppStorage("isomer.tests.volatile") private var stored = 0
+    var body: some View {
+        let _ = volatileStoredBuilds += 1
+        Text("Stored \(stored)")
+    }
+}
+
+struct VolatileSibling: View {
+    let title: String
+    var body: some View {
+        let _ = volatileSiblingBuilds += 1
+        Text(title).animation(.default, value: title)
+    }
+}
+
+@MainActor
+func checkVolatileSites() {
+    let previous = Renderer.current
+    Renderer.bind(JetpackComposeRenderer(send: { _ in }))
+    defer { Renderer.bind(previous) }
+    let verifying = Runtime.shared.verifyPartialFrames
+    defer { Runtime.shared.verifyPartialFrames = verifying }
+    for verify in [true, false] {
+        Runtime.shared.verifyPartialFrames = verify
+        Runtime.shared.installRootView { NavigationStack { VolatileRoot(pass: verify ? 0 : 1) } }
+        Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+        func settle() { var n = 0; while Runtime.shared.wantsFrame && n < 20 { Runtime.shared.renderFrame(); n += 1 } }
+        settle()
+        let label = verify ? " (checked against a whole build)" : ""
+        @MainActor
+        func frame(_ step: String, inPlace: Bool, _ change: () -> Void) {
+            let toggles = volatileToggleBuilds, stored = volatileStoredBuilds, siblings = volatileSiblingBuilds
+            let partials = Runtime.shared.partialFrameCount, mismatches = Runtime.shared.partialMismatches
+            change()
+            settle()
+            let stats = Runtime.shared.frameStats
+            expect(Runtime.shared.partialMismatches == mismatches, "\(step)\(label): the frame built in place is the whole build's")
+            expect((Runtime.shared.partialFrameCount > partials) == inPlace,
+                   "\(step)\(label): \(inPlace ? "built in place" : "built whole") (\(stats.kind.rawValue): \(stats.detail))")
+            if inPlace, !verify {
+                expect(volatileToggleBuilds > toggles && volatileStoredBuilds > stored,
+                       "\(step): the volatile views are built again (\(volatileToggleBuilds - toggles), \(volatileStoredBuilds - stored))")
+                expect(volatileSiblingBuilds == siblings,
+                       "\(step): the view beside them is not built (\(volatileSiblingBuilds - siblings))")
+            }
+        }
+        frame("a counter beside volatile views", inPlace: true) { volatileCount?.wrappedValue += 1 }
+        expect(findTextInTree(Runtime.shared.retainedTree!, "Count 1"), "the counter shows its count\(label)")
+        frame("the sheet presented", inPlace: false) { volatileSheet?.wrappedValue = true }
+        expect(HostFrame(Runtime.shared.retainedTree!).shows("Sheet body"), "the sheet shows\(label)")
+        frame("a counter under the open sheet", inPlace: true) { volatileCount?.wrappedValue += 1 }
+        expect(findTextInTree(Runtime.shared.retainedTree!, "Count 2"), "the counter shows its count under the sheet\(label)")
+        expect(HostFrame(Runtime.shared.retainedTree!).shows("Sheet body"), "the sheet stays\(label)")
+        frame("the sheet dismissed", inPlace: false) { volatileSheet?.wrappedValue = false }
+        expect(!HostFrame(Runtime.shared.retainedTree!).shows("Sheet body"), "the sheet is gone\(label)")
+    }
 }

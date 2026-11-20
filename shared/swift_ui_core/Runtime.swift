@@ -650,11 +650,9 @@ package final class Runtime {
         // Only the views whose state changed, where they stand (InPlace.swift).
         if let tree = retainedTree, let sites = planPartialFrame(rootEnv: rootEnv) {
             let written = dirtyStateKeys
-            let volatility = buildVolatility
             let lists = verifyPartialFrames ? listWindowState : nil
             beginReuseFrame()
             if buildInPlace(sites, in: tree) {
-                treeVolatile = buildVolatility != volatility
                 endReuseFrame(partial: true)
                 partialFrameCount &+= 1
                 currentFrame.kind = .partial
@@ -708,11 +706,12 @@ package final class Runtime {
         lastRootEnv = rootEnv
         lastCompactWidth = compactWidth
         var ctx = BuildContext(path: "root", env: rootEnv, storage: storage)
-        let volatility = buildVolatility
+        volatileOwnersBuilding = []
         beginReuseFrame()
         defer { endReuseFrame() }
         let root = buildNode(view: makeRootView(), ctx: &ctx)
-        treeVolatile = buildVolatility != volatility
+        volatileOwners = volatileOwnersBuilding
+        treeVolatile = false
         // The tree a later pass of this frame builds in place into.
         retainedTree = root
         frameLogEnd()
@@ -796,8 +795,18 @@ package final class Runtime {
     /// Partial frames built, and those found to differ from a whole build.
     public internal(set) var partialFrameCount = 0
     public internal(set) var partialMismatches = 0
-    /// A build in the current tree read runtime state: it is built whole.
+    /// The tree's builds are not known view by view (none built whole since
+    /// the reuse state was reset): the next frame is built whole.
     var treeVolatile = true
+    /// The composite views whose own builds read or registered runtime state
+    /// (a control reading its binding, an `@AppStorage`, a value animating):
+    /// built again, each alone, every frame (InPlace.swift). "root" when such
+    /// a build was in no composite but the root.
+    var volatileOwners: Set<String> = []
+    /// The same, for the build in progress, and the composites being built,
+    /// innermost last (whose build a volatile one is in).
+    var volatileOwnersBuilding: Set<String> = []
+    var compositePathStack: [String] = []
     /// `setNeedsRender` asked for the next frame to be built whole.
     var wholeFrameRequested = true
     /// The root environment and system scheme of the last whole build.

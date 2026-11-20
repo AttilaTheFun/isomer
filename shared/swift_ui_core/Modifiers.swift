@@ -815,7 +815,7 @@ extension View {
                 env.colorScheme = colorScheme
                 Runtime.shared.colorScheme = colorScheme
                 Runtime.shared.preferredColorScheme = colorScheme
-                Runtime.shared.markBuildVolatile()
+                Runtime.shared.markBuildVolatile(registersForFrame: true)
             }
         }
     }
