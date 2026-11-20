@@ -138,7 +138,35 @@ else
     exit 0
 fi
 [ "$binder" = yes ] || exit 0
-if run 600 init sudo waydroid init; then
+# Its images fetched here rather than by `waydroid init`, whose download
+# from SourceForge stalled past ten minutes on an AWS runner (24 s on an
+# Azure one): Waydroid's OTA index names each (the newest first), curl gives
+# up on a mirror that slows below 1 MB/s for 20 s and asks again (each ask
+# may be sent to another mirror), and each is checked against its SHA-256.
+images="$LOGS/../waydroid-images"
+mkdir -p "$images"
+fetch_image() { # <OTA index URL> <image name>
+    local entry url sha zip="$images/$2.zip"
+    entry="$(curl -fsSL --retry 3 "$1" | python3 -c 'import json, sys; e = json.load(sys.stdin)["response"][0]; print(e["url"], e["id"])')" || return 1
+    read -r url sha <<< "$entry"
+    curl -fL --retry 8 --retry-all-errors --speed-limit 1000000 --speed-time 20 -o "$zip" "$url" &&
+        echo "$sha  $zip" | sha256sum -c - && unzip -o -q "$zip" -d "$images" && rm -f "$zip"
+}
+fetch_images() {
+    fetch_image https://ota.waydro.id/system/lineage/waydroid_x86_64/VANILLA.json system &&
+        fetch_image https://ota.waydro.id/vendor/waydroid_x86_64/MAINLINE.json vendor &&
+        ls -la "$images"
+}
+export -f fetch_image fetch_images
+export images
+if run 600 images bash -c fetch_images && [ -f "$images/system.img" ] && [ -f "$images/vendor.img" ]; then
+    row "images fetched" ok "$(grep -E "OK$" "$LOGS/images.log" | tr '\n' ' ' | cut -c1-200)"
+    init=(sudo waydroid init -i "$images")
+else
+    row "images fetched" failed "$(tail -2 "$LOGS/images.log" | tr '\n' ' ' | cut -c1-300); waydroid init downloads them"
+    init=(sudo waydroid init)
+fi
+if run 600 init "${init[@]}"; then
     row "waydroid init" ok "$(grep -iE "system|vendor" "$LOGS/init.log" | tail -2 | tr '\n' ' ' | cut -c1-200)"
 else
     row "waydroid init" failed "$(tail -3 "$LOGS/init.log" | tr '\n' ' ')"
