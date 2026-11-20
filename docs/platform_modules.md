@@ -108,7 +108,7 @@ rules_swift_package_manager), against each layout:
 | --- | --- | --- |
 | 0.57 | 53 | rules_apple 5.3.1.applecross.6, apple_support 2.11.0, rules_applecross, llvm, xctestrunner, libxml2, mimalloc, windows_support, zlib-ng, zstd; rules_go 0.62, gazelle 0.51, rules_cc 0.2.26 |
 | 0.58 (isomer_apple) | 45 | rules_apple 4.3.3 and apple_support 2.9.1 (rules_swift_package_manager's and rules_swift's), no rules_applecross graph; rules_go 0.60, gazelle 0.50, rules_cc 0.2.25 |
-| without Android's four (an isomer_android) | 39 (the web app) | hermetic_android_toolchains, rules_android_ndk, rules_robolectric, abseil-py, bazel_worker_api, bazel_worker_java gone; rules_android 0.7.3 → 0.1.1, rules_kotlin 2.2.2 → 1.9.6, rules_java 9.3.0 → 9.1.0, rules_jvm_external 6.9 → 6.7 |
+| 0.59 (isomer_android) | 39 (the web app) | hermetic_android_toolchains, rules_android_ndk, rules_robolectric, abseil-py, bazel_worker_api, bazel_worker_java gone; rules_android 0.7.3 → 0.1.1, rules_kotlin 2.2.2 → 1.9.6, rules_java 9.3.0 → 9.1.0, rules_jvm_external 6.9 → 6.7 (measured on the web app's fixture: six fewer modules than 0.58's, as projected) |
 | and without `wabt` (an isomer_web) | 38 | wabt |
 
 The floor, what rules_swift and rules_swift_package_manager bring by
