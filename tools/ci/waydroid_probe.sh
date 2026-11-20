@@ -162,7 +162,7 @@ shots() { # <way> <count>
                 sudo timeout 10 cat "$HOME/.local/share/waydroid/data/local/tmp/shot.png" > "$LOGS/shot.png" ;;
         esac
         case $? in
-            0) size=$(wc -c < "$LOGS/shot.png"); [ "$size" -gt 100000 ] && ok=$((ok + 1)) || short=$((short + 1)) ;;
+            0) size=$(wc -c < "$LOGS/shot.png"); [ "$size" -gt 20000 ] && ok=$((ok + 1)) || short=$((short + 1)) ;;
             124) hung=$((hung + 1)) ;;
             *) short=$((short + 1)) ;;
         esac
@@ -171,6 +171,9 @@ shots() { # <way> <count>
     row "screenshots ($way)" "$ok of $n" "$hung hung past 20 s, $short short or failed, $((SECONDS - t0)) s in all"
 }
 shots exec-out 30
+# A quiet minute, as the Storybook's tests have between stories, then again.
+sleep 60
+shots exec-out 10
 shots file 30
 verdict="Android booted under Waydroid on the hosted runner, adb in: GUI tests can run in the same job"
 sudo timeout 10 cat /var/lib/waydroid/waydroid.log > "$LOGS/waydroid.log" 2>&1

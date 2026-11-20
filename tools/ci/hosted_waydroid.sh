@@ -115,6 +115,11 @@ done
 sudo timeout 10 cat /var/lib/waydroid/waydroid.log > "$logs/waydroid.log" 2>&1
 [ -n "$booted" ] || { tail -5 "$logs/session.log" >&2; fail "Android didn't boot (its logs: $logs)"; }
 say "booted ($((SECONDS - started)) s)"
+# Waydroid freezes its whole container when Android is idle (the screen off,
+# no window in use), and every adb call then waits: CI's Storybook tests and
+# proof hung on their first quiet moment. Never, as Shireworks' phones have it.
+waydroid prop set persist.waydroid.suspend false > /dev/null 2>&1 ||
+    sudo waydroid prop set persist.waydroid.suspend false > /dev/null 2>&1
 
 # adb: this runner's key let in (written into Android's adb_keys through
 # Waydroid's own root shell, adbd started again to read it), then a
@@ -144,6 +149,9 @@ a() { "$adb" -s "$serial" "$@"; }
 # forgets demo mode.
 a shell wm size 1080x2400 > /dev/null
 a shell wm density 420 > /dev/null
+# Awake for the whole job: the screen on, whatever the time since a touch.
+a shell svc power stayon true > /dev/null 2>&1
+a shell settings put system screen_off_timeout 2147483647 > /dev/null 2>&1
 a shell cmd overlay enable com.android.internal.systemui.navbar.gestural > /dev/null 2>&1 || true
 for _ in $(seq 1 60); do
     [ -n "$(a shell pidof com.android.systemui 2> /dev/null | tr -d '\r')" ] && break
@@ -163,5 +171,5 @@ for _ in 1 2 3; do
     demo notifications -e visible false
     sleep 5
 done
-say "$(a shell getprop ro.product.model | tr -d '\r'), Android $(a shell getprop ro.build.version.release | tr -d '\r') (API $(a shell getprop ro.build.version.sdk | tr -d '\r')), $(a shell wm size | tail -1 | tr -d '\r'), $(a shell wm density | tail -1 | tr -d '\r') at $serial"
+say "$(a shell getprop ro.product.model | tr -d '\r'), Android $(a shell getprop ro.build.version.release | tr -d '\r') (API $(a shell getprop ro.build.version.sdk | tr -d '\r')), EGL $(a shell getprop ro.hardware.egl | tr -d '\r'), suspend $(a shell getprop persist.waydroid.suspend | tr -d '\r'), $(a shell wm size | tail -1 | tr -d '\r'), $(a shell wm density | tail -1 | tr -d '\r') at $serial"
 echo "$serial" > "$serial_file"
