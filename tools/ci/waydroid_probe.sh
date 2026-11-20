@@ -119,9 +119,18 @@ row "binder available" "$binder" "$(tr '\n' ' ' < "$LOGS/lsmod.log" | cut -c1-20
 [ "$binder" = yes ] || { verdict="no binder in this kernel: Waydroid cannot run here"; }
 
 # 3. Waydroid, from its official repository, and its images.
+# GitHub's runners on AWS fetch Ubuntu's packages from an EC2 mirror that
+# stalled Waydroid's install past its limit in two runs of four (those on
+# Azure finished it in seconds): Ubuntu's own archives are asked first.
+if [ -f /etc/apt/apt-mirrors.txt ] && grep -q ec2.archive /etc/apt/apt-mirrors.txt; then
+    { printf 'http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\nhttp://archive.ubuntu.com/ubuntu/\tpriority:2\n'
+      grep -v ec2.archive /etc/apt/apt-mirrors.txt; } > "$LOGS/apt-mirrors.txt"
+    sudo cp "$LOGS/apt-mirrors.txt" /etc/apt/apt-mirrors.txt
+    row "apt mirrors" "Ubuntu's first" "$(tr '\n' ' ' < "$LOGS/apt-mirrors.txt" | cut -c1-200)"
+fi
 # (A mirror stalled for minutes on one package once: apt's own timeout and
 # retries, and only what the three need.)
-if run 180 repository bash -c 'curl -fsSL --retry 3 https://repo.waydro.id | sudo bash' && run 480 install sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
+if run 180 repository bash -c 'curl -fsSL --retry 3 https://repo.waydro.id | sudo bash' && run 600 install sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
         -o Acquire::http::Timeout=30 -o Acquire::Retries=5 waydroid weston adb dbus-daemon; then
     row "waydroid installed" ok "$(dpkg-query -W -f '${Version}' waydroid 2> /dev/null)"
 else
