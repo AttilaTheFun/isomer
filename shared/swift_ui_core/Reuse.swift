@@ -500,11 +500,6 @@ func abandonCompositeBuild(_ build: _CompositeBuild) {
 
 // MARK: - Comparing inputs
 
-private func equalsSame<T: Equatable>(_ lhs: T, _ rhs: Any) -> Bool {
-    guard let rhs = rhs as? T else { return false }
-    return lhs == rhs
-}
-
 /// Whether two values of a view's inputs are the same, the way SwiftUI
 /// compares a view's fields: Equatable values by `==`, other structs, enums
 /// and tuples field by field. Closures, class instances and anything else
@@ -512,18 +507,24 @@ private func equalsSame<T: Equatable>(_ lhs: T, _ rhs: Any) -> Bool {
 func reuseEqual(_ a: Any, _ b: Any, depth: Int = 0) -> Bool {
     // A struct, by its type's plan (ReusePlan.swift): no reflection.
     if let planned = _plannedReuseEqual(a, b, depth: depth) { return planned }
-    if _metadataKind(type(of: a)) == 0x302 { return false }
-    // Bindings to the same state (its identity) read and write the same
-    // value. (Known by descriptor, before Equatable is asked, which a
-    // binding is not: each such question scans the conformances once.)
-    if _isBindingType(type(of: a)), let x = a as? _IdentifiedBinding, let y = b as? _IdentifiedBinding {
+    switch _generalComparison(of: type(of: a)) {
+    case .never:
+        return false
+    case .binding:
+        // Bindings to the same state (its identity) read and write the same
+        // value.
+        guard let x = a as? _IdentifiedBinding, let y = b as? _IdentifiedBinding else { break }
         guard let identity = x._reuseIdentity else { return false }
         return identity == y._reuseIdentity
+    case .transparent:
+        // Property wrappers: `@State` changes arrive as dirty state, and
+        // `@Environment` reads the environment compared separately.
+        return true
+    case .equatable(let same):
+        return same(a, b)
+    case .other:
+        break
     }
-    // Property wrappers: `@State` changes arrive as dirty state, and
-    // `@Environment` reads the environment compared separately.
-    if _isReuseTransparentType(type(of: a)) { return true }
-    if let equatable = a as? any Equatable { return equalsSame(equatable, b) }
     #if canImport(Observation)
     // The same `@Observable` model: what the view reads of it is tracked.
     if let same = _sameObservableInstance(a, b) { return same }
@@ -552,9 +553,12 @@ func reuseEqual(_ a: Any, _ b: Any, depth: Int = 0) -> Bool {
 func reuseComparable(_ value: Any, depth: Int = 0) -> Bool {
     if _metadataKind(type(of: value)) == 0x302 { return false }
     if let planned = _plannedReuseComparable(value, depth: depth) { return planned }
-    if _isBindingType(type(of: value)), let binding = value as? _IdentifiedBinding { return binding._reuseIdentity != nil }
-    if _isReuseTransparentType(type(of: value)) { return true }
-    if value is any Equatable { return true }
+    switch _generalComparison(of: type(of: value)) {
+    case .never: return false
+    case .binding: if let binding = value as? _IdentifiedBinding { return binding._reuseIdentity != nil }
+    case .transparent, .equatable: return true
+    case .other: break
+    }
     #if canImport(Observation)
     if _sameObservableInstance(value, value) != nil { return true }
     #endif
@@ -565,6 +569,53 @@ func reuseComparable(_ value: Any, depth: Int = 0) -> Bool {
         return mirror.children.allSatisfy { reuseComparable($0.value, depth: depth + 1) }
     default:
         return false
+    }
+}
+
+/// How a value of a type with no plan (an enum, an optional, a standard
+/// type) compares, asked once per type: each question of a conformance
+/// (`as? any Equatable`) went through the runtime's conformance lookup on
+/// every comparison, every frame.
+enum _GeneralComparison {
+    /// A closure: never the same.
+    case never
+    case binding
+    case transparent
+    /// Its `==`, the values cast to the type.
+    case equatable((Any, Any) -> Bool)
+    case other
+}
+
+func _generalComparison(of type: Any.Type) -> _GeneralComparison {
+    let id = ObjectIdentifier(type)
+    if let known = _generalComparisons[id] { return known }
+    let made: _GeneralComparison
+    if _metadataKind(type) == 0x302 {
+        made = .never
+    } else if _isBindingType(type) {
+        // (Known by descriptor, before Equatable is asked, which a binding
+        // is not.)
+        made = .binding
+    } else if _isReuseTransparentType(type) {
+        made = .transparent
+    } else if let equatable = type as? any Equatable.Type {
+        made = .equatable(_sameByEquatable(equatable))
+    } else {
+        made = .other
+    }
+    _generalComparisons[id] = made
+    return made
+}
+
+// Unguarded: read and written only by builds, which all run on the main
+// actor. A build off the main thread (encoding a snapshot elsewhere, say)
+// would race it: guard it with a lock, or make it the runtime's, first.
+nonisolated(unsafe) private var _generalComparisons: [ObjectIdentifier: _GeneralComparison] = [:]
+
+private func _sameByEquatable<T: Equatable>(_: T.Type) -> (Any, Any) -> Bool {
+    { a, b in
+        guard let x = a as? T, let y = b as? T else { return false }
+        return x == y
     }
 }
 
