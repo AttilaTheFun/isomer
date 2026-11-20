@@ -372,6 +372,19 @@ extension Runtime {
         return true
     }
 
+    /// Sets the animating transforms' values on their nodes where they stand
+    /// in `tree` (a site built this frame registered its own afresh), and
+    /// marks the nodes above them changed for the encoder.
+    func moveAnimatedBoxes(_ paths: [String], in tree: RenderNode) {
+        for path in paths {
+            guard let box = animatedBoxes[path], let node = box.node, let trail = _trail(to: node, in: tree) else { continue }
+            box.configure(node, box.env, path, animationTime)
+            node.contentEpoch &+= 1
+            for above in trail { above.contentEpoch &+= 1 }
+            frameLog?.inPlace.append("moved " + _pathTail(path, 2))
+        }
+    }
+
     /// The frame's registrations that only a whole build makes afresh,
     /// to tell whether a site built alone made any of them again.
     private var _frameRegistrations: _FrameRegistrations {
