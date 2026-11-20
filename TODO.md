@@ -73,8 +73,16 @@ container with its own KVM, the iPhone and the Mac on slots. Left:
   could move to the container's Xvfb (its pictures then lose GNOME's title
   bar, a one-time change); Windows' pixels stay Windows' (a Windows slot of
   a Windows primary, Shireworks' backlog for the Mac Studio). The proof's
-  Android part could use the container phone once its boot is fast enough.
-- **Android in a container doesn't finish booting on a Mac**, so CI tested
+  Android part, where it leases, is Waydroid in a container since
+  2026-11-20 (below).
+- **Android in a container: Waydroid's boots, Cuttlefish's didn't.**
+  Shireworks' `android --config=waydroid` (Android 13, LineageOS 20, arm64,
+  1080x2400 at 420 dpi, its status bar held still) is ready in under a
+  minute, and tools/proof/proof.py leases it (2026-11-20: the Storybook's
+  test stories and its whole proof on it, every picture within 1% of the
+  x86_64 emulator's, the GPU renderer drawn on ANGLE over SwiftShader).
+  An arm64 APK only; API 33, so the API 23 fixture still wants an emulator.
+  Before it, CI tested
   a private copy's Android on an emulator leased from Shireworks (the Mac's
   own hypervisor); since 2026-11-15 CI tests on GitHub's Ubuntu KVM alone.
   Cuttlefish in a container with its own KVM (tools/ci/android_device.sh, in git's history)

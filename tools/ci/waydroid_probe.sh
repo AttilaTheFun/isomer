@@ -122,7 +122,7 @@ row "binder available" "$binder" "$(tr '\n' ' ' < "$LOGS/lsmod.log" | cut -c1-20
 # (A mirror stalled for minutes on one package once: apt's own timeout and
 # retries, and only what the three need.)
 if run 180 repository bash -c 'curl -fsSL --retry 3 https://repo.waydro.id | sudo bash' && run 480 install sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
-        -o Acquire::http::Timeout=30 -o Acquire::Retries=5 waydroid weston adb; then
+        -o Acquire::http::Timeout=30 -o Acquire::Retries=5 waydroid weston adb dbus-daemon; then
     row "waydroid installed" ok "$(dpkg-query -W -f '${Version}' waydroid 2> /dev/null)"
 else
     row "waydroid installed" failed "$(tail -2 "$LOGS/install.log" 2> /dev/null | tr '\n' ' ')"
@@ -153,16 +153,27 @@ if kill -0 "$weston_pid" 2> /dev/null; then
 else
     row "weston (headless)" failed "$(tail -2 "$LOGS/weston.log" | tr '\n' ' ')"
 fi
-WAYLAND_DISPLAY=wayland-probe waydroid session start > "$LOGS/session.log" 2>&1 &
-session_pid=$!
-
-# 5. Android booted, and adb.
+# 5. Android booted, and adb. The session tried as it is, then (should it
+# end) under a D-Bus session bus of its own: Waydroid's user session talks
+# to one, and a runner's job has none.
 booted=no
 deadline=$((SECONDS + 300))
-while [ $SECONDS -lt $deadline ]; do
-    if [ "$(sudo timeout 20 waydroid shell getprop sys.boot_completed 2> /dev/null | tr -d '\r\n')" = 1 ]; then booted=yes; break; fi
-    kill -0 "$session_pid" 2> /dev/null || break
-    sleep 10
+for way in plain dbus-run-session; do
+    if [ "$way" = plain ]; then
+        WAYLAND_DISPLAY=wayland-probe waydroid session start > "$LOGS/session-$way.log" 2>&1 &
+    else
+        command -v dbus-run-session > /dev/null || break
+        WAYLAND_DISPLAY=wayland-probe dbus-run-session -- waydroid session start > "$LOGS/session-$way.log" 2>&1 &
+    fi
+    session_pid=$!
+    while [ $SECONDS -lt $deadline ]; do
+        if [ "$(sudo timeout 20 waydroid shell getprop sys.boot_completed 2> /dev/null | tr -d '\r\n')" = 1 ]; then booted=yes; break; fi
+        kill -0 "$session_pid" 2> /dev/null || break
+        sleep 10
+    done
+    kill -0 "$session_pid" 2> /dev/null && state=running || state=ended
+    row "session ($way)" "$state" "$(tail -4 "$LOGS/session-$way.log" | tr '\n' ' ' | cut -c1-400)"
+    [ "$booted" = yes ] || [ "$state" = running ] && break
 done
 status="$(sudo waydroid status 2> /dev/null)"
 echo "$status" > "$LOGS/status.log"
@@ -180,10 +191,11 @@ else
     row "adb devices" skipped "no IP from waydroid status"
 fi
 [ "$booted" = yes ] && verdict="Android booted under Waydroid on the hosted runner: GUI tests could run in the same job"
-sudo waydroid log > "$LOGS/waydroid.log" 2>&1
+sudo timeout 10 cat /var/lib/waydroid/waydroid.log > "$LOGS/waydroid.log" 2>&1
+row "waydroid.log" info "$(grep -iE "error|fail|exception" "$LOGS/waydroid.log" | tail -4 | tr '\n' ' ' | cut -c1-400)"
 sudo dmesg 2> /dev/null | tail -200 > "$LOGS/dmesg.log"
 # Stopped by their own PIDs and the service.
 timeout 30 waydroid session stop > /dev/null 2>&1
-kill "$session_pid" "$weston_pid" 2> /dev/null
+kill "${session_pid:-}" "$weston_pid" 2> /dev/null
 sudo systemctl stop waydroid-container > /dev/null 2>&1
 exit 0

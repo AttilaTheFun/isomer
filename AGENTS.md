@@ -734,7 +734,10 @@ acceptable.
     doesn't finish: Virtualization's vCPU threads oversleep every timed
     wait (macOS's timer leeway), and WebView's zygote times out starting,
     restarting the system server. On a Linux host with KVM it would be the
-    fast path (TODO.md);
+    fast path (TODO.md). Waydroid's Android does boot in a container on a
+    Mac (Shireworks' `android --config=waydroid`: Android 13, arm64, in
+    under a minute), and the proof leases it (tools/proof/proof.py), never
+    the Mac's emulator;
   - the iPhone and the Mac, built and tested on `xcode-27` Macs with their
     own Xcode (`verify-apple`, then `apple`: tools/ci/hosted_apple_test.sh
     and hosted_headful_test.sh);
