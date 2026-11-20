@@ -766,4 +766,3 @@ A release is promoted only from a main commit whose proof is in: Reviews'
 Publish waits for it. Still to do: Reviews' release page holds Publish
 until the commit's proof is there.
 
-- **Android signing and /dev/shm (2026-11-20):** build_tools 0.4.1's `sign android` writes the signed APK under /dev/shm (its secrets folder), which a GitHub job container gives 64 MB, so the alpha and release containers run with `--shm-size=1g`. Drop it once build_tools keeps the APK on disk (sent to the Shireworks session).
