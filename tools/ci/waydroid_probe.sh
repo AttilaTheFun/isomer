@@ -16,12 +16,11 @@
 #     with the kernel's linux-modules-extra package installed if the module
 #     isn't there, and binderfs mounted; ashmem (Waydroid uses memfd where
 #     ashmem is missing);
-#  3. Waydroid from its official apt repository (repo.waydro.id), and
-#     `waydroid init` (the LineageOS system and vendor images);
-#  4. the container (waydroid-container's service), then a session under a
-#     headless Weston (Waydroid draws into a Wayland compositor);
-#  5. Android booted: `waydroid status`, sys.boot_completed, and adb over
-#     Waydroid's IP (`adb connect <ip>:5555`, `adb devices`).
+#  3. the phone CI's Android jobs use, made as they make it
+#     (tools/ci/hosted_waydroid.sh: Waydroid from its apt repository, its
+#     images, a session under a headless Weston, adb let in, the phone
+#     shaped and its status bar held still), then a screenshot, an app
+#     started and a tap over adb, and the phone's insets.
 # Run on the runner itself (not in a job container), with sudo.
 set -u
 LOGS="${1:-${RUNNER_TEMP:-/tmp}/waydroid-probe}"
@@ -78,17 +77,21 @@ row "/dev/binder*, /dev/binderfs, /dev/ashmem before" info "$(tr '\n' ' ' < "$LO
 filesystems="$(grep binder /proc/filesystems)"
 row "binder in /proc/filesystems before" "${filesystems:+yes}${filesystems:-no}" "$filesystems"
 
-# 2. Binder (and ashmem).
-modprobe_binder() { sudo modprobe binder_linux devices=binder,hwbinder,vndbinder; }
-if run 60 modprobe-binder modprobe_binder; then
+# 2. Binder (and ashmem). (`timeout` runs programs, not this script's
+# functions: each step below is a command line of its own.)
+find "/lib/modules/$kernel" -name 'binder*' > "$LOGS/binder-modules.log" 2>&1
+row "binder modules shipped" info "$(tr '\n' ' ' < "$LOGS/binder-modules.log" | cut -c1-300)"
+modprobe_binder=(sudo modprobe binder_linux devices=binder,hwbinder,vndbinder)
+if run 60 modprobe-binder "${modprobe_binder[@]}"; then
     row "modprobe binder_linux" ok ""
 else
     row "modprobe binder_linux" failed "$(tail -2 "$LOGS/modprobe-binder.log" | tr '\n' ' ')"
     # The module ships in the kernel's extra modules, which the runner's
     # image may leave out.
+    run 300 apt-update sudo apt-get update -q
     if run 300 modules-extra sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -q "linux-modules-extra-$kernel"; then
         row "linux-modules-extra-$kernel" installed ""
-        if run 60 modprobe-binder-again modprobe_binder; then
+        if run 60 modprobe-binder-again "${modprobe_binder[@]}"; then
             row "modprobe binder_linux, again" ok ""
         else
             row "modprobe binder_linux, again" failed "$(tail -2 "$LOGS/modprobe-binder-again.log" | tr '\n' ' ')"
@@ -114,70 +117,65 @@ binder=no
 row "binder available" "$binder" "$(tr '\n' ' ' < "$LOGS/lsmod.log" | cut -c1-200)"
 [ "$binder" = yes ] || { verdict="no binder in this kernel: Waydroid cannot run here"; }
 
-# 3. Waydroid, from its official repository, and its images.
-add_repository() { curl -fsSL --retry 3 https://repo.waydro.id | sudo bash; }
-if run 180 repository add_repository && run 300 install sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -q waydroid weston adb; then
-    row "waydroid installed" ok "$(dpkg-query -W -f '${Version}' waydroid 2> /dev/null)"
-else
-    row "waydroid installed" failed "$(tail -2 "$LOGS/install.log" 2> /dev/null | tr '\n' ' ')"
-    exit 0
-fi
+# 3. The phone CI's Android jobs use (tools/ci/hosted_waydroid.sh: Waydroid
+# installed, its images, a session under a headless Weston, adb let in, the
+# phone's shape and status bar), then what the tests ask of it: a
+# screenshot, an app started, a tap.
 [ "$binder" = yes ] || exit 0
-if run 600 init sudo waydroid init; then
-    row "waydroid init" ok "$(grep -iE "system|vendor" "$LOGS/init.log" | tail -2 | tr '\n' ' ' | cut -c1-200)"
+sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+adb="$sdk/platform-tools/adb"
+started=$SECONDS
+if "$(dirname "$0")/hosted_waydroid.sh" "$LOGS/phone.log" "$LOGS/serial" > /dev/null 2>&1; then
+    row "phone (hosted_waydroid.sh)" ok "$((SECONDS - started)) s: $(grep -v "^hosted_waydroid: [a-z-]* ([0-9]* s)$" "$LOGS/phone.log" | tr '\n' ' ' | cut -c1-300)"
 else
-    row "waydroid init" failed "$(tail -3 "$LOGS/init.log" | tr '\n' ' ')"
+    row "phone (hosted_waydroid.sh)" failed "$(tail -3 "$LOGS/phone.log" | tr '\n' ' ' | cut -c1-400)"
+    sudo timeout 10 cat /var/lib/waydroid/waydroid.log > "$LOGS/waydroid.log" 2>&1
     exit 0
 fi
-
-# 4. The container, and a session under a headless Weston.
-if run 90 container sudo systemctl restart waydroid-container; then
-    sleep 5
-    row "container" "$(systemctl is-active waydroid-container)" "$(sudo waydroid status 2> /dev/null | tr '\n' ' ')"
-else
-    row "container" failed "$(sudo journalctl -u waydroid-container --no-pager 2> /dev/null | tail -3 | tr '\n' ' ')"
-fi
-export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-[ -d "$XDG_RUNTIME_DIR" ] || { sudo mkdir -p "$XDG_RUNTIME_DIR" && sudo chown "$(id -u)" "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"; }
-weston --backend=headless --socket=wayland-probe --width=1080 --height=1920 > "$LOGS/weston.log" 2>&1 &
-weston_pid=$!
-sleep 5
-if kill -0 "$weston_pid" 2> /dev/null; then
-    row "weston (headless)" ok ""
-else
-    row "weston (headless)" failed "$(tail -2 "$LOGS/weston.log" | tr '\n' ' ')"
-fi
-WAYLAND_DISPLAY=wayland-probe waydroid session start > "$LOGS/session.log" 2>&1 &
-session_pid=$!
-
-# 5. Android booted, and adb.
-booted=no
-deadline=$((SECONDS + 300))
-while [ $SECONDS -lt $deadline ]; do
-    if [ "$(sudo timeout 20 waydroid shell getprop sys.boot_completed 2> /dev/null | tr -d '\r\n')" = 1 ]; then booted=yes; break; fi
-    kill -0 "$session_pid" 2> /dev/null || break
-    sleep 10
-done
-status="$(sudo waydroid status 2> /dev/null)"
-echo "$status" > "$LOGS/status.log"
-row "waydroid status" info "$(tr '\n' ' ' <<< "$status")"
-row "sys.boot_completed" "$booted" "after $((SECONDS - deadline + 300)) s"
-ip="$(awk '/IP address/ {print $NF}' <<< "$status")"
-if [ -n "$ip" ] && [ "$ip" != UNKNOWN ]; then
-    timeout 30 adb connect "$ip:5555" > "$LOGS/adb.log" 2>&1
-    timeout 30 adb devices -l >> "$LOGS/adb.log" 2>&1
-    model="$(timeout 20 adb -s "$ip:5555" shell getprop ro.product.model 2> /dev/null | tr -d '\r')"
-    release="$(timeout 20 adb -s "$ip:5555" shell getprop ro.build.version.release 2> /dev/null | tr -d '\r')"
-    row "adb devices" "$(grep -q "$ip:5555.*device" "$LOGS/adb.log" && echo connected || echo "not connected")" "$(tr '\n' ' ' < "$LOGS/adb.log" | cut -c1-200)"
-    [ -n "$release" ] && row "Android" ok "$model, Android $release"
-else
-    row "adb devices" skipped "no IP from waydroid status"
-fi
-[ "$booted" = yes ] && verdict="Android booted under Waydroid on the hosted runner: GUI tests could run in the same job"
-sudo waydroid log > "$LOGS/waydroid.log" 2>&1
+row "phone's steps" info "$(grep -oE "^hosted_waydroid: [a-z-]* \([0-9]* s\)" "$LOGS/phone.log" | sed 's/^hosted_waydroid: //' | tr '\n' ' ')"
+serial="$(cat "$LOGS/serial")"
+a() { timeout 60 "$adb" -s "$serial" "$@"; }
+a exec-out screencap -p > "$LOGS/home.png"
+row "screenshot" "$(file -b "$LOGS/home.png" | cut -d, -f1-2)" "$(wc -c < "$LOGS/home.png") bytes"
+a shell am start -W -a android.settings.SETTINGS > "$LOGS/settings.log" 2>&1
+sleep 3
+a exec-out screencap -p > "$LOGS/settings.png"
+a shell input tap 540 1200
+sleep 2
+a exec-out screencap -p > "$LOGS/after-tap.png"
+row "an app and a tap" "$(grep -q "Status: ok" "$LOGS/settings.log" && echo started || echo "not started")" \
+    "$(cmp -s "$LOGS/settings.png" "$LOGS/after-tap.png" && echo "the tap changed nothing" || echo "the tap changed the screen"); top: $(a shell dumpsys activity activities 2> /dev/null | grep -m1 topResumedActivity | tr -s ' ' | cut -c1-120)"
+a shell dumpsys window > "$LOGS/window.log" 2>&1
+row "insets" info "$(grep -oE "type=(ITYPE_STATUS_BAR|ITYPE_NAVIGATION_BAR|statusBars|navigationBars) frame=\[[0-9,]+\]\[[0-9,]+\]" "$LOGS/window.log" | sort -u | tr '\n' ' ')"
+# Screenshots, many in a row (the Storybook's tests and proof hung on one
+# over adb's TCP connection): over adb (exec-out, each given 20 s), and
+# written on the phone then read from the host (its /data is the session
+# user's ~/.local/share/waydroid/data).
+shots() { # <way> <count>
+    local way=$1 n=$2 ok=0 hung=0 short=0 i t0 size
+    t0=$SECONDS
+    for i in $(seq 1 "$n"); do
+        rm -f "$LOGS/shot.png"
+        case "$way" in
+            exec-out) timeout 20 "$adb" -s "$serial" exec-out screencap -p > "$LOGS/shot.png" ;;
+            file) timeout 20 "$adb" -s "$serial" shell screencap -p /data/local/tmp/shot.png &&
+                sudo timeout 10 cat "$HOME/.local/share/waydroid/data/local/tmp/shot.png" > "$LOGS/shot.png" ;;
+        esac
+        case $? in
+            0) size=$(wc -c < "$LOGS/shot.png"); [ "$size" -gt 20000 ] && ok=$((ok + 1)) || short=$((short + 1)) ;;
+            124) hung=$((hung + 1)) ;;
+            *) short=$((short + 1)) ;;
+        esac
+        [ $((i % 3)) -eq 0 ] && a shell input swipe 540 1600 540 900 200 > /dev/null 2>&1
+    done
+    row "screenshots ($way)" "$ok of $n" "$hung hung past 20 s, $short short or failed, $((SECONDS - t0)) s in all"
+}
+shots exec-out 30
+# A quiet minute, as the Storybook's tests have between stories, then again.
+sleep 60
+shots exec-out 10
+shots file 30
+verdict="Android booted under Waydroid on the hosted runner, adb in: GUI tests can run in the same job"
+sudo timeout 10 cat /var/lib/waydroid/waydroid.log > "$LOGS/waydroid.log" 2>&1
 sudo dmesg 2> /dev/null | tail -200 > "$LOGS/dmesg.log"
-# Stopped by their own PIDs and the service.
-timeout 30 waydroid session stop > /dev/null 2>&1
-kill "$session_pid" "$weston_pid" 2> /dev/null
-sudo systemctl stop waydroid-container > /dev/null 2>&1
 exit 0
