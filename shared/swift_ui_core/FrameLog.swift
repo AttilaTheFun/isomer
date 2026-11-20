@@ -9,8 +9,9 @@
 //   inputs      its stored properties differ from last frame's
 //   environment the environment it was built in differs
 //   context     a style stack it was built under differs
-//   volatile    last frame's build read runtime state (a .task, an
-//               .onAppear, a GeometryReader, …), so it was not kept
+//   volatile    last frame's build read runtime state (a control reading
+//               its binding, an @AppStorage, a value animating), so it was
+//               not kept: built again every frame (InPlace.swift)
 //   binding     last frame's build read a binding's value
 //   uncomparable its inputs cannot be compared (a closure), so it was not kept
 //   type, navigation   its type, or the navigation level it is at, changed
