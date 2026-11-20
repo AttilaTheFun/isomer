@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AttilaTheFun/build_tools.git",
       "state" : {
-        "revision" : "9b8f48dbdf6460663c9edd4c703561eb0e78dd6a",
-        "version" : "0.4.1"
+        "revision" : "2c78af3d58ce52b031f56a74906c1d93a56fab73",
+        "version" : "0.4.2"
       }
     },
     {
