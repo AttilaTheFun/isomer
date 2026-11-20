@@ -56,7 +56,7 @@ Every non-dev directive, by the platform that needs it.
 | `rules_android` 0.7.3, `rules_java` 9.3.0, `rules_kotlin` 2.2.2 | Android | `isomer_android_app` and the rest of tools/android, android/libraries, swift_ffi's `kt_swift_library` (rules_kotlin) |
 | `rules_java`'s `toolchains` extension (`remote_java_tools`) | Android | rules_android's Java actions |
 | `//android/maven:extensions.bzl` (`isomer_android_maven_set`) | Android | Isomer's AndroidX or the app's (docs/android_maven.md) |
-| `//tools/android:extensions.bzl` (build tools, emulator, platform jar and tools, system image, JDK, kotlinc) | Android (and tests) | the emulator runner, the Level 4 templates' tools; lazy |
+| `//tools/android:extensions.bzl` (build tools, emulator, platform jar and tools, system image, JDK, kotlinc) | Android (and tests), the web's Electron packaging (the JDK) | the emulator runner, the Level 4 templates' tools; lazy |
 | `wabt` 1.0.37 | wasm hosting | mixed mode's wasm2c and wat2wasm, built from source (tools/wasm/mixed.bzl) |
 | `binaryen_*`, `wabt_sources` (`http_archive`) | wasm hosting | mixed mode; lazy |
 | `wasmkit` (`http_archive`) | every native host that runs reactors (Apple, Android, Linux, Windows) | `WasmKitRuntime`; lazy |
@@ -270,8 +270,9 @@ stay where they were.
   - wasm_view: `:wasm_engine_bindings` and `:engine_native`, from
     android/libraries/wasm_view.
 - isomer: rules_android, rules_java, rules_kotlin and
-  hermetic_android_toolchains are development dependencies, as is the
-  `android_tools` extension; isomer_android a development dependency by
+  hermetic_android_toolchains are development dependencies. The
+  `android_tools` extension stays isomer's (plain http_archives, lazy: the
+  web's Electron packaging runs its JDK); isomer_android a development dependency by
   `local_path_override`, android/module in .bazelignore. The templates, the
   debug keystore, the AAR's assembly, the emulator runner and the flags
   (`--@isomer//tools/android:shared_platform`, `:aar_libcxx_shared`) stay

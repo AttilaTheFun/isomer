@@ -635,10 +635,11 @@ register_toolchains(
 wasm_tools = use_extension("//tools/wasm:extensions.bzl", "wasm_tools")
 use_repo(wasm_tools, "electron", "electron_win64")
 
-# Android's tools (the emulator runner, isomer_android's hand-built APKs):
-# the isomer_android module's for an app; isomer's own builds use them here
-# (//tools/android/emulator).
-android_tools = use_extension("//tools/android:extensions.bzl", "android_tools", dev_dependency = True)
+# Android's tools (the emulator runner, isomer_android's hand-built APKs) and
+# the JDK the web's Electron packaging runs (tools/wasm/defs.bzl): plain
+# http_archives, fetched only by a build that uses one, so no cost to an app
+# that doesn't (isomer_android names them too, for its macros).
+android_tools = use_extension("//tools/android:extensions.bzl", "android_tools")
 use_repo(
     android_tools,
     "android_build_tools",
