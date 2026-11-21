@@ -1191,7 +1191,7 @@ private func buildUnidentifiedNode(view: any View, ctx: inout BuildContext) -> R
         // Built-in views that don't say they build purely read or register
         // runtime state: nothing around them is reused (Reuse.swift).
         if !(kind.contains(.reusable) && primitive._buildIsPure(ctx)) {
-            Runtime.shared.markBuildVolatile()
+            Runtime.shared.markBuildVolatile(registersForFrame: Swift.type(of: primitive)._impureBuildRegistersForFrame)
             _frameLogVolatile(view)
         }
         return primitive.makeNode(&ctx)
