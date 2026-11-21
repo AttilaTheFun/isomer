@@ -30,7 +30,7 @@ module(
 #   git_override(module_name = "isomer",
 #                remote = "https://github.com/AttilaTheFun/isomer.git",
 #                commit = "<commit>")
-bazel_dep(name = "isomer", version = "0.58.0")
+bazel_dep(name = "isomer", version = "0.59.0")
 local_path_override(
     module_name = "isomer",
     path = "..",
@@ -43,7 +43,7 @@ local_path_override(
 # registry by version (each isomer release has it), or, beside a
 # git_override of isomer, overrides it from the same commit with
 # `strip_prefix = "android/maven_module"`.
-bazel_dep(name = "isomer_android_maven", version = "0.58.0")
+bazel_dep(name = "isomer_android_maven", version = "0.59.0")
 local_path_override(
     module_name = "isomer_android_maven",
     path = "../android/maven_module",
@@ -57,7 +57,7 @@ local_path_override(
 # consumer takes it from the registry by version (each isomer release from
 # 0.58 has it), or, beside a git_override of isomer, overrides it from the
 # same commit with `strip_prefix = "apple/module"`.
-bazel_dep(name = "isomer_apple", version = "0.58.0")
+bazel_dep(name = "isomer_apple", version = "0.59.0")
 local_path_override(
     module_name = "isomer_apple",
     path = "../apple/module",
@@ -71,7 +71,7 @@ local_path_override(
 # app on the web, the iPhone and the Mac alone leaves it out. A real
 # consumer takes it from the registry by version (each isomer release from
 # 0.59 has it), or overrides it from the same checkout as isomer.
-bazel_dep(name = "isomer_android", version = "0.58.0")
+bazel_dep(name = "isomer_android", version = "0.59.0")
 local_path_override(
     module_name = "isomer_android",
     path = "../android/module",

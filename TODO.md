@@ -586,7 +586,7 @@ has it.
   - #2000 (merged after 4.3.0, e901d23b): Android down to the Swift SDK's
     own minimum (6.4's: 23), no RELR below 28; 4.3.0 alone (#1998) fails
     any target below 28;
-  - #2032 (approved): generated proto sources copied with `/.`, so a proto
+  - #2032 (merged after 4.3.0): generated proto sources copied with `/.`, so a proto
     with no Swift output doesn't fail;
   - #2016 (open): the Android and wasm compiles' implicit Clang module
     cache goes stale when the SDK (or rules_swift) changes under an output

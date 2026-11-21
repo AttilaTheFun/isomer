@@ -25,7 +25,7 @@ with isomer's MODULE.bazel (tools/released_pins.sh checks it).
 
 module(
     name = "isomer_android",
-    version = "0.58.0",
+    version = "0.59.0",
 )
 
 # rules_android's `android_binary` and rules_kotlin's `kt_android_library`
@@ -47,7 +47,7 @@ bazel_dep(name = "rules_swift", version = "4.3.0.isomer.2")
 
 # The isomer these macros build on (Android's Swift libraries, the Kotlin
 # runtime's sources, isomer_application), the same release.
-bazel_dep(name = "isomer", version = "0.58.0")
+bazel_dep(name = "isomer", version = "0.59.0")
 
 # The tools defs.bzl's hand-built APKs and the emulator runner use (lazy:
 # fetched only by a build that uses them).
