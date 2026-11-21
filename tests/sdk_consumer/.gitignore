@@ -1,0 +1,3 @@
+# Written by tools/ci/sdk_smoke cell with a checkout's isomer: the
+# checkout's rules_swift_package_manager patch, copied for the cell's override.
+cell_rules_swift_package_manager.patch

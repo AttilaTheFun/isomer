@@ -148,6 +148,22 @@ struct Cell: ParsableCommand {
                     "    path = \"\(checkout)/android/module\",", ")",
                 ]
             }
+            // isomer's package by path is a local package that is a Bazel
+            // module too, which rules_swift_package_manager 1.26.0 copies with
+            // its BUILD files (rules_swift_package_manager#2638, upstream's v2):
+            // the checkout's patch, applied as isomer's own root applies it.
+            // A root's override can name only its own files: a copy, beside
+            // the cell's other files.
+            let localPackagePatch = "tools/patches/rules_swift_package_manager_local_bazel_package.patch"
+            if FileManager.default.fileExists(atPath: "\(checkout)/\(localPackagePatch)") {
+                let copy = "\(root)/cell_rules_swift_package_manager.patch"
+                try? FileManager.default.removeItem(atPath: copy)
+                try FileManager.default.copyItem(atPath: "\(checkout)/\(localPackagePatch)", toPath: copy)
+                lines += [
+                    "single_version_override(", "    module_name = \"rules_swift_package_manager\",",
+                    "    patch_strip = 1,", "    patches = [\"//:cell_rules_swift_package_manager.patch\"],", ")",
+                ]
+            }
             isomerLines = lines
             packageLine = ".package(path: \"\(checkout)\"),"
         } else {
