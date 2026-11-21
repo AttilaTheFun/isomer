@@ -39,7 +39,7 @@ bazel_dep(name = "rules_apple", version = "5.3.1.applecross.6", repo_name = "bui
 bazel_dep(name = "rules_applecross", version = "0.0.3.382f8c3")
 
 bazel_dep(name = "bazel_skylib", version = "1.9.0")
-bazel_dep(name = "rules_swift", version = "4.3.0.isomer.1")
+bazel_dep(name = "rules_swift", version = "4.3.0.isomer.2")
 
 # The isomer whose isomer_application declares these platforms (and the
 # heads the shells link), the same release.

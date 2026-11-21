@@ -43,7 +43,7 @@ bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "platforms", version = "1.1.0")
 bazel_dep(name = "rules_cc", version = "0.2.18")
 bazel_dep(name = "rules_shell", version = "0.8.0")
-bazel_dep(name = "rules_swift", version = "4.3.0.isomer.1")
+bazel_dep(name = "rules_swift", version = "4.3.0.isomer.2")
 
 # The isomer these macros build on (Android's Swift libraries, the Kotlin
 # runtime's sources, isomer_application), the same release.
