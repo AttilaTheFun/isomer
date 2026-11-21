@@ -115,6 +115,56 @@ struct StorybookHeadlessTests {
         try app.picture("state.observableobject")
     }
 
+    /// A view's state lasts as long as the view (state.lifetime). Each of
+    /// the story's counters is tapped to 1, its view is taken away and
+    /// brought back (by an if, a new id, a ForEach's items, its sheet), and
+    /// its count read again; one is left alone. Apple's SwiftUI is the
+    /// reference: it checks the counts SwiftUI gives. Isomer keeps a view's
+    /// state by its place, so its counts are only printed beside them until
+    /// it drops a view's state with the view.
+    @Test func stateLastsAsLongAsItsView() throws {
+        let app = try launch(story: "state.lifetime")
+        defer { app.quit() }
+        let apple = try app.info().renderer == "SwiftUI"
+        var seen: [(scenario: String, swiftUI: Int, count: Int)] = []
+        /// Taps `name`'s counter to 1, makes `change`, and reads its count.
+        func count(_ name: String, after change: () throws -> Void) throws -> Int {
+            try app.tap("\(name): 0")
+            try app.wait(for: "\(name): 1")
+            try change()
+            let screen = try app.screen()
+            return (0...3).first { screen.shows("\(name): \($0)") } ?? -1
+        }
+        try app.tap("Stays: 0")
+        try app.wait(for: "Stays: 1")
+        seen.append(("an if's branch swapped away and back", 0, try count("Branch") {
+            try app.tap("Swap the branch")
+            try app.tap("Swap the branch")
+        }))
+        seen.append(("an if's other branch, the same type", 0, try count("Either branch") {
+            try app.tap("Swap the counters")
+        }))
+        seen.append(("a new id", 0, try count("Identified") {
+            try app.tap("Give it a new id")
+        }))
+        seen.append(("a ForEach item removed and added again", 0, try count("Item 2") {
+            try app.tap("Remove item 2")
+            try app.tap("Add item 2")
+        }))
+        try app.tap("Show the sheet")
+        seen.append(("its sheet closed and shown again", 0, try count("In the sheet") {
+            try app.tap("Close the sheet")
+            try app.tap("Show the sheet")
+        }))
+        try app.tap("Close the sheet")
+        let stays = try app.screen()
+        seen.append(("a view left alone", 1, (0...3).first { stays.shows("Stays: \($0)") } ?? -1))
+        for (scenario, swiftUI, count) in seen {
+            print("[state.lifetime] \(scenario): \(count) (SwiftUI's: \(swiftUI))")
+            if apple { #expect(count == swiftUI, "\(scenario): \(count), SwiftUI's \(swiftUI)") }
+        }
+    }
+
     /// A trip to the background and back (`scene`): the app comes back as
     /// it was, still driven, whichever way its platform moves it (Android's
     /// launcher sends it home and brings it back; iOS tells SwiftUI's scene
