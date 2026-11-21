@@ -2945,6 +2945,7 @@ struct Main {
         checkTextEditFrames()
         checkPresentFromPartialFrame()
         checkVolatileSites()
+        checkAnimatedTransforms(mock)
         checkOpenURLAfterPartialFrames()
 
         // Row actions: the tagged row is a tap target and carries its menu.
@@ -3573,6 +3574,106 @@ func checkVolatileSites() {
         expect(HostFrame(Runtime.shared.retainedTree!).shows("Sheet body"), "the sheet stays\(label)")
         frame("the sheet dismissed", inPlace: false) { volatileSheet?.wrappedValue = false }
         expect(!HostFrame(Runtime.shared.retainedTree!).shows("Sheet body"), "the sheet is gone\(label)")
+    }
+}
+
+
+// MARK: - Animating transforms moved in place
+
+/// Spinners turning forever: one in a view of its own beside others, one in
+/// the root's own body (which has no site to build alone). Each frame of
+/// their animation is built in place, their nodes moved where they stand,
+/// no view built.
+nonisolated(unsafe) var spinnerBuilds = 0
+nonisolated(unsafe) var spinnerSiblingBuilds = 0
+nonisolated(unsafe) var rootTurning: Binding<Bool>?
+nonisolated(unsafe) var spinnerSpinning: Binding<Bool>?
+
+struct SpinnerRoot: View {
+    let pass: Int
+    @State private var turning = false
+    var body: some View {
+        let _ = (rootTurning = $turning)
+        VStack {
+            Text("Root \(pass)")
+                .rotationEffect(.degrees(turning ? 360 : 0))
+                .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: turning)
+            Spinner()
+            SpinnerSibling(title: "Loading")
+        }
+    }
+}
+
+struct Spinner: View {
+    @State private var spinning = false
+    var body: some View {
+        let _ = spinnerBuilds += 1
+        let _ = (spinnerSpinning = $spinning)
+        Text("Spinner")
+            .rotationEffect(.degrees(spinning ? 360 : 0))
+            .scaleEffect(spinning ? 2 : 1)
+            .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: spinning)
+    }
+}
+
+struct SpinnerSibling: View {
+    let title: String
+    var body: some View {
+        let _ = spinnerSiblingBuilds += 1
+        Text(title)
+    }
+}
+
+@MainActor
+func checkAnimatedTransforms(_ mock: MockRenderer) {
+    let verifying = Runtime.shared.verifyPartialFrames
+    defer {
+        Runtime.shared.verifyPartialFrames = verifying
+        stubHostNow = 0
+    }
+    for verify in [true, false] {
+        Runtime.shared.verifyPartialFrames = verify
+        stubHostNow = 0
+        Runtime.shared.installRootView { SpinnerRoot(pass: verify ? 0 : 1) }
+        Runtime.shared.start(host: StubHost(), width: 320, height: 480)
+        let label = verify ? " (checked against a whole build)" : ""
+        let encoder = FlatTreeEncoder()
+        var root: PatchNode?
+        _ = applyPatch(encoder.encodePatch(root: mock.lastTree!), into: &root)
+        func rotations() -> [String] {
+            var buffer = ByteBuffer(bytes: FlatTreeEncoder().encode(root: mock.lastTree!))
+            return allParams(getRoot(byteBuffer: &buffer) as IsoFlat_Node, key: "rotation")
+        }
+        // Both start turning (as an `.onAppear` would start them).
+        rootTurning?.wrappedValue = true
+        spinnerSpinning?.wrappedValue = true
+        for _ in 0..<3 {
+            stubHostNow += 0.01
+            Runtime.shared.renderFrame()
+            _ = applyPatch(encoder.encodePatch(root: mock.lastTree!), into: &root)
+        }
+        var last = rotations()
+        for step in 1...5 {
+            let spinners = spinnerBuilds, siblings = spinnerSiblingBuilds
+            let partials = Runtime.shared.partialFrameCount, mismatches = Runtime.shared.partialMismatches
+            stubHostNow += 0.1
+            Runtime.shared.renderFrame()
+            let stats = Runtime.shared.frameStats
+            let tree = mock.lastTree!
+            _ = applyPatch(encoder.encodePatch(root: tree), into: &root)
+            let now = rotations()
+            expect(describeTree(root!) == fullDescribe(tree), "turning, frame \(step)\(label): applied patch == full encode")
+            expect(Runtime.shared.partialMismatches == mismatches, "turning, frame \(step)\(label): as a whole build")
+            expect(Runtime.shared.partialFrameCount > partials,
+                   "turning, frame \(step)\(label): built in place (\(stats.kind.rawValue): \(stats.detail))")
+            expect(now.count == 2 && now[0] != last[0] && now[1] != last[1],
+                   "turning, frame \(step)\(label): both turn (\(last) to \(now))")
+            if !verify {
+                expect(spinnerBuilds == spinners && spinnerSiblingBuilds == siblings,
+                       "turning, frame \(step): no view is built (\(spinnerBuilds - spinners), \(spinnerSiblingBuilds - siblings))")
+            }
+            last = now
+        }
     }
 }
 
