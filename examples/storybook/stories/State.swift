@@ -33,6 +33,10 @@ extension StoryCatalog {
             summary: "A value kept in the app's defaults: it is still there when the app is opened again."
         ) { AppStorageStory() },
         Story(
+            "state.lifetime", "A view's state lifetime",
+            summary: "A view's state lasts as long as the view: swapped out by an if, given a new id, removed from a ForEach, or closed with its sheet, it starts again from its initial value when it comes back; a view that stays keeps its own."
+        ) { LifetimeStory() },
+        Story(
             "state.task", "Tasks and lifecycle",
             summary: "Work that starts when a view appears and is cancelled when it goes, restarted when a value changes."
         ) { TaskStory() },
@@ -256,6 +260,65 @@ struct TaskStory: View {
         .onChange(of: city) {
             status = "Changed city"
         }
+    }
+}
+// end story
+
+// story: state.lifetime
+struct LifetimeStory: View {
+    @State private var branch = true
+    @State private var firstOfTwo = true
+    @State private var identity = 0
+    @State private var items = [1, 2]
+    @State private var sheet = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            LifetimeCounter(name: "Stays")
+
+            if branch {
+                LifetimeCounter(name: "Branch")
+            } else {
+                Text("The other branch")
+            }
+            Button("Swap the branch") { branch.toggle() }
+
+            if firstOfTwo {
+                LifetimeCounter(name: "Either branch")
+            } else {
+                LifetimeCounter(name: "Either branch")
+            }
+            Button("Swap the counters") { firstOfTwo.toggle() }
+
+            LifetimeCounter(name: "Identified").id(identity)
+            Button("Give it a new id") { identity += 1 }
+
+            ForEach(items, id: \.self) { item in
+                LifetimeCounter(name: "Item \(item)")
+            }
+            Button(items.count == 2 ? "Remove item 2" : "Add item 2") {
+                items = items.count == 2 ? [1] : [1, 2]
+            }
+
+            Button("Show the sheet") { sheet = true }
+        }
+        .sheet(isPresented: $sheet) {
+            VStack(spacing: 12) {
+                LifetimeCounter(name: "In the sheet")
+                Button("Close the sheet") { sheet = false }
+            }
+            .padding()
+        }
+    }
+}
+
+/// A count of its own taps, which starts at 0.
+struct LifetimeCounter: View {
+    let name: String
+    @State private var taps = 0
+
+    var body: some View {
+        Button("\(name): \(taps)") { taps += 1 }
     }
 }
 // end story
