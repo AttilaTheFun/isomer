@@ -101,7 +101,7 @@ hot-reload as wasm and ship compiled):
   compiles none of the Storybook's Swift, and
   examples/android/webview_android_application, the same site in an APK
   with no Swift and no native library of its own
-  (`isomer_android_webview_app` in tools/android/defs.bzl); CI's container
+  (`isomer_android_webview_app` in android/module/defs.bzl); CI's container
   builds both on every pull request.
 - **Tests**: the examples' //tests/webview_session:session_test runs the page
   in headless Chrome with the Storybook's guest, as a head drives it: the
@@ -174,9 +174,11 @@ interpreted:
 `--@isomer//:mode=compiled|webview|remote` (a string flag at isomer's root,
 with config settings `@isomer//:mode_compiled`, `:mode_webview` and
 `:mode_remote`) for a whole app, which `isomer_application` takes on every
-platform: isomer's (tools/application/defs.bzl) declares Android's and the
-web's apps, isomer_apple's (`@isomer_apple//:defs.bzl`, apple/module, since
-0.58: docs/platform_modules.md) the iPhone's and the Mac's beside them. The examples'
+platform: isomer's (tools/application/defs.bzl) declares the web's apps,
+and each other platform's module its own, named in its `platforms`
+(since 0.59, docs/platform_modules.md): isomer_apple's `IOS` and `MACOS`
+(`@isomer_apple//:defs.bzl`) the iPhone's and the Mac's, isomer_android's
+`ANDROID` (`@isomer_android//:defs.bzl`) Android's. The examples'
 .bazelrc names two: `--config=webview_mode`, `--config=remote_mode`.
 
 `isomer_application(name, swift_library, bundle_id, display_name, …)`

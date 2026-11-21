@@ -660,11 +660,12 @@ platform-specific modifiers (`.androidStatusBarStyle`, `.webDocumentTitle`,
 `isomer_application` declares one app's targets on every platform from one
 Swift library: `<name>_ios`, `<name>_macos`, `<name>_android` (and `_apk`)
 and `<name>_web`, built in the mode `--@isomer//:mode` names
-(docs/modes.md). The iPhone's and the Mac's are the isomer_apple module's
-(since 0.58, docs/platform_modules.md): an app with them loads it from
-`@isomer_apple//:defs.bzl`; an app on Android and the web alone loads
-isomer's own, `@isomer//tools/application:defs.bzl`, and never resolves
-rules_apple's graph. The modes:
+(docs/modes.md). It is isomer's (`@isomer//tools/application:defs.bzl`),
+and an app names its platforms by values their modules export (since 0.59,
+docs/platform_modules.md): `WEB` isomer's, `IOS` and `MACOS` isomer_apple's,
+`ANDROID` isomer_android's. An app resolves only the rules of the platforms
+it names: rules_apple's graph with isomer_apple, rules_android's and
+rules_kotlin's with isomer_android. The modes:
 
 - `compiled` (the default): the app's Swift in each platform's app
   (rules_apple's applications, `isomer_android_app`, `isomer_web_app`);
@@ -678,12 +679,15 @@ The web is wasm in every mode. Each mode's app is also there by name
 (`<name>_ios_webview`, `<name>_android_remote`, …).
 
 ```starlark
-load("@isomer_apple//:defs.bzl", "isomer_application")  # Android and the web alone: @isomer//tools/application:defs.bzl
+load("@isomer//tools/application:defs.bzl", "WEB", "isomer_application")
+load("@isomer_android//:defs.bzl", "ANDROID")
+load("@isomer_apple//:defs.bzl", "IOS", "MACOS")
 
 isomer_application(
     name = "notes",
     bundle_id = "com.example.Notes",
     display_name = "Notes",
+    platforms = [IOS, MACOS, ANDROID, WEB],
     swift_library = ":notes_lib",  # alwayslink, -parse-as-library, on @isomer//:swift_ui
 )
 ```
@@ -738,7 +742,24 @@ bazel_dep(name = "isomer_apple", version = "0.58.1")
 It brings rules_apple 5.3.1.applecross.6 (as `build_bazel_rules_apple`),
 rules_applecross and apple_support 2.11.0; the root still registers the
 bundling toolchains ("Upgrading isomer", 0.40). An app that declares its
-Apple applications with rules_apple itself needs no isomer_apple. rules_android's own Maven (its tools) is
+Apple applications with rules_apple itself needs no isomer_apple.
+
+**Android: isomer_android** (since 0.59;
+[docs/platform_modules.md](docs/platform_modules.md)). isomer asks for no
+Android or Kotlin rules: an app on the web, the iPhone and the Mac alone
+resolves rules_android, rules_kotlin and rules_java only at the versions its
+other modules ask for, and no hermetic_android_toolchains. An app with
+Android apps adds the module released with each isomer, at the same
+version,
+
+```starlark
+bazel_dep(name = "isomer_android", version = "0.59.1")
+```
+
+and loads Android's macros (`isomer_android_app`, `apk_install_run`,
+`ANDROID`, …) from `@isomer_android//:defs.bzl` and `kt_swift_library` from
+`@isomer_android//swift_ffi:kt_swift_library.bzl`. Android's Swift
+(`@isomer//:swift_ui` and the rest) is still isomer's. rules_android's own Maven (its tools) is
 rules_android's to declare; docs/android_maven.md shows how to pin it with
 isomer's lock file, as the examples do.
 
@@ -927,6 +948,34 @@ bazel aquery 'mnemonic(CppArchive, @isomer//swift_ffi/swift_ffi)' | grep 'Inputs
 
 Each release's notes have an Upgrading section; these things are easy to miss:
 
+- **Android's rules are isomer_android's (since 0.59,
+  docs/platform_modules.md).** isomer no longer asks for rules_android,
+  rules_kotlin, rules_java or hermetic_android_toolchains:
+  - an app that builds for Android adds
+    `bazel_dep(name = "isomer_android", version = …)` at isomer's version,
+    and changes its loads: `@isomer//tools/android:defs.bzl` is
+    `@isomer_android//:defs.bzl` (the same macros and rules), and
+    `@isomer//swift_ffi/rules:kt_swift_library.bzl` is
+    `@isomer_android//swift_ffi:kt_swift_library.bzl`. The old files are
+    still there, and fail saying so;
+  - labels that moved with them: `@isomer//android/libraries/swift_ui:`
+    `compose_compiler_plugin` and `:isomer_platform` are
+    `@isomer_android//swift_ui:…`; `@isomer//android/libraries/wasm_view:`
+    `wasm_engine_bindings` and `:engine_native` are
+    `@isomer_android//wasm_view:…`; `@isomer//swift_ffi/runtime/kotlin` is
+    `@isomer_android//swift_ffi:kotlin`. Every other label, the Swift ones
+    and the flags (`--@isomer//tools/android:shared_platform`) included, is
+    as it was;
+  - `isomer_application` is isomer's again, and takes its platforms as
+    values: `load("@isomer//tools/application:defs.bzl", "WEB",
+    "isomer_application")`, `IOS` and `MACOS` from
+    `@isomer_apple//:defs.bzl`, `ANDROID` from `@isomer_android//:defs.bzl`,
+    and `platforms = [IOS, MACOS, ANDROID, WEB]` (the arguments and
+    targets as before). isomer_apple's `isomer_application` fails saying
+    so;
+  - an app that relied on isomer for rules_android 0.7.3, rules_kotlin
+    2.2.2 or rules_java 9.3.0 without asking for them, and builds no
+    Android, asks for them itself.
 - **The iPhone's and the Mac's apps are isomer_apple's (since 0.58,
   docs/platform_modules.md).** isomer no longer asks for rules_apple or
   apple_support 2.11.0 (apple_support only at rules_swift's 2.9.1):
@@ -995,6 +1044,11 @@ Each release's notes have an Upgrading section; these things are easy to miss:
   - rules_swift is the registry's 4.3.0.isomer.1 (upstream 4.3.0, which
     takes `swift.android_sdk(url = …)`, and four pull requests); your own
     override of rules_swift, if you kept one, has to be that version.
+    It asks for **bazel_features 1.54.0** or later: a root that holds
+    bazel_features lower with a `single_version_override` fails as
+    `@rules_swift//swift` loads, with "'struct' value has no field or
+    method 'label_build_setting_has_scope'". Raise that override to 1.54.0
+    (or drop it).
   - After changing an SDK's URL, or upgrading Isomer or rules_swift, run
     `bazel clean` once if a build reports a module "defined in both"
     (`module '_Builtin_stddef' is defined in both '…/_swift_module_cache/…'
@@ -1084,7 +1138,10 @@ Each release's notes have an Upgrading section; these things are easy to miss:
   whatever version isomer asks for: bumping isomer alone silently keeps the
   old fork. Since 0.40 isomer's rules_swift needs no override (it sorts above
   rules_applecross's); delete yours, or move it to the version isomer's
-  release names (4.3.0.isomer.1 at 0.56).
+  release names (4.3.0.isomer.1 at 0.56). The same goes for an override of
+  one of rules_swift's own dependencies: an override below what rules_swift
+  asks for (bazel_features 1.54.0 for 4.3.0) wins too, and fails in
+  rules_swift's files.
 
 ### Swift features, Java and library evolution
 
@@ -1262,7 +1319,7 @@ finds by name) kept whole, nothing renamed. The Storybook with it: 3.1 MB
 of dex, 3,450 classes, a 16.5 MB APK instead of 23.3 MB, for about 15 s of
 R8 per build. An app with its own Proguard rules, or a release build,
 gives them to its android_binary's `proguard_specs` as usual (the keep
-rules `minify` writes are the three lines in tools/android/defs.bzl).
+rules `minify` writes are the three lines in android/module/defs.bzl).
 
 ### One C++ runtime with other libraries
 
@@ -1406,7 +1463,7 @@ apps that take it.
 
 ### Embedding an Isomer app in an Android app
 
-`isomer_android_aar` (tools/android/defs.bzl) builds the app
+`isomer_android_aar` (android/module/defs.bzl) builds the app
 `isomer_android_app` would make an APK of as an Android library,
 `<name>.aar`, for an app with its own Gradle or Bazel build to embed
 (examples' `//android/storybook_android_application:storybook_android_aar`):
@@ -1545,6 +1602,36 @@ TextField story on Android at 0.58 builds no view (the field shows its own
 text) and diffs 52 of its nodes, where 0.57 built the page's 107 views and
 diffed all of it (a filled shape on the page made every frame whole).
 
+Measure with an optimized build (`-c opt`): a debug build's frames and
+start-up are several times slower, and say little about a release's.
+
+**Views built every frame.** `ISO_FRAME_LOG` says why each view built was
+not reused. Two reasons are the app's to change:
+
+- `uncomparable`: the view stores a value that can't be compared with
+  last frame's, most often a closure (a button's action, a callback passed
+  down), or a class instance that isn't an `@Observable` model. Isomer
+  compares a view's stored properties as SwiftUI does (Equatable values by
+  `==`, other structs field by field) and can't tell whether two closures do
+  the same thing, so such a view is built again whenever the view around it
+  is. The views inside it can still be reused. Keep closures out of the
+  views that are built often, or make them comparable:
+  - pass an identifier and take the handler from the environment
+    (`@Environment(\.openChat) var openChat`, then `openChat(chat.id)`),
+    so the view stores only the identifier;
+  - wrap the action in an `Equatable` type whose equality is what it acts
+    on: `struct Action: Equatable { let id: Chat.ID; let run: (Chat.ID) ->
+    Void; static func == (a: Self, b: Self) -> Bool { a.id == b.id } }`;
+  - or keep the state the closure would change in an `@Observable` model
+    the view holds, and call its method.
+- `volatile`: the view's own build read runtime state (a control reading
+  its binding, an `@AppStorage`, a value animating). It is built again
+  every frame, alone, the rest of the frame built in place; a large view
+  that is volatile costs its whole build each frame, so keep what reads
+  runtime state in small views of its own. A transform animating (a
+  `.rotationEffect`, `.scaleEffect`, `.offset` or `.position` with an
+  animation, a spinner's) builds nothing: its node is moved where it stands.
+
 ### Headless, and on a server
 
 An app built with `--@isomer//headless` runs with nothing drawn, its UI read
@@ -1580,7 +1667,9 @@ swift_map/            the OpenStreetMap renderer behind `Map`
 examples/             the example applications: a Bazel module of their own,
                       consuming this one as an outside application does
 apple/module/         isomer_apple, the module of the iPhone's and the Mac's
-                      apps (rules_apple; isomer_application's Apple half)
+                      apps (rules_apple; isomer_application's IOS, MACOS)
+android/module/       isomer_android, the module of Android's macros and
+                      rules (rules_android, rules_kotlin; ANDROID)
 android/maven_module/ isomer_android_maven, Isomer's AndroidX
 shared/
   swift_ui_core/      SwiftUI reimplementation (platform-agnostic): views,

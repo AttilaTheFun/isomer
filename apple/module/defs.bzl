@@ -1,35 +1,53 @@
-"""isomer_application with the iPhone's and the Mac's apps: isomer's
-(@isomer//tools/application:defs.bzl, Android's and the web's), and Apple's
-beside them, built with rules_apple (isomer's docs/platform_modules.md).
+"""The iPhone's and the Mac's apps for isomer_application
+(@isomer//tools/application:defs.bzl), built with rules_apple (isomer's
+docs/platform_modules.md):
 
-    load("@isomer_apple//:defs.bzl", "isomer_application")
+    load("@isomer//tools/application:defs.bzl", "WEB", "isomer_application")
+    load("@isomer_apple//:defs.bzl", "IOS", "MACOS")
 
-takes isomer's isomer_application's arguments, and Apple's (below), and
-declares the targets isomer's does and <name>_ios and <name>_macos in each
-mode (docs/modes.md, "The setting").
+    isomer_application(name = "app", platforms = [IOS, MACOS, WEB], ...)
+
+For each of IOS and MACOS in `platforms`, in each mode
+(docs/modes.md, "The setting"):
+
+  <name>_ios       the iPhone and iPad app, in the build's mode:
+    <name>_ios_compiled  the library compiled in (ios_application)
+    <name>_ios_webview   the web app's site bundled, run in a web view
+                         and drawn by Isomer's tree renderer
+                         (IsomerWebViewAppView), from a generated shell
+                         (webview_app.swift.tpl): none of the app's
+                         Swift compiled in
+    <name>_ios_remote    a generated shell drawing the app's session
+                         (IsomerRemoteView; remote_app.swift.tpl): the
+                         session's URL is the Info.plist's
+                         IsomerSessionURL (`remote_url`), or the launch
+                         argument `-url <url>`
+  <name>_macos     the Mac's, the same three (macos_application)
+
+The per-mode targets are `manual`, as isomer's are.
+
+Their arguments to isomer_application: `minimum_ios_version` and
+`minimum_macos_version`, every mode's (the heads, IsomerRemoteHead and
+IsomerWebViewHead, need iOS 17 and macOS 14; the defaults are what the
+remote and web-view examples are built at); `families`; `app_icons` (an
+asset catalog's app icon), `infoplists` (merged over the generated ones),
+in every mode's app; `ios_provisioning_profile` for a device build (none:
+the simulator's, `--ios_multi_cpus=sim_arm64`). The app's `resources` and
+`fonts` go in every mode's app (in web-view and remote modes the head loads
+a bundled image by name and lays text out in its own fonts). The Apple
+shells allow plain ws:// to the local network only
+(NSAllowsLocalNetworking): a remote session elsewhere is wss://.
 """
 
 load("@bazel_skylib//rules:expand_template.bzl", "expand_template")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
 load("@build_bazel_rules_apple//apple:macos.bzl", "macos_application")
-load("@isomer//tools/application:defs.bzl", _isomer_application = "isomer_application")
+load("@isomer//tools/application:defs.bzl", "by_mode")
 # Named apart: the macros take the app's library as `swift_library`.
 load("@rules_swift//swift:swift.bzl", swift_library_rule = "swift_library")
 
 _MODES = ["compiled", "webview", "remote"]
-
-_APPLE_PLATFORMS = ["ios", "macos"]
-
-_PLATFORMS = _APPLE_PLATFORMS + ["android", "web"]
-
-def _by_mode(targets):
-    """A select() over --@isomer//:mode: `targets` maps each mode to what
-    the platform's own name is in it."""
-    return select({
-        Label("@isomer//:mode_" + mode): targets[mode]
-        for mode in _MODES
-    })
 
 def _plist(name, entries, tags):
     """An Info.plist of `entries` (each a key's XML and its value's), merged
@@ -54,106 +72,55 @@ def _identifier(name):
     """`name` as a Swift module name: letters, digits and underscores."""
     return "".join([c if c.isalnum() else "_" for c in name.elems()])
 
-def isomer_application(
-        name,
-        swift_library,
-        bundle_id,
-        display_name,
-        version = "1.0",
-        build = 1,
-        platforms = _PLATFORMS,
-        minimum_ios_version = "18.0",
-        minimum_macos_version = "15.0",
-        families = ["iphone", "ipad"],
-        app_icons = [],
-        infoplists = [],
-        resources = [],
-        fonts = [],
-        ios_provisioning_profile = None,
-        remote_url = "ws://127.0.0.1:8090/session",
-        tags = [],
-        visibility = None,
-        **kwargs):
-    """One Isomer app's targets on every platform, in each mode
-    (docs/modes.md, "The setting").
-
-    Everything isomer's isomer_application declares (Android's, the web's,
-    `<name>_server`; its arguments, `package`, `android_icon`,
-    `android_assets`, `min_sdk_version`, `web_index`, `web_assets` and
-    `android_remote_url`, are passed on to it), and, for each of `ios` and
-    `macos` in `platforms` (all four by default):
-
-      <name>_ios       the iPhone and iPad app, in the build's mode:
-        <name>_ios_compiled  the library compiled in (ios_application)
-        <name>_ios_webview   the web app's site bundled, run in a web view
-                             and drawn by Isomer's tree renderer
-                             (IsomerWebViewAppView), from a generated shell
-                             (webview_app.swift.tpl): none of the app's
-                             Swift compiled in
-        <name>_ios_remote    a generated shell drawing the app's session
-                             (IsomerRemoteView; remote_app.swift.tpl): the
-                             session's URL is the Info.plist's
-                             IsomerSessionURL (`remote_url`), or the launch
-                             argument `-url <url>`
-      <name>_macos     the Mac's, the same three (macos_application)
-
-    The per-mode targets are `manual`, as isomer's are.
-
-    Identity: `bundle_id`, `display_name` (under the icon), `version`
-    (CFBundleShortVersionString) and `build` (CFBundleVersion), isomer's
-    too. `minimum_ios_version` and `minimum_macos_version` are every
-    mode's (the heads, IsomerRemoteHead and IsomerWebViewHead, need iOS 17
-    and macOS 14; the defaults are what the remote and web-view examples are
-    built at).
-
-    `app_icons` (an asset catalog's app icon), `infoplists` (merged over
-    the generated ones), `resources` and `fonts` go in every mode's app (in
-    web-view and remote modes the head loads a bundled image by name and lays
-    text out in its own fonts; `resources` and `fonts` go to isomer's
-    too), `ios_provisioning_profile` for a device build (none: the
-    simulator's, `--ios_multi_cpus=sim_arm64`). The Apple shells allow plain
-    ws:// to the local network only (NSAllowsLocalNetworking): a remote
-    session elsewhere is wss://.
-    """
-    for platform in platforms:
-        if platform not in _PLATFORMS:
-            fail("isomer_application: platforms are %s, not %s" % (_PLATFORMS, platform))
-    _isomer_application(
-        name = name,
-        swift_library = swift_library,
-        bundle_id = bundle_id,
-        display_name = display_name,
-        version = version,
-        build = build,
-        platforms = [platform for platform in platforms if platform not in _APPLE_PLATFORMS],
-        resources = resources,
-        fonts = fonts,
-        remote_url = remote_url,
-        tags = tags,
-        visibility = visibility,
-        **kwargs
+def _declare(
+        app,
+        platforms,
+        minimum_ios_version,
+        minimum_macos_version,
+        families,
+        app_icons,
+        infoplists,
+        ios_provisioning_profile):
+    _apple(
+        name = app.name,
+        swift_library = app.swift_library,
+        bundle_id = app.bundle_id,
+        display_name = app.display_name,
+        version = app.version,
+        build = app.build,
+        platforms = platforms,
+        minimum_ios_version = minimum_ios_version,
+        minimum_macos_version = minimum_macos_version,
+        families = families,
+        app_icons = app_icons,
+        infoplists = infoplists,
+        resources = app.resources + app.fonts,
+        ios_provisioning_profile = ios_provisioning_profile,
+        remote_url = app.remote_url,
+        site = app.site,
+        tags = app.tags,
+        manual = app.manual,
+        visibility = app.visibility,
     )
-    if "ios" in platforms or "macos" in platforms:
-        _apple(
-            name = name,
-            swift_library = swift_library,
-            bundle_id = bundle_id,
-            display_name = display_name,
-            version = version,
-            build = build,
-            platforms = platforms,
-            minimum_ios_version = minimum_ios_version,
-            minimum_macos_version = minimum_macos_version,
-            families = families,
-            app_icons = app_icons,
-            infoplists = infoplists,
-            resources = resources + fonts,
-            ios_provisioning_profile = ios_provisioning_profile,
-            remote_url = remote_url,
-            tags = tags,
-            manual = tags + ([] if "manual" in tags else ["manual"]),
-            visibility = visibility,
-        )
+
+_ATTRS = {
+    "app_icons": [],
+    "families": ["iphone", "ipad"],
+    "infoplists": [],
+    "ios_provisioning_profile": None,
+    "minimum_ios_version": "18.0",
+    "minimum_macos_version": "15.0",
+}
+
+# The iPhone (and iPad) and the Mac, for isomer_application's `platforms`.
+IOS = struct(name = "ios", module = "isomer_apple", attrs = _ATTRS, declare = _declare)
+
+MACOS = struct(name = "macos", module = "isomer_apple", attrs = _ATTRS, declare = _declare)
+
+def isomer_application(**_kwargs):
+    fail("isomer_application is isomer's since 0.59: load it from @isomer//tools/application:defs.bzl " +
+         "and name the Apple platforms there, platforms = [IOS, MACOS, ...] (IOS and MACOS from " +
+         "@isomer_apple//:defs.bzl; docs/platform_modules.md)")
 
 def _apple(
         name,
@@ -171,6 +138,7 @@ def _apple(
         resources,
         ios_provisioning_profile,
         remote_url,
+        site,
         tags,
         manual,
         visibility):
@@ -178,7 +146,7 @@ def _apple(
     expand_template(
         name = name + "_webview_shell_swift",
         out = "generated/%s/WebViewShell.swift" % name,
-        substitutions = {"{SITE}": name + "_web_site"},
+        substitutions = {"{SITE}": site.lstrip(":")},
         tags = manual,
         template = Label("//:webview_app.swift.tpl"),
     )
@@ -223,7 +191,7 @@ def _apple(
     # remote app draws.
     modes = {
         "compiled": struct(deps = [swift_library], resources = [], plists = []),
-        "webview": struct(deps = [":%s_webview_shell" % name], resources = [":%s_web_site" % name], plists = []),
+        "webview": struct(deps = [":%s_webview_shell" % name], resources = [site], plists = []),
         "remote": struct(deps = [":%s_remote_shell" % name], resources = [], plists = [":%s_remote_plist" % name]),
     }
     for platform in ["ios", "macos"]:
@@ -254,7 +222,7 @@ def _apple(
                 )
         native.alias(
             name = "%s_%s" % (name, platform),
-            actual = _by_mode({mode: ":%s_%s_%s" % (name, platform, mode) for mode in _MODES}),
+            actual = by_mode({mode: ":%s_%s_%s" % (name, platform, mode) for mode in _MODES}),
             tags = tags,
             visibility = visibility,
         )

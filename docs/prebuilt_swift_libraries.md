@@ -96,10 +96,10 @@ one Isomer serve both in the process.
 (`alwayslink = True`: nothing in the shared library refers to them, so
 without it none of their code is linked) against Isomer's targets, and
 links them over the platform with `isomer_android_shared_library`
-(tools/android/defs.bzl):
+(android/module/defs.bzl):
 
 ```starlark
-load("@isomer//tools/android:defs.bzl", "isomer_android_shared_library")
+load("@isomer_android//:defs.bzl", "isomer_android_shared_library")
 
 swift_library(
     name = "greeter",

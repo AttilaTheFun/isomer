@@ -2944,6 +2944,8 @@ struct Main {
         checkFieldOnPathScreen(mock)
         checkTextEditFrames()
         checkPresentFromPartialFrame()
+        checkVolatileSites()
+        checkAnimatedTransforms(mock)
 
         // Row actions: the tagged row is a tap target and carries its menu.
         Runtime.shared.installRootView { RowScreen() }
@@ -3460,4 +3462,216 @@ func checkPresentFromPartialFrame() {
     Runtime.shared.hostViewEvent(id: done, value: "")
     settle()
     expect(!frame().shows("A sheet"), "Done dismisses the sheet")
+}
+
+
+// MARK: - Volatile builds as sites of their own
+
+/// A screen with views whose builds read runtime state (a toggle, an
+/// `@AppStorage`) beside a counter, presenting a sheet: a frame that changes
+/// the counter is built in place, the volatile views built again with it,
+/// the rest not; with the sheet open too.
+nonisolated(unsafe) var volatileToggleBuilds = 0
+nonisolated(unsafe) var volatileStoredBuilds = 0
+nonisolated(unsafe) var volatileSiblingBuilds = 0
+nonisolated(unsafe) var volatileSheet: Binding<Bool>?
+nonisolated(unsafe) var volatileCount: Binding<Int>?
+
+/// Each pass at a place of its own (state is kept by place).
+struct VolatileRoot: View {
+    let pass: Int
+    var body: some View {
+        if pass == 0 { VolatileScreen() } else { VolatileScreen() }
+    }
+}
+
+struct VolatileScreen: View {
+    @State private var sheet = false
+    var body: some View {
+        let _ = (volatileSheet = $sheet)
+        VStack {
+            VolatileCounter()
+            VolatileTogglePane()
+            VolatileStoredPane()
+            VolatileSibling(title: "Beside")
+        }
+        .sheet(isPresented: $sheet) { Text("Sheet body") }
+    }
+}
+
+struct VolatileCounter: View {
+    @State private var count = 0
+    var body: some View {
+        let _ = (volatileCount = $count)
+        Text("Count \(count)")
+    }
+}
+
+/// A toggle's build reads runtime state: built again every frame.
+struct VolatileTogglePane: View {
+    @State private var on = false
+    var body: some View {
+        let _ = volatileToggleBuilds += 1
+        Toggle("Switch", isOn: $on)
+    }
+}
+
+/// An `@AppStorage`'s value can change outside any state: built every frame.
+struct VolatileStoredPane: View {
+    @AppStorage("isomer.tests.volatile") private var stored = 0
+    var body: some View {
+        let _ = volatileStoredBuilds += 1
+        Text("Stored \(stored)")
+    }
+}
+
+struct VolatileSibling: View {
+    let title: String
+    var body: some View {
+        let _ = volatileSiblingBuilds += 1
+        Text(title).animation(.default, value: title)
+    }
+}
+
+@MainActor
+func checkVolatileSites() {
+    let previous = Renderer.current
+    Renderer.bind(JetpackComposeRenderer(send: { _ in }))
+    defer { Renderer.bind(previous) }
+    let verifying = Runtime.shared.verifyPartialFrames
+    defer { Runtime.shared.verifyPartialFrames = verifying }
+    for verify in [true, false] {
+        Runtime.shared.verifyPartialFrames = verify
+        Runtime.shared.installRootView { NavigationStack { VolatileRoot(pass: verify ? 0 : 1) } }
+        Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+        func settle() { var n = 0; while Runtime.shared.wantsFrame && n < 20 { Runtime.shared.renderFrame(); n += 1 } }
+        settle()
+        let label = verify ? " (checked against a whole build)" : ""
+        @MainActor
+        func frame(_ step: String, inPlace: Bool, _ change: () -> Void) {
+            let toggles = volatileToggleBuilds, stored = volatileStoredBuilds, siblings = volatileSiblingBuilds
+            let partials = Runtime.shared.partialFrameCount, mismatches = Runtime.shared.partialMismatches
+            change()
+            settle()
+            let stats = Runtime.shared.frameStats
+            expect(Runtime.shared.partialMismatches == mismatches, "\(step)\(label): the frame built in place is the whole build's")
+            expect((Runtime.shared.partialFrameCount > partials) == inPlace,
+                   "\(step)\(label): \(inPlace ? "built in place" : "built whole") (\(stats.kind.rawValue): \(stats.detail))")
+            if inPlace, !verify {
+                expect(volatileToggleBuilds > toggles && volatileStoredBuilds > stored,
+                       "\(step): the volatile views are built again (\(volatileToggleBuilds - toggles), \(volatileStoredBuilds - stored))")
+                expect(volatileSiblingBuilds == siblings,
+                       "\(step): the view beside them is not built (\(volatileSiblingBuilds - siblings))")
+            }
+        }
+        frame("a counter beside volatile views", inPlace: true) { volatileCount?.wrappedValue += 1 }
+        expect(findTextInTree(Runtime.shared.retainedTree!, "Count 1"), "the counter shows its count\(label)")
+        frame("the sheet presented", inPlace: false) { volatileSheet?.wrappedValue = true }
+        expect(HostFrame(Runtime.shared.retainedTree!).shows("Sheet body"), "the sheet shows\(label)")
+        frame("a counter under the open sheet", inPlace: true) { volatileCount?.wrappedValue += 1 }
+        expect(findTextInTree(Runtime.shared.retainedTree!, "Count 2"), "the counter shows its count under the sheet\(label)")
+        expect(HostFrame(Runtime.shared.retainedTree!).shows("Sheet body"), "the sheet stays\(label)")
+        frame("the sheet dismissed", inPlace: false) { volatileSheet?.wrappedValue = false }
+        expect(!HostFrame(Runtime.shared.retainedTree!).shows("Sheet body"), "the sheet is gone\(label)")
+    }
+}
+
+
+// MARK: - Animating transforms moved in place
+
+/// Spinners turning forever: one in a view of its own beside others, one in
+/// the root's own body (which has no site to build alone). Each frame of
+/// their animation is built in place, their nodes moved where they stand,
+/// no view built.
+nonisolated(unsafe) var spinnerBuilds = 0
+nonisolated(unsafe) var spinnerSiblingBuilds = 0
+nonisolated(unsafe) var rootTurning: Binding<Bool>?
+nonisolated(unsafe) var spinnerSpinning: Binding<Bool>?
+
+struct SpinnerRoot: View {
+    let pass: Int
+    @State private var turning = false
+    var body: some View {
+        let _ = (rootTurning = $turning)
+        VStack {
+            Text("Root \(pass)")
+                .rotationEffect(.degrees(turning ? 360 : 0))
+                .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: turning)
+            Spinner()
+            SpinnerSibling(title: "Loading")
+        }
+    }
+}
+
+struct Spinner: View {
+    @State private var spinning = false
+    var body: some View {
+        let _ = spinnerBuilds += 1
+        let _ = (spinnerSpinning = $spinning)
+        Text("Spinner")
+            .rotationEffect(.degrees(spinning ? 360 : 0))
+            .scaleEffect(spinning ? 2 : 1)
+            .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: spinning)
+    }
+}
+
+struct SpinnerSibling: View {
+    let title: String
+    var body: some View {
+        let _ = spinnerSiblingBuilds += 1
+        Text(title)
+    }
+}
+
+@MainActor
+func checkAnimatedTransforms(_ mock: MockRenderer) {
+    let verifying = Runtime.shared.verifyPartialFrames
+    defer {
+        Runtime.shared.verifyPartialFrames = verifying
+        stubHostNow = 0
+    }
+    for verify in [true, false] {
+        Runtime.shared.verifyPartialFrames = verify
+        stubHostNow = 0
+        Runtime.shared.installRootView { SpinnerRoot(pass: verify ? 0 : 1) }
+        Runtime.shared.start(host: StubHost(), width: 320, height: 480)
+        let label = verify ? " (checked against a whole build)" : ""
+        let encoder = FlatTreeEncoder()
+        var root: PatchNode?
+        _ = applyPatch(encoder.encodePatch(root: mock.lastTree!), into: &root)
+        func rotations() -> [String] {
+            var buffer = ByteBuffer(bytes: FlatTreeEncoder().encode(root: mock.lastTree!))
+            return allParams(getRoot(byteBuffer: &buffer) as IsoFlat_Node, key: "rotation")
+        }
+        // Both start turning (as an `.onAppear` would start them).
+        rootTurning?.wrappedValue = true
+        spinnerSpinning?.wrappedValue = true
+        for _ in 0..<3 {
+            stubHostNow += 0.01
+            Runtime.shared.renderFrame()
+            _ = applyPatch(encoder.encodePatch(root: mock.lastTree!), into: &root)
+        }
+        var last = rotations()
+        for step in 1...5 {
+            let spinners = spinnerBuilds, siblings = spinnerSiblingBuilds
+            let partials = Runtime.shared.partialFrameCount, mismatches = Runtime.shared.partialMismatches
+            stubHostNow += 0.1
+            Runtime.shared.renderFrame()
+            let stats = Runtime.shared.frameStats
+            let tree = mock.lastTree!
+            _ = applyPatch(encoder.encodePatch(root: tree), into: &root)
+            let now = rotations()
+            expect(describeTree(root!) == fullDescribe(tree), "turning, frame \(step)\(label): applied patch == full encode")
+            expect(Runtime.shared.partialMismatches == mismatches, "turning, frame \(step)\(label): as a whole build")
+            expect(Runtime.shared.partialFrameCount > partials,
+                   "turning, frame \(step)\(label): built in place (\(stats.kind.rawValue): \(stats.detail))")
+            expect(now.count == 2 && now[0] != last[0] && now[1] != last[1],
+                   "turning, frame \(step)\(label): both turn (\(last) to \(now))")
+            if !verify {
+                expect(spinnerBuilds == spinners && spinnerSiblingBuilds == siblings,
+                       "turning, frame \(step): no view is built (\(spinnerBuilds - spinners), \(spinnerSiblingBuilds - siblings))")
+            }
+            last = now
+        }
+    }
 }

@@ -3,11 +3,10 @@
 # kt_swift_library's JNI library (swift_binary(linkshared)), an APK for each
 # architecture an emulator runs, and a WASI command of the same checks.
 
-load("@isomer//swift_ffi/rules:kt_swift_library.bzl", "kt_swift_library")
 load("@rules_android//rules:rules.bzl", "android_binary")
 load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
-load(":cell.bzl", "MIN_SDK_VERSION")
+load(":cell.bzl", "MIN_SDK_VERSION", "kt_swift_library")
 
 ARCHES = {
     "aarch64": "@platforms//cpu:aarch64",

@@ -1,9 +1,10 @@
 package(default_visibility = ["//visibility:public"])
 
-# isomer_application (defs.bzl): one Isomer app's targets on Android and the
-# web, in the mode --@isomer//:mode names (docs/modes.md); the iPhone's and
-# the Mac's are isomer_apple's (apple/module, docs/platform_modules.md). The
-# Android shell it generates for remote mode, and the web page an app
+# isomer_application (defs.bzl): one Isomer app's targets on each platform
+# it names, in the mode --@isomer//:mode names (docs/modes.md); the web's
+# here, the iPhone's and the Mac's isomer_apple's (apple/module), Android's
+# isomer_android's (android/module; docs/platform_modules.md). The Android
+# shell isomer_android generates for remote mode, and the web page an app
 # without one of its own gets, are these templates.
 exports_files([
     "defs.bzl",

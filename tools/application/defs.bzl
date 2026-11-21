@@ -13,32 +13,49 @@ The macro declares each platform's app once a mode, and, under the
 platform's own name, the one `--@isomer//:mode` picks; the web is wasm in
 every mode.
 
-This is Android's and the web's (isomer's own rules alone). The iPhone's
-and the Mac's apps are the isomer_apple module's (apple/module here, since
-0.58: rules_apple and what it brings, which an app on Android and the web
-alone never resolves): an app with them loads isomer_application from
-`@isomer_apple//:defs.bzl`, which declares the same targets as this one and
-the Apple ones beside them (docs/platform_modules.md).
+isomer declares the web's apps. Each other platform's are its module's
+(docs/platform_modules.md), so an app resolves only the rules of the
+platforms it builds: the iPhone's and the Mac's isomer_apple's (rules_apple),
+Android's isomer_android's (rules_android, rules_kotlin). An app names its
+platforms by the values those modules export:
+
+    load("@isomer//tools/application:defs.bzl", "WEB", "isomer_application")
+    load("@isomer_android//:defs.bzl", "ANDROID")
+    load("@isomer_apple//:defs.bzl", "IOS", "MACOS")
+
+    isomer_application(
+        name = "app",
+        platforms = [IOS, MACOS, ANDROID, WEB],
+        ...
+    )
+
+A platform value is a struct: `name`, `module` (the module whose platforms
+are declared together), `attrs` (the arguments it takes beyond the common
+ones, with their defaults) and `declare(app, platforms, **attrs)`, called
+once a module with the common arguments (`app`) and the names of that
+module's platforms the app asked for.
 """
 
-load("@bazel_skylib//rules:copy_file.bzl", "copy_file")
 load("@bazel_skylib//rules:expand_template.bzl", "expand_template")
-load("@rules_android//rules:rules.bzl", "android_binary")
-load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
 load("@rules_swift//swift:swift_binary.bzl", "swift_binary")
-load("//tools/android:defs.bzl", "apk_install_run", "isomer_android_app", "isomer_android_webview_app")
 load("//tools/wasm:defs.bzl", "isomer_web_app")
 
 _MODES = ["compiled", "webview", "remote"]
 
-_PLATFORMS = ["android", "web"]
+# The web: declared by isomer_application itself, whatever `platforms` says
+# (the web-view apps bundle its site), so its value is a name alone.
+WEB = struct(name = "web", module = "isomer", attrs = {}, declare = None)
 
-# isomer_apple's: named here only to say where they are.
-_APPLE_PLATFORMS = ["ios", "macos"]
+# The other platforms' modules, to say where a platform named by a string is.
+_MODULES = {
+    "android": ("isomer_android", "ANDROID"),
+    "ios": ("isomer_apple", "IOS"),
+    "macos": ("isomer_apple", "MACOS"),
+}
 
-def _by_mode(targets):
+def by_mode(targets):
     """A select() over --@isomer//:mode: `targets` maps each mode to what
-    the platform's own name is in it."""
+    the platform's own name is in it. For the platforms' modules."""
     return select({
         Label("//:mode_" + mode): targets[mode]
         for mode in _MODES
@@ -52,22 +69,17 @@ def isomer_application(
         package = None,
         version = "1.0",
         build = 1,
-        platforms = _PLATFORMS,
+        platforms = [WEB],
         resources = [],
         fonts = [],
-        android_icon = None,
-        android_assets = None,
-        min_sdk_version = 28,
         web_index = None,
         web_assets = [],
         remote_url = "ws://127.0.0.1:8090/session",
-        android_remote_url = None,
         tags = [],
-        visibility = None):
-    """One Isomer app's targets on Android and the web, in each mode
-    (docs/modes.md, "The setting"). The iPhone's and the Mac's are
-    isomer_apple's isomer_application, which takes these arguments and
-    Apple's and calls this one (docs/platform_modules.md).
+        visibility = None,
+        **kwargs):
+    """One Isomer app's targets on each of `platforms`, in each mode
+    (docs/modes.md, "The setting").
 
     `swift_library` is the app: its SwiftUI `@main App`, `alwayslink`
     (the only reference to its `main` comes from an archive linked after
@@ -79,30 +91,17 @@ def isomer_application(
     meaning). One isomer_application to a package: the web app's reactor
     is the package's `app_bridge` (isomer_web_app).
 
-    Declares, for each platform in `platforms` (`android`, `web`):
+    `platforms` are platform values: `WEB` (here), `ANDROID`
+    (@isomer_android//:defs.bzl), `IOS` and `MACOS`
+    (@isomer_apple//:defs.bzl); each module's defs.bzl lists the targets
+    and arguments of its own. Whatever `platforms` says, this declares:
 
-      <name>_android   `bazel run`: install and launch, in the build's mode;
-      <name>_android_apk  the APK:
-        <name>_android_compiled[_apk]  isomer_android_app
-        <name>_android_remote[_apk]    a generated Kotlin shell over
-                                       IsomerRemote (remote_activity.kt.tpl;
-                                       the session's URL the intent's `url`
-                                       extra, else `android_remote_url`):
-                                       no Swift, no native library
-        <name>_android_webview[_apk]   the web app's site in the APK's
-                                       assets, run in a WebView and drawn
-                                       by the Compose renderer
-                                       (isomer_android_webview_app,
-                                       IsomerWebViewApp): no Swift, no
-                                       native library
       <name>_web       isomer_web_app in every mode (a page is already
                        wasm): `bazel run` serves it; <name>_web_site the
-                       site, which the web-view apps bundle (declared
-                       whatever `platforms` says: the iPhone's and the
-                       Mac's web-view apps bundle it too)
+                       site, which the web-view apps bundle
       <name>_server    the app headless, serving itself, for the remote
-                       apps to draw (always declared, manual): build it
-                       with --@isomer//headless and run it with
+                       apps to draw (manual): build it with
+                       --@isomer//headless and run it with
                        ISO_DRIVE_LISTEN=ws://0.0.0.0:8090
                        ISO_HEADLESS_PROTOCOL=serve (docs/remote_sessions.md)
 
@@ -110,37 +109,46 @@ def isomer_application(
     own names, in its mode. Every mode's can be built by name in one build
     (CI builds the three of an example so).
 
-    Identity: `bundle_id` (Apple's, with isomer_apple), `package` (Android;
-    `bundle_id` without one, also the web page's app key), `display_name`
-    (under the icon), `version` (versionName) and `build` (versionCode).
-    `min_sdk_version` is Android's.
-
-    Android: `android_icon` (a 192 × 192 PNG, as isomer_android_app's
-    `icon`), `android_assets` (the compiled and web-view apps' `assets`);
-    `fonts` go to the compiled and web-view apps, `resources` to the
-    compiled app (the remote shell carries none yet).
+    Identity: `bundle_id` (Apple's), `package` (Android's; `bundle_id`
+    without one, also the web page's app key), `display_name` (under the
+    icon), `version` and `build`. `resources` and `fonts` go to every
+    platform's app that carries them; `remote_url` is the remote apps'
+    session (an app on the building machine, by default).
 
     Web: `web_index` the page (generated from index.html.tpl without one:
     the DOM renderer, the app's identity), `web_assets` its assets/, `fonts`
     its fonts/.
 
-    `remote_url` is the remote apps' session (an app on the building
-    machine, by default); `android_remote_url` Android's, by default
-    `remote_url` with its loopback host as an emulator reaches it
-    (10.0.2.2).
-
     `tags` go to every target the macro makes (`manual` on the platforms'
     names keeps a wildcard build from making the app), `visibility` to the
-    platforms' names.
+    platforms' names. Any other argument is a platform's (`android_icon`,
+    `minimum_ios_version`, ...): one none of `platforms` takes fails.
     """
     package = package or bundle_id
+    modules = {}
     for platform in platforms:
-        if platform in _APPLE_PLATFORMS:
-            fail(("isomer_application: the iPhone's and the Mac's apps (%s) are the isomer_apple " +
-                  "module's since 0.58: add bazel_dep(name = \"isomer_apple\", version = <isomer's>) and " +
-                  "load isomer_application from @isomer_apple//:defs.bzl (docs/platform_modules.md)") % platform)
-        if platform not in _PLATFORMS:
-            fail("isomer_application: platforms are %s, not %s" % (_PLATFORMS + _APPLE_PLATFORMS, platform))
+        if type(platform) == "string":
+            if platform == "web":
+                continue
+            if platform in _MODULES:
+                module, value = _MODULES[platform]
+                fail(("isomer_application: platforms are values since 0.59: %s is %s from %s " +
+                      "(add bazel_dep(name = \"%s\", version = <isomer's>), and " +
+                      "load(\"@%s//:defs.bzl\", \"%s\"): docs/platform_modules.md)") %
+                     (platform, value, module, module, module, value))
+            fail("isomer_application: no platform %r" % platform)
+        if platform.module == "isomer":
+            continue
+        if platform.module not in modules:
+            modules[platform.module] = struct(declare = platform.declare, attrs = platform.attrs, names = [])
+        modules[platform.module].names.append(platform.name)
+    taken = {}
+    for module in modules.values():
+        taken.update(module.attrs)
+    for key in kwargs:
+        if key not in taken:
+            fail("isomer_application: %s is an argument of none of its platforms (%s)" %
+                 (key, ", ".join([p.name if type(p) != "string" else p for p in platforms])))
     manual = tags + ([] if "manual" in tags else ["manual"])
 
     # The web app: wasm in every mode, and the site the web-view apps bundle.
@@ -173,163 +181,25 @@ def isomer_application(
         deps = [swift_library],
     )
 
-    if "android" in platforms:
-        _android(
-            name = name,
-            swift_library = swift_library,
-            package = package,
-            display_name = display_name,
-            version = version,
-            build = build,
-            icon = android_icon,
-            assets = android_assets,
-            fonts = fonts,
-            resources = resources,
-            min_sdk_version = min_sdk_version,
-            remote_url = android_remote_url or remote_url.replace("127.0.0.1", "10.0.2.2").replace("localhost", "10.0.2.2"),
-            tags = tags,
-            manual = manual,
-            visibility = visibility,
-        )
-
-def _android(
-        name,
-        swift_library,
-        package,
-        display_name,
-        version,
-        build,
-        icon,
-        assets,
-        fonts,
-        resources,
-        min_sdk_version,
-        remote_url,
-        tags,
-        manual,
-        visibility):
-    # compiled: the app's Swift in the APK, under the Compose renderer.
-    isomer_android_app(
-        name = name + "_android_compiled",
-        assets = assets,
-        fonts = fonts,
-        icon = icon,
-        label = display_name,
-        min_sdk_version = min_sdk_version,
-        package = package,
-        resources = resources,
+    app = struct(
+        name = name,
         swift_library = swift_library,
-        tags = manual,
-        version_code = build,
-        version_name = version,
-    )
-
-    # remote: Kotlin and Compose only, drawing the app's session.
-    remote = name + "_android_remote"
-    expand_template(
-        name = remote + "_activity",
-        out = "generated/%s/MainActivity.kt" % remote,
-        substitutions = {
-            "{PACKAGE}": package,
-            "{REMOTE_URL}": remote_url,
-        },
-        tags = manual,
-        template = Label("//tools/application:remote_activity.kt.tpl"),
-    )
-
-    # isomer_android_app's manifest, the session's plain ws: allowed.
-    application_attrs = '\n        android:usesCleartextTraffic="true"'
-    kt_kwargs = {}
-    if icon:
-        copy_file(
-            name = remote + "_icon",
-            src = icon,
-            out = "generated/%s/res/mipmap-xxxhdpi/ic_launcher.png" % remote,
-            tags = manual,
-        )
-        application_attrs += '\n        android:icon="@mipmap/ic_launcher"'
-        application_attrs += '\n        android:roundIcon="@mipmap/ic_launcher"'
-        kt_kwargs["resource_files"] = [":%s_icon" % remote]
-    expand_template(
-        name = remote + "_manifest",
-        out = "generated/%s/AndroidManifest.xml" % remote,
-        substitutions = {
-            "{PACKAGE}": package,
-            "{LABEL}": display_name,
-            "{EXTRA_INTENT_FILTERS}": "",
-            "{EXTRA_PERMISSIONS}": "",
-            "{APPLICATION_ATTRS}": application_attrs,
-            "{VERSION_ATTRS}": '\n    android:versionCode="%d"\n    android:versionName="%s"' % (build, version),
-            "{MIN_SDK}": str(min_sdk_version),
-            "{EXTRA_APPLICATION}": "",
-        },
-        tags = manual,
-        template = Label("//tools/android:manifest.xml.tpl"),
-    )
-    androidx = Label("//android/maven:androidx")
-    kt_android_library(
-        name = remote + "_lib",
-        srcs = [
-            ":%s_activity" % remote,
-            # The Compose renderer, as Kotlin alone: IsomerRemote and the
-            # tree it draws.
-            Label("//android/libraries/swift_ui:interpreter_kotlin"),
-        ],
-        custom_package = package,
-        manifest = ":%s_manifest" % remote,
-        plugins = [Label("//android/libraries/swift_ui:compose_compiler_plugin")],
-        tags = manual,
-        deps = [androidx],
-        **kt_kwargs
-    )
-    android_binary(
-        name = remote + "_apk",
-        manifest = ":%s_manifest" % remote,
-        tags = manual,
-        deps = [
-            ":%s_lib" % remote,
-            androidx,
-        ],
-    )
-    apk_install_run(
-        name = remote,
-        activity = "%s/.MainActivity" % package,
-        apk = ":%s_apk.apk" % remote,
-        tags = manual,
-    )
-
-    # webview: the web app's site in the APK, Kotlin and Compose only.
-    isomer_android_webview_app(
-        name = name + "_android_webview",
-        assets = assets,
-        fonts = fonts,
-        icon = icon,
-        label = display_name,
-        min_sdk_version = min_sdk_version,
+        bundle_id = bundle_id,
         package = package,
+        display_name = display_name,
+        version = version,
+        build = build,
+        resources = resources,
+        fonts = fonts,
+        remote_url = remote_url,
         site = ":%s_web_site" % name,
-        tags = manual,
-        version_code = build,
-        version_name = version,
-    )
-
-    native.alias(
-        name = name + "_android",
-        actual = _by_mode({
-            "compiled": ":%s_android_compiled" % name,
-            "webview": ":%s_android_webview" % name,
-            "remote": ":" + remote,
-        }),
         tags = tags,
+        manual = manual,
         visibility = visibility,
     )
-    native.alias(
-        name = name + "_android_apk",
-        actual = _by_mode({
-            "compiled": ":%s_android_compiled_apk" % name,
-            "webview": ":%s_android_webview_apk" % name,
-            "remote": ":%s_apk" % remote,
-        }),
-        tags = tags,
-        visibility = visibility,
-    )
+    for module in modules.values():
+        module.declare(
+            app = app,
+            platforms = module.names,
+            **{key: kwargs.get(key, default) for key, default in module.attrs.items()}
+        )

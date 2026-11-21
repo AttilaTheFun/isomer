@@ -1,5 +1,5 @@
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
-load("@isomer//tools/android:defs.bzl", "isomer_android_aar")
+load("@isomer_android//:defs.bzl", "isomer_android_aar")
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 load("@rules_java//java:java_library.bzl", "java_library")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")

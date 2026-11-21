@@ -3,8 +3,6 @@ load("@rules_swift//swift:swift.bzl", "swift_library")
 load("//tools/library_evolution:defs.bzl", "LIBRARY_EVOLUTION_COPTS")
 load("//foundation:defs.bzl", "one_configuration")
 load("@rules_swift//swift:swift_library_group.bzl", "swift_library_group")
-load("@rules_kotlin//kotlin:core.bzl", "kt_compiler_plugin")
-load("//swift_ffi/rules:kt_swift_library.bzl", "kt_swift_platform")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -138,15 +136,6 @@ swift_library_group(
     ],
 )
 
-# Isomer's shared platform library (libisomer_platform.so): the Swift
-# runtime, the standard library, Foundation and the SDK above, linked once,
-# for apps whose libraries link against it (isomer_android_library's
-# `shared_platform`, through --@isomer//tools/android:shared_platform).
-kt_swift_platform(
-    name = "isomer_platform",
-    deps = [":sdk"],
-)
-
 # Core native-bridging API, Android implementation.
 # What Isomer provides beyond Apple's SwiftUI API (see
 # //shared/swift_ui_extensions).
@@ -174,7 +163,7 @@ swift_library(
 # implementation, the GL surface view, the Compose interpreter, and the
 # Level 3 embedding surfaces (Isomer() composable, IsomerFragment,
 # IsomerView). Compiled per-app together with the generated bindings by
-# `isomer_android_library` (tools/android/defs.bzl) — the bindings'
+# `isomer_android_library` (@isomer_android//:defs.bzl) — the bindings'
 # package is fixed at dev.isomer.runtime so these sources resolve them.
 # The Swift-FREE Compose interpreter: decode tree.proto (FlatTree), render it as
 # Material composables (ComposeRenderer/IsoNode), and the pure-Kotlin host
@@ -288,12 +277,7 @@ filegroup(
 
 exports_files(["RuntimeManifest.xml"])
 
-# The Compose compiler (matching rules_kotlin's kotlinc release), shared by
-# every kt_android_library the macros declare: Isomer's, or the app's
-# (//android/maven:compose_compiler).
-kt_compiler_plugin(
-    name = "compose_compiler_plugin",
-    id = "androidx.compose.compiler",
-    target_embedded_compiler = True,
-    deps = ["//android/maven:compose_compiler"],
-)
+# Isomer's shared platform library (libisomer_platform.so, over :sdk) and the
+# Compose compiler plugin the macros' Kotlin is compiled with are the
+# isomer_android module's (@isomer_android//swift_ui): they load rules_kotlin,
+# which isomer itself doesn't ask for (docs/platform_modules.md).

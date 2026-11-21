@@ -33,13 +33,21 @@
 //     an enclosing view's;
 //   - its node's kind and size behaviour come out the same (what the
 //     containers above it read while they were built).
-// And a frame is partial only when nothing else could have changed: no
-// build in the tree read runtime state (a volatile build is redone every
-// frame, which a partial frame would skip), the root's environment is the
-// same (colour scheme, scene phase), the renderer keeps the tree as given
-// (component-system renderers: the self-drawing one expands chrome into
-// it) and no navigation transition is running. Otherwise, or when a check
-// fails partway, the whole tree is built, as before.
+// A build that read or registered runtime state (a volatile build: a
+// control reading its binding, an `@AppStorage`, a value animating) is
+// redone every frame: the composite it was in is a site of its own each
+// frame, built alone like any other, unless it has none that can be built
+// alone (it is in the root's own body). Built again, a site must leave the
+// frame's registrations as they were (the presentations, the URL handlers,
+// the navigation stacks, the search field, the colour scheme): those are
+// made afresh only by a whole build, so a site that makes them again (a
+// sheet it presents) has the frame built whole.
+// And a frame is partial only when nothing else could have changed: the
+// root's environment is the same (colour scheme, scene phase), the
+// renderer keeps the tree as given (component-system renderers: the
+// self-drawing one expands chrome into it) and no navigation transition is
+// running. Otherwise, or when a check fails partway, the whole tree is
+// built, as before.
 //
 // With `ISO_VERIFY_PARTIAL` in the host's environment (or
 // `verifyPartialFrames` set), each partial frame is followed by a whole
@@ -79,6 +87,16 @@ final class _RebuildSite {
         self.reachingEffects = reachingEffects
         self.node = node
     }
+}
+
+/// What a whole build registers for the frame (`Runtime._frameRegistrations`).
+struct _FrameRegistrations: Equatable {
+    let presentations: [String]
+    let urlHandlers: Int
+    let navigationStacks: Int
+    let search: Bool
+    let colorScheme: ColorScheme
+    let preferredColorScheme: ColorScheme?
 }
 
 /// A modifier that changed its child's node in place (`_ModifiedView`).
@@ -192,6 +210,15 @@ extension Runtime {
             }
             chosen[site.path] = site
         }
+        // The views whose builds read runtime state, built again each frame.
+        for owner in volatileOwners {
+            if let site = rebuildSites[owner], site.node == nil { continue }
+            guard owner != "root", let site = rebuildSite(atOrAbove: owner) else {
+                notePartialRefused("no site for \(_pathTail(owner, 2)), a volatile build")
+                return nil
+            }
+            chosen[site.path] = site
+        }
         // The outermost: a site inside another is built with it.
         let sites = chosen.values.filter { site in
             !chosen.keys.contains { $0 != site.path && _byteAfterPrefix(site.path, $0) == UInt8(ascii: "/") }
@@ -255,9 +282,17 @@ extension Runtime {
         if sites.isEmpty { frameLog?.inPlace = ["nothing"] }
         let outside = buildStacks
         defer { buildStacks = outside }
+        volatileOwnersBuilding = []
+        let registered = _frameRegistrations
         for site in sites {
             guard let old = site.node, let trail = _trail(to: old, in: tree), let parent = trail.last else {
                 noteBuiltWhole("\(typeName(site.view)) not in the tree")
+                return false
+            }
+            // A presentation it holds is registered by a whole build (and
+            // closed, by one that doesn't register it): built with the rest.
+            if pendingPresentations.contains(where: { $0.id == site.path || _byteAfterPrefix($0.id, site.path) == UInt8(ascii: "/") }) {
+                noteBuiltWhole("\(typeName(site.view)) presents")
                 return false
             }
             buildStacks = site.stacks
@@ -294,6 +329,11 @@ extension Runtime {
                 noteBuiltWhole("\(typeName(site.view)) changed kind or size behaviour")
                 return false
             }
+            // What only a whole build makes afresh, as it was.
+            guard _frameRegistrations == registered else {
+                noteBuiltWhole("\(typeName(site.view)) registers for the frame (a presentation, a stack, the scheme)")
+                return false
+            }
             // The views around it are as they were: what they did to its node
             // holds for the next time it is built alone.
             if let fresh = node.rebuildSite, fresh.node === node { fresh.mutators = site.mutators }
@@ -324,7 +364,34 @@ extension Runtime {
             }
             frameLog?.inPlace.append(typeName(site.view))
         }
+        // The volatile builds now: those in the sites built are as found.
+        let built = sites.map(\.path)
+        volatileOwners = volatileOwners.filter { owner in
+            !built.contains { owner == $0 || _byteAfterPrefix(owner, $0) == UInt8(ascii: "/") }
+        }.union(volatileOwnersBuilding)
         return true
+    }
+
+    /// Sets the animating transforms' values on their nodes where they stand
+    /// in `tree` (a site built this frame registered its own afresh), and
+    /// marks the nodes above them changed for the encoder.
+    func moveAnimatedBoxes(_ paths: [String], in tree: RenderNode) {
+        for path in paths {
+            guard let box = animatedBoxes[path], let node = box.node, let trail = _trail(to: node, in: tree) else { continue }
+            box.configure(node, box.env, path, animationTime)
+            node.contentEpoch &+= 1
+            for above in trail { above.contentEpoch &+= 1 }
+            frameLog?.inPlace.append("moved " + _pathTail(path, 2))
+        }
+    }
+
+    /// The frame's registrations that only a whole build makes afresh,
+    /// to tell whether a site built alone made any of them again.
+    private var _frameRegistrations: _FrameRegistrations {
+        _FrameRegistrations(
+            presentations: pendingPresentations.map(\.id), urlHandlers: openURLHandlers.count,
+            navigationStacks: navigationStates.count, search: pendingSearch != nil,
+            colorScheme: colorScheme, preferredColorScheme: preferredColorScheme)
     }
 }
 

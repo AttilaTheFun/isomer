@@ -1,7 +1,7 @@
 load("@rules_android//rules:rules.bzl", "android_binary")
 load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
-load("//swift_ffi/rules:kt_swift_library.bzl", "kt_swift_library")
+load("@isomer_android//swift_ffi:kt_swift_library.bzl", "kt_swift_library")
 load("//swift_map/tools/android:defs.bzl", "apk_install_run")
 
 # The JNI .so + generated Kotlin bindings for the SwiftMap Android module.
