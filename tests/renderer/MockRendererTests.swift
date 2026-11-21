@@ -2946,6 +2946,7 @@ struct Main {
         checkPresentFromPartialFrame()
         checkVolatileSites()
         checkAnimatedTransforms(mock)
+        checkAnimationsEndWithTheirViews(mock)
         checkOpenURLAfterPartialFrames()
 
         // Row actions: the tagged row is a tap target and carries its menu.
@@ -3742,5 +3743,138 @@ func checkOpenURLAfterPartialFrames() {
         Runtime.shared.openURL(external: "isomer-tests://open")
         settle()
         expect(openURLSeenCounts == [2], "the URL reaches the handler of the view as it is now\(label) (got \(openURLSeenCounts))")
+    }
+}
+
+
+// MARK: - Animations end with their views
+
+/// A loading screen with a spinner (a rotation repeating forever, started
+/// by `.onAppear`) that a change replaces with content: the animation goes
+/// with its view, frames with nothing written build nothing, and the app
+/// stops asking for frames. A spinner beside a counter keeps turning in
+/// place while the counter's changes are built in place; a spinner taken
+/// away and shown again starts again.
+nonisolated(unsafe) var endingLoaded: Binding<Bool>?
+nonisolated(unsafe) var endingShowsSpinner: Binding<Bool>?
+nonisolated(unsafe) var endingCount: Binding<Int>?
+
+struct EndingSpinner: View {
+    @State private var turning = false
+    var body: some View {
+        Text("Turning")
+            .rotationEffect(.degrees(turning ? -360 : 0))
+            .animation(.linear(duration: 4).repeatForever(autoreverses: false), value: turning)
+            .onAppear { turning = true }
+    }
+}
+
+struct EndingCounter: View {
+    @State private var count = 0
+    var body: some View {
+        let _ = (endingCount = $count)
+        Text("Count \(count)")
+    }
+}
+
+/// Each pass at a place of its own (state is kept by place).
+struct EndingRoot: View {
+    let pass: Int
+    var body: some View {
+        if pass == 0 { EndingScreen() } else { EndingScreen() }
+    }
+}
+
+struct EndingScreen: View {
+    @State private var loaded = false
+    @State private var showsSpinner = true
+    var body: some View {
+        let _ = (endingLoaded = $loaded)
+        let _ = (endingShowsSpinner = $showsSpinner)
+        if loaded {
+            VStack {
+                if showsSpinner { EndingSpinner() }
+                EndingCounter()
+            }
+        } else {
+            VStack {
+                EndingSpinner()
+                Text("Loading")
+            }
+        }
+    }
+}
+
+@MainActor
+func checkAnimationsEndWithTheirViews(_ mock: MockRenderer) {
+    let verifying = Runtime.shared.verifyPartialFrames
+    defer {
+        Runtime.shared.verifyPartialFrames = verifying
+        stubHostNow = 0
+    }
+    for verify in [true, false] {
+        Runtime.shared.verifyPartialFrames = verify
+        stubHostNow = 0
+        Runtime.shared.installRootView { EndingRoot(pass: verify ? 0 : 1) }
+        Runtime.shared.start(host: StubHost(), width: 320, height: 480)
+        let label = verify ? " (checked against a whole build)" : ""
+        func frame() {
+            stubHostNow += 0.1
+            Runtime.shared.renderFrame()
+        }
+        func rotations() -> [String] {
+            var buffer = ByteBuffer(bytes: FlatTreeEncoder().encode(root: mock.lastTree!))
+            return allParams(getRoot(byteBuffer: &buffer) as IsoFlat_Node, key: "rotation")
+        }
+        // The loading screen's spinner turns.
+        for _ in 0..<4 { frame() }
+        let first = rotations()
+        frame()
+        expect(Runtime.shared.wantsFrame, "loading\(label): the spinner asks for frames")
+        expect(first.count == 1 && rotations() != first, "loading\(label): the spinner turns (\(first) to \(rotations()))")
+
+        // Loaded: the loading screen and its spinner are replaced.
+        let mismatches = Runtime.shared.partialMismatches
+        endingLoaded?.wrappedValue = true
+        frame()
+        frame()
+        expect(findTextInTree(Runtime.shared.retainedTree!, "Count 0"), "loaded\(label): the content shows")
+        expect(!findTextInTree(Runtime.shared.retainedTree!, "Loading"), "loaded\(label): the loading screen is gone")
+        // (Loaded shows a spinner of its own: take it away for the idle check.)
+        endingShowsSpinner?.wrappedValue = false
+        frame()
+        frame()
+        expect(!Runtime.shared.wantsFrame,
+               "loaded, no spinner\(label): no animation is left to ask for frames (\(Runtime.shared.frameStats.kind.rawValue): \(Runtime.shared.frameStats.detail))")
+        let partials = Runtime.shared.partialFrameCount
+        frame()
+        expect(Runtime.shared.partialFrameCount > partials,
+               "idle\(label): a frame with nothing written is built in place (\(Runtime.shared.frameStats.kind.rawValue): \(Runtime.shared.frameStats.detail))")
+
+        // A counter's change is built in place.
+        let counted = Runtime.shared.partialFrameCount
+        endingCount?.wrappedValue += 1
+        frame()
+        expect(Runtime.shared.partialFrameCount > counted && findTextInTree(Runtime.shared.retainedTree!, "Count 1"),
+               "the counter\(label): built in place (\(Runtime.shared.frameStats.kind.rawValue): \(Runtime.shared.frameStats.detail))")
+
+        // The spinner shown again starts again, and turns in place beside
+        // the counter, whose changes stay in place.
+        endingShowsSpinner?.wrappedValue = true
+        for _ in 0..<3 { frame() }
+        expect(Runtime.shared.wantsFrame, "shown again\(label): the spinner asks for frames again")
+        var last = rotations()
+        for step in 1...3 {
+            let before = Runtime.shared.partialFrameCount
+            if step == 2 { endingCount?.wrappedValue += 1 }
+            frame()
+            let now = rotations()
+            expect(Runtime.shared.partialFrameCount > before,
+                   "turning beside the counter, frame \(step)\(label): built in place (\(Runtime.shared.frameStats.kind.rawValue): \(Runtime.shared.frameStats.detail))")
+            expect(now.count == 1 && now != last, "turning beside the counter, frame \(step)\(label): it turns (\(last) to \(now))")
+            last = now
+        }
+        expect(findTextInTree(Runtime.shared.retainedTree!, "Count 2"), "turning beside the counter\(label): the counter's change shows")
+        expect(Runtime.shared.partialMismatches == mismatches, "the frames built in place are the whole builds'\(label)")
     }
 }
