@@ -249,6 +249,7 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.TextUnit
@@ -1205,6 +1206,16 @@ fun IsoNode(
             var box = m
             colorOf(j, "fill")?.let { box = box.background(it, shape) }
             gradientBrush(j)?.let { brush -> box = box.background(brush, shape) }
+            // `.stroke`: the outline along the shape's edge, half each side
+            // of it as SwiftUI strokes a path, over any fill. (Only a trimmed
+            // circle's was drawn, above: `Circle().stroke(…)`, a stroked
+            // rounded rectangle and an app's own stroked shape were blank.)
+            colorOf(j, "stroke")?.let { color ->
+                val width = j.optDouble("strokeWidth", 1.0).toFloat()
+                box = box.drawBehind {
+                    drawOutline(shape.createOutline(size, layoutDirection, this), color, style = Stroke(width = width.dp.toPx()))
+                }
+            }
             Box(box, contentAlignment = Alignment.Center) {
                 for ((i, c) in n.children.withIndex()) key(childKey(c, i)) { IsoNode(c, Modifier, bw, bh) }
             }
