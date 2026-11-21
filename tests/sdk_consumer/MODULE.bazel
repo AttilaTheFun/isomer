@@ -20,8 +20,8 @@ module(name = "isomer_sdk_consumer")
 include("//:cell.MODULE.bazel")
 
 # rules_swift: isomer's, from the registry by version (README).
-bazel_dep(name = "rules_swift", version = "4.3.0.isomer.1")
-bazel_dep(name = "rules_swift_package_manager", version = "1.25.0.isomer.1")
+bazel_dep(name = "rules_swift", version = "4.3.0.isomer.2")
+bazel_dep(name = "rules_swift_package_manager", version = "1.26.0")
 bazel_dep(name = "rules_kotlin", version = "2.2.2")
 bazel_dep(name = "rules_java", version = "9.3.0")
 bazel_dep(name = "rules_cc", version = "0.2.26")

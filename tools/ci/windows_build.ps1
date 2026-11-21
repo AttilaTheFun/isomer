@@ -7,8 +7,7 @@
 # (tools/proof/proof.py's), with LLVM's llvm-lib as MSVC's lib.exe (below):
 # Bazel in MSVC's environment (vcvarsall arm64),
 # BAZEL_SH Git's bash and Git's usr\bin ahead of System32 (rules_swift_package_manager
-# runs find, cp and od; tools/patches/rules_swift_package_manager_windows.patch
-# in the examples), and --repo_env for SDKROOT, PATH and MSVC's variables
+# runs find, cp and od), and --repo_env for SDKROOT, PATH and MSVC's variables
 # (repository rules see nothing else). Bazel's startup options and caches
 # are tools/ci/ci_bazel.sh's (ISOMER_BAZEL_ROOT=C:/b: short paths).
 #

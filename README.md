@@ -759,7 +759,14 @@ bazel_dep(name = "isomer_android", version = "0.59.1")
 and loads Android's macros (`isomer_android_app`, `apk_install_run`,
 `ANDROID`, …) from `@isomer_android//:defs.bzl` and `kt_swift_library` from
 `@isomer_android//swift_ffi:kt_swift_library.bzl`. Android's Swift
-(`@isomer//:swift_ui` and the rest) is still isomer's. rules_android's own Maven (its tools) is
+(`@isomer//:swift_ui` and the rest) is still isomer's.
+
+So an Android app has up to two of Isomer's Android modules, for different
+reasons: **isomer_android** always (Android's rules and Isomer's macros), and
+**isomer_android_maven** only when it uses Isomer's AndroidX rather than its
+own (above). They stay apart so that an app with AndroidX of its own never
+evaluates Isomer's Maven set, nor has its rules_jvm_external raised by it.
+rules_android's own Maven (its tools) is
 rules_android's to declare; docs/android_maven.md shows how to pin it with
 isomer's lock file, as the examples do.
 
@@ -827,7 +834,7 @@ The isomer the root depends on and the one its Package.swift lists are the
 module's release: one isomer in the build.
 
 Nothing of isomer's needs an override in your MODULE.bazel since 0.40 (its
-rules_swift, 4.3.0.isomer.1, sorts above the version rules_applecross asks
+rules_swift, 4.3.0.isomer.2, sorts above the version rules_applecross asks
 for); you still register the toolchains, and only those of the platforms
 you build: an app for iOS, the Mac and Android declares the host toolchain
 and Isomer's Android SDK (below) and registers the Android Swift toolchains, with
@@ -952,7 +959,9 @@ Each release's notes have an Upgrading section; these things are easy to miss:
   docs/platform_modules.md).** isomer no longer asks for rules_android,
   rules_kotlin, rules_java or hermetic_android_toolchains:
   - an app that builds for Android adds
-    `bazel_dep(name = "isomer_android", version = …)` at isomer's version,
+    `bazel_dep(name = "isomer_android", version = …)` at isomer's version
+    (beside isomer_android_maven, if it has that already: the two are
+    apart, so an app with AndroidX of its own still needs only the first),
     and changes its loads: `@isomer//tools/android:defs.bzl` is
     `@isomer_android//:defs.bzl` (the same macros and rules), and
     `@isomer//swift_ffi/rules:kt_swift_library.bzl` is

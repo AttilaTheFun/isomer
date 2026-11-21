@@ -40,8 +40,8 @@ bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "platforms", version = "1.1.0")
 
 # rules_swift from this project's registry (AttilaTheFun/bazel_registry,
-# listed before the BCR in .bazelrc): 4.3.0.isomer.1 is upstream's 4.3.0
-# with four rules_swift pull requests until a release has them, each a patch
+# listed before the BCR in .bazelrc): 4.3.0.isomer.2 is upstream's 4.3.0
+# with five rules_swift pull requests until a release has them, each a patch
 # in the registry entry, taken from the PR's head:
 #   * #1860: a metadata-driven wasm SDK and its wasip1-threads variant;
 #   * #1990: a single-threaded and a threads wasm SDK side by side (two
@@ -52,7 +52,9 @@ bazel_dep(name = "platforms", version = "1.1.0")
 #     beside the shared runtime, -lc++ the static libc++);
 #   * #2000 (merged after 4.3.0): Android targets down to the Swift SDK's
 #     own minimum (6.4's: API 23), without RELR relocations below 28; 4.3.0
-#     alone fails any target below 28 (#1998).
+#     alone fails any target below 28 (#1998);
+#   * #2032: generated proto sources copied with `/.`, so a
+#     swift_proto_library over a proto with no Swift output doesn't fail.
 # 4.3.0 itself has what 4.2.2.isomer.3 carried besides: #1989 (C compiled
 # for wasm gets the Swift SDK's clang resource directory, so SQLite's
 # amalgamation builds as is), #1985 (swift.org's release metadata through
@@ -63,10 +65,10 @@ bazel_dep(name = "platforms", version = "1.1.0")
 # of SDK or rules_swift a build that kept its output base may report a
 # module "defined in both": `bazel clean` once (README, "Upgrading isomer").
 # It sorts above the 4.2.2 rules_applecross asks for, so no override holds
-# it, here or in a consumer. A change is a new entry (4.3.0.isomer.2) made
+# it, here or in a consumer. A change is a new entry (4.3.0.isomer.3) made
 # with the registry's tools/add_version.py --fork; back to a plain BCR
 # version at the release that has them all.
-bazel_dep(name = "rules_swift", version = "4.3.0.isomer.1")
+bazel_dep(name = "rules_swift", version = "4.3.0.isomer.2")
 # No Apple rules for a consumer (since 0.58, docs/platform_modules.md): the
 # iPhone's and the Mac's apps (isomer_application's Apple half) are the
 # isomer_apple module's (apple/module), which brings rules_apple
@@ -140,15 +142,24 @@ bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.2", dev_
 # package's or a module's, is Isomer's with no dependency declared. Linux and
 # Windows keep the toolchain's corelibs Foundation.
 #
-# The registry's 1.25.0.isomer.1: upstream 1.25.0 with three pull requests to
-# cgrindel/rules_swift_package_manager, until a release has them (MVS gives
-# it to every consumer): #2638
-# (a local package that is a Bazel module too, isomer's taken by path in its
-# own graph, is copied without its Bazel files), #2639 (no Apple minimum OS
+# Upstream 1.26.0 has what isomer needed of it: #2639 (no Apple minimum OS
 # versions off Apple: isomer declares iOS 16 and macOS 13, and a package
-# beneath it may declare more) and #2640 (a Swift target's cSettings defines
-# reach its Clang importer, as SwiftPM passes them).
-bazel_dep(name = "rules_swift_package_manager", version = "1.25.0.isomer.1")
+# beneath it may declare more), #2640 (a Swift target's cSettings defines
+# reach its Clang importer, as SwiftPM passes them) and #2621 (Windows
+# hosts). Consumers get it as released.
+bazel_dep(name = "rules_swift_package_manager", version = "1.26.0")
+
+# Only where isomer is the root: its own graph takes the package by path, a
+# local package that is a Bazel module too, which needs #2638 (copied without
+# its Bazel files). Upstream will fix that in its v2 (#2657); a consumer takes
+# isomer by revision and needs nothing of it.
+single_version_override(
+    module_name = "rules_swift_package_manager",
+    patch_strip = 1,
+    patches = [
+        "//tools/patches:rules_swift_package_manager_local_bazel_package.patch",
+    ],
+)
 
 # rules_swift_package_manager's own extension, so an application's graph and
 # this module's packages are one: what isomer declares here applies to the
