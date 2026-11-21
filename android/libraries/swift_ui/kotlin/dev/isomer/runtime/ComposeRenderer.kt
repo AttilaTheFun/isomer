@@ -744,17 +744,21 @@ private fun IsoHStack(n: UNode, m: Modifier, bw: Boolean, bh: Boolean) {
                 mm.maxIntrinsicWidth(childHeight) - mm.minIntrinsicWidth(childHeight)
             })
         val minimum = (0 until count).map { if (greedy[it]) 0 else measurables[it].minIntrinsicWidth(childHeight) }
-        // When every one of them fits at its ideal width, each is offered
-        // that, as SwiftUI's HStack does: shared out a fair part each, a
-        // word longer than its part (a "Semibold" third in a row of five
-        // weights) broke in the middle though the row had room to spare.
+        // When the children with an ideal width (text, a fixed frame) all fit
+        // at it, each is offered that, as SwiftUI's HStack does, and those
+        // with none (a shape, which takes what it is offered) then share
+        // what is left. Shared out a fair part each, a word longer than its
+        // part (a "Semibold" third in a row of five weights) broke in the
+        // middle though the row had room to spare.
         val ideal = (0 until count).map { if (greedy[it]) 0 else measurables[it].maxIntrinsicWidth(childHeight) }
-        val allFit = bounded && flexible.sumOf { ideal[it] } <= remaining
-        for ((at, i) in flexible.withIndex()) {
-            val later = flexible.drop(at + 1)
+        val sized = flexible.filter { ideal[it] > 0 }
+        val allFit = bounded && sized.sumOf { ideal[it] } <= remaining
+        val order = if (allFit) sized + flexible.filter { ideal[it] == 0 } else flexible
+        for ((at, i) in order.withIndex()) {
+            val later = order.drop(at + 1)
             val reserved = later.filter { priority[it] < priority[i] }.sumOf { minimum[it] }
-            val peers = 1 + later.count { priority[it] == priority[i] }
-            val proposal = if (allFit) ideal[i]
+            val peers = 1 + later.count { priority[it] == priority[i] && !(allFit && ideal[it] > 0) }
+            val proposal = if (allFit && ideal[i] > 0) ideal[i]
                 else if (bounded) ((remaining - reserved).coerceAtLeast(0) / peers) else Int.MAX_VALUE
             val pl = measurables[i].measure(Constraints(0, if (bounded) proposal.coerceAtLeast(0) else Constraints.Infinity, 0, childHeight))
             placeables[i] = pl
