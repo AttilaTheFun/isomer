@@ -96,7 +96,22 @@ are ProfileInstaller's dependencies, not Isomer's, but the set must carry
 them: ProfileInstaller's install task loads them a few seconds after launch,
 and an app whose graph excludes them (an `exclusions` entry, a Guava left out
 of a large app's graph) crashes then with `NoClassDefFoundError`. Isomer's set
-exports both by name for that reason. So it does material-icons-core
+exports both by name for that reason.
+
+**In a graph that has Guava, export Guava, not `listenablefuture`.** There
+`com.google.guava:listenablefuture` resolves to
+`9999.0-empty-to-avoid-conflict-with-guava`, an empty jar that only stops two
+copies of the class: exported by name as above, it carries no
+`ListenableFuture`, and the app crashes about five seconds after a fresh
+install with
+
+    java.lang.VerifyError: Verifier rejected class androidx.profileinstaller.ProfileVerifier:
+      ... can't resolve returned type 'Unresolved Reference: com.google.common.util.concurrent.ListenableFuture'
+
+Export `@maven//:com_google_guava_guava` in its place (or pin
+`com.google.guava:listenablefuture:1.0`, the real class, in a graph without
+Guava, as `isomer_android_maven` does). Either way the set must carry
+`com.google.common.util.concurrent.ListenableFuture`. So it does material-icons-core
 (`androidx.compose.material:material-icons-core`, the runtime's
 `Icons.Filled`), which Material 3 brought with it until 1.4: a set on a later
 Material 3 lists it itself.
