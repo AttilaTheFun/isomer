@@ -918,7 +918,10 @@ swift_proto_library(
 
 (or a `swift_proto_compiler` of your own over
 `@swiftpkg_swift_protobuf//:protoc-gen-swift` and `:SwiftProtobuf`, as
-shared/wire/BUILD.bazel's is, for other plugin options).
+shared/wire/BUILD.bazel's is, for other plugin options). An app whose own
+SwiftProtobuf is one module several of its binaries share (a framework of its
+own) points `--@isomer//:swift_protobuf` at it, and Isomer links that one in
+place of the graph's (BUILD.bazel says what it must provide).
 
 **The complete, always-current reference is
 [`examples/MODULE.bazel`](examples/MODULE.bazel)** — the examples are
