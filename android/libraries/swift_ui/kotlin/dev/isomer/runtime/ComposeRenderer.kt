@@ -887,6 +887,24 @@ private fun IsoGrid(n: UNode, m: Modifier, bw: Boolean, bh: Boolean) {
 /** A shape node's `path` param (Shapes.swift: `M x y`, `L x y`, `Z`,
  *  `R x y w h`, `Q x y w h r`, `E x y w h`, in the unit square) as a Compose
  *  shape, scaled to the size it is given. */
+/** A stroke of `widthPx` in the style a `StrokeStyle` other than the
+ *  default sends ("cap,join,miter,phase,dash…", lengths in points): its
+ *  caps, joins, miter limit and dashes. */
+private fun strokeOf(style: String, widthPx: Float, density: Float): Stroke {
+    val parts = style.split(",")
+    if (parts.size < 4) return Stroke(width = widthPx)
+    val cap = when (parts[0]) { "round" -> StrokeCap.Round; "square" -> StrokeCap.Square; else -> StrokeCap.Butt }
+    val join = when (parts[1]) { "round" -> StrokeJoin.Round; "bevel" -> StrokeJoin.Bevel; else -> StrokeJoin.Miter }
+    val miter = parts[2].toFloatOrNull() ?: 10f
+    val phase = (parts[3].toFloatOrNull() ?: 0f) * density
+    // An odd number of lengths repeats once, as Core Graphics does.
+    val lengths = parts.drop(4).mapNotNull { it.toFloatOrNull() }.map { it * density }
+        .let { if (it.size % 2 == 1) it + it else it }
+    val dashes = if (lengths.isNotEmpty() && lengths.any { it > 0f })
+        androidx.compose.ui.graphics.PathEffect.dashPathEffect(lengths.toFloatArray(), phase) else null
+    return Stroke(width = widthPx, miter = miter, cap = cap, join = join, pathEffect = dashes)
+}
+
 private fun pathShape(text: String): androidx.compose.ui.graphics.Shape = androidx.compose.foundation.shape.GenericShape { size, _ ->
     addPath(customPath(text, size.width, size.height))
 }
@@ -1218,7 +1236,7 @@ fun IsoNode(
             colorOf(j, "stroke")?.let { color ->
                 val width = j.optDouble("strokeWidth", 1.0).toFloat()
                 box = box.drawBehind {
-                    val stroke = Stroke(width = width.dp.toPx())
+                    val stroke = strokeOf(j.optJSONObject("params")?.optString("strokeStyle") ?: "", width.dp.toPx(), density)
                     // An app's own path as it drew it, open or closed.
                     if (custom.isNotEmpty()) drawPath(customPath(custom, size.width, size.height), color, style = stroke)
                     else drawOutline(shape.createOutline(size, layoutDirection, this), color, style = stroke)
