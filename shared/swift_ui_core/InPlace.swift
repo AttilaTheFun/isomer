@@ -208,9 +208,9 @@ extension Runtime {
                 // Of a view inside one that left the tree (an animation's
                 // key is a primitive's, which has no site of its own: the
                 // nearest site above it is the gone view's): nothing to
-                // build. (Animations end with their views,
-                // `endAnimationsNotAsked`, so this is a key written in the
-                // frame its view went.)
+                // build. (Animations stop with their views,
+                // `suspendAnimationsNotAsked`, so this is a key written in
+                // the frame its view went.)
                 if viewIsGone(owner) { continue }
                 notePartialRefused("no site for \(_pathTail(key, 2))")
                 return nil
