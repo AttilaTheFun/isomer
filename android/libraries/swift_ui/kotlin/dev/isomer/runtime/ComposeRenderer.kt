@@ -888,11 +888,16 @@ private fun IsoGrid(n: UNode, m: Modifier, bw: Boolean, bh: Boolean) {
  *  `R x y w h`, `Q x y w h r`, `E x y w h`, in the unit square) as a Compose
  *  shape, scaled to the size it is given. */
 private fun pathShape(text: String): androidx.compose.ui.graphics.Shape = androidx.compose.foundation.shape.GenericShape { size, _ ->
+    addPath(customPath(text, size.width, size.height))
+}
+
+/** An app's own shape's path (the `path` param: M/L/Z/R/Q/E in the unit
+ *  square), scaled to `w`×`h`: open where the app left it open. (A
+ *  GenericShape closes its path, right for a fill, not for a stroke.) */
+private fun customPath(text: String, w: Float, h: Float): androidx.compose.ui.graphics.Path = androidx.compose.ui.graphics.Path().apply {
     val t = text.split(" ")
     var i = 0
     fun n(): Float = t[i++].toFloat()
-    val w = size.width
-    val h = size.height
     while (i < t.size) {
         when (t[i++]) {
             "M" -> moveTo(n() * w, n() * h)
@@ -904,7 +909,7 @@ private fun pathShape(text: String): androidx.compose.ui.graphics.Shape = androi
                 addRoundRect(androidx.compose.ui.geometry.RoundRect(x, y, x + rw, y + rh, androidx.compose.ui.geometry.CornerRadius(radius, radius)))
             }
             "E" -> { val x = n() * w; val y = n() * h; addOval(androidx.compose.ui.geometry.Rect(x, y, x + n() * w, y + n() * h)) }
-            else -> return@GenericShape
+            else -> return@apply
         }
     }
 }
@@ -1213,7 +1218,10 @@ fun IsoNode(
             colorOf(j, "stroke")?.let { color ->
                 val width = j.optDouble("strokeWidth", 1.0).toFloat()
                 box = box.drawBehind {
-                    drawOutline(shape.createOutline(size, layoutDirection, this), color, style = Stroke(width = width.dp.toPx()))
+                    val stroke = Stroke(width = width.dp.toPx())
+                    // An app's own path as it drew it, open or closed.
+                    if (custom.isNotEmpty()) drawPath(customPath(custom, size.width, size.height), color, style = stroke)
+                    else drawOutline(shape.createOutline(size, layoutDirection, this), color, style = stroke)
                 }
             }
             Box(box, contentAlignment = Alignment.Center) {
