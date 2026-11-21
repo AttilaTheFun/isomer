@@ -3818,9 +3818,15 @@ func checkAnimationsEndWithTheirViews(_ mock: MockRenderer) {
         Runtime.shared.installRootView { EndingRoot(pass: verify ? 0 : 1) }
         Runtime.shared.start(host: StubHost(), width: 320, height: 480)
         let label = verify ? " (checked against a whole build)" : ""
+        // Each frame delivered as a renderer delivers it: its patch encoded,
+        // and what appeared in it told to the runtime, which runs the views'
+        // `.onAppear` (the spinner's, which starts it turning).
+        let encoder = FlatTreeEncoder()
         func frame() {
             stubHostNow += 0.1
             Runtime.shared.renderFrame()
+            _ = encoder.encodePatch(root: mock.lastTree!)
+            Runtime.shared.fireTreeAppearances(encoder.appearances, disappearances: encoder.disappearances)
         }
         func rotations() -> [String] {
             var buffer = ByteBuffer(bytes: FlatTreeEncoder().encode(root: mock.lastTree!))
