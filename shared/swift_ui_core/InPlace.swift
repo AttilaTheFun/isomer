@@ -205,6 +205,13 @@ extension Runtime {
                 continue
             }
             guard let site = rebuildSite(owning: key) else {
+                // Of a view inside one that left the tree (an animation's
+                // key is a primitive's, which has no site of its own: the
+                // nearest site above it is the gone view's): nothing to
+                // build. (Animations end with their views,
+                // `endAnimationsNotAsked`, so this is a key written in the
+                // frame its view went.)
+                if viewIsGone(owner) { continue }
                 notePartialRefused("no site for \(_pathTail(key, 2))")
                 return nil
             }
@@ -224,6 +231,19 @@ extension Runtime {
             !chosen.keys.contains { $0 != site.path && _byteAfterPrefix(site.path, $0) == UInt8(ascii: "/") }
         }
         return sites.sorted { $0.path < $1.path }
+    }
+
+    /// Whether the view at `path` left the tree: the nearest site at or above
+    /// it was freed (its node, weakly held, is gone with the tree it was in).
+    /// No site above it at all says nothing: false.
+    func viewIsGone(_ start: String) -> Bool {
+        var path = Substring(start)
+        while !path.isEmpty, path != "root" {
+            if let site = rebuildSites[String(path)] { return site.node == nil }
+            guard let slash = path.lastIndex(of: "/") else { return false }
+            path = path[..<slash]
+        }
+        return false
     }
 
     /// The nearest site at or above the view owning `key` ("<path>#<name>")
