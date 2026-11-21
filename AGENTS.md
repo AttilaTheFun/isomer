@@ -55,7 +55,7 @@ nothing under `swift_ffi/` may depend on anything outside it but Foundation,
 and so on up. A consumer pins ONE version of isomer (by version from the
 project's registry, AttilaTheFun/bazel_registry, from 0.36.0; a commit
 between releases) and lists that registry before the BCR in its .bazelrc:
-no override of isomer's dependencies since 0.40 (rules_swift 4.3.0.isomer.1
+no override of isomer's dependencies since 0.40 (rules_swift 4.3.0.isomer.2
 sorts above the 4.2.2 rules_applecross asks for).
 
 **Versions (from 0.38).** A version is MAJOR.MINOR.BUILD; there are no
@@ -89,10 +89,10 @@ minor (MAJOR.MINOR.0) before the release's commit.
 by version at a release (a commit is fine on a branch, or on main between
 releases). Bazel modules come from bazel_registry, before the BCR: isomer's
 releases, visor's, and the forks isomer carries until upstream takes their
-changes, as patched versions (rules_swift 4.3.0.isomer.1: upstream 4.3.0
-with rules_swift#1860, #1990, #1995 and #2000, each a patch taken from the
-PR's head). A change to a fork or to those
-patches is a new entry (.isomer.2), made with the registry's
+changes, as patched versions (rules_swift 4.3.0.isomer.2: upstream 4.3.0
+with rules_swift#1860, #1990, #1995, #2000 and #2032, each a patch taken
+from the PR's head). A change to a fork or to those
+patches is a new entry (.isomer.3), made with the registry's
 tools/add_version.py --fork and approved there like any version. Swift
 packages are SwiftPM's, through rules_swift_package_manager, never Bazel
 modules. tools/released_pins.sh says whether every pin is a released
@@ -579,11 +579,12 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   registered through `--extra_toolchains`, the build-time Swift tools'
   CppArchive fails in the sandbox (no apple-support-ar-wrapper);
   `--strategy=CppArchive=local` works around it.
-- **rules_swift 4.3.0.isomer.1** from the registry (since 0.56):
-  upstream 4.3.0 and four pull requests, each a patch from its head:
+- **rules_swift 4.3.0.isomer.2** from the registry (4.3.0.isomer.1 since
+  0.56, .2 since 0.59): upstream 4.3.0 and five pull requests, each a patch
+  from its head:
   #1860 and #1990 (the wasip1-threads SDK beside the single-threaded one),
-  #1995 (Swift/C++ interop on Android) and #2000 (Android below API 28,
-  merged after 4.3.0). 4.3.0 has the rest of what 4.2.2.isomer.3 carried
+  #1995 (Swift/C++ interop on Android), #2000 (Android below API 28,
+  merged after 4.3.0) and #2032 (proto sources copied with `/.`). 4.3.0 has the rest of what 4.2.2.isomer.3 carried
   (#1989, #1985), #2012 (`swift.android_sdk(url = …)`, Isomer's Swift
   SDKs) and #1999 (explicit C modules declared unsupported for Android and
   wasm, which build their Clang modules implicitly, as before; after a

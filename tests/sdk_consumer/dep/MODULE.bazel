@@ -4,7 +4,7 @@ the root's, as a feature module in a larger app's repository may keep."""
 
 module(name = "sdk_consumer_dep", version = "0.0.0")
 
-bazel_dep(name = "rules_swift", version = "4.3.0.isomer.1")
+bazel_dep(name = "rules_swift", version = "4.3.0.isomer.2")
 bazel_dep(name = "rules_swift_package_manager", version = "1.26.0")
 
 swift_deps = use_extension(

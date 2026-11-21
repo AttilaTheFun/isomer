@@ -575,7 +575,7 @@ project's own modules. Every change we carry has an upstream PR now
 (2026-11-04, drafts unless noted); each patch or fork goes when a release
 has it.
 
-- **rules_swift** (the registry's 4.3.0.isomer.1 since 0.56: upstream 4.3.0,
+- **rules_swift** (the registry's 4.3.0.isomer.2 since 0.59, .1 since 0.56: upstream 4.3.0,
   which has #1985, #1989, #1998, #1999 and #2012, and a patch per PR, from
   its head):
   - bazelbuild/rules_swift#1860 (open): the metadata-driven wasm SDK and its
@@ -586,6 +586,8 @@ has it.
   - #2000 (merged after 4.3.0, e901d23b): Android down to the Swift SDK's
     own minimum (6.4's: 23), no RELR below 28; 4.3.0 alone (#1998) fails
     any target below 28;
+  - #2032 (approved): generated proto sources copied with `/.`, so a proto
+    with no Swift output doesn't fail;
   - #2016 (open): the Android and wasm compiles' implicit Clang module
     cache goes stale when the SDK (or rules_swift) changes under an output
     base ("module '_Builtin_stddef' is defined in both"): a cache keyed by
