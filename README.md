@@ -725,7 +725,10 @@ bazel_dep(name = "isomer_android_maven", version = "0.54.1")
 
 and an app with AndroidX of its own leaves the module out and points both
 flags at its own set in its `.bazelrc`. With neither, an Android build
-fails saying which to do.
+fails saying which to do. An app's own set must carry what ProfileInstaller
+loads after launch, Guava's `ListenableFuture` among it: in a graph with
+Guava, `listenablefuture` is an empty jar, so export Guava itself
+(docs/android_maven.md says what to export, and the crash otherwise).
 
 **The iPhone and the Mac: isomer_apple** (since 0.58;
 [docs/platform_modules.md](docs/platform_modules.md)). isomer asks for no
