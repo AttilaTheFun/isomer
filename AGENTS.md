@@ -820,7 +820,8 @@ no wamrc, no `.aot`, no `--define wamr_*`). The engine work Isomer did
 - **WasmKit** (MODULE.bazel's `wasmkit`: swiftwasm/WasmKit 0.5.0, by tag,
   with one patch until upstream takes it, tools/patches/
   wasmkit_host_linking.patch: the side-modules author's host-linking API
-  and cheaper host calls, from AttilaTheFun/WasmKit's isomer/side-modules;
+  and cheaper host calls, a trap guard that saves no signal mask, and
+  malloc-backed memories grown by `realloc` (MODULE.bazel says which and why);
   built by tools/wasmkit/BUILD.wasmkit.bazel after its
   Package.swift, default traits, optimized in every build, for macOS, iOS,
   Android, Linux and Windows) is behind `WasmKitRuntime`
@@ -887,13 +888,23 @@ no wamrc, no `.aot`, no `--define wamr_*`). The engine work Isomer did
   its screens match the ICU build's.
 - **Shared memory needs WasmKit's guard pages**: a 4 GiB reservation per
   memory and signal-trapped bounds checks, on macOS, Linux, iOS and
-  (WasmKit 0.5.0's #527) 64-bit Android, whose reactors run on guard pages
-  by default; `canRunThreads` should pass there too (WasmKit makes shared
-  memory on Android), unchecked while no threaded reactor is built (Swift
-  6.5's threads SDK).
+  (WasmKit 0.5.0's #527) 64-bit Android; `canRunThreads` should pass on
+  Android too (WasmKit makes shared memory there), unchecked while no
+  threaded reactor is built (Swift 6.5's threads SDK).
   Windows checks bounds in software and runs no threaded reactor. `WasmKitRuntime.canRunThreads` tries one; a host
   with both builds of its reactor picks the threaded one only then (an
   iPhone's address space may refuse it; nothing here has run on a device).
+- **Single-threaded reactors check bounds in software** (2026-11-19,
+  `WasmKitRuntime.memoryBoundsChecking`): WasmKit checks every access to a
+  memory that isn't shared in software under either mode, so guest code
+  runs as fast (CoreMark, PolyBench and libsodium within noise); guard
+  pages would only add a 4 GiB reservation, and an iPhone grants a process
+  one, which mixed mode's native code needs (MixedWasmKitRuntime keeps
+  `.mprotect`). Such a memory moves when it grows: host code reaches guest
+  memory through WasmKit's scoped accessors only, never a pointer kept
+  across calls. It grows by `realloc` (the WasmKit patch; 0.5.0 copied the
+  whole memory on every `memory.grow`, quadratic). `ISO_WASMKIT_BOUNDS=
+  mprotect|software` picks one mode for every reactor, for comparing.
 
 ## Apple apps compiled against Isomer (0.32)
 
