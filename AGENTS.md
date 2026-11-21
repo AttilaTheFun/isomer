@@ -168,8 +168,8 @@ a repository of its own):
   Package.swift by revision (the release's tag) and adds
   `inject_repo(swift_deps, "isomer")`. isomer's own graph
   (third_party/swift_packages, dev-only) and the examples' take the package by
-  path (cgrindel/rules_swift_package_manager#2638; with #2639 and #2640 the
-  registry's 1.25.0.isomer.1). Isomer's labels (`//core_graphics`,
+  path (cgrindel/rules_swift_package_manager#2638, a patch where isomer is the
+  root; 1.26.0 has the rest). Isomer's labels (`//core_graphics`,
   `//shared/isomer_swift_ui`, each platform's
   `libraries/swift_ui:core`, ...) are `one_configuration` wrappers over the
   package's products. SwiftUI is one target, the same on every platform off
@@ -803,9 +803,7 @@ acceptable.
   `BAZEL_SH` Git's bash, Git's usr\bin on PATH (rules_swift_package_manager
   runs find, cp and od), `--output_user_root=C:/b` (short paths) and
   `--repo_env` for SDKROOT, PATH and MSVC's variables (repository rules see
-  nothing else). The Playground carries
-  tools/patches/rules_swift_package_manager_windows.patch for its SwiftPM
-  graph there (and the examples, for the Storybook's). tools/proof/proof.py
+  nothing else). tools/proof/proof.py
   has the whole recipe. No Swift
   toolchain cross-compiles to Windows.
 - docs/open_items.md lists what is open, by tier.

@@ -142,15 +142,24 @@ bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.2", dev_
 # package's or a module's, is Isomer's with no dependency declared. Linux and
 # Windows keep the toolchain's corelibs Foundation.
 #
-# The registry's 1.25.0.isomer.1: upstream 1.25.0 with three pull requests to
-# cgrindel/rules_swift_package_manager, until a release has them (MVS gives
-# it to every consumer): #2638
-# (a local package that is a Bazel module too, isomer's taken by path in its
-# own graph, is copied without its Bazel files), #2639 (no Apple minimum OS
+# Upstream 1.26.0 has what isomer needed of it: #2639 (no Apple minimum OS
 # versions off Apple: isomer declares iOS 16 and macOS 13, and a package
-# beneath it may declare more) and #2640 (a Swift target's cSettings defines
-# reach its Clang importer, as SwiftPM passes them).
-bazel_dep(name = "rules_swift_package_manager", version = "1.25.0.isomer.1")
+# beneath it may declare more), #2640 (a Swift target's cSettings defines
+# reach its Clang importer, as SwiftPM passes them) and #2621 (Windows
+# hosts). Consumers get it as released.
+bazel_dep(name = "rules_swift_package_manager", version = "1.26.0")
+
+# Only where isomer is the root: its own graph takes the package by path, a
+# local package that is a Bazel module too, which needs #2638 (copied without
+# its Bazel files). Upstream will fix that in its v2 (#2657); a consumer takes
+# isomer by revision and needs nothing of it.
+single_version_override(
+    module_name = "rules_swift_package_manager",
+    patch_strip = 1,
+    patches = [
+        "//tools/patches:rules_swift_package_manager_local_bazel_package.patch",
+    ],
+)
 
 # rules_swift_package_manager's own extension, so an application's graph and
 # this module's packages are one: what isomer declares here applies to the
