@@ -162,7 +162,8 @@ extension View {
     /// ForEach rows is handled by ForEach itself, in the same way.)
     nonisolated public func id<ID: Hashable>(_ id: ID) -> some View {
         let name = String(describing: id)
-        return _ModifiedView(child: self, descend: "vid-" + name, pure: true) { inner, _ in
+        // (In the path escaped, `_pathSegment`; the scroll target is the name.)
+        return _ModifiedView(child: self, descend: "vid-" + _pathSegment(name), pure: true) { inner, _ in
             inner.scrollTarget = name
             return inner
         }

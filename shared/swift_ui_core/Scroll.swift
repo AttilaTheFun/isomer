@@ -525,7 +525,7 @@ private func collectRowSlots(of view: any View, ctx: inout BuildContext, into sl
         slots.reserveCapacity(slots.count + rows.count)
         for index in 0..<rows.count {
             var sub = ctx
-            sub.path = ctx.path + "/fe-" + rows.id(index)
+            sub.path = ctx.path + "/fe-" + _pathSegment(rows.id(index))
             slots.append(_RowSlot(kind: .deferred({ rows.view(index) }), ctx: sub))
         }
         return
