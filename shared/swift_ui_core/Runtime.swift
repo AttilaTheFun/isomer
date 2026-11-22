@@ -643,6 +643,8 @@ package final class Runtime {
         // stands instead when the frame is built in place (InPlace.swift).
         var moved: [String: _AnimatedBox] = [:]
         var movedKeys: [String] = []
+        // (Not those of views the last frame left out: stopped with them.)
+        animator.suspendAnimationsNotAsked(now: animationTime)
         for key in animator.animatingKeys {
             // (In the tree built in place: not a presented layer's content.)
             if keepsRebuildSites, let tree = retainedTree, let hash = key.lastIndex(of: "#"),

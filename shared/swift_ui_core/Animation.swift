@@ -183,6 +183,11 @@ final class Animator {
 
     private var entries: [String: Entry] = [:]
     private var displayed: [String: Double] = [:]
+    /// The keys whose values were asked for since `suspendAnimationsNotAsked`.
+    private var asked: Set<String> = []
+    /// The animations of views that left the tree, kept to resume if they
+    /// come back (`suspendAnimationsNotAsked`).
+    private var suspended: [String: Entry] = [:]
 
     var isAnimating: Bool { !entries.isEmpty }
 
@@ -197,7 +202,41 @@ final class Animator {
     /// The keys of the values animating now.
     var animatingKeys: [String] { Array(entries.keys) }
 
+    /// Stops the animations whose values no build asked for since the last
+    /// call, and returns their keys: their views left the tree. Called as
+    /// each frame starts, it holds because a frame asks for every live one:
+    /// moved in place (its box's `configure`), or built again (its key is
+    /// written every frame, so the views above it aren't reused). Without
+    /// it a `repeatForever` whose view was replaced (a loading spinner gone
+    /// with its loading screen) went on writing its key, and on asking for
+    /// frames, for as long as the app ran, each frame built whole.
+    ///
+    /// Stopped, not ended: a view's state outlives it here (kept by its
+    /// place, `StateStorage`), so a spinner shown again at its place comes
+    /// back with its `.onAppear`'s value already set, and nothing would
+    /// start it again; its animation resumes instead as its value is next
+    /// asked for. (In SwiftUI the state goes with the view, and the
+    /// `.onAppear` starts a new one.) One that would have finished by now
+    /// is let go.
+    @discardableResult
+    func suspendAnimationsNotAsked(now: Double) -> [String] {
+        let gone = entries.keys.filter { !asked.contains($0) }
+        for key in gone {
+            suspended[key] = entries.removeValue(forKey: key)
+        }
+        if !suspended.isEmpty {
+            suspended = suspended.filter { $0.value.animation.progress(elapsed: now - $0.value.start).running }
+        }
+        asked.removeAll(keepingCapacity: true)
+        return gone
+    }
+
     func value(key: String, target: Double, animation: Animation?, now: Double) -> Double {
+        asked.insert(key)
+        // A view back in the tree: its animation resumes.
+        if !suspended.isEmpty, entries[key] == nil, let entry = suspended.removeValue(forKey: key) {
+            entries[key] = entry
+        }
         // First time we've seen this property: snap, no animation.
         guard let current = displayed[key] else {
             displayed[key] = target
