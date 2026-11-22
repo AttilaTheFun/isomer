@@ -127,13 +127,20 @@ struct StorybookHeadlessTests {
         defer { app.quit() }
         let apple = try app.info().renderer == "SwiftUI"
         var seen: [(scenario: String, swiftUI: Int, count: Int)] = []
+        /// A counter's count as the screen shows it: its button's label
+        /// (Apple's accessibility lists a button by its label, not as a
+        /// text), or a text; -1 when it isn't there.
+        func shown(_ name: String, on screen: HeadlessScreen) -> Int {
+            (0...3).first { n in
+                screen.elements.contains { $0.label == "\(name): \(n)" } || screen.shows("\(name): \(n)")
+            } ?? -1
+        }
         /// Taps `name`'s counter to 1, makes `change`, and reads its count.
         func count(_ name: String, after change: () throws -> Void) throws -> Int {
             try app.tap("\(name): 0")
             try app.wait(for: "\(name): 1")
             try change()
-            let screen = try app.screen()
-            return (0...3).first { screen.shows("\(name): \($0)") } ?? -1
+            return shown(name, on: try app.screen())
         }
         try app.tap("Stays: 0")
         try app.wait(for: "Stays: 1")
@@ -157,8 +164,7 @@ struct StorybookHeadlessTests {
             try app.tap("Show the sheet")
         }))
         try app.tap("Close the sheet")
-        let stays = try app.screen()
-        seen.append(("a view left alone", 1, (0...3).first { stays.shows("Stays: \($0)") } ?? -1))
+        seen.append(("a view left alone", 1, shown("Stays", on: try app.screen())))
         for (scenario, swiftUI, count) in seen {
             print("[state.lifetime] \(scenario): \(count) (SwiftUI's: \(swiftUI))")
             if apple { #expect(count == swiftUI, "\(scenario): \(count), SwiftUI's \(swiftUI)") }
