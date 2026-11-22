@@ -209,6 +209,10 @@ struct _BuildCacheEntry {
     /// The state outside it that it read through bindings: it is rebuilt
     /// when any of it changes.
     var bindingDependencies: Set<String>
+    /// The views keeping state that its build reached, but for those inside
+    /// the entries in `inner` (which keep their own): reused, it hands them
+    /// to the frame as reached (State.swift), as a build would have.
+    var owners: [String]
 }
 
 extension Runtime {
@@ -294,7 +298,15 @@ extension Runtime {
     /// frame.
     func touchBuildCache(_ path: String) {
         guard buildCacheTouched.insert(path).inserted, let entry = buildCache[path] else { return }
+        if recordingStateOwners { liveStateOwners.formUnion(entry.owners) }
         for inner in entry.inner { touchBuildCache(inner) }
+    }
+
+    /// Hands the views keeping state that a composite's build reached (and
+    /// that it keeps no entry for) to the build around it.
+    func forwardStateOwners(_ owners: [String]) {
+        guard !owners.isEmpty, !stateOwnerStack.isEmpty else { return }
+        stateOwnerStack[stateOwnerStack.count - 1] += owners
     }
 
     /// Records a reusable entry built (or reused) inside the view building
@@ -311,6 +323,9 @@ extension Runtime {
         buildDirtyKeys = dirtyStateKeys
         dirtyStateKeys = []
         buildCacheTouched.removeAll(keepingCapacity: true)
+        liveStateOwners.removeAll(keepingCapacity: true)
+        keptStatePrefixes.removeAll(keepingCapacity: true)
+        keptStateLists.removeAll(keepingCapacity: true)
     }
 
     /// Frame end: entries no view reached this frame are gone. A partial
@@ -432,6 +447,7 @@ func beginCompositeBuild(_ view: any View, ctx: BuildContext) -> _CompositeBuild
         started: _frameLogStart(),
         stacks: runtime.keepsRebuildSites ? runtime.buildStacks : nil)
     runtime.buildCacheInnerStack.append([])
+    runtime.stateOwnerStack.append([])
     runtime.buildEffectStack.append([])
     runtime.stateReadStack.append([])
     runtime.compositePathStack.append(ctx.path)
@@ -445,6 +461,7 @@ func finishCompositeBuild(_ build: _CompositeBuild, view: any View, ctx: BuildCo
     let runtime = Runtime.shared
     if build.started != 0 { _frameLogTime(view, started: build.started) }
     let inner = runtime.buildCacheInnerStack.removeLast()
+    let owners = runtime.stateOwnerStack.removeLast()
     let effects = runtime.popFrameEffects()
     runtime.noteStateReads(path: ctx.path, runtime.stateReadStack.removeLast())
     runtime.compositePathStack.removeLast()
@@ -465,7 +482,7 @@ func finishCompositeBuild(_ build: _CompositeBuild, view: any View, ctx: BuildCo
         runtime.buildCache[ctx.path] = _BuildCacheEntry(
             view: view, env: ctx.env, context: build.context, navigationLevel: ctx.navigationLevel,
             navigation: ctx.navigation.map(ObjectIdentifier.init), node: node, inner: inner, effects: effects,
-            bindingDependencies: dependencies)
+            bindingDependencies: dependencies, owners: owners)
         runtime.buildCacheTouched.insert(ctx.path)
         runtime.noteInnerCacheEntry(ctx.path)
     } else {
@@ -474,8 +491,9 @@ func finishCompositeBuild(_ build: _CompositeBuild, view: any View, ctx: BuildCo
                              bindingRead: _bindingDependencies(since: build.bindingReads, path: ctx.path) == nil)
         }
         // Not reusable itself: what was reusable inside it stays reachable
-        // through the views around it.
+        // through the views around it, and so do the views it reached.
         for entry in inner { runtime.noteInnerCacheEntry(entry) }
+        runtime.forwardStateOwners(owners)
     }
 }
 
@@ -484,6 +502,7 @@ func finishCompositeBuild(_ build: _CompositeBuild, view: any View, ctx: BuildCo
 func abandonCompositeBuild(_ build: _CompositeBuild) {
     let runtime = Runtime.shared
     let inner = runtime.buildCacheInnerStack.removeLast()
+    runtime.forwardStateOwners(runtime.stateOwnerStack.removeLast())
     _ = runtime.popFrameEffects()
     // Read by a view that is several rows: the view around it reads it.
     let reads = runtime.stateReadStack.removeLast()

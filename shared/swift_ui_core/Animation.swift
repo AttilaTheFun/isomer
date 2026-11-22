@@ -188,6 +188,9 @@ final class Animator {
     /// The animations of views that left the tree, kept to resume if they
     /// come back (`suspendAnimationsNotAsked`).
     private var suspended: [String: Entry] = [:]
+    /// The values shown, by the composite whose build first asked for each
+    /// (the view whose body holds the modifier), to forget with its state.
+    private var keysByOwner: [String: [String]] = [:]
 
     var isAnimating: Bool { !entries.isEmpty }
 
@@ -202,6 +205,27 @@ final class Animator {
     /// The keys of the values animating now.
     var animatingKeys: [String] { Array(entries.keys) }
 
+    /// Forgets what is kept of the values of the view at `owner` and the
+    /// views in it ("<owner>#…", "<owner>/…"): its state went with it
+    /// (State.swift), and shown again it starts afresh. The values shown are
+    /// found by the view that asked for them; those animating or stopped
+    /// (few) by their keys.
+    func forgetAnimations(of owner: String) {
+        if let keys = keysByOwner.removeValue(forKey: owner) {
+            for key in keys {
+                displayed[key] = nil
+                entries[key] = nil
+                suspended[key] = nil
+            }
+        }
+        func under(_ key: String) -> Bool {
+            let next = _byteAfterPrefix(key, owner)
+            return next == UInt8(ascii: "/") || next == UInt8(ascii: "#")
+        }
+        if !entries.isEmpty, entries.keys.contains(where: under) { entries = entries.filter { !under($0.key) } }
+        if !suspended.isEmpty, suspended.keys.contains(where: under) { suspended = suspended.filter { !under($0.key) } }
+    }
+
     /// Stops the animations whose values no build asked for since the last
     /// call, and returns their keys: their views left the tree. Called as
     /// each frame starts, it holds because a frame asks for every live one:
@@ -211,13 +235,14 @@ final class Animator {
     /// with its loading screen) went on writing its key, and on asking for
     /// frames, for as long as the app ran, each frame built whole.
     ///
-    /// Stopped, not ended: a view's state outlives it here (kept by its
-    /// place, `StateStorage`), so a spinner shown again at its place comes
-    /// back with its `.onAppear`'s value already set, and nothing would
-    /// start it again; its animation resumes instead as its value is next
-    /// asked for. (In SwiftUI the state goes with the view, and the
-    /// `.onAppear` starts a new one.) One that would have finished by now
-    /// is let go.
+    /// Stopped, not ended: a view can leave the tree with its state kept
+    /// (an unselected tab, a list's row off screen, a modifier an `if` in
+    /// its view's body took away), and comes back with its `.onAppear`'s
+    /// value already set, so nothing would start it again; its animation
+    /// resumes instead as its value is next asked for. A view whose state
+    /// goes takes its animations with it (`forgetAnimations(of:)`), and
+    /// shown again its `.onAppear` starts a new one, as in SwiftUI. One that
+    /// would have finished by now is let go.
     @discardableResult
     func suspendAnimationsNotAsked(now: Double) -> [String] {
         let gone = entries.keys.filter { !asked.contains($0) }
@@ -240,6 +265,7 @@ final class Animator {
         // First time we've seen this property: snap, no animation.
         guard let current = displayed[key] else {
             displayed[key] = target
+            if let owner = Runtime.shared.compositePathStack.last { keysByOwner[owner, default: []].append(key) }
             return target
         }
 

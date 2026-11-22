@@ -159,6 +159,9 @@ extension GeometryReader: _PrimitiveView {
         let node = RenderNode(kind: .geometryReader)
         node.identityPath = ctx.path
         let captured = ctx.descend("geo")
+        // Its content is built as it is laid out, after the frame's build:
+        // the views in it keep their state while the reader is there.
+        Runtime.shared.keepState(under: [captured.path])
         let content = self.content
         node.geometryBuild = { size, place in
             var sub = captured
@@ -310,8 +313,12 @@ extension TabView: _PrimitiveView {
         }
         let index = entries.isEmpty ? 0 : min(max(0, stored), entries.count - 1)
 
-        // Selected tab content, expanded to fill the area above the bar.
+        // Selected tab content, expanded to fill the area above the bar. The
+        // others keep their state while not shown, as SwiftUI's tabs do.
         let selectedView: any View = entries.isEmpty ? EmptyView() : entries[index].content
+        if entries.count > 1 {
+            Runtime.shared.keepState(under: entries.indices.filter { $0 != index }.map { path + "/tab\($0)" })
+        }
         var contentCtx = ctx.descend("tab\(index)")
         let contentNode = buildNode(view: selectedView, ctx: &contentCtx)
         let contentHolder = RenderNode.box(child: contentNode)
