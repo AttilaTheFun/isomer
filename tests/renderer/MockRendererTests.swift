@@ -2949,6 +2949,7 @@ struct Main {
         checkAnimationsEndWithTheirViews(mock)
         checkStateLifetime(mock)
         checkStateStorage(mock)
+        checkWholeFrameReasons(mock)
         checkOpenURLAfterPartialFrames()
 
         // Row actions: the tagged row is a tap target and carries its menu.
@@ -4095,6 +4096,102 @@ func checkStateLifetime(_ mock: MockRenderer) {
         settle()
         expect(shows("Row 5 1"), "a row off the rows built keeps its count\(label)")
     }
+}
+
+
+// MARK: - Why a frame is built whole
+
+/// Renders as the headless head does (headless/libraries/swift_ui/
+/// HeadlessHead.swift): the tree laid out with its chrome drawn, as the
+/// self-drawing renderer lays it out, then encoded for its handlers and
+/// appearances. Nothing drawn.
+final class HeadlessLikeRenderer: TreeRenderer {
+    let semanticNavigation = false
+    private let encoder = FlatTreeEncoder()
+    private(set) var lastTree: RenderNode?
+
+    init() { encoder.semantic = true }
+
+    func render(tree: RenderNode) {
+        let runtime = Runtime.shared
+        let reports = runtime.layoutTree(root: tree)
+        _ = runtime.layoutPresentations()
+        _ = encoder.encodePatch(root: tree)
+        runtime.installTreeHandlers(encoder.handlers)
+        runtime.fireTreeAppearances(encoder.appearances, disappearances: encoder.disappearances)
+        lastTree = tree
+        for report in reports { report() }
+    }
+}
+
+nonisolated(unsafe) var refusalTap: (@MainActor () -> Void)?
+
+struct RefusalCounter: View {
+    @State private var count = 0
+    var body: some View {
+        let _ = (refusalTap = { count += 1 })
+        HStack {
+            Text("Count \(count)")
+            Button("+") { count += 1 }
+        }
+    }
+}
+
+struct RefusalScreen: View {
+    var body: some View {
+        NavigationStack {
+            VStack {
+                Text("Refusals")
+                RefusalCounter()
+            }
+            .navigationTitle("Counter")
+        }
+    }
+}
+
+/// A frame built whole says why. Under a renderer that draws its chrome (the
+/// headless head's, the GPU renderer's) a tap's frame is built whole for
+/// that reason, by design: the renderer expands chrome into the tree, and
+/// drawn navigation animates in the core. It is not the root's environment,
+/// which is the same frame to frame there (the label these frames had
+/// before). The same tap under a component-system renderer is built in
+/// place.
+@MainActor
+func checkWholeFrameReasons(_ previous: MockRenderer) {
+    let logChecked = Runtime.shared.renderLogChecked, logEnabled = Runtime.shared.renderLogEnabled
+    Runtime.shared.renderLogChecked = true
+    Runtime.shared.renderLogEnabled = true
+    defer {
+        Runtime.shared.renderLogChecked = logChecked
+        Runtime.shared.renderLogEnabled = logEnabled
+        Renderer.bind(previous)
+    }
+    func settle() { var n = 0; while Runtime.shared.wantsFrame && n < 40 { Runtime.shared.renderFrame(); n += 1 } }
+
+    let headless = HeadlessLikeRenderer()
+    Renderer.bind(headless)
+    Runtime.shared.installRootView { RefusalScreen() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    settle()
+    for step in 1...2 {
+        refusalTap?()
+        settle()
+        let stats = Runtime.shared.frameStats
+        expect(stats.kind == .whole && stats.detail == "drawn chrome",
+               "a tap's frame under drawn chrome is built whole for that reason, \(step) (\(stats.kind.rawValue): \(stats.detail))")
+        expect(findTextInTree(headless.lastTree!, "Count \(step)"), "and shows the count, \(step)")
+    }
+
+    Renderer.bind(previous)
+    Runtime.shared.installRootView { RefusalScreen() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    settle()
+    let partials = Runtime.shared.partialFrameCount
+    refusalTap?()
+    settle()
+    let stats = Runtime.shared.frameStats
+    expect(Runtime.shared.partialFrameCount > partials && stats.kind == .partial,
+           "the same tap under a component-system renderer is built in place (\(stats.kind.rawValue): \(stats.detail))")
 }
 
 
