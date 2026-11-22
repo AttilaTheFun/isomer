@@ -83,4 +83,6 @@ swift-collections. An app that uses SwiftProtobuf itself takes the same one,
 module of its own: two would link two SwiftProtobufs into one app. With
 `--@isomer//:library_evolution` that SwiftProtobuf is built resilient too
 (docs/library_evolution.md), for generated modules built with library
-evolution.
+evolution. An app whose SwiftProtobuf is a module of its own that several of
+its binaries share points `--@isomer//:swift_protobuf` at it instead, and
+Isomer links that one (BUILD.bazel).
