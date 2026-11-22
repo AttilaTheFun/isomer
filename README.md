@@ -921,9 +921,12 @@ swift_proto_library(
 shared/wire/BUILD.bazel's is, for other plugin options). Take
 SwiftProtobuf from that graph rather than as a module of your own: Isomer's
 SwiftUI depends on it, and `--@isomer//:library_evolution` builds it
-resilient too, for generated modules built with library evolution.
-docs/compatibility.md lists every Bazel module isomer asks for, at what
-version and why.
+resilient too, for generated modules built with library evolution. An app
+whose own SwiftProtobuf is one module several of its binaries share (a
+framework of its own) points `--@isomer//:swift_protobuf` at it, and Isomer
+links that one in place of the graph's (BUILD.bazel says what it must
+provide). docs/compatibility.md lists every Bazel module isomer asks for, at
+what version and why.
 
 **The complete, always-current reference is
 [`examples/MODULE.bazel`](examples/MODULE.bazel)** — the examples are
