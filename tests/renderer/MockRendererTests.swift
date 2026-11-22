@@ -3968,21 +3968,20 @@ struct LifetimeList: View {
     }
 }
 
-/// Each case at a place of its own, each pass too: a whole build of a new
-/// root lets go of the state of the views no longer in it, so a place
-/// shared with the pass before would be its views', kept.
+/// Each case at a place of its own, each pass too (a case of its own): a
+/// place shared with the pass before would hold its views, and their state.
+/// Each in a stack, so its view's node is not the tree's root, which no
+/// view is built again alone in place of.
 struct LifetimeRoot: View {
     let place: Int
     var body: some View {
-        switch place {
-        case 0: LifetimeScreen()
-        case 1: VStack { LifetimeScreen() }
-        case 2: LifetimeTabs()
-        case 3: VStack { LifetimeTabs() }
-        case 4: LifetimeStack()
-        case 5: VStack { LifetimeStack() }
-        case 6: LifetimeList()
-        default: VStack { LifetimeList() }
+        VStack {
+            switch place {
+            case 0, 1: if place == 0 { LifetimeScreen() } else { LifetimeScreen() }
+            case 2, 3: if place == 2 { LifetimeTabs() } else { LifetimeTabs() }
+            case 4, 5: if place == 4 { LifetimeStack() } else { LifetimeStack() }
+            default: if place == 6 { LifetimeList() } else { LifetimeList() }
+            }
         }
     }
 }
