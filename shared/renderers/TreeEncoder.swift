@@ -34,6 +34,12 @@ package final class FlatTreeEncoder {
     /// subtree on any kind/child-count change.
     private var previous: FlatNode?
 
+    /// The sizes the wire writer measures, kept from pass to pass with their
+    /// storage (`_TreeWire`): made afresh, a large tree's grew through a
+    /// string of allocations every frame, and the frames built after them
+    /// came slower in the tail.
+    private var wireSizes: [Int] = []
+
     /// Each node's greediness for the current pass. Every node asks for its
     /// own, and a node's answer takes its whole subtree's, so without this a
     /// deep tree (a long transcript) paid subtree-size times depth per frame.
@@ -160,7 +166,7 @@ package final class FlatTreeEncoder {
         appearances = []
         disappearances = [:]
         let tree = flattenRoot(root)
-        return _TreeWire.nodeBytes(tree)
+        return _TreeWire.nodeBytes(tree, sizes: &wireSizes)
     }
 
     // MARK: - Diff-aware encode
@@ -185,7 +191,7 @@ package final class FlatTreeEncoder {
         diff(previous, tree, path: "n", &ops)
         previous = tree
         Runtime.shared.noteFrameDiff(nodes: diffedNodes, ops: ops.count)
-        return _TreeWire.patchBytes(ops)
+        return _TreeWire.patchBytes(ops, sizes: &wireSizes)
     }
 
     // MARK: - Diff
@@ -1743,10 +1749,18 @@ private func _int32Bits(_ value: Int32) -> UInt64 {
 private struct _WireSizer: _WireSink, ~Copyable {
     /// The size of the message being measured so far.
     var count = 0
-    var sizes: [Int] = []
+    var sizes: [Int]
     /// The messages around the one being measured: each one's slot in
     /// `sizes` and its size so far.
     private var open: [(slot: Int, outer: Int, field: Int)] = []
+
+    /// Measures into `sizes`' storage, emptied.
+    init(reusing sizes: inout [Int]) {
+        sizes.removeAll(keepingCapacity: true)
+        self.sizes = sizes
+        // (Moved out, so the measuring appends to storage no one else holds.)
+        sizes = []
+    }
 
     mutating func varint(_ field: Int, _ value: UInt64) { count += _tagSize(field) + _varintSize(value) }
     mutating func fixed32(_ field: Int, _ bits: UInt32) { count += _tagSize(field) + 4 }
@@ -1895,24 +1909,27 @@ private struct _WireWriter: _WireSink, ~Copyable {
 
 private enum _TreeWire {
     /// A tree.proto Node: the tree `encode(root:)` writes.
-    static func nodeBytes(_ node: FlatNode) -> [UInt8] {
-        var sizer = _WireSizer()
+    /// (`sizes`: the measuring's storage, kept by the encoder.)
+    static func nodeBytes(_ node: FlatNode, sizes: inout [Int]) -> [UInt8] {
+        var sizer = _WireSizer(reusing: &sizes)
         _visitNode(node, children: true, &sizer)
-        return write(sizer) { _visitNode(node, children: true, &$0) }
+        return write(sizer, sizes: &sizes) { _visitNode(node, children: true, &$0) }
     }
 
     /// A tree.proto Patch of `ops`.
-    static func patchBytes(_ ops: [_WireOp]) -> [UInt8] {
-        var sizer = _WireSizer()
+    static func patchBytes(_ ops: [_WireOp], sizes: inout [Int]) -> [UInt8] {
+        var sizer = _WireSizer(reusing: &sizes)
         _visitPatch(ops, &sizer)
-        return write(sizer) { _visitPatch(ops, &$0) }
+        return write(sizer, sizes: &sizes) { _visitPatch(ops, &$0) }
     }
 
     /// What `body` writes (the walk `measured` measured), in an array of
-    /// exactly that many bytes.
-    private static func write(_ measured: consuming _WireSizer, _ body: (inout _WireWriter) -> Void) -> [UInt8] {
+    /// exactly that many bytes; the sizes measured handed back to `sizes`.
+    private static func write(
+        _ measured: consuming _WireSizer, sizes: inout [Int], _ body: (inout _WireWriter) -> Void
+    ) -> [UInt8] {
         let total = measured.count
-        let sizes = measured.sizes
+        sizes = measured.sizes
         return [UInt8](unsafeUninitializedCapacity: total) { buffer, initialized in
             var writer = _WireWriter(buffer, sizes: sizes)
             body(&writer)
