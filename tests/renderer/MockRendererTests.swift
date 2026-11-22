@@ -2947,6 +2947,7 @@ struct Main {
         checkVolatileSites()
         checkAnimatedTransforms(mock)
         checkAnimationsEndWithTheirViews(mock)
+        checkStateLifetime(mock)
         checkOpenURLAfterPartialFrames()
 
         // Row actions: the tagged row is a tap target and carries its menu.
@@ -3882,5 +3883,215 @@ func checkAnimationsEndWithTheirViews(_ mock: MockRenderer) {
         }
         expect(findTextInTree(Runtime.shared.retainedTree!, "Count 2"), "turning beside the counter\(label): the counter's change shows")
         expect(Runtime.shared.partialMismatches == mismatches, "the frames built in place are the whole builds'\(label)")
+    }
+}
+
+
+// MARK: - A view's state lasts as long as the view
+
+/// Each tally's count, written through its binding as a tap would.
+nonisolated(unsafe) var lifetimeCounts: [String: Binding<Int>] = [:]
+nonisolated(unsafe) var lifetimeShows: Binding<Bool>?
+nonisolated(unsafe) var lifetimeItems: Binding<[Int]>?
+nonisolated(unsafe) var lifetimeTab: Binding<Int>?
+nonisolated(unsafe) var lifetimePath: Binding<[Int]>?
+nonisolated(unsafe) var lifetimeHeldTaps = 0
+
+/// A count of its own, which starts at 0.
+struct LifetimeTally: View {
+    let name: String
+    @State private var count = 0
+    var body: some View {
+        let _ = (lifetimeCounts[name] = $count)
+        Text("\(name) \(count)")
+    }
+}
+
+/// The same, holding a closure: its inputs can't be compared, so no cache
+/// entry keeps it, and a view around it reused hands it over as reached
+/// from its own entry.
+struct LifetimeHeldTally: View {
+    let name: String
+    let onTap: () -> Void
+    @State private var count = 0
+    var body: some View {
+        let _ = (lifetimeCounts[name] = $count)
+        Button("\(name) \(count)", action: onTap)
+    }
+}
+
+/// An if's branch, a ForEach's items, a view holding a closure and one
+/// left alone.
+struct LifetimeScreen: View {
+    @State private var shows = true
+    @State private var items = [1, 2]
+    var body: some View {
+        let _ = (lifetimeShows = $shows)
+        let _ = (lifetimeItems = $items)
+        VStack {
+            if shows { LifetimeTally(name: "Branch") } else { Text("The other branch") }
+            ForEach(items, id: \.self) { item in LifetimeTally(name: "Item \(item)") }
+            LifetimeHeldTally(name: "Held") { lifetimeHeldTaps += 1 }
+            LifetimeTally(name: "Stays")
+        }
+    }
+}
+
+struct LifetimeTabs: View {
+    @State private var tab = 0
+    var body: some View {
+        let _ = (lifetimeTab = $tab)
+        TabView(selection: $tab) {
+            LifetimeTally(name: "First tab").tabItem { Text("One") }.tag(0)
+            LifetimeTally(name: "Second tab").tabItem { Text("Two") }.tag(1)
+        }
+    }
+}
+
+struct LifetimeStack: View {
+    @State private var path: [Int] = []
+    var body: some View {
+        let _ = (lifetimePath = $path)
+        NavigationStack(path: $path) {
+            LifetimeTally(name: "Level 0")
+                .navigationDestination(for: Int.self) { level in LifetimeTally(name: "Level \(level)") }
+        }
+    }
+}
+
+/// A List longer than the rows it builds at once.
+struct LifetimeList: View {
+    var body: some View {
+        List {
+            ForEach(0..<200) { row in LifetimeTally(name: "Row \(row)") }
+        }
+    }
+}
+
+/// Each case at a place of its own, each pass too (a case of its own): a
+/// place shared with the pass before would hold its views, and their state.
+/// Each in a stack, so its view's node is not the tree's root, which no
+/// view is built again alone in place of.
+struct LifetimeRoot: View {
+    let place: Int
+    var body: some View {
+        VStack {
+            switch place {
+            case 0, 1: if place == 0 { LifetimeScreen() } else { LifetimeScreen() }
+            case 2, 3: if place == 2 { LifetimeTabs() } else { LifetimeTabs() }
+            case 4, 5: if place == 4 { LifetimeStack() } else { LifetimeStack() }
+            default: if place == 6 { LifetimeList() } else { LifetimeList() }
+            }
+        }
+    }
+}
+
+/// A view's state lasts as long as the view, as in SwiftUI: an if's branch
+/// swapped away and back, or a ForEach's item removed and added again,
+/// starts again from 0, in a frame built in place and in one built whole;
+/// a view that stays keeps its count, one holding a closure too. A TabView's
+/// unselected tab, a stack's level under the one shown and a List's row off
+/// the rows it builds keep theirs; a level popped and pushed again starts
+/// again. Each with partial frames checked against whole builds, and not.
+@MainActor
+func checkStateLifetime(_ mock: MockRenderer) {
+    let verifying = Runtime.shared.verifyPartialFrames
+    defer { Runtime.shared.verifyPartialFrames = verifying }
+    for verify in [true, false] {
+        Runtime.shared.verifyPartialFrames = verify
+        let label = verify ? " (checked against a whole build)" : ""
+        func settle() { var n = 0; while Runtime.shared.wantsFrame && n < 40 { Runtime.shared.renderFrame(); n += 1 } }
+        func shows(_ text: String) -> Bool { findTextInTree(Runtime.shared.retainedTree!, text) }
+        func start(_ place: Int) {
+            lifetimeCounts = [:]
+            Runtime.shared.installRootView { LifetimeRoot(place: place) }
+            Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+            settle()
+        }
+        func tap(_ name: String) {
+            guard let count = lifetimeCounts[name] else { return expect(false, "\(name)\(label): its tally is built") }
+            count.wrappedValue += 1
+            settle()
+        }
+        /// A change, in a frame built in place (or asked to be built whole),
+        /// as a whole build of it would be.
+        func frame(_ step: String, whole: Bool = false, _ change: () -> Void) {
+            let partials = Runtime.shared.partialFrameCount, mismatches = Runtime.shared.partialMismatches
+            change()
+            if whole { Runtime.shared.setNeedsRender() }
+            settle()
+            let stats = Runtime.shared.frameStats
+            expect(Runtime.shared.partialMismatches == mismatches, "\(step)\(label): the frames built in place are the whole builds'")
+            if !whole {
+                expect(Runtime.shared.partialFrameCount > partials,
+                       "\(step)\(label): built in place (\(stats.kind.rawValue): \(stats.detail))")
+            }
+        }
+
+        // An if, a ForEach, a view holding a closure, one left alone.
+        start(verify ? 0 : 1)
+        for name in ["Branch", "Item 1", "Item 2", "Held", "Stays"] { tap(name) }
+        expect(shows("Branch 1") && shows("Item 2 1") && shows("Held 1") && shows("Stays 1"), "the tallies count\(label)")
+        frame("an if's branch swapped away") { lifetimeShows?.wrappedValue = false }
+        expect(shows("The other branch"), "the other branch shows\(label)")
+        frame("and back") { lifetimeShows?.wrappedValue = true }
+        expect(shows("Branch 0"), "an if's branch swapped away and back, in place, starts again\(label)")
+        tap("Branch")
+        frame("an if's branch swapped away, built whole", whole: true) { lifetimeShows?.wrappedValue = false }
+        frame("and back, built whole", whole: true) { lifetimeShows?.wrappedValue = true }
+        expect(shows("Branch 0"), "an if's branch swapped away and back, built whole, starts again\(label)")
+        frame("a ForEach's item removed") { lifetimeItems?.wrappedValue = [1] }
+        expect(!shows("Item 2 1"), "the item is gone\(label)")
+        frame("and added again") { lifetimeItems?.wrappedValue = [1, 2] }
+        expect(shows("Item 2 0"), "a ForEach's item removed and added again starts again\(label)")
+        expect(shows("Item 1 1") && shows("Held 1") && shows("Stays 1"),
+               "the views that stayed keep their counts, the one holding a closure too\(label)")
+        // A whole build that reuses the screen: its views are reached
+        // through its cache entry, the one holding a closure among them.
+        frame("a whole build reusing the screen", whole: true) {}
+        expect(shows("Item 1 1") && shows("Held 1") && shows("Stays 1"),
+               "a whole build reusing them keeps their counts, the one holding a closure too\(label)")
+        tap("Held")
+        expect(shows("Held 2"), "the view holding a closure counts on from its own count\(label)")
+
+        // A TabView: the tab not shown keeps its count.
+        start(verify ? 2 : 3)
+        tap("First tab")
+        frame("the second tab selected", whole: true) { lifetimeTab?.wrappedValue = 1 }
+        expect(shows("Second tab 0") && !shows("First tab 1"), "the second tab shows\(label)")
+        tap("Second tab")
+        frame("the first tab selected again", whole: true) { lifetimeTab?.wrappedValue = 0 }
+        expect(shows("First tab 1"), "a tab not shown keeps its count\(label)")
+        frame("the second tab again", whole: true) { lifetimeTab?.wrappedValue = 1 }
+        expect(shows("Second tab 1"), "and so does the other\(label)")
+
+        // A NavigationStack: a level under the one shown keeps its count; a
+        // level popped doesn't.
+        start(verify ? 4 : 5)
+        tap("Level 0")
+        frame("a level pushed", whole: true) { lifetimePath?.wrappedValue = [1] }
+        expect(shows("Level 1 0") && !shows("Level 0 1"), "the level pushed shows\(label)")
+        tap("Level 1")
+        frame("a level pushed above it", whole: true) { lifetimePath?.wrappedValue = [1, 2] }
+        frame("and popped", whole: true) { lifetimePath?.wrappedValue = [1] }
+        expect(shows("Level 1 1"), "a level under the one shown keeps its count\(label)")
+        frame("popped to the root", whole: true) { lifetimePath?.wrappedValue = [] }
+        expect(shows("Level 0 1"), "the root under the levels keeps its count\(label)")
+        frame("the level pushed again", whole: true) { lifetimePath?.wrappedValue = [1] }
+        expect(shows("Level 1 0"), "a level popped and pushed again starts again\(label)")
+
+        // A List: a row off the rows it builds keeps its count.
+        start(verify ? 6 : 7)
+        tap("Row 5")
+        guard let list = Runtime.shared.listsWithUnbuiltRows.first?.list else {
+            expect(false, "the list leaves rows unbuilt\(label)")
+            continue
+        }
+        Runtime.shared.showListRows(list, 150...160)
+        settle()
+        expect(!shows("Row 5 1") && !shows("Row 5 0"), "the row is off the rows built\(label)")
+        Runtime.shared.showListRows(list, 0...10)
+        settle()
+        expect(shows("Row 5 1"), "a row off the rows built keeps its count\(label)")
     }
 }

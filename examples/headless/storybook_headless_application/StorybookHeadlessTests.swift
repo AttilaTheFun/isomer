@@ -119,13 +119,10 @@ struct StorybookHeadlessTests {
     /// the story's counters is tapped to 1, its view is taken away and
     /// brought back (by an if, a new id, a ForEach's items, its sheet), and
     /// its count read again; one is left alone. Apple's SwiftUI is the
-    /// reference: it checks the counts SwiftUI gives. Isomer keeps a view's
-    /// state by its place, so its counts are only printed beside them until
-    /// it drops a view's state with the view.
+    /// reference: every renderer gives the counts SwiftUI gives.
     @Test func stateLastsAsLongAsItsView() throws {
         let app = try launch(story: "state.lifetime")
         defer { app.quit() }
-        let apple = try app.info().renderer == "SwiftUI"
         var seen: [(scenario: String, swiftUI: Int, count: Int)] = []
         /// A counter's count as the screen shows it: its button's label
         /// (Apple's accessibility lists a button by its label, not as a
@@ -167,7 +164,7 @@ struct StorybookHeadlessTests {
         seen.append(("a view left alone", 1, shown("Stays", on: try app.screen())))
         for (scenario, swiftUI, count) in seen {
             print("[state.lifetime] \(scenario): \(count) (SwiftUI's: \(swiftUI))")
-            if apple { #expect(count == swiftUI, "\(scenario): \(count), SwiftUI's \(swiftUI)") }
+            #expect(count == swiftUI, "\(scenario): \(count), SwiftUI's \(swiftUI)")
         }
     }
 

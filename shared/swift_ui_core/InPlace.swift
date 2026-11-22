@@ -304,6 +304,8 @@ extension Runtime {
         defer { buildStacks = outside }
         volatileOwnersBuilding = []
         let registered = _frameRegistrations
+        recordingStateOwners = true
+        defer { recordingStateOwners = false }
         for site in sites {
             guard let old = site.node, let trail = _trail(to: old, in: tree), let parent = trail.last else {
                 noteBuiltWhole("\(typeName(site.view)) not in the tree")
@@ -321,6 +323,7 @@ extension Runtime {
             if !ctx.env.animationChosen { ctx.env.animation = transactionAnimation }
             buildCache[site.path] = nil
             buildCacheInnerStack.append([])
+            stateOwnerStack.append([])
             buildEffectStack.append([])
             let readsBefore = _bindingReadKeys.count
             let volatilityBefore = buildVolatility
@@ -333,6 +336,7 @@ extension Runtime {
             }
             let effects = buildEffectStack.removeLast()
             let inner = buildCacheInnerStack.removeLast()
+            let owners = stateOwnerStack.removeLast()
             let reads = Array(_bindingReadKeys[min(readsBefore, _bindingReadKeys.count)...])
             guard let node else {
                 noteBuiltWhole("\(typeName(site.view)) came to another node")
@@ -377,6 +381,11 @@ extension Runtime {
                 }
                 entry.bindingDependencies.formUnion(reads)
                 entry.inner += inner
+                // The views keeping state that it reached and keeps no
+                // entry for (itself, when its inputs can't be compared),
+                // each added once: a site built every frame (a volatile
+                // one) would add them every frame.
+                for owner in owners where !entry.owners.contains(owner) { entry.owners.append(owner) }
                 // Its registrations for the views above are theirs already
                 // (the same as before); its own bookkeeping is added.
                 entry.effects += effects.filter(\.local)
@@ -384,6 +393,9 @@ extension Runtime {
             }
             frameLog?.inPlace.append(typeName(site.view))
         }
+        // The views that were inside the sites and are no longer lose their
+        // state (State.swift).
+        for site in sites { dropStateGone(inside: site.path) }
         // The volatile builds now: those in the sites built are as found.
         let built = sites.map(\.path)
         volatileOwners = volatileOwners.filter { owner in

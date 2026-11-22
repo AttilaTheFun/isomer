@@ -265,6 +265,20 @@ a repository of its own):
   (`RenderNode.keepsItsBuild`), so a partial frame's patch is diffed along
   the changed path only.
 
+- **A view's state lasts as long as the view** (State.swift's section of
+  that name). State is kept by the view's path, and goes when a build no
+  longer reaches the path: each build records the views whose state it
+  connects, a reused subtree hands over those its cache entry recorded
+  (`_BuildCacheEntry.owners`), and a container that keeps views it doesn't
+  build registers their places each frame (`keepState(under:)`: a TabView's
+  other tabs, a stack's lower levels, a geometry reader's content;
+  `keepStateOfRows(of:)`: a List's rows off screen). A whole build drops
+  every other owner's state; a view built alone drops what was inside it
+  and isn't now, found through the owners' tree (`StateStorage.parents`,
+  `children`). Its animations go too. `.id(_:)` is part of the path, so a
+  new id is a new view. A container that builds only some of what it holds
+  must register the rest, or their state goes when they are hidden.
+
 ## What this repo is
 
 A cross-platform **SwiftUI subset**: one Bazel module builds the same SwiftUI

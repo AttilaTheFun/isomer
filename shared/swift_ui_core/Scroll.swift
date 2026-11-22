@@ -238,6 +238,8 @@ extension List: _PrimitiveView {
         collectRowSlots(of: content, ctx: &sub, into: &slots)
         let window = semantic ? Runtime.shared.listBuildWindow(list: ctx.path, rowPaths: slots.map(\.ctx.path)) : nil
         if semantic { scroll.lazyRows = true }
+        // Its rows off screen keep their state, as SwiftUI's List's do.
+        if window != nil { Runtime.shared.keepStateOfRows(of: ctx.path) }
         var rows: [(node: RenderNode, tag: AnyHashable?, isHeader: Bool, path: String)] = []
         rows.reserveCapacity(slots.count)
         for (index, slot) in slots.enumerated() {

@@ -319,6 +319,9 @@ extension NavigationStack {
 extension NavigationStack: _PrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
+        // The path is state the stack keeps at its place, which goes with
+        // the stack (State.swift).
+        Runtime.shared.noteStateOwner(ctx.path, type: ObjectIdentifier(NavigationState.self), storage: ctx.storage)
         let key = ctx.path + "#navigation"
         let nav: NavigationState
         if let existing = ctx.storage.locations[key] as? NavigationState {
@@ -334,6 +337,13 @@ extension NavigationStack: _PrimitiveView {
         nav.path = path
         nav.followPath()
         nav.followPresenters()
+        // The levels below the top keep their state while a level above
+        // them shows, as SwiftUI's do; a level popped is no longer kept, and
+        // pushed again starts afresh.
+        if !nav.stack.isEmpty {
+            let stackPath = ctx.path
+            Runtime.shared.keepState(under: nav.stack.indices.map { stackPath + "/level\($0)" })
+        }
         _registerDestinations(nav: nav, ctx: &ctx)
         // Track for the system back button (innermost visible stack pops first).
         Runtime.shared.registerFrameEffect { Runtime.shared.navigationStates.append(nav) }
@@ -1388,6 +1398,14 @@ extension NavigationSplitView: _PrimitiveView {
                 }
                 shown = advanceTo
                 box = build(shown)
+            }
+            // The columns before the one shown keep their state, as a
+            // compact split's do in SwiftUI (they are the stack under it);
+            // those after it are popped.
+            let order = columnCount == 3 ? ["sidebar", "content", "detail"] : ["sidebar", "detail"]
+            if let at = order.firstIndex(of: shown), at > 0 {
+                let splitPath = ctx.path
+                Runtime.shared.keepState(under: order[..<at].map { splitPath + "/" + $0 })
             }
             box.expandsWidth = true
             return box

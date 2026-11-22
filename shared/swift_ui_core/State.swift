@@ -6,7 +6,9 @@
 // and connects every dynamic property to a persistent location owned by
 // `StateStorage` (keyed by tree path + property label). The connection
 // mutates a class box *referenced* by the property wrapper struct, which is
-// how the freshly-copied view value ends up seeing persistent state.
+// how the freshly-copied view value ends up seeing persistent state. The
+// location lasts as long as the view does ("A view's state lasts as long as
+// the view", below).
 
 /// Internal protocol adopted by property wrappers that need to be wired to
 /// persistent storage (and/or the environment) before `body` runs.
@@ -23,11 +25,61 @@ extension _DynamicProperty {
 }
 
 final class StateStorage {
-    var locations: [String: AnyObject] = [:]
+    var locations = _StateLocations()
     /// The type of the view whose properties are kept at each path: another
     /// type there is another view, whose state starts afresh (SwiftUI's
-    /// identity is the type and the place).
+    /// identity is the type and the place). Every view that keeps state here
+    /// (an owner) has an entry, which goes with its state when the view
+    /// leaves the tree (`Runtime.dropStateOfViewsGone`).
     var types: [String: ObjectIdentifier] = [:]
+    /// The owners as a tree: each one's nearest owner above it (the
+    /// composite whose build it was first built in) and the owners just
+    /// below each. A view built again alone (InPlace.swift) finds here the
+    /// owners that were inside it, without looking at every owner's path.
+    var parents: [String: String] = [:]
+    var children: [String: Set<String>] = [:]
+    /// Owners first given state outside any frame's build (drawn chrome,
+    /// built as the renderer draws; a menu's content built as it opens): no
+    /// build says whether they are still there, so their state is kept, as
+    /// every view's was before.
+    var unmanaged: Set<String> = []
+    /// The place that kept each owner while it was not built (an unselected
+    /// tab, a list's row off screen), asked first next time: walking up an
+    /// owner's path to find it makes a string for each step.
+    var keptBy: [String: String] = [:]
+}
+
+/// The kept properties by key ("<view path>#<property>"), and the keys of
+/// each owner (the view path before the key's last "#"), so a view's state
+/// can go without a look at every key.
+struct _StateLocations {
+    private var objects: [String: AnyObject] = [:]
+    private var keysByOwner: [String: [String]] = [:]
+
+    subscript(key: String) -> AnyObject? {
+        get { objects[key] }
+        set {
+            guard let newValue else {
+                guard objects.removeValue(forKey: key) != nil else { return }
+                let owner = _stateOwner(key)
+                keysByOwner[owner]?.removeAll { $0 == key }
+                if keysByOwner[owner]?.isEmpty == true { keysByOwner[owner] = nil }
+                return
+            }
+            // (Each key's owner worked out once, as it is first kept.)
+            if objects.updateValue(newValue, forKey: key) == nil { keysByOwner[_stateOwner(key), default: []].append(key) }
+        }
+    }
+
+    var count: Int { objects.count }
+
+    /// Forgets every property `owner` keeps; returns their keys.
+    @discardableResult
+    mutating func removeAll(ownedBy owner: String) -> [String] {
+        guard let keys = keysByOwner.removeValue(forKey: owner) else { return [] }
+        for key in keys { objects[key] = nil }
+        return keys
+    }
 }
 
 /// Whether `new` is `old` again: Equatable values by `==`; anything else
@@ -319,18 +371,7 @@ public struct Binding<Value> {
 func connectDynamicProperties(
     of view: any View, path: String, storage: StateStorage, env: EnvironmentValues
 ) {
-    // Another type of view at this place (a story switched in place, a
-    // branch's other view): the old one's state goes, so a property of the
-    // same name and type isn't the old view's.
-    let type = ObjectIdentifier(Swift.type(of: view))
-    let previous = storage.types[path]
-    if previous != type {
-        if previous != nil {
-            let prefix = path + "#"
-            for key in storage.locations.keys where key.hasPrefix(prefix) { storage.locations[key] = nil }
-        }
-        storage.types[path] = type
-    }
+    Runtime.shared.noteStateOwner(path, type: ObjectIdentifier(Swift.type(of: view)), storage: storage)
     // In place, by the type's layout (DynamicPropertyLayout.swift); Mirror
     // for a type whose fields are not inline.
     if _connectByLayout(of: view, path: path, storage: storage, env: env) { return }
@@ -351,6 +392,176 @@ private func connectDynamicProperties(ofValue value: Any, prefix: String, storag
             connectDynamicProperties(ofValue: child.value, prefix: prefix + label + ".", storage: storage, env: env)
         }
         index += 1
+    }
+}
+
+// MARK: - A view's state lasts as long as the view
+
+// SwiftUI keeps a view's state while the view is in the hierarchy and lets
+// it go with the view: a view an `if` swaps out, one given a new `.id`, a
+// ForEach's item removed or a sheet closed comes back with its initial
+// values. Here state is kept by the view's place (`StateStorage`), and it
+// used to go only when another type of view took the place; now it goes
+// when nothing is at the place any more:
+//   - each build records the owners it reaches (`liveStateOwners`): every
+//     view whose state it connects, and, for a subtree handed back unbuilt,
+//     the owners its cache entry recorded as it was built
+//     (`_BuildCacheEntry.owners`; those of the entries inside it are found
+//     through `inner`, as `touchBuildCache` keeps them);
+//   - a container that keeps views it doesn't build says so each frame
+//     (`keepState(under:)`, `keepStateOfRows(of:)`: a TabView's unselected
+//     tabs, a stack's levels below its top, a List's rows off screen, a
+//     geometry reader's content, built as it is laid out), as a
+//     registration a reused container makes again;
+//   - after a whole build, an owner neither reached nor under a kept place
+//     loses its state (`dropStateOfViewsGone`); after a view built again
+//     alone, so do the owners that were inside it and are no longer
+//     (`dropStateGone(inside:)`), found through the owners' tree.
+// Its animations go with it (`Animator.forgetAnimations(of:)`), so a view
+// shown again starts from its initial state, and its `.onAppear` starts
+// what it starts. The root's state stays; so does state first kept outside
+// a frame's build (`StateStorage.unmanaged`).
+
+extension Runtime {
+    /// The view at `path` keeps state in `storage` (its properties are being
+    /// connected, or it is a navigation stack keeping its path): recorded as
+    /// a view this build reaches and, the first time, where it sits among
+    /// the owners.
+    func noteStateOwner(_ path: String, type: ObjectIdentifier, storage: StateStorage) {
+        let previous = storage.types[path]
+        if previous != type {
+            if previous != nil {
+                // Another type of view at this place (a story switched in
+                // place, a branch's other view): the old one's state goes,
+                // so a property of the same name and type isn't the old
+                // view's.
+                storage.locations.removeAll(ownedBy: path)
+            } else if recordingStateOwners || geometryBuildDepth > 0 {
+                // Below the composite being built (its own build has pushed
+                // it already: the one before it).
+                let stack = compositePathStack
+                if let above = stack.last == path ? stack.dropLast().last : stack.last, storage.parents[path] == nil {
+                    storage.parents[path] = above
+                    storage.children[above, default: []].insert(path)
+                }
+            } else {
+                storage.unmanaged.insert(path)
+            }
+            storage.types[path] = type
+        }
+        guard recordingStateOwners, storage === self.storage else { return }
+        liveStateOwners.insert(path)
+        if !stateOwnerStack.isEmpty { stateOwnerStack[stateOwnerStack.count - 1].append(path) }
+    }
+
+    /// The views at and under each of `paths` keep their state this frame
+    /// though they are not built: a TabView's unselected tabs, a stack's
+    /// levels below its top, a geometry reader's content (built as it is
+    /// laid out, after the frame's build). Made again when a view around the
+    /// container is reused.
+    @MainActor
+    func keepState(under paths: [String]) {
+        registerFrameEffect(local: true) { Runtime.shared.keptStatePrefixes.formUnion(paths) }
+    }
+
+    /// The rows of the List at `list` keep their state while they are off
+    /// the rows it builds: its rows now, built or not (`listRowPaths`). A
+    /// row taken out of the list is no longer one of them.
+    @MainActor
+    func keepStateOfRows(of list: String) {
+        registerFrameEffect(local: true) { Runtime.shared.keptStateLists.insert(list) }
+    }
+
+    /// Whether `owner`, which this frame's build did not reach, is at or
+    /// under a place kept this frame.
+    func stateIsKept(_ owner: String) -> Bool {
+        guard !keptStatePrefixes.isEmpty || !keptStateLists.isEmpty else { return false }
+        // The place that kept it last time, most often the place now.
+        if let place = storage.keptBy[owner], isKeptPlace(place) { return true }
+        var path = Substring(owner)
+        while true {
+            let place = String(path)
+            if isKeptPlace(place) {
+                storage.keptBy[owner] = place
+                return true
+            }
+            guard let slash = path.lastIndex(of: "/") else { break }
+            path = path[..<slash]
+        }
+        storage.keptBy[owner] = nil
+        return false
+    }
+
+    private func isKeptPlace(_ path: String) -> Bool {
+        if keptStatePrefixes.contains(path) { return true }
+        // A row of a list that keeps its rows: one of its rows now.
+        guard !keptStateLists.isEmpty, let row = listRowIndex[path], keptStateLists.contains(row.list),
+              let rows = listRowPaths[row.list], row.index < rows.count, rows[row.index] == path
+        else { return false }
+        return true
+    }
+
+    /// After a whole build: the state of every view it did not reach, and
+    /// that no container keeps, goes. A whole build reaches every view in
+    /// the tree: each one built connects its state, and each subtree reused
+    /// hands over the owners recorded as it was built.
+    func dropStateOfViewsGone() {
+        var gone: [String] = []
+        for owner in storage.types.keys
+        where !liveStateOwners.contains(owner) && owner != "root" && !storage.unmanaged.contains(owner) && !stateIsKept(owner) {
+            gone.append(owner)
+        }
+        dropState(of: gone)
+    }
+
+    /// After the view at `site` was built again alone: the views that were
+    /// inside it and that its build no longer reached go, unless a
+    /// container in it keeps them. Only its own subtree of owners is looked
+    /// at, and only below the owners it reached: below one that is kept or
+    /// gone, every owner is too.
+    func dropStateGone(inside site: String) {
+        guard let below = storage.children[site] else { return }
+        var gone: [String] = []
+        func collect(_ owner: String) {
+            gone.append(owner)
+            for inner in storage.children[owner] ?? [] { collect(inner) }
+        }
+        func visit(_ owners: Set<String>) {
+            for owner in owners {
+                if liveStateOwners.contains(owner) {
+                    if let deeper = storage.children[owner] { visit(deeper) }
+                } else if !storage.unmanaged.contains(owner), !stateIsKept(owner) {
+                    collect(owner)
+                }
+            }
+        }
+        visit(below)
+        dropState(of: gone)
+    }
+
+    /// Forgets the state of views gone, and what is kept about them: their
+    /// subtrees kept for reuse (which would bring them back as they were),
+    /// the states they read and were read by, their animations.
+    private func dropState(of gone: [String]) {
+        guard !gone.isEmpty else { return }
+        for owner in gone {
+            storage.types[owner] = nil
+            for key in storage.locations.removeAll(ownedBy: owner) { stateReaders[key] = nil }
+            if let above = storage.parents.removeValue(forKey: owner) {
+                storage.children[above]?.remove(owner)
+                if storage.children[above]?.isEmpty == true { storage.children[above] = nil }
+            }
+            storage.children[owner] = nil
+            storage.keptBy[owner] = nil
+            buildCache[owner] = nil
+            noteStateReads(path: owner, [])
+            volatileOwners.remove(owner)
+            animator.forgetAnimations(of: owner)
+        }
+        // (Its rebuild site stays until its node is freed and the sites are
+        // pruned, `endReuseFrame`: a write to the gone view's state by a
+        // closure still holding it finds the site's node gone and builds
+        // nothing, where one with no site would build the view above.)
     }
 }
 

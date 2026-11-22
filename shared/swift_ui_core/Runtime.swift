@@ -728,7 +728,11 @@ package final class Runtime {
         volatileOwnersBuilding = []
         beginReuseFrame()
         defer { endReuseFrame() }
+        recordingStateOwners = true
         let root = buildNode(view: makeRootView(), ctx: &ctx)
+        recordingStateOwners = false
+        // The views it no longer reached lose their state (State.swift).
+        dropStateOfViewsGone()
         volatileOwners = volatileOwnersBuilding
         treeVolatile = false
         // The tree a later pass of this frame builds in place into.
@@ -807,6 +811,19 @@ package final class Runtime {
     var stateReadStack: [[String]] = []
     var keysReadOutsideBuild: Set<String> = []
     var geometryBuildDepth = 0
+    // A view's state lasting as long as the view (State.swift).
+    /// The frame's build is under way: the views whose state it connects
+    /// are in the tree (not a layout's geometry content, drawn chrome).
+    var recordingStateOwners = false
+    /// The views keeping state that this frame's builds reached, and those
+    /// reached while each composite in progress builds (kept with its cache
+    /// entry, `_BuildCacheEntry.owners`).
+    var liveStateOwners: Set<String> = []
+    var stateOwnerStack: [[String]] = []
+    /// The places whose views keep their state this frame though not built
+    /// (`keepState(under:)`), and the lists whose rows do (`keepStateOfRows`).
+    var keptStatePrefixes: Set<String> = []
+    var keptStateLists: Set<String> = []
     /// Off: a frame always builds the tree from its root.
     public var partialFramesEnabled = true
     /// Each partial frame followed by a whole build compared with it.
