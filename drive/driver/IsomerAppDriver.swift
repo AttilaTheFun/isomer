@@ -395,10 +395,12 @@ struct DriverScreen {
                     field.typePrefix = "search:"
                     elements.append(field)
                 }
-            } else if kind == "tabs", let handler = node.edit {
+            } else if kind == "tabs" || kind == "tabbar", let handler = node.edit {
                 // A TabView's tabs, as the system's tab bar lists them: a
                 // button each, named by its title (`.tabItem`'s label or a
-                // Tab's), a tap selecting it by its place.
+                // Tab's), a tap selecting it by its place. `tabs` where the
+                // host draws the TabView, `tabbar` (its bar alone, under the
+                // content) where it doesn't: headless, the drawn renderers.
                 let count = Int(p["count"] ?? "") ?? 0
                 for index in 0..<count {
                     let title = p["label\(index)"] ?? ""
