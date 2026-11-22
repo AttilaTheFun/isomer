@@ -4231,7 +4231,7 @@ func checkStateStorage(_ mock: MockRenderer) {
         // built, in place.
         for pass in 1...3 {
             frame("the screen made again, pass \(pass)") { storageParentPass?.wrappedValue = pass }
-            expect(shows("Title pass \(pass) count 0"), "the screen made again shows pass \(pass)\(label)")
+            expect(shows("Title pass \(pass) count 0 manual 0 name a"), "the screen made again shows pass \(pass)\(label)")
         }
         // Built whole, every view built again (none reused).
         Runtime.shared.subtreeReuseEnabled = false
@@ -4244,9 +4244,9 @@ func checkStateStorage(_ mock: MockRenderer) {
         settle()
 
         frame("the child writes through $count") { storageChildTap?() }
-        expect(shows("count 1 manual 0") && shows("Counter 1"), "a child's write through $count shows\(label)")
+        expect(shows("Title pass 3 count 1 manual 0 name a") && shows("Counter 1"), "a child's write through $count shows\(label)")
         frame("a binding made by hand") { storageHandTap?() }
-        expect(shows("count 1 manual 10") && shows("Hand 10"), "a write through a binding made by hand shows\(label)")
+        expect(shows("Title pass 3 count 1 manual 10 name a") && shows("Hand 10"), "a write through a binding made by hand shows\(label)")
         frame("the screen made again after the writes") { storageParentPass?.wrappedValue = 4 }
         frame("the child writes again") { storageChildTap?() }
         frame("and the hand-made binding") { storageHandTap?() }
