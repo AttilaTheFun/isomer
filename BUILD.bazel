@@ -163,6 +163,27 @@ string_flag(
     ]
 ]
 
+# The SwiftProtobuf Isomer's modules link: the render tree's and the driver's
+# messages (shared/wire), and IsomerSwiftUI, IsomerWire, IsomerServing and the
+# iso CLI, which read and write them. By default the SwiftPM graph's
+# (swift-protobuf, a dependency of Isomer's package). An app with a
+# SwiftProtobuf of its own, one module several of its binaries share (a
+# framework of its own, say), points the flag at it, so one copy is linked:
+#
+#   build --@isomer//:swift_protobuf=//third_party:SwiftProtobuf
+#
+# The target must provide a Swift module named SwiftProtobuf, of a release at
+# least as new as the one Isomer's package asks for (Package.swift). Isomer's
+# package reaches it through configure_package (MODULE.bazel): its manifest's
+# SwiftProtobuf product is taken out and this flag put in its place, in the
+# package an app takes by revision. Other packages in the app's graph that
+# depend on swift-protobuf (gRPC's) still take the graph's.
+label_flag(
+    name = "swift_protobuf",
+    build_setting_default = "@swiftpkg_swift_protobuf//:SwiftProtobuf",
+    visibility = ["//visibility:public"],
+)
+
 # Isomer's modules built resilient (docs/library_evolution.md):
 # `--@isomer//:library_evolution` compiles every module of Isomer's that an
 # Android or web app links with `-enable-library-evolution`, so that a

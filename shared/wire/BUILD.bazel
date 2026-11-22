@@ -67,7 +67,8 @@ swift_proto_compiler(
     plugin_options = {"Visibility": "Public"},
     protoc = "@protobuf//:protoc",
     suffixes = [".pb.swift"],
-    deps = ["@swiftpkg_swift_protobuf//:SwiftProtobuf"],
+    # (`@isomer//:swift_protobuf`: the graph's, or an app's own.)
+    deps = ["//:swift_protobuf"],
 )
 
 # What the messages compile against: Isomer's Foundation where it is the
