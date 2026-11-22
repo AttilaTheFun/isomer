@@ -13,18 +13,36 @@ Foundation, FoundationNetworking, CoreGraphics and Combine have been the
 SDK's on Android and the web since 0.56 (docs/hermetic_toolchains.md). This
 is the rest: SwiftUI and the frameworks its interface names.
 
-Nothing here is built yet. The decisions it needs are at the end.
+Nothing here is built yet.
 
-## Three things, kept apart
+## Three pieces
 
-- **The SDK**: the Apple-named modules, and the Isomer* modules they depend
-  on privately. Each platform has a default SDK: Android's and the web's are
-  Isomer's. On iOS and macOS the default is Apple's, and Isomer's is an
-  alternative, for example to drive an app from the CLI while it draws
-  with native SwiftUI (apple/compiled is that today, as a Bazel
-  configuration). An SDK can be built from source or used prebuilt.
-- **The renderer**: plugged in through IsomerSwiftUI's FFI, never part of
-  the SDK.
+Two are precompiled into the SDK. The third is built from source with the
+app, from isomer.
+
+1. **Apple's frameworks, Isomer's versions** (SDK, precompiled): Foundation,
+   Combine, CoreGraphics, OSLog, UniformTypeIdentifiers, CoreTransferable,
+   PhotosUI, and SwiftUI. All are full implementations except SwiftUI,
+   which is a **facade**: its public types (`View`, `Text`, the stacks, the
+   modifiers, `@State`, `App`) and what they hold, with nothing behind them
+   but calls to the runtime. Any of the others may later move its
+   implementation out the same way: that's a private change.
+2. **The Isomer\* binding modules** (SDK, precompiled), which the frameworks
+   depend on privately: an API between the facade and the runtime.
+   IsomerSwiftUI declares the runtime's protocol and holds the runtime
+   bound to it, set when the process starts.
+3. **IsomerSwiftUIImplementation** (isomer, built from source): the runtime
+   itself (building, layout, diffing, state, animation, partial frames, the
+   render tree's encoding) implementing IsomerSwiftUI's protocol, and bound
+   to it as the app starts.
+
+SwiftUI and IsomerSwiftUI have no SwiftProtobuf. SwiftProtobuf sits between
+the runtime and the renderer, on isomer's side, where
+`@isomer//:swift_protobuf` (0.60) lets an app share its own.
+
+Alongside, and kept apart from the SDK:
+
+- **The renderer**: plugged in through the FFI.
 
   | Platform | Renderers |
   | --- | --- |
@@ -36,85 +54,63 @@ Nothing here is built yet. The decisions it needs are at the end.
 
 - **What the host injects**: the platform's side (Android's Kotlin runtime,
   the page's JavaScript, the network transports, the keychain) is injected
-  by the host, through the FFI, into the Isomer* modules the SDK's modules
-  depend on privately. So no SDK module names a platform's runtime, and the
-  Kotlin and JavaScript stay where they are: isomer_android's rules, the
-  web's runtime files.
+  by the host through the FFI into the Isomer\* modules. No SDK module names
+  a platform's runtime: the Kotlin and JavaScript stay with isomer_android's
+  rules and the web's runtime files.
 
-A headless app is a plain `swift_binary` on macOS, Linux or Windows with
-no renderer, usually serving WebSocket or gRPC. Optionally it uses the
-headless head, the GPU renderer's layout engine drawing nothing. It needs
-the Linux and Windows SDKs (phase 2), or Isomer's on macOS (phase 3).
+Each platform has a default SDK: Android's and the web's are Isomer's. On
+iOS and macOS the default is Apple's, and Isomer's is an alternative, for
+example to drive an app from the CLI while it draws with native SwiftUI
+(apple/compiled is that today, as a Bazel configuration). A headless app
+is a plain `swift_binary` on macOS, Linux or Windows with no renderer,
+usually serving WebSocket or gRPC. Optionally it uses the headless head,
+the GPU renderer's layout engine drawing nothing.
 
-## What moves into the Android and web SDKs
+## How the pieces meet
 
-| Module | Today | In the SDK |
-| --- | --- | --- |
-| SwiftUI | isomer's package (`@isomer//:swift_ui`) | yes, resilient, with IsomerSwiftUI beneath it |
-| Observation, Synchronization | the toolchain's | as now |
-| OSLog (`Logger`) | `@isomer//:os_log` | yes |
-| UniformTypeIdentifiers, CoreTransferable, PhotosUI | the package's | yes |
-| ImageIO | the package's | yes, once it is a strict subset (docs/parity) |
-| Isomer (Isomer's own API: WebView, Map, MetalView, Clipboard, …) | the package's | yes: Apple's platforms take it from the package, as now |
-| The platform's host's Swift (IsomerAndroidHost, IsomerWebHost) | the platform's `swift_ui` group | yes, privately: what `App.main` hands the process to, and what the host injects into |
-| The renderers' Swift (IsomerGPURenderer) | Bazel modules | no: a renderer is chosen by the app, linked by its rules |
+- **The facade's primitives are data.** `Text`, `VStack` and `.padding`
+  hold their parameters. What turns them into nodes, today each primitive's
+  `makeNode` in shared/swift_ui_core, moves into the implementation.
+- **No dynamic casts to find a primitive.** IsomerSwiftUI declares a
+  visitor protocol with a method per primitive; each facade primitive calls
+  its own (`visitor.visit(self)`), and the implementation is the visitor.
+  Dispatch is static. A new primitive is a new requirement with a default
+  implementation, which library evolution allows.
+- **State, environment and animation** go through the same protocol: a
+  property wrapper asks the runtime for its location, as it connects today.
+- **Binding.** The implementation exports a bind call that the host makes as
+  it loads (JNI's load on Android, the page's boot on the web), before the
+  facade's `App.main` runs, alongside what the host injects. The bind checks
+  versions both ways: the runtime names the facade versions it supports,
+  and fails clearly otherwise.
+- **Linking.** An app's own libraries declare nothing. isomer's app rules
+  (`isomer_android_app`, `isomer_web_app`, `isomer_application`) link the
+  implementation and the host into the final binary, as they link the hosts
+  now.
+- **Library evolution.** The facade and the binding modules are built
+  resilient, so a newer runtime runs under an older SDK, and their interface
+  is a contract. Calls from an app into the facade aren't specialized across
+  it unless they're `@inlinable`, as with Apple's SwiftUI: measure that on
+  the Storybook.
+- **Macros.** `@State` and `@Entry` are macros. Their plugin, a program for
+  the building machine, ships in the SDK bundle, built for each build
+  machine (macOS arm64, Linux x86_64 and arm64) and named by the bundle's
+  toolset.json, so a consumer's compiler finds it with no flag.
+- **The Isomer module** (Isomer's own API: WebView, Map, MetalView,
+  Clipboard, the platform modifiers) is in the SDK too, so `import Isomer`
+  needs no dependency either. On Apple's platforms it stays the package's.
 
-`import SwiftUI` then autolinks SwiftUI, IsomerSwiftUI and the platform's
-host's Swift, as `import Foundation` autolinks its family now. An app's
-`@main App` runs on Android when its JNI library is loaded by
-isomer_android's activity, and on the web when the page boots the
-reactor, as now.
+## Sources and releases
 
-## The two things that don't fit as they stand
-
-**1. SwiftProtobuf beneath SwiftUI.** IsomerSwiftUI writes the render tree
-with SwiftProtobuf (FlatTreeEncoder, Wire_Node). An SDK that carried
-SwiftProtobuf as `SwiftProtobuf` would clash with an app's own (the reason
-for `@isomer//:swift_protobuf`, #286). The options:
-- (a) The SDK carries it under a private module name (as swift.org's
-  `_FoundationCollections`), built from swift-protobuf's sources with its
-  module renamed. Then an app's SwiftProtobuf and the SDK's never meet.
-- (b) The render tree's Swift writer and reader are hand-written against
-  protobuf's wire format, as the web's (runtime/flat_tree.js) and Android's
-  (FlatTree.kt) readers already are. SwiftUI then needs no SwiftProtobuf at
-  all. The driver's and session's messages (IsomerWire) stay
-  SwiftProtobuf's, outside the SDK.
-
-  (b) is less to carry and removes a dependency from every app, at the
-  cost of keeping the hand-written code in step with tree.proto, which
-  tools/ could check. **Recommended: (b).**
-
-**2. SwiftUI's macros.** `@State` and `@Entry` are macros (since 0.39),
-expanded by the SwiftUIMacros plugin. A plugin is a program for the
-machine doing the build, not for the SDK's target. An SDK artifact bundle
-can carry one per build machine (macOS arm64, Linux x86_64 and arm64),
-named by its toolset.json's compiler flags (`-load-plugin-executable`). A
-consumer's toolchain then finds it with no flag of its own. The plugin is
-small (swift-syntax, statically linked). **Recommended:** carry it in the
-bundle, built by the SDK's own CI for each build machine. Isomer's Bazel
-rules already know where it is, for apps built from source.
-
-## From source, or prebuilt
-
-One source, two ways to build it:
-- **SwiftUI's sources stay in isomer**, beside the renderers and the
-  hosts, which change with them. They don't move to isomer_hermetic_toolchains
-  as Foundation's did: SwiftUI changes with every isomer release, and
-  Foundation with Swift's.
-- **The SDK's build checks out isomer at a tag** and builds the SwiftUI
-  family into the SDK, as it builds Foundation's.
-- **From source:** isomer's own builds and an app that asks for it
-  (`--@isomer//:frameworks=source`) build SwiftUI from isomer's package, as
-  today, with the SDK's SwiftUI left out of the link. That's how isomer is
-  developed and tested before an SDK exists for a change.
-- **Prebuilt:** the default for an app. The SDK registered is the one
-  released with the isomer version the app depends on.
-
-This ties SDK releases to isomer's. An isomer release N names SDK
-`isomer-6.4.2.<n>` built from isomer N's tag, and the SDK's
-release run follows isomer's (Reviews approves both, as now). The JavaScript
-and Kotlin halves and the SDK's Swift half are then always from the same
-release.
+- **All three pieces' sources stay in isomer** for now. The SDK's build
+  checks out isomer at a tag and builds the facade and the binding modules
+  into the SDK, as it builds Foundation's. A change to the facade goes with
+  the implementation in one pull request.
+- **From source:** isomer's own builds build all three from source, as
+  today, so a change is tested before any SDK has it.
+- **Releases:** a new SDK when the facade's or the binding modules'
+  interface changes. The runtime ships with each isomer release, and the
+  version handshake says which SDKs it runs under.
 
 ## What an app changes
 
@@ -123,28 +119,29 @@ release.
   dependency for Android and the web. `@isomer//:swift_ui` and its siblings
   stay as empty targets (as `@isomer//:foundation` did in 0.56), so
   existing files keep building.
-- Its MODULE.bazel registers the release's SDK (one line per platform, as
-  now). A wrapper rule that adds SwiftUI to every `swift_library` (as one
-  consumer has) goes.
+- Its MODULE.bazel registers the SDK (one line per platform, as now). A
+  wrapper rule that adds SwiftUI to every `swift_library` goes.
 
 ## Phases
 
-1. Android and web SDKs carry the SwiftUI family, with the macro plugin;
-   SwiftProtobuf goes from SwiftUI by option (b); isomer's labels become
-   empty there. Measure the result on the apps we have (the Storybook,
-   Playground, Visor, Convo) and on a downstream app's diff.
-2. Linux and Windows SDKs: Foundation, then the SwiftUI family; headless
-   apps on Linux and Windows get the same.
-3. Isomer's SDK on Apple's platforms, as an alternative to Apple's, for
-   driving an app with the native renderer (apple/compiled's
-   configuration becomes an SDK).
+1. The split, in isomer, from source: the facade, the binding modules and
+   the implementation, with the visitor, the binding and the handshake. The
+   Storybook's proof and every test must be unchanged.
+2. Android and web SDKs carry the facade, the binding modules, the other
+   frameworks, the Isomer module and the macro plugin. isomer's labels
+   become empty there. Measure the result on the apps we have (the
+   Storybook, Playground, Visor, Convo) and on a downstream app's diff.
+3. Linux and Windows SDKs: Foundation, then the rest; headless apps there
+   get the same.
+4. Isomer's SDK on Apple's platforms, as an alternative to Apple's (the
+   compiled configuration becomes an SDK).
 
-## Decisions needed
+## Decided (2026-11-22)
 
-1. SwiftProtobuf: (a) a private copy in the SDK, or (b) a hand-written
-   writer and reader with no SwiftProtobuf in SwiftUI. Recommended: (b).
-2. The macro plugin carried in the SDK bundle, per build machine.
-   Recommended: yes.
-3. SDK releases tied to isomer's, one per isomer release. Recommended: yes.
-4. The Isomer module in the SDK too, so `import Isomer` needs no dependency
-   either. Recommended: yes.
+- Three pieces: the frameworks (SwiftUI a facade) and the binding modules
+  in the SDK, the implementation in isomer. No SwiftProtobuf in the SDK.
+- The macro plugin in the SDK bundle.
+- The Isomer module in the SDK.
+- All sources in isomer for now.
+- The other frameworks stay whole in the SDK; moving an implementation out
+  later is a private change.
