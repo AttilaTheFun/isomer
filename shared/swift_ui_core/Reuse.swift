@@ -393,7 +393,7 @@ func buildCompositeReusing(_ view: any View, ctx: inout BuildContext) -> RenderN
 /// Last frame's subtree for the composite view at `ctx.path`, when it can be
 /// handed back unbuilt.
 @MainActor
-func reusedSubtree(for view: any View, ctx: BuildContext) -> RenderNode? {
+func reusedSubtree(for view: borrowing any View, ctx: borrowing BuildContext) -> RenderNode? {
     let runtime = Runtime.shared
     let path = ctx.path
     guard runtime.subtreeReuseEnabled, path != "root", let entry = runtime.buildCache[path],
@@ -439,7 +439,7 @@ struct _CompositeBuild {
     var asPart = false
 }
 
-func beginCompositeBuild(ctx: BuildContext) -> _CompositeBuild {
+func beginCompositeBuild(ctx: borrowing BuildContext) -> _CompositeBuild {
     let runtime = Runtime.shared
     let build = _CompositeBuild(
         volatility: runtime.buildVolatility,
@@ -457,7 +457,7 @@ func beginCompositeBuild(ctx: BuildContext) -> _CompositeBuild {
 
 /// Ends a composite view's build with the node it produced: kept for reuse
 /// when nothing in the build was volatile and the view's inputs compare.
-func finishCompositeBuild(_ build: _CompositeBuild, view: any View, ctx: BuildContext, node: RenderNode) {
+func finishCompositeBuild(_ build: consuming _CompositeBuild, view: any View, ctx: BuildContext, node: RenderNode) {
     let runtime = Runtime.shared
     if build.started != 0 { _frameLogTime(view, started: build.started) }
     let inner = runtime.buildCacheInnerStack.removeLast()
@@ -645,7 +645,7 @@ extension EnvironmentValues {
     /// `other`. Closures compare by presence (an `onSubmit` or `dismiss` in
     /// scope comes from the same presentation or field frame to frame);
     /// custom values by `==` when they are Equatable.
-    func _sameForReuse(_ other: EnvironmentValues) -> Bool {
+    func _sameForReuse(_ other: borrowing EnvironmentValues) -> Bool {
         // Not the transaction's animation: a subtree whose inputs, state and
         // environment are otherwise the same has nothing that animation would
         // move (the animator interpolates values whose targets changed, and

@@ -81,7 +81,7 @@ extension Runtime {
 }
 
 /// Notes a composite view built (not reused), with why.
-func _frameLogBuilt(_ view: any View, ctx: BuildContext) {
+func _frameLogBuilt(_ view: borrowing any View, ctx: borrowing BuildContext) {
     Runtime.shared.compositeBuildCount &+= 1
     guard let log = Runtime.shared.frameLog else { return }
     let runtime = Runtime.shared

@@ -327,7 +327,7 @@ extension Runtime {
             buildEffectStack.append([])
             let readsBefore = _bindingReadKeys.count
             let volatilityBefore = buildVolatility
-            var node = _buildCompositeAlone(site.view, ctx: &ctx, asPart: site.asPart)
+            var node = _buildCompositeAlone(site.view, ctx: ctx, asPart: site.asPart)
             if let built = node {
                 for mutator in site.mutators {
                     var mctx = mutator.ctx
@@ -431,7 +431,7 @@ extension Runtime {
 /// container's `appendChildren` does; nil when a body that was one view
 /// among a container's children comes to several now.
 @MainActor
-func _buildCompositeAlone(_ view: any View, ctx: inout BuildContext, asPart: Bool) -> RenderNode? {
+func _buildCompositeAlone(_ view: any View, ctx: BuildContext, asPart: Bool) -> RenderNode? {
     _frameLogBuilt(view, ctx: ctx)
     var build = beginCompositeBuild(ctx: ctx)
     build.asPart = asPart

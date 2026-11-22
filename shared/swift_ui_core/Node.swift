@@ -1040,10 +1040,12 @@ package struct BuildContext {
     var navigation: NavigationState?
     var navigationLevel = 0
 
+    /// The context one level down, at `component`. Made field by field:
+    /// a copy of the whole context, its path then replaced, retained the old
+    /// path and released it again for every view built.
     func descend(_ component: String) -> BuildContext {
-        var copy = self
-        copy.path = path + "/" + component
-        return copy
+        BuildContext(path: path + "/" + component, env: env, storage: storage,
+                     navigation: navigation, navigationLevel: navigationLevel)
     }
 }
 
