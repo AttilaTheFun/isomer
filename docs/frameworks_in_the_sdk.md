@@ -100,6 +100,26 @@ the GPU renderer's layout engine drawing nothing.
   Clipboard, the platform modifiers) is in the SDK too, so `import Isomer`
   needs no dependency either. On Apple's platforms it stays the package's.
 
+## Binary compatibility with Apple's, where it's cheap
+
+A facade designed now decides whether an app's own Apple build could one day
+run against Isomer's frameworks without its source (docs/roadmap.md,
+"Research"). That needs the facade to be binary-compatible with Apple's, not
+only source-compatible:
+- **the module named `SwiftUI`, mangling as Apple's does**, so the app's
+  references to Apple's symbols name ours. The strict-subset rule already
+  keeps the names; the mangling follows from the module's name and the
+  declarations';
+- **`@frozen` types laid out as Apple's**, since their layout is baked into
+  an app's code (0.61's `State` already is: `_value` and `_location`);
+- **Apple's `@usableFromInline` internals present**, since Apple's
+  `@inlinable` code inlined into an app calls them;
+- **protocols' requirements** that an app's conformances refer to (a View's
+  `body`), under the same descriptors.
+
+Nothing here is built for it yet. The rule for the facade: where matching
+Apple's binary interface costs nothing, match it; where it costs, decide then.
+
 ## Sources and releases
 
 - **All three pieces' sources stay in isomer** for now. The SDK's build
