@@ -20,13 +20,13 @@ built for. Its version moves with isomer's MODULE.bazel.
 
 module(
     name = "isomer_android_maven",
-    version = "0.59.0",
+    version = "0.60.0",
 )
 
 # isomer's //android/maven:extensions.bzl, told where this set is (below).
 # isomer depends on this module only for its own builds, so the two name
 # each other only there.
-bazel_dep(name = "isomer", version = "0.59.0")
+bazel_dep(name = "isomer", version = "0.60.0")
 bazel_dep(name = "rules_android", version = "0.7.3")
 bazel_dep(name = "rules_jvm_external", version = "7.1")
 
