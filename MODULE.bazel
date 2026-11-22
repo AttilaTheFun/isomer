@@ -174,11 +174,29 @@ swift_deps = use_extension("@rules_swift_package_manager//:extensions.bzl", "swi
 # swift_proto_library's modules, which IsomerSwiftUI and IsomerWire re-export
 # (//shared/wire). The generated repositories see @isomer by the
 # application's inject_repo (README: "Consuming isomer").
+#
+# SwiftProtobuf, too, is the `@isomer//:swift_protobuf` flag's (BUILD.bazel):
+# the graph's by default, an app's own when it sets it. The manifest's
+# SwiftProtobuf product is taken out (patch_cmds, applied to the package an
+# app takes by revision before its manifest is read; a package taken by path,
+# isomer's own and the examples', keeps it, and the flag's default names the
+# same target) and the flag put in its place.
 swift_deps.configure_package(
     name = "isomer",
+    patch_cmds = [
+        "sed -i.orig '/\\.product(name: \"SwiftProtobuf\", package: \"swift-protobuf\"),/d' Package.swift && rm Package.swift.orig",
+    ],
     target_deps = {
-        "IsomerSwiftUI": ["@isomer//shared/wire:tree_messages"],
-        "IsomerWire": ["@isomer//shared/wire:wire_messages"],
+        "IsomerSwiftUI": [
+            "@isomer//shared/wire:tree_messages",
+            "@isomer//:swift_protobuf",
+        ],
+        "IsomerWire": [
+            "@isomer//shared/wire:wire_messages",
+            "@isomer//:swift_protobuf",
+        ],
+        "IsomerServing": ["@isomer//:swift_protobuf"],
+        "iso": ["@isomer//:swift_protobuf"],
     },
 )
 # gRPC Swift 2 and SwiftNIO (driving an app: drive/): in every application's

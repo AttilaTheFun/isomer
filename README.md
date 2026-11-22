@@ -725,7 +725,10 @@ bazel_dep(name = "isomer_android_maven", version = "0.54.1")
 
 and an app with AndroidX of its own leaves the module out and points both
 flags at its own set in its `.bazelrc`. With neither, an Android build
-fails saying which to do.
+fails saying which to do. An app's own set must carry what ProfileInstaller
+loads after launch, Guava's `ListenableFuture` among it: in a graph with
+Guava, `listenablefuture` is an empty jar, so export Guava itself
+(docs/android_maven.md says what to export, and the crash otherwise).
 
 **The iPhone and the Mac: isomer_apple** (since 0.58;
 [docs/platform_modules.md](docs/platform_modules.md)). isomer asks for no
@@ -915,7 +918,15 @@ swift_proto_library(
 
 (or a `swift_proto_compiler` of your own over
 `@swiftpkg_swift_protobuf//:protoc-gen-swift` and `:SwiftProtobuf`, as
-shared/wire/BUILD.bazel's is, for other plugin options).
+shared/wire/BUILD.bazel's is, for other plugin options). Take
+SwiftProtobuf from that graph rather than as a module of your own: Isomer's
+SwiftUI depends on it, and `--@isomer//:library_evolution` builds it
+resilient too, for generated modules built with library evolution. An app
+whose own SwiftProtobuf is one module several of its binaries share (a
+framework of its own) points `--@isomer//:swift_protobuf` at it, and Isomer
+links that one in place of the graph's (BUILD.bazel says what it must
+provide). docs/compatibility.md lists every Bazel module isomer asks for, at
+what version and why.
 
 **The complete, always-current reference is
 [`examples/MODULE.bazel`](examples/MODULE.bazel)** — the examples are

@@ -17,7 +17,7 @@ one_configuration(
 # headless host's) fails to link on Linux on duplicate symbols.
 one_configuration(
     name = "swift_protobuf",
-    actual = "@swiftpkg_swift_protobuf//:SwiftProtobuf",
+    actual = "//:swift_protobuf",
 )
 
 # The same, in the configuration of a build whose SwiftUI isn't the package's
