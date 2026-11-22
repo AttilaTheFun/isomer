@@ -615,9 +615,9 @@ private func collectMenuButtons(
     // buttons, its properties (`@Environment`, `@State`) connected first as
     // a build connects them.
     if _viewKind(view).isComposite {
-        connectDynamicProperties(of: view, path: ctx.path, storage: ctx.storage, env: ctx.env)
+        let body = _connectedBody(of: view, ctx: ctx)
         var sub = ctx.descend(typeName(view))
-        collectMenuButtons(view.body, ctx: &sub, into: &items)
+        collectMenuButtons(body, ctx: &sub, into: &items)
     }
 }
 

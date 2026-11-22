@@ -433,16 +433,16 @@ extension Runtime {
 @MainActor
 func _buildCompositeAlone(_ view: any View, ctx: inout BuildContext, asPart: Bool) -> RenderNode? {
     _frameLogBuilt(view, ctx: ctx)
-    var build = beginCompositeBuild(view, ctx: ctx)
+    var build = beginCompositeBuild(ctx: ctx)
     build.asPart = asPart
     var sub = ctx.descend(typeName(view))
     guard asPart else {
-        let node = _trackingObservation(at: ctx.path) { buildNode(view: view.body, ctx: &sub) }
+        let node = _trackingObservation(at: ctx.path) { buildNode(view: _connectedBody(of: view, ctx: ctx), ctx: &sub) }
         finishCompositeBuild(build, view: view, ctx: ctx, node: node)
         return node
     }
     var parts: [RenderNode] = []
-    _trackingObservation(at: ctx.path) { appendChildren(of: view.body, ctx: &sub, into: &parts) }
+    _trackingObservation(at: ctx.path) { appendChildren(of: _connectedBody(of: view, ctx: ctx), ctx: &sub, into: &parts) }
     guard parts.count == 1 else {
         abandonCompositeBuild(build)
         return nil
