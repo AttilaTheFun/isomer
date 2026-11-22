@@ -49,12 +49,6 @@ import {
   namedFillCSS as styleNamedFill,
 } from "./render_style.js";
 
-/// An SF Symbol drawn from the portable table as an inline SVG sized to
-/// the text it stands in (an `Image(systemName:)` is a text node carrying
-/// `params.symbol`); unknown names keep the guest's fallback glyph.
-/** A shape node's `path` param (Shapes.swift: `M x y`, `L x y`, `Z`,
- *  `R x y w h`, `Q x y w h r`, `E x y w h`, in the unit square) as SVG
- *  path data. A rounded rect's corners and an ellipse are arcs. */
 // A StrokeStyle other than the default, as the core sends it
 // ("cap,join,miter,phase,dash…", lengths in points), as SVG's stroke
 // attributes. SVG repeats an odd number of dash lengths once, as Core
@@ -71,6 +65,12 @@ function svgStrokeStyle(style) {
   return attributes;
 }
 
+/// An SF Symbol drawn from the portable table as an inline SVG sized to
+/// the text it stands in (an `Image(systemName:)` is a text node carrying
+/// `params.symbol`); unknown names keep the guest's fallback glyph.
+/** A shape node's `path` param (Shapes.swift: `M x y`, `L x y`, `Z`,
+ *  `R x y w h`, `Q x y w h r`, `E x y w h`, in the unit square) as SVG
+ *  path data. A rounded rect's corners and an ellipse are arcs. */
 function svgPathData(text) {
   const t = text.split(" ");
   const out = [];
@@ -4123,12 +4123,12 @@ export function createDOMTreeRenderer({ container, sendEvent, sendKey = (id, val
           const width = n.strokeWidth || 1;
           const inset = width / 2;
           const paint = { fill: "none", stroke: rgba(n.stroke), strokeWidth: width, ...svgStrokeStyle(strokeStyle) };
+          // As attributes what needs no calc() (older WebKit takes few of
+          // SVG 2's geometry properties as CSS); the sizes, in style.
           const outline = n.shape === "circle"
-            ? h("ellipse", { ...paint, style: { cx: "50%", cy: "50%", rx: `calc(50% - ${inset}px)`, ry: `calc(50% - ${inset}px)` } })
-            : h("rect", { ...paint, style: {
-                x: `${inset}px`, y: `${inset}px`, width: `calc(100% - ${width}px)`, height: `calc(100% - ${width}px)`,
-                rx: `${Math.max(0, (n.radius || 0) - inset)}px`,
-              } });
+            ? h("ellipse", { ...paint, cx: "50%", cy: "50%", style: { rx: `calc(50% - ${inset}px)`, ry: `calc(50% - ${inset}px)` } })
+            : h("rect", { ...paint, x: inset, y: inset, rx: Math.max(0, (n.radius || 0) - inset),
+                style: { width: `calc(100% - ${width}px)`, height: `calc(100% - ${width}px)` } });
           if (n.width == null && !n.expandW && !(sizedByFrame && sizedByFrame.w)) s.minWidth = 10;
           if (n.height == null && !n.expandH && !(sizedByFrame && sizedByFrame.h)) s.minHeight = 10;
           s.position = s.position || "relative";
