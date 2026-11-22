@@ -13,10 +13,30 @@ Nimbus iPhone app.
 Partial frames that stay partial (dead animations no longer force whole
 rebuilds), a view's state lasting as long as the view, as in SwiftUI, an
 app's own SwiftProtobuf (`@isomer//:swift_protobuf`), and Android layout and
-stroke fixes. The changes in how Apple's frameworks ship come in the
-releases after it.
+stroke fixes.
 
-## 1. Apple's frameworks in Isomer's Swift SDKs
+## 0.61: the runtime, behind the interface
+
+Changes that need no SDK work, before the SDK rework moves the runtime
+behind its binding:
+
+- **`@State` as Apple's 27 SDK's macros store it.** Isomer's SwiftUI is
+  versionless: the macro form is the one on every platform and OS version
+  (the Playground's in-browser compilers, which can run no compiler plugin,
+  keep the property wrapper over the same storage). What changes is the
+  storage behind the expansion: `State` holds its value inline and
+  `LazyState` its thunk or value, each with an optional location the
+  runtime writes into its copy of the view before `body`, as Apple's does.
+  No box is allocated per state per view construction.
+- **Bindings backed by the state's location,** with no get and set closures
+  behind every `$x`.
+- **`borrowing` and `consuming` on the hot paths,** and **spans in the
+  encoder and the tree's readers** (below, steps 1 and 2).
+- **State lifetime's follow-ups** (below).
+
+Each measured with the headless Storybook before and after.
+
+## 0.62: Apple's frameworks in Isomer's Swift SDKs
 
 docs/frameworks_in_the_sdk.md is the design. In three pieces:
 - the frameworks, precompiled in the SDK, with SwiftUI a facade;
@@ -34,35 +54,39 @@ Its phases:
 3. Linux's and Windows' SDKs: Foundation, then the rest.
 4. Isomer's SDK on Apple's platforms, as an alternative to Apple's.
 
-## 2. Fewer heap allocations in the runtime
+## Fewer heap allocations in the runtime
 
-After the split, when the runtime is the implementation's own and its
-internals can change without touching the facade. Each step is measured
-with the headless Storybook (whole and partial frames, `-c opt`) against
-the same stories, before and after. Retain, release, deallocation and
-malloc were about a fifth of an Android profile's samples in a downstream
-app on 0.58.
+Retain, release, deallocation and malloc were about a fifth of an Android
+profile's samples in a downstream app on 0.58. Each step is measured with
+the headless Storybook (whole and partial frames, `-c opt`) against the same
+stories, before and after.
 
-1. **`borrowing` and `consuming` on the hot paths.** The build and encode
-   paths pass `BuildContext`, `EnvironmentValues` and nodes by value through
-   deep recursion. Borrowing them where they're only read, and consuming
-   them where ownership moves, removes retain and release traffic with no
-   change of types.
-2. **Spans in the encoder and the tree's readers.** The encoder writes into
-   a buffer owned by a `~Copyable` writer through `OutputSpan`/`MutableSpan`,
-   with no copy-on-write checks or intermediate arrays. The readers read
-   nodes straight from a `Span` over the bytes, allocating nothing per node.
-3. **Nodes in an arena.** Render nodes as structs in a `~Copyable` arena,
+1. **`borrowing` and `consuming` on the hot paths** (0.61). The build and
+   encode paths pass `BuildContext`, `EnvironmentValues` and nodes by value
+   through deep recursion. Borrowing them where they're only read, and
+   consuming them where ownership moves, removes retain and release traffic
+   with no change of types.
+2. **Spans in the encoder and the tree's readers** (0.61). The encoder
+   writes into a buffer owned by a `~Copyable` writer through
+   `OutputSpan`/`MutableSpan`, with no copy-on-write checks or intermediate
+   arrays. The readers read nodes straight from a `Span` over the bytes,
+   allocating nothing per node.
+3. **Nodes in an arena** (after the SDK rework, when the runtime is the
+   implementation's own). Render nodes as structs in a `~Copyable` arena,
    one buffer a tree, children by 32-bit index, not reference-counted
    objects: building is a bump allocation, and a tree is freed at once.
    Partial frames keep last frame's tree, so the arena is generational: a
    subtree reused from an earlier tree is shared by generation or copied
    across.
-4. **Interned paths.** A view's path is a string today, hashed and
-   prefix-scanned throughout (rebuild sites, the build cache, state keys,
+4. **Interned paths** (with step 3). A view's path is a string today, hashed
+   and prefix-scanned throughout (rebuild sites, the build cache, state keys,
    the live owners). Interned once to an integer at build, as the node's
-   identity in the arena, they make those lookups integer work. Steps 3 and 4
-   are one project.
+   identity in the arena, they make those lookups integer work.
+5. **The `@State` macro's own optimizations** (with step 3): a static state
+   layout per view type, and change detection without casts. These depart
+   from Apple's exact expansion, so source-compatibility tests replace the
+   identical-expansion check, and the expansion's helpers live in the binding
+   module the SDK rework creates.
 
 ## Also open
 
