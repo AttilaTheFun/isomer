@@ -45,9 +45,10 @@
 // And a frame is partial only when nothing else could have changed: the
 // root's environment is the same (colour scheme, scene phase), the
 // renderer keeps the tree as given (component-system renderers: the
-// self-drawing one expands chrome into it) and no navigation transition is
+// self-drawing one, and the headless head, which lays its tree out as that
+// one does, expand chrome into it) and no navigation transition is
 // running. Otherwise, or when a check fails partway, the whole tree is
-// built, as before.
+// built, as before; the frame and render logs say which check it was.
 //
 // With `ISO_VERIFY_PARTIAL` in the host's environment (or
 // `verifyPartialFrames` set), each partial frame is followed by a whole
@@ -172,14 +173,34 @@ extension Runtime {
     /// The sites to build again alone this frame, outermost first; nil when
     /// the frame is to be built whole.
     func planPartialFrame(rootEnv: EnvironmentValues) -> [_RebuildSite]? {
+        // Each refusal says its own reason: one label for them all ("the
+        // root's environment") sent a look at an environment that was the
+        // same frame to frame, when the host drew its chrome.
+        guard keepsRebuildSites else {
+            // A self-drawing renderer (the GPU renderer, the headless head,
+            // which lays its tree out as that one does) expands its chrome
+            // into the tree, and its drawn navigation animates in the core:
+            // its frames are built whole, by design.
+            notePartialRefused(!Renderer.hostRendersNavigation ? "drawn chrome"
+                : !partialFramesEnabled ? "partial frames off" : "subtree reuse off")
+            return nil
+        }
+        guard retainedTree != nil, let last = lastRootEnv else { return nil }
+        guard !wholeFrameRequested, !treeVolatile, !navTransitionActive else {
+            notePartialRefused(wholeFrameRequested ? "asked for" : treeVolatile ? "a volatile build" : "a transition")
+            return nil
+        }
+        guard last.scenePhase == rootEnv.scenePhase else {
+            notePartialRefused("the scene phase")
+            return nil
+        }
+        guard last._sameForReuse(rootEnv) else {
+            notePartialRefused("the root's environment" + _frameLogEnvironmentDifference(last, rootEnv))
+            return nil
+        }
         // (The size class is worked out from the width as it is read.)
-        guard keepsRebuildSites, retainedTree != nil, !wholeFrameRequested, !treeVolatile, !navTransitionActive,
-              let last = lastRootEnv, last.scenePhase == rootEnv.scenePhase, last._sameForReuse(rootEnv),
-              lastCompactWidth == compactWidth
-        else {
-            notePartialRefused(retainedTree == nil || lastRootEnv == nil ? nil
-                : wholeFrameRequested ? "asked for" : treeVolatile ? "a volatile build"
-                : navTransitionActive ? "a transition" : "the root's environment")
+        guard lastCompactWidth == compactWidth else {
+            notePartialRefused("the size class")
             return nil
         }
         var chosen: [String: _RebuildSite] = [:]

@@ -30,8 +30,11 @@ behind its binding:
   No box is allocated per state per view construction.
 - **Bindings backed by the state's location,** with no get and set closures
   behind every `$x`.
-- **`borrowing` and `consuming` on the hot paths,** and **spans in the
-  encoder and the tree's readers** (below, steps 1 and 2).
+- **The render tree's wire format written and read by hand** (step 2,
+  below), the same bytes with no protobuf message made per node: encoding
+  28–38% faster in the headless Storybook.
+- **`borrowing` and `consuming` on the hot paths** (step 1, below) measured
+  neutral and was left out: the retain traffic is in what the build stores.
 - **State lifetime's follow-ups** (below).
 
 Each measured with the headless Storybook before and after.
@@ -61,16 +64,14 @@ profile's samples in a downstream app on 0.58. Each step is measured with
 the headless Storybook (whole and partial frames, `-c opt`) against the same
 stories, before and after.
 
-1. **`borrowing` and `consuming` on the hot paths** (0.61). The build and
-   encode paths pass `BuildContext`, `EnvironmentValues` and nodes by value
-   through deep recursion. Borrowing them where they're only read, and
-   consuming them where ownership moves, removes retain and release traffic
-   with no change of types.
-2. **Spans in the encoder and the tree's readers** (0.61). The encoder
-   writes into a buffer owned by a `~Copyable` writer through
-   `OutputSpan`/`MutableSpan`, with no copy-on-write checks or intermediate
-   arrays. The readers read nodes straight from a `Span` over the bytes,
-   allocating nothing per node.
+1. **`borrowing` and `consuming` on the hot paths** (tried for 0.61:
+   neutral, 0.98–1.03 of the time before). The copies the compiler made were
+   closure captures and stored values, which only steps 3 and 4 remove.
+2. **The encoder and the tree's readers by hand** (0.61). The encoder writes
+   tree.proto's bytes into one buffer through a `~Copyable` writer and the
+   readers decode straight from the bytes, with no message made per node.
+   Not through `Span`/`OutputSpan`: before iOS 26 they need a compatibility
+   library embedded in the app, and Isomer's floor is iOS 16.
 3. **Nodes in an arena** (after the SDK rework, when the runtime is the
    implementation's own). Render nodes as structs in a `~Copyable` arena,
    one buffer a tree, children by 32-bit index, not reference-counted
@@ -119,6 +120,12 @@ how many Isomer already provides under the same mangled names. That turns
 "theoretically possible" into a number. After 0.62.
 
 ## Also open
+
+- **Partial frames where the renderer draws its own chrome** (the GPU
+  renderers on every platform, and headless, which lays chrome out as they
+  do): today every frame there is built whole, by design, because drawn
+  navigation stacks and split views animate their transitions in the core.
+  Building them in place means keeping that chrome's state across frames.
 
 - **Android: one slow frame on each navigation push** (120–200 ms in a
   downstream app; its Swift build is cheap). The likely cause is the top

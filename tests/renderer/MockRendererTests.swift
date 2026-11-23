@@ -9,6 +9,7 @@ import Foundation
 import SwiftUI  // IsomerCore, aliased (BUILD.bazel)
 import Observation
 import IsomerSwiftUI
+import SwiftProtobuf
 
 struct ToggleScreen: View {
     var body: some View {
@@ -917,7 +918,9 @@ func checkLazyRows(_ mock: MockRenderer) {
 }
 
 func findTextInTree(_ node: RenderNode, _ value: String) -> Bool {
-    var buffer = ByteBuffer(bytes: FlatTreeEncoder().encode(root: node))
+    let bytes = FlatTreeEncoder().encode(root: node)
+    checkWireBytes(tree: bytes)
+    var buffer = ByteBuffer(bytes: bytes)
     return findText(getRoot(byteBuffer: &buffer) as IsoFlat_Node, value)
 }
 
@@ -2951,6 +2954,7 @@ struct Main {
         checkStateStorage(mock)
         checkStateBuiltOutsideBuilds(mock)
         checkClassState(mock)
+        checkWholeFrameReasons(mock)
         checkOpenURLAfterPartialFrames()
         checkIDsInPaths()
 
@@ -2973,6 +2977,9 @@ struct Main {
                "frames built in place match the whole builds (\(Runtime.shared.partialMismatches) of \(Runtime.shared.partialFrameCount) differ)")
         print("frames built in place: \(Runtime.shared.partialFrameCount)")
         expect(_viewKindMismatches.isEmpty, "view kinds read from Body match the casts (\(_viewKindMismatches.prefix(5)))")
+        expect(wireChecked.trees > 100 && wireChecked.patches > 10,
+               "the encoder's trees and patches were checked against SwiftProtobuf's (\(wireChecked))")
+        print("wire bytes checked against SwiftProtobuf's: \(wireChecked.trees) trees, \(wireChecked.patches) patches")
 
         if failures > 0 {
             print("FAILED: \(failures) check(s)")
@@ -3066,6 +3073,7 @@ func fullDescribe(_ tree: RenderNode) -> String {
 /// reference implementation of what every host does (Compose FlatTree.applyPatch,
 /// etc.): `attrsOnly` keeps the retained children; otherwise rebuild the subtree.
 func applyPatch(_ bytes: [UInt8], into root: inout PatchNode?) -> Int {
+    checkWireBytes(patch: bytes)
     var buffer = ByteBuffer(bytes: bytes)
     let patch = getRoot(byteBuffer: &buffer) as IsoFlat_Patch
     for index in 0..<patch.ops.count {
@@ -4101,6 +4109,102 @@ func checkStateLifetime(_ mock: MockRenderer) {
 }
 
 
+// MARK: - Why a frame is built whole
+
+/// Renders as the headless head does (headless/libraries/swift_ui/
+/// HeadlessHead.swift): the tree laid out with its chrome drawn, as the
+/// self-drawing renderer lays it out, then encoded for its handlers and
+/// appearances. Nothing drawn.
+final class HeadlessLikeRenderer: TreeRenderer {
+    let semanticNavigation = false
+    private let encoder = FlatTreeEncoder()
+    private(set) var lastTree: RenderNode?
+
+    init() { encoder.semantic = true }
+
+    func render(tree: RenderNode) {
+        let runtime = Runtime.shared
+        let reports = runtime.layoutTree(root: tree)
+        _ = runtime.layoutPresentations()
+        _ = encoder.encodePatch(root: tree)
+        runtime.installTreeHandlers(encoder.handlers)
+        runtime.fireTreeAppearances(encoder.appearances, disappearances: encoder.disappearances)
+        lastTree = tree
+        for report in reports { report() }
+    }
+}
+
+nonisolated(unsafe) var refusalTap: (@MainActor () -> Void)?
+
+struct RefusalCounter: View {
+    @State private var count = 0
+    var body: some View {
+        let _ = (refusalTap = { count += 1 })
+        HStack {
+            Text("Count \(count)")
+            Button("+") { count += 1 }
+        }
+    }
+}
+
+struct RefusalScreen: View {
+    var body: some View {
+        NavigationStack {
+            VStack {
+                Text("Refusals")
+                RefusalCounter()
+            }
+            .navigationTitle("Counter")
+        }
+    }
+}
+
+/// A frame built whole says why. Under a renderer that draws its chrome (the
+/// headless head's, the GPU renderer's) a tap's frame is built whole for
+/// that reason, by design: the renderer expands chrome into the tree, and
+/// drawn navigation animates in the core. It is not the root's environment,
+/// which is the same frame to frame there (the label these frames had
+/// before). The same tap under a component-system renderer is built in
+/// place.
+@MainActor
+func checkWholeFrameReasons(_ previous: MockRenderer) {
+    let logChecked = Runtime.shared.renderLogChecked, logEnabled = Runtime.shared.renderLogEnabled
+    Runtime.shared.renderLogChecked = true
+    Runtime.shared.renderLogEnabled = true
+    defer {
+        Runtime.shared.renderLogChecked = logChecked
+        Runtime.shared.renderLogEnabled = logEnabled
+        Renderer.bind(previous)
+    }
+    func settle() { var n = 0; while Runtime.shared.wantsFrame && n < 40 { Runtime.shared.renderFrame(); n += 1 } }
+
+    let headless = HeadlessLikeRenderer()
+    Renderer.bind(headless)
+    Runtime.shared.installRootView { RefusalScreen() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    settle()
+    for step in 1...2 {
+        refusalTap?()
+        settle()
+        let stats = Runtime.shared.frameStats
+        expect(stats.kind == .whole && stats.detail == "drawn chrome",
+               "a tap's frame under drawn chrome is built whole for that reason, \(step) (\(stats.kind.rawValue): \(stats.detail))")
+        expect(findTextInTree(headless.lastTree!, "Count \(step)"), "and shows the count, \(step)")
+    }
+
+    Renderer.bind(previous)
+    Runtime.shared.installRootView { RefusalScreen() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    settle()
+    let partials = Runtime.shared.partialFrameCount
+    refusalTap?()
+    settle()
+    let stats = Runtime.shared.frameStats
+    expect(Runtime.shared.partialFrameCount > partials && stats.kind == .partial,
+           "the same tap under a component-system renderer is built in place (\(stats.kind.rawValue): \(stats.detail))")
+}
+
+
 // MARK: - A state's storage
 
 nonisolated(unsafe) var storageTitlesMade = 0
@@ -4457,4 +4561,44 @@ func checkClassState(_ mock: MockRenderer) {
     expect(findTextInTree(Runtime.shared.retainedTree!, "Class count 0"), "a class's state shows its initial value")
     let said = hostLogs.filter { $0.contains("ClassStateView's @State can't be kept") }
     expect(said.count == 1, "a class's state that can't be kept is said once (\(said))")
+}
+
+
+// MARK: - The wire format, by hand
+
+nonisolated(unsafe) var wireChecked = (trees: 0, patches: 0)
+
+/// The encoder writes tree.proto by hand and the reader reads it by hand
+/// (TreeEncoder.swift, TreeReader.swift): the bytes are SwiftProtobuf's own
+/// for the same message (parsed and written again, they come out the same),
+/// and the reader reads them as SwiftProtobuf's parse, mapped field by field,
+/// reads them. Every tree and patch the checks encode is held to this.
+func checkWireBytes(tree bytes: [UInt8]) {
+    wireChecked.trees += 1
+    guard let wire = try? Wire_Node(serializedBytes: bytes) else { return expect(false, "a tree's bytes parse as a Node") }
+    let again: [UInt8] = (try? wire.serializedBytes()) ?? []
+    if again != bytes { expect(false, "a tree's bytes are SwiftProtobuf's (\(bytes.count) bytes, SwiftProtobuf's \(again.count))") }
+    let read = try? IsoFlat_Node(treeBytes: bytes)
+    if read.map({ String(describing: $0) }) != String(describing: IsoFlat_Node(wire)) {
+        expect(false, "the reader reads a tree as SwiftProtobuf's parse does")
+    }
+}
+
+func checkWireBytes(patch bytes: [UInt8]) {
+    wireChecked.patches += 1
+    guard let wire = try? Wire_Patch(serializedBytes: bytes) else { return expect(false, "a patch's bytes parse as a Patch") }
+    let again: [UInt8] = (try? wire.serializedBytes()) ?? []
+    if again != bytes { expect(false, "a patch's bytes are SwiftProtobuf's (\(bytes.count) bytes, SwiftProtobuf's \(again.count))") }
+    let read = try? IsoFlat_Patch(patchBytes: bytes)
+    let expected = wire.ops.map { op -> String in
+        var parsed = String(describing: op.path) + "|" + String(describing: op.attrsOnly) + "|" + String(describing: op.order)
+        parsed += "|" + String(describing: op.reorder) + "|" + (op.hasNode ? String(describing: IsoFlat_Node(op.node)) : "-")
+        return parsed + "|" + op.inserts.map { String(describing: IsoFlat_Node($0)) }.joined(separator: ",")
+    }
+    let got = read?.ops.map { op -> String in
+        var parsed = String(describing: op.path ?? "") + "|" + String(describing: op.attrsOnly) + "|" + String(describing: op.order)
+        parsed += "|" + String(describing: op.hasOrder) + "|" + (op.node.map { String(describing: $0) } ?? "-")
+        return parsed + "|" + op.inserts.map { String(describing: $0) }.joined(separator: ",")
+    }
+    if got != expected { expect(false, "the reader reads a patch as SwiftProtobuf's parse does") }
 }
