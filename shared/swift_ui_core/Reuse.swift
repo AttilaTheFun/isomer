@@ -818,7 +818,7 @@ extension Runtime {
             }
             scrollRequestSeen.frames += 1
             if scrollRequestSeen.frames <= 8 {
-                let marker = "/fe-" + request.target
+                let marker = "/fe-" + _pathSegment(request.target)
                 let known = listRowTargets[list]?[request.target]
                 for (index, path) in rowPaths.enumerated() where path.hasSuffix(marker) || path == known {
                     extra.insert(index)
@@ -846,7 +846,7 @@ extension Runtime {
     /// The lists with a row for `target` (a `ForEach` id, or a view's `.id`
     /// in a row) that they have not built.
     func listsMissingScrollTarget(_ target: String) -> [String] {
-        let marker = "/fe-" + target
+        let marker = "/fe-" + _pathSegment(target)
         return listRowPaths.compactMap { list, paths in
             let known = listRowTargets[list]?[target]
             guard let path = paths.first(where: { $0.hasSuffix(marker) || $0 == known }) else { return nil }
@@ -861,7 +861,7 @@ extension Runtime {
         guard let request = pendingScroll else { return false }
         let rows = listRowCounts[list]
         if let memo = scrollTargetMemo[list], memo.tick == request.tick, memo.rows == rows { return memo.holds }
-        let marker = "/fe-" + request.target
+        let marker = "/fe-" + _pathSegment(request.target)
         let known = listRowTargets[list]?[request.target]
         let holds = (listRowPaths[list] ?? []).contains { $0.hasSuffix(marker) || $0 == known }
         scrollTargetMemo[list] = (request.tick, rows, holds)

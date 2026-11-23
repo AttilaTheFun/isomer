@@ -74,7 +74,7 @@ extension ForEach {
 extension ForEach: _MultiView {
     func childViews() -> [(suffix: String, view: any View)] {
         let rows = self.rows()
-        return (0..<rows.count).map { ("fe-" + rows.id($0), rows.view($0)) }
+        return (0..<rows.count).map { ("fe-" + _pathSegment(rows.id($0)), rows.view($0)) }
     }
 }
 
@@ -180,7 +180,7 @@ extension _DeletableRows: _IndexedRows {
 extension _DeletableRows: _MultiView {
     func childViews() -> [(suffix: String, view: any View)] {
         let rows = indexedRows()
-        return (0..<rows.count).map { ("fe-" + rows.id($0), rows.view($0)) }
+        return (0..<rows.count).map { ("fe-" + _pathSegment(rows.id($0)), rows.view($0)) }
     }
 }
 
@@ -214,3 +214,24 @@ extension MutableCollection {
 // The view conformances, in extensions: declared on the type itself they
 // would make the whole type main-actor isolated (see `View`).
 extension ForEach: View {}
+
+/// An id as a segment of a view's path: "%", "/" and "#" escaped, so that an
+/// id holding them (a URL, a "#tag") can't be read as more of the path or as
+/// a state's name ("<path>#<property>", State.swift). Most ids hold none, and
+/// come back as they are.
+func _pathSegment(_ id: String) -> String {
+    guard id.utf8.contains(where: { $0 == UInt8(ascii: "%") || $0 == UInt8(ascii: "/") || $0 == UInt8(ascii: "#") }) else {
+        return id
+    }
+    var escaped = ""
+    escaped.reserveCapacity(id.utf8.count + 6)
+    for scalar in id.unicodeScalars {
+        switch scalar {
+        case "%": escaped += "%25"
+        case "/": escaped += "%2F"
+        case "#": escaped += "%23"
+        default: escaped.unicodeScalars.append(scalar)
+        }
+    }
+    return escaped
+}
