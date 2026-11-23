@@ -41,9 +41,9 @@ struct ExampleApplication: App {
             StorybookView()
                 #if canImport(ShakeKit)
                 // A shake files an issue here, with a screenshot and the
-                // logs; only where the build opts in (ShakeKitScope in the
-                // Info.plist, CI's Alphas), and only the iPhone's and the
-                // Mac's Storybook link ShakeKit.
+                // logs, for someone signed in (ShakeKitScope is in every
+                // build's Info.plist); only the iPhone's and the Mac's
+                // Storybook link ShakeKit.
                 .shakeToReport(repository: "AttilaTheFun/isomer")
                 #endif
         }

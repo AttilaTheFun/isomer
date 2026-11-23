@@ -19,9 +19,9 @@ It also defines what the Storybook's apps carry in their Info.plist
   (comma-separated): on a Mac, the distributor's bundle ids to ask to
   install an update (`UpdateKitApplicationsBundleIDs`).
 - INFOPLIST, from ISOMER_INFOPLIST: any other keys the builder's apps
-  carry, as a JSON object of strings or arrays of strings (ShakeKit's
-  `ShakeKitScope`, which turns it on, and the shared GitHub sign-in's
-  `GitHubShared*`), or none.
+  carry, as a JSON object of strings or arrays of strings (the shared
+  GitHub sign-in's `GitHubShared*`, which ShakeKit files with when the
+  person is signed in there), or none.
 CI's distribution builds set them from the repository's secrets.
 """
 

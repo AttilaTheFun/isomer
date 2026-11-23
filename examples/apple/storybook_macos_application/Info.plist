@@ -12,5 +12,9 @@
     <string>.</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
+    <!-- ShakeKit, in every build: a shake files an issue for someone
+         signed in (ExampleApp.swift); a plain checkout's too. -->
+    <key>ShakeKitScope</key>
+    <string>public_repo</string>
 </dict>
 </plist>

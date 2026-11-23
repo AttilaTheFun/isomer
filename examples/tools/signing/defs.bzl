@@ -7,7 +7,7 @@ and the builder's other keys (ShakeKit's, the shared GitHub sign-in's).
     stamped_infoplist(name = "stamped_plist")   # an Info.plist fragment
 
 With nothing set, the fragment is empty: UpdateKit does nothing (its README,
-"The app group"), and neither does ShakeKit (no ShakeKitScope).
+"The app group"), and ShakeKit signs in on its own (no shared sign-in).
 """
 
 load("@bazel_skylib//rules:write_file.bzl", "write_file")

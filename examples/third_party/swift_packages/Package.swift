@@ -26,9 +26,9 @@ let package = Package(
         // (ApplicationUpdates in AttilaTheFun/applications until 0.10.45.)
         .package(url: "https://github.com/AttilaTheFun/update_kit.git", exact: "0.18.0"),
         // ShakeKit: shake the iPhone (or Help › Report a Bug… on the Mac) to
-        // file an issue with a screenshot and the logs. It does nothing unless
-        // the build's Info.plist opts in (ShakeKitScope), which only CI's
-        // Alphas do (//tools/signing).
+        // file an issue with a screenshot and the logs, for someone signed in
+        // (the apps' Info.plist opts in, ShakeKitScope; CI's Alphas add the
+        // shared GitHub sign-in's keys, //tools/signing).
         .package(url: "https://github.com/AttilaTheFun/shake_kit.git", exact: "0.2.0"),
         // build_tools: CI's shared tools, built here and run by the release
         // jobs: `sign` (an APK, a Mac app, an
