@@ -168,6 +168,17 @@ struct StorybookHeadlessTests {
         }
     }
 
+    /// A TabView's tabs are buttons named by their titles, as the system's
+    /// tab bar lists them: a tap on one shows its content (navigation.tabs).
+    @Test func tabsAreSelectedByTheirTitles() throws {
+        let app = try launch(story: "navigation.tabs")
+        defer { app.quit() }
+        #expect(try app.screen().texts.contains("Home"))
+        let screen = try app.tap("Profile")
+        #expect(screen.texts.contains("Profile"), "the Profile tab's content shows: \(screen.texts)")
+        #expect(!screen.texts.contains("Home"), "the Home tab's content is gone: \(screen.texts)")
+    }
+
     /// A trip to the background and back (`scene`): the app comes back as
     /// it was, still driven, whichever way its platform moves it (Android's
     /// launcher sends it home and brings it back; iOS tells SwiftUI's scene
