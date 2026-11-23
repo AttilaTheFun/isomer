@@ -17,7 +17,6 @@
 // mirror of the tree (children, and own attributes compared field by field)
 // — which is both what gets serialized and what the next frame diffs against.
 
-import SwiftProtobuf
 internal import IsomerSwiftUI
 
 package final class FlatTreeEncoder {
@@ -34,6 +33,12 @@ package final class FlatTreeEncoder {
     /// (the common in-place value update — a tap flipping state), full-replaces a
     /// subtree on any kind/child-count change.
     private var previous: FlatNode?
+
+    /// The sizes the wire writer measures, kept from pass to pass with their
+    /// storage (`_TreeWire`): made afresh, a large tree's grew through a
+    /// string of allocations every frame, and the frames built after them
+    /// came slower in the tail.
+    private var wireSizes: [Int] = []
 
     /// Each node's greediness for the current pass. Every node asks for its
     /// own, and a node's answer takes its whole subtree's, so without this a
@@ -161,12 +166,7 @@ package final class FlatTreeEncoder {
         appearances = []
         disappearances = [:]
         let tree = flattenRoot(root)
-        return Self.bytes(serialize(tree, includeChildren: true))
-    }
-
-    private static func bytes(_ message: some SwiftProtobuf.Message) -> [UInt8] {
-        // Serializing a complete message of known fields can't fail.
-        (try? message.serializedBytes()) ?? []
+        return _TreeWire.nodeBytes(tree, sizes: &wireSizes)
     }
 
     // MARK: - Diff-aware encode
@@ -186,12 +186,12 @@ package final class FlatTreeEncoder {
             let stale = passStats.stale.prefix(6).joined(separator: ", ") + (passStats.stale.count > 6 ? " (+\(passStats.stale.count - 6))" : "")
             Runtime.shared.host?.log("[encode] flattened \(passStats.nodes) nodes | cached subtrees replayed \(passStats.hits), flattened again \(passStats.stale.count): \(stale.isEmpty ? "-" : stale) | new \(passStats.fresh.count): \(passStats.fresh.prefix(4).joined(separator: ", "))")
         }
-        var patch = Wire_Patch()
+        var ops: [_WireOp] = []
         diffedNodes = 0
-        diff(previous, tree, path: "n", &patch.ops)
+        diff(previous, tree, path: "n", &ops)
         previous = tree
-        Runtime.shared.noteFrameDiff(nodes: diffedNodes, ops: patch.ops.count)
-        return Self.bytes(patch)
+        Runtime.shared.noteFrameDiff(nodes: diffedNodes, ops: ops.count)
+        return _TreeWire.patchBytes(ops, sizes: &wireSizes)
     }
 
     // MARK: - Diff
@@ -213,11 +213,11 @@ package final class FlatTreeEncoder {
     /// tree as it stands when the op runs: a node's own ops come before its
     /// children's, so a child's path is its position after any reorder.
     private func diff(
-        _ old: FlatNode?, _ new: FlatNode, path: String, _ ops: inout [Wire_PatchOp]
+        _ old: FlatNode?, _ new: FlatNode, path: String, _ ops: inout [_WireOp]
     ) {
         guard let old, old.kind == new.kind else {
             diffedNodes &+= 1
-            ops.append(op(path, serialize(new, includeChildren: true), attrsOnly: false))
+            ops.append(.node(path: path, node: new, attrsOnly: false))
             return
         }
         // The same cached subtree as last frame (a reused view's): nothing
@@ -225,7 +225,7 @@ package final class FlatTreeEncoder {
         if new.subtreeToken != 0, new.subtreeToken == old.subtreeToken { return }
         diffedNodes &+= 1
         if !old.sameOwnAttributes(as: new) {
-            ops.append(op(path, serialize(new, includeChildren: false), attrsOnly: true))
+            ops.append(.node(path: path, node: new, attrsOnly: true))
         }
         // Where each new child was among the old ones (-1: it is new).
         var sameOrder = old.children.count == new.children.count
@@ -246,45 +246,25 @@ package final class FlatTreeEncoder {
         // No children left: a plain replace (an `order` op is never empty,
         // so readers can tell one by its entries).
         if new.children.isEmpty {
-            ops.append(op(path, serialize(new, includeChildren: true), attrsOnly: false))
+            ops.append(.node(path: path, node: new, attrsOnly: false))
             return
         }
         var oldIndex: [String: Int] = [:]
         oldIndex.reserveCapacity(old.children.count)
         for (index, child) in old.children.enumerated() { oldIndex[child.matchKey] = index }
-        var inserts: [Wire_Node] = []
+        var inserts: [FlatNode] = []
         for child in new.children {
             if let index = oldIndex[child.matchKey], old.children[index].kind == child.kind {
                 order.append(Int32(index))
             } else {
                 order.append(-1)
-                inserts.append(serialize(child, includeChildren: true))
+                inserts.append(child)
             }
         }
-        ops.append(reorderOp(path, order: order, inserts: inserts))
+        ops.append(.reorder(path: path, order: order, inserts: inserts))
         for (index, child) in new.children.enumerated() where order[index] >= 0 {
             diff(old.children[Int(order[index])], child, path: "\(path).\(index)", &ops)
         }
-    }
-
-    private func op(_ path: String, _ node: Wire_Node, attrsOnly: Bool) -> Wire_PatchOp {
-        var op = Wire_PatchOp()
-        op.path = path
-        op.node = node
-        op.attrsOnly = attrsOnly
-        return op
-    }
-
-    /// The node at `path` keeps its attributes; its children become, for
-    /// each `order` entry, the old child at that index, or (for -1) the next
-    /// of `inserts`.
-    private func reorderOp(_ path: String, order: [Int32], inserts: [Wire_Node]) -> Wire_PatchOp {
-        var op = Wire_PatchOp()
-        op.path = path
-        op.reorder = true
-        op.order = order
-        op.inserts = inserts
-        return op
     }
 
     // MARK: - Flatten (RenderNode -> FlatNode)
@@ -1357,76 +1337,6 @@ package final class FlatTreeEncoder {
         if let popover = node.popoverAnchor { out.params = (out.params ?? []) + [("popover", popover)] }
     }
 
-    // MARK: - Serialize (FlatNode -> wire Node)
-
-    /// Serializes a `FlatNode` to a `Node` table. When `includeChildren` is
-    /// false the `ch` vector is omitted — the attrs-only patch encoding whose
-    /// consumer keeps the retained node's existing children.
-    // swiftlint:disable:next cyclomatic_complexity function_body_length
-    private func serialize(_ node: FlatNode, includeChildren: Bool) -> Wire_Node {
-        var out = Wire_Node()
-        out.kind = node.kind.wire
-        if let v = node.v { out.v = v }
-        if let num = node.num { out.num = num }
-        if let id = node.id { out.id = id }
-        if let fontSize = node.fontSize { out.size = fontSize }
-        if let weight = node.weight { out.weight = weight }
-        if let color = node.color { out.color = color.wire }
-        if let lines = node.lines { out.lines = lines }
-        if let shape = node.shape { out.shape = shape.wire }
-        if let fill = node.fill { out.fill = fill.wire }
-        if let stroke = node.stroke { out.stroke = stroke.wire }
-        if let strokeWidth = node.strokeWidth { out.strokeWidth = strokeWidth }
-        if let axis = node.axis { out.axis = axis.wire }
-        if let spacing = node.spacing { out.spacing = spacing }
-        if let min = node.min { out.min = min }
-        if let src = node.src { out.src = src }
-        if let remote = node.remote { out.remote = remote }
-        if let resizable = node.resizable { out.resizable = resizable }
-        if let fit = node.fit { out.fit = fit }
-        if let placeholder = node.placeholder { out.placeholder = placeholder }
-        if let edit = node.edit { out.edit = edit }
-        if let view = node.view { out.view = view }
-        if let options = node.options { out.options = options }
-        if let params = node.params {
-            out.params = params.map { key, value in
-                var entry = Wire_KV()
-                entry.key = key
-                entry.value = value
-                return entry
-            }
-        }
-        out.growW = node.growW
-        out.growH = node.growH
-        if let alignH = node.alignH { out.alignH = alignH.wire }
-        if let alignV = node.alignV { out.alignV = alignV.wire }
-        if let shadow = node.shadow { out.shadow = shadow.wire }
-        if let padding = node.padding { out.padding = padding }
-        if let width = node.width { out.width = width }
-        if let height = node.height { out.height = height }
-        out.expandW = node.expandW
-        out.expandH = node.expandH
-        if let radius = node.radius { out.radius = radius }
-        if let opacity = node.opacity { out.opacity = opacity }
-        if let bg = node.bg { out.bg = bg.wire }
-        if let gradient = node.gradient { out.gradient = gradient }
-        if let tap = node.tap {
-            out.tap = tap
-            if let feedback = node.feedback { out.feedback = feedback }
-        }
-        if let style = node.style { out.style = style.wire }
-        if let title = node.title { out.title = title }
-        if let message = node.message { out.message = message }
-        if let dismiss = node.dismiss { out.dismiss = dismiss }
-        if includeChildren { out.ch = node.children.map { serialize($0, includeChildren: true) } }
-        if let offsetX = node.offsetX { out.offsetX = offsetX }
-        if let offsetY = node.offsetY { out.offsetY = offsetY }
-        if let scale = node.scale { out.scale = scale }
-        if let drag = node.drag { out.drag = drag }
-        if let key = node.key { out.key = key }
-        return out
-    }
-
     // MARK: - Mapping helpers
 
     /// "#rrggbbaa" for a color (no Foundation formatting here).
@@ -1774,4 +1684,371 @@ func systemColorName(_ color: Color) -> String? {
     let whole: String = String(hundredths / 100)
     let fraction: String = String(String(100 + hundredths % 100).dropFirst())
     return name + "@" + whole + "." + fraction
+}
+
+// MARK: - The wire format, written by hand
+
+// tree.proto's messages written straight from the encoder's FlatNodes into
+// one buffer of the size they come to: no SwiftProtobuf message made per
+// node (each with storage of its own, its fields copied in), no sizes worked
+// out again at each level of nesting (a deep tree's leaves were measured once
+// for every message around them), no array grown as it fills. Two passes over
+// the same walk (`_visitNode`): the first measures every message, in the
+// order they are written; the second writes them, each one's length taken
+// from the first. The bytes are SwiftProtobuf's for the same messages, field
+// by field in number order, as tree.proto's readers (the web's flat_tree.js,
+// Android's FlatTree.kt, TreeReader.swift) read them.
+//
+// Not through OutputSpan: on Apple's systems before 26 it is in a
+// back-deployment library (libswiftCompatibilitySpan) that an app at
+// Isomer's floor (iOS 16) would have to embed. The writer keeps its
+// discipline instead: it owns its place in the array's own uninitialized
+// storage, can't be copied, and checks every write against the size measured.
+
+/// One operation of a patch (tree.proto's PatchOp): a node replaced (or its
+/// attributes alone), or a node's children reordered with the new ones.
+private enum _WireOp {
+    case node(path: String, node: FlatNode, attrsOnly: Bool)
+    case reorder(path: String, order: [Int32], inserts: [FlatNode])
+}
+
+/// What the walk writes to: the measuring pass or the writing one.
+private protocol _WireSink: ~Copyable {
+    mutating func varint(_ field: Int, _ value: UInt64)
+    mutating func fixed32(_ field: Int, _ bits: UInt32)
+    mutating func fixed64(_ field: Int, _ bits: UInt64)
+    mutating func string(_ field: Int, _ value: String)
+    mutating func packedDoubles(_ field: Int, _ values: [Double])
+    mutating func packedInt32s(_ field: Int, _ values: [Int32])
+    /// A nested message starts: its fields follow, until `end()`.
+    mutating func begin(_ field: Int)
+    mutating func end()
+}
+
+/// The bytes a varint of `value` takes.
+@inline(__always)
+private func _varintSize(_ value: UInt64) -> Int {
+    (64 - (value | 1).leadingZeroBitCount + 6) / 7
+}
+
+/// The bytes a field's tag takes.
+@inline(__always)
+private func _tagSize(_ field: Int) -> Int {
+    _varintSize(UInt64(field) << 3)
+}
+
+/// An int32 field's varint: a negative value sign-extended to 64 bits, as
+/// protobuf writes it.
+@inline(__always)
+private func _int32Bits(_ value: Int32) -> UInt64 {
+    UInt64(bitPattern: Int64(value))
+}
+
+/// The measuring pass: each message's size, in the order the walk meets
+/// them, for the writing pass to write its length from.
+private struct _WireSizer: _WireSink, ~Copyable {
+    /// The size of the message being measured so far.
+    var count = 0
+    var sizes: [Int]
+    /// The messages around the one being measured: each one's slot in
+    /// `sizes` and its size so far.
+    private var open: [(slot: Int, outer: Int, field: Int)] = []
+
+    /// Measures into `sizes`' storage, emptied.
+    init(reusing sizes: inout [Int]) {
+        sizes.removeAll(keepingCapacity: true)
+        self.sizes = sizes
+        // (Moved out, so the measuring appends to storage no one else holds.)
+        sizes = []
+    }
+
+    mutating func varint(_ field: Int, _ value: UInt64) { count += _tagSize(field) + _varintSize(value) }
+    mutating func fixed32(_ field: Int, _ bits: UInt32) { count += _tagSize(field) + 4 }
+    mutating func fixed64(_ field: Int, _ bits: UInt64) { count += _tagSize(field) + 8 }
+
+    mutating func string(_ field: Int, _ value: String) {
+        let length = value.utf8.count
+        count += _tagSize(field) + _varintSize(UInt64(length)) + length
+    }
+
+    mutating func packedDoubles(_ field: Int, _ values: [Double]) {
+        guard !values.isEmpty else { return }
+        let length = values.count * 8
+        count += _tagSize(field) + _varintSize(UInt64(length)) + length
+    }
+
+    mutating func packedInt32s(_ field: Int, _ values: [Int32]) {
+        guard !values.isEmpty else { return }
+        var length = 0
+        for value in values { length += _varintSize(_int32Bits(value)) }
+        count += _tagSize(field) + _varintSize(UInt64(length)) + length
+    }
+
+    mutating func begin(_ field: Int) {
+        open.append((sizes.count, count, field))
+        sizes.append(0)
+        count = 0
+    }
+
+    mutating func end() {
+        let (slot, outer, field) = open.removeLast()
+        let inner = count
+        sizes[slot] = inner
+        count = outer + _tagSize(field) + _varintSize(UInt64(inner)) + inner
+    }
+}
+
+/// The writing pass: into the array's uninitialized storage, which it alone
+/// writes, each write checked against the size the measuring pass found.
+private struct _WireWriter: _WireSink, ~Copyable {
+    private let base: UnsafeMutablePointer<UInt8>
+    private let capacity: Int
+    private let sizes: [Int]
+    private var next = 0
+    private(set) var position = 0
+
+    init(_ buffer: UnsafeMutableBufferPointer<UInt8>, sizes: [Int]) {
+        // (A buffer of no bytes has no address: nothing is written to it.)
+        base = buffer.baseAddress ?? UnsafeMutablePointer(bitPattern: 1)!
+        capacity = buffer.count
+        self.sizes = sizes
+    }
+
+    @inline(__always)
+    private mutating func room(_ bytes: Int) {
+        precondition(position + bytes <= capacity, "the tree's bytes outgrew the size measured")
+    }
+
+    @inline(__always)
+    private mutating func rawVarint(_ value: UInt64) {
+        room(_varintSize(value))
+        var value = value
+        while value >= 0x80 {
+            base[position] = UInt8(truncatingIfNeeded: value) | 0x80
+            position += 1
+            value >>= 7
+        }
+        base[position] = UInt8(truncatingIfNeeded: value)
+        position += 1
+    }
+
+    @inline(__always)
+    private mutating func tag(_ field: Int, _ wireType: UInt64) {
+        rawVarint(UInt64(field) << 3 | wireType)
+    }
+
+    @inline(__always)
+    private mutating func raw64(_ bits: UInt64) {
+        room(8)
+        UnsafeMutableRawPointer(base + position).storeBytes(of: bits.littleEndian, as: UInt64.self)
+        position += 8
+    }
+
+    mutating func varint(_ field: Int, _ value: UInt64) {
+        tag(field, 0)
+        rawVarint(value)
+    }
+
+    mutating func fixed32(_ field: Int, _ bits: UInt32) {
+        tag(field, 5)
+        room(4)
+        UnsafeMutableRawPointer(base + position).storeBytes(of: bits.littleEndian, as: UInt32.self)
+        position += 4
+    }
+
+    mutating func fixed64(_ field: Int, _ bits: UInt64) {
+        tag(field, 1)
+        raw64(bits)
+    }
+
+    mutating func string(_ field: Int, _ value: String) {
+        let length = value.utf8.count
+        tag(field, 2)
+        rawVarint(UInt64(length))
+        room(length)
+        let copied: Void? = value.utf8.withContiguousStorageIfAvailable { bytes in
+            if let source = bytes.baseAddress { (base + position).update(from: source, count: length) }
+        }
+        if copied == nil {
+            var at = position
+            for byte in value.utf8 {
+                base[at] = byte
+                at += 1
+            }
+        }
+        position += length
+    }
+
+    mutating func packedDoubles(_ field: Int, _ values: [Double]) {
+        guard !values.isEmpty else { return }
+        tag(field, 2)
+        rawVarint(UInt64(values.count * 8))
+        for value in values { raw64(value.bitPattern) }
+    }
+
+    mutating func packedInt32s(_ field: Int, _ values: [Int32]) {
+        guard !values.isEmpty else { return }
+        var length = 0
+        for value in values { length += _varintSize(_int32Bits(value)) }
+        tag(field, 2)
+        rawVarint(UInt64(length))
+        for value in values { rawVarint(_int32Bits(value)) }
+    }
+
+    mutating func begin(_ field: Int) {
+        let size = sizes[next]
+        next += 1
+        tag(field, 2)
+        rawVarint(UInt64(size))
+    }
+
+    // (Each length was written as the message began; the whole is checked
+    // against its size at the end.)
+    mutating func end() {}
+}
+
+private enum _TreeWire {
+    /// A tree.proto Node: the tree `encode(root:)` writes.
+    /// (`sizes`: the measuring's storage, kept by the encoder.)
+    static func nodeBytes(_ node: FlatNode, sizes: inout [Int]) -> [UInt8] {
+        var sizer = _WireSizer(reusing: &sizes)
+        _visitNode(node, children: true, &sizer)
+        return write(sizer, sizes: &sizes) { _visitNode(node, children: true, &$0) }
+    }
+
+    /// A tree.proto Patch of `ops`.
+    static func patchBytes(_ ops: [_WireOp], sizes: inout [Int]) -> [UInt8] {
+        var sizer = _WireSizer(reusing: &sizes)
+        _visitPatch(ops, &sizer)
+        return write(sizer, sizes: &sizes) { _visitPatch(ops, &$0) }
+    }
+
+    /// What `body` writes (the walk `measured` measured), in an array of
+    /// exactly that many bytes; the sizes measured handed back to `sizes`.
+    private static func write(
+        _ measured: consuming _WireSizer, sizes: inout [Int], _ body: (inout _WireWriter) -> Void
+    ) -> [UInt8] {
+        let total = measured.count
+        sizes = measured.sizes
+        return [UInt8](unsafeUninitializedCapacity: total) { buffer, initialized in
+            var writer = _WireWriter(buffer, sizes: sizes)
+            body(&writer)
+            precondition(writer.position == total, "the tree's bytes differ from their size measured")
+            initialized = total
+        }
+    }
+}
+
+private func _visitPatch<S: _WireSink & ~Copyable>(_ ops: [_WireOp], _ sink: inout S) {
+    for index in ops.indices {
+        sink.begin(1)
+        switch ops[index] {
+        case .node(let path, let node, let attrsOnly):
+            if !path.isEmpty { sink.string(1, path) }
+            sink.begin(2)
+            _visitNode(node, children: !attrsOnly, &sink)
+            sink.end()
+            if attrsOnly { sink.varint(3, 1) }
+        case .reorder(let path, let order, let inserts):
+            if !path.isEmpty { sink.string(1, path) }
+            sink.packedInt32s(4, order)
+            for insert in inserts.indices {
+                sink.begin(5)
+                _visitNode(inserts[insert], children: true, &sink)
+                sink.end()
+            }
+            sink.varint(6, 1)
+        }
+        sink.end()
+    }
+}
+
+/// A Color (proto3 floats: each one that isn't zero; -0 is written).
+private func _visitColor<S: _WireSink & ~Copyable>(_ field: Int, _ color: IsoFlat_ColorRGBA, _ sink: inout S) {
+    sink.begin(field)
+    if color.r.bitPattern != 0 { sink.fixed32(1, color.r.bitPattern) }
+    if color.g.bitPattern != 0 { sink.fixed32(2, color.g.bitPattern) }
+    if color.b.bitPattern != 0 { sink.fixed32(3, color.b.bitPattern) }
+    if color.a.bitPattern != 0 { sink.fixed32(4, color.a.bitPattern) }
+    sink.end()
+}
+
+/// A Node's fields in number order; its children (field 45) unless
+/// `children` is false (an attributes op, whose reader keeps its own).
+private func _visitNode<S: _WireSink & ~Copyable>(_ node: borrowing FlatNode, children: Bool, _ sink: inout S) {
+    if node.kind != .box { sink.varint(1, UInt64(node.kind.rawValue)) }
+    if let v = node.v { sink.string(2, v) }
+    if let num = node.num { sink.fixed64(3, num.bitPattern) }
+    if let id = node.id { sink.string(4, id) }
+    if let size = node.fontSize { sink.fixed64(5, size.bitPattern) }
+    if let weight = node.weight { sink.varint(6, _int32Bits(weight)) }
+    if let color = node.color { _visitColor(7, color, &sink) }
+    if let lines = node.lines { sink.varint(8, _int32Bits(lines)) }
+    if let shape = node.shape { sink.varint(9, UInt64(shape.rawValue)) }
+    if let fill = node.fill { _visitColor(10, fill, &sink) }
+    if let stroke = node.stroke { _visitColor(11, stroke, &sink) }
+    if let strokeWidth = node.strokeWidth { sink.fixed64(12, strokeWidth.bitPattern) }
+    if let axis = node.axis { sink.varint(13, UInt64(axis.rawValue)) }
+    if let spacing = node.spacing { sink.fixed64(14, spacing.bitPattern) }
+    if let min = node.min { sink.fixed64(15, min.bitPattern) }
+    if let src = node.src { sink.string(16, src) }
+    if let remote = node.remote { sink.varint(17, remote ? 1 : 0) }
+    if let resizable = node.resizable { sink.varint(18, resizable ? 1 : 0) }
+    if let fit = node.fit { sink.varint(19, fit ? 1 : 0) }
+    if let placeholder = node.placeholder { sink.string(20, placeholder) }
+    if let edit = node.edit { sink.string(21, edit) }
+    if let view = node.view { sink.string(22, view) }
+    if let options = node.options {
+        for index in options.indices { sink.string(23, options[index]) }
+    }
+    if let params = node.params {
+        for index in params.indices {
+            sink.begin(24)
+            if !params[index].0.isEmpty { sink.string(1, params[index].0) }
+            if !params[index].1.isEmpty { sink.string(2, params[index].1) }
+            sink.end()
+        }
+    }
+    if node.growW { sink.varint(25, 1) }
+    if node.growH { sink.varint(26, 1) }
+    if let alignH = node.alignH { sink.varint(27, UInt64(alignH.rawValue)) }
+    if let alignV = node.alignV { sink.varint(28, UInt64(alignV.rawValue)) }
+    if let shadow = node.shadow {
+        sink.begin(29)
+        // (Its colour is always set, as the message's field.)
+        _visitColor(1, shadow.color, &sink)
+        if shadow.radius.bitPattern != 0 { sink.fixed32(2, shadow.radius.bitPattern) }
+        if shadow.x.bitPattern != 0 { sink.fixed32(3, shadow.x.bitPattern) }
+        if shadow.y.bitPattern != 0 { sink.fixed32(4, shadow.y.bitPattern) }
+        sink.end()
+    }
+    if let padding = node.padding { sink.packedDoubles(30, padding) }
+    if let width = node.width { sink.fixed64(31, width.bitPattern) }
+    if let height = node.height { sink.fixed64(32, height.bitPattern) }
+    if node.expandW { sink.varint(33, 1) }
+    if node.expandH { sink.varint(34, 1) }
+    if let radius = node.radius { sink.fixed64(35, radius.bitPattern) }
+    if let opacity = node.opacity { sink.fixed64(36, opacity.bitPattern) }
+    if let bg = node.bg { _visitColor(37, bg, &sink) }
+    if let gradient = node.gradient { sink.string(38, gradient) }
+    if let tap = node.tap {
+        sink.string(39, tap)
+        if let feedback = node.feedback { sink.varint(40, _int32Bits(feedback)) }
+    }
+    if let style = node.style { sink.varint(41, UInt64(style.rawValue)) }
+    if let title = node.title { sink.string(42, title) }
+    if let message = node.message { sink.string(43, message) }
+    if let dismiss = node.dismiss { sink.string(44, dismiss) }
+    if children {
+        for index in node.children.indices {
+            sink.begin(45)
+            _visitNode(node.children[index], children: true, &sink)
+            sink.end()
+        }
+    }
+    if let offsetX = node.offsetX { sink.fixed64(46, offsetX.bitPattern) }
+    if let offsetY = node.offsetY { sink.fixed64(47, offsetY.bitPattern) }
+    if let scale = node.scale { sink.fixed64(48, scale.bitPattern) }
+    if let drag = node.drag { sink.string(49, drag) }
+    if let key = node.key { sink.string(50, key) }
 }
