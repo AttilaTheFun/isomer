@@ -9,12 +9,29 @@ is not checked in):
 
 Simulator and Mac builds need nothing; an iPhone build needs your team's
 development profile (Xcode's, found by `local_provisioning_profile`).
+
+It also defines what the Storybook's apps tell UpdateKit (defs.bzl's
+`update_infoplist`), which a public repository never names:
+- UPDATE_APP_GROUP, from ISOMER_UPDATE_APP_GROUP: the app group the apps
+  share with the distributor (UpdateKit's `UpdateKitAppGroup`), or "" for
+  none, when UpdateKit does nothing;
+- UPDATE_APPLICATIONS_BUNDLE_IDS, from ISOMER_UPDATE_APPLICATIONS_BUNDLE_IDS
+  (comma-separated): on a Mac, the distributor's bundle ids to ask to
+  install an update (`UpdateKitApplicationsBundleIDs`).
+CI's distribution builds set both from the repository's secrets.
 """
 
 def _signing_impl(rctx):
     team = rctx.getenv("ISOMER_TEAM_ID", "YOUR_TEAM_ID") or "YOUR_TEAM_ID"
+    group = (rctx.getenv("ISOMER_UPDATE_APP_GROUP", "") or "").strip()
+    ids = [i.strip() for i in (rctx.getenv("ISOMER_UPDATE_APPLICATIONS_BUNDLE_IDS", "") or "").split(",") if i.strip()]
     rctx.file("BUILD.bazel", 'exports_files(["signing.bzl"])\n')
-    rctx.file("signing.bzl", 'TEAM_ID = "%s"\n' % team)
+    rctx.file("signing.bzl", "\n".join([
+        'TEAM_ID = "%s"' % team,
+        "UPDATE_APP_GROUP = %s" % repr(group),
+        "UPDATE_APPLICATIONS_BUNDLE_IDS = %s" % repr(ids),
+        "",
+    ]))
 
 _signing = repository_rule(implementation = _signing_impl)
 
