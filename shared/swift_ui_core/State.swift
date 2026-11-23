@@ -47,8 +47,9 @@ final class StateStorage {
     var children: [String: Set<String>] = [:]
     /// Owners first given state outside any frame's build (drawn chrome,
     /// built as the renderer draws; a menu's content built as it opens): no
-    /// build says whether they are still there, so their state is kept, as
-    /// every view's was before.
+    /// build says whether they are still there, so each is kept as long as
+    /// the owner it was built for, the nearest above its place (`parents`),
+    /// and goes with it.
     var unmanaged: Set<String> = []
     /// The place that kept each owner while it was not built (an unselected
     /// tab, a list's row off screen), asked first next time: walking up an
@@ -445,8 +446,28 @@ func _connectDynamicProperties<T>(
     // Mirror for a type whose fields are not inline (not a struct: SwiftUI's
     // views are structs). Each property is connected in a copy, which has
     // no place to go back to: the wrappers that keep a box of their own
-    // fill it, but a state has no location there.
-    connectDynamicProperties(ofValue: value, prefix: path + "#", storage: storage, env: env)
+    // fill it, but a state has no location there (said once per type,
+    // `_noteStateWithoutPlace`).
+    connectDynamicProperties(ofValue: value, prefix: path + "#", storage: storage, env: env, owner: T.self)
+}
+
+/// A `State` or a `LazyState`: connected, it writes its location into
+/// itself, which needs its place in the view.
+protocol _LocatedState {}
+extension State: _LocatedState {}
+extension LazyState: _LocatedState {}
+
+/// The types whose states were met where they can't be kept (said once).
+nonisolated(unsafe) private var _typesWithStateWithoutPlace: Set<ObjectIdentifier> = []
+
+/// A state met in a view whose fields can't be read in place (a class
+/// conforming to View: SwiftUI's views are structs, and Apple's SwiftUI
+/// says so too): connected on Mirror's copy, it gets no location, so its
+/// reads give its initial value and its writes are lost. Said through the
+/// host's log once per type, rather than failing quietly every frame.
+private func _noteStateWithoutPlace(_ type: Any.Type) {
+    guard _typesWithStateWithoutPlace.insert(ObjectIdentifier(type)).inserted else { return }
+    Runtime.shared.host?.log("\(_typeName(type, qualified: false))'s @State can't be kept: its fields aren't readable (views are structs)")
 }
 
 /// The body of `view`, evaluated on its own copy with its properties
@@ -472,16 +493,19 @@ private func _connectedBody<V: View>(opening view: V, path: String, storage: Sta
 
 /// A value's dynamic properties, and those of a `ViewModifier` it holds (a
 /// modifier's own `@State` belongs to the view it modifies).
-private func connectDynamicProperties(ofValue value: Any, prefix: String, storage: StateStorage, env: EnvironmentValues) {
+private func connectDynamicProperties(
+    ofValue value: Any, prefix: String, storage: StateStorage, env: EnvironmentValues, owner: Any.Type
+) {
     let mirror = Mirror(reflecting: value)
     var index = 0
     for child in mirror.children {
         let label = child.label ?? String(index)
         if var property = child.value as? _DynamicProperty {
             if property._blocksSubtreeReuse { Runtime.shared.markBuildVolatile() }
+            if property is _LocatedState { _noteStateWithoutPlace(owner) }
             property._connect(storage: storage, key: prefix + label, env: env)
         } else if child.value is any ViewModifier {
-            connectDynamicProperties(ofValue: child.value, prefix: prefix + label + ".", storage: storage, env: env)
+            connectDynamicProperties(ofValue: child.value, prefix: prefix + label + ".", storage: storage, env: env, owner: owner)
         }
         index += 1
     }
@@ -511,8 +535,9 @@ private func connectDynamicProperties(ofValue value: Any, prefix: String, storag
 //     (`dropStateGone(inside:)`), found through the owners' tree.
 // Its animations go with it (`Animator.forgetAnimations(of:)`), so a view
 // shown again starts from its initial state, and its `.onAppear` starts
-// what it starts. The root's state stays; so does state first kept outside
-// a frame's build (`StateStorage.unmanaged`).
+// what it starts. The root's state stays. State first kept outside a
+// frame's build (`StateStorage.unmanaged`: drawn chrome, a pop-up's content)
+// goes with the view it was built for, the nearest owner above its place.
 
 extension Runtime {
     /// The view at `path` keeps state in `storage` (its properties are being
@@ -537,13 +562,34 @@ extension Runtime {
                     storage.children[above, default: []].insert(path)
                 }
             } else {
+                // Built outside a build (drawn chrome, as it is laid out; a
+                // pop-up's content): no build reaches it, so it lasts as
+                // long as the view it was built for, the nearest owner
+                // above its place, and goes with that view. Kept forever,
+                // every menu an app ever drew kept its state.
                 storage.unmanaged.insert(path)
+                if storage.parents[path] == nil, let above = nearestOwner(above: path, in: storage) {
+                    storage.parents[path] = above
+                    storage.children[above, default: []].insert(path)
+                }
             }
             storage.types[path] = type
         }
         guard recordingStateOwners, storage === self.storage else { return }
         liveStateOwners.insert(path)
         if !stateOwnerStack.isEmpty { stateOwnerStack[stateOwnerStack.count - 1].append(path) }
+    }
+
+    /// The nearest view above `path` that keeps state (its place cut back at
+    /// each "/" or "#": drawn chrome is built at "<its control's place>#drawn").
+    private func nearestOwner(above path: String, in storage: StateStorage) -> String? {
+        var place = Substring(path)
+        while let cut = place.lastIndex(where: { $0 == "/" || $0 == "#" }) {
+            place = place[..<cut]
+            let owner = String(place)
+            if storage.types[owner] != nil { return owner }
+        }
+        return nil
     }
 
     /// The views at and under each of `paths` keep their state this frame
@@ -636,8 +682,20 @@ extension Runtime {
     /// the states they read and were read by, their animations.
     private func dropState(of gone: [String]) {
         guard !gone.isEmpty else { return }
+        // With them, the views built outside a build for them (drawn
+        // chrome, a pop-up's content), which no build reaches.
+        var gone = gone
+        var seen = Set(gone)
+        var index = 0
+        while index < gone.count {
+            for inner in storage.children[gone[index]] ?? [] where storage.unmanaged.contains(inner) {
+                if seen.insert(inner).inserted { gone.append(inner) }
+            }
+            index += 1
+        }
         for owner in gone {
             storage.types[owner] = nil
+            storage.unmanaged.remove(owner)
             for key in storage.locations.removeAll(ownedBy: owner) { stateReaders[key] = nil }
             if let above = storage.parents.removeValue(forKey: owner) {
                 storage.children[above]?.remove(owner)
