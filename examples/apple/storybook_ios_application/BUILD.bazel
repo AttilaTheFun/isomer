@@ -3,13 +3,20 @@ load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
 load("@rules_swift//swift:swift.bzl", "swift_library")
 load("@rules_xcodeproj//xcodeproj:defs.bzl", "top_level_target", "xcode_provisioning_profile", "xcodeproj")
 load("@isomer_signing//:signing.bzl", "TEAM_ID")
-load("//tools/signing:defs.bzl", "stamped_infoplist")
+load("//tools/signing:defs.bzl", "shared_signin_entitlements", "stamped_infoplist")
 load("//tools/variant:defs.bzl", "variant_infoplist")
 
 # What the apps tell UpdateKit (the distributor's app group and, on a Mac,
 # its bundle ids) and the builder's other keys (ShakeKit's, the shared GitHub
 # sign-in's), from the builder's environment (tools/signing).
 stamped_infoplist(name = "stamped_plist")
+
+# CI's device build's entitlements, with the shared GitHub sign-in's keychain
+# group where the builder sets it (tools/signing).
+DEVICE_ENTITLEMENTS = shared_signin_entitlements(
+    name = "device_entitlements",
+    src = "Storybook.entitlements",
+)
 
 # The Storybook on iOS: the Storybook's own app, which releases hand out.
 # One bundle id for every build, Alpha, Beta, Production and AdHoc, and for
@@ -77,12 +84,13 @@ ios_application(
     # the release server refuses. And Applications' app group, which CI's
     # build carries (the bundle id's own profile grants it when Applications
     # Server signs it again); a local device build under the wildcard
-    # profile, which can grant no app group, goes without.
+    # profile, which can grant no app group, goes without. CI's also names
+    # the shared GitHub sign-in's keychain group, where it is set.
     entitlements = select({
-        "//tools/ci_device": "Storybook.entitlements",
+        "//tools/ci_device": DEVICE_ENTITLEMENTS,
         "@apple_support//constraints:device": "Storybook.wildcard.entitlements",
         "@apple_support//constraints:simulator": "Storybook.simulator.entitlements",
-        "//conditions:default": "Storybook.entitlements",
+        "//conditions:default": DEVICE_ENTITLEMENTS,
     }),
     families = [
         "ipad",
