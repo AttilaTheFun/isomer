@@ -563,6 +563,13 @@ package final class RenderNode {
     var frame = CGRect.zero
     var measuredChildSizes: [CGSize] = []
     var scrollContentSize = CGSize.zero
+    /// The last measure's question and answer (Layout.swift's `measure`):
+    /// the layout pass it was in (`LayoutContext.generation`), what was
+    /// proposed, the enclosing stack's axis, and the size.
+    var measuredInPass = 0
+    var measuredProposal = ProposedSize()
+    var measuredAxis = StackAxis.vertical
+    var measuredSize = CGSize.zero
 
     init(kind: Kind) {
         self.kind = kind

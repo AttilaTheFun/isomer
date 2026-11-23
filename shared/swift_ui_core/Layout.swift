@@ -10,6 +10,16 @@ struct LayoutContext {
     let imageInfo: (String, Bool) -> ImageStatus
     /// Axis of the enclosing stack (affects Divider / Spacer orientation).
     var parentAxis: StackAxis = .vertical
+    /// The layout pass this context is for, each context made a pass of its
+    /// own (its copies, a stack's children's, share it): what a node's
+    /// remembered measure is good for (`measure`).
+    let generation: Int = LayoutContext.nextGeneration()
+
+    nonisolated(unsafe) private static var generations = 0
+    private static func nextGeneration() -> Int {
+        generations &+= 1
+        return generations
+    }
 }
 
 func isFlexible(_ node: RenderNode, along axis: StackAxis) -> Bool {
@@ -49,7 +59,30 @@ func isFlexible(_ node: RenderNode, along axis: StackAxis) -> Bool {
     }
 }
 
+/// A node's size for a proposal. Remembered for the rest of the layout pass:
+/// a container measures its children, then measures each again as it places
+/// it, and its own container did the same to it, so without this a node at
+/// depth d was measured some d + 1 times (more under boxes, decorations and
+/// grids), its whole subtree each time. Within a pass a node's size depends
+/// only on the proposal and the enclosing stack's axis (the tree doesn't
+/// change under it, nor what the host measures), and what a measure records
+/// on a node (`measuredChildSizes`, `scrollContentSize`, `fitsChosen`,
+/// `gridColumnWidths`) is its own, written by its own measure alone: so the
+/// answer is reused only when the question is the node's last, which left
+/// those as the same question would again.
 func measure(_ node: RenderNode, proposal: ProposedSize, ctx: LayoutContext) -> CGSize {
+    if node.measuredInPass == ctx.generation, node.measuredProposal == proposal, node.measuredAxis == ctx.parentAxis {
+        return node.measuredSize
+    }
+    let size = measureUnremembered(node, proposal: proposal, ctx: ctx)
+    node.measuredInPass = ctx.generation
+    node.measuredProposal = proposal
+    node.measuredAxis = ctx.parentAxis
+    node.measuredSize = size
+    return size
+}
+
+private func measureUnremembered(_ node: RenderNode, proposal: ProposedSize, ctx: LayoutContext) -> CGSize {
     // Size constraints (`.frame(...)`) apply to every node kind.
     var inner = proposal
     // `.fixedSize`: nothing proposed on a fixed axis, so the content takes
