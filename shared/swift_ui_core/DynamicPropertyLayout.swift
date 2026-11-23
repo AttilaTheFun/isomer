@@ -1,9 +1,10 @@
 // A view type's dynamic properties (`@State`, `@Environment`, `@FocusState`,
 // …), found once per type: where each lies in the view's memory and how to
-// connect it. Connecting a view then reads its properties in place instead
-// of reflecting over it with `Mirror` on every build (a view with none, most
-// of them, costs one dictionary lookup). As OpenSwiftUI's
-// DynamicPropertyCache does, from the type's field records.
+// connect it. Connecting a view then connects its properties in place, in
+// the view's own copy (a state's location written into it), instead of
+// reflecting over it with `Mirror` on every build (a view with none, most of
+// them, costs one dictionary lookup). As OpenSwiftUI's DynamicPropertyCache
+// does, from the type's field records.
 //
 // A modifier's own properties (a `ViewModifier` stored in the view) are the
 // view's, under "<label>." as with Mirror. Types whose fields this cannot
@@ -16,9 +17,10 @@ final class _DynamicPropertyLayout {
         /// The storage key's last part: the property's label, after its
         /// modifier's ("modifier._value").
         let key: String
-        /// Connects the property at its offset in the view; true when it
-        /// observes something the core cannot see change (no reuse around it).
-        let connect: (UnsafeRawPointer, StateStorage, String, EnvironmentValues) -> Bool
+        /// Connects the property at its offset in the view's copy (written
+        /// there); true when it observes something the core cannot see
+        /// change (no reuse around it).
+        let connect: (UnsafeMutableRawPointer, StateStorage, String, EnvironmentValues) -> Bool
     }
 
     let fields: [Field]
@@ -99,29 +101,25 @@ func _isDynamicPropertyType(_ type: Any.Type) -> Bool {
 
 extension _DynamicProperty {
     static func _layoutField(key: String, offset: Int) -> _DynamicPropertyLayout.Field {
-        _DynamicPropertyLayout.Field(key: key) { view, storage, prefix, env in
-            let property = view.advanced(by: offset).assumingMemoryBound(to: Self.self).pointee
-            property._connect(storage: storage, key: prefix + key, env: env)
-            return property._blocksSubtreeReuse
+        _DynamicPropertyLayout.Field(key: key) { value, storage, prefix, env in
+            let property = value.advanced(by: offset).assumingMemoryBound(to: Self.self)
+            property.pointee._connect(storage: storage, key: prefix + key, env: env)
+            return property.pointee._blocksSubtreeReuse
         }
     }
 }
 
-/// Connects `view`'s properties by its layout; false when it has none to
-/// use (connect through Mirror instead).
-func _connectByLayout(of view: any View, path: String, storage: StateStorage, env: EnvironmentValues) -> Bool {
-    guard let layout = _dynamicPropertyLayout(of: type(of: view)) else { return false }
+/// Connects `value`'s properties by its type's layout, writing them in
+/// place; false when it has none to use (connect through Mirror instead).
+func _connectByLayout<T>(of value: inout T, path: String, storage: StateStorage, env: EnvironmentValues) -> Bool {
+    guard let layout = _dynamicPropertyLayout(of: T.self) else { return false }
     guard !layout.fields.isEmpty else { return true }
     let prefix = path + "#"
-    _withViewBytes(view) { bytes in
+    withUnsafeMutablePointer(to: &value) { pointer in
+        let bytes = UnsafeMutableRawPointer(pointer)
         for field in layout.fields where field.connect(bytes, storage, prefix, env) {
             Runtime.shared.markBuildVolatile()
         }
     }
     return true
-}
-
-/// The view's own bytes (its concrete type's, the existential opened).
-private func _withViewBytes<V: View>(_ view: V, _ body: (UnsafeRawPointer) -> Void) {
-    withUnsafePointer(to: view) { body(UnsafeRawPointer($0)) }
 }

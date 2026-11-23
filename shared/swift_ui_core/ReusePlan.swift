@@ -1,8 +1,9 @@
 // How two values of a view's type compare for reuse, worked out once per
 // type from its field records (FieldRecords.swift) and then run on the two
 // values in place: `==` for a field whose type is Equatable, identity for an
-// `@Observable` model, nothing for `@State` / `@Environment` (their changes
-// reach the reuse check another way), a nested struct's own fields, and the
+// `@Observable` model, a `@State`'s location by identity (its value's
+// changes reach the reuse check another way), nothing for `@Environment`
+// (the environment is compared on its own), a nested struct's own fields, and the
 // general comparison (`reuseEqual`) for a field of any other kind. It does
 // what `reuseEqual` did through `Mirror` on every view of every frame — the
 // largest single part of a frame's build once the casts and the state
@@ -17,7 +18,8 @@ final class _ReusePlan {
     enum Step {
         /// The field's `==`.
         case equatable((UnsafeRawPointer, UnsafeRawPointer) -> Bool)
-        /// The same instance (a model, compared by identity).
+        /// The same instance (a model, or a state's location, compared by
+        /// identity; nil is the same only as nil).
         case identity(offset: Int)
         /// The field's values, compared as `reuseEqual` compares any value.
         case general((UnsafeRawPointer) -> Any)
@@ -96,6 +98,16 @@ private func _makeReusePlan(of type: Any.Type, id: ObjectIdentifier) -> _ReusePl
 /// field anyway. A standard type (a string, an array) is compared by `==`:
 /// its fields are its storage.
 private func _reuseSteps(for type: Any.Type, offset: Int, depth: Int) -> [_ReusePlan.Step]? {
+    // A state (`State`, `LazyState`): by its location, as the views holding
+    // it are the same only while they hold the same state. A view's value
+    // as made has none yet, so two of those are the same (whatever value
+    // they start from: as in SwiftUI, a state's initial value counts only
+    // the first time); a view's copy connected to a location, captured in
+    // a body (`Child(parent: self)`), is the same as another only when it
+    // holds that location too, and never the same as one not connected.
+    if let location = _stateLocationOffset(of: type) {
+        return [.identity(offset: offset + location)]
+    }
     if _isStruct(type), !_isSystemType(type) {
         var steps: [_ReusePlan.Step] = []
         guard _appendReuseSteps(for: type, offset: offset, depth: depth, into: &steps) else { return nil }
@@ -280,8 +292,20 @@ func _typeDescriptor(_ type: Any.Type) -> UnsafeRawPointer? {
 /// (`_ReuseTransparentProperty`'s), known by descriptor: asking the cast of
 /// every type of field (most of them not one) scanned the conformances.
 private let _transparentDescriptors: [UnsafeRawPointer] = ([
-    State<Int>.self, Environment<Int>.self,
+    Environment<Int>.self,
 ] as [Any.Type]).compactMap { _typeDescriptor($0) }
+
+/// The states, compared by their location (`_stateLocationOffset`).
+private let _stateDescriptors: [UnsafeRawPointer] = ([
+    State<Int>.self, LazyState<Int>.self,
+] as [Any.Type]).compactMap { _typeDescriptor($0) }
+
+/// Where a state's location lies in it (its `_location` field), when `type`
+/// is a `State` or a `LazyState`; nil for any other type.
+func _stateLocationOffset(of type: Any.Type) -> Int? {
+    guard let descriptor = _typeDescriptor(type), _stateDescriptors.contains(descriptor) else { return nil }
+    return _fieldRecords(of: type)?.first { $0.name == "_location" }?.offset
+}
 
 private let _bindingDescriptor = _typeDescriptor(Binding<Int>.self)
 

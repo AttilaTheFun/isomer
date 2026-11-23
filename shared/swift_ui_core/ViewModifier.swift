@@ -1,6 +1,6 @@
 // `ViewModifier` and `.modifier(_:)`: a reusable modification with a body of
 // its own. The modifier's `@State` and environment are the modified view's
-// (see connectDynamicProperties), as in SwiftUI.
+// (see _connectDynamicProperties), as in SwiftUI.
 
 @MainActor @preconcurrency
 public protocol ViewModifier {
