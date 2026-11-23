@@ -104,11 +104,16 @@ platform. What it adds is code size (every generic specialized), which the
 web, where the wasm is downloaded, has to measure.
 
 Apple's interface keeps what can't be embedded (`AnyView`, `ObservableObject`
-and Combine, any value in the environment), so it is a split, not a
-replacement: an **embedded-clean kernel** (layout, the diff, state storage,
-the tree and its wire format) under a **full layer** with the compatibility
-unmodified apps need, as 0.62 separates SwiftUI's interface from its
-implementation.
+and Combine, any value in the environment), so it is a layering, not a
+replacement, much as Apple's SwiftUI stands on its own SwiftUICore: a
+**fast core that compiles for Embedded Swift** (layout, the diff, state
+storage, the tree and its wire format, and every view and modifier that can
+be written without what Embedded Swift lacks) under the **full SwiftUI
+interface** for every other platform, built on that core, with the
+compatibility unmodified apps need. As much as possible goes in the core,
+as long as it costs neither the full interface's compatibility nor its
+speed; 0.62's split of SwiftUI's interface from its implementation is where
+the line is drawn.
 
 1. **The measure** (after 0.62): the core compiled with Embedded Swift
    (`-enable-experimental-feature Embedded`, `riscv32-none-none-eabi`) in a
