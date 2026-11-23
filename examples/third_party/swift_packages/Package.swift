@@ -27,9 +27,9 @@ let package = Package(
         .package(url: "https://github.com/AttilaTheFun/update_kit.git", exact: "0.18.0"),
         // ShakeKit: shake the iPhone (or Help › Report a Bug… on the Mac) to
         // file an issue with a screenshot and the logs, for someone signed in
-        // (the apps' Info.plist opts in, ShakeKitScope; CI's Alphas add the
-        // shared GitHub sign-in's keys, //tools/signing).
-        .package(url: "https://github.com/AttilaTheFun/shake_kit.git", exact: "0.2.0"),
+        // to the shared GitHub sign-in on the device; only in builds that
+        // carry its keys (CI's, //tools/signing).
+        .package(url: "https://github.com/AttilaTheFun/shake_kit.git", exact: "0.3.0"),
         // build_tools: CI's shared tools, built here and run by the release
         // jobs: `sign` (an APK, a Mac app, an
         // iPhone app, with the release environment's keys) and `proof-diff`

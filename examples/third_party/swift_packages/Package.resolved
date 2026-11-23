@@ -41,8 +41,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AttilaTheFun/shake_kit.git",
       "state" : {
-        "revision" : "8aa3e985c814b87d45ebedf351dcbce3f9c67799",
-        "version" : "0.2.0"
+        "revision" : "8815b7dd86acd88d44a946bf2da31116208156e3",
+        "version" : "0.3.0"
       }
     },
     {

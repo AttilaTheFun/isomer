@@ -21,7 +21,7 @@ BUNDLE_ID = "com.LoganShire.IsomerStorybook"
 # that there is no container. Where the builder sets the shared GitHub
 # sign-in, the app is built with entitlements naming its keychain group and
 # the app groups (tools/signing), which that profile must allow; otherwise
-# ShakeKit signs in on its own.
+# ShakeKit does nothing.
 variant_infoplist(
     name = "variant_plist",
     display_name = "Storybook",
