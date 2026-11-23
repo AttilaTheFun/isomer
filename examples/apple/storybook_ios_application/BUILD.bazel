@@ -3,7 +3,12 @@ load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
 load("@rules_swift//swift:swift.bzl", "swift_library")
 load("@rules_xcodeproj//xcodeproj:defs.bzl", "top_level_target", "xcode_provisioning_profile", "xcodeproj")
 load("@isomer_signing//:signing.bzl", "TEAM_ID")
+load("//tools/signing:defs.bzl", "update_infoplist")
 load("//tools/variant:defs.bzl", "variant_infoplist")
+
+# What the apps tell UpdateKit: the distributor's app group (and, on a
+# Mac, its bundle ids), from the builder's environment (tools/signing).
+update_infoplist(name = "update_plist")
 
 # The Storybook on iOS: the Storybook's own app, which releases hand out.
 # One bundle id for every build, Alpha, Beta, Production and AdHoc, and for
@@ -82,6 +87,7 @@ ios_application(
     ],
     infoplists = [
         "Info.plist",
+        ":update_plist",
         ":variant_plist",
     ],
     minimum_os_version = "17.0",
@@ -125,6 +131,7 @@ ios_application(
     ],
     infoplists = [
         "Info.plist",
+        ":update_plist",
         ":experiment_variant_plist",
     ],
     minimum_os_version = "17.0",
@@ -154,6 +161,7 @@ ios_application(
     ],
     infoplists = [
         "Info.plist",
+        ":update_plist",
         ":variant_plist",
     ],
     minimum_os_version = "17.0",
@@ -195,6 +203,7 @@ ios_application(
     ],
     infoplists = [
         "Info.plist",
+        ":update_plist",
         ":variant_plist",
     ],
     minimum_os_version = "17.0",

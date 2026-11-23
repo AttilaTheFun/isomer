@@ -24,7 +24,7 @@ let package = Package(
         // UpdateKit: the Storybook's iPhone and Mac apps write the build they are (version and BuildVariant) for
         // Applications at each launch, and are told of newer ones.
         // (ApplicationUpdates in AttilaTheFun/applications until 0.10.45.)
-        .package(url: "https://github.com/AttilaTheFun/update_kit.git", exact: "0.11.0"),
+        .package(url: "https://github.com/AttilaTheFun/update_kit.git", exact: "0.18.0"),
         // build_tools: CI's shared tools, built here and run by the release
         // jobs: `sign` (an APK, a Mac app, an
         // iPhone app, with the release environment's keys) and `proof-diff`
