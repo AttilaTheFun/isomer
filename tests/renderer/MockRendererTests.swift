@@ -2949,8 +2949,11 @@ struct Main {
         checkAnimationsEndWithTheirViews(mock)
         checkStateLifetime(mock)
         checkStateStorage(mock)
+        checkStateBuiltOutsideBuilds(mock)
+        checkClassState(mock)
         checkWholeFrameReasons(mock)
         checkOpenURLAfterPartialFrames()
+        checkIDsInPaths()
 
         // Row actions: the tagged row is a tap target and carries its menu.
         Runtime.shared.installRootView { RowScreen() }
@@ -4356,4 +4359,199 @@ func checkStateStorage(_ mock: MockRenderer) {
         expect(storageTitlesMade == 1, "a private state's initial value is made once\(label) (\(storageTitlesMade))")
         #endif
     }
+}
+
+
+// MARK: - Ids with "/", "#" or "%" in a view's path
+
+/// ForEach rows whose ids hold a path's separator, a state's "#" or an
+/// escape's "%": each row's state is its own ("a/b" and "a%2Fb" are two
+/// rows, not one), and a row removed and added again starts afresh while the
+/// others keep theirs.
+nonisolated(unsafe) var pathIDCounts: [String: Binding<Int>] = [:]
+nonisolated(unsafe) var pathIDItems: Binding<[String]>?
+
+struct PathIDRoot: View {
+    let place: Int
+    var body: some View {
+        if place == 0 { PathIDScreen() } else { PathIDScreen() }
+    }
+}
+
+struct PathIDScreen: View {
+    @State private var items = ["a/b", "a#b", "a%2Fb"]
+    var body: some View {
+        let _ = (pathIDItems = $items)
+        VStack {
+            ForEach(items, id: \.self) { item in PathIDCounter(name: item) }
+        }
+    }
+}
+
+struct PathIDCounter: View {
+    let name: String
+    @State private var count = 0
+    var body: some View {
+        let _ = (pathIDCounts[name] = $count)
+        Text("\(name): \(count)")
+    }
+}
+
+@MainActor
+func checkIDsInPaths() {
+    let verifying = Runtime.shared.verifyPartialFrames
+    defer { Runtime.shared.verifyPartialFrames = verifying }
+    for verify in [true, false] {
+        Runtime.shared.verifyPartialFrames = verify
+        let label = verify ? " (checked against a whole build)" : ""
+        func settle() { var n = 0; while Runtime.shared.wantsFrame && n < 40 { Runtime.shared.renderFrame(); n += 1 } }
+        func shows(_ text: String) -> Bool { findTextInTree(Runtime.shared.retainedTree!, text) }
+        pathIDCounts = [:]
+        Runtime.shared.installRootView { PathIDRoot(place: verify ? 0 : 1) }
+        Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+        settle()
+        let mismatches = Runtime.shared.partialMismatches
+        pathIDCounts["a/b"]?.wrappedValue = 1
+        pathIDCounts["a#b"]?.wrappedValue = 2
+        pathIDCounts["a%2Fb"]?.wrappedValue = 3
+        settle()
+        expect(shows("a/b: 1") && shows("a#b: 2") && shows("a%2Fb: 3"), "ids in paths\(label): each row keeps its own count")
+        pathIDItems?.wrappedValue = ["a#b", "a%2Fb"]
+        settle()
+        pathIDItems?.wrappedValue = ["a/b", "a#b", "a%2Fb"]
+        settle()
+        expect(shows("a/b: 0"), "ids in paths\(label): a row removed and added again starts afresh")
+        expect(shows("a#b: 2") && shows("a%2Fb: 3"), "ids in paths\(label): the other rows keep theirs")
+        expect(Runtime.shared.partialMismatches == mismatches, "ids in paths\(label): the frames built in place are the whole builds'")
+    }
+}
+
+
+// MARK: - State first kept outside a build
+
+/// A renderer that lays the tree out as the self-drawing one does, its
+/// chrome drawn (the headless head's way): a menu's drawn pop-up, and the
+/// pop-up's rows once it opens, are built as the tree is laid out, outside
+/// the frame's build.
+final class LayingOutMockRenderer: TreeRenderer {
+    let semanticNavigation = false
+    private(set) var lastTree: RenderNode?
+    private(set) var layers: [RenderNode] = []
+
+    func render(tree: RenderNode) {
+        let reports = Runtime.shared.layoutTree(root: tree)
+        layers = Runtime.shared.layoutPresentations()
+        lastTree = tree
+        for report in reports { report() }
+    }
+}
+
+nonisolated(unsafe) var drawnMenuPlace = 0
+
+/// A menu whose place is new each time `drawnMenuPlace` changes (its view
+/// given a new id): each one a menu the app hasn't drawn before.
+struct DrawnMenuHolder: View {
+    let place: Int
+    var body: some View {
+        VStack {
+            Text("Holder \(place)")
+            Menu("Actions \(place)") {
+                Button("Rename") {}
+                Button("Delete") {}
+            }
+        }
+    }
+}
+
+struct DrawnMenuScreen: View {
+    var body: some View {
+        VStack {
+            Text("Menus")
+            DrawnMenuHolder(place: drawnMenuPlace).id(drawnMenuPlace)
+        }
+    }
+}
+
+/// The state of views built outside a frame's build (a drawn menu, and its
+/// pop-up's rows once it opens) goes with the view it was built for: opening
+/// and closing many distinct menus leaves the state kept as it was.
+@MainActor
+func checkStateBuiltOutsideBuilds(_ previous: MockRenderer) {
+    let drawing = LayingOutMockRenderer()
+    Renderer.bind(drawing)
+    defer { Renderer.bind(previous) }
+    func settle() { var n = 0; while Runtime.shared.wantsFrame && n < 40 { Runtime.shared.renderFrame(); n += 1 } }
+    drawnMenuPlace = 0
+    Runtime.shared.installRootView { DrawnMenuScreen() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    settle()
+
+    var opened = 0
+    var counts: [(owners: Int, states: Int)] = []
+    for place in 0..<24 {
+        if place > 0 {
+            drawnMenuPlace = place
+            Runtime.shared.setNeedsRender()
+            settle()
+        }
+        guard let tree = drawing.lastTree else { return expect(false, "the drawn menus render") }
+        // Opened, its pop-up's rows built; then closed by one of them.
+        if HostFrame(tree).tap("Actions \(place)") {
+            settle()
+            if let layer = drawing.layers.last, HostFrame(layer).tap("Rename") {
+                opened += 1
+                settle()
+            }
+        }
+        counts.append((Runtime.shared.stateOwnerCount, Runtime.shared.keptStateCount))
+    }
+    expect(opened == 24, "each drawn menu opens and closes by its row (\(opened) of 24)")
+    let first = counts[1], last = counts[counts.count - 1]
+    expect(last.owners <= first.owners && last.states <= first.states,
+           "the views kept and their states stay as many, however many distinct menus were opened (owners \(counts.map(\.owners)), states \(counts.map(\.states)))")
+}
+
+// MARK: - A class's state
+
+nonisolated(unsafe) var classStateWrite: (@MainActor () -> Void)?
+
+/// A view that is a class (Apple's SwiftUI wants structs): its fields can't
+/// be read in place, so its state gets no location. (Its storage written by
+/// hand: the `@State` macro, as Apple's, expands to a `nonmutating` setter,
+/// which a class can't have.)
+final class ClassStateView: View {
+    var _count = State(wrappedValue: 0)
+    var body: some View {
+        let count = _count
+        let _ = (classStateWrite = { count.wrappedValue += 1 })
+        Text("Class count \(count.wrappedValue)")
+    }
+}
+
+struct ClassStateScreen: View {
+    var body: some View {
+        VStack {
+            Text("Class")
+            ClassStateView()
+        }
+    }
+}
+
+/// A class's `@State` can't be kept: the runtime says so once for the type,
+/// and the view shows its initial value without failing.
+@MainActor
+func checkClassState(_ mock: MockRenderer) {
+    func settle() { var n = 0; while Runtime.shared.wantsFrame && n < 40 { Runtime.shared.renderFrame(); n += 1 } }
+    hostLogs = []
+    Runtime.shared.installRootView { ClassStateScreen() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    settle()
+    for _ in 0..<3 {
+        classStateWrite?()
+        Runtime.shared.setNeedsRender()
+        settle()
+    }
+    expect(findTextInTree(Runtime.shared.retainedTree!, "Class count 0"), "a class's state shows its initial value")
+    let said = hostLogs.filter { $0.contains("ClassStateView's @State can't be kept") }
+    expect(said.count == 1, "a class's state that can't be kept is said once (\(said))")
 }

@@ -823,6 +823,10 @@ package final class Runtime {
     /// for as long as the view lives: a count the tests read, which a view's
     /// value made again (its parent's body evaluated) must not move.
     package internal(set) var stateLocationsMade = 0
+    /// The views keeping state now, and the states kept: what the tests
+    /// read to see that state goes with its views.
+    package var stateOwnerCount: Int { storage.types.count }
+    package var keptStateCount: Int { storage.locations.count }
     var stateReaders: [String: Set<String>] = [:]
     var compositeStateReads: [String: Set<String>] = [:]
     var stateReadStack: [[String]] = []
