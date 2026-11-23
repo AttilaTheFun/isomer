@@ -380,11 +380,12 @@ extension Runtime {
 func buildCompositeReusing(_ view: any View, ctx: inout BuildContext) -> RenderNode {
     if let node = reusedSubtree(for: view, ctx: ctx) { return node }
     _frameLogBuilt(view, ctx: ctx)
-    let build = beginCompositeBuild(view, ctx: ctx)
+    let build = beginCompositeBuild(ctx: ctx)
     var sub = ctx.descend(typeName(view))
-    // Its body, and the build of what it returned (a ForEach's rows), with
-    // the observable properties they read tracked (ObservationSupport).
-    let node = _trackingObservation(at: ctx.path) { buildNode(view: view.body, ctx: &sub) }
+    // Its body (on its copy with its properties connected), and the build
+    // of what it returned (a ForEach's rows), with the observable properties
+    // they read tracked (ObservationSupport).
+    let node = _trackingObservation(at: ctx.path) { buildNode(view: _connectedBody(of: view, ctx: ctx), ctx: &sub) }
     finishCompositeBuild(build, view: view, ctx: ctx, node: node)
     return node
 }
@@ -421,8 +422,8 @@ func reusedSubtree(for view: any View, ctx: BuildContext) -> RenderNode? {
     return entry.node
 }
 
-/// A composite view's build in progress (`beginCompositeBuild` connects its
-/// state; its body is evaluated by the caller).
+/// A composite view's build in progress (its body is evaluated by the
+/// caller, through `_connectedBody`, which connects its state).
 struct _CompositeBuild {
     let volatility: Int
     let context: String
@@ -438,7 +439,7 @@ struct _CompositeBuild {
     var asPart = false
 }
 
-func beginCompositeBuild(_ view: any View, ctx: BuildContext) -> _CompositeBuild {
+func beginCompositeBuild(ctx: BuildContext) -> _CompositeBuild {
     let runtime = Runtime.shared
     let build = _CompositeBuild(
         volatility: runtime.buildVolatility,
@@ -451,7 +452,6 @@ func beginCompositeBuild(_ view: any View, ctx: BuildContext) -> _CompositeBuild
     runtime.buildEffectStack.append([])
     runtime.stateReadStack.append([])
     runtime.compositePathStack.append(ctx.path)
-    connectDynamicProperties(of: view, path: ctx.path, storage: ctx.storage, env: ctx.env)
     return build
 }
 
@@ -534,8 +534,8 @@ func reuseEqual(_ a: Any, _ b: Any, depth: Int = 0) -> Bool {
         guard let identity = x._reuseIdentity else { return false }
         return identity == y._reuseIdentity
     case .transparent:
-        // Property wrappers: `@State` changes arrive as dirty state, and
-        // `@Environment` reads the environment compared separately.
+        // `@Environment` reads the environment, compared separately. (A
+        // `@State` is compared by its location, by its type's plan.)
         return true
     case .equatable(let same):
         return same(a, b)
@@ -638,7 +638,6 @@ private func _sameByEquatable<T: Equatable>(_: T.Type) -> (Any, Any) -> Bool {
 
 /// Property wrappers whose changes the reuse check sees another way.
 protocol _ReuseTransparentProperty {}
-extension State: _ReuseTransparentProperty {}
 extension Environment: _ReuseTransparentProperty {}
 
 extension EnvironmentValues {
@@ -819,7 +818,7 @@ extension Runtime {
             }
             scrollRequestSeen.frames += 1
             if scrollRequestSeen.frames <= 8 {
-                let marker = "/fe-" + request.target
+                let marker = "/fe-" + _pathSegment(request.target)
                 let known = listRowTargets[list]?[request.target]
                 for (index, path) in rowPaths.enumerated() where path.hasSuffix(marker) || path == known {
                     extra.insert(index)
@@ -847,7 +846,7 @@ extension Runtime {
     /// The lists with a row for `target` (a `ForEach` id, or a view's `.id`
     /// in a row) that they have not built.
     func listsMissingScrollTarget(_ target: String) -> [String] {
-        let marker = "/fe-" + target
+        let marker = "/fe-" + _pathSegment(target)
         return listRowPaths.compactMap { list, paths in
             let known = listRowTargets[list]?[target]
             guard let path = paths.first(where: { $0.hasSuffix(marker) || $0 == known }) else { return nil }
@@ -862,7 +861,7 @@ extension Runtime {
         guard let request = pendingScroll else { return false }
         let rows = listRowCounts[list]
         if let memo = scrollTargetMemo[list], memo.tick == request.tick, memo.rows == rows { return memo.holds }
-        let marker = "/fe-" + request.target
+        let marker = "/fe-" + _pathSegment(request.target)
         let known = listRowTargets[list]?[request.target]
         let holds = (listRowPaths[list] ?? []).contains { $0.hasSuffix(marker) || $0 == known }
         scrollTargetMemo[list] = (request.tick, rows, holds)

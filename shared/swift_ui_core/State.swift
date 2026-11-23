@@ -1,19 +1,26 @@
 // State management.
 //
 // SwiftUI reconstructs view values on every render pass, so `@State` needs
-// out-of-band storage keyed by the view's structural identity. Before a
-// view's `body` is evaluated, the runtime walks the view value with `Mirror`
-// and connects every dynamic property to a persistent location owned by
-// `StateStorage` (keyed by tree path + property label). The connection
-// mutates a class box *referenced* by the property wrapper struct, which is
-// how the freshly-copied view value ends up seeing persistent state. The
-// location lasts as long as the view does ("A view's state lasts as long as
-// the view", below).
+// out-of-band storage keyed by the view's structural identity. A `State`
+// holds its initial value inline and, once connected, a reference to its
+// location: the class `StateStorage` keeps for it (keyed by tree path +
+// property label), which every copy of the view and every binding to it
+// share. Before a view's `body` is evaluated, the runtime finds each dynamic
+// property in the view by its type's layout (DynamicPropertyLayout.swift)
+// and writes the property's location into its own copy of the view, as
+// SwiftUI's graph installs a view's properties; `body`, and the closures it
+// makes, run on that copy. Making a view's value allocates nothing for its
+// states: a location is made once, when its view is first connected, and
+// lasts as long as the view does ("A view's state lasts as long as the
+// view", below).
 
 /// Internal protocol adopted by property wrappers that need to be wired to
 /// persistent storage (and/or the environment) before `body` runs.
 protocol _DynamicProperty {
-    func _connect(storage: StateStorage, key: String, env: EnvironmentValues)
+    /// Connects the property where it lies in the view's own copy: a state
+    /// writes its location into itself. (The wrappers that still keep a box
+    /// of their own fill the box, and leave themselves as they are.)
+    mutating func _connect(storage: StateStorage, key: String, env: EnvironmentValues)
     /// Whether the view depends on state the core cannot see change per view
     /// (an observed object, app storage, focus): such a view, and the views
     /// around it, rebuild every frame instead of being reused.
@@ -40,8 +47,9 @@ final class StateStorage {
     var children: [String: Set<String>] = [:]
     /// Owners first given state outside any frame's build (drawn chrome,
     /// built as the renderer draws; a menu's content built as it opens): no
-    /// build says whether they are still there, so their state is kept, as
-    /// every view's was before.
+    /// build says whether they are still there, so each is kept as long as
+    /// the owner it was built for, the nearest above its place (`parents`),
+    /// and goes with it.
     var unmanaged: Set<String> = []
     /// The place that kept each owner while it was not built (an unselected
     /// tab, a list's row off screen), asked first next time: walking up an
@@ -96,6 +104,10 @@ private func _equalsSame<T: Equatable>(_ lhs: T, _ rhs: Any) -> Bool {
     return lhs == rhs
 }
 
+/// A state's value while its view lives: kept in `StateStorage` under the
+/// state's key, referenced by every connected copy of the view and by every
+/// binding projected from it (Apple's location). The one object a state
+/// costs, made once per view and property.
 final class _StateLocation<Value> {
     var value: Value
     /// "<view path>#<property>": where a write marks the view's subtree
@@ -105,140 +117,141 @@ final class _StateLocation<Value> {
     init(_ value: Value) {
         self.value = value
     }
-}
 
-/// Mutable backing referenced from the `State` struct; the struct itself is
-/// immutable, but the class instance it points to can be re-wired.
-final class _StateBacking<Value> {
-    var location: _StateLocation<Value>?
-    /// The value to start from, or (a LazyState's) the closure that makes
-    /// it, called once, when it is first wanted.
-    private var initial: Initial
-
-    enum Initial {
-        case value(Value)
-        case thunk(() -> Value)
+    /// The value, read by the view whose build is running: which views read
+    /// it, for a change to rebuild those (through a binding too).
+    var current: Value {
+        _noteStateRead(key)
+        return value
     }
 
-    init(_ initialValue: Value) {
-        initial = .value(initialValue)
+    /// Writes the value. The same value again changes nothing, as in
+    /// SwiftUI: no frame for it (a chat setting `inView = true` for each row
+    /// shown cost a whole build each).
+    func write(_ newValue: Value) {
+        let same = _sameStateValue(value, newValue)
+        value = newValue
+        guard !same else { return }
+        Runtime.shared.stateDidChange(key: key)
+        Runtime.shared.requestFrame()
     }
 
-    init(thunk: @escaping () -> Value) {
-        initial = .thunk(thunk)
-    }
-
-    var initialValue: Value {
-        get {
-            switch initial {
-            case .value(let value):
-                return value
-            case .thunk(let make):
-                let value = make()
-                initial = .value(value)
-                return value
-            }
-        }
-        set { initial = .value(newValue) }
+    /// The location kept under `key`, made the first time (and only then
+    /// is `initialValue` asked for: a private state's initial value is made
+    /// once, however often its view's value is).
+    static func connect(_ storage: StateStorage, key: String, initialValue: () -> Value) -> _StateLocation<Value> {
+        if let location = storage.locations[key] as? _StateLocation<Value> { return location }
+        let location = _StateLocation(initialValue())
+        location.key = key
+        storage.locations[key] = location
+        let runtime = Runtime.shared
+        runtime.stateKeys.insert(key)
+        runtime.stateLocationsMade &+= 1
+        return location
     }
 }
 
 @propertyWrapper
 public struct State<Value>: _DynamicProperty {
-    let backing: _StateBacking<Value>
+    /// The value it starts from, held inline as Apple's `State` holds it:
+    /// read until the view is connected, and its location's first value.
+    var _value: Value
+    /// Where the value is kept while the view lives: written into the
+    /// view's own copy before its body runs (nil in a view's value as made).
+    var _location: _StateLocation<Value>?
 
-    public init(wrappedValue: Value) {
-        backing = _StateBacking(wrappedValue)
+    public init(wrappedValue value: Value) {
+        _value = value
     }
 
-    public init(initialValue: Value) {
-        self.init(wrappedValue: initialValue)
-    }
-
-    init(backing: _StateBacking<Value>) {
-        self.backing = backing
+    public init(initialValue value: Value) {
+        _value = value
     }
 
     public var wrappedValue: Value {
         get {
-            // Which views read it, for a change to rebuild those (through
-            // a binding too: its getter comes here).
-            if let location = backing.location { _noteStateRead(location.key) }
-            return backing.location?.value ?? backing.initialValue
+            if let location = _location { return location.current }
+            return _value
         }
         nonmutating set {
-            if let location = backing.location {
-                // The same value again changes nothing, as in SwiftUI: no
-                // frame for it (a chat setting `inView = true` for each row
-                // shown cost a whole build each).
-                let same = _sameStateValue(location.value, newValue)
-                location.value = newValue
-                guard !same else { return }
-                Runtime.shared.stateDidChange(key: location.key)
-                Runtime.shared.requestFrame()
-            } else {
-                backing.initialValue = newValue
-            }
+            // A state not connected yet (read in a view's initializer, say)
+            // keeps no write, as SwiftUI's doesn't: there is no place for
+            // it until the view is in the tree.
+            _location?.write(newValue)
         }
     }
 
     public var projectedValue: Binding<Value> {
-        var binding = Binding(
-            get: { self.wrappedValue },
-            set: { self.wrappedValue = $0 }
-        )
-        // The state it projects, the same every frame: a subtree holding the
-        // binding (a row given `$opened` in the environment) can be reused.
-        binding._identity = backing.location.map { ObjectIdentifier($0) as AnyHashable }
-        binding._stateKey = backing.location?.key
-        return binding
+        // A binding to the location itself, the same every frame: a subtree
+        // holding it (a row given `$opened` in the environment) can be
+        // reused. Not connected: the value it starts from, which nothing
+        // keeps.
+        guard let location = _location else { return .constant(_value) }
+        return Binding(_location: location)
     }
 
-    func _connect(storage: StateStorage, key: String, env: EnvironmentValues) {
-        if let location = storage.locations[key] as? _StateLocation<Value> {
-            backing.location = location
-        } else {
-            let location = _StateLocation(backing.initialValue)
-            location.key = key
-            storage.locations[key] = location
-            backing.location = location
-            Runtime.shared.stateKeys.insert(key)
-        }
+    mutating func _connect(storage: StateStorage, key: String, env: EnvironmentValues) {
+        let initial = _value
+        _location = _StateLocation.connect(storage, key: key) { initial }
     }
 }
 
 // MARK: - The @State macro's storage
 
 /// The storage SwiftUI's `@State` macro gives a private state with an
-/// initial value (`__name`): the value is made from its closure once, when
-/// the view is first installed, not each time the view's value is made.
-/// Otherwise a `State`: the same location, read and written the same way.
+/// initial value (`__name`): the closure that makes the value, called once,
+/// when the view is first connected, not each time the view's value is made;
+/// then, as a `State`, the location.
 @_documentation(visibility: internal)
 public struct LazyState<Value>: _DynamicProperty {
-    let state: State<Value>
+    /// The initial value, or the closure that makes it (Apple's
+    /// `LazyState.Storage`).
+    enum Storage {
+        case thunk(() -> Value)
+        case value(Value)
+    }
+
+    var _storage: Storage
+    var _location: _StateLocation<Value>?
 
     public init(initialValue thunk: @escaping () -> Value) {
-        state = State(backing: _StateBacking(thunk: thunk))
+        _storage = .thunk(thunk)
     }
 
     public init(_initialValue: Value) {
-        state = State(initialValue: _initialValue)
+        _storage = .value(_initialValue)
+    }
+
+    /// The initial value, made now when it is a closure's.
+    static func _make(_ storage: Storage) -> Value {
+        switch storage {
+        case .thunk(let make): return make()
+        case .value(let value): return value
+        }
     }
 
     public var wrappedValue: Value {
-        get { state.wrappedValue }
-        nonmutating set { state.wrappedValue = newValue }
+        get {
+            if let location = _location { return location.current }
+            // Not connected: the initial value, which nothing keeps.
+            return LazyState._make(_storage)
+        }
+        nonmutating set { _location?.write(newValue) }
     }
 
-    public var projectedValue: Binding<Value> { state.projectedValue }
+    public var projectedValue: Binding<Value> {
+        guard let location = _location else { return .constant(LazyState._make(_storage)) }
+        return Binding(_location: location)
+    }
 
-    func _connect(storage: StateStorage, key: String, env: EnvironmentValues) {
-        state._connect(storage: storage, key: key, env: env)
+    mutating func _connect(storage: StateStorage, key: String, env: EnvironmentValues) {
+        let initial = _storage
+        _location = _StateLocation.connect(storage, key: key) { LazyState._make(initial) }
     }
 }
 
-// Its State's location is read and written on the main actor only, as a
-// State's is: unchecked, as State itself makes no promise of its own.
+// Its location is read and written on the main actor only, as a State's
+// is: unchecked, as State itself makes no promise of its own.
 extension LazyState: @unchecked Sendable where Value: Sendable {}
 
 extension LazyState where Value: ExpressibleByNilLiteral {
@@ -308,37 +321,83 @@ func _noteStateRead(_ key: String) {
 @dynamicMemberLookup
 @propertyWrapper
 public struct Binding<Value> {
-    let getter: () -> Value
-    let setter: (Value) -> Void
+    /// Where the value is read and written: a state's location itself
+    /// (`$state`: no closures made for it), or the closures an app (or a
+    /// binding derived from another) gave.
+    let _source: _BindingSource<Value>
     /// Set when the binding projects an `@AppStorage`: hosts can persist
     /// host-side state (e.g. a sidebar arrangement) under the same key.
     var _storageKey: String?
-    /// What the binding projects (a `@State`'s storage, and the key path to
-    /// a part of it), when known: bindings with the same identity read and
-    /// write the same value, so they compare equal for subtree reuse.
-    var _identity: AnyHashable?
-    /// The key of the state it projects ("<view path>#<property>"), when
-    /// known: a view that reads the value depends on that state, and is
-    /// rebuilt when it changes (`_bindingDependencies`).
-    var _stateKey: String?
+    /// The identity and state key a binding made from closures was given
+    /// (`_identity`, `_stateKey`).
+    private var givenIdentity: AnyHashable?
+    private var givenStateKey: String?
 
     public init(get: @escaping () -> Value, set: @escaping (Value) -> Void) {
-        getter = get
-        setter = set
+        _source = .closures(get: get, set: set)
+    }
+
+    /// A binding to a state's location (its `projectedValue`).
+    init(_location location: _StateLocation<Value>) {
+        _source = .location(location)
     }
 
     public static func constant(_ value: Value) -> Binding<Value> {
         Binding(get: { value }, set: { _ in })
     }
 
+    /// What the binding projects (a `@State`'s location, and the key path
+    /// to a part of it), when known: bindings with the same identity read
+    /// and write the same value, so they compare equal for subtree reuse.
+    var _identity: AnyHashable? {
+        get {
+            if case .location(let location) = _source { return AnyHashable(ObjectIdentifier(location)) }
+            return givenIdentity
+        }
+        set { givenIdentity = newValue }
+    }
+
+    /// The key of the state it projects ("<view path>#<property>"), when
+    /// known: a view that reads the value depends on that state, and is
+    /// rebuilt when it changes (`_bindingDependencies`).
+    var _stateKey: String? {
+        get {
+            if case .location(let location) = _source { return location.key }
+            return givenStateKey
+        }
+        set { givenStateKey = newValue }
+    }
+
+    /// The value, read as the state's own reader does (not counted as a
+    /// read of this binding: a binding derived from it counts its own).
+    func _read() -> Value {
+        switch _source {
+        case .location(let location): return location.current
+        case .closures(let get, _): return get()
+        }
+    }
+
+    func _write(_ newValue: Value) {
+        switch _source {
+        case .location(let location): location.write(newValue)
+        case .closures(_, let set): set(newValue)
+        }
+    }
+
     public var wrappedValue: Value {
         get {
             // A build that reads the value depends on it: not reused when
             // only the binding (not its value) is compared.
-            if _identity != nil { _bindingReadKeys.append(_stateKey ?? "") }
-            return getter()
+            switch _source {
+            case .location(let location):
+                _bindingReadKeys.append(location.key)
+                return location.current
+            case .closures(let get, _):
+                if givenIdentity != nil { _bindingReadKeys.append(givenStateKey ?? "") }
+                return get()
+            }
         }
-        nonmutating set { setter(newValue) }
+        nonmutating set { _write(newValue) }
     }
 
     public var projectedValue: Binding<Value> { self }
@@ -352,12 +411,13 @@ public struct Binding<Value> {
     /// Derive a binding to one property of the value (`$camera.zoom`),
     /// matching the real Binding's dynamic member lookup.
     public subscript<Subject>(dynamicMember keyPath: WritableKeyPath<Value, Subject>) -> Binding<Subject> {
+        let base = self
         var binding = Binding<Subject>(
-            get: { getter()[keyPath: keyPath] },
+            get: { base._read()[keyPath: keyPath] },
             set: { newValue in
-                var value = getter()
+                var value = base._read()
                 value[keyPath: keyPath] = newValue
-                setter(value)
+                base._write(value)
             }
         )
         binding._identity = _identity.map { _BindingPart(base: $0, keyPath: keyPath) }
@@ -366,30 +426,86 @@ public struct Binding<Value> {
     }
 }
 
-/// Connects every `@State`-like property of `view` to persistent storage and
-/// the current environment.
-func connectDynamicProperties(
-    of view: any View, path: String, storage: StateStorage, env: EnvironmentValues
+/// Where a binding's value is.
+enum _BindingSource<Value> {
+    /// A state's location, read and written directly.
+    case location(_StateLocation<Value>)
+    /// Closures that read and write it.
+    case closures(get: () -> Value, set: (Value) -> Void)
+}
+
+/// Connects the dynamic properties of a view, an app or a scene (`value`,
+/// its own copy) to persistent storage and the current environment: each
+/// state's location written into it, where its type's layout says the
+/// property lies (DynamicPropertyLayout.swift).
+func _connectDynamicProperties<T>(
+    of value: inout T, path: String, storage: StateStorage, env: EnvironmentValues
 ) {
-    Runtime.shared.noteStateOwner(path, type: ObjectIdentifier(Swift.type(of: view)), storage: storage)
-    // In place, by the type's layout (DynamicPropertyLayout.swift); Mirror
-    // for a type whose fields are not inline.
-    if _connectByLayout(of: view, path: path, storage: storage, env: env) { return }
-    connectDynamicProperties(ofValue: view, prefix: path + "#", storage: storage, env: env)
+    Runtime.shared.noteStateOwner(path, type: ObjectIdentifier(T.self), storage: storage)
+    if _connectByLayout(of: &value, path: path, storage: storage, env: env) { return }
+    // Mirror for a type whose fields are not inline (not a struct: SwiftUI's
+    // views are structs). Each property is connected in a copy, which has
+    // no place to go back to: the wrappers that keep a box of their own
+    // fill it, but a state has no location there (said once per type,
+    // `_noteStateWithoutPlace`).
+    connectDynamicProperties(ofValue: value, prefix: path + "#", storage: storage, env: env, owner: T.self)
+}
+
+/// A `State` or a `LazyState`: connected, it writes its location into
+/// itself, which needs its place in the view.
+protocol _LocatedState {}
+extension State: _LocatedState {}
+extension LazyState: _LocatedState {}
+
+/// The types whose states were met where they can't be kept (said once).
+nonisolated(unsafe) private var _typesWithStateWithoutPlace: Set<ObjectIdentifier> = []
+
+/// A state met in a view whose fields can't be read in place (a class
+/// conforming to View: SwiftUI's views are structs, and Apple's SwiftUI
+/// says so too): connected on Mirror's copy, it gets no location, so its
+/// reads give its initial value and its writes are lost. Said through the
+/// host's log once per type, rather than failing quietly every frame.
+private func _noteStateWithoutPlace(_ type: Any.Type) {
+    guard _typesWithStateWithoutPlace.insert(ObjectIdentifier(type)).inserted else { return }
+    Runtime.shared.host?.log("\(_typeName(type, qualified: false))'s @State can't be kept: its fields aren't readable (views are structs)")
+}
+
+/// The body of `view`, evaluated on its own copy with its properties
+/// connected (`_connectDynamicProperties`), as SwiftUI evaluates a view's
+/// body once its graph has installed the view's properties: the body, and
+/// the closures it makes (a Button's action), see the view's state. The
+/// view's value as given is left as it was (the reuse checks compare it
+/// with the next frame's, made without locations too).
+@MainActor
+func _connectedBody(of view: any View, ctx: BuildContext) -> any View {
+    _connectedBody(opening: view, path: ctx.path, storage: ctx.storage, env: ctx.env)
+}
+
+@MainActor
+private func _connectedBody<V: View>(opening view: V, path: String, storage: StateStorage, env: EnvironmentValues) -> any View {
+    // (The copy is on the stack, the view's type known here: written in an
+    // existential, a view larger than its inline buffer would be copied to
+    // a box of its own.)
+    var connected = view
+    _connectDynamicProperties(of: &connected, path: path, storage: storage, env: env)
+    return connected.body
 }
 
 /// A value's dynamic properties, and those of a `ViewModifier` it holds (a
 /// modifier's own `@State` belongs to the view it modifies).
-private func connectDynamicProperties(ofValue value: Any, prefix: String, storage: StateStorage, env: EnvironmentValues) {
+private func connectDynamicProperties(
+    ofValue value: Any, prefix: String, storage: StateStorage, env: EnvironmentValues, owner: Any.Type
+) {
     let mirror = Mirror(reflecting: value)
     var index = 0
     for child in mirror.children {
         let label = child.label ?? String(index)
-        if let property = child.value as? _DynamicProperty {
+        if var property = child.value as? _DynamicProperty {
             if property._blocksSubtreeReuse { Runtime.shared.markBuildVolatile() }
+            if property is _LocatedState { _noteStateWithoutPlace(owner) }
             property._connect(storage: storage, key: prefix + label, env: env)
         } else if child.value is any ViewModifier {
-            connectDynamicProperties(ofValue: child.value, prefix: prefix + label + ".", storage: storage, env: env)
+            connectDynamicProperties(ofValue: child.value, prefix: prefix + label + ".", storage: storage, env: env, owner: owner)
         }
         index += 1
     }
@@ -419,8 +535,9 @@ private func connectDynamicProperties(ofValue value: Any, prefix: String, storag
 //     (`dropStateGone(inside:)`), found through the owners' tree.
 // Its animations go with it (`Animator.forgetAnimations(of:)`), so a view
 // shown again starts from its initial state, and its `.onAppear` starts
-// what it starts. The root's state stays; so does state first kept outside
-// a frame's build (`StateStorage.unmanaged`).
+// what it starts. The root's state stays. State first kept outside a
+// frame's build (`StateStorage.unmanaged`: drawn chrome, a pop-up's content)
+// goes with the view it was built for, the nearest owner above its place.
 
 extension Runtime {
     /// The view at `path` keeps state in `storage` (its properties are being
@@ -445,13 +562,34 @@ extension Runtime {
                     storage.children[above, default: []].insert(path)
                 }
             } else {
+                // Built outside a build (drawn chrome, as it is laid out; a
+                // pop-up's content): no build reaches it, so it lasts as
+                // long as the view it was built for, the nearest owner
+                // above its place, and goes with that view. Kept forever,
+                // every menu an app ever drew kept its state.
                 storage.unmanaged.insert(path)
+                if storage.parents[path] == nil, let above = nearestOwner(above: path, in: storage) {
+                    storage.parents[path] = above
+                    storage.children[above, default: []].insert(path)
+                }
             }
             storage.types[path] = type
         }
         guard recordingStateOwners, storage === self.storage else { return }
         liveStateOwners.insert(path)
         if !stateOwnerStack.isEmpty { stateOwnerStack[stateOwnerStack.count - 1].append(path) }
+    }
+
+    /// The nearest view above `path` that keeps state (its place cut back at
+    /// each "/" or "#": drawn chrome is built at "<its control's place>#drawn").
+    private func nearestOwner(above path: String, in storage: StateStorage) -> String? {
+        var place = Substring(path)
+        while let cut = place.lastIndex(where: { $0 == "/" || $0 == "#" }) {
+            place = place[..<cut]
+            let owner = String(place)
+            if storage.types[owner] != nil { return owner }
+        }
+        return nil
     }
 
     /// The views at and under each of `paths` keep their state this frame
@@ -544,8 +682,20 @@ extension Runtime {
     /// the states they read and were read by, their animations.
     private func dropState(of gone: [String]) {
         guard !gone.isEmpty else { return }
+        // With them, the views built outside a build for them (drawn
+        // chrome, a pop-up's content), which no build reaches.
+        var gone = gone
+        var seen = Set(gone)
+        var index = 0
+        while index < gone.count {
+            for inner in storage.children[gone[index]] ?? [] where storage.unmanaged.contains(inner) {
+                if seen.insert(inner).inserted { gone.append(inner) }
+            }
+            index += 1
+        }
         for owner in gone {
             storage.types[owner] = nil
+            storage.unmanaged.remove(owner)
             for key in storage.locations.removeAll(ownedBy: owner) { stateReaders[key] = nil }
             if let above = storage.parents.removeValue(forKey: owner) {
                 storage.children[above]?.remove(owner)

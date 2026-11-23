@@ -110,7 +110,7 @@ extension _MovableRows: _IndexedRows {
 extension _MovableRows: _MultiView {
     func childViews() -> [(suffix: String, view: any View)] {
         let rows = indexedRows()
-        return (0..<rows.count).map { ("fe-" + rows.id($0), rows.view($0)) }
+        return (0..<rows.count).map { ("fe-" + _pathSegment(rows.id($0)), rows.view($0)) }
     }
 }
 
