@@ -88,6 +88,36 @@ stories, before and after.
    identical-expansion check, and the expansion's helpers live in the binding
    module the SDK rework creates.
 
+## Research: running an app's own Apple build on Android
+
+A mode for apps whose source isn't available, or that build with another
+build system. The idea: take a developer's own, unencrypted iOS build
+(arm64 Mach-O), load its code unchanged in an Android process, or convert it
+to an ELF shared library, with its imports pointed at Isomer's frameworks,
+and package it as an APK. The CPU is the same (arm64), so no instruction is
+translated, as Switch games run natively on iPhones. What differs is the
+surface the binary calls:
+- **Swift's runtime on Darwin is built with Objective-C interop** (class
+  metadata's layout, String's bridging): a Darwin-ABI runtime on Android,
+  with a minimal Objective-C runtime;
+- **the frameworks must be binary-compatible with Apple's**, not only
+  source-compatible: the same mangled names, `@frozen` types laid out as
+  Apple's, and Apple's `@usableFromInline` internals that its `@inlinable`
+  code, inlined into the app, calls (docs/frameworks_in_the_sdk.md,
+  "Binary compatibility");
+- **Darwin's C ABI and libSystem** (variadic calls, `long double`, errno and
+  struct layouts) through shims;
+- **resources:** compiled asset catalogs, binary-plist strings, fonts.
+
+App Store builds are encrypted, and anything using UIKit or Objective-C
+directly is out of scope, so the target is pure SwiftUI apps.
+
+**First step, a day's work and entirely static:** list every symbol a few
+unencrypted builds import (the Storybook's iPhone app, Visor, Reviews), by
+library (SwiftUI, Foundation, libswiftCore, libobjc, libSystem), and count
+how many Isomer already provides under the same mangled names. That turns
+"theoretically possible" into a number. After 0.62.
+
 ## Also open
 
 - **Android: one slow frame on each navigation push** (120–200 ms in a
