@@ -57,6 +57,13 @@ export async function runHotBundle({ wasm, container, dependencies = {}, bundleI
   let memory = null;
   let exports = null;
   let retainedTree = null;
+  // The retained tree as JSON for headless smoke tests (`window.__isoLastTree`),
+  // made when read: stringifying the whole tree after every patch made a
+  // one-node frame walk the whole tree. Undefined until the first frame.
+  Object.defineProperty(window, "__isoLastTree", {
+    configurable: true,
+    get: () => (retainedTree === null ? undefined : JSON.stringify(retainedTree)),
+  });
 
   const guestString = (ptr, len) =>
     len <= 0 ? "" : decoder.decode(new Uint8Array(memory.buffer, ptr, len));
@@ -108,7 +115,6 @@ export async function runHotBundle({ wasm, container, dependencies = {}, bundleI
       render_tree(ptr, len) {
         const bytes = new Uint8Array(memory.buffer, ptr, len).slice();
         retainedTree = applyPatch(retainedTree, bytes);
-        window.__isoLastTree = JSON.stringify(retainedTree); // smoke-test hook
         renderer.render(retainedTree);
       },
       log(ptr, len) {
