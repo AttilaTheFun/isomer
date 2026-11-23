@@ -2953,6 +2953,7 @@ struct Main {
         checkStateLifetime(mock)
         checkStateStorage(mock)
         checkOpenURLAfterPartialFrames()
+        checkIDsInPaths()
 
         // Row actions: the tagged row is a tap target and carries its menu.
         Runtime.shared.installRootView { RowScreen() }
@@ -4265,6 +4266,71 @@ func checkStateStorage(_ mock: MockRenderer) {
         #if compiler(>=6.4)
         expect(storageTitlesMade == 1, "a private state's initial value is made once\(label) (\(storageTitlesMade))")
         #endif
+    }
+}
+
+
+// MARK: - Ids with "/", "#" or "%" in a view's path
+
+/// ForEach rows whose ids hold a path's separator, a state's "#" or an
+/// escape's "%": each row's state is its own ("a/b" and "a%2Fb" are two
+/// rows, not one), and a row removed and added again starts afresh while the
+/// others keep theirs.
+nonisolated(unsafe) var pathIDCounts: [String: Binding<Int>] = [:]
+nonisolated(unsafe) var pathIDItems: Binding<[String]>?
+
+struct PathIDRoot: View {
+    let place: Int
+    var body: some View {
+        if place == 0 { PathIDScreen() } else { PathIDScreen() }
+    }
+}
+
+struct PathIDScreen: View {
+    @State private var items = ["a/b", "a#b", "a%2Fb"]
+    var body: some View {
+        let _ = (pathIDItems = $items)
+        VStack {
+            ForEach(items, id: \.self) { item in PathIDCounter(name: item) }
+        }
+    }
+}
+
+struct PathIDCounter: View {
+    let name: String
+    @State private var count = 0
+    var body: some View {
+        let _ = (pathIDCounts[name] = $count)
+        Text("\(name): \(count)")
+    }
+}
+
+@MainActor
+func checkIDsInPaths() {
+    let verifying = Runtime.shared.verifyPartialFrames
+    defer { Runtime.shared.verifyPartialFrames = verifying }
+    for verify in [true, false] {
+        Runtime.shared.verifyPartialFrames = verify
+        let label = verify ? " (checked against a whole build)" : ""
+        func settle() { var n = 0; while Runtime.shared.wantsFrame && n < 40 { Runtime.shared.renderFrame(); n += 1 } }
+        func shows(_ text: String) -> Bool { findTextInTree(Runtime.shared.retainedTree!, text) }
+        pathIDCounts = [:]
+        Runtime.shared.installRootView { PathIDRoot(place: verify ? 0 : 1) }
+        Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+        settle()
+        let mismatches = Runtime.shared.partialMismatches
+        pathIDCounts["a/b"]?.wrappedValue = 1
+        pathIDCounts["a#b"]?.wrappedValue = 2
+        pathIDCounts["a%2Fb"]?.wrappedValue = 3
+        settle()
+        expect(shows("a/b: 1") && shows("a#b: 2") && shows("a%2Fb: 3"), "ids in paths\(label): each row keeps its own count")
+        pathIDItems?.wrappedValue = ["a#b", "a%2Fb"]
+        settle()
+        pathIDItems?.wrappedValue = ["a/b", "a#b", "a%2Fb"]
+        settle()
+        expect(shows("a/b: 0"), "ids in paths\(label): a row removed and added again starts afresh")
+        expect(shows("a#b: 2") && shows("a%2Fb: 3"), "ids in paths\(label): the other rows keep theirs")
+        expect(Runtime.shared.partialMismatches == mismatches, "ids in paths\(label): the frames built in place are the whole builds'")
     }
 }
 
