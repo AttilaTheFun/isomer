@@ -10,26 +10,47 @@ is not checked in):
 Simulator and Mac builds need nothing; an iPhone build needs your team's
 development profile (Xcode's, found by `local_provisioning_profile`).
 
-It also defines what the Storybook's apps tell UpdateKit (defs.bzl's
-`update_infoplist`), which a public repository never names:
+It also defines what the Storybook's apps carry in their Info.plist
+(defs.bzl's `stamped_infoplist`), which a public repository never names:
 - UPDATE_APP_GROUP, from ISOMER_UPDATE_APP_GROUP: the app group the apps
   share with the distributor (UpdateKit's `UpdateKitAppGroup`), or "" for
   none, when UpdateKit does nothing;
 - UPDATE_APPLICATIONS_BUNDLE_IDS, from ISOMER_UPDATE_APPLICATIONS_BUNDLE_IDS
   (comma-separated): on a Mac, the distributor's bundle ids to ask to
   install an update (`UpdateKitApplicationsBundleIDs`).
-CI's distribution builds set both from the repository's secrets.
+- INFOPLIST, from ISOMER_INFOPLIST: any other keys the builder's apps
+  carry, as a JSON object of strings or arrays of strings (ShakeKit's
+  `ShakeKitScope`, which turns it on, and the shared GitHub sign-in's
+  `GitHubShared*`), or none.
+CI's distribution builds set them from the repository's secrets.
 """
+
+def _infoplist(text):
+    """ISOMER_INFOPLIST's keys: a JSON object of strings or string arrays."""
+    if not text.strip():
+        return {}
+    value = json.decode(text)
+    if type(value) != "dict":
+        fail("ISOMER_INFOPLIST must be a JSON object, not %s" % type(value))
+    for key, item in value.items():
+        if type(item) == "list":
+            if [i for i in item if type(i) != "string"]:
+                fail("ISOMER_INFOPLIST's %s must be a string or an array of strings" % key)
+        elif type(item) != "string":
+            fail("ISOMER_INFOPLIST's %s must be a string or an array of strings" % key)
+    return value
 
 def _signing_impl(rctx):
     team = rctx.getenv("ISOMER_TEAM_ID", "YOUR_TEAM_ID") or "YOUR_TEAM_ID"
     group = (rctx.getenv("ISOMER_UPDATE_APP_GROUP", "") or "").strip()
     ids = [i.strip() for i in (rctx.getenv("ISOMER_UPDATE_APPLICATIONS_BUNDLE_IDS", "") or "").split(",") if i.strip()]
+    infoplist = _infoplist(rctx.getenv("ISOMER_INFOPLIST", "") or "")
     rctx.file("BUILD.bazel", 'exports_files(["signing.bzl"])\n')
     rctx.file("signing.bzl", "\n".join([
         'TEAM_ID = "%s"' % team,
         "UPDATE_APP_GROUP = %s" % repr(group),
         "UPDATE_APPLICATIONS_BUNDLE_IDS = %s" % repr(ids),
+        "INFOPLIST = %s" % repr(infoplist),
         "",
     ]))
 

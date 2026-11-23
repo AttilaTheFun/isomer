@@ -11,6 +11,9 @@
 // (example_full_wasm_*, example_full_feature), the web's GPU renderer
 // (example_full_webgpu_*), Electron.
 
+#if canImport(ShakeKit)
+import ShakeKit
+#endif
 #if canImport(UpdateKit)
 import UpdateKit
 #endif
@@ -36,9 +39,20 @@ struct ExampleApplication: App {
         // The title reaches the host as the document/window/task title.
         WindowGroup("Storybook") {
             StorybookView()
+                #if canImport(ShakeKit)
+                // A shake files an issue here, with a screenshot and the
+                // logs; only where the build opts in (ShakeKitScope in the
+                // Info.plist, CI's Alphas), and only the iPhone's and the
+                // Mac's Storybook link ShakeKit.
+                .shakeToReport(repository: "AttilaTheFun/isomer")
+                #endif
         }
         #if os(macOS)
         .defaultSize(width: 1280, height: 820)
+        #endif
+        #if canImport(ShakeKit)
+        // Help › Report a Bug… (⌥⌘B), the shake's twin on the Mac.
+        .commands { ShakeKitCommands() }
         #endif
     }
 }

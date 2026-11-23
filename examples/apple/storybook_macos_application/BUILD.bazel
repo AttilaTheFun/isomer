@@ -1,12 +1,13 @@
 load("@build_bazel_rules_apple//apple:macos.bzl", "macos_application")
 load("@rules_swift//swift:swift.bzl", "swift_library")
 load("@rules_xcodeproj//xcodeproj:defs.bzl", "top_level_target", "xcodeproj")
-load("//tools/signing:defs.bzl", "update_infoplist")
+load("//tools/signing:defs.bzl", "stamped_infoplist")
 load("//tools/variant:defs.bzl", "variant_infoplist")
 
-# What the apps tell UpdateKit: the distributor's app group (and, on a
-# Mac, its bundle ids), from the builder's environment (tools/signing).
-update_infoplist(name = "update_plist")
+# What the apps tell UpdateKit (the distributor's app group and, on a Mac,
+# its bundle ids) and the builder's other keys (ShakeKit's, the shared GitHub
+# sign-in's), from the builder's environment (tools/signing).
+stamped_infoplist(name = "stamped_plist")
 
 # The Storybook on the Mac: the Storybook's own app, which releases hand out.
 # One bundle id for every build and for the iPhone's
@@ -14,9 +15,11 @@ update_infoplist(name = "update_plist")
 BUNDLE_ID = "com.LoganShire.IsomerStorybook"
 
 # BuildVariant and the name under its icon (//tools/variant), as the
-# iPhone's. No entitlements here: Applications' app group comes with the
-# Developer ID profile CI signs it with (build_tools' `sign apple`), as Reviews' Mac
-# app's; until then AppUpdates.start() logs that there is no container.
+# iPhone's. No entitlements here: Applications' app group and the shared
+# GitHub sign-in's keychain group come with the Developer ID profile CI signs
+# it with (build_tools' `sign apple` makes the app's entitlements the
+# profile's), as Reviews' Mac app's; without them AppUpdates.start() logs that
+# there is no container, and ShakeKit signs in on its own.
 variant_infoplist(
     name = "variant_plist",
     display_name = "Storybook",
@@ -37,6 +40,8 @@ swift_library(
         "@isomer//apple/libraries/swift_ui:isomer",
         # The build it is, written for Applications at launch (ExampleApp.swift).
         "@swiftpkg_update_kit//:UpdateKit",
+        # Shake (or Help › Report a Bug…) to file an issue, where the build opts in.
+        "@swiftpkg_shake_kit//:ShakeKit",
     ],
 )
 
@@ -48,7 +53,7 @@ macos_application(
     bundle_name = "Storybook",
     infoplists = [
         "Info.plist",
-        ":update_plist",
+        ":stamped_plist",
         ":variant_plist",
     ],
     minimum_os_version = "14.0",
