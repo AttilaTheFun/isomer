@@ -73,12 +73,13 @@ def shared_signin_entitlements(name, src = None, bundle_id = None):
     if not group:
         return src
     if src:
-        # After the <array> that follows keychain-access-groups' key.
+        # Last in keychain-access-groups' array: the first group is where the
+        # app keeps what it saves without naming one, which stays its own.
         native.genrule(
             name = name,
             srcs = [src],
             outs = [name + ".entitlements"],
-            cmd = "awk '{ print } /<key>keychain-access-groups<\\/key>/ { k = 1; next } k && /<array>/ { print \"\\t\\t<string>%s</string>\"; k = 0 }' $< > $@" % _xml(group),
+            cmd = "awk '/<key>keychain-access-groups<\\/key>/ { k = 1 } k && /<\\/array>/ { print \"\\t\\t<string>%s</string>\"; k = 0 } { print }' $< > $@" % _xml(group),
         )
         return ":" + name
     if not bundle_id:
