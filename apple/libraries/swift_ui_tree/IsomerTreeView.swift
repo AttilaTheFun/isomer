@@ -1560,10 +1560,20 @@ struct ListBody: View {
     /// ForEach id it is; nil when no row of this list is.
     private func scrollKey(_ target: String) -> String? {
         if let key = window.targets[target], window.keys.contains(key) { return key }
-        return window.keys.first { Self.forEachID($0) == target }
+        let segment = Self.pathSegment(target)
+        return window.keys.first { Self.forEachID($0) == segment }
     }
 
-    /// The ForEach id in a cell's key ("…/fe-<id>/…~cell").
+    /// An id as the core puts it in a path (its `_pathSegment`: "%", "/"
+    /// and "#" escaped), to compare with the one in a cell's key.
+    static func pathSegment(_ id: String) -> String {
+        guard id.contains(where: { $0 == "%" || $0 == "/" || $0 == "#" }) else { return id }
+        return id.replacingOccurrences(of: "%", with: "%25")
+            .replacingOccurrences(of: "/", with: "%2F")
+            .replacingOccurrences(of: "#", with: "%23")
+    }
+
+    /// The ForEach id in a cell's key ("…/fe-<id>/…~cell"), as escaped there.
     static func forEachID(_ key: String) -> String? {
         guard let range = key.range(of: "/fe-", options: .backwards) ?? (key.hasPrefix("fe-") ? key.range(of: "fe-") : nil) else { return nil }
         let rest = key[range.upperBound...]
