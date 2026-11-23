@@ -468,9 +468,9 @@ struct _RowSlot {
                 return
             }
             _frameLogBuilt(view, ctx: ctx)
-            let build = beginCompositeBuild(view, ctx: ctx)
+            let build = beginCompositeBuild(ctx: ctx)
             _trackingObservation(at: ctx.path) {
-                let body = view.body
+                let body = _connectedBody(of: view, ctx: ctx)
                 var sub = ctx.descend(typeName(view))
                 if contributesRows(body) {
                     // Several rows after all: remembered, so the list finds
@@ -566,8 +566,7 @@ private func collectRowSlots(of view: any View, ctx: inout BuildContext, into sl
     // so is looked into now; any other is taken to be one row until built.
     if _viewKind(view).isComposite, !_viewKind(view).contains(.modified) {
         if Runtime.shared.multiRowViewPaths.contains(ctx.path) {
-            connectDynamicProperties(of: view, path: ctx.path, storage: ctx.storage, env: ctx.env)
-            let body = _trackingObservation(at: ctx.path) { view.body }
+            let body = _trackingObservation(at: ctx.path) { _connectedBody(of: view, ctx: ctx) }
             var sub = ctx.descend(typeName(view))
             collectRowSlots(of: body, ctx: &sub, into: &slots)
             return

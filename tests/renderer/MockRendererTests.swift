@@ -2948,6 +2948,7 @@ struct Main {
         checkAnimatedTransforms(mock)
         checkAnimationsEndWithTheirViews(mock)
         checkStateLifetime(mock)
+        checkStateStorage(mock)
         checkOpenURLAfterPartialFrames()
         checkIDsInPaths()
 
@@ -4094,6 +4095,170 @@ func checkStateLifetime(_ mock: MockRenderer) {
         Runtime.shared.showListRows(list, 0...10)
         settle()
         expect(shows("Row 5 1"), "a row off the rows built keeps its count\(label)")
+    }
+}
+
+
+// MARK: - A state's storage
+
+nonisolated(unsafe) var storageTitlesMade = 0
+nonisolated(unsafe) var storageParentPass: Binding<Int>?
+nonisolated(unsafe) var storageChildTap: (@MainActor () -> Void)?
+nonisolated(unsafe) var storageHandTap: (@MainActor () -> Void)?
+
+func makeStorageTitle() -> String {
+    storageTitlesMade += 1
+    return "Title"
+}
+
+/// Four states, one private with an initial value made by a call (a
+/// LazyState), the rest `State`s; a child writing one through `$count`, and
+/// another writing one through a binding made by hand.
+struct StorageScreen: View {
+    let pass: Int
+    @State private var title = makeStorageTitle()
+    @State var count = 0
+    @State var name = "a"
+    @State var manual = 0
+    var body: some View {
+        VStack {
+            Text("\(title) pass \(pass) count \(count) manual \(manual) name \(name)")
+            StorageCounter(value: $count)
+            StorageHand(value: Binding(get: { manual }, set: { manual = $0 }))
+        }
+    }
+}
+
+/// Writes its binding as its button's action would.
+struct StorageCounter: View {
+    @Binding var value: Int
+    var body: some View {
+        let _ = (storageChildTap = { value += 1 })
+        Text("Counter \(value)")
+    }
+}
+
+struct StorageHand: View {
+    let value: Binding<Int>
+    var body: some View {
+        let _ = (storageHandTap = { value.wrappedValue += 10 })
+        Text("Hand \(value.wrappedValue)")
+    }
+}
+
+/// Makes the screen again whenever its own state changes: in a frame built
+/// in place, the screen's value is made anew and built.
+struct StorageParent: View {
+    @State private var pass = 0
+    var body: some View {
+        let _ = (storageParentPass = $pass)
+        StorageScreen(pass: pass)
+    }
+}
+
+/// Each pass at a place of its own (state is kept by place).
+struct StorageRoot: View {
+    let place: Int
+    var body: some View {
+        VStack {
+            if place == 0 { StorageParent() } else { StorageParent() }
+        }
+    }
+}
+
+/// The class instances `value` holds, by their paths in it.
+func classReferences(in value: Any, at path: String = "", depth: Int = 0) -> [String] {
+    if type(of: value) is AnyClass { return [path] }
+    guard depth < 6 else { return [] }
+    var found: [String] = []
+    for (index, child) in Mirror(reflecting: value).children.enumerated() {
+        found += classReferences(in: child.value, at: path + "." + (child.label ?? String(index)), depth: depth + 1)
+    }
+    return found
+}
+
+/// `@State` is stored as Apple's is: a view's value holds each state's
+/// value (or, a LazyState, the closure making it) inline and no object, and
+/// the runtime writes the state's location into the copy of the view it
+/// builds. A location is made once per state, however often the view's
+/// value is made and built (in frames built in place, built whole, and
+/// built whole with nothing reused), and a private state's initial value
+/// once. A child writing through `$count`, and one writing through a
+/// binding made by hand, change the state, in frames built in place.
+@MainActor
+func checkStateStorage(_ mock: MockRenderer) {
+    let made = StorageScreen(pass: 0)
+    let objects = classReferences(in: made)
+    expect(objects.isEmpty, "a view's value as made holds no object for its states (\(objects))")
+    let locationFields = Mirror(reflecting: made).children.filter { child in
+        Mirror(reflecting: child.value).children.contains { $0.label == "_location" }
+    }
+    expect(locationFields.count == 4, "each of its four states has a location to be given (\(locationFields.count))")
+    #if compiler(>=6.4)
+    // (The property wrapper, before 6.4, makes it with each view value.)
+    expect(storageTitlesMade == 0, "a private state's initial value isn't made with the view's value (\(storageTitlesMade))")
+    #endif
+
+    let verifying = Runtime.shared.verifyPartialFrames
+    defer {
+        Runtime.shared.verifyPartialFrames = verifying
+        Runtime.shared.subtreeReuseEnabled = true
+    }
+    for verify in [true, false] {
+        Runtime.shared.verifyPartialFrames = verify
+        let label = verify ? " (checked against a whole build)" : ""
+        func settle() { var n = 0; while Runtime.shared.wantsFrame && n < 40 { Runtime.shared.renderFrame(); n += 1 } }
+        func shows(_ text: String) -> Bool { findTextInTree(Runtime.shared.retainedTree!, text) }
+        func frame(_ step: String, _ change: () -> Void) {
+            let partials = Runtime.shared.partialFrameCount, mismatches = Runtime.shared.partialMismatches
+            change()
+            settle()
+            let stats = Runtime.shared.frameStats
+            expect(Runtime.shared.partialMismatches == mismatches, "\(step)\(label): the frames built in place are the whole builds'")
+            expect(Runtime.shared.partialFrameCount > partials,
+                   "\(step)\(label): built in place (\(stats.kind.rawValue): \(stats.detail))")
+        }
+
+        storageTitlesMade = 0
+        let locations = Runtime.shared.stateLocationsMade
+        Runtime.shared.installRootView { StorageRoot(place: verify ? 0 : 1) }
+        Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+        settle()
+        expect(Runtime.shared.stateLocationsMade - locations == 5,
+               "a location for each state, the screen's four and its parent's\(label) (\(Runtime.shared.stateLocationsMade - locations))")
+        expect(shows("Title pass 0 count 0 manual 0 name a"), "the screen reads its states\(label)")
+
+        // The parent's state changes: the screen's value made again and
+        // built, in place.
+        for pass in 1...3 {
+            frame("the screen made again, pass \(pass)") { storageParentPass?.wrappedValue = pass }
+            expect(shows("Title pass \(pass) count 0 manual 0 name a"), "the screen made again shows pass \(pass)\(label)")
+        }
+        // Built whole, every view built again (none reused).
+        Runtime.shared.subtreeReuseEnabled = false
+        for _ in 0..<3 {
+            Runtime.shared.setNeedsRender()
+            settle()
+        }
+        Runtime.shared.subtreeReuseEnabled = true
+        Runtime.shared.setNeedsRender()
+        settle()
+
+        frame("the child writes through $count") { storageChildTap?() }
+        expect(shows("Title pass 3 count 1 manual 0 name a") && shows("Counter 1"), "a child's write through $count shows\(label)")
+        frame("a binding made by hand") { storageHandTap?() }
+        expect(shows("Title pass 3 count 1 manual 10 name a") && shows("Hand 10"), "a write through a binding made by hand shows\(label)")
+        frame("the screen made again after the writes") { storageParentPass?.wrappedValue = 4 }
+        frame("the child writes again") { storageChildTap?() }
+        frame("and the hand-made binding") { storageHandTap?() }
+        expect(shows("Title pass 4 count 2 manual 20 name a") && shows("Counter 2") && shows("Hand 20"),
+               "the states kept their values through the screen made again\(label)")
+
+        expect(Runtime.shared.stateLocationsMade - locations == 5,
+               "no location made again, however often the views were made and built\(label) (\(Runtime.shared.stateLocationsMade - locations))")
+        #if compiler(>=6.4)
+        expect(storageTitlesMade == 1, "a private state's initial value is made once\(label) (\(storageTitlesMade))")
+        #endif
     }
 }
 

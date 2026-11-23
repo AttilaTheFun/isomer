@@ -30,7 +30,7 @@ public struct FocusState<Value: Hashable>: _DynamicProperty {
     }
 
     /// Persisted across builds exactly like `@State` (same storage slot).
-    func _connect(storage: StateStorage, key: String, env: EnvironmentValues) {
+    mutating func _connect(storage: StateStorage, key: String, env: EnvironmentValues) {
         state._connect(storage: storage, key: key, env: env)
     }
 
