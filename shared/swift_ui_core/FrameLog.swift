@@ -166,10 +166,10 @@ func _frameLogVolatile(_ view: any View) {
 // keystroke that builds the whole tree, frames that keep coming with
 // nothing changed), without a profiler:
 //
-//   [render] frame 41 partial (DraftSend) | written 1 | built 1 | diffed 12 nodes, 1 op | events text | 0.4 ms
-//   [render] frame 42 whole (a volatile build) | written 1 | built 38 | diffed 210 nodes, 3 ops | events tap | 6.1 ms
-//   [render] frame 43 partial (nothing) | written 0 | built 0 | diffed 5 nodes, 0 ops | events geo ×2 | 0.1 ms
-//   [render] frame 44 relayout | diffed 5 nodes, 0 ops | events - | 0.2 ms
+//   [render] frame 41 partial (DraftSend) | written 1 | built 1 | diffed 12 nodes, 1 op | events text | 0.4 ms (build 310 µs, render 92 µs)
+//   [render] frame 42 whole (a volatile build) | written 1 | built 38 | diffed 210 nodes, 3 ops | events tap | 6.1 ms (build 4870 µs, render 1214 µs)
+//   [render] frame 43 partial (nothing) | written 0 | built 0 | diffed 5 nodes, 0 ops | events geo ×2 | 0.1 ms (build 61 µs, render 40 µs)
+//   [render] frame 44 relayout | diffed 5 nodes, 0 ops | events - | 0.2 ms (build 0 µs, render 188 µs)
 //
 // A frame is `partial` (built in place, InPlace.swift: the views it built
 // in parentheses, "nothing" when no build read what was written), `whole`
@@ -181,7 +181,11 @@ func _frameLogVolatile(_ view: any View) {
 // renderer), `events` the host's events since the frame before, by kind
 // (the last part of their ids: "text" a field's edit, "tap", "geo" a
 // geometry reader's size, "focus"). A run of frames with nothing written is
-// a render loop to find: its events say what keeps asking.
+// a render loop to find: its events say what keeps asking. The time is the
+// frame's, then apart: `build` the views' bodies and the tree (the `.onChange`
+// passes included), `render` the renderer's (an encoder's diff, or the layout
+// and drawing of a renderer that draws), in microseconds, which
+// tools/bench/headless_frames.py reads.
 // The same counts are kept with the log off (`Runtime.frameStats`), for
 // tests. ISO_FRAME_LOG (above) says, for one frame, which views were built
 // and why.
@@ -224,6 +228,13 @@ extension Runtime {
         currentFrame.written = dirtyStateKeys.count
         frameBuildsAtStart = compositeBuildCount
         frameStartedAt = renderLogOn ? (host?.now() ?? 0) : 0
+        frameRenderStartedAt = frameStartedAt
+    }
+
+    /// The frame's tree goes to the renderer: its build is over.
+    func renderStatsRenderBegins() {
+        guard renderLogOn else { return }
+        frameRenderStartedAt = host?.now() ?? 0
     }
 
     /// Why this frame is built whole, or what a partial one built.
@@ -246,13 +257,16 @@ extension Runtime {
         if currentFrame.kind == .whole { wholeFrameCount &+= 1 }
         guard renderLogOn, let host else { return }
         let stats = currentFrame
-        let ms = (host.now() - frameStartedAt) * 1000
+        let end = host.now()
+        let ms = (end - frameStartedAt) * 1000
+        let buildMicros = Int(((frameRenderStartedAt - frameStartedAt) * 1_000_000).rounded())
+        let renderMicros = Int(((end - frameRenderStartedAt) * 1_000_000).rounded())
         let detail = stats.detail.isEmpty ? "" : " (\(stats.detail))"
         let built = stats.kind == .relayout ? "" : " | written \(stats.written) | built \(stats.built)"
         let ops = stats.patchOps == 1 ? "1 op" : "\(stats.patchOps) ops"
         let events = frameRequests.isEmpty ? "-" : frameRequests.sorted { $0.key < $1.key }
             .map { $0.value == 1 ? $0.key : "\($0.key) ×\($0.value)" }.joined(separator: ", ")
         frameRequests = [:]
-        host.log("[render] frame \(renderedFrameCount) \(stats.kind.rawValue)\(detail)\(built) | diffed \(stats.diffedNodes) nodes, \(ops) | events \(events) | \((ms * 10).rounded() / 10) ms")
+        host.log("[render] frame \(renderedFrameCount) \(stats.kind.rawValue)\(detail)\(built) | diffed \(stats.diffedNodes) nodes, \(ops) | events \(events) | \((ms * 10).rounded() / 10) ms (build \(buildMicros) µs, render \(renderMicros) µs)")
     }
 }

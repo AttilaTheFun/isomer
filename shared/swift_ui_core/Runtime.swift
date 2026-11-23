@@ -926,6 +926,7 @@ package final class Runtime {
     var compositeBuildCount = 0
     var frameBuildsAtStart = 0
     var frameStartedAt = 0.0
+    var frameRenderStartedAt = 0.0
     /// The host's events since the last frame, by kind (the render log's).
     var frameRequests: [String: Int] = [:]
 
@@ -987,6 +988,7 @@ package final class Runtime {
             host.platformCommand("preferredColorScheme", _schemeParam())
         }
 
+        renderStatsRenderBegins()
         renderingTree = true
         Renderer.current.render(tree: root)
         renderingTree = false
