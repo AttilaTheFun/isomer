@@ -89,6 +89,38 @@ stories, before and after.
    identical-expansion check, and the expansion's helpers live in the binding
    module the SDK rework creates.
 
+## Embedded Swift: a kernel without reflection, then an e-ink host
+
+Embedded Swift as a platform, starting with an e-ink reader on an ESP32-C3
+(RISC-V, about 400 KB of RAM, a 160 MHz core; Embedded Swift builds for it
+through ESP-IDF). Isomer's core as it is won't compile there: Embedded Swift
+has no reflection (`Mirror`), no unspecialized generics, few existentials
+(`AnyView`, the type-erased view boxes, `Any`-typed state slots), no
+metatype-keyed lookups (the environment's keys), and no Foundation or
+Observation. Most of what it rules out is also what the allocation work
+above measures as cost, so the work is shared: static dispatch, no boxing,
+no reflection and fewer heap objects per view per frame speed up every
+platform. What it adds is code size (every generic specialized), which the
+web, where the wasm is downloaded, has to measure.
+
+Apple's interface keeps what can't be embedded (`AnyView`, `ObservableObject`
+and Combine, any value in the environment), so it is a split, not a
+replacement: an **embedded-clean kernel** (layout, the diff, state storage,
+the tree and its wire format) under a **full layer** with the compatibility
+unmodified apps need, as 0.62 separates SwiftUI's interface from its
+implementation.
+
+1. **The measure** (after 0.62): the core compiled with Embedded Swift
+   (`-enable-experimental-feature Embedded`, `riscv32-none-none-eabi`) in a
+   container, its errors sorted by kind. That sizes the rest. Check
+   `KeyPath` and Observation's registrar early: `@Observable` stands on both.
+2. **The kernel, a piece at a time**, each benchmarked with the headless
+   Storybook on desktop before and after, with the arena and interned paths
+   above.
+3. **An e-ink host on the ESP32-C3**: the display's controller over SPI,
+   frames as 1- or 2-bit framebuffers with partial-refresh regions, buttons
+   as input, a simple executor for `.task` and the frame loop.
+
 ## Research: running an app's own Apple build on Android
 
 A mode for apps whose source isn't available, or that build with another
