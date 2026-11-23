@@ -1,5 +1,5 @@
 // The example application: the Storybook (//storybook), compiled for
-// every platform. The Storybook apps (com.LoganShire.IsomerStorybook,
+// every platform. The Storybook apps (com.LoganShire.Storybook,
 // "Storybook") are its one cell per platform, each with that platform's
 // renderer:
 //   * examples/apple/storybook_{ios,macos}_application (Apple's SwiftUI)

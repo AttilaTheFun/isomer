@@ -21,9 +21,9 @@ It also defines what the Storybook's apps carry in their Info.plist
 - INFOPLIST, from ISOMER_INFOPLIST: any other keys the builder's apps
   carry, as a JSON object of strings or arrays of strings (the shared
   GitHub sign-in's `GitHubShared*`, which turn ShakeKit on, for someone
-  signed in there), or none. Its GitHubSharedKeychainGroup also
-  goes into the apps' entitlements (defs.bzl's
-  `shared_signin_entitlements`).
+  signed in there), or none. Its GitHubSharedKeychainGroup and
+  GitHubSharedLockGroup also go into the apps' entitlements, with
+  UPDATE_APP_GROUP (defs.bzl's `app_entitlements`).
 CI's distribution builds set them from the repository's secrets.
 """
 

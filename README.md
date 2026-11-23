@@ -292,7 +292,7 @@ platform, drawn by the platform's renderer: Apple's SwiftUI on iOS and the
 Mac, DOM on the web, Compose on Android, OpenGL on Linux, DirectX on
 Windows. The shell is a `NavigationSplitView`: the stories beside the page
 on a wide window, one column at a time on a phone. Each Storybook app
-(com.LoganShire.IsomerStorybook) is released with Isomer, and its proof is
+(com.LoganShire.Storybook) is released with Isomer, and its proof is
 a screenshot of every story's page on every platform. A story's view is
 written once, between `// story: <id>` and `// end story` lines, and the
 build copies that source into the page, so the code shown is the code that

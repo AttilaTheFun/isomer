@@ -72,7 +72,7 @@ swift_test(
 #
 #   storybook_headful_windows_test.exe, with ISOMER_HEADFUL_LAUNCHER=<windows_launcher.sh>
 #   ISOMER_WINDOWS_APP=<storybook_windows_application.exe> ISOMER_BASH=<bash.exe>
-_STORYBOOK = "com.LoganShire.IsomerStorybook"
+_STORYBOOK = "com.LoganShire.Storybook"
 
 _HEADFUL_WEB_ENV = {
     "ISOMER_BROWSER_CHECK": "$(rootpath @isomer//tools/testing/browser_check)",

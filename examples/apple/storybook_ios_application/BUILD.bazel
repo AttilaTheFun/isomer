@@ -3,7 +3,7 @@ load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
 load("@rules_swift//swift:swift.bzl", "swift_library")
 load("@rules_xcodeproj//xcodeproj:defs.bzl", "top_level_target", "xcode_provisioning_profile", "xcodeproj")
 load("@isomer_signing//:signing.bzl", "TEAM_ID")
-load("//tools/signing:defs.bzl", "shared_signin_entitlements", "stamped_infoplist")
+load("//tools/signing:defs.bzl", "app_entitlements", "stamped_infoplist")
 load("//tools/variant:defs.bzl", "variant_infoplist")
 
 # What the apps tell UpdateKit (the distributor's app group and, on a Mac,
@@ -11,9 +11,9 @@ load("//tools/variant:defs.bzl", "variant_infoplist")
 # sign-in's), from the builder's environment (tools/signing).
 stamped_infoplist(name = "stamped_plist")
 
-# CI's device build's entitlements, with the shared GitHub sign-in's keychain
-# group where the builder sets it (tools/signing).
-DEVICE_ENTITLEMENTS = shared_signin_entitlements(
+# CI's device build's entitlements, with the builder's app groups and the
+# shared GitHub sign-in's keychain group where it sets them (tools/signing).
+DEVICE_ENTITLEMENTS = app_entitlements(
     name = "device_entitlements",
     src = "Storybook.entitlements",
 )
@@ -21,7 +21,7 @@ DEVICE_ENTITLEMENTS = shared_signin_entitlements(
 # The Storybook on iOS: the Storybook's own app, which releases hand out.
 # One bundle id for every build, Alpha, Beta, Production and AdHoc, and for
 # the Mac's (the private AttilaTheFun/applications' docs/VARIANTS.md).
-BUNDLE_ID = "com.LoganShire.IsomerStorybook"
+BUNDLE_ID = "com.LoganShire.Storybook"
 
 # What this build of the Storybook is, BuildVariant (Alpha, Beta, Production
 # or AdHoc, by --config=alpha|beta|prod|adhoc), and its name under its icon,
@@ -80,12 +80,11 @@ ios_application(
     bundle_id = BUNDLE_ID,
     bundle_name = "Storybook",
     # Its own app ID and keychain group: a wildcard profile's entitlements
-    # would otherwise be copied as-is (application-identifier TEAM.*), which
-    # the release server refuses. And Applications' app group, which CI's
-    # build carries (the bundle id's own profile grants it when Applications
-    # Server signs it again); a local device build under the wildcard
-    # profile, which can grant no app group, goes without. CI's also names
-    # the shared GitHub sign-in's keychain group, where it is set.
+    # would otherwise be copied as-is (application-identifier TEAM.*). CI's
+    # also carries the builder's app groups and the shared GitHub sign-in's
+    # keychain group (tools/signing), which the bundle id's own profile
+    # grants; a local device build under the wildcard profile, which can
+    # grant no app group, goes without.
     entitlements = select({
         "//tools/ci_device": DEVICE_ENTITLEMENTS,
         "@apple_support//constraints:device": "Storybook.wildcard.entitlements",
@@ -164,7 +163,7 @@ ios_application(
     app_icons = ["//storybook/artwork/storybook_icon:app_icon"],
     bundle_id = BUNDLE_ID,
     bundle_name = "Storybook",
-    # The bundle id's keychain group and Applications' app group, no team.
+    # The bundle id's keychain group, no team.
     entitlements = "Storybook.simulator.entitlements",
     families = [
         "ipad",

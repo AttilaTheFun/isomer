@@ -332,7 +332,7 @@ view sits between `// story: <id>` and `// end story` lines; :snippets
 (snippets.awk) copies that source into the page's table, so the code shown
 is the code run. It is the primary integration test: the Storybook apps
 (examples/<platform>/storybook_<platform>_application,
-com.LoganShire.IsomerStorybook, "Storybook"), one a platform with that
+com.LoganShire.Storybook, "Storybook"), one a platform with that
 platform's renderer, are released with Isomer, and their proof is a
 screenshot of every story's page (`ISO_STORYBOOK_STORY=<id>` opens one; the
 web page's `?ISO_STORYBOOK_STORY=`). A story uses only what both Apple's
@@ -694,7 +694,7 @@ macros (`apk_install_run` among them) are isomer_android's since 0.59
 (android/module). iOS device builds need the team's Xcode-managed wildcard
 profile ('iOS Team Provisioning Profile: *'); a machine without it fails
 them — an environment issue, not code; exclude iOS from wildcard
-verification builds. The Storybook is com.LoganShire.IsomerStorybook; the
+verification builds. The Storybook is com.LoganShire.Storybook; the
 examples' other apps share com.LoganShire.IsomerExamples.
 
 ## Build & run (macOS host)

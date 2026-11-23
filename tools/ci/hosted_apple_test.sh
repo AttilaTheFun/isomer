@@ -21,7 +21,7 @@ webview_ipa=""
 [ -z "${4:-}" ] || webview_ipa="$(absolute "$4")"
 stories=($(sed -n 's/^ *"\([a-z]*\.[a-z]*\)",$/\1/p' "$ROOT/examples/tests/platforms/stories.bzl"))
 [ ${#stories[@]} -gt 0 ] || { echo "hosted_apple_test: no stories" >&2; exit 1; }
-BUNDLE=com.LoganShire.IsomerStorybook
+BUNDLE=com.LoganShire.Storybook
 work="$(mktemp -d)"
 udid="" pid=""
 cleanup() {

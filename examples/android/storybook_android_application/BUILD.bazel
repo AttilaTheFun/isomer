@@ -50,7 +50,7 @@ isomer_android_app(
     fonts = ["//storybook:fonts"],
     icon = "//storybook/artwork/storybook_icon:ic_launcher.png",
     label = "Storybook",
-    package = "com.LoganShire.IsomerStorybook",
+    package = "com.LoganShire.Storybook",
     # The app's platform services (shared/platform_services), installed into
     # the swift_ffi dependency dictionary before start.
     services_installer = "dev.isomer.runtime.ExampleAppServices.install()",
@@ -67,7 +67,7 @@ isomer_android_app(
 # Its MainActivity in a process of its own, as an embedding host may want.
 isomer_android_aar(
     name = "storybook_android_aar",
-    package = "com.LoganShire.IsomerStorybook",
+    package = "com.LoganShire.Storybook",
     process = ":isomer",
     services_installer = "dev.isomer.runtime.ExampleAppServices.install()",
     services_kt = "AppServices.kt",
