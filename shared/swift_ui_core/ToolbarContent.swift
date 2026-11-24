@@ -126,7 +126,7 @@ extension ToolbarSpacer: ToolbarContent, PrimitiveToolbarContent {
 
 /// A toolbar item as the view the runtime builds: the item's own node, and
 /// its reuse answers.
-struct _ToolbarItemView<Item: _InternalPrimitiveView>: _PrimitiveView {
+struct _ToolbarItemView<Item: _PrimitiveView>: _InternalPrimitiveView {
     let item: Item
 
     static var _isReusableBuild: Bool { Item._isReusableBuild }

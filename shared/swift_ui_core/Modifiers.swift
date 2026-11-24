@@ -129,7 +129,7 @@ package struct _ModifiedView {
     public var body: Never { fatalError("primitive view") }
 }
 
-extension _ModifiedView: _InternalPrimitiveView {
+extension _ModifiedView: _PrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var sub = ctx.descend(descend)
@@ -1370,7 +1370,13 @@ public struct ScrollAnchorRole: Hashable, Sendable {
 
 // The view conformances, in extensions: declared on the type itself they
 // would make the whole type main-actor isolated (see `View`).
-extension _ModifiedView: View {}
+extension _ModifiedView: View {
+    // A `package` type: the internal primitives' default can't answer for
+    // it (View.swift), so it says what it is here.
+    package static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+}
 extension _EnvironmentModifier: View {}
 extension _OnChangeView: View {}
 extension _TaskModifier: View {}
