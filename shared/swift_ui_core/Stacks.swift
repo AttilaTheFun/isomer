@@ -19,7 +19,7 @@ public struct VStack<Content: View> {
 extension VStack: _PrimitiveView {
     /// Built as a primitive, statically, as Apple's says it is through its
     /// own `_makeView` (View.swift).
-    public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
         _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
     }
 
@@ -62,7 +62,7 @@ public struct HStack<Content: View> {
 extension HStack: _PrimitiveView {
     /// Built as a primitive, statically, as Apple's says it is through its
     /// own `_makeView` (View.swift).
-    public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
         _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
     }
 
@@ -99,7 +99,7 @@ public struct ZStack<Content: View> {
 extension ZStack: _PrimitiveView {
     /// Built as a primitive, statically, as Apple's says it is through its
     /// own `_makeView` (View.swift).
-    public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
         _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
     }
 
@@ -139,7 +139,7 @@ public struct Divider {
 extension Divider: _PrimitiveView {
     /// Built as a primitive, statically, as Apple's says it is through its
     /// own `_makeView` (View.swift).
-    public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
         _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
     }
 

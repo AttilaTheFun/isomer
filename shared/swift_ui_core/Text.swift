@@ -185,7 +185,7 @@ public struct Text {
 extension Text: _PrimitiveView {
     /// Built as a primitive, statically, as Apple's says it is through its
     /// own `_makeView` (View.swift).
-    public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
         _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
     }
 

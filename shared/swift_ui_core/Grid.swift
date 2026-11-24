@@ -116,7 +116,7 @@ func gridNode(
 extension LazyVGrid: _PrimitiveView {
     /// Built as a primitive, statically, as Apple's says it is through its
     /// own `_makeView` (View.swift).
-    public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
         _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
     }
 
@@ -156,7 +156,7 @@ func gridItemSpec(_ item: GridItem) -> String {
 extension LazyHGrid: _PrimitiveView {
     /// Built as a primitive, statically, as Apple's says it is through its
     /// own `_makeView` (View.swift).
-    public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
         _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
     }
 
@@ -211,7 +211,7 @@ public struct GridRow<Content: View> {
 extension GridRow: _PrimitiveView {
     /// Built as a primitive, statically, as Apple's says it is through its
     /// own `_makeView` (View.swift).
-    public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
         _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
     }
 
@@ -230,7 +230,7 @@ extension GridRow: _PrimitiveView {
 extension Grid: _PrimitiveView {
     /// Built as a primitive, statically, as Apple's says it is through its
     /// own `_makeView` (View.swift).
-    public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
         _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
     }
 
