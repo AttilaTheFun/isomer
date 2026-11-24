@@ -381,7 +381,7 @@ struct _AnimationValueModifier {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _AnimationValueModifier: _PrimitiveView {
+extension _AnimationValueModifier: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let key = ctx.path + "#animvalue"
@@ -407,7 +407,7 @@ struct _AnimatableEnvModifier {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _AnimatableEnvModifier: _PrimitiveView {
+extension _AnimatableEnvModifier: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var sub = ctx.descend(descend)
@@ -426,7 +426,7 @@ struct _AnimatableBoxModifier {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _AnimatableBoxModifier: _PrimitiveView {
+extension _AnimatableBoxModifier: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var sub = ctx.descend(descend)

@@ -36,7 +36,7 @@ package struct _PickerRequest<Child: View> {
     public typealias Body = Never
 }
 
-extension _PickerRequest: _PrimitiveView {
+extension _PickerRequest: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var sub = ctx.descend("picked")

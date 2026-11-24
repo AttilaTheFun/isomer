@@ -129,7 +129,7 @@ package struct _ModifiedView {
     public var body: Never { fatalError("primitive view") }
 }
 
-extension _ModifiedView: _PrimitiveView {
+extension _ModifiedView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var sub = ctx.descend(descend)
@@ -154,7 +154,7 @@ struct _EnvironmentModifier {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _EnvironmentModifier: _PrimitiveView {
+extension _EnvironmentModifier: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var sub = ctx.descend(descend)
@@ -1088,7 +1088,7 @@ struct _OnChangeView<Child: View, V: Equatable> {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _OnChangeView: _PrimitiveView {
+extension _OnChangeView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let key = ctx.path + "/onchange"
@@ -1323,7 +1323,7 @@ struct _TaskModifier<Child: View> {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _TaskModifier: _PrimitiveView {
+extension _TaskModifier: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         // The task belongs to the view at this build path: started when it

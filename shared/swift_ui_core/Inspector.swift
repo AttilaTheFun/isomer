@@ -34,7 +34,7 @@ struct _InspectorView<Child: View, Content: View> {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _InspectorView: _PrimitiveView {
+extension _InspectorView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let roomForColumn = !Runtime.shared.compactWidth && Runtime.shared.height >= 500

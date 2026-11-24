@@ -83,7 +83,7 @@ package struct HostViewPrimitive {
     }
 }
 
-extension HostViewPrimitive: _PrimitiveView {
+extension HostViewPrimitive: _InternalPrimitiveView {
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         hostViewNode(kind: kind, parameters: parameters, value: value, onChange: onChange, ctx: &ctx)
     }
@@ -241,7 +241,7 @@ struct _PickerStyleView<Content: View> {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _PickerStyleView: _PrimitiveView {
+extension _PickerStyleView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         Runtime.shared.pickerStyleStack.append(style)
@@ -321,7 +321,7 @@ struct _TaggedView<V: Hashable, Content: View>: _AnyTaggedView {
     public var body: Never { fatalError("primitive view") }
 }
 
-extension _TaggedView: _PrimitiveView {
+extension _TaggedView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var sub = ctx.descend("tagged")
