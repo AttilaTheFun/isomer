@@ -24,7 +24,7 @@ extension Shape {
 extension Shape where Self: _InternalPrimitiveView {
     /// A shape that is also a primitive (a trim, a stroke) is built as the
     /// primitive, as the builder always took it first.
-    static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+    @MainActor static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
         _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
     }
 }
