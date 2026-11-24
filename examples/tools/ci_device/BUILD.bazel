@@ -1,5 +1,5 @@
 load("@isomer_signing//:signing.bzl", "TEAM_ID")
-load("//tools/signing:defs.bzl", "app_groups")
+load("//tools/signing:defs.bzl", "app_groups", "shared_keychain_group")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -49,7 +49,7 @@ genrule(
 		<key>keychain-access-groups</key>
 		<array>
 			<string>{team}.*</string>
-		</array>
+{keychain}		</array>
 	</dict>
 	<key>ExpirationDate</key>
 	<date>2036-01-01T00:00:00Z</date>
@@ -78,6 +78,10 @@ genrule(
 </plist>
 EOF""".format(
         team = TEAM_ID,
+        # The shared sign-in's keychain group, named by its own team, which
+        # the placeholder's TEAM.* doesn't cover where the builder names no
+        # team (CI): rules_apple checks the entitlements against it.
+        keychain = "\t\t\t<string>%s</string>\n" % shared_keychain_group() if shared_keychain_group() else "",
         groups = "".join(
             ["\t\t<key>com.apple.security.application-groups</key>\n\t\t<array>\n"] +
             ["\t\t\t<string>%s</string>\n" % g for g in app_groups()] +
