@@ -40,14 +40,29 @@ wait_for() {
     done
     return 1
 }
+# Taps the story's Tap button, once it is on the screen: the count can be
+# on the screen with the button still below it (the story's field between
+# them), so each look without it scrolls up by a third of a screen. False
+# when it never shows.
+tap_button() {
+    local bounds x1 y1 x2 y2 look
+    for look in 1 2 3 4; do
+        bounds="$(grep -o '<node [^>]*text="Tap"[^>]*>' "$out/webview-ui.xml" | head -1 | grep -o 'bounds="[^"]*"')"
+        read -r x1 y1 x2 y2 <<<"$(sed -E 's/bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]"/\1 \2 \3 \4/' <<<"$bounds")"
+        if [ -n "${y2:-}" ]; then
+            a shell input tap $(((x1 + x2) / 2)) $(((y1 + y2) / 2))
+            return 0
+        fi
+        a shell input swipe 540 1600 540 900 300
+        sleep 1
+        screen >"$out/webview-ui.xml"
+    done
+    return 1
+}
 # Taps the story's Tap button and waits for "Taps: <$1>".
 tap_count() {
-    local bounds x1 y1 x2 y2
     wait_for "Taps: $(($1 - 1))" 30 || return 1
-    bounds="$(grep -o '<node [^>]*text="Tap"[^>]*>' "$out/webview-ui.xml" | head -1 | grep -o 'bounds="[^"]*"')"
-    read -r x1 y1 x2 y2 <<<"$(sed -E 's/bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]"/\1 \2 \3 \4/' <<<"$bounds")"
-    [ -n "${y2:-}" ] || return 1
-    a shell input tap $(((x1 + x2) / 2)) $(((y1 + y2) / 2))
+    tap_button || return 1
     wait_for "Taps: $1" 30
 }
 # The page's start, from its log: the session's own line and the host's.
@@ -66,15 +81,10 @@ launch
 failure=""
 if ! wait_for "Taps: 0" 90; then
     failure="the story never drew \"Taps: 0\""
+elif ! tap_button; then
+    failure="no Tap button on the screen"
 else
-    bounds="$(grep -o '<node [^>]*text="Tap"[^>]*>' "$out/webview-ui.xml" | head -1 | grep -o 'bounds="[^"]*"')"
-    read -r x1 y1 x2 y2 <<<"$(sed -E 's/bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]"/\1 \2 \3 \4/' <<<"$bounds")"
-    if [ -z "${y2:-}" ]; then
-        failure="no Tap button on the screen"
-    else
-        a shell input tap $(((x1 + x2) / 2)) $(((y1 + y2) / 2))
-        wait_for "Taps: 1" 30 || failure="the tap didn't change the count"
-    fi
+    wait_for "Taps: 1" 30 || failure="the tap didn't change the count"
 fi
 # The page sent off the site (its own script, isomerDebug navigateAway):
 # refused, and the session goes on (a second tap counts).
