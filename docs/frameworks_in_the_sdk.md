@@ -146,7 +146,28 @@ Apple's binary interface costs nothing, match it; where it costs, decide then.
 
 1. The split, in isomer, from source: the facade, the binding modules and
    the implementation, with the visitor, the binding and the handshake. The
-   Storybook's proof and every test must be unchanged.
+   Storybook's proof and every test must be unchanged. In steps, each a
+   pull request that leaves them so, each measured with the headless
+   Storybook:
+   1. **Views say what they are, as Apple's do.** `View` takes Apple's
+      requirements, `static func _makeView(view: _GraphValue<Self>, inputs:
+      _ViewInputs) -> _ViewOutputs` and `_makeViewList`, with defaults: a
+      composite view builds its body, a primitive its node, a `Shape` its
+      path. The build calls the view's own `_makeView` through the type it
+      opened, so the casts, the conformance index and the kind caches that
+      answer "what is this view" today (Node.swift, ConformanceIndex.swift,
+      FieldRecords.swift) go. Apple's names and signatures, so the
+      facade's View mangles as Apple's (below).
+   2. **Content held by its type, as Apple's is:** `TupleView<T>` holds
+      `value: T` (a tuple, built by `ViewBuilder`'s parameter packs) rather
+      than `[any View]`, and a container's children are walked through
+      `_makeViewList`, with no existential per child.
+   3. **The primitives as data, the visitor in IsomerSwiftUI:** each
+      primitive's `_makeView` calls the visitor's method for it; the
+      runtime's building moves behind the visitor.
+   4. **The modules apart:** SwiftUI (the facade), IsomerSwiftUI (the
+      protocol and the binding), IsomerSwiftUIImplementation (the runtime),
+      with the bind call and the version handshake.
 2. Android and web SDKs carry the facade, the binding modules, the other
    frameworks, the Isomer module and the macro plugin. isomer's labels
    become empty there. Measure the result on the apps we have (the
@@ -155,6 +176,17 @@ Apple's binary interface costs nothing, match it; where it costs, decide then.
    get the same.
 4. Isomer's SDK on Apple's platforms, as an alternative to Apple's (the
    compiled configuration becomes an SDK).
+
+## The implementation as an embedded-capable core (2026-11-23)
+
+The owner's direction: a fast core that compiles for Embedded Swift, with
+the full SwiftUI interface layered on it, as Apple's SwiftUI stands on
+SwiftUICore (docs/roadmap.md, "Embedded Swift"). As much as possible goes
+in the core, short of costing the full interface's compatibility or speed.
+So the implementation is written to need no reflection, no dynamic casts
+and as few existentials as it can (phase 1's steps 1 and 2 remove the
+largest), and what can't be embedded (`AnyView`'s erasure, `ObservableObject`
+and Combine, any value in the environment) stays in the layer above.
 
 ## Decided (2026-11-22)
 
