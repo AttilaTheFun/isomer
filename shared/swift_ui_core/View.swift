@@ -126,6 +126,12 @@ extension EmptyView: _MultiView {
 }
 
 extension AnyView: _PrimitiveView {
+    /// Built as a primitive, statically, as Apple's says it is through its
+    /// own `_makeView` (View.swift).
+    public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var sub = ctx.descend("any")

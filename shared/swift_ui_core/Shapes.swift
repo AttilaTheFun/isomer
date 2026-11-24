@@ -271,6 +271,12 @@ public struct StrokeShapeView<Content: Shape, Style: ShapeStyle, Background: Vie
 }
 
 extension StrokeShapeView: _PrimitiveView {
+    /// Built as a primitive, statically, as Apple's says it is through its
+    /// own `_makeView` (View.swift).
+    public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var view = _ShapeView(kind: shape.shapeKind, fill: nil, stroke: (resolveStyleColor(style), strokeStyle.lineWidth))
         view.trim = shape.shapeTrim
