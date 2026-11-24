@@ -50,6 +50,11 @@ def stamped_infoplist(name, **kwargs):
         **kwargs
     )
 
+def shared_keychain_group():
+    """The shared GitHub sign-in's keychain group (INFOPLIST's
+    GitHubSharedKeychainGroup, team-prefixed), or "" for none."""
+    return INFOPLIST.get("GitHubSharedKeychainGroup", "")
+
 def app_groups():
     """The app groups the builder's apps share: UpdateKit's and the shared
     GitHub sign-in's lock group, each once (also what CI's placeholder
@@ -82,7 +87,7 @@ def app_entitlements(name, src = None, bundle_id = None):
       one. A Mac app asking for these needs its Developer ID profile, which
       CI's signing finds.
     """
-    keychain = INFOPLIST.get("GitHubSharedKeychainGroup", "")
+    keychain = shared_keychain_group()
     groups = app_groups()
     if not keychain and not groups:
         return src
