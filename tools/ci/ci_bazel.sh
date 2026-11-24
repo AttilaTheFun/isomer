@@ -46,6 +46,13 @@
 #   keeps (above) stays whole for the runs with no key; the others download
 #   only the top-level outputs (Bazel's default, the files the jobs copy and
 #   run).
+#   The cache the signed builds read is reviewed code's alone: runs on main
+#   and a published release's (the Alphas and the release jobs sign what
+#   they build) use one instance, and every other run (a pull request's, a
+#   branch's) another, `-unreviewed`, so a pull request's scripts can't put
+#   a result where a signed build would take it (Visor's catch, 2026-11-23).
+#   A pull request reads and writes its own instance, warm from the pull
+#   requests before it on the same dependency graph.
 # BuildBuddy's cache is partitioned by the dependency graph
 # (--remote_instance_name, a hash of both modules' MODULE.bazel and both
 # SwiftPM graphs' Package.resolved): a cache from before a Swift SDK
@@ -105,13 +112,19 @@ setup)
     # BuildBuddy, with the key: never traced, never echoed.
     if [ -n "${BUILDBUDDY_API_KEY:-}" ]; then
         set +x
-        # Whether this run downloads every output (above).
+        # Whether this run downloads every output, and whether it is
+        # reviewed code's, which alone shares the signed builds' instance
+        # (above).
         whole=0
+        reviewed=0
         case "${GITHUB_EVENT_NAME:-}:${GITHUB_REF:-}" in
-            push:refs/heads/main | release:*) whole=1 ;;
-            workflow_dispatch:refs/heads/main)
+            push:refs/heads/main | release:*) whole=1 reviewed=1 ;;
+            workflow_dispatch:refs/heads/main | schedule:refs/heads/main)
+                reviewed=1
                 case "${GITHUB_JOB:-}" in alpha | alpha-apple) whole=1 ;; esac ;;
         esac
+        instance="isomer"
+        if [ $reviewed -eq 0 ]; then instance="isomer-unreviewed"; fi
         secret_dir="$HOME/.config/isomer-ci"
         (umask 077 && mkdir -p "$secret_dir")
         chmod 700 "$secret_dir"
@@ -128,7 +141,7 @@ setup)
             { if command -v sha256sum > /dev/null; then sha256sum; else shasum -a 256; fi; } | cut -c1-16)"
         {
             echo "common --config=buildbuddy"
-            echo "common --remote_instance_name=isomer-$graph"
+            echo "common --remote_instance_name=$instance-$graph"
             printf 'common --remote_header=x-buildbuddy-api-key=%s\n' "$BUILDBUDDY_API_KEY"
             printf 'common --bes_header=x-buildbuddy-api-key=%s\n' "$BUILDBUDDY_API_KEY"
             if [ $whole -eq 1 ]; then echo "common --remote_download_all"; fi
@@ -136,7 +149,7 @@ setup)
         unset BUILDBUDDY_API_KEY
         secret_rc="$(cd "$secret_dir" && here)/buildbuddy.bazelrc"
         lines+=("try-import $secret_rc")
-        echo "ci_bazel: BuildBuddy's remote cache, read and written$([ $whole -eq 1 ] && echo ", every output downloaded") (${GITHUB_EVENT_NAME:-}, ${GITHUB_REF:-}, ${GITHUB_JOB:-})"
+        echo "ci_bazel: BuildBuddy's remote cache ($instance), read and written$([ $whole -eq 1 ] && echo ", every output downloaded") (${GITHUB_EVENT_NAME:-}, ${GITHUB_REF:-}, ${GITHUB_JOB:-})"
     else
         # A fork's pull request (GitHub gives it no secrets), or a builder's own.
         echo "ci_bazel: no BUILDBUDDY_API_KEY: no remote cache, GitHub's cache alone"
