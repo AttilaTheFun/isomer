@@ -265,6 +265,20 @@ a repository of its own):
   (`RenderNode.keepsItsBuild`), so a partial frame's patch is diffed along
   the changed path only.
 
+- **A view's state lasts as long as the view** (State.swift's section of
+  that name). State is kept by the view's path, and goes when a build no
+  longer reaches the path: each build records the views whose state it
+  connects, a reused subtree hands over those its cache entry recorded
+  (`_BuildCacheEntry.owners`), and a container that keeps views it doesn't
+  build registers their places each frame (`keepState(under:)`: a TabView's
+  other tabs, a stack's lower levels, a geometry reader's content;
+  `keepStateOfRows(of:)`: a List's rows off screen). A whole build drops
+  every other owner's state; a view built alone drops what was inside it
+  and isn't now, found through the owners' tree (`StateStorage.parents`,
+  `children`). Its animations go too. `.id(_:)` is part of the path, so a
+  new id is a new view. A container that builds only some of what it holds
+  must register the rest, or their state goes when they are hidden.
+
 ## What this repo is
 
 A cross-platform **SwiftUI subset**: one Bazel module builds the same SwiftUI
@@ -372,11 +386,13 @@ apple or windows, and MODULE.bazel; tools/ci/ci_bazel.sh: written by
 main's builds alone, trimmed to stay within GitHub's 10 GB a repository),
 and, on this repository's own runs, in BuildBuddy's remote cache
 (.bazelrc's `--config=buildbuddy`, its key the BUILDBUDDY_API_KEY secret,
-read and write, which the workflow hands ci_bazel.sh's setup alone and only
-in runs on main and a published release's: written by main's builds and
-the release jobs, read by main's runs by hand; pull requests, whose
-scripts could upload with it, build on GitHub's cache alone until a
-read-only key, BUILDBUDDY_READ_KEY, is theirs). CI follows the owner's policy for protected repositories
+which the workflow hands ci_bazel.sh's setup alone, in every job on
+GitHub's runners, before a merge and after it: each reads and writes, a
+pull request's and a branch's in an instance of their own (`-unreviewed`)
+so nothing unreviewed reaches the signed builds' cache, and a fork's pull
+request, which GitHub gives no secrets, builds on GitHub's cache alone; the owner, 2026-11-23: the public repositories' CI on
+GitHub's runners with BuildBuddy, the private ones' on Nimbus' runners and
+caches). CI follows the owner's policy for protected repositories
 (AttilaTheFun/reviews' docs/CI_POLICY.md) and the shape the owner set on
 2026-11-08 (build.yml's header): the tests without a GUI before a merge,
 every build after one, the GUI tests by hand, and the screenshot proof

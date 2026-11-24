@@ -9,6 +9,7 @@ import Foundation
 import SwiftUI  // IsomerCore, aliased (BUILD.bazel)
 import Observation
 import IsomerSwiftUI
+import SwiftProtobuf
 
 struct ToggleScreen: View {
     var body: some View {
@@ -917,7 +918,9 @@ func checkLazyRows(_ mock: MockRenderer) {
 }
 
 func findTextInTree(_ node: RenderNode, _ value: String) -> Bool {
-    var buffer = ByteBuffer(bytes: FlatTreeEncoder().encode(root: node))
+    let bytes = FlatTreeEncoder().encode(root: node)
+    checkWireBytes(tree: bytes)
+    var buffer = ByteBuffer(bytes: bytes)
     return findText(getRoot(byteBuffer: &buffer) as IsoFlat_Node, value)
 }
 
@@ -2947,7 +2950,13 @@ struct Main {
         checkVolatileSites()
         checkAnimatedTransforms(mock)
         checkAnimationsEndWithTheirViews(mock)
+        checkStateLifetime(mock)
+        checkStateStorage(mock)
+        checkStateBuiltOutsideBuilds(mock)
+        checkClassState(mock)
+        checkWholeFrameReasons(mock)
         checkOpenURLAfterPartialFrames()
+        checkIDsInPaths()
 
         // Row actions: the tagged row is a tap target and carries its menu.
         Runtime.shared.installRootView { RowScreen() }
@@ -2968,6 +2977,9 @@ struct Main {
                "frames built in place match the whole builds (\(Runtime.shared.partialMismatches) of \(Runtime.shared.partialFrameCount) differ)")
         print("frames built in place: \(Runtime.shared.partialFrameCount)")
         expect(_viewKindMismatches.isEmpty, "view kinds read from Body match the casts (\(_viewKindMismatches.prefix(5)))")
+        expect(wireChecked.trees > 100 && wireChecked.patches > 10,
+               "the encoder's trees and patches were checked against SwiftProtobuf's (\(wireChecked))")
+        print("wire bytes checked against SwiftProtobuf's: \(wireChecked.trees) trees, \(wireChecked.patches) patches")
 
         if failures > 0 {
             print("FAILED: \(failures) check(s)")
@@ -3061,6 +3073,7 @@ func fullDescribe(_ tree: RenderNode) -> String {
 /// reference implementation of what every host does (Compose FlatTree.applyPatch,
 /// etc.): `attrsOnly` keeps the retained children; otherwise rebuild the subtree.
 func applyPatch(_ bytes: [UInt8], into root: inout PatchNode?) -> Int {
+    checkWireBytes(patch: bytes)
     var buffer = ByteBuffer(bytes: bytes)
     let patch = getRoot(byteBuffer: &buffer) as IsoFlat_Patch
     for index in 0..<patch.ops.count {
@@ -3883,4 +3896,709 @@ func checkAnimationsEndWithTheirViews(_ mock: MockRenderer) {
         expect(findTextInTree(Runtime.shared.retainedTree!, "Count 2"), "turning beside the counter\(label): the counter's change shows")
         expect(Runtime.shared.partialMismatches == mismatches, "the frames built in place are the whole builds'\(label)")
     }
+}
+
+
+// MARK: - A view's state lasts as long as the view
+
+/// Each tally's count, written through its binding as a tap would.
+nonisolated(unsafe) var lifetimeCounts: [String: Binding<Int>] = [:]
+nonisolated(unsafe) var lifetimeShows: Binding<Bool>?
+nonisolated(unsafe) var lifetimeItems: Binding<[Int]>?
+nonisolated(unsafe) var lifetimeTab: Binding<Int>?
+nonisolated(unsafe) var lifetimePath: Binding<[Int]>?
+nonisolated(unsafe) var lifetimeHeldTaps = 0
+
+/// A count of its own, which starts at 0.
+struct LifetimeTally: View {
+    let name: String
+    @State private var count = 0
+    var body: some View {
+        let _ = (lifetimeCounts[name] = $count)
+        Text("\(name) \(count)")
+    }
+}
+
+/// The same, holding a closure: its inputs can't be compared, so no cache
+/// entry keeps it, and a view around it reused hands it over as reached
+/// from its own entry.
+struct LifetimeHeldTally: View {
+    let name: String
+    let onTap: () -> Void
+    @State private var count = 0
+    var body: some View {
+        let _ = (lifetimeCounts[name] = $count)
+        Button("\(name) \(count)", action: onTap)
+    }
+}
+
+/// An if's branch, a ForEach's items, a view holding a closure and one
+/// left alone.
+struct LifetimeScreen: View {
+    @State private var shows = true
+    @State private var items = [1, 2]
+    var body: some View {
+        let _ = (lifetimeShows = $shows)
+        let _ = (lifetimeItems = $items)
+        VStack {
+            if shows { LifetimeTally(name: "Branch") } else { Text("The other branch") }
+            ForEach(items, id: \.self) { item in LifetimeTally(name: "Item \(item)") }
+            LifetimeHeldTally(name: "Held") { lifetimeHeldTaps += 1 }
+            LifetimeTally(name: "Stays")
+        }
+    }
+}
+
+struct LifetimeTabs: View {
+    @State private var tab = 0
+    var body: some View {
+        let _ = (lifetimeTab = $tab)
+        TabView(selection: $tab) {
+            LifetimeTally(name: "First tab").tabItem { Text("One") }.tag(0)
+            LifetimeTally(name: "Second tab").tabItem { Text("Two") }.tag(1)
+        }
+    }
+}
+
+struct LifetimeStack: View {
+    @State private var path: [Int] = []
+    var body: some View {
+        let _ = (lifetimePath = $path)
+        NavigationStack(path: $path) {
+            LifetimeTally(name: "Level 0")
+                .navigationDestination(for: Int.self) { level in LifetimeTally(name: "Level \(level)") }
+        }
+    }
+}
+
+/// A List longer than the rows it builds at once.
+struct LifetimeList: View {
+    var body: some View {
+        List {
+            ForEach(0..<200) { row in LifetimeTally(name: "Row \(row)") }
+        }
+    }
+}
+
+/// Each case at a place of its own, each pass too (a case of its own): a
+/// place shared with the pass before would hold its views, and their state.
+/// Each in a stack, so its view's node is not the tree's root, which no
+/// view is built again alone in place of.
+struct LifetimeRoot: View {
+    let place: Int
+    var body: some View {
+        VStack {
+            switch place {
+            case 0, 1: if place == 0 { LifetimeScreen() } else { LifetimeScreen() }
+            case 2, 3: if place == 2 { LifetimeTabs() } else { LifetimeTabs() }
+            case 4, 5: if place == 4 { LifetimeStack() } else { LifetimeStack() }
+            default: if place == 6 { LifetimeList() } else { LifetimeList() }
+            }
+        }
+    }
+}
+
+/// A view's state lasts as long as the view, as in SwiftUI: an if's branch
+/// swapped away and back, or a ForEach's item removed and added again,
+/// starts again from 0, in a frame built in place and in one built whole;
+/// a view that stays keeps its count, one holding a closure too. A TabView's
+/// unselected tab, a stack's level under the one shown and a List's row off
+/// the rows it builds keep theirs; a level popped and pushed again starts
+/// again. Each with partial frames checked against whole builds, and not.
+@MainActor
+func checkStateLifetime(_ mock: MockRenderer) {
+    let verifying = Runtime.shared.verifyPartialFrames
+    defer { Runtime.shared.verifyPartialFrames = verifying }
+    for verify in [true, false] {
+        Runtime.shared.verifyPartialFrames = verify
+        let label = verify ? " (checked against a whole build)" : ""
+        func settle() { var n = 0; while Runtime.shared.wantsFrame && n < 40 { Runtime.shared.renderFrame(); n += 1 } }
+        func shows(_ text: String) -> Bool { findTextInTree(Runtime.shared.retainedTree!, text) }
+        func start(_ place: Int) {
+            lifetimeCounts = [:]
+            Runtime.shared.installRootView { LifetimeRoot(place: place) }
+            Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+            settle()
+        }
+        func tap(_ name: String) {
+            guard let count = lifetimeCounts[name] else { return expect(false, "\(name)\(label): its tally is built") }
+            count.wrappedValue += 1
+            settle()
+        }
+        /// A change, in a frame built in place (or asked to be built whole),
+        /// as a whole build of it would be.
+        func frame(_ step: String, whole: Bool = false, _ change: () -> Void) {
+            let partials = Runtime.shared.partialFrameCount, mismatches = Runtime.shared.partialMismatches
+            change()
+            if whole { Runtime.shared.setNeedsRender() }
+            settle()
+            let stats = Runtime.shared.frameStats
+            expect(Runtime.shared.partialMismatches == mismatches, "\(step)\(label): the frames built in place are the whole builds'")
+            if !whole {
+                expect(Runtime.shared.partialFrameCount > partials,
+                       "\(step)\(label): built in place (\(stats.kind.rawValue): \(stats.detail))")
+            }
+        }
+
+        // An if, a ForEach, a view holding a closure, one left alone.
+        start(verify ? 0 : 1)
+        for name in ["Branch", "Item 1", "Item 2", "Held", "Stays"] { tap(name) }
+        expect(shows("Branch 1") && shows("Item 2 1") && shows("Held 1") && shows("Stays 1"), "the tallies count\(label)")
+        frame("an if's branch swapped away") { lifetimeShows?.wrappedValue = false }
+        expect(shows("The other branch"), "the other branch shows\(label)")
+        frame("and back") { lifetimeShows?.wrappedValue = true }
+        expect(shows("Branch 0"), "an if's branch swapped away and back, in place, starts again\(label)")
+        tap("Branch")
+        frame("an if's branch swapped away, built whole", whole: true) { lifetimeShows?.wrappedValue = false }
+        frame("and back, built whole", whole: true) { lifetimeShows?.wrappedValue = true }
+        expect(shows("Branch 0"), "an if's branch swapped away and back, built whole, starts again\(label)")
+        frame("a ForEach's item removed") { lifetimeItems?.wrappedValue = [1] }
+        expect(!shows("Item 2 1"), "the item is gone\(label)")
+        frame("and added again") { lifetimeItems?.wrappedValue = [1, 2] }
+        expect(shows("Item 2 0"), "a ForEach's item removed and added again starts again\(label)")
+        expect(shows("Item 1 1") && shows("Held 1") && shows("Stays 1"),
+               "the views that stayed keep their counts, the one holding a closure too\(label)")
+        // A whole build that reuses the screen: its views are reached
+        // through its cache entry, the one holding a closure among them.
+        frame("a whole build reusing the screen", whole: true) {}
+        expect(shows("Item 1 1") && shows("Held 1") && shows("Stays 1"),
+               "a whole build reusing them keeps their counts, the one holding a closure too\(label)")
+        tap("Held")
+        expect(shows("Held 2"), "the view holding a closure counts on from its own count\(label)")
+
+        // A TabView: the tab not shown keeps its count.
+        start(verify ? 2 : 3)
+        tap("First tab")
+        frame("the second tab selected", whole: true) { lifetimeTab?.wrappedValue = 1 }
+        expect(shows("Second tab 0") && !shows("First tab 1"), "the second tab shows\(label)")
+        tap("Second tab")
+        frame("the first tab selected again", whole: true) { lifetimeTab?.wrappedValue = 0 }
+        expect(shows("First tab 1"), "a tab not shown keeps its count\(label)")
+        frame("the second tab again", whole: true) { lifetimeTab?.wrappedValue = 1 }
+        expect(shows("Second tab 1"), "and so does the other\(label)")
+
+        // A NavigationStack: a level under the one shown keeps its count; a
+        // level popped doesn't.
+        start(verify ? 4 : 5)
+        tap("Level 0")
+        frame("a level pushed", whole: true) { lifetimePath?.wrappedValue = [1] }
+        expect(shows("Level 1 0") && !shows("Level 0 1"), "the level pushed shows\(label)")
+        tap("Level 1")
+        frame("a level pushed above it", whole: true) { lifetimePath?.wrappedValue = [1, 2] }
+        frame("and popped", whole: true) { lifetimePath?.wrappedValue = [1] }
+        expect(shows("Level 1 1"), "a level under the one shown keeps its count\(label)")
+        frame("popped to the root", whole: true) { lifetimePath?.wrappedValue = [] }
+        expect(shows("Level 0 1"), "the root under the levels keeps its count\(label)")
+        frame("the level pushed again", whole: true) { lifetimePath?.wrappedValue = [1] }
+        expect(shows("Level 1 0"), "a level popped and pushed again starts again\(label)")
+
+        // A List: a row off the rows it builds keeps its count.
+        start(verify ? 6 : 7)
+        tap("Row 5")
+        guard let list = Runtime.shared.listsWithUnbuiltRows.first?.list else {
+            expect(false, "the list leaves rows unbuilt\(label)")
+            continue
+        }
+        Runtime.shared.showListRows(list, 150...160)
+        settle()
+        expect(!shows("Row 5 1") && !shows("Row 5 0"), "the row is off the rows built\(label)")
+        Runtime.shared.showListRows(list, 0...10)
+        settle()
+        expect(shows("Row 5 1"), "a row off the rows built keeps its count\(label)")
+    }
+}
+
+
+// MARK: - Why a frame is built whole
+
+/// Renders as the headless head does (headless/libraries/swift_ui/
+/// HeadlessHead.swift): the tree laid out with its chrome drawn, as the
+/// self-drawing renderer lays it out, then encoded for its handlers and
+/// appearances. Nothing drawn.
+final class HeadlessLikeRenderer: TreeRenderer {
+    let semanticNavigation = false
+    private let encoder = FlatTreeEncoder()
+    private(set) var lastTree: RenderNode?
+
+    init() { encoder.semantic = true }
+
+    func render(tree: RenderNode) {
+        let runtime = Runtime.shared
+        let reports = runtime.layoutTree(root: tree)
+        _ = runtime.layoutPresentations()
+        _ = encoder.encodePatch(root: tree)
+        runtime.installTreeHandlers(encoder.handlers)
+        runtime.fireTreeAppearances(encoder.appearances, disappearances: encoder.disappearances)
+        lastTree = tree
+        for report in reports { report() }
+    }
+}
+
+nonisolated(unsafe) var refusalTap: (@MainActor () -> Void)?
+
+struct RefusalCounter: View {
+    @State private var count = 0
+    var body: some View {
+        let _ = (refusalTap = { count += 1 })
+        HStack {
+            Text("Count \(count)")
+            Button("+") { count += 1 }
+        }
+    }
+}
+
+struct RefusalScreen: View {
+    var body: some View {
+        NavigationStack {
+            VStack {
+                Text("Refusals")
+                RefusalCounter()
+            }
+            .navigationTitle("Counter")
+        }
+    }
+}
+
+/// A frame built whole says why. Under a renderer that draws its chrome (the
+/// headless head's, the GPU renderer's) a tap's frame is built whole for
+/// that reason, by design: the renderer expands chrome into the tree, and
+/// drawn navigation animates in the core. It is not the root's environment,
+/// which is the same frame to frame there (the label these frames had
+/// before). The same tap under a component-system renderer is built in
+/// place.
+@MainActor
+func checkWholeFrameReasons(_ previous: MockRenderer) {
+    let logChecked = Runtime.shared.renderLogChecked, logEnabled = Runtime.shared.renderLogEnabled
+    Runtime.shared.renderLogChecked = true
+    Runtime.shared.renderLogEnabled = true
+    defer {
+        Runtime.shared.renderLogChecked = logChecked
+        Runtime.shared.renderLogEnabled = logEnabled
+        Renderer.bind(previous)
+    }
+    func settle() { var n = 0; while Runtime.shared.wantsFrame && n < 40 { Runtime.shared.renderFrame(); n += 1 } }
+
+    let headless = HeadlessLikeRenderer()
+    Renderer.bind(headless)
+    Runtime.shared.installRootView { RefusalScreen() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    settle()
+    for step in 1...2 {
+        refusalTap?()
+        settle()
+        let stats = Runtime.shared.frameStats
+        expect(stats.kind == .whole && stats.detail == "drawn chrome",
+               "a tap's frame under drawn chrome is built whole for that reason, \(step) (\(stats.kind.rawValue): \(stats.detail))")
+        expect(findTextInTree(headless.lastTree!, "Count \(step)"), "and shows the count, \(step)")
+    }
+
+    Renderer.bind(previous)
+    Runtime.shared.installRootView { RefusalScreen() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    settle()
+    let partials = Runtime.shared.partialFrameCount
+    refusalTap?()
+    settle()
+    let stats = Runtime.shared.frameStats
+    expect(Runtime.shared.partialFrameCount > partials && stats.kind == .partial,
+           "the same tap under a component-system renderer is built in place (\(stats.kind.rawValue): \(stats.detail))")
+}
+
+
+// MARK: - A state's storage
+
+nonisolated(unsafe) var storageTitlesMade = 0
+nonisolated(unsafe) var storageParentPass: Binding<Int>?
+nonisolated(unsafe) var storageChildTap: (@MainActor () -> Void)?
+nonisolated(unsafe) var storageHandTap: (@MainActor () -> Void)?
+
+func makeStorageTitle() -> String {
+    storageTitlesMade += 1
+    return "Title"
+}
+
+/// Four states, one private with an initial value made by a call (a
+/// LazyState), the rest `State`s; a child writing one through `$count`, and
+/// another writing one through a binding made by hand.
+struct StorageScreen: View {
+    let pass: Int
+    @State private var title = makeStorageTitle()
+    @State var count = 0
+    @State var name = "a"
+    @State var manual = 0
+    var body: some View {
+        VStack {
+            Text("\(title) pass \(pass) count \(count) manual \(manual) name \(name)")
+            StorageCounter(value: $count)
+            StorageHand(value: Binding(get: { manual }, set: { manual = $0 }))
+        }
+    }
+}
+
+/// Writes its binding as its button's action would.
+struct StorageCounter: View {
+    @Binding var value: Int
+    var body: some View {
+        let _ = (storageChildTap = { value += 1 })
+        Text("Counter \(value)")
+    }
+}
+
+struct StorageHand: View {
+    let value: Binding<Int>
+    var body: some View {
+        let _ = (storageHandTap = { value.wrappedValue += 10 })
+        Text("Hand \(value.wrappedValue)")
+    }
+}
+
+/// Makes the screen again whenever its own state changes: in a frame built
+/// in place, the screen's value is made anew and built.
+struct StorageParent: View {
+    @State private var pass = 0
+    var body: some View {
+        let _ = (storageParentPass = $pass)
+        StorageScreen(pass: pass)
+    }
+}
+
+/// Each pass at a place of its own (state is kept by place).
+struct StorageRoot: View {
+    let place: Int
+    var body: some View {
+        VStack {
+            if place == 0 { StorageParent() } else { StorageParent() }
+        }
+    }
+}
+
+/// The class instances `value` holds, by their paths in it.
+func classReferences(in value: Any, at path: String = "", depth: Int = 0) -> [String] {
+    if type(of: value) is AnyClass { return [path] }
+    guard depth < 6 else { return [] }
+    var found: [String] = []
+    for (index, child) in Mirror(reflecting: value).children.enumerated() {
+        found += classReferences(in: child.value, at: path + "." + (child.label ?? String(index)), depth: depth + 1)
+    }
+    return found
+}
+
+/// `@State` is stored as Apple's is: a view's value holds each state's
+/// value (or, a LazyState, the closure making it) inline and no object, and
+/// the runtime writes the state's location into the copy of the view it
+/// builds. A location is made once per state, however often the view's
+/// value is made and built (in frames built in place, built whole, and
+/// built whole with nothing reused), and a private state's initial value
+/// once. A child writing through `$count`, and one writing through a
+/// binding made by hand, change the state, in frames built in place.
+@MainActor
+func checkStateStorage(_ mock: MockRenderer) {
+    let made = StorageScreen(pass: 0)
+    let objects = classReferences(in: made)
+    expect(objects.isEmpty, "a view's value as made holds no object for its states (\(objects))")
+    let locationFields = Mirror(reflecting: made).children.filter { child in
+        Mirror(reflecting: child.value).children.contains { $0.label == "_location" }
+    }
+    expect(locationFields.count == 4, "each of its four states has a location to be given (\(locationFields.count))")
+    #if compiler(>=6.4)
+    // (The property wrapper, before 6.4, makes it with each view value.)
+    expect(storageTitlesMade == 0, "a private state's initial value isn't made with the view's value (\(storageTitlesMade))")
+    #endif
+
+    let verifying = Runtime.shared.verifyPartialFrames
+    defer {
+        Runtime.shared.verifyPartialFrames = verifying
+        Runtime.shared.subtreeReuseEnabled = true
+    }
+    for verify in [true, false] {
+        Runtime.shared.verifyPartialFrames = verify
+        let label = verify ? " (checked against a whole build)" : ""
+        func settle() { var n = 0; while Runtime.shared.wantsFrame && n < 40 { Runtime.shared.renderFrame(); n += 1 } }
+        func shows(_ text: String) -> Bool { findTextInTree(Runtime.shared.retainedTree!, text) }
+        func frame(_ step: String, _ change: () -> Void) {
+            let partials = Runtime.shared.partialFrameCount, mismatches = Runtime.shared.partialMismatches
+            change()
+            settle()
+            let stats = Runtime.shared.frameStats
+            expect(Runtime.shared.partialMismatches == mismatches, "\(step)\(label): the frames built in place are the whole builds'")
+            expect(Runtime.shared.partialFrameCount > partials,
+                   "\(step)\(label): built in place (\(stats.kind.rawValue): \(stats.detail))")
+        }
+
+        storageTitlesMade = 0
+        let locations = Runtime.shared.stateLocationsMade
+        Runtime.shared.installRootView { StorageRoot(place: verify ? 0 : 1) }
+        Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+        settle()
+        expect(Runtime.shared.stateLocationsMade - locations == 5,
+               "a location for each state, the screen's four and its parent's\(label) (\(Runtime.shared.stateLocationsMade - locations))")
+        expect(shows("Title pass 0 count 0 manual 0 name a"), "the screen reads its states\(label)")
+
+        // The parent's state changes: the screen's value made again and
+        // built, in place.
+        for pass in 1...3 {
+            frame("the screen made again, pass \(pass)") { storageParentPass?.wrappedValue = pass }
+            expect(shows("Title pass \(pass) count 0 manual 0 name a"), "the screen made again shows pass \(pass)\(label)")
+        }
+        // Built whole, every view built again (none reused).
+        Runtime.shared.subtreeReuseEnabled = false
+        for _ in 0..<3 {
+            Runtime.shared.setNeedsRender()
+            settle()
+        }
+        Runtime.shared.subtreeReuseEnabled = true
+        Runtime.shared.setNeedsRender()
+        settle()
+
+        frame("the child writes through $count") { storageChildTap?() }
+        expect(shows("Title pass 3 count 1 manual 0 name a") && shows("Counter 1"), "a child's write through $count shows\(label)")
+        frame("a binding made by hand") { storageHandTap?() }
+        expect(shows("Title pass 3 count 1 manual 10 name a") && shows("Hand 10"), "a write through a binding made by hand shows\(label)")
+        frame("the screen made again after the writes") { storageParentPass?.wrappedValue = 4 }
+        frame("the child writes again") { storageChildTap?() }
+        frame("and the hand-made binding") { storageHandTap?() }
+        expect(shows("Title pass 4 count 2 manual 20 name a") && shows("Counter 2") && shows("Hand 20"),
+               "the states kept their values through the screen made again\(label)")
+
+        expect(Runtime.shared.stateLocationsMade - locations == 5,
+               "no location made again, however often the views were made and built\(label) (\(Runtime.shared.stateLocationsMade - locations))")
+        #if compiler(>=6.4)
+        expect(storageTitlesMade == 1, "a private state's initial value is made once\(label) (\(storageTitlesMade))")
+        #endif
+    }
+}
+
+
+// MARK: - Ids with "/", "#" or "%" in a view's path
+
+/// ForEach rows whose ids hold a path's separator, a state's "#" or an
+/// escape's "%": each row's state is its own ("a/b" and "a%2Fb" are two
+/// rows, not one), and a row removed and added again starts afresh while the
+/// others keep theirs.
+nonisolated(unsafe) var pathIDCounts: [String: Binding<Int>] = [:]
+nonisolated(unsafe) var pathIDItems: Binding<[String]>?
+
+struct PathIDRoot: View {
+    let place: Int
+    var body: some View {
+        if place == 0 { PathIDScreen() } else { PathIDScreen() }
+    }
+}
+
+struct PathIDScreen: View {
+    @State private var items = ["a/b", "a#b", "a%2Fb"]
+    var body: some View {
+        let _ = (pathIDItems = $items)
+        VStack {
+            ForEach(items, id: \.self) { item in PathIDCounter(name: item) }
+        }
+    }
+}
+
+struct PathIDCounter: View {
+    let name: String
+    @State private var count = 0
+    var body: some View {
+        let _ = (pathIDCounts[name] = $count)
+        Text("\(name): \(count)")
+    }
+}
+
+@MainActor
+func checkIDsInPaths() {
+    let verifying = Runtime.shared.verifyPartialFrames
+    defer { Runtime.shared.verifyPartialFrames = verifying }
+    for verify in [true, false] {
+        Runtime.shared.verifyPartialFrames = verify
+        let label = verify ? " (checked against a whole build)" : ""
+        func settle() { var n = 0; while Runtime.shared.wantsFrame && n < 40 { Runtime.shared.renderFrame(); n += 1 } }
+        func shows(_ text: String) -> Bool { findTextInTree(Runtime.shared.retainedTree!, text) }
+        pathIDCounts = [:]
+        Runtime.shared.installRootView { PathIDRoot(place: verify ? 0 : 1) }
+        Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+        settle()
+        let mismatches = Runtime.shared.partialMismatches
+        pathIDCounts["a/b"]?.wrappedValue = 1
+        pathIDCounts["a#b"]?.wrappedValue = 2
+        pathIDCounts["a%2Fb"]?.wrappedValue = 3
+        settle()
+        expect(shows("a/b: 1") && shows("a#b: 2") && shows("a%2Fb: 3"), "ids in paths\(label): each row keeps its own count")
+        pathIDItems?.wrappedValue = ["a#b", "a%2Fb"]
+        settle()
+        pathIDItems?.wrappedValue = ["a/b", "a#b", "a%2Fb"]
+        settle()
+        expect(shows("a/b: 0"), "ids in paths\(label): a row removed and added again starts afresh")
+        expect(shows("a#b: 2") && shows("a%2Fb: 3"), "ids in paths\(label): the other rows keep theirs")
+        expect(Runtime.shared.partialMismatches == mismatches, "ids in paths\(label): the frames built in place are the whole builds'")
+    }
+}
+
+
+// MARK: - State first kept outside a build
+
+/// A renderer that lays the tree out as the self-drawing one does, its
+/// chrome drawn (the headless head's way): a menu's drawn pop-up, and the
+/// pop-up's rows once it opens, are built as the tree is laid out, outside
+/// the frame's build.
+final class LayingOutMockRenderer: TreeRenderer {
+    let semanticNavigation = false
+    private(set) var lastTree: RenderNode?
+    private(set) var layers: [RenderNode] = []
+
+    func render(tree: RenderNode) {
+        let reports = Runtime.shared.layoutTree(root: tree)
+        layers = Runtime.shared.layoutPresentations()
+        lastTree = tree
+        for report in reports { report() }
+    }
+}
+
+nonisolated(unsafe) var drawnMenuPlace = 0
+
+/// A menu whose place is new each time `drawnMenuPlace` changes (its view
+/// given a new id): each one a menu the app hasn't drawn before.
+struct DrawnMenuHolder: View {
+    let place: Int
+    var body: some View {
+        VStack {
+            Text("Holder \(place)")
+            Menu("Actions \(place)") {
+                Button("Rename") {}
+                Button("Delete") {}
+            }
+        }
+    }
+}
+
+struct DrawnMenuScreen: View {
+    var body: some View {
+        VStack {
+            Text("Menus")
+            DrawnMenuHolder(place: drawnMenuPlace).id(drawnMenuPlace)
+        }
+    }
+}
+
+/// The state of views built outside a frame's build (a drawn menu, and its
+/// pop-up's rows once it opens) goes with the view it was built for: opening
+/// and closing many distinct menus leaves the state kept as it was.
+@MainActor
+func checkStateBuiltOutsideBuilds(_ previous: MockRenderer) {
+    let drawing = LayingOutMockRenderer()
+    Renderer.bind(drawing)
+    defer { Renderer.bind(previous) }
+    func settle() { var n = 0; while Runtime.shared.wantsFrame && n < 40 { Runtime.shared.renderFrame(); n += 1 } }
+    drawnMenuPlace = 0
+    Runtime.shared.installRootView { DrawnMenuScreen() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    settle()
+
+    var opened = 0
+    var counts: [(owners: Int, states: Int)] = []
+    for place in 0..<24 {
+        if place > 0 {
+            drawnMenuPlace = place
+            Runtime.shared.setNeedsRender()
+            settle()
+        }
+        guard let tree = drawing.lastTree else { return expect(false, "the drawn menus render") }
+        // Opened, its pop-up's rows built; then closed by one of them.
+        if HostFrame(tree).tap("Actions \(place)") {
+            settle()
+            if let layer = drawing.layers.last, HostFrame(layer).tap("Rename") {
+                opened += 1
+                settle()
+            }
+        }
+        counts.append((Runtime.shared.stateOwnerCount, Runtime.shared.keptStateCount))
+    }
+    expect(opened == 24, "each drawn menu opens and closes by its row (\(opened) of 24)")
+    let first = counts[1], last = counts[counts.count - 1]
+    expect(last.owners <= first.owners && last.states <= first.states,
+           "the views kept and their states stay as many, however many distinct menus were opened (owners \(counts.map(\.owners)), states \(counts.map(\.states)))")
+}
+
+// MARK: - A class's state
+
+nonisolated(unsafe) var classStateWrite: (@MainActor () -> Void)?
+
+/// A view that is a class (Apple's SwiftUI wants structs): its fields can't
+/// be read in place, so its state gets no location. (Its storage written by
+/// hand: the `@State` macro, as Apple's, expands to a `nonmutating` setter,
+/// which a class can't have.)
+final class ClassStateView: View {
+    var _count = State(wrappedValue: 0)
+    var body: some View {
+        let count = _count
+        let _ = (classStateWrite = { count.wrappedValue += 1 })
+        Text("Class count \(count.wrappedValue)")
+    }
+}
+
+struct ClassStateScreen: View {
+    var body: some View {
+        VStack {
+            Text("Class")
+            ClassStateView()
+        }
+    }
+}
+
+/// A class's `@State` can't be kept: the runtime says so once for the type,
+/// and the view shows its initial value without failing.
+@MainActor
+func checkClassState(_ mock: MockRenderer) {
+    func settle() { var n = 0; while Runtime.shared.wantsFrame && n < 40 { Runtime.shared.renderFrame(); n += 1 } }
+    hostLogs = []
+    Runtime.shared.installRootView { ClassStateScreen() }
+    Runtime.shared.start(host: StubHost(), width: 390, height: 844)
+    settle()
+    for _ in 0..<3 {
+        classStateWrite?()
+        Runtime.shared.setNeedsRender()
+        settle()
+    }
+    expect(findTextInTree(Runtime.shared.retainedTree!, "Class count 0"), "a class's state shows its initial value")
+    let said = hostLogs.filter { $0.contains("ClassStateView's @State can't be kept") }
+    expect(said.count == 1, "a class's state that can't be kept is said once (\(said))")
+}
+
+
+// MARK: - The wire format, by hand
+
+nonisolated(unsafe) var wireChecked = (trees: 0, patches: 0)
+
+/// The encoder writes tree.proto by hand and the reader reads it by hand
+/// (TreeEncoder.swift, TreeReader.swift): the bytes are SwiftProtobuf's own
+/// for the same message (parsed and written again, they come out the same),
+/// and the reader reads them as SwiftProtobuf's parse, mapped field by field,
+/// reads them. Every tree and patch the checks encode is held to this.
+func checkWireBytes(tree bytes: [UInt8]) {
+    wireChecked.trees += 1
+    guard let wire = try? Wire_Node(serializedBytes: bytes) else { return expect(false, "a tree's bytes parse as a Node") }
+    let again: [UInt8] = (try? wire.serializedBytes()) ?? []
+    if again != bytes { expect(false, "a tree's bytes are SwiftProtobuf's (\(bytes.count) bytes, SwiftProtobuf's \(again.count))") }
+    let read = try? IsoFlat_Node(treeBytes: bytes)
+    if read.map({ String(describing: $0) }) != String(describing: IsoFlat_Node(wire)) {
+        expect(false, "the reader reads a tree as SwiftProtobuf's parse does")
+    }
+}
+
+func checkWireBytes(patch bytes: [UInt8]) {
+    wireChecked.patches += 1
+    guard let wire = try? Wire_Patch(serializedBytes: bytes) else { return expect(false, "a patch's bytes parse as a Patch") }
+    let again: [UInt8] = (try? wire.serializedBytes()) ?? []
+    if again != bytes { expect(false, "a patch's bytes are SwiftProtobuf's (\(bytes.count) bytes, SwiftProtobuf's \(again.count))") }
+    let read = try? IsoFlat_Patch(patchBytes: bytes)
+    let expected = wire.ops.map { op -> String in
+        var parsed = String(describing: op.path) + "|" + String(describing: op.attrsOnly) + "|" + String(describing: op.order)
+        parsed += "|" + String(describing: op.reorder) + "|" + (op.hasNode ? String(describing: IsoFlat_Node(op.node)) : "-")
+        return parsed + "|" + op.inserts.map { String(describing: IsoFlat_Node($0)) }.joined(separator: ",")
+    }
+    let got = read?.ops.map { op -> String in
+        var parsed = String(describing: op.path ?? "") + "|" + String(describing: op.attrsOnly) + "|" + String(describing: op.order)
+        parsed += "|" + String(describing: op.hasOrder) + "|" + (op.node.map { String(describing: $0) } ?? "-")
+        return parsed + "|" + op.inserts.map { String(describing: $0) }.joined(separator: ",")
+    }
+    if got != expected { expect(false, "the reader reads a patch as SwiftProtobuf's parse does") }
 }

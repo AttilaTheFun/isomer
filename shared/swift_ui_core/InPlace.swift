@@ -45,9 +45,10 @@
 // And a frame is partial only when nothing else could have changed: the
 // root's environment is the same (colour scheme, scene phase), the
 // renderer keeps the tree as given (component-system renderers: the
-// self-drawing one expands chrome into it) and no navigation transition is
+// self-drawing one, and the headless head, which lays its tree out as that
+// one does, expand chrome into it) and no navigation transition is
 // running. Otherwise, or when a check fails partway, the whole tree is
-// built, as before.
+// built, as before; the frame and render logs say which check it was.
 //
 // With `ISO_VERIFY_PARTIAL` in the host's environment (or
 // `verifyPartialFrames` set), each partial frame is followed by a whole
@@ -172,14 +173,34 @@ extension Runtime {
     /// The sites to build again alone this frame, outermost first; nil when
     /// the frame is to be built whole.
     func planPartialFrame(rootEnv: EnvironmentValues) -> [_RebuildSite]? {
+        // Each refusal says its own reason: one label for them all ("the
+        // root's environment") sent a look at an environment that was the
+        // same frame to frame, when the host drew its chrome.
+        guard keepsRebuildSites else {
+            // A self-drawing renderer (the GPU renderer, the headless head,
+            // which lays its tree out as that one does) expands its chrome
+            // into the tree, and its drawn navigation animates in the core:
+            // its frames are built whole, by design.
+            notePartialRefused(!Renderer.hostRendersNavigation ? "drawn chrome"
+                : !partialFramesEnabled ? "partial frames off" : "subtree reuse off")
+            return nil
+        }
+        guard retainedTree != nil, let last = lastRootEnv else { return nil }
+        guard !wholeFrameRequested, !treeVolatile, !navTransitionActive else {
+            notePartialRefused(wholeFrameRequested ? "asked for" : treeVolatile ? "a volatile build" : "a transition")
+            return nil
+        }
+        guard last.scenePhase == rootEnv.scenePhase else {
+            notePartialRefused("the scene phase")
+            return nil
+        }
+        guard last._sameForReuse(rootEnv) else {
+            notePartialRefused("the root's environment" + _frameLogEnvironmentDifference(last, rootEnv))
+            return nil
+        }
         // (The size class is worked out from the width as it is read.)
-        guard keepsRebuildSites, retainedTree != nil, !wholeFrameRequested, !treeVolatile, !navTransitionActive,
-              let last = lastRootEnv, last.scenePhase == rootEnv.scenePhase, last._sameForReuse(rootEnv),
-              lastCompactWidth == compactWidth
-        else {
-            notePartialRefused(retainedTree == nil || lastRootEnv == nil ? nil
-                : wholeFrameRequested ? "asked for" : treeVolatile ? "a volatile build"
-                : navTransitionActive ? "a transition" : "the root's environment")
+        guard lastCompactWidth == compactWidth else {
+            notePartialRefused("the size class")
             return nil
         }
         var chosen: [String: _RebuildSite] = [:]
@@ -304,6 +325,8 @@ extension Runtime {
         defer { buildStacks = outside }
         volatileOwnersBuilding = []
         let registered = _frameRegistrations
+        recordingStateOwners = true
+        defer { recordingStateOwners = false }
         for site in sites {
             guard let old = site.node, let trail = _trail(to: old, in: tree), let parent = trail.last else {
                 noteBuiltWhole("\(typeName(site.view)) not in the tree")
@@ -321,6 +344,7 @@ extension Runtime {
             if !ctx.env.animationChosen { ctx.env.animation = transactionAnimation }
             buildCache[site.path] = nil
             buildCacheInnerStack.append([])
+            stateOwnerStack.append([])
             buildEffectStack.append([])
             let readsBefore = _bindingReadKeys.count
             let volatilityBefore = buildVolatility
@@ -333,6 +357,7 @@ extension Runtime {
             }
             let effects = buildEffectStack.removeLast()
             let inner = buildCacheInnerStack.removeLast()
+            let owners = stateOwnerStack.removeLast()
             let reads = Array(_bindingReadKeys[min(readsBefore, _bindingReadKeys.count)...])
             guard let node else {
                 noteBuiltWhole("\(typeName(site.view)) came to another node")
@@ -377,6 +402,11 @@ extension Runtime {
                 }
                 entry.bindingDependencies.formUnion(reads)
                 entry.inner += inner
+                // The views keeping state that it reached and keeps no
+                // entry for (itself, when its inputs can't be compared),
+                // each added once: a site built every frame (a volatile
+                // one) would add them every frame.
+                for owner in owners where !entry.owners.contains(owner) { entry.owners.append(owner) }
                 // Its registrations for the views above are theirs already
                 // (the same as before); its own bookkeeping is added.
                 entry.effects += effects.filter(\.local)
@@ -384,6 +414,9 @@ extension Runtime {
             }
             frameLog?.inPlace.append(typeName(site.view))
         }
+        // The views that were inside the sites and are no longer lose their
+        // state (State.swift).
+        for site in sites { dropStateGone(inside: site.path) }
         // The volatile builds now: those in the sites built are as found.
         let built = sites.map(\.path)
         volatileOwners = volatileOwners.filter { owner in
@@ -421,16 +454,16 @@ extension Runtime {
 @MainActor
 func _buildCompositeAlone(_ view: any View, ctx: inout BuildContext, asPart: Bool) -> RenderNode? {
     _frameLogBuilt(view, ctx: ctx)
-    var build = beginCompositeBuild(view, ctx: ctx)
+    var build = beginCompositeBuild(ctx: ctx)
     build.asPart = asPart
     var sub = ctx.descend(typeName(view))
     guard asPart else {
-        let node = _trackingObservation(at: ctx.path) { buildNode(view: view.body, ctx: &sub) }
+        let node = _trackingObservation(at: ctx.path) { buildNode(view: _connectedBody(of: view, ctx: ctx), ctx: &sub) }
         finishCompositeBuild(build, view: view, ctx: ctx, node: node)
         return node
     }
     var parts: [RenderNode] = []
-    _trackingObservation(at: ctx.path) { appendChildren(of: view.body, ctx: &sub, into: &parts) }
+    _trackingObservation(at: ctx.path) { appendChildren(of: _connectedBody(of: view, ctx: ctx), ctx: &sub, into: &parts) }
     guard parts.count == 1 else {
         abandonCompositeBuild(build)
         return nil

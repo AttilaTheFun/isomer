@@ -283,7 +283,13 @@ final class AccessibilityDriver {
             // to if need be; else a text of exactly those words.
             var element = await reveal(before, { $0.element(target, roles: ["button", "toggle"]) })
             if element == nil { element = await reveal(before, { $0.textTarget(target) }) }
-            if let element, element.disabled {
+            // Else a segmented control's option by its title (the Mac's
+            // segments are its options, not buttons of their own, where a
+            // TabView's tabs may be drawn as one).
+            let segmented = element == nil ? before.elements.last(where: { $0.role == "segmented" && $0.options.contains(target) }) : nil
+            if let segmented {
+                error = await select(segmented, target)
+            } else if let element, element.disabled {
                 error = "\(element.name.isEmpty ? target : element.name) is disabled"
             } else if let element {
                 if !(await activate(element)) { error = "\(element.name.isEmpty ? target : element.name) didn't take the tap" }

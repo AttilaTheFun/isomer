@@ -38,6 +38,25 @@ Not implemented:
 - `_SwiftUIState`.
 - `#Preview` and `@Previewable`.
 
+## The storage behind them
+
+`State` and `LazyState` are stored as Apple's are (State.swift). A `State`
+holds its value inline and an optional reference to its location; a
+`LazyState` holds the closure that makes its value (or the value) and the
+same reference. Making a view's value allocates nothing for its states.
+
+- **The location** (`_StateLocation`) is the one object a state costs: made
+  once, when its view is first connected, kept by the runtime for as long
+  as the view lives, and shared by every binding to the state.
+- **Connecting** writes each location into the runtime's own copy of the
+  view, found by the view type's layout (DynamicPropertyLayout.swift),
+  before `body` runs on that copy (`_connectedBody`). The view's value as
+  given is left unconnected: the reuse checks compare it with the next
+  frame's, and compare a state by its location.
+- **`$state`** is a binding to the location itself, with no closures.
+- **An app's and a scene's** properties are connected once, as the app is
+  installed, under the place `app`.
+
 ## Where the macros are declared
 
 The macros are declared only by **Swift 6.4 and later**:

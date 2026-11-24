@@ -30,7 +30,7 @@ public struct FocusState<Value: Hashable>: _DynamicProperty {
     }
 
     /// Persisted across builds exactly like `@State` (same storage slot).
-    func _connect(storage: StateStorage, key: String, env: EnvironmentValues) {
+    mutating func _connect(storage: StateStorage, key: String, env: EnvironmentValues) {
         state._connect(storage: storage, key: key, env: env)
     }
 
@@ -155,11 +155,16 @@ extension Text {
 // MARK: - Scroll targeting
 
 extension View {
-    /// `.id(_:)`: names this view for `ScrollViewProxy.scrollTo` (identity
-    /// for ForEach rows is handled by ForEach itself).
+    /// `.id(_:)`: names this view for `ScrollViewProxy.scrollTo`, and is
+    /// part of its identity, as in SwiftUI: the id is in the path of
+    /// everything under it, so another id is another view, whose state
+    /// starts afresh while the old one's goes (State.swift). (Identity for
+    /// ForEach rows is handled by ForEach itself, in the same way.)
     nonisolated public func id<ID: Hashable>(_ id: ID) -> some View {
-        _ModifiedView(child: self, descend: "vid", pure: true) { inner, _ in
-            inner.scrollTarget = String(describing: id)
+        let name = String(describing: id)
+        // (In the path escaped, `_pathSegment`; the scroll target is the name.)
+        return _ModifiedView(child: self, descend: "vid-" + _pathSegment(name), pure: true) { inner, _ in
+            inner.scrollTarget = name
             return inner
         }
     }

@@ -106,7 +106,7 @@ extension View {
 /// ends, whether it completed or not.
 @propertyWrapper
 public struct GestureState<Value>: _DynamicProperty {
-    let state: State<Value>
+    var state: State<Value>
     let initial: Value
     let reset: (Value, inout Transaction) -> Void
 
@@ -140,7 +140,7 @@ public struct GestureState<Value>: _DynamicProperty {
 
     public var projectedValue: GestureState<Value> { self }
 
-    func _connect(storage: StateStorage, key: String, env: EnvironmentValues) {
+    mutating func _connect(storage: StateStorage, key: String, env: EnvironmentValues) {
         state._connect(storage: storage, key: key, env: env)
     }
 

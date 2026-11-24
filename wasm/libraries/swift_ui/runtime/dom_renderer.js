@@ -49,6 +49,22 @@ import {
   namedFillCSS as styleNamedFill,
 } from "./render_style.js";
 
+// A StrokeStyle other than the default, as the core sends it
+// ("cap,join,miter,phase,dash…", lengths in points), as SVG's stroke
+// attributes. SVG repeats an odd number of dash lengths once, as Core
+// Graphics does.
+function svgStrokeStyle(style) {
+  const parts = (style || "").split(",");
+  if (parts.length < 4) return {};
+  const attributes = { strokeLinecap: parts[0], strokeLinejoin: parts[1], strokeMiterlimit: Number(parts[2]) || 10 };
+  const dashes = parts.slice(4).map(Number).filter((length) => !Number.isNaN(length));
+  if (dashes.some((length) => length > 0)) {
+    attributes.strokeDasharray = dashes.join(" ");
+    attributes.strokeDashoffset = Number(parts[3]) || 0;
+  }
+  return attributes;
+}
+
 /// An SF Symbol drawn from the portable table as an inline SVG sized to
 /// the text it stands in (an `Image(systemName:)` is a text node carrying
 /// `params.symbol`); unknown names keep the guest's fallback glyph.
@@ -4090,12 +4106,41 @@ export function createDOMTreeRenderer({ container, sendEvent, sendKey = (id, val
               d: svgPathData(custom),
               fill: n.fill ? rgba(n.fill) : "none",
               stroke: n.stroke ? rgba(n.stroke) : "none", strokeWidth: width, vectorEffect: "non-scaling-stroke",
+              ...svgStrokeStyle((n.params || {}).strokeStyle),
             })),
             ...kids);
         }
         if (n.shape === "circle") s.borderRadius = "50%";
         if (n.shape === "capsule") s.borderRadius = 9999;
         if (n.fill) s.background = fillCSS(n);
+        // A StrokeStyle's dashes, caps and joins (the `strokeStyle` param, as
+        // Apple's host and Compose read it), which a border can't draw: the
+        // outline as SVG over the box, inset half its width as the border is.
+        // (A capsule's corner is half its shorter side, which an SVG rect
+        // can't say: it keeps the border, solid.)
+        const strokeStyle = (n.params || {}).strokeStyle;
+        if (n.stroke && strokeStyle && n.shape !== "capsule") {
+          const width = n.strokeWidth || 1;
+          const inset = width / 2;
+          const paint = { fill: "none", stroke: rgba(n.stroke), strokeWidth: width, ...svgStrokeStyle(strokeStyle) };
+          // As attributes what needs no calc() (older WebKit takes few of
+          // SVG 2's geometry properties as CSS); the sizes, in style.
+          const outline = n.shape === "circle"
+            ? h("ellipse", { ...paint, cx: "50%", cy: "50%", style: { rx: `calc(50% - ${inset}px)`, ry: `calc(50% - ${inset}px)` } })
+            : h("rect", { ...paint, x: inset, y: inset, rx: Math.max(0, (n.radius || 0) - inset),
+                style: { width: `calc(100% - ${width}px)`, height: `calc(100% - ${width}px)` } });
+          if (n.width == null && !n.expandW && !(sizedByFrame && sizedByFrame.w)) s.minWidth = 10;
+          if (n.height == null && !n.expandH && !(sizedByFrame && sizedByFrame.h)) s.minHeight = 10;
+          s.position = s.position || "relative";
+          s.display = "grid";
+          s.placeItems = "center";
+          return h("div", props,
+            h("svg", {
+              key: "stroke",
+              style: { position: "absolute", left: 0, top: 0, width: "100%", height: "100%", display: "block", overflow: "visible", pointerEvents: "none" },
+            }, outline),
+            ...kids);
+        }
         if (n.stroke) s.border = `${n.strokeWidth || 1}px solid ${rgba(n.stroke)}`;
         if (n.width == null && !n.expandW && !(sizedByFrame && sizedByFrame.w)) s.minWidth = 10;
         if (n.height == null && !n.expandH && !(sizedByFrame && sizedByFrame.h)) s.minHeight = 10;

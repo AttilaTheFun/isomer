@@ -238,6 +238,8 @@ extension List: _PrimitiveView {
         collectRowSlots(of: content, ctx: &sub, into: &slots)
         let window = semantic ? Runtime.shared.listBuildWindow(list: ctx.path, rowPaths: slots.map(\.ctx.path)) : nil
         if semantic { scroll.lazyRows = true }
+        // Its rows off screen keep their state, as SwiftUI's List's do.
+        if window != nil { Runtime.shared.keepStateOfRows(of: ctx.path) }
         var rows: [(node: RenderNode, tag: AnyHashable?, isHeader: Bool, path: String)] = []
         rows.reserveCapacity(slots.count)
         for (index, slot) in slots.enumerated() {
@@ -466,9 +468,9 @@ struct _RowSlot {
                 return
             }
             _frameLogBuilt(view, ctx: ctx)
-            let build = beginCompositeBuild(view, ctx: ctx)
+            let build = beginCompositeBuild(ctx: ctx)
             _trackingObservation(at: ctx.path) {
-                let body = view.body
+                let body = _connectedBody(of: view, ctx: ctx)
                 var sub = ctx.descend(typeName(view))
                 if contributesRows(body) {
                     // Several rows after all: remembered, so the list finds
@@ -523,7 +525,7 @@ private func collectRowSlots(of view: any View, ctx: inout BuildContext, into sl
         slots.reserveCapacity(slots.count + rows.count)
         for index in 0..<rows.count {
             var sub = ctx
-            sub.path = ctx.path + "/fe-" + rows.id(index)
+            sub.path = ctx.path + "/fe-" + _pathSegment(rows.id(index))
             slots.append(_RowSlot(kind: .deferred({ rows.view(index) }), ctx: sub))
         }
         return
@@ -564,8 +566,7 @@ private func collectRowSlots(of view: any View, ctx: inout BuildContext, into sl
     // so is looked into now; any other is taken to be one row until built.
     if _viewKind(view).isComposite, !_viewKind(view).contains(.modified) {
         if Runtime.shared.multiRowViewPaths.contains(ctx.path) {
-            connectDynamicProperties(of: view, path: ctx.path, storage: ctx.storage, env: ctx.env)
-            let body = _trackingObservation(at: ctx.path) { view.body }
+            let body = _trackingObservation(at: ctx.path) { _connectedBody(of: view, ctx: ctx) }
             var sub = ctx.descend(typeName(view))
             collectRowSlots(of: body, ctx: &sub, into: &slots)
             return

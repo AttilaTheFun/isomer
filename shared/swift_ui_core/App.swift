@@ -26,11 +26,21 @@ protocol _PrimitiveScene {
     var windowTitle: String { get }
 }
 
-/// The primitive scene an app's scene comes down to.
+/// The primitive scene an app's scene comes down to; each scene on the way
+/// with its properties connected (a scene of the app's own may keep state,
+/// as a view does), by its place under `path`.
 @MainActor
-func primitiveScene(_ scene: any Scene) -> any _PrimitiveScene {
+func primitiveScene(_ scene: any Scene, path: String) -> any _PrimitiveScene {
     if let primitive = scene as? any _PrimitiveScene { return primitive }
-    return primitiveScene(scene.body)
+    let path = path + "/scene"
+    return primitiveScene(_connectedSceneBody(opening: scene, path: path), path: path)
+}
+
+@MainActor
+private func _connectedSceneBody<S: Scene>(opening scene: S, path: String) -> any Scene {
+    var connected = scene
+    _connectDynamicProperties(of: &connected, path: path, storage: Runtime.shared.storage, env: EnvironmentValues())
+    return connected.body
 }
 
 public struct WindowGroup<Content: View> {

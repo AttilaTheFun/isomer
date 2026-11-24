@@ -119,13 +119,10 @@ struct StorybookHeadlessTests {
     /// the story's counters is tapped to 1, its view is taken away and
     /// brought back (by an if, a new id, a ForEach's items, its sheet), and
     /// its count read again; one is left alone. Apple's SwiftUI is the
-    /// reference: it checks the counts SwiftUI gives. Isomer keeps a view's
-    /// state by its place, so its counts are only printed beside them until
-    /// it drops a view's state with the view.
+    /// reference: every renderer gives the counts SwiftUI gives.
     @Test func stateLastsAsLongAsItsView() throws {
         let app = try launch(story: "state.lifetime")
         defer { app.quit() }
-        let apple = try app.info().renderer == "SwiftUI"
         var seen: [(scenario: String, swiftUI: Int, count: Int)] = []
         /// A counter's count as the screen shows it: its button's label
         /// (Apple's accessibility lists a button by its label, not as a
@@ -167,8 +164,19 @@ struct StorybookHeadlessTests {
         seen.append(("a view left alone", 1, shown("Stays", on: try app.screen())))
         for (scenario, swiftUI, count) in seen {
             print("[state.lifetime] \(scenario): \(count) (SwiftUI's: \(swiftUI))")
-            if apple { #expect(count == swiftUI, "\(scenario): \(count), SwiftUI's \(swiftUI)") }
+            #expect(count == swiftUI, "\(scenario): \(count), SwiftUI's \(swiftUI)")
         }
+    }
+
+    /// A TabView's tabs are buttons named by their titles, as the system's
+    /// tab bar lists them: a tap on one shows its content (navigation.tabs).
+    @Test func tabsAreSelectedByTheirTitles() throws {
+        let app = try launch(story: "navigation.tabs")
+        defer { app.quit() }
+        #expect(try app.screen().texts.contains("Home"))
+        let screen = try app.tap("Profile")
+        #expect(screen.texts.contains("Profile"), "the Profile tab's content shows: \(screen.texts)")
+        #expect(!screen.texts.contains("Home"), "the Home tab's content is gone: \(screen.texts)")
     }
 
     /// A trip to the background and back (`scene`): the app comes back as

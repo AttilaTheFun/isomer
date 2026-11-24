@@ -1277,12 +1277,12 @@ func appendChildren(
             return
         }
         _frameLogBuilt(view, ctx: ctx)
-        var build = beginCompositeBuild(view, ctx: ctx)
+        var build = beginCompositeBuild(ctx: ctx)
         build.asPart = true
         var sub = ctx.descend(typeName(view))
         var parts: [RenderNode] = []
         _trackingObservation(at: ctx.path) {
-            appendChildren(of: view.body, ctx: &sub, into: &parts)
+            appendChildren(of: _connectedBody(of: view, ctx: ctx), ctx: &sub, into: &parts)
         }
         if parts.count == 1 {
             if parts[0].buildPath == nil { parts[0].buildPath = sub.path }

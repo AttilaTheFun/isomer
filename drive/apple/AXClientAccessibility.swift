@@ -158,6 +158,12 @@ private enum AXClient {
             // it by one identifier on either.
             if id == "chevron.backward", label == "Back" { button.id = "BackButton" }
             nodes.append(button)
+        case "AXRadioButton":
+            // A tab of a tab group (SwiftUI's TabView on the Mac: an
+            // AXTabGroup of radio buttons) is a button named by its title, as
+            // UIKit's tab bar's are; a radio group's are its options instead
+            // (AXRadioGroup, below, doesn't visit them).
+            nodes.append(node("button", label, nil))
         case "AXCheckBox", "AXSwitch":
             nodes.append(node("toggle", label, value(element)))
         case "AXTextField", "AXTextArea", "AXComboBox", "AXSearchField":

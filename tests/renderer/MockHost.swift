@@ -38,6 +38,7 @@ final class StubHost: HostBridge {
     func endTextInput() {}
     func scheduleRender() {}
     func log(_ message: String) {
+        hostLogs.append(message)
         // What a frame built in place got wrong (InPlace.swift).
         if message.hasPrefix("[partial]") { print(message) }
     }
@@ -47,6 +48,9 @@ final class StubHost: HostBridge {
 
 /// The StubHost's clock, in seconds (for animations).
 nonisolated(unsafe) var stubHostNow = 0.0
+
+/// What the runtime said through a StubHost's log.
+nonisolated(unsafe) var hostLogs: [String] = []
 
 /// The URLs the runtime asked a StubHost to open outside the app.
 nonisolated(unsafe) var hostOpenedURLs: [String] = []

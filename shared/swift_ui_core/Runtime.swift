@@ -525,7 +525,13 @@ package final class Runtime {
 
     @MainActor
     public func installApp<A: App>(_ app: A) {
-        let scene = primitiveScene(app.body)
+        // The app's own properties (`@State private var model = Model()`)
+        // connected as a view's are, once: its scene's closures hold this
+        // copy. Kept by the place "app", outside the views' tree, as long as
+        // the app runs (first kept outside a frame's build: `unmanaged`).
+        var app = app
+        _connectDynamicProperties(of: &app, path: "app", storage: storage, env: EnvironmentValues())
+        let scene = primitiveScene(app.body, path: "app")
         windowTitle = scene.windowTitle
         makeRootView = { scene.makeRootView() }
     }
@@ -728,7 +734,18 @@ package final class Runtime {
         volatileOwnersBuilding = []
         beginReuseFrame()
         defer { endReuseFrame() }
-        let root = buildNode(view: makeRootView(), ctx: &ctx)
+        recordingStateOwners = true
+        // The states the root view's making reads (an app's own, given to
+        // its root view by its scene) are read by the app, which has no
+        // view to build again alone: a change to one builds the frame
+        // whole.
+        stateReadStack.append([])
+        let rootView = makeRootView()
+        noteStateReads(path: "app", stateReadStack.removeLast())
+        let root = buildNode(view: rootView, ctx: &ctx)
+        recordingStateOwners = false
+        // The views it no longer reached lose their state (State.swift).
+        dropStateOfViewsGone()
         volatileOwners = volatileOwnersBuilding
         treeVolatile = false
         // The tree a later pass of this frame builds in place into.
@@ -802,11 +819,32 @@ package final class Runtime {
     /// state each composite's last build read, the reads of the builds in
     /// progress, and the states read where no view's build was running.
     var stateKeys: Set<String> = []
+    /// The states' locations made (State.swift), one per view and property
+    /// for as long as the view lives: a count the tests read, which a view's
+    /// value made again (its parent's body evaluated) must not move.
+    package internal(set) var stateLocationsMade = 0
+    /// The views keeping state now, and the states kept: what the tests
+    /// read to see that state goes with its views.
+    package var stateOwnerCount: Int { storage.types.count }
+    package var keptStateCount: Int { storage.locations.count }
     var stateReaders: [String: Set<String>] = [:]
     var compositeStateReads: [String: Set<String>] = [:]
     var stateReadStack: [[String]] = []
     var keysReadOutsideBuild: Set<String> = []
     var geometryBuildDepth = 0
+    // A view's state lasting as long as the view (State.swift).
+    /// The frame's build is under way: the views whose state it connects
+    /// are in the tree (not a layout's geometry content, drawn chrome).
+    var recordingStateOwners = false
+    /// The views keeping state that this frame's builds reached, and those
+    /// reached while each composite in progress builds (kept with its cache
+    /// entry, `_BuildCacheEntry.owners`).
+    var liveStateOwners: Set<String> = []
+    var stateOwnerStack: [[String]] = []
+    /// The places whose views keep their state this frame though not built
+    /// (`keepState(under:)`), and the lists whose rows do (`keepStateOfRows`).
+    var keptStatePrefixes: Set<String> = []
+    var keptStateLists: Set<String> = []
     /// Off: a frame always builds the tree from its root.
     public var partialFramesEnabled = true
     /// Each partial frame followed by a whole build compared with it.
