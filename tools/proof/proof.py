@@ -69,7 +69,7 @@ import argparse, json, os, re, shlex, shutil, subprocess, sys, tempfile, threadi
 ISOMER = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 EXAMPLES = os.path.join(ISOMER, "examples")
 APPS = {
-    "storybook": {"name": "Storybook", "bundle": "com.LoganShire.IsomerStorybook"},
+    "storybook": {"name": "Storybook", "bundle": "com.LoganShire.Storybook"},
 }
 # The Storybook compiled against Isomer's frameworks (iPhone only; a test,
 # not released): every story shot again and set beside the Storybook's own,

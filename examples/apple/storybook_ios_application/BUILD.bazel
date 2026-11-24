@@ -3,17 +3,25 @@ load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
 load("@rules_swift//swift:swift.bzl", "swift_library")
 load("@rules_xcodeproj//xcodeproj:defs.bzl", "top_level_target", "xcode_provisioning_profile", "xcodeproj")
 load("@isomer_signing//:signing.bzl", "TEAM_ID")
-load("//tools/signing:defs.bzl", "update_infoplist")
+load("//tools/signing:defs.bzl", "app_entitlements", "stamped_infoplist")
 load("//tools/variant:defs.bzl", "variant_infoplist")
 
-# What the apps tell UpdateKit: the distributor's app group (and, on a
-# Mac, its bundle ids), from the builder's environment (tools/signing).
-update_infoplist(name = "update_plist")
+# What the apps tell UpdateKit (the distributor's app group and, on a Mac,
+# its bundle ids) and the builder's other keys (ShakeKit's, the shared GitHub
+# sign-in's), from the builder's environment (tools/signing).
+stamped_infoplist(name = "stamped_plist")
+
+# CI's device build's entitlements, with the builder's app groups and the
+# shared GitHub sign-in's keychain group where it sets them (tools/signing).
+DEVICE_ENTITLEMENTS = app_entitlements(
+    name = "device_entitlements",
+    src = "Storybook.entitlements",
+)
 
 # The Storybook on iOS: the Storybook's own app, which releases hand out.
 # One bundle id for every build, Alpha, Beta, Production and AdHoc, and for
 # the Mac's (the private AttilaTheFun/applications' docs/VARIANTS.md).
-BUNDLE_ID = "com.LoganShire.IsomerStorybook"
+BUNDLE_ID = "com.LoganShire.Storybook"
 
 # What this build of the Storybook is, BuildVariant (Alpha, Beta, Production
 # or AdHoc, by --config=alpha|beta|prod|adhoc), and its name under its icon,
@@ -22,7 +30,9 @@ variant_infoplist(
     name = "variant_plist",
     display_name = "Storybook",
     # Its link scheme: how Applications opens it, and links into it.
-    url_scheme = "storybook",
+    # Its own since com.LoganShire.Storybook (`storybook` before), so
+    # Applications tells the new app from the old.
+    url_scheme = "storybook-app",
 )
 
 # The Storybook (//shared/example_application), compiled against Apple's
@@ -38,6 +48,8 @@ swift_library(
         "@isomer//apple/libraries/swift_ui:isomer",
         # The build it is, written for Applications at launch (ExampleApp.swift).
         "@swiftpkg_update_kit//:UpdateKit",
+        # Shake (or Help › Report a Bug…) to file an issue, where the build opts in.
+        "@swiftpkg_shake_kit//:ShakeKit",
     ],
 )
 
@@ -70,16 +82,16 @@ ios_application(
     bundle_id = BUNDLE_ID,
     bundle_name = "Storybook",
     # Its own app ID and keychain group: a wildcard profile's entitlements
-    # would otherwise be copied as-is (application-identifier TEAM.*), which
-    # the release server refuses. And Applications' app group, which CI's
-    # build carries (the bundle id's own profile grants it when Applications
-    # Server signs it again); a local device build under the wildcard
-    # profile, which can grant no app group, goes without.
+    # would otherwise be copied as-is (application-identifier TEAM.*). CI's
+    # also carries the builder's app groups and the shared GitHub sign-in's
+    # keychain group (tools/signing), which the bundle id's own profile
+    # grants; a local device build under the wildcard profile, which can
+    # grant no app group, goes without.
     entitlements = select({
-        "//tools/ci_device": "Storybook.entitlements",
+        "//tools/ci_device": DEVICE_ENTITLEMENTS,
         "@apple_support//constraints:device": "Storybook.wildcard.entitlements",
         "@apple_support//constraints:simulator": "Storybook.simulator.entitlements",
-        "//conditions:default": "Storybook.entitlements",
+        "//conditions:default": DEVICE_ENTITLEMENTS,
     }),
     families = [
         "ipad",
@@ -87,7 +99,7 @@ ios_application(
     ],
     infoplists = [
         "Info.plist",
-        ":update_plist",
+        ":stamped_plist",
         ":variant_plist",
     ],
     minimum_os_version = "17.0",
@@ -131,7 +143,7 @@ ios_application(
     ],
     infoplists = [
         "Info.plist",
-        ":update_plist",
+        ":stamped_plist",
         ":experiment_variant_plist",
     ],
     minimum_os_version = "17.0",
@@ -153,7 +165,7 @@ ios_application(
     app_icons = ["//storybook/artwork/storybook_icon:app_icon"],
     bundle_id = BUNDLE_ID,
     bundle_name = "Storybook",
-    # The bundle id's keychain group and Applications' app group, no team.
+    # The bundle id's keychain group, no team.
     entitlements = "Storybook.simulator.entitlements",
     families = [
         "ipad",
@@ -161,7 +173,7 @@ ios_application(
     ],
     infoplists = [
         "Info.plist",
-        ":update_plist",
+        ":stamped_plist",
         ":variant_plist",
     ],
     minimum_os_version = "17.0",
@@ -203,7 +215,7 @@ ios_application(
     ],
     infoplists = [
         "Info.plist",
-        ":update_plist",
+        ":stamped_plist",
         ":variant_plist",
     ],
     minimum_os_version = "17.0",

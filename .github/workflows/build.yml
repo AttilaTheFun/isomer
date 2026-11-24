@@ -892,11 +892,17 @@ jobs:
           ISOMER_UPDATE_APP_GROUP: ${{ secrets.ISOMER_UPDATE_APP_GROUP }}
         run: |
           test -n "$ISOMER_UPDATE_APP_GROUP" || { echo "::error::ISOMER_UPDATE_APP_GROUP is not set: the Alphas' UpdateKit would do nothing"; exit 1; }
+      - name: The shared sign-in's keys are set
+        env:
+          ISOMER_INFOPLIST: ${{ secrets.ISOMER_INFOPLIST }}
+        run: |
+          test -n "$ISOMER_INFOPLIST" || { echo "::error::ISOMER_INFOPLIST is not set: the Alphas would not share the sign-in"; exit 1; }
       - name: Build
         env:
           ISOMER_PLATFORMS: apple
           ISOMER_UPDATE_APP_GROUP: ${{ secrets.ISOMER_UPDATE_APP_GROUP }}
           ISOMER_UPDATE_APPLICATIONS_BUNDLE_IDS: ${{ secrets.ISOMER_UPDATE_APPLICATIONS_BUNDLE_IDS }}
+          ISOMER_INFOPLIST: ${{ secrets.ISOMER_INFOPLIST }}
         run: exec tools/ci/container_build.sh package .ci/packages --config=alpha $PUBLISHED_APPLE
       - uses: actions/upload-artifact@v4
         with:

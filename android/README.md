@@ -27,8 +27,8 @@ The compiled app's renderer is chosen **at launch** (the APK carries all three);
 after `bazel run` once, relaunch with:
 
 ```sh
-adb shell am start -S -n com.LoganShire.IsomerStorybook/.MainActivity --es renderer jetpackCompose  # default
-adb shell am start -S -n com.LoganShire.IsomerStorybook/.MainActivity --es renderer openGL
+adb shell am start -S -n com.LoganShire.Storybook/.MainActivity --es renderer jetpackCompose  # default
+adb shell am start -S -n com.LoganShire.Storybook/.MainActivity --es renderer openGL
 ```
 
 ## Benchmark cells (the minimal "Tap me" counter)
