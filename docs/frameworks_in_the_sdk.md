@@ -158,6 +158,16 @@ Apple's binary interface costs nothing, match it; where it costs, decide then.
       answer "what is this view" today (Node.swift, ConformanceIndex.swift,
       FieldRecords.swift) go. Apple's names and signatures, so the
       facade's View mangles as Apple's (below).
+      Measured against the iOS 27 SDK's interfaces: of Isomer's 103
+      primitive views, Apple's SwiftUI declares a public `_makeView` on 18;
+      the shapes take Apple's public `Shape` default and the internal ones
+      (`_ForegroundFill`, the modifiers' views) may answer privately, which
+      leaves about 35 public views (Button, List, TextField, Toggle,
+      NavigationStack, ScrollView, Picker…) that are primitives in Isomer
+      and composites in Apple's. Those become what Apple's are: a public
+      `body` over an internal primitive, the strict subset's rule kept,
+      the body's step transparent to the view's path (no new segment), so
+      no state or node identity moves.
    2. **Content held by its type, as Apple's is:** `TupleView<T>` holds
       `value: T` (a tuple, built by `ViewBuilder`'s parameter packs) rather
       than `[any View]`, and a container's children are walked through
