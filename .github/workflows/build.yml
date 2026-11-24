@@ -14,12 +14,11 @@
 # image's own Visual Studio, built only (tier 2). Bazel's
 # caches are GitHub's (.github/actions/bazel_cache), written by main's
 # builds alone, and BuildBuddy's remote cache, its key the
-# BUILDBUDDY_API_KEY secret (read and write), handed to the cache action's
-# setup alone and only in runs on main and a published release's: never to
-# a pull request or a branch's run, whose scripts could upload with it
-# (tools/ci/ci_bazel.sh: main's push builds and the release jobs write;
-# main's other runs by hand read). Pull requests build on GitHub's cache
-# alone until a read-only key (BUILDBUDDY_READ_KEY) is theirs.
+# BUILDBUDDY_API_KEY secret, handed to the cache action's setup alone, in
+# every job, before a merge and after (tools/ci/ci_bazel.sh: each reads
+# and writes; main's push builds and the release jobs download every
+# output). A fork's pull request, which GitHub gives no secrets, builds on
+# GitHub's cache alone.
 #
 # - pull requests: container (web, Linux, Android; the required check),
 #   container-apple, container-windows: every target
@@ -189,7 +188,7 @@ jobs:
         uses: ./.github/actions/bazel_cache
         with:
           group: ubuntu
-          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
+          buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
       - name: The merged tree, built into the cache
         env:
           ISOMER_EXECUTION_LOGS: ${{ runner.temp }}/execution-logs
@@ -225,7 +224,7 @@ jobs:
         uses: ./.github/actions/bazel_cache
         with:
           group: apple
-          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
+          buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
       - name: The merged tree's Apple targets, built into the cache
         run: exec tools/ci/container_build.sh all
       - name: The published Apple apps, built into the cache
@@ -289,7 +288,7 @@ jobs:
         with:
           group: ubuntu
           disk: "false"
-          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
+          buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
       # Built only (container_build.sh's checks take Bazel 9's test flags).
       - name: The Storybooks with Bazel 8.5.0
         run: >-
@@ -310,7 +309,7 @@ jobs:
       - uses: ./.github/actions/bazel_cache
         with:
           group: apple
-          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
+          buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
           disk: "false"
       - name: The Apple Storybooks with Bazel 8.5.0
         run: >-
@@ -447,7 +446,7 @@ jobs:
       - uses: ./.github/actions/bazel_cache
         with:
           group: ubuntu
-          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
+          buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
       - name: Build, and the tests in the build container
         run: exec tools/ci/container_build.sh
       - uses: actions/upload-artifact@v4
@@ -472,7 +471,7 @@ jobs:
       - uses: ./.github/actions/bazel_cache
         with:
           group: apple
-          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
+          buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
       - name: Build, with this Mac's Xcode
         run: exec tools/ci/container_build.sh
       - uses: actions/upload-artifact@v4
@@ -535,7 +534,7 @@ jobs:
       - uses: ./.github/actions/bazel_cache
         with:
           group: ubuntu
-          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
+          buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
       - name: The tests that draw
         env:
           ISOMER_EXECUTION_LOGS: ${{ runner.temp }}/execution-logs
@@ -662,7 +661,7 @@ jobs:
       - uses: ./.github/actions/bazel_cache
         with:
           group: ubuntu
-          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
+          buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
       - name: The web app built
         run: exec tools/ci/proof.sh --stage build --platform web --kind "$PROOF_KIND" --apps "$RUNNER_TEMP/proof-apps" --review "$RUNNER_TEMP/proof-review"
       - uses: actions/upload-artifact@v4
@@ -690,7 +689,7 @@ jobs:
       - uses: ./.github/actions/bazel_cache
         with:
           group: apple
-          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
+          buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
       - name: The iPhone and Mac apps built, with this Mac's Xcode
         run: exec tools/ci/proof.sh --stage build --platform ios,macos --kind "$PROOF_KIND" --apps "$RUNNER_TEMP/proof-apps" --review "$RUNNER_TEMP/proof-review"
       - uses: actions/upload-artifact@v4
@@ -729,7 +728,7 @@ jobs:
       - uses: ./.github/actions/bazel_cache
         with:
           group: ubuntu
-          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
+          buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
       - name: The Android app built, for x86_64
         run: exec tools/ci/proof.sh --stage build --platform android --kind "$PROOF_KIND" --apps "$RUNNER_TEMP/proof-apps" --review "$RUNNER_TEMP/proof-review"
       - uses: actions/upload-artifact@v4
@@ -832,7 +831,7 @@ jobs:
         with:
           group: ubuntu
           disk: "false"
-          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
+          buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
       - name: The proof's comparison
         if: ${{ !cancelled() }}
         shell: bash
@@ -887,7 +886,7 @@ jobs:
       - uses: ./.github/actions/bazel_cache
         with:
           group: apple
-          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
+          buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
       - name: The distributor's values for UpdateKit are set
         env:
           ISOMER_UPDATE_APP_GROUP: ${{ secrets.ISOMER_UPDATE_APP_GROUP }}
@@ -956,7 +955,7 @@ jobs:
       - uses: ./.github/actions/bazel_cache
         with:
           group: ubuntu
-          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
+          buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
       # exec: the runner's cancel reaches the build.
       - name: Build
         run: exec tools/ci/container_build.sh package .ci/packages --config=alpha $PUBLISHED_LINUX
@@ -1065,7 +1064,7 @@ jobs:
       - uses: ./.github/actions/bazel_cache
         with:
           group: apple
-          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
+          buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
           disk: "false"
       - name: Build
         env:
@@ -1143,7 +1142,7 @@ jobs:
       - uses: ./.github/actions/bazel_cache
         with:
           group: apple
-          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
+          buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
       - name: The iPhone's, for the simulator
         env:
           ISOMER_PLATFORMS: apple
@@ -1203,7 +1202,7 @@ jobs:
       - uses: ./.github/actions/bazel_cache
         with:
           group: ubuntu
-          buildbuddy-api-key: ${{ (github.event_name == 'release' || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')) && secrets.BUILDBUDDY_API_KEY || '' }}
+          buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
       - name: Android's, for production
         run: >-
           tools/ci/container_build.sh package .ci/android --config=prod --compilation_mode=opt
