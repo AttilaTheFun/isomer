@@ -9,7 +9,8 @@
 #   tools/ci/attach_release.sh <tag> <dir>
 #
 # From the job's environment: GH_TOKEN, the job's, with `contents: write`;
-# GITHUB_REPOSITORY. bash, curl and gh (gh_ready.sh, beside this file).
+# GITHUB_REPOSITORY. bash, curl, gh (gh_ready.sh, beside this file) and swift
+# (builds_replaces.swift, where tools/ci/replaces.json is).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 tag="${1:?usage: tools/ci/attach_release.sh <tag> <dir>}"
@@ -53,6 +54,13 @@ attach() {
   [ "$status" = 201 ] || { echo "attach_release: $name was not attached ($status): $(head -c 300 "$work/answer")" >&2; exit 1; }
   echo "attach_release: $name attached to $tag"
 }
+
+# What each build's app replaces (the bundle ids it was released under
+# before, tools/ci/replaces.json), in its builds.json line: Applications
+# offers the new app in the old one's place from the release alone.
+if [ -f "$ROOT/tools/ci/replaces.json" ]; then
+  swift "$ROOT/tools/ci/builds_replaces.swift" "$dir/builds.json" "$ROOT/tools/ci/replaces.json"
+fi
 
 for file in "$dir"/*; do
   case "$(basename "$file")" in builds.json|builds.lines|builds.lines.new) continue ;; esac
