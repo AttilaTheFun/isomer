@@ -25,9 +25,7 @@ variant_infoplist(
     name = "variant_plist",
     display_name = "Storybook",
     # Its link scheme: how Applications opens it, and links into it.
-    # Its own since com.LoganShire.Storybook (`storybook` before), so
-    # Applications tells the new app from the old.
-    url_scheme = "storybook-app",
+    url_scheme = "storybook",
 )
 
 # The Storybook (//shared/example_application), compiled against Apple's
