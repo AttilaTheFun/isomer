@@ -1208,20 +1208,7 @@ func buildNodeByKind(view: any View, ctx: inout BuildContext) -> RenderNode {
         return shape.makeNode(&ctx)
     }
     if kind.contains(.multi), let multi = view as? _MultiView {
-        // A multi-view outside a stack container (e.g. an `if` at the top of
-        // a body). Zero children render as nothing; one renders direct;
-        // several overlap like an implicit ZStack.
-        let children = multi.childViews()
-        if children.count == 1 {
-            var sub = ctx.descend(children[0].suffix)
-            return buildNode(view: children[0].view, ctx: &sub)
-        }
-        let node = RenderNode(kind: .stack(.depth))
-        node.children = children.map { entry in
-            var sub = ctx.descend(entry.suffix)
-            return buildNode(view: entry.view, ctx: &sub)
-        }
-        return node
+        return buildMulti(multi, ctx: &ctx)
     }
 
     // Composite view: reuse last frame's subtree when nothing it depends on
@@ -1348,4 +1335,22 @@ private func _modifiedParts(_ view: any View) -> [(String, any View)]? {
         return parts.map { ($0.0, _EnvironmentModifier(child: $0.1, descend: environment.descend, transform: environment.transform)) }
     }
     return nil
+}
+
+/// A multi-view outside a stack container (e.g. an `if` at the top of a
+/// body). Zero children render as nothing; one renders direct; several
+/// overlap like an implicit ZStack.
+@MainActor
+func buildMulti<M: _MultiView>(_ multi: M, ctx: inout BuildContext) -> RenderNode {
+    let children = multi.childViews()
+    if children.count == 1 {
+        var sub = ctx.descend(children[0].suffix)
+        return buildNode(view: children[0].view, ctx: &sub)
+    }
+    let node = RenderNode(kind: .stack(.depth))
+    node.children = children.map { entry in
+        var sub = ctx.descend(entry.suffix)
+        return buildNode(view: entry.view, ctx: &sub)
+    }
+    return node
 }
