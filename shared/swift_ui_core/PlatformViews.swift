@@ -83,13 +83,19 @@ package struct HostViewPrimitive {
     }
 }
 
-extension HostViewPrimitive: _InternalPrimitiveView {
+extension HostViewPrimitive: _PrimitiveView {
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         hostViewNode(kind: kind, parameters: parameters, value: value, onChange: onChange, ctx: &ctx)
     }
 }
 
-extension HostViewPrimitive: View {}
+extension HostViewPrimitive: View {
+    // A `package` type: the internal primitives' default can't answer for
+    // it (View.swift), so it says what it is here.
+    package static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+}
 
 // The per-platform refinements (WasmViewRepresentable,
 // AndroidViewRepresentable, WindowsViewRepresentable, LinuxViewRepresentable)
