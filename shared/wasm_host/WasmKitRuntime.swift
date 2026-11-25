@@ -151,18 +151,46 @@ public final class WasmKitRuntime: WasmRuntime {
 
     // MARK: - Launch
 
+    /// The bounds checking a reactor's engine uses: guard pages for a threaded
+    /// reactor, whose shared memory WasmKit makes only in a reservation with
+    /// guard pages, and software checks for the rest.
+    ///
+    /// WasmKit checks every access to a memory that isn't shared in software
+    /// either way, so a guest runs as fast with both. What guard pages add for
+    /// such a memory is a 4 GiB address-space reservation, and an iPhone grants
+    /// a process only one: a reactor that took it left mixed mode's native code
+    /// (MixedWasmKitRuntime, which needs it) to run interpreted. A memory with
+    /// software checks moves when it grows; the host reads guest memory only
+    /// through WasmKit's scoped accessors, which allow that, and it grows by
+    /// `realloc` (tools/patches/wasmkit_host_linking.patch) rather than by copying.
+    ///
+    /// `ISO_WASMKIT_BOUNDS=mprotect` (or `software`) in the environment picks one
+    /// for every reactor, for comparing.
+    static func memoryBoundsChecking(threaded: Bool) -> EngineConfiguration.MemoryBoundsChecking {
+        switch ProcessInfo.processInfo.environment["ISO_WASMKIT_BOUNDS"] {
+        case "mprotect": return .mprotect
+        case "software": return .software
+        default: return threaded ? .mprotect : .software
+        }
+    }
+
     public func launch(wasm: [UInt8], hostImports: WasmHostImports) throws {
         self.hostImports = hostImports
         var configuration = EngineConfiguration(stackSize: stackSize)
         configuration.features.insert(.threads)
-        let engine = Engine(configuration: configuration, interceptor: profile)
-        self.engine = engine
         let module: Module
         do {
             module = try parseWasm(bytes: wasm, features: configuration.features)
         } catch {
             throw WasmKitRuntimeError.launchFailed("parse: \(error)")
         }
+        let threaded = module.imports.contains {
+            if case .memory(let type) = $0.descriptor { return type.shared }
+            return false
+        }
+        configuration.memoryBoundsChecking = Self.memoryBoundsChecking(threaded: threaded)
+        let engine = Engine(configuration: configuration, interceptor: profile)
+        self.engine = engine
         let wasi = try makeWASI()
         self.wasi = wasi
 
@@ -189,10 +217,6 @@ public final class WasmKitRuntime: WasmRuntime {
         let store = Store(engine: engine)
         self.store = store
         let imports: Imports
-        let threaded = module.imports.contains {
-            if case .memory(let type) = $0.descriptor { return type.shared }
-            return false
-        }
         do {
             if threaded {
                 let group = try WASIThreads(
