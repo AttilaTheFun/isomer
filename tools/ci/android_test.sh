@@ -15,7 +15,7 @@ exec < /dev/null
 adb="$1" serial="$2" apk="$3" out="$4"
 shift 4
 mkdir -p "$out"
-BUNDLE=com.LoganShire.IsomerStorybook
+BUNDLE=com.LoganShire.Storybook
 a() { "$adb" -s "$serial" "$@"; }
 shot() { a exec-out screencap -p >"$1"; }
 a install -r "$apk" >/dev/null || { echo "android_test: the install failed" >&2; exit 1; }

@@ -86,3 +86,12 @@ module of its own: two would link two SwiftProtobufs into one app. With
 evolution. An app whose SwiftProtobuf is a module of its own that several of
 its binaries share points `--@isomer//:swift_protobuf` at it instead, and
 Isomer links that one (BUILD.bazel).
+
+One SwiftProtobuf across several root modules (an app built from two
+Bazel roots that share libraries) is the case the package route doesn't
+cover: each root's rules_swift_package_manager graph is its own, so each
+would build its own copy. There, give swift-protobuf one Bazel module that
+both roots depend on (its archive with a `MODULE.bazel` and a
+`BUILD.bazel` added, built with library evolution if the roots' modules
+are), and point `--@isomer//:swift_protobuf` at its library in each root.
+Keep it at 1.38.1 or later, Isomer's floor.

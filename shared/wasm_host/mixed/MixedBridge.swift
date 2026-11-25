@@ -9,7 +9,9 @@
 // Features call a few heavy runtime functions natively (`routed`).
 //
 // The native part is a C library linked into the app (tools/wasm/
-// mixed.bzl's wasm_mixed_native): one per process, so one bridge.
+// mixed.bzl's wasm_mixed_native): one per process, so one bridge at a time.
+// A released runtime's hand-over frees the native part and lets go of its
+// bridge, and the next runtime's launch makes both again.
 
 import Foundation
 import IsomerMixedABI
@@ -58,7 +60,9 @@ func mixedSignatureKey(_ type: FunctionType) -> String {
     return type.parameters.map(c).joined() + ":" + type.results.map(c).joined()
 }
 
-/// The process's one bridge (the native part is one C instance).
+/// The process's one bridge (the native part is one C instance): the
+/// launched runtime's, set by its guest's `setUp` and cleared by its
+/// `release`, both on that guest's thread.
 nonisolated(unsafe) var mixedBridge: MixedBridge?
 
 /// Native code's calls into the interpreter, with ISO_MIXED_COUNT=1: into the
