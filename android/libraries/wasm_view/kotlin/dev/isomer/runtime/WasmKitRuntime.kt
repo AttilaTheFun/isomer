@@ -1,12 +1,14 @@
 package dev.isomer.runtime
 
 // The Kotlin face of Android's wasm engine: WasmKit, the Swift interpreter,
-// built as the engine's own Swift library (android/libraries/wasm_view:
-// wasm_engine_bindings, libwasm_engine_bindings.so) and reached through its
-// generated bridge (WasmEngineBridge). One `WasmKitRuntime` wraps one live
-// reactor. A process runs either reactors or an app's compiled Swift, never
-// both (a second Swift runtime and libdispatch in one process): the
-// Playground runs its builds in a process of their own (RunActivity). The peer of Apple's WasmView
+// reached through its generated bridge (WasmEngineBridge). The engine is a
+// Swift library of its own (android/libraries/wasm_view:
+// wasm_engine_bindings, libwasm_engine_bindings.so) in an app that runs
+// reactors alone, or bound in a compiled app's own library
+// (`isomer_android_app(wasm_view = True)`), whose Swift runtime it then
+// shares. Never both: two libraries of Swift are two Swift runtimes and two
+// libdispatches in one process. One `WasmKitRuntime` wraps one live
+// reactor. The peer of Apple's WasmView
 // engine (the same `WasmKitRuntime` under the same `WasmFeatureRuntime`
 // core) and the web's native `WebAssembly`.
 
@@ -115,7 +117,10 @@ class WasmKitRuntime(
 
 /** libdispatch's main queue in the engine's library, where WasmKit posts the
  *  guest's jobs: nothing in an Android process drains it, so the main looper
- *  watches its wake handle and drains it when it fires. Main-thread only. */
+ *  watches its wake handle and drains it when it fires. Main-thread only.
+ *  Bound in a compiled app's library, the queue is the app's too, which
+ *  NativeBridge watches as well: the eventfd is non-blocking, so whichever
+ *  listener runs second reads nothing and drains an empty queue. */
 internal object MainQueue {
     private var watch: android.os.ParcelFileDescriptor? = null
 

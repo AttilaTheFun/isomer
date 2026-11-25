@@ -51,6 +51,7 @@ def kt_swift_library(
         module_name = None,
         linkopts = [],
         link_deps = [],
+        bound_libraries = [],
         shared_platform = None,
         shared_platform_when = None,
         platform = Label("@isomer//swift_ffi/rules:android-aarch64"),
@@ -75,7 +76,12 @@ def kt_swift_library(
     object) defaults to `<Module>Bridge`. Only `java_package` is the
     consumer's to choose. `testonly` applies to every target it makes.
 
-    `link_deps` are linked into the `.so` beside `swift`. `shared_platform`
+    `link_deps` are linked into the `.so` beside `swift`. `bound_libraries`
+    are annotated Swift libraries bound in the same `.so`: each linked in,
+    with a JNI adapter and a Kotlin facade of its own (`<Module>Bridge`, in
+    `java_package`) that loads this library rather than one of its own, so
+    a module an app's library uses (WasmView's engine, `WasmEngine`) adds no
+    second Swift runtime to the process. `shared_platform`
     (a `kt_swift_platform`) links it against that shared library instead
     of its own copy of what the platform holds (the Swift runtime, the
     standard library, the libraries in common); the Kotlin object loads
@@ -123,6 +129,61 @@ def kt_swift_library(
         tags = ["manual"],
     )
 
+    # Each bound library's header, adapter and facade, as `swift`'s above:
+    # its adapter's helpers are static and its Java_* names its own class's,
+    # so the adapters link side by side.
+    bound_adapters = []
+    bound_kotlin = []
+    for index, bound in enumerate(bound_libraries):
+        prefix = "%s_bound%d" % (name, index)
+        ffi_generate(
+            name = prefix + "_header_src",
+            testonly = testonly,
+            dep = bound,
+            platform = platform,
+            kind = "c-header",
+            output_name = prefix + "_bridge.h",
+        )
+        ffi_generate(
+            name = prefix + "_adapter_src",
+            testonly = testonly,
+            dep = bound,
+            platform = platform,
+            kind = "jni-adapter",
+            output_name = prefix + "_adapter.c",
+            java_package = java_package,
+            header_name = prefix + "_bridge.h",
+        )
+        cc_library(
+            name = prefix + "_adapter",
+            testonly = testonly,
+            srcs = [
+                ":" + prefix + "_adapter_src",
+                ":" + prefix + "_header_src",
+            ],
+            deps = [_SWIFT_ABI],
+            alwayslink = True,
+            tags = ["manual"],
+        )
+        ffi_generate(
+            name = prefix + "_gen_kt",
+            testonly = testonly,
+            dep = bound,
+            platform = platform,
+            kind = "kotlin",
+            output_name = prefix + ".kt",
+            java_package = java_package,
+            library_name = name,
+            preload_libraries = _pick(
+                shared_platform,
+                shared_platform_when,
+                [_platform_name(shared_platform)] if shared_platform else [],
+                [],
+            ),
+        )
+        bound_adapters += [bound, ":" + prefix + "_adapter"]
+        bound_kotlin.append(":" + prefix + "_gen_kt")
+
     # `swift_binary(linkshared = True)` named `<name>` produces `lib<name>.so`,
     # which is exactly what `System.loadLibrary("<name>")` looks up.
     # (Swift Concurrency's dispatch libraries are linked by the rules_swift
@@ -149,7 +210,7 @@ def kt_swift_library(
         swift_shared_library(
             name = name + "_shared_native",
             testonly = testonly,
-            deps = [swift, ":" + name + "_adapter"] + link_deps,
+            deps = [swift, ":" + name + "_adapter"] + bound_adapters + link_deps,
             platform = _platform_link(shared_platform),
             additional_linker_inputs = [Label("@isomer//swift_ffi/rules:jni_exports.lds")] + _libcxx_inputs(libcxx),
             features = _libcxx_features(libcxx),
@@ -162,7 +223,7 @@ def kt_swift_library(
             testonly = testonly,
             srcs = [REACTOR_STUB],
             module_name = name + "_native",
-            deps = [swift, ":" + name + "_adapter"] + link_deps,
+            deps = [swift, ":" + name + "_adapter"] + bound_adapters + link_deps,
             additional_linker_inputs = [Label("@isomer//swift_ffi/rules:jni_exports.lds")] + _libcxx_inputs(libcxx),
             features = _libcxx_features(libcxx),
             linkopts = jni_linkopts,
@@ -205,7 +266,7 @@ def kt_swift_library(
     kt_jvm_library(
         name = name,
         testonly = testonly,
-        srcs = [":" + name + "_gen_kt"],
+        srcs = [":" + name + "_gen_kt"] + bound_kotlin,
         visibility = visibility,
         deps = [_RUNTIME_KOTLIN] + deps,
         **kwargs
