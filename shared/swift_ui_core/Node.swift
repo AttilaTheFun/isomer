@@ -1184,8 +1184,20 @@ private func _viewKindByCasts(_ view: any View) -> _ViewKind {
 
 nonisolated(unsafe) private var _viewKinds: [ObjectIdentifier: _ViewKind] = [:]
 
+/// A view built through its own `_makeView` (View.swift), opened to its
+/// type: what it is answers there, statically.
 @MainActor
 private func buildUnidentifiedNode(view: any View, ctx: inout BuildContext) -> RenderNode {
+    func make<V: View>(_ view: V) -> RenderNode {
+        withUnsafeMutablePointer(to: &ctx) { V._makeView(view: _GraphValue(view), inputs: _ViewInputs(context: $0)).node }
+    }
+    return make(view)
+}
+
+/// The build of a view that doesn't say what it is (`View`'s default
+/// `_makeView`): what it is is asked of its type, once.
+@MainActor
+func buildNodeByKind(view: any View, ctx: inout BuildContext) -> RenderNode {
     let kind = _viewKind(view)
     if kind.contains(.primitive), let primitive = view as? _PrimitiveView {
         // Built-in views that don't say they build purely read or register
@@ -1231,8 +1243,28 @@ func buildChildren(of view: any View, ctx: inout BuildContext) -> [RenderNode] {
     return result
 }
 
+/// A container's children from one of its content's views, through the
+/// view's own `_makeViewList` (View.swift), opened to its type.
 @MainActor
 func appendChildren(
+    of view: any View,
+    ctx: inout BuildContext,
+    into result: inout [RenderNode]
+) {
+    func list<V: View>(_ view: V) {
+        withUnsafeMutablePointer(to: &ctx) { context in
+            withUnsafeMutablePointer(to: &result) { nodes in
+                _ = V._makeViewList(view: _GraphValue(view), inputs: _ViewListInputs(context: context, nodes: nodes))
+            }
+        }
+    }
+    list(view)
+}
+
+/// The children of a view that doesn't say what it stands for (`View`'s
+/// default `_makeViewList`): what it is is asked of its type, once.
+@MainActor
+func appendChildrenByKind(
     of view: any View,
     ctx: inout BuildContext,
     into result: inout [RenderNode]
