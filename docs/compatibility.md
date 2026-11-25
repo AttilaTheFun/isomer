@@ -53,6 +53,17 @@ What these bring with them:
   `src/tools/java/com/google/devtools/build/android/BUILD` to
   `@rules_android_maven//:com_google_protobuf_protobuf_java`, or moves its
   protobuf up.
+- **Linux hosts on arm64** build Android through x86_64 binaries: NDK r30's
+  LLVM (and Google's SDK tools) are published for x86_64 Linux alone, so an
+  aarch64 Linux host runs them under Rosetta (a container on an Apple
+  silicon Mac) or an x86_64 emulation layer of its own. CI builds Android on
+  GitHub's x86_64 Ubuntu for that reason.
+- **rules_android's dexing JVMs ask for 8 GB.** d8 and desugar run with
+  `-Xms8g -Xmx8g`, which a host or container with 8 GB of memory can't
+  commit. On such a machine, allow overcommit (`vm.overcommit_memory=1`),
+  run fewer of them at once (`--jobs=4 --worker_max_instances=1`), and keep
+  Bazel's own JVM small (`--host_jvm_args=-Xmx2g`), as a downstream app's
+  8 GB build container does.
 
 ## isomer_android_maven
 
