@@ -6,11 +6,33 @@
 /// are `nonisolated` for it too.) `@preconcurrency`, as SwiftUI's also is:
 /// code in the Swift 5 language mode that makes a view of its own outside
 /// the main actor is not refused for it; Swift 6 code is held to it.
+///
+/// Each view also says what it is, as Apple's do, through `_makeView` (the
+/// node it makes) and `_makeViewList` (the views it stands for in a
+/// container): Apple's requirements and names (GraphValue.swift). The
+/// defaults below build it as the builder always has.
 @MainActor @preconcurrency
 public protocol View {
+    static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs
+    static func _makeViewList(view: _GraphValue<Self>, inputs: _ViewListInputs) -> _ViewListOutputs
+    static func _viewListCount(inputs: _ViewListCountInputs) -> Int?
+
     associatedtype Body: View
 
     @ViewBuilder var body: Body { get }
+}
+
+extension View {
+    public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildNodeByKind(view: view.value, ctx: &inputs.context.pointee))
+    }
+
+    public static func _makeViewList(view: _GraphValue<Self>, inputs: _ViewListInputs) -> _ViewListOutputs {
+        appendChildrenByKind(of: view.value, ctx: &inputs.context.pointee, into: &inputs.nodes.pointee)
+        return _ViewListOutputs()
+    }
+
+    public static func _viewListCount(inputs: _ViewListCountInputs) -> Int? { nil }
 }
 
 extension Never: View {
