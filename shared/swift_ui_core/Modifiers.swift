@@ -154,7 +154,7 @@ struct _EnvironmentModifier {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _EnvironmentModifier: _PrimitiveView {
+extension _EnvironmentModifier: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var sub = ctx.descend(descend)
@@ -1088,7 +1088,7 @@ struct _OnChangeView<Child: View, V: Equatable> {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _OnChangeView: _PrimitiveView {
+extension _OnChangeView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let key = ctx.path + "/onchange"
@@ -1323,7 +1323,7 @@ struct _TaskModifier<Child: View> {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _TaskModifier: _PrimitiveView {
+extension _TaskModifier: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         // The task belongs to the view at this build path: started when it
@@ -1370,7 +1370,13 @@ public struct ScrollAnchorRole: Hashable, Sendable {
 
 // The view conformances, in extensions: declared on the type itself they
 // would make the whole type main-actor isolated (see `View`).
-extension _ModifiedView: View {}
+extension _ModifiedView: View {
+    // A `package` type: the internal primitives' default can't answer for
+    // it (View.swift), so it says what it is here.
+    package static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+}
 extension _EnvironmentModifier: View {}
 extension _OnChangeView: View {}
 extension _TaskModifier: View {}

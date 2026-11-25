@@ -442,7 +442,7 @@ struct _TabViewStyleView<Content: View> {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _TabViewStyleView: _PrimitiveView {
+extension _TabViewStyleView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         Runtime.shared.tabViewStyleStack.append(style)
@@ -588,7 +588,7 @@ struct _TabCustomizationView<Content: View> {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _TabCustomizationView: _PrimitiveView {
+extension _TabCustomizationView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         Runtime.shared.tabCustomizationStack.append(customization)
@@ -773,7 +773,7 @@ struct _ListRowTrait {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _ListRowTrait: _PrimitiveView {
+extension _ListRowTrait: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var sub = ctx.descend(descend)
