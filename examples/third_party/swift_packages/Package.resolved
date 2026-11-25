@@ -37,12 +37,20 @@
       }
     },
     {
-      "identity" : "shake_kit",
+      "identity" : "kscrash",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/AttilaTheFun/shake_kit.git",
+      "location" : "https://github.com/kstenerud/KSCrash.git",
       "state" : {
-        "revision" : "8815b7dd86acd88d44a946bf2da31116208156e3",
-        "version" : "0.3.0"
+        "revision" : "c3882b4db5e810a8ed4148b79cab29a173d4c5c5",
+        "version" : "2.6.1"
+      }
+    },
+    {
+      "identity" : "shireworks_kit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/AttilaTheFun/shireworks_kit.git",
+      "state" : {
+        "revision" : "6e61e129ca8ee4bcff16ff17ba1056deaa761928"
       }
     },
     {
@@ -250,15 +258,6 @@
       "state" : {
         "revision" : "feb21a6e9fe3aeac72c055c4092c34106a4f19df",
         "version" : "0.35.0"
-      }
-    },
-    {
-      "identity" : "update_kit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/AttilaTheFun/update_kit.git",
-      "state" : {
-        "revision" : "2acaad86637246bc7297a3a999ea153a52dd9d40",
-        "version" : "0.18.0"
       }
     }
   ],
