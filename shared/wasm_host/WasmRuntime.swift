@@ -27,6 +27,14 @@ public typealias WasmScalar = SwiftFFIScalar
 /// render ABI. The engine binds each to its own linear memory; the values here
 /// are already materialized (the engine reads `(ptr, len)` out of guest memory
 /// before invoking `onRenderTree` / `onLog`), so this surface is engine-neutral.
+///
+/// Which thread calls them is the engine's: `WasmKitRuntime` calls each on
+/// the thread that called into the guest (the main thread, as hosts drive
+/// it), but `MixedWasmKitRuntime` runs its guest on a thread of its own and
+/// calls `epochMillis` there, for speed (the rest it hands to the main
+/// thread). So `epochMillis` must be callable from any thread: one that
+/// asserts the main queue, or is a `@MainActor` closure, traps under the
+/// mixed runtime.
 public struct WasmHostImports {
     /// The reactor pushed a fresh serialized render tree (tree.proto).
     public var onRenderTree: ([UInt8]) -> Void
