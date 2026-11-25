@@ -125,6 +125,12 @@ public struct Picker<SelectionValue: Hashable, Content: View> {
 }
 
 extension Picker: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         // Collect the tagged options from the content.
@@ -376,6 +382,12 @@ public struct DatePickerComponents: OptionSet, Sendable {
 }
 
 extension DatePicker: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let binding = selection
         // Canonical semantic node; the self-drawing path swaps in
