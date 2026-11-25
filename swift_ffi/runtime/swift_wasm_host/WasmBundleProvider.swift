@@ -80,7 +80,9 @@ public enum WasmModuleSource: Sendable, Hashable {
         var chunk = [UInt8](repeating: 0, count: 1 << 20)
         while length.map({ bytes.count < $0 }) ?? true {
             let wanted = min(chunk.count, length.map { $0 - bytes.count } ?? chunk.count)
-            let got = chunk.withUnsafeMutableBytes { fread($0.baseAddress, 1, wanted, file) }
+            // (Unwrapped: Glibc's, Bionic's and the CRT's fread take a pointer
+            // that isn't optional; a chunk of 1 MiB always has one.)
+            let got = chunk.withUnsafeMutableBytes { fread($0.baseAddress!, 1, wanted, file) }
             if got == 0 { break }
             bytes.append(contentsOf: chunk[0..<got])
         }
