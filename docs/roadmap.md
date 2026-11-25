@@ -126,6 +126,32 @@ the line is drawn.
    frames as 1- or 2-bit framebuffers with partial-refresh regions, buttons
    as input, a simple executor for `.task` and the frame loop.
 
+## Several features in one runtime: a root per feature
+
+Today a runtime instance runs one feature: the runtime keeps one root
+(`Runtime.shared`) and starts its feature through `__main_argc_argv`, and
+every `iso_hot_*` export (render, event, resize, …) speaks to that root.
+Several features' side modules already load into one instance; what's
+missing is a root for each. With mixed mode's native part one a process, a
+second feature on screen (a sheet over a page) runs on an interpreted
+runtime of its own and starts slower.
+
+1. **In the runtime:** a `Runtime` per root, made by
+   `iso_hot_feature_start(entry)` and named by a handle. A side module
+   exports its entry under a name of its own (the linker renames its
+   `__main_argc_argv`), and the `iso_hot_*` exports take the handle, with
+   the root it names current while they run. A frame or a log goes to the
+   host with its handle. The handle-less exports stay, as the first
+   root's, so a reactor is unchanged.
+2. **In the hosts:** one engine shared by the features on screen (a
+   `WasmFeatureRuntime` behind several `WasmView`s): each view owns a
+   handle, takes its frames, and sends its events, sizes and appearance
+   under it. A reload replaces one feature's side module, not the engine.
+3. **Until then:** a host chooses which feature gets the native part. The
+   first launch while `MixedWasmKitRuntime.isAvailable` takes it, and a
+   view that needs it more (the page, not the sheet) releases the other's
+   runtime first, as a reload does.
+
 ## Research: running an app's own Apple build on Android
 
 A mode for apps whose source isn't available, or that build with another
