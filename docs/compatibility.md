@@ -73,6 +73,32 @@ Only for an app whose iPhone and Mac apps come from `isomer_application`.
 | rules_applecross | 0.0.3.382f8c3 | Apple's SDKs and tools on Linux |
 | apple_support | 2.11.0 | rules_applecross's |
 
+## Pinning: the registry and the release tags
+
+**The registry by commit.** isomer and its platform modules come from the
+project's registry (AttilaTheFun/bazel_registry), which a consumer lists
+before the BCR. A version's entry doesn't change once added (a fork's
+change is a new entry, `.isomer.N+1`), but a registry read at
+`main` follows whatever is added next. A consumer that wants its build to
+read the same registry each time pins it by commit:
+
+```
+common --registry=https://raw.githubusercontent.com/AttilaTheFun/bazel_registry/<commit>
+common --registry=https://bcr.bazel.build
+```
+
+and moves the commit forward when it takes a new isomer.
+
+**A release tag's own `MODULE.bazel` says MAJOR.MINOR.0.** A release is
+tagged vX.Y.N, but its `MODULE.bazel` files (the root, `android/module`,
+`android/maven_module`, `apple/module`) commit X.Y.0: CI stamps each build's
+version, and the registry's entry is the tag with one patch setting
+`module()` to X.Y.N (its tools/add_version.py `--stamped`). A consumer that
+takes isomer from the registry gets X.Y.N. One that takes the tag through a
+`git_override` (a fork of its own, say) gets X.Y.0 unless its override
+patches the versions too, as the registry's entry does: a `patches` of its
+own setting each module's `version` to the tag's.
+
 ## Swift packages
 
 Swift dependencies are SwiftPM's, through rules_swift_package_manager, never

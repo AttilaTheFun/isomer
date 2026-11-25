@@ -1293,6 +1293,27 @@ that must load on Android 5 (API 21 and 22) comes from a build without the
 flag (a prebuilt library), and the host opens the Isomer app only from
 API 23 (`Build.VERSION.SDK_INT >= 23`); its Swift can't load below that.
 
+**C++ compiled for a lower API than the Swift link** (a host's native
+libraries built at API 21, linked into the Isomer app's library at 23, so
+the app shares those objects with the host's own build): the check reads
+the C++ toolchain of the Swift target's own configuration, since the
+Swift SDK's libraries need API 23's symbols at link time. Objects compiled
+for 21 link into a library at 23 and run there (an Android API only
+grows), so two ways work, and the check stays as it is:
+
+- **A prebuilt archive** of the C++ (`cc_import` of a `.a` built by the
+  host's API-21 build, as "Prebuilt Swift libraries" says for Swift:
+  docs/prebuilt_swift_libraries.md), linked into the app's library;
+- **another configuration** for the C++ targets: a platform of the host's
+  whose NDK toolchain is at 21, with the C++ libraries built for it through
+  a transition (as `@isomer//tools/platforms:transition.bzl`'s
+  `transition_binary` builds a target for another platform), while the
+  Swift and the link stay on Isomer's platform at 23.
+
+The second shares cache entries with the host's build only where the two
+configurations are the same, with the same flags and output paths: the
+same platform, toolchain and copts as the host's API-21 build.
+
 ### Android release size
 
 An app's Swift is one JNI library (`lib<app>_runtime_bindings.so`): the
