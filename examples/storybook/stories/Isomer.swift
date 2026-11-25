@@ -1,6 +1,6 @@
 // The Isomer module: what Isomer adds to SwiftUI, on every platform
 // (`import Isomer`): the platform, web views, maps, video, the clipboard,
-// colors by appearance, swipes, and a platform's own views.
+// colors by appearance, swipes, screenshots, and a platform's own views.
 
 import Foundation
 import Isomer
@@ -39,6 +39,10 @@ extension StoryCatalog {
             "isomer.swipe", "Swipe gesture",
             summary: "A horizontal swipe that leaves vertical drags to the scroll view around it: a row swiped aside."
         ) { SwipeStory() },
+        Story(
+            "isomer.screenshot", "Screenshot",
+            summary: "A picture of the app's window, as a PNG, for a bug report: Apple's own drawing on iOS and the Mac, Android's PixelCopy. None on the web or desktops yet."
+        ) { ScreenshotStory() },
     ])
 }
 
@@ -196,6 +200,35 @@ struct SwipeStory: View {
             #if os(Windows) || os(Linux)
             NativeSliderRow()
             #endif
+        }
+    }
+}
+// end story
+
+// story: isomer.screenshot
+struct ScreenshotStory: View {
+    @State private var result = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button("Take a screenshot") {
+                Task {
+                    guard let png = await IsomerScreenshot.capture() else {
+                        result = "No screenshot on this platform"
+                        return
+                    }
+                    // A PNG's width and height: bytes 16 to 23, big-endian.
+                    let bytes = [UInt8](png.prefix(24))
+                    func number(at i: Int) -> Int {
+                        bytes.count < i + 4 ? 0 : bytes[i..<i + 4].reduce(0) { $0 << 8 | Int($1) }
+                    }
+                    result = "A PNG of \(number(at: 16)) × \(number(at: 20)) pixels, \(png.count / 1024) KB"
+                }
+            }
+            .buttonStyle(.bordered)
+            Text(result)
+                .font(.footnote)
+                .foregroundColor(.secondary)
         }
     }
 }

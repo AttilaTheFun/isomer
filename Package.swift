@@ -210,6 +210,7 @@ let package = Package(
                 "apple/libraries/swift_ui/AppleClipboard.swift",
                 "apple/libraries/swift_ui/AppleMacStandIns.swift",
                 "apple/libraries/swift_ui/AppleMetalView.swift",
+                "apple/libraries/swift_ui/AppleScreenshot.swift",
                 "apple/libraries/swift_ui/AppleWebView.swift",
                 "apple/libraries/swift_ui/IsomerBridge.swift",
                 "apple/libraries/swift_ui/Map.swift",

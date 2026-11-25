@@ -74,6 +74,9 @@ package protocol AndroidHost {
     /// A timed job (`Task.sleep`) is waiting: call `nativeRunMainJobs` on
     /// the runtime's thread after `milliseconds`, when it will be due.
     func scheduleMainJobsAfter(milliseconds: Int32)
+    /// The app's window as it is on screen, a PNG (`IsomerScreenshot`);
+    /// empty when it can't be taken.
+    func captureScreen() async -> [UInt8]
 }
 
 /// The active host, installed by `nativeStart`. The generated foreign proxy

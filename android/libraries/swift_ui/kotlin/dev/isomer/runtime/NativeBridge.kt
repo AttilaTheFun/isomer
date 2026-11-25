@@ -73,6 +73,8 @@ object NativeBridge {
 
         override fun displayScale(): Double = density.toDouble()
 
+        override suspend fun captureScreen(): ByteArray = ScreenCapture.capture(activity?.get())
+
         override fun platformCommand(key: String, value: String) {
             platformCommandHandler?.invoke(key, value)
         }
@@ -205,6 +207,10 @@ object NativeBridge {
     /** Applies runtime platform commands (window title, status bar, …) to the
      * current Activity; installed by [IsomerRuntime.attach]. */
     var platformCommandHandler: ((String, String) -> Unit)? = null
+
+    /** The activity the runtime is attached to (IsomerRuntime.attach), for
+     *  what needs its window: a screenshot. */
+    var activity: java.lang.ref.WeakReference<android.app.Activity>? = null
 
     /** Where serialized trees go under a component-system renderer. Null =
      * the Compose interpreter (ComposeTreeState). */
