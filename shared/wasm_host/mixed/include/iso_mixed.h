@@ -24,6 +24,9 @@ const char *iso_mixed_export_name(uint32_t index);
 uint32_t iso_mixed_export_sig(uint32_t index);
 
 void iso_mixed_instantiate(void);
+// Frees the instance iso_mixed_instantiate made (nothing if none), so it can
+// be made again over another runtime module's memory.
+void iso_mixed_release(void);
 // Calls export `index` with raw slots; one result slot.
 void iso_mixed_call_export(uint32_t index, const uint64_t *args, uint64_t *results);
 uint32_t *iso_mixed_stack_pointer(void);

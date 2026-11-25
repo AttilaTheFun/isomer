@@ -304,6 +304,7 @@ enum Bridge {
         }
         c.append("""
               wasm2c_hot_instantiate(&iso_mixed_instance, &iso_mixed_env, &iso_mixed_iso_hot, &iso_mixed_swift_ffi, &iso_mixed_wasi);
+              iso_mixed_live = true;
             }
 
             """)
@@ -357,7 +358,8 @@ enum Bridge {
     }
 
     /// mixed_glue.c's fixed middle: lookups, the native table, memory over
-    /// WasmKit's, the trap handler, and the start of iso_mixed_instantiate.
+    /// WasmKit's, the trap handler, iso_mixed_release, and the start of
+    /// iso_mixed_instantiate.
     private static let glueRuntime = #"""
 
         const char* iso_mixed_sig(uint32_t i) { return iso_mixed_sigs[i]; }
@@ -440,6 +442,22 @@ enum Bridge {
         static struct w2c_swift__ffi iso_mixed_swift_ffi;
         static struct w2c_wasi__snapshot__preview1 iso_mixed_wasi;
 
+        // Whether the instance is made and not yet released.
+        static bool iso_mixed_live = false;
+
+        // The instance freed (its tables; its memory is WasmKit's, which
+        // wasm_rt_free_memory leaves alone), so iso_mixed_instantiate can make
+        // it again over another runtime's memory: a released
+        // MixedWasmKitRuntime's hand-over, the last thing its guest's thread
+        // does. Nothing if it isn't made.
+        void iso_mixed_release(void) {
+          if (!iso_mixed_live) return;
+          wasm2c_hot_free(&iso_mixed_instance);
+          wasm_rt_free();
+          memset(&iso_mixed_instance, 0, sizeof iso_mixed_instance);
+          iso_mixed_live = false;
+        }
+
         void iso_mixed_instantiate(void) {
           wasm_rt_init();
         """#
@@ -472,6 +490,7 @@ enum Bridge {
         const char* iso_mixed_global_name(uint32_t index);
 
         void iso_mixed_instantiate(void);
+        void iso_mixed_release(void);
         void iso_mixed_call_export(uint32_t index, const uint64_t* args, uint64_t* results);
         uint64_t iso_mixed_global_value(uint32_t index);
         uint32_t* iso_mixed_stack_pointer(void);
