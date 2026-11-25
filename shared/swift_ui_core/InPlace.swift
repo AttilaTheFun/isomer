@@ -94,6 +94,7 @@ final class _RebuildSite {
 struct _FrameRegistrations: Equatable {
     let presentations: [String]
     let urlHandlers: Int
+    let shakeHandlers: Int
     let navigationStacks: Int
     let search: Bool
     let colorScheme: ColorScheme
@@ -443,6 +444,7 @@ extension Runtime {
     private var _frameRegistrations: _FrameRegistrations {
         _FrameRegistrations(
             presentations: pendingPresentations.map(\.id), urlHandlers: openURLHandlers.count,
+            shakeHandlers: shakeHandlers.count,
             navigationStacks: navigationStates.count, search: pendingSearch != nil,
             colorScheme: colorScheme, preferredColorScheme: preferredColorScheme)
     }
