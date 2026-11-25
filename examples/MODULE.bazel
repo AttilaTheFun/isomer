@@ -303,12 +303,11 @@ use_repo(
     "swiftpkg_grpc_swift_2",
     "swiftpkg_grpc_swift_nio_transport",
     "swiftpkg_grpc_swift_protobuf",
-    "swiftpkg_shake_kit",
     "swiftpkg_swift_collections",
     "swiftpkg_swift_nio",
     "swiftpkg_swift_protobuf",
     "swiftpkg_swift_sql",
-    "swiftpkg_update_kit",
+    "swiftpkg_shireworks_kit",
 )
 
 # The generated package repositories see rules_swift_package_manager's
