@@ -44,10 +44,9 @@ swift_library(
         "//shared/platform_services",
         "@isomer//apple/libraries/swift_ui",
         "@isomer//apple/libraries/swift_ui:isomer",
-        # The build it is, written for Applications at launch (ExampleApp.swift).
-        "@swiftpkg_update_kit//:UpdateKit",
-        # Shake (or Help › Report a Bug…) to file an issue, where the build opts in.
-        "@swiftpkg_shake_kit//:ShakeKit",
+        # The build it is, its updates, crash reports and shake to report
+        # (ExampleApp.swift).
+        "@swiftpkg_shireworks_kit//:ShireworksKit",
     ],
 )
 

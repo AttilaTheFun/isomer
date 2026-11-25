@@ -20,8 +20,10 @@ It also defines what the Storybook's apps carry in their Info.plist
   install an update (`UpdateKitApplicationsBundleIDs`).
 - INFOPLIST, from ISOMER_INFOPLIST: any other keys the builder's apps
   carry, as a JSON object of strings or arrays of strings (the shared
-  GitHub sign-in's `GitHubShared*`, which turn ShakeKit on, for someone
-  signed in there), or none. Its GitHubSharedKeychainGroup and
+  GitHub sign-in's `GitHubShared*`, which turn Shireworks' kit's shake on,
+  for someone signed in there), or none; `ShireworksRepository`, where the
+  kit files crash and bug reports, is GITHUB_REPOSITORY's in CI unless it
+  names one. Its GitHubSharedKeychainGroup and
   GitHubSharedLockGroup also go into the apps' entitlements, with
   UPDATE_APP_GROUP (defs.bzl's `app_entitlements`).
 CI's distribution builds set them from the repository's secrets.
@@ -47,6 +49,11 @@ def _signing_impl(rctx):
     group = (rctx.getenv("ISOMER_UPDATE_APP_GROUP", "") or "").strip()
     ids = [i.strip() for i in (rctx.getenv("ISOMER_UPDATE_APPLICATIONS_BUNDLE_IDS", "") or "").split(",") if i.strip()]
     infoplist = _infoplist(rctx.getenv("ISOMER_INFOPLIST", "") or "")
+    # Where Shireworks' kit files crash and bug reports: the repository CI
+    # builds (GitHub's GITHUB_REPOSITORY), unless the builder names one.
+    repository = (rctx.getenv("GITHUB_REPOSITORY", "") or "").strip()
+    if repository and "ShireworksRepository" not in infoplist:
+        infoplist["ShireworksRepository"] = repository
     rctx.file("BUILD.bazel", 'exports_files(["signing.bzl"])\n')
     rctx.file("signing.bzl", "\n".join([
         'TEAM_ID = "%s"' % team,
