@@ -7,8 +7,9 @@ load("@rules_swift//swift:swift.bzl", "swift_library")
 # package holding other platforms' apps leaves them out), everything the
 # macro makes testonly, Isomer's own AndroidX label listed again (in
 # services_deps and extra_binary_deps), which the macro takes once, and
-# another app's package queried (`queries_packages`: the manifest's
-# <queries>, which aapt2 checks as it links the APK).
+# another app's package and the launcher's intent queried
+# (`queries_packages`, `queries_intents`: the manifest's <queries>, which
+# aapt2 checks as it links the APK).
 swift_library(
     name = "app_swift",
     testonly = True,
@@ -30,6 +31,10 @@ isomer_android_app(
     debug_key = "@rules_android//tools/android:debug_keystore",
     extra_binary_deps = ["@isomer//android/maven:androidx"],
     package = "dev.isomer.attributes",
+    queries_intents = [{
+        "action": "android.intent.action.MAIN",
+        "category": "android.intent.category.LAUNCHER",
+    }],
     queries_packages = ["dev.isomer.another"],
     services_deps = ["@isomer//android/maven:androidx"],
     swift_library = ":app_swift",
