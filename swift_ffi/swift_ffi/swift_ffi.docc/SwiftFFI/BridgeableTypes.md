@@ -37,4 +37,7 @@ Kotlin sees a `data class`; TypeScript sees a plain object interface.
 Exported free functions may be `async` and/or throwing. A throwing function
 (or one returning `Result<T, E>` — recorded as `T` with the throwing bit)
 bridges to `Result<T>` in Kotlin and a rejected promise/`Result` shape in
-TypeScript. Interface *methods* may not be async or throwing.
+TypeScript. Interface methods may be `async` and/or throwing too, in both
+directions: Isomer's network hosts (`HTTPHost.send`, `WebSocketHost.open`,
+shared/isomer_network_host) are interfaces the Kotlin and JavaScript hosts
+implement with methods that are both.

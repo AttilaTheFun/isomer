@@ -77,6 +77,4 @@ in README.md):
 - Typed error payloads (errors currently cross as their message string only).
 - Timer support for the wasm cooperative executor
   (`swift_task_enqueueGlobalWithDelay_hook`).
-- Effectful interface methods (async / throwing), today allowed only on free
-  functions.
 - Idiomatic Apple/Linux/Windows consumer surfaces beyond the raw C header.
