@@ -115,6 +115,20 @@ public final class WasmFeatureRuntime {
         // (Announcing after start would wipe the tree the first frame just
         // built.)
         onReload?()
+        // The running engine lets go first, so one holding what a process
+        // has one of (mixed mode's native part) can give it to the engine
+        // made next: the factory finds it available
+        // (`MixedWasmKitRuntime.isAvailable`), and the new engine's launch
+        // waits for the old one's hand-over. Its guest may still be finishing
+        // something, even waiting for the main thread (this one); the launch
+        // answers that as it waits, without running the main run loop
+        // (nothing else of the host's runs mid-reload) and without the two
+        // waiting on each other. Releasing nothing (other engines), it's a
+        // plain replacement, as before.
+        if let previous = runtime {
+            runtime = nil
+            previous.release()
+        }
         do {
             let runtime = makeRuntime(bundle.wasm)
             // Hand the engine the app's dependency table BEFORE launch — the
@@ -406,6 +420,7 @@ public final class WasmFeatureRuntime {
             if pending == 0 { break }
             try? await Task.sleep(nanoseconds: 8_000_000)
         } while Date() < deadline
+        runtime.release()
         self.runtime = nil
         if pending == 0 {
             log("shutdown: graceful")
@@ -420,6 +435,7 @@ public final class WasmFeatureRuntime {
     public func forceShutdown() {
         isShutDown = true
         resizeWork?.cancel()
+        runtime?.release()
         runtime = nil
     }
 
