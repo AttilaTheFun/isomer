@@ -223,11 +223,27 @@ _swift_resources_aspect = aspect(
 )
 
 def _swift_resources_impl(ctx):
-    return [DefaultInfo(files = ctx.attr.swift_library[_SwiftResourcesInfo].files)]
+    # A label attribute with a Starlark transition reads as a list.
+    library = ctx.attr.swift_library
+    library = library[0] if type(library) == "list" else library
+    return [DefaultInfo(files = library[_SwiftResourcesInfo].files)]
+
+def _android_platform_transition_impl(_settings, _attr):
+    # The app's Swift library read as it is built, for Android: on the
+    # building machine's platform an Android-only library is incompatible,
+    # and that made everything depending on the app's assets so (a test
+    # that opens the APK). Which ABI doesn't matter: resources are the same.
+    return {"//command_line_option:platforms": str(Label("@isomer//tools/platforms:android_arm64"))}
+
+_android_platform_transition = transition(
+    implementation = _android_platform_transition_impl,
+    inputs = [],
+    outputs = ["//command_line_option:platforms"],
+)
 
 _swift_resources = rule(
     implementation = _swift_resources_impl,
-    attrs = {"swift_library": attr.label(aspects = [_swift_resources_aspect])},
+    attrs = {"swift_library": attr.label(aspects = [_swift_resources_aspect], cfg = _android_platform_transition)},
     doc = """The bundle resources an app's Swift brings: the `data` of its
     `swift_library` and of every library it depends on (a strings library's
     `<language>.lproj/<Table>.strings`), as an iOS app's bundle gathers them,
