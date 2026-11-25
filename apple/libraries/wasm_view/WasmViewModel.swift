@@ -104,6 +104,10 @@ public final class WasmViewModel: ObservableObject {
     }
     private final class HomeRelay { var directory: String?; var bundleIdentifier: String? }
     private let home = HomeRelay()
+    /// Whether the last engine made for a reactor was WasmKit's, whose
+    /// modules `prepare(bundle:)` can parse ahead.
+    private final class EngineRelay { var wasmKit = false }
+    private let engines = EngineRelay()
 
     /// The runtime module side-module bundles run over (see
     /// `WasmFeatureRuntime.runtimeModule`): set once, before the first load
@@ -164,8 +168,10 @@ public final class WasmViewModel: ObservableObject {
             "/tmp/picked")
         let logRelay = self.logRelay
         let home = self.home
+        let engines = self.engines
         core = WasmFeatureRuntime(runtime: { bytes in
             let made = runtime(bytes)
+            engines.wasmKit = made is WasmKitRuntime
             if let directory = home.directory, let engine = made as? WasmKitRuntime {
                 try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
                 engine.homeDirectory = directory
@@ -283,6 +289,27 @@ public final class WasmViewModel: ObservableObject {
     deinit {
         // The engine instance goes with the model (see the runtimes' deinit).
         NSLog("[wasm-view] model released")
+    }
+
+    /// Parses what `bundle` launches on a thread of its own, so that
+    /// `load(bundle:)` on the main thread then skips the parse, most of a
+    /// launch (WasmKitModules): a side-module bundle's runtime module (the
+    /// same from reload to reload, so parsed once a process), or a reactor
+    /// when the engine is WasmKit's. Nothing for another engine's reactor.
+    public func prepare(bundle: WasmServiceBundle) async {
+        let source: WasmModuleSource
+        switch bundle.kind {
+        case .reactor:
+            guard engines.wasmKit else { return }
+            source = bundle.module
+        case .sideModule:
+            guard let runtimeModule else { return }
+            source = runtimeModule.source
+        }
+        await Task.detached(priority: .userInitiated) {
+            guard let bytes = try? source.read() else { return }
+            _ = try? WasmKitModules.module(bytes)
+        }.value
     }
 
     public func load(bundle: WasmServiceBundle) {

@@ -164,6 +164,10 @@ public struct WasmView: View {
             let onStatus = onStatus
             for await bundle in provider.bundleUpdates() {
                 if Task.isCancelled { return }
+                // Parsed off the main thread first: the launch below
+                // finds it parsed and doesn't hold the app's frames.
+                await runtime.prepare(bundle: bundle)
+                if Task.isCancelled { return }
                 runtime.load(bundle: bundle)
                 onStatus?(runtime.status)
             }
