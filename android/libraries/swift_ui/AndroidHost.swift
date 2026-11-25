@@ -4,6 +4,7 @@
 // `nativeRender` export; see DrawListDecoder.kt for the format); everything
 // else calls up through the generated JNI foreign proxy with real values.
 
+internal import Foundation
 internal import SwiftUI
 internal import IsomerSwiftUI
 
@@ -39,6 +40,20 @@ struct AndroidHostBridge: HostBridge {
     func captureScreenshot() async -> [UInt8]? {
         guard let png = await androidHost?.captureScreen(), !png.isEmpty else { return nil }
         return png
+    }
+
+    func hostValue(_ key: String) -> String? {
+        // The runtime's debug switches are the process's environment, as
+        // every host's (HostBridge's default).
+        if key.hasPrefix("env:") {
+            return ProcessInfo.processInfo.environment[String(key.dropFirst(4))]
+        }
+        guard let value = androidHost?.hostValue(key: key), !value.isEmpty else { return nil }
+        return value
+    }
+
+    func hostRequest(_ key: String, _ value: String) async -> String? {
+        await androidHost?.hostRequest(key: key, value: value)
     }
 
     func registerImage(_ source: String, bytes: [UInt8]) {

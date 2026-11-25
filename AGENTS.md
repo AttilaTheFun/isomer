@@ -1342,7 +1342,9 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
   PlatformViewRepresentable and its per-platform refinements, BridgedView,
   `Color.dynamic(light:dark:)`, `swipeGesture`, `IsomerScreenshot.capture()`
   (the window as a PNG: Apple's renderers, Android's PixelCopy; nil on the web
-  and desktops), `cameraCapture`,
+  and desktops), `AppPackages` (other apps: installed versions, opening,
+  installing a package; Android's PackageManager and PackageInstaller, a
+  Mac's NSWorkspace), `cameraCapture`,
   `VideoPlayer(url:)`, Platform, platform modifiers, JSON, the platform
   bridge) and is the umbrella over the Isomer* modules (shared/isomer/
   Exports.swift). Its names before 0.31, SwiftUIExtensions and

@@ -207,6 +207,7 @@ let package = Package(
                 "wasm", "web", "windows", "xplat",
             ],
             sources: [
+                "apple/libraries/swift_ui/AppleAppPackages.swift",
                 "apple/libraries/swift_ui/AppleClipboard.swift",
                 "apple/libraries/swift_ui/AppleMacStandIns.swift",
                 "apple/libraries/swift_ui/AppleMetalView.swift",

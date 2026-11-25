@@ -76,6 +76,9 @@ object IsomerRuntime {
         // Initial system appearance; call [setColorScheme] again from
         // onConfigurationChanged for live dark-mode toggles.
         setColorScheme(activity.resources.configuration)
+        // The activity the system's screens start from (an app opened, an
+        // install's confirmation).
+        AppPackages.activity = java.lang.ref.WeakReference(activity)
     }
 
     /** Forward the system appearance (initially via [attach]; on change from
