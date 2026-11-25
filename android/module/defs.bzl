@@ -232,7 +232,9 @@ def _android_platform_transition_impl(_settings, _attr):
     # The app's Swift library read as it is built, for Android: on the
     # building machine's platform an Android-only library is incompatible,
     # and that made everything depending on the app's assets so (a test
-    # that opens the APK). Which ABI doesn't matter: resources are the same.
+    # that opens the APK). Which ABI doesn't matter: resources are the same
+    # on each, except a library whose `data` is `select()`ed by CPU, which
+    # gives arm64's here in an x86_64 build too.
     return {"//command_line_option:platforms": str(Label("@isomer//tools/platforms:android_arm64"))}
 
 _android_platform_transition = transition(
