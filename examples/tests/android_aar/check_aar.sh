@@ -41,6 +41,8 @@ has aar/assets/hello.txt "assets, at assets/'s root"
 has aar/assets/fonts/Fixture.ttf "fonts, in assets/fonts/ for Font.custom"
 has aar/assets/bundle/Data.json "resources, in assets/bundle/ for Bundle.main"
 has aar/assets/bundle/fr.lproj/Localizable.strings "a resource in its .lproj folder"
+has aar/assets/bundle/de.lproj/Strings.strings "a Swift library's data, in its .lproj folder"
+lacks aar/assets/bundle/Contents.json "an asset catalog, which rules_apple compiles"
 # classes.jar: the app's and Isomer's, not the host's.
 has classes/dev/isomer/aartest/MainActivity.class "the app's entry activity"
 has classes/dev/isomer/runtime/IsomerRuntime.class "Isomer's runtime"

@@ -145,8 +145,10 @@ object NativeBridge {
             try { wakes.read(ByteArray(8)) } catch (_: java.io.IOException) {}
             SwiftUIBridge.nativeDrainMainQueue()
             if (SwiftUIBridge.nativeWantsRender()) {
-                NativeBridge.render()
-                pumpFramesIfNeeded()
+                // Compose: the next vsync frame renders what the drain asked
+                // for, so a burst of main-actor work renders once a frame,
+                // not once a drain. The GL path renders on its own loop.
+                if (surface == null) pumpFramesIfNeeded() else NativeBridge.render()
             }
             input
         }
