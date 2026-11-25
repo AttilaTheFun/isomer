@@ -726,6 +726,7 @@ def isomer_android_app(
         services_installer = None,
         services_deps = [],
         permissions = [],
+        queries_packages = [],
         uses_cleartext_traffic = False,
         version_name = None,
         version_code = None,
@@ -778,6 +779,9 @@ def isomer_android_app(
     the app's Kotlin loads (@isomer_android//wasm_view:engine_native,
     WasmKit for WasmView). `extra_application` is manifest XML placed
     inside `<application>`: a second activity the app's Kotlin declares.
+    `queries_packages` are the other apps' packages the app looks up
+    through PackageManager (their installed versions): Android 11 and later
+    shows an app only those its manifest's `<queries>` names.
     App-authored host views (`kind` of a PlatformViewRepresentable) are
     composables the services installer puts in `AppHostViews.factories`.
     `icon` is the launcher icon: a square PNG at 192 × 192 (the launcher's
@@ -891,6 +895,15 @@ def isomer_android_app(
         for permission in permissions
         if permission not in ["android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE"]
     ])
+    # The other apps the app looks up (PackageManager: their installed
+    # versions, whether they're there): Android 11 and later shows an app
+    # only the packages its manifest's <queries> names, a child of
+    # <manifest>, where the permissions are.
+    if queries_packages:
+        extra_permissions += "\n\n    <queries>" + "".join([
+            '\n        <package android:name="%s" />' % package_name
+            for package_name in queries_packages
+        ]) + "\n    </queries>"
     application_attrs = ""
     if uses_cleartext_traffic:
         application_attrs = '\n        android:usesCleartextTraffic="true"'
