@@ -21,15 +21,14 @@ let package = Package(
         // SQLite: its C API and the Swift layer over it (the files probe and
         // the WASI check).
         .package(url: "https://github.com/AttilaTheFun/swift_sql.git", exact: "0.35.0"),
-        // UpdateKit: the Storybook's iPhone and Mac apps write the build they are (version and BuildVariant) for
-        // Applications at each launch, and are told of newer ones.
-        // (ApplicationUpdates in AttilaTheFun/applications until 0.10.45.)
-        .package(url: "https://github.com/AttilaTheFun/update_kit.git", exact: "0.18.0"),
-        // ShakeKit: shake the iPhone (or Help › Report a Bug… on the Mac) to
-        // file an issue with a screenshot and the logs, for someone signed in
-        // to the shared GitHub sign-in on the device; only in builds that
-        // carry its keys (CI's, //tools/signing).
-        .package(url: "https://github.com/AttilaTheFun/shake_kit.git", exact: "0.3.0"),
+        // ShireworksKit: the Storybook's iPhone and Mac apps write the build
+        // they are (version and BuildVariant) for Shireworks' Applications,
+        // show its update sheet, report crashes, and file an issue with a
+        // screenshot and the logs on a shake (Help › Report a Bug… on the
+        // Mac), for someone signed in to the shared GitHub sign-in; only in
+        // builds that carry its keys (CI's, //tools/signing). It replaced
+        // UpdateKit and ShakeKit. By revision until its 0.1.0 is tagged.
+        .package(url: "https://github.com/AttilaTheFun/shireworks_kit.git", revision: "6e61e129ca8ee4bcff16ff17ba1056deaa761928"),
         // build_tools: CI's shared tools, built here and run by the release
         // jobs: `sign` (an APK, a Mac app, an
         // iPhone app, with the release environment's keys) and `proof-diff`
