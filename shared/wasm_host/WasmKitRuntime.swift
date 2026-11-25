@@ -298,6 +298,9 @@ public final class WasmKitRuntime: WasmRuntime {
     /// Calls each dependency's register export once, so the guest's proxy
     /// factories exist before its first lookup (the C host's
     /// `swift_ffi_host_activate_dependencies`).
+    /// Register exports whose call failed, said once each a process.
+    nonisolated(unsafe) private static var reportedRegisterFailures: Set<String> = []
+
     private func activateDependencies() {
         var seen: Set<String> = []
         for dependency in pendingDependencies.values.sorted(by: { $0.key < $1.key }) {
@@ -306,7 +309,13 @@ public final class WasmKitRuntime: WasmRuntime {
             do {
                 try call(symbol, [])
             } catch {
-                hostImports?.onLog("[wasmkit] register \(symbol): \(error)")
+                // A dependency the module wasn't built with (a runtime with
+                // no IsomerNetworkHost has no register export for the
+                // network hosts every host injects): said once a process,
+                // not at every launch.
+                if Self.reportedRegisterFailures.insert(symbol).inserted {
+                    hostImports?.onLog("[wasmkit] register \(symbol): \(error) (said once)")
+                }
             }
         }
     }
