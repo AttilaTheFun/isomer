@@ -27,8 +27,8 @@ let package = Package(
         // screenshot and the logs on a shake (Help › Report a Bug… on the
         // Mac), for someone signed in to the shared GitHub sign-in; only in
         // builds that carry its keys (CI's, //tools/signing). It replaced
-        // UpdateKit and ShakeKit. By revision until its 0.1.0 is tagged.
-        .package(url: "https://github.com/AttilaTheFun/shireworks_kit.git", revision: "6e61e129ca8ee4bcff16ff17ba1056deaa761928"),
+        // UpdateKit and ShakeKit. At 0.1.0.
+        .package(url: "https://github.com/AttilaTheFun/shireworks_kit.git", exact: "0.1.0"),
         // build_tools: CI's shared tools, built here and run by the release
         // jobs: `sign` (an APK, a Mac app, an
         // iPhone app, with the release environment's keys) and `proof-diff`

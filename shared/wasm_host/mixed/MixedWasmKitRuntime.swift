@@ -26,10 +26,14 @@
 //     back into the guest (swift_ffi staging a result) run there, in turn.
 // Frames come to the host on the main thread.
 //
-// One per process: the native part is one C instance. A trap in native code
-// (or in interpreted code native code called) ends the process, as a crash
-// in native code would. Native code compiled without bounds checks relies on
-// WasmKit's guard pages; where WasmKit couldn't reserve them, launch fails.
+// One at a time: the native part is one C instance a process. A side module
+// can't be unloaded, so a feature's reload is a new runtime: the old one's
+// `release()` (or its deinit) lets its thread finish what was queued, then
+// free the native part (the hand-over), and the new one's launch waits for
+// that (MixedNativeClaim). A trap in native code (or in interpreted code
+// native code called) ends the process, as a crash in native code would.
+// Native code compiled without bounds checks relies on WasmKit's guard
+// pages; where WasmKit couldn't reserve them, launch fails.
 
 import Foundation
 import IsomerMixedABI
@@ -42,6 +46,8 @@ import WasmKitWASI
 public enum MixedRuntimeError: Error, CustomStringConvertible {
     case alreadyRunning
     case notLaunched
+    case released
+    case handOverTimedOut
     case missingExport(String)
     case launchFailed(String)
 
@@ -49,6 +55,8 @@ public enum MixedRuntimeError: Error, CustomStringConvertible {
         switch self {
         case .alreadyRunning: return "a mixed runtime already runs in this process (the native part is one instance)"
         case .notLaunched: return "the mixed runtime isn't launched"
+        case .released: return "the mixed runtime was released"
+        case .handOverTimedOut: return "a released mixed runtime's guest didn't hand the native part over in time"
         case .missingExport(let name): return "the runtime module exports no \(name)"
         case .launchFailed(let reason): return "launch failed: \(reason)"
         }
@@ -77,6 +85,9 @@ public struct MixedNativePart: Sendable {
 /// `Thread` (Linux, Windows) can't be subclassed from another module (its
 /// overridable members name CoreFoundation's types, which it imports for
 /// its implementation alone), and a block runs the same on every Foundation.
+///
+/// A released runtime stops its thread (`stop(finally:)`): what was queued
+/// runs, then the hand-over, last; then the thread ends.
 final class MixedEngineThread: @unchecked Sendable {
     private let condition = NSCondition()
     private var work: [() -> Void] = []
@@ -85,11 +96,24 @@ final class MixedEngineThread: @unchecked Sendable {
     private var running = false
     /// The thread itself, made by `start()`.
     private var thread: Thread?
+    /// `stop(finally:)` was called: work posted since is refused, but for
+    /// the host's calls while the guest waits for the main thread (see
+    /// `accepting`).
+    private var stopping = false
+    /// The hand-over `stop(finally:)` was given, until it runs: once the
+    /// queue is empty, at the serve loop's top (never inside a wait for the
+    /// main thread, where the guest's frames are still on the stack).
+    private var handOver: (() -> Void)?
+    /// What the guest's thread waits on the main thread for, by number. Each
+    /// runs once, from the main queue or from a main thread that waits for
+    /// this thread's hand-over (`answerMainRequests`), whichever comes first.
+    private var mainRequests: [Int: () -> Void] = [:]
+    private var nextMainRequest = 0
 
     init() {}
 
     /// The thread made and started: 64 MiB of stack (native code recurses on
-    /// it), serving the queue for the life of the process.
+    /// it), serving the queue until `stop(finally:)`.
     func start() {
         let thread = Thread { [self] in serve() }
         thread.stackSize = 64 << 20
@@ -103,13 +127,33 @@ final class MixedEngineThread: @unchecked Sendable {
         while true {
             condition.lock()
             running = false
-            while work.isEmpty { condition.wait() }
+            while work.isEmpty && handOver == nil { condition.wait() }
+            if work.isEmpty, let finally = handOver {
+                // Everything queued has run: the hand-over, last, and the
+                // thread ends.
+                handOver = nil
+                running = true
+                condition.unlock()
+                finally()
+                condition.lock()
+                running = false
+                condition.unlock()
+                return
+            }
             let next = work.removeFirst()
             running = true
             condition.unlock()
             next()
         }
     }
+
+    /// Whether work may be queued now (under `condition`): always until
+    /// `stop(finally:)`; after it, only while the guest waits for the main
+    /// thread. Those are the host's calls back into the guest in answer to
+    /// what it asked (swift_ffi staging a result): the guest can't finish
+    /// without them, and they run before the hand-over, as it waits for the
+    /// queue to empty.
+    private var accepting: Bool { !stopping || waiting > 0 }
 
     /// Nothing queued, nothing running, not waiting for the main thread.
     var isIdle: Bool {
@@ -118,26 +162,46 @@ final class MixedEngineThread: @unchecked Sendable {
         return work.isEmpty && !running && waiting == 0
     }
 
-    func post(_ item: @escaping () -> Void) {
+    /// Queues `item`; false (and nothing queued) once the thread is stopping.
+    @discardableResult
+    func post(_ item: @escaping () -> Void) -> Bool {
         condition.lock()
+        defer { condition.unlock() }
+        guard accepting else { return false }
         work.append(item)
         condition.signal()
-        condition.unlock()
+        return true
     }
 
-    /// `body` on this thread, waited for (not from this thread).
+    /// `body` on this thread, waited for (not from this thread). Throws
+    /// `MixedRuntimeError.released` once the thread is stopping, rather than
+    /// waiting for work that will never run.
     func sync<T>(_ body: @escaping () throws -> T) throws -> T {
         // Identity: Thread is NSObject's equality on Apple and corelibs, a
         // plain Swift class in Isomer's Foundation (the Swift SDK's on Android).
         if let thread, Thread.current === thread { return try body() }
         let done = DispatchSemaphore(value: 0)
         var result: Result<T, Error>!
-        post {
+        let queued = post {
             result = Result { try body() }
             done.signal()
         }
+        guard queued else { throw MixedRuntimeError.released }
         done.wait()
         return try result.get()
+    }
+
+    /// Stops the thread: what is queued runs, then `finally`, on this
+    /// thread, and the thread ends. Work posted since is refused (`post`
+    /// answers false, `sync` throws), but for calls in answer to the guest
+    /// while it waits for the main thread. Once: a second stop does nothing.
+    func stop(finally: @escaping () -> Void) {
+        condition.lock()
+        defer { condition.unlock() }
+        guard !stopping else { return }
+        stopping = true
+        handOver = finally
+        condition.signal()
     }
 
     /// Whether the guest's thread is waiting for the main thread now (so a
@@ -148,15 +212,46 @@ final class MixedEngineThread: @unchecked Sendable {
         return waiting > 0
     }
 
+    /// Whether the guest's thread waits for the main thread to answer
+    /// something no one has answered yet.
+    var hasMainRequests: Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        return !mainRequests.isEmpty
+    }
+
+    /// On the main thread: answers now what the guest's thread waits on the
+    /// main thread for, in the order it asked. For a main thread that waits
+    /// for this thread (a launch waiting for this runtime's hand-over), so
+    /// that neither waits for the other.
+    func answerMainRequests() {
+        condition.lock()
+        let requests = mainRequests.sorted { $0.key < $1.key }.map(\.value)
+        mainRequests.removeAll()
+        condition.unlock()
+        for request in requests { request() }
+    }
+
+    /// Request `number`, unless it was answered already (on the main thread).
+    private func answerMainRequest(_ number: Int) {
+        condition.lock()
+        let request = mainRequests.removeValue(forKey: number)
+        condition.unlock()
+        request?()
+    }
+
     /// From this thread: `body` on the main thread, this thread doing the
-    /// work queued for it until `body` has answered.
+    /// work queued for it until `body` has answered. The request goes to the
+    /// main queue, and to a main thread waiting for this thread's hand-over
+    /// if there is one (which can't run the main queue meanwhile).
     func onMain<T>(_ body: @escaping @MainActor () -> T) -> T {
         var answer: T?
         var answered = false
         condition.lock()
         waiting += 1
-        condition.unlock()
-        DispatchQueue.main.async {
+        let number = nextMainRequest
+        nextMainRequest += 1
+        mainRequests[number] = {
             let value = MainActor.assumeIsolated(body)
             self.condition.lock()
             answer = value
@@ -164,6 +259,9 @@ final class MixedEngineThread: @unchecked Sendable {
             self.condition.broadcast()
             self.condition.unlock()
         }
+        condition.unlock()
+        DispatchQueue.main.async { self.answerMainRequest(number) }
+        MixedNativeClaim.mainRequestPosted()
         while true {
             condition.lock()
             while work.isEmpty && !answered { condition.wait() }
@@ -179,12 +277,142 @@ final class MixedEngineThread: @unchecked Sendable {
     }
 }
 
+/// The process's one native part (one C instance): whether a runtime holds
+/// it, and a released holder's hand-over until it has run.
+///
+/// A runtime claims it at launch and gives it back when released: its
+/// thread finishes what was queued, frees the native part and lets go of
+/// the bridge (the hand-over), and only then is the native part free. A
+/// launch while a released runtime's hand-over is still to run waits for
+/// it, on the main thread; the old guest may be waiting for the main thread
+/// itself (a host value, a swift_ffi answer), so the launch answers those
+/// requests as it waits: without running the main run loop (which would run
+/// anything queued there, a view's update mid-reload among them), and
+/// without the two threads waiting on each other.
+enum MixedNativeClaim {
+    private static let condition = NSCondition()
+    /// A runtime holds the native part (from its launch to its hand-over).
+    nonisolated(unsafe) private static var held = false
+    /// The released holder's thread, while its hand-over is still to run.
+    nonisolated(unsafe) private static var handingOver: MixedEngineThread?
+
+    /// No runtime holds the native part, or the one that does was released
+    /// (a launch now waits for its hand-over, then gets it).
+    static var isAvailable: Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        return !held || handingOver != nil
+    }
+
+    /// Claims the native part for a launch, on the main thread. Held by a
+    /// runtime not released: `alreadyRunning`. Held by a released one: waits
+    /// for its hand-over (up to `timeout`, then `handOverTimedOut`),
+    /// answering what its guest asks the main thread for meanwhile.
+    @MainActor
+    static func claim(timeout: TimeInterval) throws {
+        let deadline = Date(timeIntervalSinceNow: timeout)
+        condition.lock()
+        defer { condition.unlock() }
+        while held {
+            guard let previous = handingOver else { throw MixedRuntimeError.alreadyRunning }
+            if previous.hasMainRequests {
+                condition.unlock()
+                previous.answerMainRequests()
+                condition.lock()
+                continue
+            }
+            // Woken by the hand-over's end, or by a new request of the old
+            // guest's (`mainRequestPosted`).
+            if !condition.wait(until: deadline), held, Date() >= deadline {
+                throw MixedRuntimeError.handOverTimedOut
+            }
+        }
+        held = true
+    }
+
+    /// A released holder's hand-over is to run on `thread`.
+    static func beginHandOver(_ thread: MixedEngineThread) {
+        condition.lock()
+        handingOver = thread
+        condition.broadcast()
+        condition.unlock()
+    }
+
+    /// The hand-over has run (on the old guest's thread): the native part is
+    /// free.
+    static func endHandOver() {
+        condition.lock()
+        held = false
+        handingOver = nil
+        condition.broadcast()
+        condition.unlock()
+    }
+
+    /// A guest's thread asked the main thread for something: a launch
+    /// waiting for a hand-over wakes to answer it.
+    static func mainRequestPosted() {
+        condition.lock()
+        condition.broadcast()
+        condition.unlock()
+    }
+}
+
+/// Whether a runtime holds the native part and whether it was released:
+/// what `release()` and `deinit` (off the main actor) share, and the guest
+/// reads to drop what a released guest sends its host.
+final class MixedLifecycle: @unchecked Sendable {
+    private let lock = NSLock()
+    private var claimed = false
+    private var released = false
+    private var guest: MixedGuest?
+
+    var isReleased: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return released
+    }
+
+    /// The runtime claimed the native part for `guest`.
+    func claim(for guest: MixedGuest) {
+        lock.lock()
+        claimed = true
+        self.guest = guest
+        lock.unlock()
+    }
+
+    /// Releases the runtime, once, from any thread: stops `thread`, and,
+    /// when the runtime holds the native part, hands it over last there.
+    func release(thread: MixedEngineThread) {
+        lock.lock()
+        guard !released else {
+            lock.unlock()
+            return
+        }
+        released = true
+        let held = claimed
+        let guest = self.guest
+        lock.unlock()
+        guard held else {
+            thread.stop {}
+            return
+        }
+        MixedNativeClaim.beginHandOver(thread)
+        thread.stop {
+            guest?.release()
+            MixedNativeClaim.endHandOver()
+        }
+    }
+}
+
 @MainActor
 public final class MixedWasmKitRuntime: WasmRuntime {
-    nonisolated(unsafe) private static var running = false
+    /// Dependency registers the runtime module was found not to export, each
+    /// said once a process.
+    private static var unregistered: Set<String> = []
 
     private let native: MixedNativePart
     private let thread = MixedEngineThread()
+    private let lifecycle = MixedLifecycle()
     private var guest: MixedGuest?
     private var hostImports: WasmHostImports?
     private var ffi: SwiftFFIHostRuntime?
@@ -203,9 +431,25 @@ public final class MixedWasmKitRuntime: WasmRuntime {
     /// (512 KiB) ran out in both on the Storybook. Read at `launch`.
     public var stackSize = 2 << 20
 
+    /// How long `launch` waits for a released runtime's hand-over (its
+    /// guest finishing what it was doing) before `handOverTimedOut`.
+    public var handOverTimeout: TimeInterval = 10
+
+    /// Whether a launch now gets the native part: no mixed runtime holds it,
+    /// or the one that does was released (the launch waits for its
+    /// hand-over). A host that finds it false runs the guest another way
+    /// (`WasmKitRuntime`, interpreted).
+    public nonisolated static var isAvailable: Bool { MixedNativeClaim.isAvailable }
+
     public init(native: MixedNativePart) {
         self.native = native
         thread.start()
+    }
+
+    /// A runtime let go of without `release()` releases itself; its thread
+    /// hands the native part over as `release()` would.
+    deinit {
+        lifecycle.release(thread: thread)
     }
 
     public func installDependencies(prefix: String, _ dependencies: [String: SwiftFFIDependency]) {
@@ -213,10 +457,14 @@ public final class MixedWasmKitRuntime: WasmRuntime {
         ffi?.dependencies = pendingDependencies
     }
 
-    /// Launches `wasm`, the runtime module, on the guest's thread.
+    /// Launches `wasm`, the runtime module, on the guest's thread. The
+    /// native part is one a process: held by another runtime, launch throws
+    /// `alreadyRunning`; held by a released one, launch waits for its
+    /// hand-over first (`handOverTimeout`).
     public func launch(wasm: [UInt8], hostImports: WasmHostImports) throws {
-        guard !Self.running else { throw MixedRuntimeError.alreadyRunning }
-        Self.running = true
+        guard !lifecycle.isReleased else { throw MixedRuntimeError.released }
+        guard guest == nil else { throw MixedRuntimeError.alreadyRunning }
+        try MixedNativeClaim.claim(timeout: handOverTimeout)
         self.hostImports = hostImports
         let ffi = SwiftFFIHostRuntime(engine: Adapter(runtime: self))
         ffi.dependencies = pendingDependencies
@@ -226,15 +474,32 @@ public final class MixedWasmKitRuntime: WasmRuntime {
         var standard: [String: SwiftFFIImport] = [:]
         for item in ffi.standardImports() { standard[item.name] = item }
         let guest = MixedGuest(
-            thread: thread, native: native, hostImports: hostImports, swiftFFI: standard, stackSize: stackSize)
+            thread: thread, lifecycle: lifecycle, native: native, hostImports: hostImports, swiftFFI: standard,
+            stackSize: stackSize)
         self.guest = guest
-        try thread.sync { try guest.setUp(runtime: wasm) }
+        lifecycle.claim(for: guest)
+        do {
+            try thread.sync { try guest.setUp(runtime: wasm) }
+        } catch {
+            // What setUp made of the native part goes with the runtime, so
+            // the next launch can have it.
+            release()
+            throw error
+        }
         // Each dependency's register export, so the guest's proxy factories
-        // exist before its first lookup.
+        // exist before its first lookup. A dependency the runtime module
+        // wasn't linked with (no IsomerNetworkHost, say) has none: skipped,
+        // and said once a process.
         var seen: Set<String> = []
         for dependency in pendingDependencies.values.sorted(by: { $0.key < $1.key }) {
             let symbol = dependency.registerSymbol
             guard !symbol.isEmpty, seen.insert(symbol).inserted else { continue }
+            guard try thread.sync({ guest.exports(symbol) }) else {
+                if Self.unregistered.insert(symbol).inserted {
+                    hostImports.onLog("[mixed] the runtime module exports no \(symbol): that dependency isn't registered")
+                }
+                continue
+            }
             _ = try? call(symbol, [])
         }
     }
@@ -246,6 +511,18 @@ public final class MixedWasmKitRuntime: WasmRuntime {
         try thread.sync { try guest.loadSideModule(wasm) }
     }
 
+    /// Lets go of the native part, so another runtime can launch with it (a
+    /// side module can't be unloaded: a feature's reload is a new runtime).
+    /// The guest's thread finishes what was queued, then frees the native
+    /// part and the bridge, and ends; a launch meanwhile waits for that.
+    /// Calls after it throw `released` (reads answer nothing, writes and
+    /// renders do nothing), but for the host's answers to the guest while it
+    /// still waits for the main thread; frames and commands the guest sends
+    /// after it are dropped. Once; `deinit` releases a runtime not released.
+    public func release() {
+        lifecycle.release(thread: thread)
+    }
+
     // MARK: Calls from the host
 
     private static let allocators: Set<String> = ["iso_hot_alloc", "swift_ffi_alloc"]
@@ -254,17 +531,20 @@ public final class MixedWasmKitRuntime: WasmRuntime {
     public func call(_ name: String, _ args: [WasmScalar]) throws -> WasmScalar? {
         guard let guest else { throw MixedRuntimeError.notLaunched }
         // The guest's thread waits for the main thread (a host import): the
-        // call runs there now, in turn.
+        // call runs there now, in turn (released or not: the guest needs it).
         if thread.isWaitingForMain || name == "iso_hot_pending_tasks" {
             return try thread.sync { try guest.call(name, args) }
         }
+        guard !lifecycle.isReleased else { throw MixedRuntimeError.released }
         if Self.allocators.contains(name) {
             nextPlaceholder -= 16
             let placeholder = nextPlaceholder
-            thread.post { guest.allocate(name, args, placeholder: placeholder) }
+            guard thread.post({ guest.allocate(name, args, placeholder: placeholder) }) else {
+                throw MixedRuntimeError.released
+            }
             return .i32(Int32(bitPattern: placeholder))
         }
-        thread.post {
+        let queued = thread.post {
             do {
                 _ = try guest.call(name, args)
             } catch {
@@ -272,6 +552,7 @@ public final class MixedWasmKitRuntime: WasmRuntime {
             }
             if Self.deallocators.contains(name), case .i32(let p)? = args.first { guest.forget(UInt32(bitPattern: p)) }
         }
+        guard queued else { throw MixedRuntimeError.released }
         return nil
     }
 
@@ -289,7 +570,10 @@ public final class MixedWasmKitRuntime: WasmRuntime {
         }
     }
 
-    public func pumpGuestJobs() { ffi?.runQueuedJobs() }
+    public func pumpGuestJobs() {
+        guard !lifecycle.isReleased else { return }
+        ffi?.runQueuedJobs()
+    }
 
     /// The guest's thread has nothing queued or running and isn't waiting
     /// for the main thread. What it sent the main thread (frames, logs) may
@@ -302,7 +586,10 @@ public final class MixedWasmKitRuntime: WasmRuntime {
     /// guest then runs interpreted. Known after `launch`.
     public var isNative: Bool { guest?.isNative ?? false }
 
-    public func renderPending() { guest?.requestRender() }
+    public func renderPending() {
+        guard !lifecycle.isReleased else { return }
+        guest?.requestRender()
+    }
 
     /// Native code's calls into the interpreter so far (ISO_MIXED_COUNT=1),
     /// and resets them.
@@ -334,6 +621,7 @@ public final class MixedWasmKitRuntime: WasmRuntime {
 /// The guest: everything here runs on the guest's thread.
 final class MixedGuest: @unchecked Sendable {
     let thread: MixedEngineThread
+    let lifecycle: MixedLifecycle
     let native: MixedNativePart
     let hostImports: WasmHostImports
     let swiftFFI: [String: SwiftFFIImport]
@@ -342,6 +630,8 @@ final class MixedGuest: @unchecked Sendable {
     private var runtime: Instance!
     /// Native code runs (else the guest runs interpreted: see `setUp`).
     var isNative = false
+    /// `setUp` made the native part's instance (`release` frees it).
+    private var instantiated = false
     private var wasi: WASIBridgeToHost?
     /// Placeholder address → the real one.
     private var placeholders: [UInt32: UInt32] = [:]
@@ -349,10 +639,11 @@ final class MixedGuest: @unchecked Sendable {
     private var renderQueued = false
 
     init(
-        thread: MixedEngineThread, native: MixedNativePart, hostImports: WasmHostImports,
+        thread: MixedEngineThread, lifecycle: MixedLifecycle, native: MixedNativePart, hostImports: WasmHostImports,
         swiftFFI: [String: SwiftFFIImport], stackSize: Int
     ) {
         self.thread = thread
+        self.lifecycle = lifecycle
         self.native = native
         self.hostImports = hostImports
         self.swiftFFI = swiftFFI
@@ -366,6 +657,16 @@ final class MixedGuest: @unchecked Sendable {
         if Self.trace { print("[mixed-trace] \(message)") }
         let hostImports = self.hostImports
         DispatchQueue.main.async { hostImports.onLog(message) }
+    }
+
+    /// `body` on the main thread, unless the runtime is released by then: a
+    /// released guest's frames, render requests and commands are its host's
+    /// no longer (after a reload the new guest's are). Logs still go.
+    private func toHost(_ body: @escaping () -> Void) {
+        let lifecycle = self.lifecycle
+        DispatchQueue.main.async {
+            if !lifecycle.isReleased { body() }
+        }
     }
 
     func setUp(runtime runtimeBytes: [UInt8]) throws {
@@ -408,6 +709,7 @@ final class MixedGuest: @unchecked Sendable {
             log("[mixed] no guard pages for the runtime's memory (the reservation was refused): running interpreted")
         } else {
             iso_mixed_instantiate()
+            instantiated = true
             b.nativeStackPointer = iso_mixed_stack_pointer()
 
             // The table slots the split added: the runtime's functions there.
@@ -444,6 +746,23 @@ final class MixedGuest: @unchecked Sendable {
 
     func loadSideModule(_ bytes: [UInt8]) throws {
         try bridge.linker.load(bytes)
+    }
+
+    /// Whether the runtime module exports `name` (natively or interpreted).
+    func exports(_ name: String) -> Bool {
+        bridge.nativeExports[name] != nil || runtime.exports[function: name] != nil
+    }
+
+    /// The hand-over, the guest's thread's last work once its runtime is
+    /// released: the native part's instance freed and the process's bridge
+    /// let go of, so the next runtime's launch makes both again over its own
+    /// memory. No native code of this guest's runs after it.
+    func release() {
+        if instantiated {
+            iso_mixed_release()
+            instantiated = false
+        }
+        if let bridge, mixedBridge === bridge { mixedBridge = nil }
     }
 
     // MARK: Calls
@@ -547,7 +866,7 @@ final class MixedGuest: @unchecked Sendable {
                 implementation = { [self] caller, args in
                     let tree = bytes(caller, args[0], args[1])
                     if Self.trace { print("[mixed-trace] render_tree \(tree.count) bytes") }
-                    DispatchQueue.main.async { hostImports.onRenderTree(tree) }
+                    toHost { hostImports.onRenderTree(tree) }
                     return []
                 }
             case ("iso_hot", "log"):
@@ -559,15 +878,15 @@ final class MixedGuest: @unchecked Sendable {
             case ("iso_hot", "epoch_millis"):
                 implementation = { _, _ in [.f64(hostImports.epochMillis().bitPattern)] }
             case ("iso_hot", "schedule_render"):
-                implementation = { _, _ in
-                    DispatchQueue.main.async { hostImports.onScheduleRender() }
+                implementation = { [self] _, _ in
+                    toHost { hostImports.onScheduleRender() }
                     return []
                 }
             case ("iso_hot", "platform_command"):
                 implementation = { [self] caller, args in
                     let key = String(decoding: bytes(caller, args[0], args[1]), as: UTF8.self)
                     let value = String(decoding: bytes(caller, args[2], args[3]), as: UTF8.self)
-                    DispatchQueue.main.async { hostImports.onPlatformCommand(key, value) }
+                    toHost { hostImports.onPlatformCommand(key, value) }
                     return []
                 }
             case ("iso_hot", "host_value"):
@@ -601,7 +920,7 @@ final class MixedGuest: @unchecked Sendable {
                         }
                     }
                     guard answers else {
-                        DispatchQueue.main.async { _ = handler(scalars) }
+                        toHost { _ = handler(scalars) }
                         return []
                     }
                     let results = thread.onMain { handler(scalars) }
