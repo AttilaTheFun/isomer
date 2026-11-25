@@ -185,7 +185,7 @@ apple)
     if [[ $parts == *" ios "* ]]; then
         if [ -n "$runner" ]; then
             apple_runner storybook_headful_ios_test "$out" \
-                ISOMER_BUNDLE_ID=com.LoganShire.IsomerStorybook ISOMER_HEADFUL_LAUNCHER="$ROOT/drive/launchers/ios_launcher.sh"
+                ISOMER_BUNDLE_ID=com.LoganShire.Storybook ISOMER_HEADFUL_LAUNCHER="$ROOT/drive/launchers/ios_launcher.sh"
         else
             run storybook_headful_ios_test "$out" --test_env=ISOMER_SIMULATOR="$udid"
         fi
@@ -225,7 +225,7 @@ apple)
         app="$(ls -d "$work/mac/"*.app | head -1)"
         if [ -n "$runner" ]; then
             apple_runner storybook_headful_macos_test "$out" ISOMER_MAC_APP="$app" \
-                ISOMER_BUNDLE_ID=com.LoganShire.IsomerStorybook ISOMER_HEADFUL_LAUNCHER="$ROOT/drive/launchers/macos_launcher.sh"
+                ISOMER_BUNDLE_ID=com.LoganShire.Storybook ISOMER_HEADFUL_LAUNCHER="$ROOT/drive/launchers/macos_launcher.sh"
         else
             run storybook_headful_macos_test "$out" --test_env=ISOMER_MAC_APP="$app"
         fi

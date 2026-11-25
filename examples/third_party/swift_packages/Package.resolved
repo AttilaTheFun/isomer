@@ -37,6 +37,24 @@
       }
     },
     {
+      "identity" : "kscrash",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/kstenerud/KSCrash.git",
+      "state" : {
+        "revision" : "c3882b4db5e810a8ed4148b79cab29a173d4c5c5",
+        "version" : "2.6.1"
+      }
+    },
+    {
+      "identity" : "shireworks_kit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/AttilaTheFun/shireworks_kit.git",
+      "state" : {
+        "revision" : "d86f1ca1989d8ad30a1d78b7682d0e5cd4f30cf7",
+        "version" : "0.1.0"
+      }
+    },
+    {
       "identity" : "swift-algorithms",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-algorithms.git",
@@ -241,15 +259,6 @@
       "state" : {
         "revision" : "feb21a6e9fe3aeac72c055c4092c34106a4f19df",
         "version" : "0.35.0"
-      }
-    },
-    {
-      "identity" : "update_kit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/AttilaTheFun/update_kit.git",
-      "state" : {
-        "revision" : "2acaad86637246bc7297a3a999ea153a52dd9d40",
-        "version" : "0.18.0"
       }
     }
   ],

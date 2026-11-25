@@ -170,8 +170,10 @@ wasm_mixed_native(
     deps = [
         ":storybook_native",
         "@isomer//shared/wasm_host:mixed_runtime",
+        "@isomer//shared/wasm_host:wasm_host",
         "@isomer//shared/wasm_host:wasm_runtime",
         "@isomer//shared/wasm_host:wasmkit_runtime",
+        "@isomer//swift_ffi/runtime/swift_wasm_host",
     ],
 ) for name, env in [
     ("mixed_render_test", {}),

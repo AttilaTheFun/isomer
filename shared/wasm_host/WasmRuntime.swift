@@ -27,6 +27,14 @@ public typealias WasmScalar = SwiftFFIScalar
 /// render ABI. The engine binds each to its own linear memory; the values here
 /// are already materialized (the engine reads `(ptr, len)` out of guest memory
 /// before invoking `onRenderTree` / `onLog`), so this surface is engine-neutral.
+///
+/// Which thread calls them is the engine's: `WasmKitRuntime` calls each on
+/// the thread that called into the guest (the main thread, as hosts drive
+/// it), but `MixedWasmKitRuntime` runs its guest on a thread of its own and
+/// calls `epochMillis` there, for speed (the rest it hands to the main
+/// thread). So `epochMillis` must be callable from any thread: one that
+/// asserts the main queue, or is a `@MainActor` closure, traps under the
+/// mixed runtime.
 public struct WasmHostImports {
     /// The reactor pushed a fresh serialized render tree (tree.proto).
     public var onRenderTree: ([UInt8]) -> Void
@@ -99,11 +107,20 @@ public protocol WasmRuntime: AnyObject {
     /// the host's scheduled render, which a frame already built since may
     /// have made empty.
     func renderPending()
+
+    /// Lets go of the feature: the host calls nothing on it after this. For
+    /// an engine that holds what a process has one of (mixed mode's native
+    /// part, `MixedWasmKitRuntime`), so the next engine made can have it:
+    /// `WasmFeatureRuntime` releases the running engine before making the
+    /// next on a reload. Engines with nothing of the kind do nothing (the
+    /// default); they let go of everything when they are deinitialized.
+    func release()
 }
 
 extension WasmRuntime {
     public func pumpGuestJobs() {}
     public func renderPending() { _ = try? call("iso_hot_render", []) }
+    public func release() {}
 }
 
 /// The engine registration point: the host app picks the wasm engine once

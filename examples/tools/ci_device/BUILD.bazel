@@ -1,4 +1,5 @@
 load("@isomer_signing//:signing.bzl", "TEAM_ID")
+load("//tools/signing:defs.bzl", "app_groups", "shared_keychain_group")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -6,10 +7,9 @@ package(default_visibility = ["//visibility:public"])
 # (--config=ci_device, .bazelrc), as Reviews' is: CI holds no profile of
 # the team's, so it signs ad hoc (--ios_signing_cert_name=-) with this
 # placeholder, which allows what the apps' entitlements ask for (their own
-# app ID and keychain group, and Applications' app group). Applications
-# Server replaces both, the profile and the signature, with the bundle id's
-# own (the private AttilaTheFun/applications' docs/CI.md, "What the server does with
-# each build"). A plain plist: rules_applecross's `security cms -D` off a
+# app ID and the team's keychain groups, and the builder's app groups,
+# tools/signing). CI's signing (build_tools' `sign apple`) replaces both,
+# the profile and the signature, with the bundle id's own. A plain plist: rules_applecross's `security cms -D` off a
 # Mac reads the plist in a profile, so this builds on Linux alone, as CI
 # does. The setting refines the device's alone, so an app's select takes it
 # before its development profile.
@@ -44,16 +44,12 @@ genrule(
 		<string>{team}.*</string>
 		<key>com.apple.developer.team-identifier</key>
 		<string>{team}</string>
-		<key>com.apple.security.application-groups</key>
-		<array>
-			<string>group.com.LoganShire.Applications</string>
-		</array>
-		<key>get-task-allow</key>
+{groups}		<key>get-task-allow</key>
 		<true/>
 		<key>keychain-access-groups</key>
 		<array>
 			<string>{team}.*</string>
-		</array>
+{keychain}		</array>
 	</dict>
 	<key>ExpirationDate</key>
 	<date>2036-01-01T00:00:00Z</date>
@@ -80,5 +76,16 @@ genrule(
 	<integer>1</integer>
 </dict>
 </plist>
-EOF""".format(team = TEAM_ID),
+EOF""".format(
+        team = TEAM_ID,
+        # The shared sign-in's keychain group, named by its own team, which
+        # the placeholder's TEAM.* doesn't cover where the builder names no
+        # team (CI): rules_apple checks the entitlements against it.
+        keychain = "\t\t\t<string>%s</string>\n" % shared_keychain_group() if shared_keychain_group() else "",
+        groups = "".join(
+            ["\t\t<key>com.apple.security.application-groups</key>\n\t\t<array>\n"] +
+            ["\t\t\t<string>%s</string>\n" % g for g in app_groups()] +
+            ["\t\t</array>\n"],
+        ) if app_groups() else "",
+    ),
 )

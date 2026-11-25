@@ -67,7 +67,10 @@ public final class AppBundleProvider: BundleProvider {
     public func bundleUpdates() -> AsyncStream<WasmServiceBundle> {
         let env = ProcessInfo.processInfo.environment
         if let server = env[serverEnv], let url = URL(string: server) {
-            return HotReloadServerSource(base: url).stream()
+            // The packaged bundle is what runs at first: the server's build
+            // replaces it only when its bytes differ, so connecting to a
+            // server with the same build doesn't reload.
+            return HotReloadServerSource(base: url, running: initialBundle()?.wasm).stream()
         }
         if let path = env[pathEnv], FileManager.default.fileExists(atPath: path) {
             return WatchedFileSource(path: path).stream()
@@ -80,8 +83,10 @@ public final class AppBundleProvider: BundleProvider {
 
 /// Polls a hot-reload server (see the example's HotReloadServer): `GET /version`
 /// (a build counter) and `GET /wasm` (the reactor bytes). Yields a bundle on
-/// each version bump. The running timer strong-retains the source; the
-/// stream's termination cancels it, breaking the cycle.
+/// each version bump whose bytes differ from what runs (the packaged bundle
+/// at first), so the first poll reloads only when the server's build is a
+/// new one. The running timer strong-retains the source; the stream's
+/// termination cancels it, breaking the cycle.
 private final class HotReloadServerSource {
     private let base: URL
     private let session: URLSession
@@ -90,9 +95,12 @@ private final class HotReloadServerSource {
     private var version = Int.min
     private var inFlight = false
     private var continuation: AsyncStream<WasmServiceBundle>.Continuation?
+    /// What runs: its size and a hash of its bytes (on `queue`).
+    private var running: (count: Int, hash: Int)?
 
-    init(base: URL) {
+    init(base: URL, running: [UInt8]? = nil) {
         self.base = base
+        self.running = running.map(Self.digest)
         let config = URLSessionConfiguration.ephemeral
         config.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         config.timeoutIntervalForRequest = 5
@@ -138,9 +146,20 @@ private final class HotReloadServerSource {
     private func fetchWasm(version: Int) {
         session.dataTask(with: base.appendingPathComponent("wasm")) { [weak self] data, _, _ in
             guard let self, let data, !data.isEmpty else { return }
-            self.continuation?.yield(
-                WasmServiceBundle(label: "server build \(version)", wasm: [UInt8](data)))
+            let wasm = [UInt8](data)
+            let digest = Self.digest(wasm)
+            self.queue.async {
+                guard self.running.map({ $0 != digest }) ?? true else { return }
+                self.running = digest
+                self.continuation?.yield(WasmServiceBundle(label: "server build \(version)", wasm: wasm))
+            }
         }.resume()
+    }
+
+    private static func digest(_ bytes: [UInt8]) -> (count: Int, hash: Int) {
+        var hasher = Hasher()
+        hasher.combine(bytes)
+        return (bytes.count, hasher.finalize())
     }
 }
 

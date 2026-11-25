@@ -156,17 +156,32 @@ Checked: examples' //tests/side_modules:mixed_render_test and
 :mixed_interpreted_render_test, the Storybook's app in mixed mode, natively
 and interpreted, render byte for byte what its reactor renders.
 
+One runtime at a time: the native part is one C instance a process, and a
+side module can't be unloaded, so a feature's reload is a new runtime. The
+old one's `release()` (or its deinit) stops its guest's thread: what was
+queued runs, then the hand-over, last (`iso_mixed_release`, which frees the
+instance, and the bridge let go of); calls after it throw `released`, and
+what the old guest sends its host is dropped. A launch while a released
+runtime's hand-over is still to run waits for it, answering what the old
+guest asks the main thread for meanwhile, without running the main run loop
+(`MixedNativeClaim`); then it makes the instance again over its own memory.
+`WasmFeatureRuntime.load` releases the running engine before it makes the
+next (`WasmRuntime.release()`, nothing for other engines), so a reloaded
+feature runs natively too. The same tests check that a released runtime's
+successor, and a reload through `WasmFeatureRuntime`, render as the first.
+
 What it needs of WasmKit, beside the side modules' API: cheaper host calls
 (`invokeUnchecked`, no signal mask saved per entry, a return to the host that
 doesn't throw), on the same branch with its tests, to propose to
 swiftwasm/WasmKit.
 
 Open: a trap in native code (or in interpreted code under it) ends the
-process (native code can't unwind into Swift); a mixed runtime and the
-features it serves are one per process (the native part is one C instance),
-and one feature per runtime instance until the runtime has a root per
-feature (several features' side modules already load into one instance);
-the routed list is still the Storybook's (from its feature calls).
+process (native code can't unwind into Swift); one mixed runtime runs at
+a time, with the features it serves (the native part is one C instance a
+process; a released runtime hands it over, above), and one feature per
+runtime instance until the runtime has a root per feature (several
+features' side modules already load into one instance); the routed list is
+still the Storybook's (from its feature calls).
 
 ## Measurements
 

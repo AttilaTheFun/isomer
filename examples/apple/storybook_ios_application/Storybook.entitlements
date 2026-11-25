@@ -9,12 +9,9 @@
 	<array>
 		<string>$(AppIdentifierPrefix)$(CFBundleIdentifier)</string>
 	</array>
-	<!-- Applications' container, where the app writes the build it is
-	     (UpdateKit) -->
-	<key>com.apple.security.application-groups</key>
-	<array>
-		<string>group.com.LoganShire.Applications</string>
-	</array>
+	<!-- The app groups (UpdateKit's, the shared GitHub sign-in's) and the
+	     shared sign-in's keychain group are the builder's, added by
+	     //tools/signing:defs.bzl's app_entitlements where they are set. -->
 	<key>get-task-allow</key>
 	<true/>
 </dict>
