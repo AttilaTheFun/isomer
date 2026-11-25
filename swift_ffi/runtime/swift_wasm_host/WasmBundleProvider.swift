@@ -65,10 +65,18 @@ public enum WasmModuleSource: Sendable, Hashable {
                 throw ReadError(path: path, reason: "\(error)")
             }
         }
-        // Part of one: the C library's stream, from the offset.
+        // Part of one: the C library's stream, from the offset. (The CRT
+        // deprecates fopen for fopen_s, a warning these targets fail on.)
+        #if os(Windows)
+        var opened: UnsafeMutablePointer<FILE>?
+        guard fopen_s(&opened, path, "rb") == 0, let file = opened else {
+            throw ReadError(path: path, reason: "it can't be opened")
+        }
+        #else
         guard let file = fopen(path, "rb") else {
             throw ReadError(path: path, reason: "it can't be opened")
         }
+        #endif
         defer { fclose(file) }
         #if os(Windows)
         let seeked = _fseeki64(file, Int64(offset), SEEK_SET)
