@@ -201,6 +201,57 @@ flat_assets = rule(
     doc = "Flattens nested asset files into a single dir keyed by basename.",
 )
 
+_SwiftResourcesInfo = provider(
+    doc = "The `data` of a Swift library and of what it depends on: its bundle's resources.",
+    fields = {"files": "depset of the files"},
+)
+
+def _bundled(f):
+    # What rules_apple compiles rather than copies (an asset catalog, a
+    # documentation catalog) isn't a resource here.
+    return ".xcassets/" not in f.path and ".docc/" not in f.path
+
+def _swift_resources_aspect_impl(target, ctx):
+    direct = [f for f in getattr(ctx.rule.files, "data", []) if _bundled(f)]
+    transitive = [dep[_SwiftResourcesInfo].files for dep in getattr(ctx.rule.attr, "deps", []) if _SwiftResourcesInfo in dep]
+    return [_SwiftResourcesInfo(files = depset(direct, transitive = transitive))]
+
+_swift_resources_aspect = aspect(
+    implementation = _swift_resources_aspect_impl,
+    attr_aspects = ["deps"],
+    doc = "Gathers each library's `data` along `deps`, as rules_apple's resource aspect gathers an iOS app's.",
+)
+
+def _swift_resources_impl(ctx):
+    # A label attribute with a Starlark transition reads as a list.
+    library = ctx.attr.swift_library
+    library = library[0] if type(library) == "list" else library
+    return [DefaultInfo(files = library[_SwiftResourcesInfo].files)]
+
+def _android_platform_transition_impl(_settings, _attr):
+    # The app's Swift library read as it is built, for Android: on the
+    # building machine's platform an Android-only library is incompatible,
+    # and that made everything depending on the app's assets so (a test
+    # that opens the APK). Which ABI doesn't matter: resources are the same
+    # on each, except a library whose `data` is `select()`ed by CPU, which
+    # gives arm64's here in an x86_64 build too.
+    return {"//command_line_option:platforms": str(Label("@isomer//tools/platforms:android_arm64"))}
+
+_android_platform_transition = transition(
+    implementation = _android_platform_transition_impl,
+    inputs = [],
+    outputs = ["//command_line_option:platforms"],
+)
+
+_swift_resources = rule(
+    implementation = _swift_resources_impl,
+    attrs = {"swift_library": attr.label(aspects = [_swift_resources_aspect], cfg = _android_platform_transition)},
+    doc = """The bundle resources an app's Swift brings: the `data` of its
+    `swift_library` and of every library it depends on (a strings library's
+    `<language>.lproj/<Table>.strings`), as an iOS app's bundle gathers them,
+    for `_app_assets` to lay out in bundle/ beside the app's own `resources`.""",
+)
+
 def _app_assets_impl(ctx):
     """One assets/ directory out of an app's own assets and its fonts.
 
@@ -890,22 +941,26 @@ def isomer_android_app(
     if icon:
         kt_kwargs["resource_files"] = [":%s_icon" % name]
     asset_list = assets if type(assets) == "list" else ([assets] if assets else [])
-    if fonts or resources or len(asset_list) > 1:
-        # One directory for rules_android: the assets, fonts/ and bundle/ merged.
-        _app_assets(
-            name = name + "_assets",
-            assets = asset_list,
-            fonts = fonts,
-            resources = resources,
-            tags = ["manual"],
-            testonly = testonly,
-        )
-        kt_kwargs["assets"] = [":%s_assets" % name]
-        kt_kwargs["assets_dir"] = name + "_assets"
-    elif asset_list:
-        # A single directory (a `flat_assets` target) goes in as it is.
-        kt_kwargs["assets"] = asset_list
-        kt_kwargs["assets_dir"] = asset_list[0].removeprefix(":")
+    # The app's Swift libraries' own resources (their `data`), as an iOS
+    # app's bundle gathers them: whether there are any is known only when
+    # the libraries are analysed, so the assets are always merged.
+    _swift_resources(
+        name = name + "_swift_resources",
+        swift_library = swift_library,
+        tags = ["manual"],
+        testonly = testonly,
+    )
+    # One directory for rules_android: the assets, fonts/ and bundle/ merged.
+    _app_assets(
+        name = name + "_assets",
+        assets = asset_list,
+        fonts = fonts,
+        resources = resources + [":%s_swift_resources" % name],
+        tags = ["manual"],
+        testonly = testonly,
+    )
+    kt_kwargs["assets"] = [":%s_assets" % name]
+    kt_kwargs["assets_dir"] = name + "_assets"
     kt_android_library(
         name = name + "_app_lib",
         srcs = [":%s_main_activity" % name],
@@ -1241,18 +1296,23 @@ def isomer_android_aar(
         testonly = testonly,
     )
     asset_list = assets if type(assets) == "list" else ([assets] if assets else [])
-    aar_assets = None
-    if asset_list or fonts or resources:
-        # The APK's assets/ directory, as isomer_android_app merges it.
-        _app_assets(
-            name = name + "_assets",
-            assets = asset_list,
-            fonts = fonts,
-            resources = resources,
-            tags = ["manual"],
-            testonly = testonly,
-        )
-        aar_assets = ":%s_assets" % name
+    # The APK's assets/ directory, as isomer_android_app merges it, the app's
+    # Swift libraries' resources included.
+    _swift_resources(
+        name = name + "_swift_resources",
+        swift_library = swift_library,
+        tags = ["manual"],
+        testonly = testonly,
+    )
+    _app_assets(
+        name = name + "_assets",
+        assets = asset_list,
+        fonts = fonts,
+        resources = resources + [":%s_swift_resources" % name],
+        tags = ["manual"],
+        testonly = testonly,
+    )
+    aar_assets = ":%s_assets" % name
     kt_android_library(
         name = name + "_lib",
         srcs = [":%s_main_activity" % name],

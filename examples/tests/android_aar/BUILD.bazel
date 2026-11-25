@@ -12,6 +12,22 @@ load("@rules_swift//swift:swift.bzl", "swift_library")
 # libraries in jni/arm64-v8a/ (a cc_binary's, and a cc_library's over a
 # prebuilt .so), and the macro's tags and testonly. :android_aar_test
 # opens the AAR and checks each; nothing is drawn or run.
+
+# A strings library, as an app keeps its localized strings: its resources
+# are its `data`, which the AAR's bundle gathers as an iOS app's does (an
+# asset catalog aside, which rules_apple compiles rather than copies).
+swift_library(
+    name = "strings",
+    testonly = True,
+    srcs = ["strings/Strings.swift"],
+    data = [
+        "strings/Images.xcassets/Contents.json",
+        "strings/de.lproj/Strings.strings",
+    ],
+    module_name = "EmbeddedStrings",
+    tags = ["manual"],
+)
+
 swift_library(
     name = "app_swift",
     testonly = True,
@@ -21,6 +37,7 @@ swift_library(
     module_name = "EmbeddedApp",
     tags = ["manual"],
     deps = [
+        ":strings",
         "@isomer//:foundation",
         "@isomer//:swift_ui",
         "@isomer//android/libraries/swift_ui",
