@@ -1,6 +1,6 @@
 // The Isomer module: what Isomer adds to SwiftUI, on every platform
 // (`import Isomer`): the platform, web views, maps, video, the clipboard,
-// colors by appearance, swipes, and a platform's own views.
+// colors by appearance, swipes, shakes, and a platform's own views.
 
 import Foundation
 import Isomer
@@ -39,6 +39,10 @@ extension StoryCatalog {
             "isomer.swipe", "Swipe gesture",
             summary: "A horizontal swipe that leaves vertical drags to the scroll view around it: a row swiped aside."
         ) { SwipeStory() },
+        Story(
+            "isomer.shake", "Shake",
+            summary: "Something done when the phone is shaken: an iPhone's shake gesture, Android's accelerometer. Nothing to shake on a Mac or the web."
+        ) { ShakeStory() },
     ])
 }
 
@@ -197,6 +201,19 @@ struct SwipeStory: View {
             NativeSliderRow()
             #endif
         }
+    }
+}
+// end story
+
+// story: isomer.shake
+struct ShakeStory: View {
+    @State private var shakes = 0
+
+    var body: some View {
+        Label(shakes == 0 ? "Shake the phone" : "Shaken \(shakes) time\(shakes == 1 ? "" : "s")",
+              systemImage: "iphone")
+            .font(.headline)
+            .onShake { shakes += 1 }
     }
 }
 // end story

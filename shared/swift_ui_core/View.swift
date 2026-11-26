@@ -23,8 +23,14 @@ public protocol View {
 }
 
 extension View {
+    /// A view with a body: built through it (Reuse.swift). Every view of
+    /// Isomer's with no body says what it is with a `_makeView` of its own;
+    /// one that doesn't (`Body` is `Never`) is asked, as before.
     public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
-        _ViewOutputs(node: buildNodeByKind(view: view.value, ctx: &inputs.context.pointee))
+        if Body.self == Never.self {
+            return _ViewOutputs(node: buildNodeByKind(view: view.value, ctx: &inputs.context.pointee))
+        }
+        return _ViewOutputs(node: buildCompositeReusing(view.value, ctx: &inputs.context.pointee))
     }
 
     public static func _makeViewList(view: _GraphValue<Self>, inputs: _ViewListInputs) -> _ViewListOutputs {
@@ -91,6 +97,30 @@ extension _PrimitiveView where Self: _ReusableBuild {
     func _buildIsPure(_ ctx: BuildContext) -> Bool { _buildsPurely(ctx) }
 }
 
+/// An internal primitive: it says it is one through `_makeView`, statically,
+/// with no question asked of its type (View.swift). A public view can't take
+/// this default (Swift wants a public requirement's witness public, and an
+/// extension constrained to an internal protocol can't declare one), so the
+/// public primitives say it each in their own way (docs/frameworks_in_the_sdk.md).
+protocol _InternalPrimitiveView: _PrimitiveView {}
+
+extension View where Self: _InternalPrimitiveView {
+    static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+}
+
+/// A primitive's node. Built-in views that don't say they build purely read
+/// or register runtime state: nothing around them is reused (Reuse.swift).
+@MainActor
+func buildPrimitive<P: _PrimitiveView>(_ primitive: P, ctx: inout BuildContext) -> RenderNode {
+    if !(P._isReusableBuild && primitive._buildIsPure(ctx)) {
+        Runtime.shared.markBuildVolatile(registersForFrame: P._impureBuildRegistersForFrame)
+        _frameLogVolatile(primitive)
+    }
+    return primitive.makeNode(&ctx)
+}
+
 /// Views that represent zero or more child views (TupleView, ForEach, if/else
 /// content, ...). Containers flatten these when collecting children.
 protocol _MultiView {
@@ -98,10 +128,21 @@ protocol _MultiView {
 }
 
 extension EmptyView: _MultiView {
+    /// The views it stands for, built where it is (View.swift's `buildMulti`).
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildMulti(view.value, ctx: &inputs.context.pointee))
+    }
+
     func childViews() -> [(suffix: String, view: any View)] { [] }
 }
 
 extension AnyView: _PrimitiveView {
+    /// Built as a primitive, statically, as Apple's says it is through its
+    /// own `_makeView` (View.swift).
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var sub = ctx.descend("any")
@@ -120,6 +161,11 @@ public struct TupleView<T> {
 }
 
 extension TupleView: _MultiView {
+    /// The views it stands for, built where it is (View.swift's `buildMulti`).
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildMulti(view.value, ctx: &inputs.context.pointee))
+    }
+
     func childViews() -> [(suffix: String, view: any View)] {
         elements.enumerated().map { (String($0.offset), $0.element) }
     }
@@ -140,6 +186,11 @@ public struct _ConditionalContent<TrueContent, FalseContent> {
 }
 
 extension _ConditionalContent: _MultiView where TrueContent: View, FalseContent: View {
+    /// The views it stands for, built where it is (View.swift's `buildMulti`).
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildMulti(view.value, ctx: &inputs.context.pointee))
+    }
+
     func childViews() -> [(suffix: String, view: any View)] {
         switch storage {
         case .trueContent(let view): return [("then", view)]
@@ -154,6 +205,11 @@ extension Optional: View where Wrapped: View {
 }
 
 extension Optional: _MultiView where Wrapped: View {
+    /// The views it stands for, built where it is (View.swift's `buildMulti`).
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildMulti(view.value, ctx: &inputs.context.pointee))
+    }
+
     func childViews() -> [(suffix: String, view: any View)] {
         switch self {
         case .some(let view): return [("some", view)]
@@ -174,6 +230,11 @@ public struct Group<Content: View> {
 }
 
 extension Group: _MultiView {
+    /// The views it stands for, built where it is (View.swift's `buildMulti`).
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildMulti(view.value, ctx: &inputs.context.pointee))
+    }
+
     func childViews() -> [(suffix: String, view: any View)] {
         [("group", content)]
     }

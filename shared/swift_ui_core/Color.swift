@@ -160,6 +160,12 @@ extension Color: View {
 }
 
 extension Color: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         // Honor the inherited opacity (`.opacity`/`.disabled`) so a `Color`
         // (including as a `.background`) fades like text and images do.
