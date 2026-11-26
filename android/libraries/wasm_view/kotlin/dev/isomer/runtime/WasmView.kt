@@ -239,6 +239,13 @@ fun WasmView(
             // Not cancellable: a reactor made while the view was leaving is
             // destroyed below rather than leaked.
             val elsewhere = kotlinx.coroutines.NonCancellable
+            // A compressed asset's copy (once per install, tens of megabytes)
+            // made on an IO thread, so the start below finds it made.
+            val appContext = context.applicationContext
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO + elsewhere) {
+                prepareModule(bundle.module, appContext)
+                runtimeModule?.let { prepareModule(it.source, appContext) }
+            }
             val created = if (offMainInit) {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default + elsewhere) {
                     create(bundle, widthPt, heightPt)
