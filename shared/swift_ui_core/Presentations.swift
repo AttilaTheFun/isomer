@@ -44,7 +44,7 @@ struct _PresentationModifier<PresentedContent: View> {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _PresentationModifier: _PrimitiveView {
+extension _PresentationModifier: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var sub = ctx.descend("presented")

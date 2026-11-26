@@ -8,10 +8,11 @@ package(default_visibility = ["//visibility:public"])
 # `wasmKit*` functions kotlin/.../WasmKitRuntime.kt calls. An app that runs
 # reactors depends on both (the Kotlin bindings, and
 # @isomer_android//wasm_view:engine_native for the .so): the isomer_android
-# module's, as they load rules_kotlin (docs/platform_modules.md). A process runs
-# reactors or the app's compiled Swift, not both: each library carries its
-# own Swift runtime and libdispatch (the Playground's builds run in a process
-# of their own).
+# module's, as they load rules_kotlin (docs/platform_modules.md). A compiled
+# app binds it in its own library instead (`isomer_android_app(wasm_view =
+# True)`, kt_swift_library's `bound_libraries`), sharing that library's Swift
+# runtime and libdispatch: two libraries of Swift in one process would each
+# carry their own.
 swift_library(
     name = "engine",
     package_name = "isomer",

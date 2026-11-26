@@ -21,6 +21,11 @@
 // feature, and pumps frames on demand. All engine specifics (the swift_ffi
 // transport, WASI, the WasmKit `Imports`/`Caller` types) live inside the
 // `WasmRuntime` implementation, never here.
+//
+// A bundle is a self-contained reactor, or a feature linked as a side module
+// over a runtime module the host was given once (`runtimeModule`,
+// docs/side_modules.md): then each load launches the runtime module in a
+// fresh engine and loads the bundle's side module over it.
 
 import SwiftFFIWasmHost
 import Foundation
@@ -28,6 +33,24 @@ import SwiftFFIWasmHost
 // Re-export the engine seam so consumers of `IsomerWasmHost` still see
 // `WasmRuntime` / `WasmHostImports` / `WasmScalar` unchanged after the split.
 @_exported import IsomerWasmRuntime
+
+/// Why `WasmFeatureRuntime.load(bundle:)` couldn't run a side-module
+/// bundle (its `status` says so, and the log).
+public enum WasmFeatureLoadError: Error, CustomStringConvertible {
+    /// The bundle is a side module, and the host was given no runtime module.
+    case noRuntimeModule(bundle: String, runtime: String)
+    /// The bundle is a side module of another runtime build than the host's.
+    case otherRuntimeModule(bundle: String, runtime: String, host: String)
+
+    public var description: String {
+        switch self {
+        case .noRuntimeModule(let bundle, let runtime):
+            return "\(bundle) is a side module of the runtime module \(runtime), and the host has no runtime module"
+        case .otherRuntimeModule(let bundle, let runtime, let host):
+            return "\(bundle) is a side module of the runtime module \(runtime), not of the host's (\(host))"
+        }
+    }
+}
 
 @MainActor
 public final class WasmFeatureRuntime {
@@ -74,6 +97,21 @@ public final class WasmFeatureRuntime {
     /// "pasteboard", the clipboard's text. Unset: commands dropped, no values.
     public var onPlatformCommand: ((String, String) -> Void)?
     public var hostValue: ((String) -> String?)?
+    /// The wall clock the guest's animations read (`iso_hot.epoch_millis`),
+    /// in milliseconds since the epoch, for the bundles loaded after it is
+    /// set: the system's by default; a test fixes it, so frames don't depend
+    /// on when they were built. Called on the engine's guest thread under
+    /// mixed mode (see `WasmHostImports.epochMillis`), so it touches nothing
+    /// of the main actor's.
+    public var epochMillis: @Sendable () -> Double = { Date().timeIntervalSince1970 * 1000 }
+
+    /// The runtime module side-module bundles run over (a bundle of kind
+    /// `.sideModule(runtime:)` naming it): set once, before the first such
+    /// load. Each load makes its engine (`makeEngine`), launches the runtime
+    /// module in it and loads the bundle's side module over it, so a reload
+    /// changes only the side module; reactors (`.reactor`) ignore it and go
+    /// to the `runtime` factory, as before.
+    public var runtimeModule: WasmRuntimeModule?
 
     private let log: (String) -> Void
     private let makeRuntime: @MainActor ([UInt8]) -> WasmRuntime
@@ -107,6 +145,9 @@ public final class WasmFeatureRuntime {
     /// Instantiate a service bundle (reactor + its small assets) and start the
     /// feature. Each call is a fresh engine/instance, so state resets — this is
     /// also the reload entry point (a hot-reload shadow or dynamic update).
+    /// A side-module bundle runs over `runtimeModule`: the runtime module
+    /// launched in the engine its `makeEngine` makes, the bundle's module
+    /// loaded over it. A module in a file is read here, on the main thread.
     public func load(bundle: WasmServiceBundle) {
         assets = bundle.assets
         // Announce the (re)load BEFORE the new reactor's first frame: consumers
@@ -130,7 +171,32 @@ public final class WasmFeatureRuntime {
             previous.release()
         }
         do {
-            let runtime = makeRuntime(bundle.wasm)
+            let runtime: any WasmRuntime
+            var sideModule: (engine: any WasmSideModuleRuntime, wasm: [UInt8])?
+            let wasm: [UInt8]
+            switch bundle.kind {
+            case .reactor:
+                // The reactor's bytes, read once (from its file, for one
+                // that names a file).
+                wasm = try bundle.module.read()
+                runtime = makeRuntime(wasm)
+            case .sideModule(let name):
+                // A feature over the host's runtime module: the runtime
+                // module launched in a fresh engine, the side module loaded
+                // over it below, before the feature starts.
+                guard let runtimeModule else {
+                    throw WasmFeatureLoadError.noRuntimeModule(bundle: bundle.label, runtime: name)
+                }
+                guard runtimeModule.name == name else {
+                    throw WasmFeatureLoadError.otherRuntimeModule(
+                        bundle: bundle.label, runtime: name, host: runtimeModule.name)
+                }
+                let side = try bundle.module.read()
+                wasm = try runtimeModule.source.read()
+                let engine = runtimeModule.makeEngine()
+                sideModule = (engine, side)
+                runtime = engine
+            }
             // Hand the engine the app's dependency table BEFORE launch — the
             // DI imports bind at instantiation. A table without the app's
             // prefix (WasmView's own entries, the network hosts, for an app
@@ -147,13 +213,23 @@ public final class WasmFeatureRuntime {
             let hostImports = WasmHostImports(
                 onRenderTree: { [weak self] bytes in self?.deliverTree(bytes) },
                 onLog: { [weak self] message in self?.log("[wasm] \(message)") },
-                epochMillis: { Date().timeIntervalSince1970 * 1000 },
+                epochMillis: epochMillis,
                 onScheduleRender: { [weak self] in self?.requestRender() },
                 onPlatformCommand: { [weak self] key, value in self?.onPlatformCommand?(key, value) },
                 hostValue: { [weak self] key in self?.hostValue?(key) ?? nil }
             )
             // Instantiate + wire WASI + swift_ffi DI + iso_hot; runs _initialize.
-            try runtime.launch(wasm: bundle.wasm, hostImports: hostImports)
+            try runtime.launch(wasm: wasm, hostImports: hostImports)
+            if let sideModule {
+                do {
+                    try sideModule.engine.loadSideModule(wasm: sideModule.wasm)
+                } catch {
+                    // What the launch claimed (mixed mode's native part)
+                    // goes back, for the next load.
+                    runtime.release()
+                    throw error
+                }
+            }
             self.runtime = runtime
 
             // Replay the host appearance: it is typically reported once
