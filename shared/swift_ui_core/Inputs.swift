@@ -37,6 +37,12 @@ public struct TextField {
 }
 
 extension TextField: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let node = RenderNode(kind: .textField(placeholder: placeholder))
         node.identityPath = ctx.path
@@ -96,6 +102,12 @@ public struct SecureField {
 }
 
 extension SecureField: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let node = field.makeNode(&ctx)
         node.secureEntry = true
@@ -121,6 +133,12 @@ public struct TextEditor {
 }
 
 extension TextEditor: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let node = RenderNode(kind: .textField(placeholder: ""))
         node.identityPath = ctx.path
@@ -169,6 +187,12 @@ public struct Slider {
 }
 
 extension Slider: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let node = RenderNode(kind: .slider)
         node.identityPath = ctx.path

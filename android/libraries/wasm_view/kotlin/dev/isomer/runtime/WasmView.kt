@@ -38,7 +38,8 @@ import kotlinx.coroutines.isActive
 
 /**
  * Embed a wasm feature. [provider] supplies the initial bundle (a packaged
- * asset) and any newer bundles (a dev hot-reload shadow / dynamic delivery);
+ * asset) and any newer bundles (a dev hot-reload shadow / dynamic delivery):
+ * reactors, or side modules over [runtimeModule];
  * [ffiPrefix] + [dependencies] are the APP's swift_ffi dependency table
  * (opaque to this view — keys, ordinals, and blob dispatchers belong to the
  * app), injected into the feature's `dependencies` dictionary. With them
@@ -67,6 +68,12 @@ fun WasmView(
     // WasmKit; an app may pass a factory of its own.
     engineFactory: (ByteArray, WasmEngineCallbacks, String?, List<WasmDependency>) -> WasmEngine =
         { w, h, prefix, deps -> WasmKitRuntime(w, h, prefix, deps) },
+    // The runtime module the provider's side-module bundles run over
+    // (docs/side_modules.md), given once; a reload launches it again with
+    // the new side module. Those bundles, and any whose module is a file or
+    // an asset (read by the engine's Swift, not the JVM), run on WasmKit
+    // (`WasmKitRuntime`); reactors in memory go to [engineFactory], as before.
+    runtimeModule: WasmRuntimeModule? = null,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current.density
@@ -185,12 +192,25 @@ fun WasmView(
 
         // Instantiate + first render. The [wasm-init] logs bracket the whole
         // create+start so it's visible in adb.
-        fun create(wasm: ByteArray, widthPt: Double, heightPt: Double): WasmEngine? {
+        fun create(bundle: WasmServiceBundle, widthPt: Double, heightPt: Double): WasmEngine? {
             val t0 = android.os.SystemClock.uptimeMillis()
+            val module = bundle.module
+            val described = when (module) {
+                is WasmModuleSource.Bytes -> "${module.bytes.size} bytes"
+                is WasmModuleSource.File -> module.path
+                is WasmModuleSource.Asset -> "asset ${module.name}"
+            } + (bundle.sideModuleOf?.let { " over $it" } ?: "")
             android.util.Log.i(
-                "Isomer", "[wasm-init] start — ${wasm.size} bytes (offMain=$offMainInit)")
+                "Isomer", "[wasm-init] start — $described (offMain=$offMainInit)")
             val created = try {
-                engineFactory(wasm, host, ffiPrefix, injected).also {
+                val engine = if (module is WasmModuleSource.Bytes && bundle.sideModuleOf == null) {
+                    engineFactory(module.bytes, host, ffiPrefix, injected)
+                } else {
+                    WasmKitRuntime(
+                        bundle, host, ffiPrefix, injected,
+                        runtimeModule = runtimeModule, context = context.applicationContext)
+                }
+                engine.also {
                     it.start(widthPt, heightPt)
                     it.setColorScheme(currentDark)
                 }
@@ -207,7 +227,7 @@ fun WasmView(
         // Dispatchers.Default when [offMainInit]. Off the main thread the
         // reactor is created and started there and handed over here; it is
         // only driven from main afterward.
-        suspend fun launch(wasm: ByteArray) {
+        suspend fun launch(bundle: WasmServiceBundle) {
             holder.runtime?.destroy()
             holder.runtime = null
             // Fresh reactor => fresh diff state; drop the retained tree so the
@@ -221,10 +241,10 @@ fun WasmView(
             val elsewhere = kotlinx.coroutines.NonCancellable
             val created = if (offMainInit) {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default + elsewhere) {
-                    create(wasm, widthPt, heightPt)
+                    create(bundle, widthPt, heightPt)
                 }
             } else {
-                create(wasm, widthPt, heightPt)
+                create(bundle, widthPt, heightPt)
             }
             if (!kotlinx.coroutines.currentCoroutineContext().isActive) {
                 created?.destroy()
@@ -241,8 +261,8 @@ fun WasmView(
                 created.render()
             }
         }
-        provider.initialBundle()?.let { bundle -> launch(bundle.wasm) }
-        provider.bundleUpdates().collect { bundle -> launch(bundle.wasm) }
+        provider.initialBundle()?.let { bundle -> launch(bundle) }
+        provider.bundleUpdates().collect { bundle -> launch(bundle) }
     }
 
     Box(modifier.fillMaxSize().onSizeChanged { size = it.width to it.height }) {

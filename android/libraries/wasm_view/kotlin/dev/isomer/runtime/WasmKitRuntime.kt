@@ -42,14 +42,20 @@ class WasmDependency(
 )
 
 /**
- * One wasm feature reactor running on WasmKit. Create it with the bundle
- * bytes and the host's [WasmEngineCallbacks]; [start] instantiates and
- * starts it; drive [render]/[resize]/[event]; [destroy] frees it. Drive it
- * from the main thread: the guest's jobs are posted to libdispatch's main
- * queue, which the main looper drains.
+ * One wasm feature running on WasmKit: a reactor, or a side module over a
+ * runtime module. Create it with the bundle and the host's
+ * [WasmEngineCallbacks]; [start] instantiates and starts it; drive
+ * [render]/[resize]/[event]; [destroy] frees it. Drive it from the main
+ * thread: the guest's jobs are posted to libdispatch's main queue, which the
+ * main looper drains.
+ *
+ * A module in a file or an asset is read by the engine's Swift, never by the
+ * JVM; a side-module bundle ([WasmServiceBundle.sideModuleOf]) runs over
+ * [runtimeModule], interpreted (mixed mode's native part isn't in the
+ * engine's library). [context] resolves assets.
  */
 class WasmKitRuntime(
-    private val wasm: ByteArray,
+    private val bundle: WasmServiceBundle,
     host: WasmEngineCallbacks,
     private val ffiPrefix: String? = null,
     dependencies: List<WasmDependency> = emptyList(),
@@ -57,7 +63,19 @@ class WasmKitRuntime(
      *  Caches and UserDefaults); empty gives it none. */
     private val homeDirectory: String = "",
     private val bundleIdentifier: String = "",
+    private val runtimeModule: WasmRuntimeModule? = null,
+    private val context: android.content.Context? = null,
 ) : WasmEngine {
+    /** A reactor from its bytes (the engine before bundles had sources). */
+    constructor(
+        wasm: ByteArray,
+        host: WasmEngineCallbacks,
+        ffiPrefix: String? = null,
+        dependencies: List<WasmDependency> = emptyList(),
+        homeDirectory: String = "",
+        bundleIdentifier: String = "",
+    ) : this(WasmServiceBundle("reactor", wasm), host, ffiPrefix, dependencies, homeDirectory, bundleIdentifier)
+
     private var dark = false
     private var handle: Long = WasmEngineBridge.wasmKitCreate(object : WasmKitHost {
         override fun renderTree(tree: ByteArray) = host.renderTree(tree)
@@ -77,7 +95,27 @@ class WasmKitRuntime(
 
     override fun start(width: Double, height: Double) {
         if (handle == 0L) return
-        val failure = WasmEngineBridge.wasmKitLaunch(handle, wasm, ffiPrefix ?: "", homeDirectory, bundleIdentifier, width, height, dark)
+        val module = bundle.module
+        val failure = if (module is WasmModuleSource.Bytes && bundle.sideModuleOf == null) {
+            WasmEngineBridge.wasmKitLaunch(handle, module.bytes, ffiPrefix ?: "", homeDirectory, bundleIdentifier, width, height, dark)
+        } else {
+            // Both sources stay open until the engine has read them, during
+            // the launch (an asset read in place is the APK's descriptor).
+            val runtime = runtimeModule?.let { resolveModule(it.source, context) }
+            try {
+                resolveModule(module, context).use { feature ->
+                    if (runtimeModule != null && runtime != null) {
+                        WasmEngineBridge.wasmKitSetRuntimeModule(
+                            handle, runtimeModule.name, runtime.bytes, runtime.path, runtime.offset, runtime.length)
+                    }
+                    WasmEngineBridge.wasmKitLaunchModule(
+                        handle, bundle.label, feature.bytes, feature.path, feature.offset, feature.length,
+                        bundle.sideModuleOf ?: "", ffiPrefix ?: "", homeDirectory, bundleIdentifier, width, height, dark)
+                }
+            } finally {
+                runtime?.close()
+            }
+        }
         if (failure.isNotEmpty()) throw IllegalStateException(failure)
     }
 

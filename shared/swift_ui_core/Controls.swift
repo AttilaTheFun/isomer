@@ -80,6 +80,12 @@ extension Button: _AnyButton {
 }
 
 extension Button: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let style = Runtime.shared.buttonStyleStack.last ?? .automatic
@@ -210,10 +216,22 @@ public struct PrimitiveButtonStyleConfiguration {
 }
 
 extension ButtonStyleConfiguration.Label: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     func makeNode(_ ctx: inout BuildContext) -> RenderNode { content.makeNode(&ctx) }
 }
 
 extension PrimitiveButtonStyleConfiguration.Label: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     func makeNode(_ ctx: inout BuildContext) -> RenderNode { content.makeNode(&ctx) }
 }
 
@@ -416,7 +434,7 @@ struct _StackScopedView<Content: View, Value> {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _StackScopedView: _PrimitiveView {
+extension _StackScopedView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         Runtime.shared[keyPath: keyPath].append(value)
@@ -447,6 +465,12 @@ extension Toggle where Label == Text {
 }
 
 extension Toggle: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         // An app's `ToggleStyle` (or `.button`) makes the toggle itself
