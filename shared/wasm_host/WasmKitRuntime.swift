@@ -59,11 +59,18 @@ import WasmKitWASIThreads
 public enum WasmKitModules {
     /// The features every module here is parsed with: WasmKit's default,
     /// and threads (shared memory and atomics), which `WasmKitRuntime`
-    /// enables and a single-threaded module simply doesn't use.
-    public static var features: WasmFeatureSet {
-        var features = WasmFeatureSet.default
-        features.insert(.threads)
-        return features
+    /// enables and a single-threaded module simply doesn't use. (Kept in a
+    /// configuration: their type is WasmParser's, which isn't imported here.)
+    private static let parsing: EngineConfiguration = {
+        var configuration = EngineConfiguration()
+        configuration.features.insert(.threads)
+        return configuration
+    }()
+
+    /// Gives `configuration` the features modules here are parsed with, as
+    /// an engine that runs them needs.
+    public static func useFeatures(in configuration: inout EngineConfiguration) {
+        configuration.features = parsing.features
     }
 
     private final class Parsed: @unchecked Sendable {
@@ -87,7 +94,7 @@ public enum WasmKitModules {
         parsed.lock.unlock()
         // Parsed outside the lock: another thread may parse the same bytes
         // meanwhile, and the later one is kept; both are the same module.
-        let module = try parseWasm(bytes: bytes, features: features)
+        let module = try parseWasm(bytes: bytes, features: parsing.features)
         parsed.lock.lock()
         parsed.entries.removeAll { $0.bytes == bytes }
         parsed.entries.append((bytes, module))
@@ -208,7 +215,7 @@ public final class WasmKitRuntime: WasmRuntime {
     public func launch(wasm: [UInt8], hostImports: WasmHostImports) throws {
         self.hostImports = hostImports
         var configuration = EngineConfiguration(stackSize: stackSize)
-        configuration.features = WasmKitModules.features
+        WasmKitModules.useFeatures(in: &configuration)
         let engine = Engine(configuration: configuration, interceptor: profile)
         self.engine = engine
         let module: Module

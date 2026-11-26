@@ -672,7 +672,7 @@ final class MixedGuest: @unchecked Sendable {
     func setUp(runtime runtimeBytes: [UInt8]) throws {
         var configuration = EngineConfiguration(stackSize: stackSize, memoryBoundsChecking: .mprotect)
         // The features its runtime module was parsed with (WasmKitModules).
-        configuration.features = WasmKitModules.features
+        WasmKitModules.useFeatures(in: &configuration)
         let engine = Engine(configuration: configuration)
         let store = Store(engine: engine)
         let b = MixedBridge(engine: engine, store: store)
