@@ -15,7 +15,9 @@ if [ -z "${RUNFILES}" ]; then
 fi
 RUNFILES="$(cd "${RUNFILES}" && pwd)"
 
+# isomer's own (_main), or a consumer's run of @isomer//… (isomer+).
 REAL="${RUNFILES}/_main/shared/hot_reload/hot_reload_server_bin"
+[ -e "${REAL}" ] || REAL="${RUNFILES}/isomer+/shared/hot_reload/hot_reload_server_bin"
 if [ ! -e "${REAL}" ]; then
   echo "error: server binary not found at ${REAL}" >&2
   exit 1

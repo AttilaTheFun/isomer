@@ -133,6 +133,23 @@ stdlib) and `NSLog` on Android (logcat) and wasm (standard error).
   FoundationXML, and, on Android, curl, libxml2 and OpenSSL, which only
   corelibs' FoundationNetworking used. The Android SDKs' dynamic resources
   stay swift.org's: rules_swift links Swift statically.
+- **What `import Foundation` links**: a library that imports nothing of
+  Isomer's but Foundation still links some of Isomer's modules, because the
+  SDK's Foundation is built on them, as Apple's is on its neighbours:
+  - CoreGraphics, which Foundation re-exports (`CGFloat`, `CGPoint`…);
+  - Combine, whose `ObservableObject` and `Published` Foundation names;
+  - IsomerFoundation (the host's network transports and UserDefaults' store)
+    and IsomerDispatchTime (Dispatch's time types), folded into Foundation's
+    own archive;
+  - in the -i18n SDKs, IsomerFoundationInternationalization (and through it
+    swift-foundation's FoundationInternationalization and the SDK's ICU).
+
+  That is the SDK's Foundation itself, not an app's Isomer: a library on
+  these SDKs links them whether or not the app uses Isomer's SwiftUI, and
+  `--config=android_release`'s linker drops what of them nothing reaches. A
+  library that must link only the toolchain's runtime imports neither
+  Foundation nor anything that imports it (FoundationEssentials stays
+  swift-foundation's own, with no Isomer modules beneath it).
 
 ## The SDKs' checks (0.58)
 
