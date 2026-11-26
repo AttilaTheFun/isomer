@@ -17,6 +17,7 @@ swift_library(
         "AppleMacStandIns.swift",
         "AppleMetalView.swift",
         "AppleScreenshot.swift",
+        "AppleShake.swift",
         "AppleWebView.swift",
         "IsomerBridge.swift",
         "Map.swift",

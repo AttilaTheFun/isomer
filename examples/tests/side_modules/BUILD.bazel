@@ -36,7 +36,9 @@ wasm_side_module(
 
 # Under WasmKit, the side module over the runtime renders what the
 # self-contained reactor renders, byte for byte: the first frame and every
-# first-frame tap after it (each story's page).
+# first-frame tap after it (each story's page). Also as a host loads it:
+# WasmFeatureRuntime given the runtime module once and the side module as a
+# bundle, both read from their files.
 swift_test(
     name = "side_module_render_test",
     size = "large",
@@ -55,8 +57,10 @@ swift_test(
         "//conditions:default": ["@platforms//:incompatible"],
     }),
     deps = [
+        "@isomer//shared/wasm_host",
         "@isomer//shared/wasm_host:wasm_runtime",
         "@isomer//shared/wasm_host:wasmkit_runtime",
+        "@isomer//swift_ffi/runtime/swift_wasm_host",
     ],
 )
 
@@ -145,7 +149,8 @@ wasm_mixed_native(
 # MixedWasmKitRuntime takes when WasmKit can't reserve guard pages for the
 # runtime's memory (an iPhone grants a process one such reservation, so a
 # mixed runtime that isn't the first engine there gets none): the guest
-# interpreted, rendering the same.
+# interpreted, rendering the same. The corpus's side module is the other
+# feature a reload swaps in over the same runtime module.
 [swift_test(
     name = name,
     size = "large",
@@ -155,6 +160,7 @@ wasm_mixed_native(
     ],
     data = [
         "storybook_routed.txt",
+        ":corpus_side",
         ":storybook_native_shim",
         ":storybook_native_slots",
         ":storybook_runtime.wasm",

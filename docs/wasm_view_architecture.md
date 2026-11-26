@@ -364,9 +364,13 @@ heap) rather than code.
       (`:engine`, `engine/WasmKitEngine.swift`, loaded as `:engine_native`)
       with a generated Kotlin bridge (`:wasm_engine_bindings`) that the
       Kotlin `WasmKitRuntime` calls; WAMR, its JNI C and `WamrRuntime` are
-      gone. A process runs reactors or the app's compiled Swift, not both:
-      each library carries its own Swift runtime. What follows is how it
-      was built until then.* Until 0.38 it ran on **WAMR**, a tiny C
+      gone. A compiled app binds the engine in its own library
+      (`isomer_android_app(wasm_view = True)`, 0.63), sharing its Swift
+      runtime, and draws each page into a tree of its own
+      (`WasmView(treeState = remember { IsoTreeState() })`, events through
+      `LocalIsoEvents`), inside an `AppHostViews` factory; two libraries of
+      Swift in one process would each carry their own runtime. What follows
+      is how it was built until then.* Until 0.38 it ran on **WAMR**, a tiny C
       WebAssembly interpreter, NOT WasmKit. This is deliberate: Android's "wasm"
       delivery cell must carry **no compiled Swift** (compiled-vs-wasm is an
       exclusive choice on Android; mixing is only free on Apple, where the Swift
