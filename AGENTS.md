@@ -853,8 +853,10 @@ no wamrc, no `.aot`, no `--define wamr_*`). The engine work Isomer did
   the default engine (`WasmRuntimeRegistry.registerDefault`; an app may
   register its own first); Android's WasmView runs it as a Swift library of
   its own (android/libraries/wasm_view: engine/WasmKitEngine.swift, reached
-  from the Kotlin `WasmKitRuntime` through generated bindings; a process
-  runs reactors or an app's compiled Swift, not both); the Linux and Windows hosts drive
+  from the Kotlin `WasmKitRuntime` through generated bindings), or bound in
+  a compiled app's own library (`isomer_android_app(wasm_view = True)`:
+  one Swift runtime, each page a tree of its own, `IsoTreeState` and
+  `LocalIsoEvents`); the Linux and Windows hosts drive
   `WasmFeatureRuntime` over it. It lays out WASI as the hosts always have
   (/tmp, /home/app, HOME and XDG_*), binds the six iso_hot callbacks and
   swift_ffi through `SwiftFFIHostRuntime` (the dependencies' register
