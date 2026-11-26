@@ -12,8 +12,9 @@ package dev.isomer.runtime
 // The reactor's render tree is the tree.proto the native path also emits, so the
 // only wasm-specific glue is (1) launching the reactor with a bundle's bytes
 // and (2) routing node events back to the reactor via `WasmEngine.event`
-// (IsoEventRouter). Feature-flag / analytics DI is answered natively through
-// the `WasmEngineCallbacks` (the swift_ffi dependency transport).
+// (its tree state's events: IsoEventRouter for the app's own tree).
+// Feature-flag / analytics DI is answered natively through the
+// `WasmEngineCallbacks` (the swift_ffi dependency transport).
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -44,11 +45,18 @@ import kotlinx.coroutines.isActive
  * app), injected into the feature's `dependencies` dictionary. With them
  * goes Foundation's networking (WasmNetworkHosts: URLSession's HTTP and
  * WebSockets on Android's), unless the app injects its own under those keys.
+ *
+ * [treeState] is the tree the reactor draws into: the app's own
+ * (ComposeTreeState) for a whole-app WasmView, or one of its own
+ * (`remember { IsoTreeState() }`) for a page inside an app that draws a tree
+ * too (a compiled Isomer app's host view), whose tree and taps it then
+ * leaves alone.
  */
 @Composable
 fun WasmView(
     provider: WasmBundleProvider,
     modifier: Modifier = Modifier,
+    treeState: IsoTreeState = ComposeTreeState,
     ffiPrefix: String? = null,
     dependencies: List<WasmDependency> = emptyList(),
     // Init-threading A/B (benchmark): move the reactor instantiate + first
@@ -110,7 +118,7 @@ fun WasmView(
                 // apply to the retained UNode tree so only changed views
                 // recompose (the first patch is a full root op).
                 val t0 = if (WasmPerf.on) System.nanoTime() else 0L
-                ComposeTreeState.applyPatch(tree)
+                treeState.applyPatch(tree)
                 if (WasmPerf.on) WasmPerf.patch(System.nanoTime() - t0, tree.size)
             }
             // The guest's "render again soon" (an animation's next frame, a
@@ -151,14 +159,15 @@ fun WasmView(
 
     // Node events go straight to THIS reactor on the main thread while alive.
     DisposableEffect(Unit) {
-        val previous = IsoEventRouter.sink
-        IsoEventRouter.sink = { id, value ->
+        val events = treeState.events
+        val previous = events.sink
+        events.sink = { id, value ->
             val t0 = if (WasmPerf.on) System.nanoTime() else 0L
             holder.runtime?.event(id, value)
             if (WasmPerf.on) WasmPerf.call("event", System.nanoTime() - t0)
         }
         onDispose {
-            IsoEventRouter.sink = previous
+            events.sink = previous
             holder.runtime?.destroy()
             holder.runtime = null
         }
@@ -223,7 +232,7 @@ fun WasmView(
             holder.runtime = null
             // Fresh reactor => fresh diff state; drop the retained tree so the
             // first patch (a root op carrying the whole tree) rebuilds it.
-            ComposeTreeState.clear()
+            treeState.clear()
             val started = size
             val widthPt = started.first / density.toDouble()
             val heightPt = started.second / density.toDouble()
@@ -257,7 +266,7 @@ fun WasmView(
     }
 
     Box(modifier.fillMaxSize().onSizeChanged { size = it.width to it.height }) {
-        val root = ComposeTreeState.tree.value
+        val root = treeState.tree.value
         // The system's appearance, as the guest is told it (setColorScheme
         // above): dark text on light, or light on dark — never one of each.
         // Grounds as iOS's: white or black, grouped greys for sidebars.
@@ -267,7 +276,7 @@ fun WasmView(
                 surfaceVariant = androidx.compose.ui.graphics.Color(0xFFF2F2F7))
         MaterialTheme(colorScheme = scheme) {
             Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                if (root != null) IsoRoot(root)
+                if (root != null) IsoRoot(root, treeState.events)
             }
         }
     }

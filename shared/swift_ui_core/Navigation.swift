@@ -317,6 +317,12 @@ extension NavigationStack {
 }
 
 extension NavigationStack: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         // The path is state the stack keeps at its place, which goes with
@@ -756,6 +762,12 @@ public struct NavigationView<Content: View> {
 }
 
 extension NavigationView: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         NavigationStack(root: { content }).makeNode(&ctx)
@@ -793,7 +805,7 @@ struct _ColumnWidthView<Child: View> {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _ColumnWidthView: _PrimitiveView {
+extension _ColumnWidthView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let width = width, bounds = (min, max)
@@ -1149,6 +1161,12 @@ struct DrawnSearchField {
 }
 
 extension NavigationSplitView: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         // Native-navigation hosts mount a REAL NavigationSplitView: serialize
@@ -1508,6 +1526,12 @@ extension NavigationLink where Label == Text {
 }
 
 extension NavigationLink: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var sub = ctx.descend("navlink")
@@ -1564,7 +1588,7 @@ struct _NavigationDestinationView {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _NavigationDestinationView: _PrimitiveView {
+extension _NavigationDestinationView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         ctx.navigation?.destinations[type] = make
@@ -1587,7 +1611,7 @@ struct _PresentedDestinationView {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _PresentedDestinationView: _PrimitiveView {
+extension _PresentedDestinationView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let presenter = ctx.path
@@ -1614,7 +1638,7 @@ struct _NavigationTitleView {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _NavigationTitleView: _PrimitiveView {
+extension _NavigationTitleView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let nav = ctx.navigation, title = title, level = ctx.navigationLevel
@@ -1634,7 +1658,7 @@ struct _NavigationSubtitleView {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _NavigationSubtitleView: _PrimitiveView {
+extension _NavigationSubtitleView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let nav = ctx.navigation, subtitle = subtitle, level = ctx.navigationLevel
@@ -1759,6 +1783,12 @@ public struct DefaultToolbarItem {
 }
 
 extension DefaultToolbarItem: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         // At the top (`_bottomBarAtTop`) the field is left to the navigation
         // bar, as a plain `.searchable`'s is.
@@ -1793,6 +1823,12 @@ public struct ToolbarSpacer {
 }
 
 extension ToolbarSpacer: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         if placement.slot == .bottom {
             let nav = ctx.navigation, fixed = sizing.isFixed
@@ -1855,7 +1891,7 @@ struct _SafeAreaInsetView<Content: View, Inset: View> {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _SafeAreaInsetView: _PrimitiveView {
+extension _SafeAreaInsetView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var sub = ctx.descend("safearea")
@@ -1960,7 +1996,7 @@ struct _ToolbarView<Content: View> {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _ToolbarView: _PrimitiveView {
+extension _ToolbarView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var probe = ctx.descend("toolbaritem")
@@ -2037,6 +2073,12 @@ public struct ToolbarItem<Content: View> {
 }
 
 extension ToolbarItem: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         if placement.slot == .bottom {
@@ -2109,6 +2151,12 @@ public struct ToolbarItemGroup<Content: View> {
 }
 
 extension ToolbarItemGroup: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         if placement.slot == .bottom {
@@ -2205,7 +2253,7 @@ struct _BackButtonHiddenView {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _BackButtonHiddenView: _PrimitiveView {
+extension _BackButtonHiddenView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let nav = ctx.navigation, hidden = hidden
@@ -2225,7 +2273,7 @@ struct _ToolbarTitleDisplayModeView {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _ToolbarTitleDisplayModeView: _PrimitiveView {
+extension _ToolbarTitleDisplayModeView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let nav = ctx.navigation, mode = mode
