@@ -401,9 +401,12 @@ gets `container` (the web, Linux and Android targets built, then the
 tests that draw nothing: the core's, the WASI checks, the Android build
 tests, and the Storybook's headless and remote-driving tests; the required
 check), `container-apple` (the Apple targets) and `container-windows` (not
-required), each commit on main `populate`, `populate-apple` and
-`populate-windows` (the same builds, then the published apps under
---config=alpha; the cache's only writers; never the proof's) and `bazel8`.
+required), each commit on main `populate` and `populate-windows` (the
+same builds, then the published apps under --config=alpha; the cache's
+only writers; never the proof's) and `bazel8`, and each night (and by hand,
+`run: populate-apple`) `populate-apple` and `bazel8-apple`: GitHub gives a
+public repository five macOS runners, which two Apple builds on every
+merge kept from the pull requests' `container-apple` (2026-11-25).
 The GUI tests run only by hand: `run: verify` (each
 platform's build, `verify` (the web, Linux and Android), `verify-apple`,
 `verify-windows`; the tests
@@ -586,7 +589,7 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   `include()` that held it to 9 gone with rules_swift's release). 8.5 is the
   floor because windows_support (the MSVC runtime, a dependency's) reads
   `module_ctx.facts`. CI's `bazel8` job builds the Storybooks with 8.5.0 on
-  each commit on main. What 8 needed: no generic `treat_warnings_as_errors`
+  each commit on main (`bazel8-apple`, the Apple ones, nightly). What 8 needed: no generic `treat_warnings_as_errors`
   on packages that link a tool for the building Mac (Bazel 8's link repeats
   an `-rpath`, which ld64 warns about; Swift's own
   `swift.treat_warnings_as_errors` stays), and Bazel 9's test-toolchain flag
