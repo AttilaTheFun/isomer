@@ -72,6 +72,11 @@ extension ForEach {
 }
 
 extension ForEach: _MultiView {
+    /// The views it stands for, built where it is (View.swift's `buildMulti`).
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildMulti(view.value, ctx: &inputs.context.pointee))
+    }
+
     func childViews() -> [(suffix: String, view: any View)] {
         let rows = self.rows()
         return (0..<rows.count).map { ("fe-" + _pathSegment(rows.id($0)), rows.view($0)) }
@@ -178,6 +183,11 @@ extension _DeletableRows: _IndexedRows {
 }
 
 extension _DeletableRows: _MultiView {
+    /// The views it stands for, built where it is (View.swift's `buildMulti`).
+    @MainActor static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildMulti(view.value, ctx: &inputs.context.pointee))
+    }
+
     func childViews() -> [(suffix: String, view: any View)] {
         let rows = indexedRows()
         return (0..<rows.count).map { ("fe-" + _pathSegment(rows.id($0)), rows.view($0)) }
