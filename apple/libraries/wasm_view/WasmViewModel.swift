@@ -104,6 +104,40 @@ public final class WasmViewModel: ObservableObject {
     }
     private final class HomeRelay { var directory: String?; var bundleIdentifier: String? }
     private let home = HomeRelay()
+    /// Whether the last engine made for a reactor was WasmKit's, whose
+    /// modules `prepare(bundle:)` can parse ahead.
+    private final class EngineRelay { var wasmKit = false }
+    private let engines = EngineRelay()
+
+    /// The runtime module side-module bundles run over (see
+    /// `WasmFeatureRuntime.runtimeModule`): set once, before the first load
+    /// of one. Its engines get the guest's home and bundle identifier as the
+    /// registry's do (a `WasmKitRuntime`'s; mixed mode's has no home yet).
+    public var runtimeModule: WasmRuntimeModule? {
+        didSet {
+            let home = self.home
+            core.runtimeModule = runtimeModule.map { module in
+                WasmRuntimeModule(name: module.name, source: module.source) {
+                    let made = module.makeEngine()
+                    if let engine = made as? WasmKitRuntime { Self.configure(engine, home: home) }
+                    return made
+                }
+            }
+        }
+    }
+
+    /// A WasmKit engine's guest home: the app's container and identifier,
+    /// or the host's own (`guestHomeDirectory`, made when missing).
+    private static func configure(_ engine: WasmKitRuntime, home: HomeRelay) {
+        if let directory = home.directory {
+            try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+            engine.homeDirectory = directory
+            engine.bundleIdentifier = home.bundleIdentifier ?? engine.bundleIdentifier
+        } else if engine.homeDirectory == nil {
+            engine.homeDirectory = NSHomeDirectory()
+            engine.bundleIdentifier = engine.bundleIdentifier ?? Bundle.main.bundleIdentifier
+        }
+    }
 
     /// The runtime module side-module bundles run over (see
     /// `WasmFeatureRuntime.runtimeModule`): set once, before the first load
@@ -164,8 +198,10 @@ public final class WasmViewModel: ObservableObject {
             "/tmp/picked")
         let logRelay = self.logRelay
         let home = self.home
+        let engines = self.engines
         core = WasmFeatureRuntime(runtime: { bytes in
             let made = runtime(bytes)
+            engines.wasmKit = made is WasmKitRuntime
             if let directory = home.directory, let engine = made as? WasmKitRuntime {
                 try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
                 engine.homeDirectory = directory
@@ -283,6 +319,27 @@ public final class WasmViewModel: ObservableObject {
     deinit {
         // The engine instance goes with the model (see the runtimes' deinit).
         NSLog("[wasm-view] model released")
+    }
+
+    /// Parses what `bundle` launches on a thread of its own, so that
+    /// `load(bundle:)` on the main thread then skips the parse, most of a
+    /// launch (WasmKitModules): a side-module bundle's runtime module (the
+    /// same from reload to reload, so parsed once a process), or a reactor
+    /// when the engine is WasmKit's. Nothing for another engine's reactor.
+    public func prepare(bundle: WasmServiceBundle) async {
+        let source: WasmModuleSource
+        switch bundle.kind {
+        case .reactor:
+            guard engines.wasmKit else { return }
+            source = bundle.module
+        case .sideModule:
+            guard let runtimeModule else { return }
+            source = runtimeModule.source
+        }
+        await Task.detached(priority: .userInitiated) {
+            guard let bytes = try? source.read() else { return }
+            _ = try? WasmKitModules.module(bytes)
+        }.value
     }
 
     public func load(bundle: WasmServiceBundle) {
