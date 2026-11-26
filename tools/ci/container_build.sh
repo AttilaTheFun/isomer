@@ -308,8 +308,11 @@ if has web; then
     # The tests that draw nothing run here; those that do (the web Storybook
     # in Chrome, the headful apps) in headful mode, container-verify, at
     # verify. The web-view session test drives a page in Chrome that draws
-    # nothing.
-    run_tests --test_output=errors //tests/sqlite_wasi:sqlite_file_test //tests/webview_session:session_test
+    # nothing. Beside them the builds of the threads SDK (wasm32-wasip1-threads,
+    # run under the WASI Threads of WasmKit): the SQLite check, and the
+    # threaded tap counter frame for frame with the single-threaded one.
+    run_tests --test_output=errors //tests/sqlite_wasi:sqlite_file_test //tests/webview_session:session_test \
+        //tests/sqlite_wasi:sqlite_file_threads_test //tests/wasm_engines:wasmkit_threads_test
     results+=($?)
 fi
 if has linux; then

@@ -109,7 +109,8 @@ error). .4: a third wasm bundle,
 `swift-6.4.2-RELEASE_wasm-threads.artifactbundle.tar.gz`
 (wasm32-unknown-wasip1-threads: Swift 6.4.2 with swiftlang/swift#92018's
 multi-threaded Concurrency, libc++ with threads and WebAssembly exceptions;
-plain, no ICU), and `URLSession`'s downloads written to a file as they
+plain, no ICU; isomer registers it beside the wasm SDK, `threads = True`,
+and builds and tests its threaded reactors with it), and `URLSession`'s downloads written to a file as they
 arrive (IsomerFoundation's `HTTPTransport.download(_:to:)`).
 
 - **Minimum**: the Android SDKs' is API 23, swift.org's: every library in
@@ -336,7 +337,10 @@ consumer.
   same apps with no other change. rules_swift's `swift` extension takes its
   tags from the root module only, so until then the consumer's own block
   registers the SDKs.
-- **The threads SDK** follows Swift 6.5 (TODO.md, "wasi-threads").
+- **The threads SDK** is isomer-6.4.2.4's third wasm bundle (Swift 6.4.2
+  with swiftlang/swift#92018 patched in), registered beside the wasm SDK
+  (`swift.wasm_sdk(threads = True, …)`) since 0.63; it builds over
+  swift.org's own once 6.5 has one (TODO.md, "wasi-threads").
 - **swift-collections inside the SDK under its own module names**: an app
   that builds swift-collections itself would see two. Private names in the
   SDK (as swift.org's `_FoundationCollections`) are the likely answer.
