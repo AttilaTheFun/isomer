@@ -903,7 +903,12 @@ no wamrc, no `.aot`, no `--define wamr_*`). The engine work Isomer did
   for C and C++ `-fwasm-exceptions -mllvm -wasm-use-legacy-eh=false`; for
   Swift `-Xllvm -wasm-enable-eh -Xllvm -wasm-use-legacy-eh=false`; and for
   the link `--import-memory --export-memory --shared-memory
-  --max-memory=1073741824 -lunwind`. A threaded reactor still names its
+  --max-memory=1073741824 -lunwind`. rules_swift#1860 hands the C options
+  to clang's links as well as its compiles, so each threaded link warns
+  "argument unused during compilation: '-mllvm -wasm-use-legacy-eh=false'":
+  harmless (no warning is an error in a wasm link), and #1860's to fix (a
+  compile-only `cc_args` for the toolset's C options), not the toolset's.
+  A threaded reactor still names its
   memory flags itself; examples' tap_counter_threads_release.wasm,
   network_probe_threads.wasm and example_full_threads.wasm are the test
   cells, the examples' //tests/sqlite_wasi:sqlite_file_threads_test and
