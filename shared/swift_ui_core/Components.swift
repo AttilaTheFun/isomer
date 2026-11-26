@@ -193,7 +193,7 @@ struct _TabItemView<Content: View, LabelV: View>: _AnyTabItem {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _TabItemView: _PrimitiveView {
+extension _TabItemView: _InternalPrimitiveView {
     // Rendered outside a TabView (or as the selected tab's content): just the
     // content; the label only matters to the enclosing TabView's tab bar.
     @MainActor
@@ -676,7 +676,7 @@ struct _SearchableView<Content: View> {
 }
 
 /// Records the search spec for the enclosing native list while building content.
-struct _RegisterSearch<Content: View>: _PrimitiveView {
+struct _RegisterSearch<Content: View>: _InternalPrimitiveView {
     let content: Content
     let text: Binding<String>
     let prompt: String

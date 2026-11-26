@@ -80,7 +80,7 @@ struct _AlignmentGuide<Content: View> {
     typealias Body = Never
 }
 
-extension _AlignmentGuide: _PrimitiveView {
+extension _AlignmentGuide: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let container = ctx.env.containerAlignment
