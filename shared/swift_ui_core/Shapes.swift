@@ -13,6 +13,23 @@ protocol PrimitiveShape: Shape {
 }
 
 extension Shape {
+    /// A shape's node, statically, as Apple's `Shape` says it through its
+    /// own default (View.swift): an app's own shape is filled with the
+    /// foreground colour, as a bare `Circle()` is.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: view.value.makeNode(&inputs.context.pointee))
+    }
+}
+
+extension Shape where Self: _InternalPrimitiveView {
+    /// A shape that is also a primitive (a trim, a stroke) is built as the
+    /// primitive, as the builder always took it first.
+    @MainActor static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+}
+
+extension Shape {
     nonisolated public var body: Never { fatalError("primitive view") }
 
     /// What the hosts draw: a built-in shape's kind, or an app's own shape's
@@ -271,6 +288,12 @@ public struct StrokeShapeView<Content: Shape, Style: ShapeStyle, Background: Vie
 }
 
 extension StrokeShapeView: _PrimitiveView {
+    /// Built as a primitive, statically, as Apple's says it is through its
+    /// own `_makeView` (View.swift).
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var view = _ShapeView(kind: shape.shapeKind, fill: nil, stroke: (resolveStyleColor(style), strokeStyle.lineWidth))
         view.trim = shape.shapeTrim

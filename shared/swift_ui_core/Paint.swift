@@ -289,12 +289,24 @@ extension ShapeStyle where Self == AngularGradient {
 
 // Gradients render as a `.gradient` node filling their proposed rect.
 extension LinearGradient: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         gradientNode(resolvePaint(), ctx: ctx)
     }
 }
 
 extension RadialGradient: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         gradientNode(resolvePaint(), ctx: ctx)
     }
@@ -337,6 +349,12 @@ public struct EllipticalGradient: PaintStyle {
 }
 
 extension EllipticalGradient: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         gradientNode(resolvePaint(), ctx: ctx)
     }
@@ -418,6 +436,12 @@ extension ShapeStyle where Self == AngularGradient {
 }
 
 extension AngularGradient: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         gradientNode(resolvePaint(), ctx: ctx)
     }

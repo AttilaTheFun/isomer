@@ -317,6 +317,12 @@ extension NavigationStack {
 }
 
 extension NavigationStack: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         // The path is state the stack keeps at its place, which goes with
@@ -756,6 +762,12 @@ public struct NavigationView<Content: View> {
 }
 
 extension NavigationView: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         NavigationStack(root: { content }).makeNode(&ctx)
@@ -1149,6 +1161,12 @@ struct DrawnSearchField {
 }
 
 extension NavigationSplitView: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         // Native-navigation hosts mount a REAL NavigationSplitView: serialize
@@ -1508,6 +1526,12 @@ extension NavigationLink where Label == Text {
 }
 
 extension NavigationLink: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var sub = ctx.descend("navlink")
@@ -1759,6 +1783,12 @@ public struct DefaultToolbarItem {
 }
 
 extension DefaultToolbarItem: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         // At the top (`_bottomBarAtTop`) the field is left to the navigation
         // bar, as a plain `.searchable`'s is.
@@ -1793,6 +1823,12 @@ public struct ToolbarSpacer {
 }
 
 extension ToolbarSpacer: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         if placement.slot == .bottom {
             let nav = ctx.navigation, fixed = sizing.isFixed
@@ -2037,6 +2073,12 @@ public struct ToolbarItem<Content: View> {
 }
 
 extension ToolbarItem: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         if placement.slot == .bottom {
@@ -2109,6 +2151,12 @@ public struct ToolbarItemGroup<Content: View> {
 }
 
 extension ToolbarItemGroup: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         if placement.slot == .bottom {
