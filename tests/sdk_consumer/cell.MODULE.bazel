@@ -5,12 +5,12 @@ bazel_dep(name = "isomer", version = "0.57.1")
 
 _swift = use_extension("@rules_swift//swift:extensions.bzl", "swift")
 _swift.android_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.2/swift-6.4.2-RELEASE_android-i18n.artifactbundle.tar.gz",
-    sha256 = "ab250666b10586a507abf4b80b55bf453ddeae1a7d499c788c4d347d5b55ce93",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.3/swift-6.4.2-RELEASE_android-i18n.artifactbundle.tar.gz",
+    sha256 = "b9d31edf5ea51a7a7756d9fbff2627364fac30ad6fd8f29c25abe8f00956cf2c",
 )
 _swift.wasm_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.2/swift-6.4.2-RELEASE_wasm-i18n.artifactbundle.tar.gz",
-    sha256 = "86cb53c7af7808fd0b07e2f37b7a66a7a64f379b18348aedaaff7ddab24fb36b",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.3/swift-6.4.2-RELEASE_wasm-i18n.artifactbundle.tar.gz",
+    sha256 = "32d49aa8ef4a7f125b9ca24c976a557089c57d30e066881ba4f2edd1390fc19c",
 )
 
 _android = use_extension("@hermetic_android_toolchains//:extensions.bzl", "android", dev_dependency = True)

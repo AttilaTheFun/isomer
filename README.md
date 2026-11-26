@@ -861,8 +861,8 @@ If you build for Android:
 
 ```starlark
 swift.android_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.2/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz",
-    sha256 = "19094e58e92669d26a4ce31e5a05f85963eeb5af9cafa35475f2a55e4d69451c",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.3/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz",
+    sha256 = "4dedbd4df358ba83478649f7a9ad9c6f865e9496e57f3088403df1f68e589487",
 )
 ```
 
@@ -870,8 +870,8 @@ If you build for the web:
 
 ```starlark
 swift.wasm_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.2/swift-6.4.2-RELEASE_wasm.artifactbundle.tar.gz",
-    sha256 = "9bd7e1808fc9fb5027b89becbf2559946e19e9a365aac6876eedf834cceb68cf",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.3/swift-6.4.2-RELEASE_wasm.artifactbundle.tar.gz",
+    sha256 = "6ad399ae30c74adb55bf7de0861537579d3964f1b0427e156187773c5a3570a9",
 )
 ```
 
@@ -883,13 +883,13 @@ and ICU (tens of megabytes of data, which `icu_locales` trims on the web):
 ```starlark
 # Android, formatting:
 swift.android_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.2/swift-6.4.2-RELEASE_android-i18n.artifactbundle.tar.gz",
-    sha256 = "ab250666b10586a507abf4b80b55bf453ddeae1a7d499c788c4d347d5b55ce93",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.3/swift-6.4.2-RELEASE_android-i18n.artifactbundle.tar.gz",
+    sha256 = "b9d31edf5ea51a7a7756d9fbff2627364fac30ad6fd8f29c25abe8f00956cf2c",
 )
 # The web, formatting:
 swift.wasm_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.2/swift-6.4.2-RELEASE_wasm-i18n.artifactbundle.tar.gz",
-    sha256 = "86cb53c7af7808fd0b07e2f37b7a66a7a64f379b18348aedaaff7ddab24fb36b",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.3/swift-6.4.2-RELEASE_wasm-i18n.artifactbundle.tar.gz",
+    sha256 = "32d49aa8ef4a7f125b9ca24c976a557089c57d30e066881ba4f2edd1390fc19c",
 )
 ```
 
@@ -1011,6 +1011,13 @@ Each release's notes have an Upgrading section; these things are easy to miss:
   - swift_map's Apple example apps and XCFramework are the examples'
     (`examples/swift_map/…`), not `@isomer//swift_map/apple/applications`
     and `@isomer//swift_map/apple/xcframework`.
+- **Isomer's Swift SDKs isomer-6.4.2.3 (0.63): Swift's C++ interop on
+  wasm, and `NSLog`.** Move `swift.android_sdk` and `swift.wasm_sdk` to its
+  lines ("Isomer's Swift SDKs" above, or the release's notes). A Swift
+  library with `-cxx-interoperability-mode=default` now builds for wasm
+  (isomer-6.4.2.2's wasi-libc module map made a cycle with libc++'s, and
+  `-lswiftCxx` wasn't found); there is no CxxStdlib Swift overlay on wasm,
+  so `std.string` doesn't convert to and from `String` there.
 - **Isomer's Swift SDKs isomer-6.4.2.2 (since 0.58): Android at API 23.**
   isomer-6.4.2.2's Android SDKs are built at API 23; move to it: both
   `swift.android_sdk` and `swift.wasm_sdk` to its lines ("Isomer's Swift
