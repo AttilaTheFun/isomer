@@ -14,6 +14,12 @@
 // cquery --output=files`, so the flags given decide its configuration.
 // Config (arguments, else env):
 //   --port=, ISO_HOT_RELOAD_PORT      listen port (default 8787)
+//   --host=, ISO_HOT_RELOAD_HOST      the address it listens on (default
+//                                     127.0.0.1: this machine alone, which a
+//                                     simulator shares and an Android emulator
+//                                     reaches as 10.0.2.2; 0.0.0.0 for a phone
+//                                     on the network, which can then fetch the
+//                                     module and read /clients)
 //   --target=, ISO_HOT_RELOAD_TARGET  the wasm target (default the full example reactor)
 //   --watch=, ISO_HOT_RELOAD_WATCH    source dir to watch, workspace-relative
 //   --flag= (repeated), ISO_HOT_RELOAD_FLAGS (space-separated)  build flags
@@ -54,8 +60,9 @@ struct HotReloadServerMain {
             exit(1)
         }
         let env = ProcessInfo.processInfo.environment
-        // Arguments first (`--target=`, `--watch=`, `--port=`, `--flag=` each a
-        // further build flag), then the environment, then the example's.
+        // Arguments first (`--target=`, `--watch=`, `--port=`, `--host=`,
+        // `--flag=` each a further build flag), then the environment, then the
+        // example's.
         var arguments: [String: String] = [:]
         var flags = (env["ISO_HOT_RELOAD_FLAGS"] ?? "").split(separator: " ").map(String.init)
         for argument in CommandLine.arguments.dropFirst() {
@@ -65,9 +72,10 @@ struct HotReloadServerMain {
             if key == "flag" { flags.append(value) } else { arguments[key] = value }
         }
         let port = UInt16(arguments["port"] ?? env["ISO_HOT_RELOAD_PORT"] ?? "") ?? 8787
+        let host = arguments["host"] ?? env["ISO_HOT_RELOAD_HOST"] ?? "127.0.0.1"
         let target = arguments["target"] ?? env["ISO_HOT_RELOAD_TARGET"] ?? "//examples/wasm/example_full_feature:example_full.wasm"
         let watch = arguments["watch"] ?? env["ISO_HOT_RELOAD_WATCH"] ?? "examples/shared/example_application"
-        let server = Server(workspace: workspace, port: port, target: target, watchDir: watch, flags: flags)
+        let server = Server(workspace: workspace, host: host, port: port, target: target, watchDir: watch, flags: flags)
         server.run()
         dispatchMain()
     }
@@ -112,6 +120,7 @@ final class Clients {
 
 final class Server {
     private let workspace: String
+    private let host: String
     private let port: UInt16
     private let target: String
     private let watchDir: String
@@ -135,9 +144,10 @@ final class Server {
     }
     private var sourceDir: String { workspace + "/" + watchDir }
 
-    init(workspace: String, port: UInt16, target: String, watchDir: String, flags: [String] = []) {
+    init(workspace: String, host: String, port: UInt16, target: String, watchDir: String, flags: [String] = []) {
         self.flags = flags
         self.workspace = workspace
+        self.host = host
         self.port = port
         self.target = target
         self.watchDir = watchDir
@@ -148,9 +158,9 @@ final class Server {
         rebuild()
         startHTTP()
         startWatching()
-        log("Serving on http://0.0.0.0:\(port) — any number of clients at once.")
+        log("Serving on http://\(host):\(port) — any number of clients at once.")
         log("  Linux / Windows wasm cell:  ISO_HOT_RELOAD_SERVER=http://localhost:\(port)")
-        log("  (a peer on another host uses this machine's LAN IP)")
+        log("  (an Android emulator: http://10.0.2.2:\(port); a phone on the network needs --host=0.0.0.0 and this machine's LAN IP)")
         log("Watching \(sourceDir) — edit a source file and every connected app re-renders.")
     }
 
@@ -246,15 +256,18 @@ final class Server {
         #endif
         addr.sin_family = sa_family_t(AF_INET)
         addr.sin_port = port.bigEndian
-        // All interfaces (LAN peers can reach it); converted, as Darwin and
-        // Glibc import INADDR_ANY as different integer types.
-        addr.sin_addr.s_addr = in_addr_t(INADDR_ANY)
+        // The address asked for (`--host=`): loopback by default, so a
+        // machine on a shared network doesn't hand its module to anyone on it.
+        guard inet_pton(AF_INET, host, &addr.sin_addr) == 1 else {
+            log("Not an IPv4 address to listen on: \(host)")
+            exit(2)
+        }
         let bound = withUnsafePointer(to: &addr) { p in
             p.withMemoryRebound(to: sockaddr.self, capacity: 1) { sp in
                 bind(listenSocket, sp, socklen_t(MemoryLayout<sockaddr_in>.size))
             }
         }
-        guard bound == 0 else { log("Failed to bind port \(port)"); exit(1) }
+        guard bound == 0 else { log("Failed to bind \(host):\(port)"); exit(1) }
         guard listen(listenSocket, 64) == 0 else { log("Failed to listen"); exit(1) }
 
         // Accept loop on its own thread; each connection is served concurrently.
