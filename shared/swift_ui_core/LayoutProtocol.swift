@@ -295,7 +295,7 @@ extension _LayoutView: View {}
 /// Each custom layout's type, logged once.
 @MainActor private var announcedLayouts: Set<String> = []
 
-extension _LayoutView: _PrimitiveView {
+extension _LayoutView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let chosen: any Layout = (layout as? AnyLayout)?.layout ?? layout

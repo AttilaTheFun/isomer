@@ -1200,13 +1200,7 @@ private func buildUnidentifiedNode(view: any View, ctx: inout BuildContext) -> R
 func buildNodeByKind(view: any View, ctx: inout BuildContext) -> RenderNode {
     let kind = _viewKind(view)
     if kind.contains(.primitive), let primitive = view as? _PrimitiveView {
-        // Built-in views that don't say they build purely read or register
-        // runtime state: nothing around them is reused (Reuse.swift).
-        if !(kind.contains(.reusable) && primitive._buildIsPure(ctx)) {
-            Runtime.shared.markBuildVolatile(registersForFrame: Swift.type(of: primitive)._impureBuildRegistersForFrame)
-            _frameLogVolatile(view)
-        }
-        return primitive.makeNode(&ctx)
+        return buildPrimitive(primitive, ctx: &ctx)
     }
     // An app's own `Shape` (a `path(in:)` of its own): filled with the
     // foreground colour, as a bare `Circle()` is.

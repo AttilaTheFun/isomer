@@ -152,7 +152,7 @@ struct DrawnToggle {
     var body: Never { fatalError("primitive view") }
 }
 
-extension DrawnToggle: _PrimitiveView {
+extension DrawnToggle: _InternalPrimitiveView {
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let trackColor: Color = on ? .green : Color(white: 0, opacity: 0.12)
         let knobOffset: CGFloat = on ? 20 : 2

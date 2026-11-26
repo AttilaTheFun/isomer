@@ -183,6 +183,12 @@ public struct Text {
 }
 
 extension Text: _PrimitiveView {
+    /// Built as a primitive, statically, as Apple's says it is through its
+    /// own `_makeView` (View.swift).
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let cased = ctx.env.textCase == "upper" ? content.uppercased() : ctx.env.textCase == "lower" ? content.lowercased() : content
         let node = RenderNode(kind: .text(cased))

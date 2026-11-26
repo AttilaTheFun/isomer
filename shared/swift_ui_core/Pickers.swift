@@ -124,4 +124,10 @@ extension View {
 
 // The view conformances, in extensions: declared on the type itself they
 // would make the whole type main-actor isolated (see `View`).
-extension _PickerRequest: View {}
+extension _PickerRequest: View {
+    // A `package` type: the internal primitives' default can't answer for
+    // it (View.swift), so it says what it is here.
+    package static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+}
