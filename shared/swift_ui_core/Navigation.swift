@@ -793,7 +793,7 @@ struct _ColumnWidthView<Child: View> {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _ColumnWidthView: _PrimitiveView {
+extension _ColumnWidthView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let width = width, bounds = (min, max)
@@ -1564,7 +1564,7 @@ struct _NavigationDestinationView {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _NavigationDestinationView: _PrimitiveView {
+extension _NavigationDestinationView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         ctx.navigation?.destinations[type] = make
@@ -1587,7 +1587,7 @@ struct _PresentedDestinationView {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _PresentedDestinationView: _PrimitiveView {
+extension _PresentedDestinationView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let presenter = ctx.path
@@ -1614,7 +1614,7 @@ struct _NavigationTitleView {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _NavigationTitleView: _PrimitiveView {
+extension _NavigationTitleView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let nav = ctx.navigation, title = title, level = ctx.navigationLevel
@@ -1634,7 +1634,7 @@ struct _NavigationSubtitleView {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _NavigationSubtitleView: _PrimitiveView {
+extension _NavigationSubtitleView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let nav = ctx.navigation, subtitle = subtitle, level = ctx.navigationLevel
@@ -1855,7 +1855,7 @@ struct _SafeAreaInsetView<Content: View, Inset: View> {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _SafeAreaInsetView: _PrimitiveView {
+extension _SafeAreaInsetView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var sub = ctx.descend("safearea")
@@ -1960,7 +1960,7 @@ struct _ToolbarView<Content: View> {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _ToolbarView: _PrimitiveView {
+extension _ToolbarView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var probe = ctx.descend("toolbaritem")
@@ -2205,7 +2205,7 @@ struct _BackButtonHiddenView {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _BackButtonHiddenView: _PrimitiveView {
+extension _BackButtonHiddenView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let nav = ctx.navigation, hidden = hidden
@@ -2225,7 +2225,7 @@ struct _ToolbarTitleDisplayModeView {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _ToolbarTitleDisplayModeView: _PrimitiveView {
+extension _ToolbarTitleDisplayModeView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let nav = ctx.navigation, mode = mode

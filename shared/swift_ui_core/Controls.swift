@@ -416,7 +416,7 @@ struct _StackScopedView<Content: View, Value> {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _StackScopedView: _PrimitiveView {
+extension _StackScopedView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         Runtime.shared[keyPath: keyPath].append(value)

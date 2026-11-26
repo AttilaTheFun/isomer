@@ -161,7 +161,7 @@ struct _ShapeFill<S: ShapeStyle> {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _ShapeFill: _PrimitiveView {
+extension _ShapeFill: _InternalPrimitiveView {
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         if let color = styleColor(content) {
             var view = _ShapeView(kind: kind, fill: color, stroke: nil)
@@ -181,7 +181,7 @@ struct _ForegroundFill {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _ForegroundFill: _PrimitiveView {
+extension _ForegroundFill: _InternalPrimitiveView {
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         _ShapeView(kind: kind, fill: ctx.env.foregroundColor, stroke: nil).makeNode(&ctx)
     }
@@ -228,7 +228,7 @@ struct _ForegroundStroke {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _ForegroundStroke: _PrimitiveView {
+extension _ForegroundStroke: _InternalPrimitiveView {
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         _ShapeView(kind: kind, fill: nil, stroke: (ctx.env.foregroundColor, lineWidth)).makeNode(&ctx)
     }
@@ -244,7 +244,7 @@ struct _GradientShapeView {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _GradientShapeView: _PrimitiveView {
+extension _GradientShapeView: _InternalPrimitiveView {
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         RenderNode(kind: .gradient(kind, paint.withOpacity(ctx.env.opacity)))
     }
@@ -312,7 +312,7 @@ struct _StrokedShape {
     nonisolated func path(in rect: CGRect) -> Path { Path(primitiveKind, in: rect) }
 }
 
-extension _StrokedShape: _PrimitiveView {
+extension _StrokedShape: _InternalPrimitiveView {
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var view = _ShapeView(kind: kind, fill: nil, stroke: (ctx.env.foregroundColor, lineWidth))
         view.trim = trim
@@ -996,7 +996,7 @@ struct _ShapeView {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _ShapeView: _PrimitiveView {
+extension _ShapeView: _InternalPrimitiveView {
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let opacity = ctx.env.opacity
         let node = RenderNode(kind: .shape(
@@ -1033,7 +1033,7 @@ extension Shape {
 // would make the whole type main-actor isolated (see `View`).
 extension _GradientShapeView: View {}
 extension _TrimmedShape: PrimitiveShape {}
-extension _TrimmedShape: _PrimitiveView {}
+extension _TrimmedShape: _InternalPrimitiveView {}
 extension _StrokedShape: PrimitiveShape {}
 extension Rectangle: PrimitiveShape {}
 extension RoundedRectangle: PrimitiveShape {}
