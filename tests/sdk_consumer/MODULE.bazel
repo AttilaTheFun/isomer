@@ -41,7 +41,7 @@ single_version_override(
 # as an app on a fork of it does (isomer asks for 0.7.3), for the JNI
 # library's link; 0.7.3 for the APKs, whose tools' Maven isomer's lock file
 # pins (0.6.0's, unpinned, needs a host JDK to resolve).
-# hermetic_android_toolchains 0.5.0.isomer.2 makes @androidsdk load with
+# hermetic_android_toolchains 0.5.0.isomer.3 makes @androidsdk load with
 # 0.6.0: .1 loaded string_flag from rules_android's helper.bzl, which only
 # 0.7 has.
 
@@ -82,7 +82,7 @@ register_toolchains(
     "@swift_toolchain//:swift_toolchain_android_armv7_ubuntu24.04-aarch64",
 )
 
-bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.2")
+bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.3")
 android = use_extension("@hermetic_android_toolchains//:extensions.bzl", "android", dev_dependency = True)
 android.sdk(
     build_tools_version = "35.0.0",

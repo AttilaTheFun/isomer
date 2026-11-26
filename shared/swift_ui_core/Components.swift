@@ -59,6 +59,12 @@ extension ProgressView {
 }
 
 extension ProgressView: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let style = ctx.env[_ProgressViewStyleKey.self]
@@ -154,6 +160,12 @@ public struct GeometryReader<Content: View> {
 }
 
 extension GeometryReader: _PrimitiveView {
+    /// Built as a primitive, statically, as Apple's says it is through its
+    /// own `_makeView` (View.swift).
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let node = RenderNode(kind: .geometryReader)
@@ -193,7 +205,7 @@ struct _TabItemView<Content: View, LabelV: View>: _AnyTabItem {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _TabItemView: _PrimitiveView {
+extension _TabItemView: _InternalPrimitiveView {
     // Rendered outside a TabView (or as the selected tab's content): just the
     // content; the label only matters to the enclosing TabView's tab bar.
     @MainActor
@@ -246,6 +258,12 @@ public struct TabView<Content: View> {
 }
 
 extension TabView: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var entries: [(label: any View, content: any View, tag: AnyHashable?)] = []
@@ -525,6 +543,12 @@ extension Menu where Label == Text {
 }
 
 extension Menu: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var items: [(title: String, symbol: String?, role: ButtonRole?, action: () -> Void)] = []
@@ -676,7 +700,7 @@ struct _SearchableView<Content: View> {
 }
 
 /// Records the search spec for the enclosing native list while building content.
-struct _RegisterSearch<Content: View>: _PrimitiveView {
+struct _RegisterSearch<Content: View>: _InternalPrimitiveView {
     let content: Content
     let text: Binding<String>
     let prompt: String
