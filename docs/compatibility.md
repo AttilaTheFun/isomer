@@ -69,8 +69,8 @@ Only for an app whose iPhone and Mac apps come from `isomer_application`.
 
 | Module | Version | Why |
 | --- | --- | --- |
-| rules_apple | 5.3.1.applecross.6 | the iPhone's and the Mac's apps, built on a Mac or on Linux (rules_applecross's patches) |
-| rules_applecross | 0.0.3.382f8c3 | Apple's SDKs and tools on Linux |
+| rules_apple | 5.3.1.applecross.7 | the iPhone's and the Mac's apps, built on a Mac or on Linux (rules_applecross's patches) |
+| rules_applecross | 0.0.3.1f03f48 | Apple's SDKs and tools on Linux |
 | apple_support | 2.11.0 | rules_applecross's |
 
 ## Pinning: the registry and the release tags
