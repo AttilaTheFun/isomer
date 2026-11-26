@@ -235,6 +235,9 @@ package final class Runtime {
     var scenePhase: ScenePhase = .active
     /// `.onOpenURL` handlers registered during the current build.
     var openURLHandlers: [(URL) -> Void] = []
+    /// The Isomer module's `.onShake` handlers registered during the
+    /// current build: while there are any, the host listens for shakes.
+    var shakeHandlers: [() -> Void] = []
     /// External URLs delivered before handlers were registered (`openURL(external:)`).
     var pendingExternalURLs: [String] = []
     /// The `WindowGroup` title, reported to the host once via `platformCommand`.
@@ -716,6 +719,7 @@ package final class Runtime {
         // Per-build registrations reset so they don't accumulate.
         pendingPresentations = []
         openURLHandlers = []
+        shakeHandlers = []
         navigationStates = []
         pendingSearch = nil
         navTransitionActive = false
@@ -994,6 +998,7 @@ package final class Runtime {
 
         syncWindowTitle()
         dispatchExternalURLs()
+        syncShakeListening()
         // Run actions queued during the build (`.onChange`, delivered URLs);
         // they may mutate state, so render again to reflect it.
         if !deferredActions.isEmpty {
