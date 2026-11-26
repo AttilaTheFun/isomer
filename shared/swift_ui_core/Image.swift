@@ -232,6 +232,12 @@ public struct Image {
 }
 
 extension Image: _PrimitiveView {
+    /// Built as a primitive, statically, as Apple's says it is through its
+    /// own `_makeView` (View.swift).
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         // Inside a TabView's tab bar, an unsized `Image` becomes a fixed-size
         // icon (matching how the native tab bar treats `.tabItem` images).
@@ -352,6 +358,12 @@ public struct AsyncImage {
 }
 
 extension AsyncImage: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         guard let url else {

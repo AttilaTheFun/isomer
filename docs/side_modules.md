@@ -79,6 +79,66 @@ tests: commits on AttilaTheFun/WasmKit's isomer/side-modules, to propose to
 swiftwasm/WasmKit. Until a release has them, isomer takes WasmKit 0.5.0 with
 those commits as a patch (tools/patches/wasmkit_host_linking.patch).
 
+## A feature over a runtime module, in a host
+
+A host takes the runtime module once and features as bundles. A bundle
+(`WasmServiceBundle`, swift_ffi's `WasmBundle`) is a reactor, as before, or
+a side module naming the runtime build it was linked against
+(`kind: .sideModule(runtime: <name>)`); its module's bytes are in memory
+(`.bytes`) or in a file the engine reads at launch (`.file(path:offset:length:)`).
+The runtime module is a `WasmRuntimeModule`: its name, its source, and the
+engine made for each launch.
+
+    let runtime = WasmRuntimeModule.mixed(           // IsomerMixedRuntime
+        name: "app-runtime-12",
+        source: .packaged(resource: "runtime")!,     // a file in Bundle.main
+        native: native)                              // the app's MixedNativePart
+    WasmView(provider: provider, runtimeModule: runtime)
+    // provider's bundles: WasmServiceBundle(label:module:kind: .sideModule(runtime: "app-runtime-12"))
+
+- **The engine.** `.mixed` makes a `MixedWasmKitRuntime` while the
+  process's native part is free (`MixedWasmKitRuntime.isAvailable`) and a
+  `WasmKitRuntime` otherwise (another view's feature holds it);
+  `.interpreted` (IsomerWasmKitRuntime) always a `WasmKitRuntime`. Either
+  is a `WasmSideModuleRuntime` (`launch`, then `loadSideModule`); an app's
+  own engine can be too.
+- **A load** (`WasmFeatureRuntime.load(bundle:)`, which WasmView and
+  WasmViewModel call): the running engine released, a new one made, the
+  runtime module launched in it and the bundle's side module loaded over
+  it, then the feature started. A side module can't be unloaded, so a
+  reload is that again: only the side module differs, and the released
+  engine's hand-over gives the next mixed one the native part, so it stays
+  native. A bundle naming another runtime build, or none given, fails to
+  load (`WasmFeatureLoadError`, in the status).
+- **Files, not bytes.** A runtime module is tens of megabytes; read into a
+  Kotlin `ByteArray` and copied through JNI, one ran an Android 6 emulator
+  out of the JVM's memory. A source names a file, and the engine's Swift
+  reads it at launch (and doesn't keep it). On Apple platforms,
+  `WasmModuleSource.packaged(resource:)` and `WasmBundle.packagedFile(…)`
+  name a resource's file in `Bundle.main`. On Android, the Kotlin
+  `WasmModuleSource` is `Bytes`, `File(path, offset, length)` or
+  `Asset(name)`: an asset stored uncompressed (list `.wasm` among the app's
+  uncompressed extensions) is read in place, its range of the APK through
+  its descriptor; a compressed one is streamed once per install into the
+  app's no-backup files and read from there. The Kotlin `WasmView` takes a
+  `WasmRuntimeModule(name, source)` (`runtimeModule =`), and
+  `PackagedWasmBundleProvider`/`AppWasmBundleProvider` deliver side
+  modules (`sideModuleOf =`) and assets the engine reads
+  (`engineReads = true`).
+- **Android runs it interpreted.** Its engine is isomer's own Swift library
+  (android/libraries/wasm_view:engine), which has no mixed mode's native
+  part; reactors in memory still go to `WasmView`'s `engineFactory`, and the
+  rest to `WasmKitRuntime`.
+
+Checked: examples' //tests/side_modules: the Storybook's app as a
+side-module bundle through `WasmFeatureRuntime`, interpreted
+(:side_module_render_test, runtime and side module read from their files)
+and mixed (:mixed_render_test, natively and interpreted), renders what its
+reactor renders, tap for tap; a reload swaps the Storybook for the corpus's
+side module and back (from its file rather than bytes), each a new mixed
+runtime, native, the Storybook's first frame the same both times; a module
+read from a file, or a region of one, is its bytes.
+
 ## Mixed mode
 
 Interpreting the runtime is slow, and compiling all of it to C (wasm2c) is

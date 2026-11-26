@@ -89,7 +89,13 @@ extension HostViewPrimitive: _PrimitiveView {
     }
 }
 
-extension HostViewPrimitive: View {}
+extension HostViewPrimitive: View {
+    // A `package` type: the internal primitives' default can't answer for
+    // it (View.swift), so it says what it is here.
+    package static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+}
 
 // The per-platform refinements (WasmViewRepresentable,
 // AndroidViewRepresentable, WindowsViewRepresentable, LinuxViewRepresentable)
@@ -119,6 +125,12 @@ public struct Picker<SelectionValue: Hashable, Content: View> {
 }
 
 extension Picker: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         // Collect the tagged options from the content.
@@ -241,7 +253,7 @@ struct _PickerStyleView<Content: View> {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _PickerStyleView: _PrimitiveView {
+extension _PickerStyleView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         Runtime.shared.pickerStyleStack.append(style)
@@ -321,7 +333,7 @@ struct _TaggedView<V: Hashable, Content: View>: _AnyTaggedView {
     public var body: Never { fatalError("primitive view") }
 }
 
-extension _TaggedView: _PrimitiveView {
+extension _TaggedView: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var sub = ctx.descend("tagged")
@@ -370,6 +382,12 @@ public struct DatePickerComponents: OptionSet, Sendable {
 }
 
 extension DatePicker: _PrimitiveView {
+    /// Built as a primitive, statically, through its own `_makeView`
+    /// (View.swift): the requirement every view has, Apple's included.
+    @MainActor public static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         let binding = selection
         // Canonical semantic node; the self-drawing path swaps in

@@ -154,9 +154,9 @@ func _frameLogNotKept(path: String, volatile: Bool, bindingRead: Bool) {
 }
 
 /// Notes a built-in view whose build was volatile.
-func _frameLogVolatile(_ view: any View) {
+func _frameLogVolatile<V>(_ view: V) {
     guard let log = Runtime.shared.frameLog else { return }
-    var name = _typeName(type(of: view), qualified: false)
+    var name = _typeName(type(of: view as Any), qualified: false)
     if let modified = view as? _ModifiedView { name = "." + modified.descend }
     log.volatileBy[String(name.prefix(70)), default: 0] += 1
 }

@@ -43,7 +43,7 @@ What these bring with them:
 | rules_android | 0.7.3 | `android_binary` and the rest of Isomer's Android macros, whose APKs are tested with it. With 0.6.0 held at the root, CI's SDK smoke test builds the JNI library and a WASI command, not the APKs: 0.6 is not yet a floor |
 | rules_kotlin | 2.2.2 | the Kotlin runtime and the activities Isomer's macros make; Isomer's Compose compiler plugin (2.2.21) matches its kotlinc |
 | rules_java | 9.3.0 | rules_android's Java actions, with its `toolchains` extension |
-| hermetic_android_toolchains | 0.5.0.isomer.2 | the NDK's C toolchains the Android Swift toolchain links through; .isomer.2's @androidsdk loads beside rules_android 0.6 as well as 0.7 (0.5.0's didn't), and runs on Linux hosts of any CPU |
+| hermetic_android_toolchains | 0.5.0.isomer.3 | the NDK's C toolchains the Android Swift toolchain links through; .isomer.2's @androidsdk loads beside rules_android 0.6 as well as 0.7 (0.5.0's didn't), and runs on Linux hosts of any CPU; .isomer.3's fetches the SDK (142 MB) only for an Android target |
 
 - **rules_android's tools take the root's protobuf-java**
   (`@com_google_protobuf//:protobuf_java`). A root on an older protobuf (27.x)

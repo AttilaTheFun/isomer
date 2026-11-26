@@ -125,7 +125,7 @@ the NDK's modules.
 | --- | --- | --- | --- |
 | `isomer` | `.` | the Swift package, the platforms' Swift libraries, swift_ffi, the web's rules; bazel_skylib, platforms, rules_swift, rules_swift_package_manager, rules_cc, rules_shell, protobuf, swift_argument_parser, apple_support at rules_swift's version | (core) |
 | `isomer_apple` | `apple/module` | rules_apple 5.3.1.applecross.6, rules_applecross, apple_support 2.11.0, isomer_application with the iPhone's and the Mac's apps | 0.58 |
-| `isomer_android` | `android/module` | rules_android 0.7.3, rules_java 9.3.0, rules_kotlin 2.2.2, hermetic_android_toolchains 0.5.0.isomer.2; Android's macros and rules (tools/android's defs.bzl), `kt_swift_library`, swift_ffi's Kotlin runtime, the Kotlin targets of android/libraries; `ANDROID` for isomer_application. isomer_android_maven stays beside it | 0.59 |
+| `isomer_android` | `android/module` | rules_android 0.7.3, rules_java 9.3.0, rules_kotlin 2.2.2, hermetic_android_toolchains 0.5.0.isomer.3; Android's macros and rules (tools/android's defs.bzl), `kt_swift_library`, swift_ffi's Kotlin runtime, the Kotlin targets of android/libraries; `ANDROID` for isomer_application. isomer_android_maven stays beside it | 0.59 |
 | `isomer_web` | — | not worth a module: wabt alone (above); mixed mode's tools could be prebuilt `http_archive`s instead (lazy), Binaryen's are already | not proposed |
 | `isomer_linux`, `isomer_windows` | — | nothing to carry: their libraries need rules_cc and rules_swift alone, the Windows SDK is a repository rule | not proposed |
 
@@ -252,7 +252,7 @@ stay where they were.
 
 - android/module (`isomer_android`, at isomer's version):
   - MODULE.bazel: rules_android 0.7.3, rules_java 9.3.0, rules_kotlin
-    2.2.2, hermetic_android_toolchains 0.5.0.isomer.2 (to raise an Android
+    2.2.2, hermetic_android_toolchains 0.5.0.isomer.3 (to raise an Android
     app to the patched version, as isomer did), bazel_skylib, platforms,
     rules_cc, rules_shell, rules_swift, isomer; isomer's
     `//tools/android:extensions.bzl` (the hand-built APK's and the

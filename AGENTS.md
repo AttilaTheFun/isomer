@@ -400,10 +400,19 @@ only ad hoc, ahead of a release (the owner, 2026-11-15). A pull request
 gets `container` (the web, Linux and Android targets built, then the
 tests that draw nothing: the core's, the WASI checks, the Android build
 tests, and the Storybook's headless and remote-driving tests; the required
-check), `container-apple` (the Apple targets) and `container-windows` (not
-required), each commit on main `populate`, `populate-apple` and
-`populate-windows` (the same builds, then the published apps under
---config=alpha; the cache's only writers; never the proof's) and `bazel8`.
+check) and `container-windows` (not required), and no macOS job: the
+Apple targets build at release verification (`verify-apple`), or on a
+branch by hand (`run: container-apple`, the same build a pull request had
+until 2026-11-26), as the owner set on 2026-11-13 ("i don't want to run
+apple runners on every pr just release verification as they will be the
+bottleneck"). Each commit on main gets `populate` and `populate-windows`
+(the same builds, then the published apps under --config=alpha; the
+cache's only writers; never the proof's) and `bazel8`, and each night (and
+by hand, `run: populate-apple`) `populate-apple` and `bazel8-apple`:
+GitHub gives a public repository five macOS runners. A nightly Apple
+build that fails opens an issue, "Nightly Apple build failed on main" (or
+comments on the open one): it is where main breaking for Apple is seen
+first.
 The GUI tests run only by hand: `run: verify` (each
 platform's build, `verify` (the web, Linux and Android), `verify-apple`,
 `verify-windows`; the tests
@@ -586,7 +595,7 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   `include()` that held it to 9 gone with rules_swift's release). 8.5 is the
   floor because windows_support (the MSVC runtime, a dependency's) reads
   `module_ctx.facts`. CI's `bazel8` job builds the Storybooks with 8.5.0 on
-  each commit on main. What 8 needed: no generic `treat_warnings_as_errors`
+  each commit on main (`bazel8-apple`, the Apple ones, nightly). What 8 needed: no generic `treat_warnings_as_errors`
   on packages that link a tool for the building Mac (Bazel 8's link repeats
   an `-rpath`, which ld64 warns about; Swift's own
   `swift.treat_warnings_as_errors` stays), and Bazel 9's test-toolchain flag
@@ -844,8 +853,10 @@ no wamrc, no `.aot`, no `--define wamr_*`). The engine work Isomer did
   the default engine (`WasmRuntimeRegistry.registerDefault`; an app may
   register its own first); Android's WasmView runs it as a Swift library of
   its own (android/libraries/wasm_view: engine/WasmKitEngine.swift, reached
-  from the Kotlin `WasmKitRuntime` through generated bindings; a process
-  runs reactors or an app's compiled Swift, not both); the Linux and Windows hosts drive
+  from the Kotlin `WasmKitRuntime` through generated bindings), or bound in
+  a compiled app's own library (`isomer_android_app(wasm_view = True)`:
+  one Swift runtime, each page a tree of its own, `IsoTreeState` and
+  `LocalIsoEvents`); the Linux and Windows hosts drive
   `WasmFeatureRuntime` over it. It lays out WASI as the hosts always have
   (/tmp, /home/app, HOME and XDG_*), binds the six iso_hot callbacks and
   swift_ffi through `SwiftFFIHostRuntime` (the dependencies' register
@@ -1340,7 +1351,8 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
     tests say so); wasm and Android track per view.
 - **The Isomer module** holds what Isomer adds (WebView, MetalView, Map,
   PlatformViewRepresentable and its per-platform refinements, BridgedView,
-  `Color.dynamic(light:dark:)`, `swipeGesture`, `cameraCapture`,
+  `Color.dynamic(light:dark:)`, `swipeGesture`, `onShake` (iOS's shake
+  gesture, Android's accelerometer while a view has one), `cameraCapture`,
   `VideoPlayer(url:)`, Platform, platform modifiers, JSON, the platform
   bridge) and is the umbrella over the Isomer* modules (shared/isomer/
   Exports.swift). Its names before 0.31, SwiftUIExtensions and

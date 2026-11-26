@@ -35,6 +35,8 @@ public protocol WasmKitHost {
 private final class WasmKitEngine {
     let host: any WasmKitHost
     var dependencies: [String: SwiftFFIDependency] = [:]
+    /// The runtime module side-module bundles run over: its name and source.
+    var runtimeModule: (name: String, source: WasmModuleSource)?
     var running: WasmFeatureRuntime?
 
     init(host: any WasmKitHost) { self.host = host }
@@ -80,27 +82,83 @@ public func wasmKitLaunch(
     width: Double, height: Double, dark: Bool
 ) -> String {
     MainActor.assumeIsolated {
-        guard let engine = WasmKitEngine.engines[handle] else { return "no engine \(handle)" }
-        let core = WasmFeatureRuntime(runtime: { _ in
-            let runtime = WasmKitRuntime()
-            if !homeDirectory.isEmpty {
-                try? FileManager.default.createDirectory(atPath: homeDirectory, withIntermediateDirectories: true)
-                runtime.homeDirectory = homeDirectory
-            }
-            if !bundleIdentifier.isEmpty { runtime.bundleIdentifier = bundleIdentifier }
-            return runtime
-        }, log: { [host = engine.host] line in host.log(message: line) })
-        core.onTree = { [host = engine.host] bytes in host.renderTree(tree: bytes) }
-        core.onScheduleRender = { [host = engine.host] in host.scheduleRender() }
-        core.ffiModulePrefix = ffiPrefix.isEmpty ? nil : ffiPrefix
-        core.dependencies = engine.dependencies
-        core.setColorScheme(dark: dark)
-        core.resize(width: width, height: height)
-        core.load(bundle: WasmServiceBundle(label: "reactor", wasm: wasm))
-        guard core.engineRuntime != nil else { return core.status }
-        engine.running = core
-        return ""
+        launch(
+            handle: handle, bundle: WasmServiceBundle(label: "reactor", wasm: wasm), ffiPrefix: ffiPrefix,
+            homeDirectory: homeDirectory, bundleIdentifier: bundleIdentifier, width: width, height: height, dark: dark)
     }
+}
+
+/// A module's source as Kotlin hands it over: the file at `path` (its
+/// `length` bytes from `offset`; -1, to its end) when `path` isn't empty, so
+/// this library reads it and the JVM never holds it (an Android asset is
+/// resolved to its APK's range, or a copy, by the Kotlin side); else `wasm`.
+private func moduleSource(wasm: [UInt8], path: String, offset: Int, length: Int) -> WasmModuleSource {
+    path.isEmpty ? .bytes(wasm) : .file(path: path, offset: offset, length: length < 0 ? nil : length)
+}
+
+/// The runtime module side-module bundles run over (`WasmFeatureRuntime.
+/// runtimeModule`), before `wasmKitLaunchModule`: named `name`, its bytes
+/// `wasm` or the file at `path` (see `moduleSource`), interpreted by WasmKit
+/// (the engine's library has no mixed mode's native part).
+@ExportedFunction(namespace: "wasm_engine")
+public func wasmKitSetRuntimeModule(handle: Int, name: String, wasm: [UInt8], path: String, offset: Int, length: Int) {
+    MainActor.assumeIsolated {
+        WasmKitEngine.engines[handle]?.runtimeModule = (name, moduleSource(wasm: wasm, path: path, offset: offset, length: length))
+    }
+}
+
+/// `wasmKitLaunch` for a bundle's module from memory or a file (see
+/// `moduleSource`): a reactor when `sideModuleOf` is empty, else a side
+/// module over the runtime module of that name (`wasmKitSetRuntimeModule`).
+@ExportedFunction(namespace: "wasm_engine")
+public func wasmKitLaunchModule(
+    handle: Int, label: String, wasm: [UInt8], path: String, offset: Int, length: Int, sideModuleOf: String,
+    ffiPrefix: String, homeDirectory: String, bundleIdentifier: String, width: Double, height: Double, dark: Bool
+) -> String {
+    MainActor.assumeIsolated {
+        let bundle = WasmServiceBundle(
+            label: label, module: moduleSource(wasm: wasm, path: path, offset: offset, length: length),
+            kind: sideModuleOf.isEmpty ? .reactor : .sideModule(runtime: sideModuleOf))
+        return launch(
+            handle: handle, bundle: bundle, ffiPrefix: ffiPrefix, homeDirectory: homeDirectory,
+            bundleIdentifier: bundleIdentifier, width: width, height: height, dark: dark)
+    }
+}
+
+/// Launches `bundle` in the engine at `handle`: "" when it runs, else why not.
+@MainActor
+private func launch(
+    handle: Int, bundle: WasmServiceBundle, ffiPrefix: String, homeDirectory: String, bundleIdentifier: String,
+    width: Double, height: Double, dark: Bool
+) -> String {
+    guard let engine = WasmKitEngine.engines[handle] else { return "no engine \(handle)" }
+    // Each engine made for the feature, a reactor's or the runtime module's:
+    // the guest's home and bundle identifier.
+    let configure: @MainActor (WasmKitRuntime) -> Void = { runtime in
+        if !homeDirectory.isEmpty {
+            try? FileManager.default.createDirectory(atPath: homeDirectory, withIntermediateDirectories: true)
+            runtime.homeDirectory = homeDirectory
+        }
+        if !bundleIdentifier.isEmpty { runtime.bundleIdentifier = bundleIdentifier }
+    }
+    let core = WasmFeatureRuntime(runtime: { _ in
+        let runtime = WasmKitRuntime()
+        configure(runtime)
+        return runtime
+    }, log: { [host = engine.host] line in host.log(message: line) })
+    if let module = engine.runtimeModule {
+        core.runtimeModule = .interpreted(name: module.name, source: module.source, configure: configure)
+    }
+    core.onTree = { [host = engine.host] bytes in host.renderTree(tree: bytes) }
+    core.onScheduleRender = { [host = engine.host] in host.scheduleRender() }
+    core.ffiModulePrefix = ffiPrefix.isEmpty ? nil : ffiPrefix
+    core.dependencies = engine.dependencies
+    core.setColorScheme(dark: dark)
+    core.resize(width: width, height: height)
+    core.load(bundle: bundle)
+    guard core.engineRuntime != nil else { return core.status }
+    engine.running = core
+    return ""
 }
 
 /// A frame now, if the guest has one to build (the host's scheduled render).

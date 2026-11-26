@@ -12,6 +12,11 @@
 // fresh instance of the native part, rendering the same, and
 // WasmFeatureRuntime's reload releases the old runtime before it makes the
 // new one, so the new one runs natively too.
+//
+// And the same as a host runs it: WasmFeatureRuntime given the runtime
+// module once (`WasmRuntimeModule.mixed`), the features as side-module
+// bundles. It renders what the reactor renders, and a reload launches the
+// runtime module again with only the side module changed, natively.
 
 import Foundation
 import IsomerMixedRuntime
@@ -52,10 +57,14 @@ final class StorybookFeature: WasmRuntime {
 
 @MainActor
 final class MixedRenderTests: XCTestCase {
-    func artifact(_ relative: String) throws -> [UInt8] {
+    func path(_ relative: String) -> String {
         let dir = ProcessInfo.processInfo.environment["TEST_SRCDIR"] ?? ""
         let workspace = ProcessInfo.processInfo.environment["TEST_WORKSPACE"] ?? "_main"
-        return [UInt8](try Data(contentsOf: URL(fileURLWithPath: "\(dir)/\(workspace)/\(relative)")))
+        return "\(dir)/\(workspace)/\(relative)"
+    }
+
+    func artifact(_ relative: String) throws -> [UInt8] {
+        [UInt8](try Data(contentsOf: URL(fileURLWithPath: path(relative))))
     }
 
     func text(_ relative: String) throws -> String { String(decoding: try artifact(relative), as: UTF8.self) }
@@ -64,6 +73,12 @@ final class MixedRenderTests: XCTestCase {
     /// after each; `settle` after each step (the mixed runtime's queue).
     func drive(_ runtime: any WasmRuntime, stream: () -> [UInt8], settle: () throws -> Void) throws -> Int {
         _ = try runtime.call("iso_hot_start", [.f64(1024), .f64(768)])
+        return try tapThrough(runtime, stream: stream, settle: settle)
+    }
+
+    /// `drive` for a feature already started (WasmFeatureRuntime starts the
+    /// features it loads).
+    func tapThrough(_ runtime: any WasmRuntime, stream: () -> [UInt8], settle: () throws -> Void) throws -> Int {
         _ = try runtime.call("iso_hot_render", [])
         try settle()
         let ids = TapTargets.ids(stream())
@@ -234,5 +249,93 @@ final class MixedRenderTests: XCTestCase {
         XCTAssertTrue(made.allSatisfy { $0.isNative == expectsNative })
         XCTAssertThrowsError(try made[0].call("iso_hot_render", []))
         XCTAssertTrue(reloaded == first, "the reloaded feature's first frame differs")
+    }
+
+    /// A WasmFeatureRuntime as a host makes one for features over the
+    /// Storybook's runtime module (`.mixed`, from its file), its clock fixed
+    /// and its frames appended to `trees`; and the bundle of a side module.
+    func featureRuntime(native: MixedNativePart, trees: @escaping ([UInt8]) -> Void) -> WasmFeatureRuntime {
+        let feature = WasmFeatureRuntime(runtime: { _ in
+            XCTFail("a side-module bundle made a reactor's engine")
+            return WasmKitRuntime()
+        })
+        feature.epochMillis = { 1.7e12 }
+        feature.onTree = trees
+        feature.resize(width: 1024, height: 768)
+        feature.runtimeModule = .mixed(
+            name: "storybook_runtime", source: .file(path: path("tests/side_modules/storybook_runtime.wasm")),
+            native: native)
+        return feature
+    }
+
+    func sideModule(_ label: String, _ module: WasmModuleSource) -> WasmServiceBundle {
+        WasmServiceBundle(label: label, module: module, kind: .sideModule(runtime: "storybook_runtime"))
+    }
+
+    /// The feature as a host loads it renders what the reactor renders, tap
+    /// for tap, in mixed mode (natively, unless ISO_MIXED_NATIVE=0).
+    func testFeatureOverRuntimeModuleRendersAsTheReactor() throws {
+        var reactorStream: [UInt8] = []
+        let reactor = WasmKitRuntime()
+        try reactor.launch(wasm: try artifact("wasm/example_full_feature/example_full.wasm"), hostImports: imports { reactorStream += $0 })
+        let reactorTaps = try drive(reactor, stream: { reactorStream }, settle: {})
+
+        var stream: [UInt8] = []
+        let feature = featureRuntime(native: try nativePart()) { stream += $0 }
+        defer { feature.forceShutdown() }
+        // Frames come from the test's calls alone, as the reactor's do: the
+        // renders the guest asks for (its jobs ran) aren't pumped.
+        feature.onScheduleRender = {}
+        feature.load(bundle: sideModule("storybook", .bytes(try artifact("tests/side_modules/storybook_side.wasm"))))
+        XCTAssertEqual(feature.status, "Loaded storybook")
+        let mixed = try XCTUnwrap(feature.engineRuntime as? MixedWasmKitRuntime)
+        XCTAssertEqual(mixed.isNative, expectsNative)
+        let taps = try tapThrough(mixed, stream: { stream }, settle: { settle(mixed) })
+
+        XCTAssertGreaterThan(reactorTaps, 50)
+        XCTAssertEqual(taps, reactorTaps)
+        XCTAssertEqual(stream.count, reactorStream.count)
+        XCTAssertTrue(stream == reactorStream, "the render streams differ")
+    }
+
+    /// A reload swaps the side module alone: each load is a new mixed
+    /// runtime (the last released first, so it gets the native part) with
+    /// the runtime module launched again from its file, and another feature
+    /// over it renders its own frame; the first feature again, from its file
+    /// rather than bytes, renders its first frame as before.
+    func testReloadSwapsOnlyTheSideModule() throws {
+        var trees: [[UInt8]] = []
+        let feature = featureRuntime(native: try nativePart()) { trees.append($0) }
+        defer { feature.forceShutdown() }
+        var engines: [MixedWasmKitRuntime] = []
+
+        /// Loads `bundle` and runs the main thread until its first frame.
+        func load(_ bundle: WasmServiceBundle) throws -> [UInt8] {
+            trees = []
+            feature.load(bundle: bundle)
+            XCTAssertEqual(feature.status, "Loaded \(bundle.label)")
+            let mixed = try XCTUnwrap(feature.engineRuntime as? MixedWasmKitRuntime, "not mixed: \(feature.status)")
+            engines.append(mixed)
+            let deadline = Date(timeIntervalSinceNow: 60)
+            while (trees.isEmpty || !mixed.isIdle) && Date() < deadline {
+                _ = RunLoop.main.run(mode: .default, before: Date(timeIntervalSinceNow: 0.001))
+            }
+            return trees.first ?? []
+        }
+
+        let storybook = try load(sideModule("storybook", .bytes(try artifact("tests/side_modules/storybook_side.wasm"))))
+        XCTAssertFalse(storybook.isEmpty)
+        let corpus = try load(sideModule("corpus", .file(path: path("tests/side_modules/corpus_side.wasm"))))
+        XCTAssertFalse(corpus.isEmpty)
+        XCTAssertFalse(corpus == storybook, "another side module rendered the first one's frame")
+        let again = try load(sideModule("storybook", .file(path: path("tests/side_modules/storybook_side.wasm"))))
+        XCTAssertTrue(again == storybook, "the side module from its file renders another first frame than from bytes")
+
+        XCTAssertEqual(engines.count, 3)
+        XCTAssertEqual(Set(engines.map(ObjectIdentifier.init)).count, 3)
+        XCTAssertTrue(engines.allSatisfy { $0.isNative == expectsNative })
+        // The engines reloaded away from were released.
+        XCTAssertThrowsError(try engines[0].call("iso_hot_render", []))
+        XCTAssertThrowsError(try engines[1].call("iso_hot_render", []))
     }
 }

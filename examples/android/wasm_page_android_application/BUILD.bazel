@@ -1,0 +1,38 @@
+load("@isomer_android//:defs.bzl", "flat_assets", "isomer_android_app")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+# A compiled app with a wasm page inside it (WasmPageApp.swift): the
+# engine bound in the app's own library (`wasm_view = True`: no
+# libwasm_engine_bindings.so, one Swift runtime), the page drawn by
+# WasmPages' factory in a tree of its own. `bazel run` installs and
+# launches it.
+
+swift_library(
+    name = "app_swift",
+    srcs = ["WasmPageApp.swift"],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "WasmPageApp",
+    tags = ["manual"],  # only meaningful through the android transition
+    deps = [
+        "@isomer//android/libraries/swift_ui",
+        "@isomer//android/libraries/swift_ui:isomer",
+    ],
+)
+
+# assets/: the tap counter's reactor, the page.
+flat_assets(
+    name = "app_assets",
+    srcs = ["//wasm/tap_counter_feature:tap_counter_release"],
+)
+
+isomer_android_app(
+    name = "wasm_page_android_application",
+    assets = ":app_assets",
+    label = "Wasm Page",
+    package = "dev.isomer.wasmpage",
+    services_installer = "dev.isomer.runtime.WasmPageAppServices.install()",
+    services_kt = "AppServices.kt",
+    swift_library = ":app_swift",
+    wasm_view = True,
+)
