@@ -400,13 +400,19 @@ only ad hoc, ahead of a release (the owner, 2026-11-15). A pull request
 gets `container` (the web, Linux and Android targets built, then the
 tests that draw nothing: the core's, the WASI checks, the Android build
 tests, and the Storybook's headless and remote-driving tests; the required
-check), `container-apple` (the Apple targets) and `container-windows` (not
-required), each commit on main `populate` and `populate-windows` (the
-same builds, then the published apps under --config=alpha; the cache's
-only writers; never the proof's) and `bazel8`, and each night (and by hand,
-`run: populate-apple`) `populate-apple` and `bazel8-apple`: GitHub gives a
-public repository five macOS runners, which two Apple builds on every
-merge kept from the pull requests' `container-apple` (2026-11-25).
+check) and `container-windows` (not required), and no macOS job: the
+Apple targets build at release verification (`verify-apple`), or on a
+branch by hand (`run: container-apple`, the same build a pull request had
+until 2026-11-26), as the owner set on 2026-11-13 ("i don't want to run
+apple runners on every pr just release verification as they will be the
+bottleneck"). Each commit on main gets `populate` and `populate-windows`
+(the same builds, then the published apps under --config=alpha; the
+cache's only writers; never the proof's) and `bazel8`, and each night (and
+by hand, `run: populate-apple`) `populate-apple` and `bazel8-apple`:
+GitHub gives a public repository five macOS runners. A nightly Apple
+build that fails opens an issue, "Nightly Apple build failed on main" (or
+comments on the open one): it is where main breaking for Apple is seen
+first.
 The GUI tests run only by hand: `run: verify` (each
 platform's build, `verify` (the web, Linux and Android), `verify-apple`,
 `verify-windows`; the tests
