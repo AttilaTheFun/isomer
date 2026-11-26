@@ -52,14 +52,19 @@ on:
     # main's commits: populate.
     branches: [main]
   pull_request:
+  # The Apple cache's builds (populate-apple, bazel8-apple), nightly: a
+  # public repository has five macOS runners, which two Apple builds on
+  # every merge kept from the pull requests' container-apple.
+  schedule:
+    - cron: "23 8 * * *"
   release:
     types: [published]
   workflow_dispatch:
     inputs:
       run:
-        description: "What to run: verify (the tests, no proof), prerelease or release on main (verify on a branch to bisect); proof (the screenshot proof alone); experiment on any but a release branch; waydroid-probe (a probe of Waydroid on the hosted runner) on any; sdk-smoke (a consumer of Isomer's Swift SDKs, the ones this commit registers) on any"
+        description: "What to run: verify (the tests, no proof), prerelease or release on main (verify on a branch to bisect); proof (the screenshot proof alone); experiment on any but a release branch; waydroid-probe (a probe of Waydroid on the hosted runner) on any; sdk-smoke (a consumer of Isomer's Swift SDKs, the ones this commit registers) on any; populate-apple (the Apple cache's builds, as each night) on main"
         type: choice
-        options: [verify, proof, prerelease, release, experiment, waydroid-probe, sdk-smoke]
+        options: [verify, proof, prerelease, release, experiment, waydroid-probe, sdk-smoke, populate-apple]
         default: verify
       kind:
         description: The proof's kind
@@ -213,7 +218,7 @@ jobs:
           retention-days: 7
 
   populate-apple:
-    if: github.event_name == 'push'
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run == 'populate-apple')
     runs-on: xcode-27
     timeout-minutes: 180
     env:
@@ -298,7 +303,7 @@ jobs:
           //android/storybook_android_application:storybook_android_application_apk
 
   bazel8-apple:
-    if: github.event_name == 'push'
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run == 'populate-apple')
     runs-on: xcode-27
     timeout-minutes: 180
     env:

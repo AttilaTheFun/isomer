@@ -91,6 +91,30 @@ extension _PrimitiveView where Self: _ReusableBuild {
     func _buildIsPure(_ ctx: BuildContext) -> Bool { _buildsPurely(ctx) }
 }
 
+/// An internal primitive: it says it is one through `_makeView`, statically,
+/// with no question asked of its type (View.swift). A public view can't take
+/// this default (Swift wants a public requirement's witness public, and an
+/// extension constrained to an internal protocol can't declare one), so the
+/// public primitives say it each in their own way (docs/frameworks_in_the_sdk.md).
+protocol _InternalPrimitiveView: _PrimitiveView {}
+
+extension View where Self: _InternalPrimitiveView {
+    static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildPrimitive(view.value, ctx: &inputs.context.pointee))
+    }
+}
+
+/// A primitive's node. Built-in views that don't say they build purely read
+/// or register runtime state: nothing around them is reused (Reuse.swift).
+@MainActor
+func buildPrimitive<P: _PrimitiveView>(_ primitive: P, ctx: inout BuildContext) -> RenderNode {
+    if !(P._isReusableBuild && primitive._buildIsPure(ctx)) {
+        Runtime.shared.markBuildVolatile(registersForFrame: P._impureBuildRegistersForFrame)
+        _frameLogVolatile(primitive)
+    }
+    return primitive.makeNode(&ctx)
+}
+
 /// Views that represent zero or more child views (TupleView, ForEach, if/else
 /// content, ...). Containers flatten these when collecting children.
 protocol _MultiView {
