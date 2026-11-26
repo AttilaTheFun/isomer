@@ -91,6 +91,12 @@ MAP = {
     "line.3.horizontal.decrease.circle": "list-filter", "person.crop.circle.badge.checkmark": "user-round-check",
     "photo.on.rectangle.angled": "images", "point.topleft.down.to.point.bottomright.curvepath": "route",
     "safari": "compass", "xmark.bin": "archive-x", "smallcircle.filled.circle": "circle-dot", "equal.circle": "circle-equal",
+    # Shireworks' (its tabs and lists); a badge Lucide has no icon with is left off.
+    "square.stack": "layers-2", "square.stack.3d.down.right": "layers", "square.stack.3d.up": "layers",
+    "checkmark.bubble": "message-square-check", "externaldrive.badge.exclamationmark": "hard-drive",
+    "flask": "flask-conical", "gauge.with.dots.needle.33percent": "gauge", "person.crop.square": "square-user",
+    "person.crop.circle.badge.questionmark": "circle-user", "photo.badge.plus": "image-plus", "tag.circle": "tag",
+    "tuningfork": "audio-waveform", "wifi.exclamationmark": "wifi-off",
 }
 FILLED_OK = {"circle", "square", "star", "heart", "bell", "flame", "drop", "bolt", "trash", "play", "stop", "pause",
              "cloud", "hand.raised", "shippingbox", "checkmark.seal", "xmark.circle", "plus.circle", "checkmark.circle",

@@ -948,3 +948,30 @@ final class MixedGuest: @unchecked Sendable {
         }
     }
 }
+
+// MARK: - Features over a runtime module
+
+/// `launch` then `loadSideModule`: a feature over the runtime module in
+/// mixed mode, for `WasmFeatureRuntime`'s side-module bundles.
+extension MixedWasmKitRuntime: WasmSideModuleRuntime {}
+
+extension WasmRuntimeModule {
+    /// A runtime module in mixed mode with `native`, its native part (the
+    /// app links its C; `wasm_mixed_native`), while the process's native
+    /// part is free (`MixedWasmKitRuntime.isAvailable`), else interpreted by
+    /// WasmKit (`WasmKitRuntime`, set up by `configure`), as a host that
+    /// finds it held (another view's feature runs in mixed mode) must.
+    /// `WasmFeatureRuntime` releases the running engine before it makes the
+    /// next, so a reload of the same view finds it free and stays native.
+    public static func mixed(
+        name: String, source: WasmModuleSource, native: MixedNativePart,
+        configure: @escaping @MainActor (WasmKitRuntime) -> Void = { _ in }
+    ) -> WasmRuntimeModule {
+        WasmRuntimeModule(name: name, source: source) {
+            if MixedWasmKitRuntime.isAvailable { return MixedWasmKitRuntime(native: native) }
+            let runtime = WasmKitRuntime()
+            configure(runtime)
+            return runtime
+        }
+    }
+}

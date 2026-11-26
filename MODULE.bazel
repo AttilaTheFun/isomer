@@ -98,18 +98,22 @@ bazel_dep(name = "rules_cc", version = "0.2.18")
 # consumes the stock @androidndk (only targets it already exposes), so no
 # override is needed here. A development dependency since 0.59: the
 # isomer_android module asks for it for Android apps (android/module).
-# The project registry's 0.5.0.isomer.2: upstream 0.5.0 with
+# The project registry's 0.5.0.isomer.3: upstream 0.5.0 with
 # keith/hermetic_android_toolchains#110, so any Linux takes Google's x86_64
 # SDK and NDK tools (an arm64 Linux, a container on a Mac, runs them under
 # Rosetta, with x86_64 glibc beside its own), and (.2) with the helper its
 # @androidsdk BUILD file loads (string_flag, the system images' filegroups)
 # its own: 0.5.0 linked rules_android's private helper.bzl, whose contents
 # change between releases, so a root on an older rules_android (0.6) failed
-# loading @androidsdk//:all ("does not contain symbol 'string_flag'"). A
+# loading @androidsdk//:all ("does not contain symbol 'string_flag'"), and
+# (.3, 0.63) with the SDK's files in a repository of their own
+# (@androidsdk_files): @androidsdk holds the toolchains and aliases and
+# downloads nothing, so a build with no Android target fetches no SDK (142
+# MB; the license check runs only when it is fetched). A
 # version above 0.5.0, so MVS gives it to every consumer with no override
 # (one was root-only, and each consumer carried its own copy of the patch
 # until 0.42).
-bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.2", dev_dependency = True)
+bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.3", dev_dependency = True)
 
 # --- swift_ffi (//swift_ffi/...) ---------------------------------------------
 # The idiomatic Swift <-> Kotlin/TypeScript/C bridge layer. The wasm and

@@ -8,7 +8,8 @@ import Foundation
 import SwiftFFIWasmHost
 
 /// A deliverable unit for a wasm feature — the isomer name for the
-/// swift_ffi-level `WasmBundle` (reactor bytes + small co-versioned assets).
+/// swift_ffi-level `WasmBundle` (a reactor or a side module, in memory or in
+/// a file, + small co-versioned assets).
 public typealias WasmServiceBundle = WasmBundle
 
 /// Where a feature's bundle comes from — the isomer name for the
@@ -28,6 +29,16 @@ extension WasmBundle {
         return WasmBundle(label: resource, wasm: [UInt8](data))
     }
 
+    /// A bundle whose module is a packaged resource's file, read by the
+    /// engine when it launches (not now, and not kept): a reactor, or a side
+    /// module over the host's runtime module (`kind`).
+    public static func packagedFile(
+        resource: String, ext: String = "wasm", in bundle: Bundle = .main, kind: Kind = .reactor
+    ) -> WasmBundle? {
+        guard let module = WasmModuleSource.packaged(resource: resource, ext: ext, in: bundle) else { return nil }
+        return WasmBundle(label: resource, module: module, kind: kind)
+    }
+
     /// Loads a bundle directory: `<dir>/feature.wasm` plus every file under
     /// `<dir>/assets/` (recursively) keyed by its path relative to `assets/`.
     public static func directory(_ dir: URL, label: String? = nil) -> WasmBundle? {
@@ -45,5 +56,17 @@ extension WasmBundle {
             assets[path] = data
         }
         return WasmBundle(label: label ?? dir.lastPathComponent, wasm: [UInt8](wasm), assets: assets)
+    }
+}
+
+extension WasmModuleSource {
+    /// A packaged resource's file (`Bundle.main`'s, by default), for the
+    /// engine to read when it launches the module: a runtime module
+    /// (`WasmRuntimeModule`'s source) or a bundle's. Nil if there is none.
+    public static func packaged(
+        resource: String, ext: String = "wasm", in bundle: Bundle = .main
+    ) -> WasmModuleSource? {
+        guard let url = bundle.url(forResource: resource, withExtension: ext) else { return nil }
+        return .file(path: url.path)
     }
 }

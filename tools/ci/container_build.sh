@@ -139,7 +139,8 @@ elif [ $# -eq 0 ] || [ "$*" = all ] || [ "$*" = pr ] || [ "$*" = headful ]; then
     if has android; then
         apps+=(//android/storybook_android_application:storybook_android_application
                //android/storybook_android_application:storybook_android_application_apk
-               //android/webview_android_application:webview_android_application_apk)
+               //android/webview_android_application:webview_android_application_apk
+               //android/wasm_page_android_application:wasm_page_android_application_apk)
         add_probes android_compiled_apk android_webview_apk android_remote_apk
         # The release jobs' tools (build_tools' sign and proof-diff, and
         # what they run), built where the release jobs build them: a pull

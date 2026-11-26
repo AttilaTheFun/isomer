@@ -640,8 +640,9 @@ has it.
   override; 0.5.0.isomer.2 adds the SDK repository's own helper.bzl
   (0.5.0 links rules_android's private one, which only rules_android 0.7.3
   has string_flag in, so a root on an older rules_android failed loading
-  @androidsdk//:all), to propose upstream too; the entry goes when a
-  release has both.
+  @androidsdk//:all), to propose upstream too; 0.5.0.isomer.3 (0.63) puts
+  the SDK's files in @androidsdk_files, fetched only for an Android target;
+  the entry goes when a release has all three.
 - **rules_apple** (rules_applecross's patches): bazelbuild/rules_apple #3114
   to #3124 (drafts, tracked in apple-cross-toolchain/rules_applecross#273);
   three workarounds stay in rules_applecross until upstream fixes exist.
