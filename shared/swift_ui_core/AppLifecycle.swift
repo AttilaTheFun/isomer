@@ -38,7 +38,34 @@ extension View {
     }
 }
 
+extension View {
+    /// The Isomer module's `.onShake` (shared/swift_ui_extensions/Shake.swift):
+    /// `action` runs when the device is shaken, for as long as this view is
+    /// built. Plumbing, not SwiftUI's: Apple's has no shake.
+    nonisolated package func _onShake(perform action: @escaping () -> Void) -> some View {
+        _ModifiedView(child: self, descend: "shake", pure: true) { inner, _ in
+            Runtime.shared.registerFrameEffect { Runtime.shared.shakeHandlers.append(action) }
+            return inner
+        }
+    }
+}
+
 extension Runtime {
+    /// Host entry point: the device was shaken. Runs the `.onShake`
+    /// handlers the last frame registered.
+    package func deviceShaken() {
+        for handler in shakeHandlers { handler() }
+    }
+
+    /// Called at the end of each frame: the host listens for shakes ("shake"
+    /// "1", its motion sensor on) only while a view has `.onShake`, and stops
+    /// ("0") when none has. An app that never asks sends nothing.
+    func syncShakeListening() {
+        let listening = !shakeHandlers.isEmpty
+        guard listening || sentPlatformCommands["shake"] != nil else { return }
+        sendPlatformCommand("shake", listening ? "1" : "0")
+    }
+
     /// Host entry point: the scene moved between foreground/background.
     /// Updates the environment and re-renders so `.onChange(of: scenePhase)`
     /// observers fire.
