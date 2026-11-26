@@ -25,7 +25,6 @@ import android.os.Looper
 import android.provider.Settings
 import java.io.File
 import java.lang.ref.WeakReference
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
@@ -33,7 +32,6 @@ import kotlin.coroutines.suspendCoroutine
 internal object AppPackages {
     /** The activity the system's screens start from (IsomerRuntime.attach). */
     var activity: WeakReference<Activity>? = null
-    private val sessions = AtomicInteger(1)
     private val app: Context? get() = activity?.get()?.applicationContext ?: HostServices.appContext
 
     /** "package.installed:<id>": "<versionName>\t<versionCode>", empty when
@@ -92,13 +90,36 @@ internal object AppPackages {
 
     /** The APK at [file] installed in a PackageInstaller session: written on
      *  a thread of its own, then committed; the system's confirmation is
-     *  shown, and the outcome comes back as a broadcast to this process
-     *  alone. "" when installed, else why not. */
+     *  shown, and the outcome comes back as a broadcast to this process.
+     *  "" when installed, else why not. */
     private suspend fun install(app: Context, file: File, identifier: String): String = suspendCoroutine { done ->
-        thread(name = "isomer-install") {
-            val installer = app.packageManager.packageInstaller
-            var session = -1
-            var registered: BroadcastReceiver? = null
+        thread(name = "isomer-install") { Install(app, file, identifier) { done.resume(it) }.run() }
+    }
+
+    /** One install, finished exactly once: by the system's final status, by
+     *  the person leaving its confirmation without an answer, or by a long
+     *  timeout; each way the receiver and the watches go. */
+    private class Install(
+        private val app: Context,
+        private val file: File,
+        private val identifier: String,
+        private val finished: (String) -> Unit,
+    ) {
+        private val installer = app.packageManager.packageInstaller
+        private val main = Handler(Looper.getMainLooper())
+        private val done = java.util.concurrent.atomic.AtomicBoolean(false)
+        private var session = -1
+        private var receiver: BroadcastReceiver? = null
+        private var lifecycle: android.app.Application.ActivityLifecycleCallbacks? = null
+        @Volatile private var confirming = false
+        // Only this install's own PendingIntent carries the token, so a
+        // broadcast another app sends (a guessed action, a faked status or
+        // confirmation to start) is ignored: below Android 13 a receiver
+        // registered at run time is exported.
+        private val token = java.util.UUID.randomUUID().toString()
+        private val action = app.packageName + ".ISOMER_INSTALL." + java.util.UUID.randomUUID()
+
+        fun run() {
             try {
                 val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
                 if (identifier.isNotEmpty()) params.setAppPackageName(identifier)
@@ -111,41 +132,80 @@ internal object AppPackages {
                             open.fsync(output)
                         }
                     }
-                    val action = app.packageName + ".ISOMER_INSTALL." + sessions.getAndIncrement()
-                    val receiver = object : BroadcastReceiver() {
-                        override fun onReceive(context: Context, intent: Intent) {
-                            when (val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)) {
-                                PackageInstaller.STATUS_PENDING_USER_ACTION -> {
-                                    @Suppress("DEPRECATION")
-                                    intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)?.let { start(app, it) }
-                                }
-                                PackageInstaller.STATUS_SUCCESS -> {
-                                    app.unregisterReceiver(this)
-                                    done.resume("")
-                                }
-                                else -> {
-                                    app.unregisterReceiver(this)
-                                    done.resume(failure(status, intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE), identifier))
-                                }
-                            }
-                        }
-                    }
-                    registered = receiver
-                    val filter = IntentFilter(action)
-                    if (Build.VERSION.SDK_INT >= 33) {
-                        app.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
-                    } else {
-                        app.registerReceiver(receiver, filter)
-                    }
+                    listen()
+                    main.postDelayed({ finish("Android didn't say whether it installed the package.", abandon = true) }, TIMEOUT_MS)
                     val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
-                    val pending = PendingIntent.getBroadcast(app, session, Intent(action).setPackage(app.packageName), flags)
-                    open.commit(pending.intentSender)
+                    val intent = Intent(action).setPackage(app.packageName).putExtra(TOKEN, token)
+                    open.commit(PendingIntent.getBroadcast(app, session, intent, flags).intentSender)
                 }
             } catch (error: Exception) {
-                registered?.let { try { app.unregisterReceiver(it) } catch (_: Exception) {} }
-                if (session >= 0) try { installer.abandonSession(session) } catch (_: Exception) {}
-                done.resume("Android didn't take the package: " + (error.message ?: error.javaClass.simpleName))
+                finish("Android didn't take the package: " + (error.message ?: error.javaClass.simpleName), abandon = true)
             }
+        }
+
+        private fun listen() {
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context, intent: Intent) {
+                    if (intent.getStringExtra(TOKEN) != token) return
+                    when (val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)) {
+                        PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                            @Suppress("DEPRECATION")
+                            val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) ?: return
+                            confirming = true
+                            AppPackages.start(app, confirm)
+                        }
+                        PackageInstaller.STATUS_SUCCESS -> finish("", abandon = false)
+                        else -> finish(AppPackages.failure(status, intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE), identifier), abandon = false)
+                    }
+                }
+            }
+            this.receiver = receiver
+            val filter = IntentFilter(action)
+            if (Build.VERSION.SDK_INT >= 33) {
+                app.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                app.registerReceiver(receiver, filter)
+            }
+            // Some Android versions send nothing when the person leaves the
+            // confirmation without an answer. Back in the app, a session that
+            // still exists but has no progress was left: cancelled. (One the
+            // system already ended waits for its broadcast, which an install
+            // that went through can send after the app is back.)
+            val application = app.applicationContext as? android.app.Application ?: return
+            val callbacks = object : android.app.Application.ActivityLifecycleCallbacks {
+                override fun onActivityResumed(a: Activity) {
+                    if (!confirming || done.get()) return
+                    main.postDelayed({
+                        val info = try { installer.getSessionInfo(session) } catch (_: Exception) { null }
+                        if (info != null && !info.isActive) finish("The install was cancelled.", abandon = true)
+                    }, LEFT_CHECK_MS)
+                }
+                override fun onActivityCreated(a: Activity, state: android.os.Bundle?) {}
+                override fun onActivityStarted(a: Activity) {}
+                override fun onActivityPaused(a: Activity) {}
+                override fun onActivityStopped(a: Activity) {}
+                override fun onActivitySaveInstanceState(a: Activity, state: android.os.Bundle) {}
+                override fun onActivityDestroyed(a: Activity) {}
+            }
+            lifecycle = callbacks
+            application.registerActivityLifecycleCallbacks(callbacks)
+        }
+
+        private fun finish(result: String, abandon: Boolean) {
+            if (!done.compareAndSet(false, true)) return
+            main.removeCallbacksAndMessages(null)
+            receiver?.let { try { app.unregisterReceiver(it) } catch (_: Exception) {} }
+            lifecycle?.let { (app.applicationContext as? android.app.Application)?.unregisterActivityLifecycleCallbacks(it) }
+            if (abandon && session >= 0) try { installer.abandonSession(session) } catch (_: Exception) {}
+            finished(result)
+        }
+
+        private companion object {
+            const val TOKEN = "dev.isomer.runtime.INSTALL_TOKEN"
+            /** How long a session may go without a final status. */
+            const val TIMEOUT_MS = 15 * 60 * 1000L
+            /** How long after the app is back a left confirmation is checked. */
+            const val LEFT_CHECK_MS = 3000L
         }
     }
 
