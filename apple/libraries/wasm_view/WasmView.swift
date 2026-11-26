@@ -6,6 +6,15 @@
 //
 //     WasmView(provider: BundledWasmProvider(resource: "profile"))
 //
+// A feature linked as a side module runs over a runtime module the view is
+// given once (docs/side_modules.md); its bundles name it, and a reload swaps
+// the side module alone:
+//
+//     WasmView(
+//         provider: provider,  // bundles of kind .sideModule(runtime: "app-runtime-12")
+//         runtimeModule: .mixed(
+//             name: "app-runtime-12", source: .packaged(resource: "runtime")!, native: native))
+//
 // Native services the feature consumes are injected as `dependencies` (the
 // app's generated `Dependencies` builders); Foundation's networking goes in
 // beneath them by default, so the feature's URLSession is Apple's
@@ -41,21 +50,26 @@ public struct WasmView: View {
     @Environment(\.verticalSizeClass) private var hostVerticalSizeClass
     #endif
     private let provider: BundleProvider
+    private let runtimeModule: WasmRuntimeModule?
     private let ffiModulePrefix: String?
     private let dependencies: [String: SwiftFFIDependency]
     private let onStatus: ((String) -> Void)?
     private let renderer: WasmViewRenderer
 
+    /// - runtimeModule: the runtime module the provider's side-module
+    ///   bundles run over (`WasmRuntimeModule.interpreted(…)`, or `.mixed(…)`
+    ///   with the app's native part), given once; reactors don't need one.
     public init(
         provider: BundleProvider,
+        runtimeModule: WasmRuntimeModule? = nil,
         ffiModulePrefix: String? = nil,
         dependencies: [String: SwiftFFIDependency] = [:],
         renderer: WasmViewRenderer = .swiftUI,
         onStatus: ((String) -> Void)? = nil
     ) {
         self.init(
-            model: WasmViewModel(), provider: provider, ffiModulePrefix: ffiModulePrefix,
-            dependencies: dependencies, renderer: renderer, onStatus: onStatus)
+            model: WasmViewModel(), provider: provider, runtimeModule: runtimeModule,
+            ffiModulePrefix: ffiModulePrefix, dependencies: dependencies, renderer: renderer, onStatus: onStatus)
     }
 
     /// The caller-owned-model variant: hand in the `WasmViewModel` you keep a
@@ -66,6 +80,7 @@ public struct WasmView: View {
     public init(
         model: WasmViewModel,
         provider: BundleProvider,
+        runtimeModule: WasmRuntimeModule? = nil,
         ffiModulePrefix: String? = nil,
         dependencies: [String: SwiftFFIDependency] = [:],
         renderer: WasmViewRenderer = .swiftUI,
@@ -73,6 +88,7 @@ public struct WasmView: View {
     ) {
         _runtime = StateObject(wrappedValue: model)
         self.provider = provider
+        self.runtimeModule = runtimeModule
         self.ffiModulePrefix = ffiModulePrefix
         self.dependencies = dependencies
         self.renderer = renderer
@@ -177,6 +193,9 @@ public struct WasmView: View {
         runtime.ffiModulePrefix = ffiModulePrefix  // injected before the first load
         runtime.dependencies = dependencies
         runtime.drawnNavigation = renderer == .gpu
+        // The runtime module side-module bundles run over, once (a model a
+        // host set one on itself keeps it).
+        if let runtimeModule { runtime.runtimeModule = runtimeModule }
 
         // The initial bundle loads synchronously so the first frame renders
         // immediately (no ProgressView flash for a packaged feature).

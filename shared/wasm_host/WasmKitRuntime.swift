@@ -626,3 +626,25 @@ private final class Bindings: @unchecked Sendable {
         }
     }
 }
+
+// MARK: - Features over a runtime module
+
+/// `launch` then `loadSideModule`: a feature over a runtime module, for
+/// `WasmFeatureRuntime`'s side-module bundles.
+extension WasmKitRuntime: WasmSideModuleRuntime {}
+
+extension WasmRuntimeModule {
+    /// A runtime module interpreted by WasmKit (`WasmKitRuntime`), each
+    /// launch a fresh one; `configure` sets one up before its launch (its
+    /// home directory, its bundle identifier).
+    public static func interpreted(
+        name: String, source: WasmModuleSource,
+        configure: @escaping @MainActor (WasmKitRuntime) -> Void = { _ in }
+    ) -> WasmRuntimeModule {
+        WasmRuntimeModule(name: name, source: source) {
+            let runtime = WasmKitRuntime()
+            configure(runtime)
+            return runtime
+        }
+    }
+}
