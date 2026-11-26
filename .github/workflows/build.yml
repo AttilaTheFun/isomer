@@ -21,8 +21,10 @@
 # GitHub's cache alone.
 #
 # - pull requests: container (web, Linux, Android; the required check),
-#   container-apple, container-windows: every target
-#   built, then every test that draws nothing (container_build.sh pr).
+#   container-windows: every target built, then every test that draws
+#   nothing (container_build.sh pr). No macOS job (the owner, 2026-11-13:
+#   Apple builds at release verification): container-apple runs by hand,
+#   `run: container-apple`, on a branch that touches Apple code.
 # - main's commits: populate, populate-apple,
 #   populate-windows (the same, and what a release builds, into the cache;
 #   never a proof); bazel8, bazel8-apple.
@@ -62,9 +64,9 @@ on:
   workflow_dispatch:
     inputs:
       run:
-        description: "What to run: verify (the tests, no proof), prerelease or release on main (verify on a branch to bisect); proof (the screenshot proof alone); experiment on any but a release branch; waydroid-probe (a probe of Waydroid on the hosted runner) on any; sdk-smoke (a consumer of Isomer's Swift SDKs, the ones this commit registers) on any; populate-apple (the Apple cache's builds, as each night) on main"
+        description: "What to run: verify (the tests, no proof), prerelease or release on main (verify on a branch to bisect); proof (the screenshot proof alone); experiment on any but a release branch; waydroid-probe (a probe of Waydroid on the hosted runner) on any; sdk-smoke (a consumer of Isomer's Swift SDKs, the ones this commit registers) on any; populate-apple (the Apple cache's builds, as each night) on main; container-apple (a pull request's Apple build) on any"
         type: choice
-        options: [verify, proof, prerelease, release, experiment, waydroid-probe, sdk-smoke, populate-apple]
+        options: [verify, proof, prerelease, release, experiment, waydroid-probe, sdk-smoke, populate-apple, container-apple]
         default: verify
       kind:
         description: The proof's kind
@@ -133,7 +135,7 @@ jobs:
           retention-days: 7
 
   container-apple:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'workflow_dispatch' && inputs.run == 'container-apple'
     runs-on: xcode-27
     timeout-minutes: 180
     env:
@@ -221,6 +223,10 @@ jobs:
     if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run == 'populate-apple')
     runs-on: xcode-27
     timeout-minutes: 180
+    # The last step's issue, alone: the workflow's default stays contents: read.
+    permissions:
+      contents: read
+      issues: write
     env:
       ISOMER_PLATFORMS: apple
     steps:
@@ -240,6 +246,20 @@ jobs:
           group: apple
           gigabytes: 2
           repository-hit: ${{ steps.cache.outputs.repository-hit }}
+      # Apple isn't checked on a pull request, so a broken main is seen
+      # here first: an issue says so (one, commented on each night it
+      # stays broken).
+      - name: A broken main, said in an issue
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Nightly Apple build failed on main"
+          body="$GITHUB_JOB failed on $GITHUB_SHA: $RUN"
+          open=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$open" ]; then gh issue comment "$open" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"; fi
 
   populate-windows:
     if: github.event_name == 'push'
@@ -306,6 +326,10 @@ jobs:
     if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run == 'populate-apple')
     runs-on: xcode-27
     timeout-minutes: 180
+    # The last step's issue, alone: the workflow's default stays contents: read.
+    permissions:
+      contents: read
+      issues: write
     env:
       USE_BAZEL_VERSION: 8.5.0
       ISOMER_PLATFORMS: apple
@@ -322,6 +346,20 @@ jobs:
           //apple/storybook_ios_application:storybook_ios_sim_application
           //apple/storybook_isomer_ios_application
           //apple/storybook_macos_application:storybook_macos_application
+      # Apple isn't checked on a pull request, so a broken main is seen
+      # here first: an issue says so (one, commented on each night it
+      # stays broken).
+      - name: A broken main, said in an issue
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Nightly Apple build failed on main"
+          body="$GITHUB_JOB failed on $GITHUB_SHA: $RUN"
+          open=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$open" ]; then gh issue comment "$open" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"; fi
 
   # --- By hand: Isomer's Swift SDKs as a consumer links them -------------
 
