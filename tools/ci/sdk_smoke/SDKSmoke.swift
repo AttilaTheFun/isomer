@@ -19,7 +19,7 @@ struct SDKSmoke: ParsableCommand {
             a checkout refuses one with Bazel's convenience symlinks at its root.
 
               sdk_smoke cell --fixture tests/sdk_consumer --isomer 0.57.1 \\
-                  --sdk-base-url https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.2 \\
+                  --sdk-base-url https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.3 \\
                   --variant i18n --api 23
               sdk_smoke build --fixture tests/sdk_consumer --out /tmp/apks
               sdk_smoke run-android --fixture tests/sdk_consumer --adb adb --serial emulator-5554 \\
