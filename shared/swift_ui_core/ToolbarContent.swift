@@ -126,7 +126,7 @@ extension ToolbarSpacer: ToolbarContent, PrimitiveToolbarContent {
 
 /// A toolbar item as the view the runtime builds: the item's own node, and
 /// its reuse answers.
-struct _ToolbarItemView<Item: _PrimitiveView>: _PrimitiveView {
+struct _ToolbarItemView<Item: _PrimitiveView>: _InternalPrimitiveView {
     let item: Item
 
     static var _isReusableBuild: Bool { Item._isReusableBuild }
@@ -161,6 +161,11 @@ struct _ToolbarItems<Content: ToolbarContent> {
 }
 
 extension _ToolbarItems: _MultiView {
+    /// The views it stands for, built where it is (View.swift's `buildMulti`).
+    @MainActor static func _makeView(view: _GraphValue<Self>, inputs: _ViewInputs) -> _ViewOutputs {
+        _ViewOutputs(node: buildMulti(view.value, ctx: &inputs.context.pointee))
+    }
+
     func childViews() -> [(suffix: String, view: any View)] {
         MainActor.assumeIsolated {
             placedToolbarViews(content).enumerated().map { (String($0.offset), $0.element) }

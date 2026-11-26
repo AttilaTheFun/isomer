@@ -562,7 +562,7 @@ def _without(deps, own):
         return deps  # a select(): taken as it is
     return [dep for dep in deps if native.package_relative_label(dep) not in own]
 
-def isomer_android_library(name, swift_library, extra_kotlin_srcs = [], extra_deps = [], libcxx = None, shared_platform = None, testonly = False, visibility = None):
+def isomer_android_library(name, swift_library, extra_kotlin_srcs = [], extra_deps = [], bound_libraries = [], libcxx = None, shared_platform = None, testonly = False, visibility = None):
     """Level 3 building block: the app's Swift + the Isomer Android
     runtime, packaged for embedding in an existing app.
 
@@ -589,6 +589,11 @@ def isomer_android_library(name, swift_library, extra_kotlin_srcs = [], extra_de
     (`isomer_android_shared_library`) needs it. False never does; None (the
     default) follows the flag.
 
+    `bound_libraries` are further annotated Swift libraries bound in the
+    app's library (kt_swift_library's): linked in, their Kotlin facades in
+    dev.isomer.runtime loading it, with no `.so` or Swift runtime of their
+    own.
+
     Declares:
       <name>        kt_android_library — dep this from your app's Kotlin.
       <name>_native cc_library carrying the .so — dep it from android_binary.
@@ -599,6 +604,7 @@ def isomer_android_library(name, swift_library, extra_kotlin_srcs = [], extra_de
         module_name = "SwiftUI",
         swift = swift_library,
         link_deps = [Label("@isomer//android/libraries/swift_ui:application_entry")],
+        bound_libraries = bound_libraries,
         libcxx = libcxx,
         testonly = testonly,
         **_shared_platform_args(shared_platform)
@@ -725,6 +731,8 @@ def isomer_android_app(
         services_kt = None,
         services_installer = None,
         services_deps = [],
+        bound_libraries = [],
+        wasm_view = False,
         permissions = [],
         queries_packages = [],
         queries_intents = [],
@@ -790,6 +798,17 @@ def isomer_android_app(
     launcher entry).
     App-authored host views (`kind` of a PlatformViewRepresentable) are
     composables the services installer puts in `AppHostViews.factories`.
+
+    `bound_libraries` are annotated Swift libraries (swift_ffi's
+    `@Exported…`) whose Kotlin bindings the app's own library carries:
+    each linked into it with its JNI adapter, its `<Module>Bridge` facade
+    compiled beside the runtime and loading the app's library, so the
+    module brings no second Swift runtime into the process.
+    `wasm_view = True` binds WasmView's engine so (`WasmEngine`, WasmKit)
+    and compiles WasmView's Kotlin into the runtime: a compiled app shows
+    wasm pages, each a `WasmView(provider, treeState = remember {
+    IsoTreeState() })` drawn by an `AppHostViews` factory, with no
+    @isomer_android//wasm_view:engine_native beside it.
     `icon` is the launcher icon: a square PNG at 192 × 192 (the launcher's
     largest density, xxxhdpi; Android scales it down for the others), put
     in the APK as `@mipmap/ic_launcher` and named by the application's
@@ -859,12 +878,17 @@ def isomer_android_app(
     if exec_compatible_with != None:
         outer["exec_compatible_with"] = exec_compatible_with
 
+    # One label or a list of them.
+    runtime_kotlin = (services_kt if type(services_kt) == "list" else [services_kt]) if services_kt else []
+    if wasm_view:
+        bound_libraries = bound_libraries + [Label("@isomer//android/libraries/wasm_view:engine")]
+        runtime_kotlin = runtime_kotlin + [Label("@isomer//android/libraries/wasm_view:runtime_kotlin")]
     isomer_android_library(
         name = name + "_runtime",
         swift_library = swift_library,
-        # One label or a list of them.
-        extra_kotlin_srcs = (services_kt if type(services_kt) == "list" else [services_kt]) if services_kt else [],
+        extra_kotlin_srcs = runtime_kotlin,
         extra_deps = services_deps,
+        bound_libraries = bound_libraries,
         libcxx = libcxx,
         shared_platform = shared_platform,
         testonly = testonly,

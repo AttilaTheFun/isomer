@@ -15,10 +15,11 @@ import org.json.JSONObject
 object AppHostViews {
     val factories = mutableMapOf<String, @Composable (node: JSONObject, modifier: Modifier, edit: String) -> Unit>()
 
-    /** Reports a representable's changed value (its `onValueChanged`). */
-    fun report(edit: String, value: String) {
-        if (edit.isEmpty()) return
-        IsoEventRouter.lastEventAt = android.os.SystemClock.uptimeMillis()
-        IsoEventRouter.sink(edit, value)
+    /** Reports a representable's changed value (its `onValueChanged`) to
+     *  [events]: the app's own tree's, or, for a representable in a tree of
+     *  its own (a page's), `LocalIsoEvents.current` read where the factory
+     *  composes. */
+    fun report(edit: String, value: String, events: IsoEvents = IsoEventRouter) {
+        events.send(edit, value)
     }
 }
