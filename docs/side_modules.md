@@ -243,6 +243,24 @@ runtime instance until the runtime has a root per feature (several
 features' side modules already load into one instance); the routed list is
 still the Storybook's (from its feature calls).
 
+## Launch time
+
+Once a page runs, its frames cost little (a downstream app's measured about
+0.1 ms each, its idle CPU under 1%). Opening it is the cost, and most of that
+is WasmKit parsing the runtime module: 230 to 300 ms for a 29 MB module, about
+70% of a 340 ms launch on a Mac, longer on an emulator.
+
+- **Build the wasm modules `-c opt`**, whatever the app's own mode. That
+  app's runtime module went from 37.7 MB to 29.6 MB, and its first frame from
+  136 ms to 45 ms. WasmKit itself is optimized in every build
+  (tools/wasmkit/BUILD.wasmkit.bazel), so only the guest's mode matters.
+- **A reload builds once.** Before 0.62 a page's first poll of a hot-reload
+  server reloaded even an unchanged build, launching the runtime twice.
+- **Planned:** a parsed runtime module kept for the process, so a reload or
+  a second page doesn't parse it again; and the launch off the main thread
+  everywhere, its first frame posted back (Android's WasmView has it as
+  `offMainInit`), so opening a page doesn't freeze the app's frames.
+
 ## Measurements
 
 **A set from the corpus, apps held out** (a Mac, median of three; busy time
