@@ -445,6 +445,13 @@ package func nativeOpenURL(url: String) {
     Runtime.shared.openURL(external: url)
 }
 
+/// The device was shaken (ShakeDetector.kt, listening while a view has the
+/// Isomer module's `.onShake`).
+@ExportedFunction
+package func nativeShake() {
+    Runtime.shared.deviceShaken()
+}
+
 /// Edge overscroll distance (logical points) for the native scroller `path`.
 @ExportedFunction
 package func nativeOverscroll(path: String, amount: Double) {

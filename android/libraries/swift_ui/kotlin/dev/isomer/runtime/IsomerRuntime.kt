@@ -164,6 +164,11 @@ object IsomerRuntime {
             // `.sensoryFeedback`: the view's haptic, as the system's
             // settings allow.
             "haptic" -> activity.window.decorView.performHapticFeedback(hapticConstant(value))
+            // The Isomer module's `.onShake`: the accelerometer watched while
+            // a view has one ("1"), let go when none has ("0").
+            "shake" -> ShakeDetector.listen(activity, value == "1") {
+                NativeBridge.dispatchToRuntime { SwiftUIBridge.nativeShake() }
+            }
             // Unknown keys are ignored by design (forward-compatible channel).
         }
     }

@@ -395,7 +395,7 @@ struct _GestureModifier<Child: View, G: Gesture> {
     var body: Never { fatalError("primitive view") }
 }
 
-extension _GestureModifier: _PrimitiveView {
+extension _GestureModifier: _InternalPrimitiveView {
     @MainActor
     func makeNode(_ ctx: inout BuildContext) -> RenderNode {
         var sub = ctx.descend("gesture")

@@ -261,9 +261,8 @@ import org.json.JSONObject
  *  Unchanged subtrees keep their [UNode] identity across updates (see
  *  [FlatTree.applyPatch]) so the skippable
  *  [IsoNode] only recomposes the views that actually changed. */
-object ComposeTreeState {
+open class IsoTreeState(val events: IsoEvents = IsoEvents()) {
     val tree = androidx.compose.runtime.mutableStateOf<UNode?>(null)
-    val imageTick = mutableStateOf(0)
 
     /** Apply a `Patch` buffer to the retained tree — the only wire format,
      *  compiled and wasm alike (the first patch is a full root op). Only the
@@ -312,23 +311,49 @@ object ComposeTreeState {
     }
 }
 
-/** Where a node's events go. Defaults to a no-op so the interpreter carries NO
+/** The app's own tree, which the compiled runtime, `IsomerRemote` and a
+ *  whole-app WasmView draw into; its events go to [IsoEventRouter]. A view
+ *  that draws a tree of its own beside it (a WasmView inside a compiled
+ *  app) makes an [IsoTreeState] of its own and draws it with
+ *  `IsoRoot(root, state.events)`. */
+object ComposeTreeState : IsoTreeState(IsoEventRouter) {
+    /** Bumped when an image loads, for every tree: the image cache is the
+     *  process's. */
+    val imageTick = mutableStateOf(0)
+}
+
+/** Where a tree's node events go. Defaults to a no-op so the interpreter carries NO
  *  dependency on the native `SwiftUIBridge` (that is what lets it run in the
  *  Swift-free wasm cell). The native compiled-Swift path installs a sink that
  *  feeds the in-process Swift runtime and pumps frames (see
  *  `installNativeEventSink`); the wasm WasmView (//android/libraries/wasm_view)
  *  installs a sink that routes to its WasmKit reactor. */
-object IsoEventRouter {
+open class IsoEvents {
     var sink: (String, String) -> Unit = { _, _ -> }
 
     /** A field's key for `.onKeyPress`, answered synchronously: true when
      *  the app took it (and the field must not type it). */
     var keySink: (String, String) -> Boolean = { _, _ -> false }
 
+    fun send(id: String, value: String) {
+        if (id.isEmpty()) return
+        IsoEventRouter.lastEventAt = android.os.SystemClock.uptimeMillis()
+        sink(id, value)
+    }
+}
+
+/** The app's own tree's events ([ComposeTreeState]'s), and the default
+ *  [LocalIsoEvents]. */
+object IsoEventRouter : IsoEvents() {
     /** Uptime (ms) the last real tap was dispatched, consumed by
      *  [ComposeTreeState.applyPatch] to log tap->tree latency. 0 = none pending. */
     @Volatile var lastEventAt: Long = 0L
 }
+
+/** The events of the tree being drawn: what the renderer's handlers send
+ *  to. `IsoRoot` provides it, so a tree drawn inside another's host view
+ *  (a WasmView in a compiled app) sends its own taps to its own sink. */
+val LocalIsoEvents = androidx.compose.runtime.staticCompositionLocalOf<IsoEvents> { IsoEventRouter }
 
 /** The Compose keys a `KeyEquivalent` names by AppKit's private-use characters. */
 private val keyEquivalents = mapOf(
@@ -341,7 +366,7 @@ private val keyEquivalents = mapOf(
 
 /** A hardware key event as `KeyPress(hostValue:)` reads it (see the web
  *  renderer's keyPress): true when the app took it. */
-private fun keyPress(id: String, event: androidx.compose.ui.input.key.KeyEvent, keyUp: Boolean): Boolean {
+private fun keyPress(events: IsoEvents, id: String, event: androidx.compose.ui.input.key.KeyEvent, keyUp: Boolean): Boolean {
     val native = event.nativeKeyEvent
     val phase = when {
         event.type == KeyEventType.KeyUp -> if (keyUp) "u" else return false
@@ -363,13 +388,7 @@ private fun keyPress(id: String, event: androidx.compose.ui.input.key.KeyEvent, 
     val chars = named ?: if (event.isCtrlPressed && key.length == 1 && key[0].code in 0x40..0x7f)
         (key.uppercase()[0].code and 0x1f).toChar().toString()
     else if (event.utf16CodePoint > 0) String(Character.toChars(event.utf16CodePoint)) else key
-    return IsoEventRouter.keySink(id, "$mods\u001f$key\u001f$chars")
-}
-
-private fun sendEvent(id: String, value: String) {
-    if (id.isEmpty()) return
-    IsoEventRouter.lastEventAt = android.os.SystemClock.uptimeMillis()
-    IsoEventRouter.sink(id, value)
+    return events.keySink(id, "$mods\u001f$key\u001f$chars")
 }
 
 /** Parses the serialized gradient paint into a Brush (direction approximated). */
@@ -443,7 +462,7 @@ object MaterialGrounds {
 
 /** Shared decorations: size, shadow, corner clip, background, tap, padding. */
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
-private fun baseModifier(n: JSONObject, extra: Modifier): Modifier {
+private fun baseModifier(n: JSONObject, extra: Modifier, events: IsoEvents): Modifier {
     var m = extra
     // `.matchedGeometryEffect`: the node follows its key (matchedGeometry).
     n.optJSONObject("params")?.let { p ->
@@ -478,12 +497,12 @@ private fun baseModifier(n: JSONObject, extra: Modifier): Modifier {
     // since the fingers went down.
     val dragID = n.optString("drag")
     val magnifyID = n.optJSONObject("params")?.optString("magnify") ?: ""
-    if (dragID.isNotEmpty() || magnifyID.isNotEmpty()) m = m.guestGestures(dragID, magnifyID)
+    if (dragID.isNotEmpty() || magnifyID.isNotEmpty()) m = m.guestGestures(events, dragID, magnifyID)
     // A long press: "press:1", "fire" after lpMin seconds held within
     // lpDist, "press:0" when it lifts or strays.
     n.optJSONObject("params")?.optString("longPress")?.takeIf { it.isNotEmpty() }?.let { id ->
         val p = n.optJSONObject("params")!!
-        m = m.guestLongPress(id, p.optString("lpMin").toDoubleOrNull() ?: 0.5, p.optString("lpDist").toFloatOrNull() ?: 10f)
+        m = m.guestLongPress(events, id, p.optString("lpMin").toDoubleOrNull() ?: 0.5, p.optString("lpDist").toFloatOrNull() ?: 10f)
     }
     // Accessibility: the label and value TalkBack reads, and
     // `.accessibilityElement(children:)` (merge the children into this node,
@@ -517,15 +536,15 @@ private fun baseModifier(n: JSONObject, extra: Modifier): Modifier {
             m = m.semantics {
                 val custom = mutableListOf<CustomAccessibilityAction>()
                 if (adjustID.isNotEmpty()) {
-                    custom += CustomAccessibilityAction("Increase") { sendEvent(adjustID, "increment"); true }
-                    custom += CustomAccessibilityAction("Decrease") { sendEvent(adjustID, "decrement"); true }
+                    custom += CustomAccessibilityAction("Increase") { events.send(adjustID, "increment"); true }
+                    custom += CustomAccessibilityAction("Decrease") { events.send(adjustID, "decrement"); true }
                 }
                 for ((id, kind) in actions) {
                     when {
                         kind.startsWith("named:") ->
-                            custom += CustomAccessibilityAction(kind.removePrefix("named:")) { sendEvent(id, ""); true }
-                        kind == "default" -> onClick { sendEvent(id, ""); true }
-                        kind == "escape" -> dismiss { sendEvent(id, ""); true }
+                            custom += CustomAccessibilityAction(kind.removePrefix("named:")) { events.send(id, ""); true }
+                        kind == "default" -> onClick { events.send(id, ""); true }
+                        kind == "escape" -> dismiss { events.send(id, ""); true }
                     }
                 }
                 if (custom.isNotEmpty()) customActions = custom
@@ -602,9 +621,9 @@ private fun baseModifier(n: JSONObject, extra: Modifier): Modifier {
     n.optString("tap").takeIf { it.isNotEmpty() && n.optJSONObject("params")?.optString("disabled") != "1" }?.let { id ->
         m = if ((n.optJSONObject("params")?.optString("tapCount") ?: "") == "2") {
             // `onTapGesture(count: 2)`: a double tap.
-            m.doubleTap(id)
+            m.doubleTap(id, events)
         } else {
-            m.clickable { sendEvent(id, "") } // ripple via MaterialTheme
+            m.clickable { events.send(id, "") } // ripple via MaterialTheme
         }
     }
     val p = n.optJSONArray("padding")
@@ -984,6 +1003,7 @@ fun IsoNode(
     boundedW: Boolean = true,
     boundedH: Boolean = true,
 ) {
+    val events = LocalIsoEvents.current
     val j = n.json
     // `.textSelection`: the text inside is selectable (a SelectionContainer:
     // long press selects a range, with Copy) or not (DisableSelection), an
@@ -1001,7 +1021,7 @@ fun IsoNode(
         }
         return
     }
-    var m = baseModifier(j, extra)
+    var m = baseModifier(j, extra, events)
     // `.id(_:)` inside a scroll: where a ScrollViewProxy request finds it.
     val vid = j.optJSONObject("params")?.optString("vid") ?: ""
     val targets = LocalScrollTargets.current
@@ -1136,7 +1156,7 @@ fun IsoNode(
             editID = j.optString("edit"),
             search = false,
             modifier = j.optJSONObject("params")?.optString("keys")?.takeIf { it.isNotEmpty() }
-                ?.let { keys -> m.onPreviewKeyEvent { keyPress(keys, it, j.optJSONObject("params")?.optString("keyUp") == "1") } }
+                ?.let { keys -> m.onPreviewKeyEvent { keyPress(events, keys, it, j.optJSONObject("params")?.optString("keyUp") == "1") } }
                 ?: m,
             plain = j.optJSONObject("params")?.optString("fieldStyle") == "plain",
             maxLines = j.optJSONObject("params")?.optString("maxLines")?.toIntOrNull() ?: 1,
@@ -1150,7 +1170,7 @@ fun IsoNode(
         )
         "slider" -> Slider(
             value = j.optDouble("v", 0.0).toFloat(),
-            onValueChange = { sendEvent(j.optString("edit"), it.toString()) },
+            onValueChange = { events.send(j.optString("edit"), it.toString()) },
             modifier = m.fillMaxWidth(),
         )
         "progress" -> if (j.has("v")) {
@@ -1348,7 +1368,7 @@ fun IsoNode(
                             val value = "${w}x${h}$place"
                             if (lastSent[0] != value) {
                                 lastSent[0] = value
-                                sendEvent(geo, value)
+                                events.send(geo, value)
                             }
                         }
                     }
@@ -1542,6 +1562,7 @@ private fun IsoTextField(
     submitID: String = "",
     editor: Boolean = false,
 ) {
+    val events = LocalIsoEvents.current
     // A `TextEditor` has as many lines as it is given room for; a TextField
     // has one unless its axis is vertical.
     val multiline = editor || maxLines > 1
@@ -1574,7 +1595,7 @@ private fun IsoTextField(
         .onFocusChanged { state ->
             if (state.isFocused == hasFocus) return@onFocusChanged
             hasFocus = state.isFocused
-            if (state.isFocused != focusWanted) sendEvent(focusID, if (state.isFocused) "1" else "0")
+            if (state.isFocused != focusWanted) events.send(focusID, if (state.isFocused) "1" else "0")
         }
     // TextFieldValue (not a plain String) so the caret survives the
     // recomposition that follows every keystroke's round trip through Swift.
@@ -1628,18 +1649,18 @@ private fun IsoTextField(
         local = it
         if (textChanged) {
             pending.addLast(it.text)
-            sendEvent(editID, eventPrefix + it.text)
+            events.send(editID, eventPrefix + it.text)
         }
         if (selectionID.isNotEmpty()) {
             val selection = "${it.selection.min},${it.selection.max}"
             if (selection != reportedSelection) {
                 reportedSelection = selection
-                sendEvent(selectionID, selection)
+                events.send(selectionID, selection)
             }
         }
     }
     val submit = {
-        sendEvent(submitID, "")
+        events.send(submitID, "")
         keyboard?.hide()
     }
     val actions = if (submits) KeyboardActions(onAny = { submit() }) else KeyboardActions.Default
@@ -1729,6 +1750,7 @@ private fun IsoTabs(node: UNode, m: Modifier, bw: Boolean, bh: Boolean) {
  *  actions are 1… on the wire. */
 @Composable
 private fun IsoMenu(n: UNode, m: Modifier) {
+    val events = LocalIsoEvents.current
     val j = n.json
     val edit = j.optString("edit")
     val options = j.optJSONArray("options") ?: JSONArray()
@@ -1751,7 +1773,7 @@ private fun IsoMenu(n: UNode, m: Modifier) {
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             items.forEachIndexed { index, title ->
-                DropdownMenuItem(text = { Text(title) }, onClick = { open = false; sendEvent(edit, "${index + 1}") })
+                DropdownMenuItem(text = { Text(title) }, onClick = { open = false; events.send(edit, "${index + 1}") })
             }
         }
     }
@@ -1923,6 +1945,7 @@ private fun stackDepth(pane: UNode?): Int {
  *  first), the back row retreats — matching SwiftUI's compact split view. */
 @Composable
 private fun IsoNavSplit(node: UNode, m: Modifier, bw: Boolean, bh: Boolean) {
+    val events = LocalIsoEvents.current
     BoxWithConstraints(m.fillMaxSize()) {
         if (maxWidth < 700.dp) {
             // The compact split: one column at a time. The guest decides
@@ -1942,7 +1965,7 @@ private fun IsoNavSplit(node: UNode, m: Modifier, bw: Boolean, bh: Boolean) {
             val seenTick = remember { arrayOf(tick) }
             fun go(next: Int) {
                 if (next == pane || next < 0 || next >= node.children.size) return
-                if (edit.isNotEmpty()) sendEvent(edit, "compact:" + names[next] + (if (next < pane) ":back" else ""))
+                if (edit.isNotEmpty()) events.send(edit, "compact:" + names[next] + (if (next < pane) ":back" else ""))
                 pane = next
             }
             LaunchedEffect(tick) {
@@ -2044,6 +2067,7 @@ private fun IsoNavSplit(node: UNode, m: Modifier, bw: Boolean, bh: Boolean) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun IsoHostView(n: JSONObject, m: Modifier) {
+    val events = LocalIsoEvents.current
     // Tabbar icons load through the async bitmap cache; subscribe to imageTick so
     // they refresh on load even when the enclosing IsoNode skipped.
     @Suppress("UNUSED_VARIABLE") val tick = ComposeTreeState.imageTick.value
@@ -2070,7 +2094,7 @@ private fun IsoHostView(n: JSONObject, m: Modifier) {
                     }
                 } else if (principalIndex >= 0 && principalIndex < trailingTitles.size) {
                     // A worded principal item: a title-styled button.
-                    TextButton(onClick = { sendEvent(edit, "trailingItem:$principalIndex") }) {
+                    TextButton(onClick = { events.send(edit, "trailingItem:$principalIndex") }) {
                         Text(trailingTitles[principalIndex], color = LocalContentColor.current, fontWeight = FontWeight.SemiBold)
                     }
                 } else {
@@ -2086,7 +2110,7 @@ private fun IsoHostView(n: JSONObject, m: Modifier) {
                 Row(Modifier.padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     val splitBack = LocalSplitBack.current
                     if (p.optString("back") == "1") {
-                        BarButton(onClick = { if (splitBack != null) splitBack() else sendEvent(edit, "back") }, icon = true) {
+                        BarButton(onClick = { if (splitBack != null) splitBack() else events.send(edit, "back") }, icon = true) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
@@ -2098,7 +2122,7 @@ private fun IsoHostView(n: JSONObject, m: Modifier) {
                         val labels = p.optString("leadingLabels").split("\n")
                         val disabled = p.optString("leadingDisabled").split("\n")
                         leading.split("\n").forEachIndexed { i, title ->
-                            IsoBarItem(title, symbols.getOrNull(i) ?: "", labels.getOrNull(i) ?: "", disabled = disabled.getOrNull(i) == "1") { sendEvent(edit, "leading:$i") }
+                            IsoBarItem(title, symbols.getOrNull(i) ?: "", labels.getOrNull(i) ?: "", disabled = disabled.getOrNull(i) == "1") { events.send(edit, "leading:$i") }
                         }
                     }
                 }
@@ -2118,13 +2142,13 @@ private fun IsoHostView(n: JSONObject, m: Modifier) {
                         trailingItems.split("\n").forEachIndexed { i, title ->
                             // The principal item sits in the title slot (its own view, or its words).
                             if (i == principal) return@forEachIndexed
-                            IsoBarItem(title, symbols.getOrNull(i) ?: "", labels.getOrNull(i) ?: "", prominent.getOrNull(i) == "1", disabled.getOrNull(i) == "1") { sendEvent(edit, "trailingItem:$i") }
+                            IsoBarItem(title, symbols.getOrNull(i) ?: "", labels.getOrNull(i) ?: "", prominent.getOrNull(i) == "1", disabled.getOrNull(i) == "1") { events.send(edit, "trailingItem:$i") }
                         }
                     }
                 } else {
                     val trailing = p.optString("trailing")
                     if (trailing.isNotEmpty()) {
-                        TextButton(onClick = { sendEvent(edit, "trailing") }) { Text(trailing) }
+                        TextButton(onClick = { events.send(edit, "trailing") }) { Text(trailing) }
                     }
                 }
             }
@@ -2152,7 +2176,7 @@ private fun IsoHostView(n: JSONObject, m: Modifier) {
             for (i in 0 until count) {
                 NavigationBarItem(
                     selected = i == selected,
-                    onClick = { sendEvent(edit, "$i") },
+                    onClick = { events.send(edit, "$i") },
                     icon = {
                         val icon = p.optString("icon$i")
                         val bitmap = if (icon.isEmpty()) null else HostServices.imageBitmap(icon, false)
@@ -2188,7 +2212,7 @@ private fun IsoHostView(n: JSONObject, m: Modifier) {
         )
         "toggle" -> Switch(
             checked = n.optString("v") == "1",
-            onCheckedChange = { sendEvent(edit, if (it) "1" else "0") },
+            onCheckedChange = { events.send(edit, if (it) "1" else "0") },
             modifier = m,
         )
         "picker" -> {
@@ -2211,7 +2235,7 @@ private fun IsoHostView(n: JSONObject, m: Modifier) {
                     labels.forEachIndexed { index, option ->
                         SegmentedButton(
                             selected = index == selected,
-                            onClick = { sendEvent(edit, "$index") },
+                            onClick = { events.send(edit, "$index") },
                             shape = SegmentedButtonDefaults.itemShape(index, labels.size),
                         ) { Text(option, maxLines = 1) }
                     }
@@ -2225,7 +2249,7 @@ private fun IsoHostView(n: JSONObject, m: Modifier) {
                     labels.forEachIndexed { index, option ->
                         Row(
                             Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                                .selectable(selected = index == selected, role = Role.RadioButton, onClick = { sendEvent(edit, "$index") }),
+                                .selectable(selected = index == selected, role = Role.RadioButton, onClick = { events.send(edit, "$index") }),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             RadioButton(selected = index == selected, onClick = null)
@@ -2255,7 +2279,7 @@ private fun IsoHostView(n: JSONObject, m: Modifier) {
                                 text = { Text(option) },
                                 onClick = {
                                     open = false
-                                    sendEvent(edit, "$index")
+                                    events.send(edit, "$index")
                                 },
                                 trailingIcon = if (view == "picker" && index == selected) {
                                     { Icon(Icons.Filled.Check, contentDescription = null) }
@@ -2310,7 +2334,7 @@ private fun IsoHostView(n: JSONObject, m: Modifier) {
                         TextButton(onClick = {
                             openDate = false
                             state.selectedDateMillis?.let { millis ->
-                                sendEvent(edit, utcDay.format(java.util.Date(millis)))
+                                events.send(edit, utcDay.format(java.util.Date(millis)))
                             }
                         }) { Text("OK") }
                     },
@@ -2330,7 +2354,7 @@ private fun IsoHostView(n: JSONObject, m: Modifier) {
                     confirmButton = {
                         TextButton(onClick = {
                             openTime = false
-                            sendEvent(edit, "time:%02d:%02d".format(java.util.Locale.US, state.hour, state.minute))
+                            events.send(edit, "time:%02d:%02d".format(java.util.Locale.US, state.hour, state.minute))
                         }) { Text("OK") }
                     },
                     dismissButton = {
@@ -2380,7 +2404,7 @@ private fun IsoHostView(n: JSONObject, m: Modifier) {
                     value = local,
                     onValueChange = {
                         local = it
-                        sendEvent(edit, it)
+                        events.send(edit, it)
                     },
                     modifier = m
                         .background(Color(0f, 0f, 0f, 0.06f), RoundedCornerShape(8.dp))
@@ -2407,6 +2431,7 @@ private fun alertActionRole(n: UNode): String {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun IsoPresentation(n: UNode) {
+    val events = LocalIsoEvents.current
     // A request: the system's own picker (MediaPickerHost), answered with
     // the copied files' paths (or, saving, where the file went); nothing is
     // drawn.
@@ -2414,9 +2439,9 @@ private fun IsoPresentation(n: UNode) {
         val result = p.optString("result")
         LaunchedEffect(n.json.optString("dismiss")) {
             if (p.optString("request") == "export") {
-                MediaPickerHost.export(p.optString("name"), p.optString("type"), p.optString("data")) { sendEvent(result, it) }
+                MediaPickerHost.export(p.optString("name"), p.optString("type"), p.optString("data")) { events.send(result, it) }
             } else {
-                MediaPickerHost.request(p.optString("request"), p.optString("accept"), p.optString("multiple") == "1") { sendEvent(result, it) }
+                MediaPickerHost.request(p.optString("request"), p.optString("accept"), p.optString("multiple") == "1") { events.send(result, it) }
             }
         }
         return
@@ -2440,7 +2465,7 @@ private fun IsoPresentation(n: UNode) {
             val (ci, c) = confirming.single()
             val (di, d) = dismissive.single()
             AlertDialog(
-                onDismissRequest = { sendEvent(dismiss, "") },
+                onDismissRequest = { events.send(dismiss, "") },
                 // Each with a Material text button's padding around its label.
                 confirmButton = { key(childKey(c, ci)) { IsoNode(c, Modifier.padding(horizontal = 12.dp, vertical = 8.dp), boundedW = false, boundedH = false) } },
                 dismissButton = { key(childKey(d, di)) { IsoNode(d, Modifier.padding(horizontal = 12.dp, vertical = 8.dp), boundedW = false, boundedH = false) } },
@@ -2450,7 +2475,7 @@ private fun IsoPresentation(n: UNode) {
             return
         }
         AlertDialog(
-            onDismissRequest = { sendEvent(dismiss, "") },
+            onDismissRequest = { events.send(dismiss, "") },
             confirmButton = {},
             title = if (title.isEmpty()) null else ({ Text(title) }),
             text = {
@@ -2519,7 +2544,7 @@ private fun IsoPresentation(n: UNode) {
             val right = with(density) { sides.getRight(density, direction).toDp() }
             key(compactHeight) {
             ModalBottomSheet(
-                onDismissRequest = { sendEvent(dismiss, "") },
+                onDismissRequest = { events.send(dismiss, "") },
                 // Below the status bar, as a sheet sits on a phone.
                 modifier = Modifier.statusBarsPadding().absolutePadding(left = left, right = right).padding(top = 8.dp),
                 containerColor = ground,
@@ -2529,7 +2554,7 @@ private fun IsoPresentation(n: UNode) {
                 ),
                 dragHandle = if (grabber) ({ BottomSheetDefaults.DragHandle() }) else null,
             ) {
-                if (noDismiss) BackHandler { sendEvent(dismiss, "") }
+                if (noDismiss) BackHandler { events.send(dismiss, "") }
                 // The sheet sits below the status bar and pads for the
                 // navigation bar itself: nothing inside takes a safe area.
                 CompositionLocalProvider(LocalSafeArea provides EdgeInsets(), LocalGround provides ground) {
@@ -2614,6 +2639,7 @@ internal fun styledRuns(text: String, encoded: String): AnnotatedString = buildA
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun IsoContextMenuBox(n: UNode, m: Modifier, bw: Boolean, bh: Boolean) {
+    val events = LocalIsoEvents.current
     val params = n.json.optJSONObject("params") ?: JSONObject()
     val items = decodeRowActions(params.optString("ctxitems"))
     val id = params.optString("ctxmenu")
@@ -2627,7 +2653,7 @@ private fun IsoContextMenuBox(n: UNode, m: Modifier, bw: Boolean, bh: Boolean) {
                 DropdownMenuItem(
                     text = { Text(item.title, color = if (item.destructive) MaterialTheme.colorScheme.error else Color.Unspecified) },
                     leadingIcon = Symbols.table[item.symbol]?.let { sym -> { Icon(symbolVector(sym), contentDescription = null) } },
-                    onClick = { open = false; sendEvent(id, "${item.index}") },
+                    onClick = { open = false; events.send(id, "${item.index}") },
                 )
             }
         }
@@ -2706,6 +2732,7 @@ private fun Modifier.onLongPressObserving(onLongPress: () -> Unit): Modifier = p
  *  show in the space it leaves; a full swipe performs the first one. */
 @Composable
 private fun IsoSwipeRow(n: UNode, m: Modifier, bw: Boolean, bh: Boolean) {
+    val events = LocalIsoEvents.current
     val params = n.json.optJSONObject("params") ?: JSONObject()
     val leading = decodeRowActions(params.optString("swipeLeading"))
     val trailing = decodeRowActions(params.optString("swipeTrailing"))
@@ -2715,7 +2742,7 @@ private fun IsoSwipeRow(n: UNode, m: Modifier, bw: Boolean, bh: Boolean) {
     val buttonWidth = 84f * density
     var offset by remember { mutableStateOf(0f) }
     var rowWidth by remember { mutableStateOf(0f) }
-    val perform: (RowAction) -> Unit = { offset = 0f; sendEvent(id, "${it.index}") }
+    val perform: (RowAction) -> Unit = { offset = 0f; events.send(id, "${it.index}") }
     Box(m.fillMaxWidth().onSizeChanged { rowWidth = it.width.toFloat() }.pointerInput(leading, trailing) {
         detectHorizontalDragGestures(
             onDragEnd = {
@@ -2782,6 +2809,7 @@ private val LocalInScroll = compositionLocalOf { false }
  *  up, as a chat log does). */
 @Composable
 private fun IsoVerticalScroll(n: UNode, m: Modifier, bw: Boolean) {
+    val events = LocalIsoEvents.current
     val params = n.json.optJSONObject("params")
     val column = n.children.singleOrNull()
     if (params?.optString("list") == "1" && column != null &&
@@ -2862,7 +2890,7 @@ private fun IsoVerticalScroll(n: UNode, m: Modifier, bw: Boolean) {
             }.collect { value ->
                 if (value.isNotEmpty() && value != reported) {
                     reported = value
-                    sendEvent(geometryId, value)
+                    events.send(geometryId, value)
                 }
             }
         }
@@ -2896,6 +2924,7 @@ private fun ReportScrollPhase(
     state: androidx.compose.foundation.gestures.ScrollableState,
     interactions: androidx.compose.foundation.interaction.InteractionSource,
 ) {
+    val events = LocalIsoEvents.current
     if (phaseId.isEmpty()) return
     LaunchedEffect(state, phaseId) {
         var dragging by mutableStateOf(false)
@@ -2918,7 +2947,7 @@ private fun ReportScrollPhase(
             if (drag) afterDrag = true else if (!scrolling) afterDrag = false
             if (phase != reported) {
                 reported = phase
-                sendEvent(phaseId, phase)
+                events.send(phaseId, phase)
             }
         }
     }
@@ -2962,6 +2991,7 @@ internal fun childKey(c: UNode, index: Int): Any {
  *  (opens at the end and follows growth until the reader scrolls up). */
 @Composable
 private fun IsoLazyList(n: UNode, column: UNode, m: Modifier, bw: Boolean) {
+    val events = LocalIsoEvents.current
     val params = n.json.optJSONObject("params")
     val request = params?.optString("scrollTo") ?: ""
     val bottomAnchored = params?.optString("anchor") == "bottom"
@@ -3007,7 +3037,7 @@ private fun IsoLazyList(n: UNode, column: UNode, m: Modifier, bw: Boolean) {
             }.collect { value ->
                 if (value.isNotEmpty() && value != reported) {
                     reported = value
-                    sendEvent(windowId, value)
+                    events.send(windowId, value)
                 }
             }
         }
@@ -3056,7 +3086,7 @@ private fun IsoLazyList(n: UNode, column: UNode, m: Modifier, bw: Boolean) {
             }.collect { value ->
                 if (value.isNotEmpty() && value != reported) {
                     reported = value
-                    sendEvent(geometryId, value)
+                    events.send(geometryId, value)
                 }
             }
         }
@@ -3569,6 +3599,7 @@ private fun IsoInsetStack(n: UNode, m: Modifier, bw: Boolean, bh: Boolean) {
  *  else in the bar keeps iOS's row (false). */
 @Composable
 private fun MaterialBottomBar(n: UNode, m: Modifier, bw: Boolean, bh: Boolean): Boolean {
+    val events = LocalIsoEvents.current
     val params = n.json.optJSONObject("params") ?: return false
     val kinds = params.optString("bottomBar").takeIf { it.isNotEmpty() }?.split("\n") ?: return false
     if (params.optString("inset") != "bottom" || n.children.size != 2) return false
@@ -3619,9 +3650,9 @@ private fun MaterialBottomBar(n: UNode, m: Modifier, bw: Boolean, bh: Boolean): 
             }
             val place = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 16.dp + safe.bottom)
             if (label.isNotEmpty()) {
-                ExtendedFloatingActionButton(onClick = { sendEvent(tap, "") }, modifier = place, icon = icon, text = { Text(label) })
+                ExtendedFloatingActionButton(onClick = { events.send(tap, "") }, modifier = place, icon = icon, text = { Text(label) })
             } else {
-                FloatingActionButton(onClick = { sendEvent(tap, "") }, modifier = place) { icon() }
+                FloatingActionButton(onClick = { events.send(tap, "") }, modifier = place) { icon() }
             }
         }
     }
@@ -3632,6 +3663,7 @@ private fun MaterialBottomBar(n: UNode, m: Modifier, bw: Boolean, bh: Boolean): 
  *  around the guest's search field. */
 @Composable
 private fun MaterialSearchBar(field: UNode, modifier: Modifier) {
+    val events = LocalIsoEvents.current
     val j = field.json
     val value = j.optString("v")
     Row(
@@ -3654,7 +3686,7 @@ private fun MaterialSearchBar(field: UNode, modifier: Modifier) {
             }
         }
         if (value.isNotEmpty()) {
-            IconButton(onClick = { sendEvent(j.optString("edit"), "") }) {
+            IconButton(onClick = { events.send(j.optString("edit"), "") }) {
                 Icon(Icons.Filled.Close, contentDescription = "Clear the search", tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else {
@@ -3693,8 +3725,15 @@ private fun findLabel(n: UNode): String {
     return ""
 }
 
+/** Draws a tree, its node events going to [events]: the app's own by
+ *  default, or those of a tree of its own (an [IsoTreeState]'s). */
 @Composable
-fun IsoRoot(root: UNode) {
+fun IsoRoot(root: UNode, events: IsoEvents = LocalIsoEvents.current) {
+    androidx.compose.runtime.CompositionLocalProvider(LocalIsoEvents provides events) { IsoRootContent(root) }
+}
+
+@Composable
+private fun IsoRootContent(root: UNode) {
     val presented = root.json.optString("k") == "stack" && root.json.optString("axis") == "z" &&
         root.children.size > 1 && root.children.drop(1).all { it.json.optString("k") == "presentation" }
     val content = if (presented) root.children[0] else root
@@ -3741,7 +3780,7 @@ private class OverChildrenPointerNode(handler: suspend PointerInputScope.() -> U
  *  view drawn moved or zoomed inside it (`.offset`/`.scaleEffect`) takes the
  *  taps wherever it is drawn, as SwiftUI hit-tests it. A tap that turns into
  *  a drag or pinch (consumed by guestGestures) doesn't count. */
-private fun Modifier.doubleTap(id: String): Modifier = pointerInputOverChildren(id) {
+private fun Modifier.doubleTap(id: String, events: IsoEvents): Modifier = pointerInputOverChildren(id) {
     suspend fun AwaitPointerEventScope.tapUp(down: PointerInputChange): Boolean {
         while (true) {
             val event = awaitPointerEvent()
@@ -3757,7 +3796,7 @@ private fun Modifier.doubleTap(id: String): Modifier = pointerInputOverChildren(
             awaitFirstDown(requireUnconsumed = false)
         } ?: return@awaitEachGesture
         if ((second.position - first.position).getDistance() > viewConfiguration.touchSlop * 4) return@awaitEachGesture
-        if (tapUp(second)) sendEvent(id, "")
+        if (tapUp(second)) events.send(id, "")
     }
 }
 
@@ -3767,11 +3806,11 @@ private fun Modifier.doubleTap(id: String): Modifier = pointerInputOverChildren(
  *  the last finger lifts. The gesture then owns the pointers (as a SwiftUI
  *  gesture does over a scroll view it sits in). */
 /** A guest's long press, reported as the web's is (see the caller). */
-private fun Modifier.guestLongPress(id: String, minSeconds: Double, maxDistance: Float): Modifier =
+private fun Modifier.guestLongPress(events: IsoEvents, id: String, minSeconds: Double, maxDistance: Float): Modifier =
     pointerInput(id, minSeconds, maxDistance) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
-            sendEvent(id, "press:1")
+            events.send(id, "press:1")
             val limit = maxDistance * density
             // Within the time: lifted, or strayed (true); held: null.
             val endedEarly = withTimeoutOrNull((minSeconds * 1000).toLong()) {
@@ -3782,14 +3821,14 @@ private fun Modifier.guestLongPress(id: String, minSeconds: Double, maxDistance:
                 true
             }
             if (endedEarly == null) {
-                sendEvent(id, "fire")
+                events.send(id, "fire")
                 while (awaitPointerEvent().changes.any { it.pressed }) {}
             }
-            sendEvent(id, "press:0")
+            events.send(id, "press:0")
         }
     }
 
-private fun Modifier.guestGestures(dragID: String, magnifyID: String): Modifier = pointerInputOverChildren(dragID + "|" + magnifyID) {
+private fun Modifier.guestGestures(events: IsoEvents, dragID: String, magnifyID: String): Modifier = pointerInputOverChildren(dragID + "|" + magnifyID) {
     awaitEachGesture {
         awaitFirstDown(requireUnconsumed = false)
         var zoom = 1f
@@ -3805,14 +3844,14 @@ private fun Modifier.guestGestures(dragID: String, magnifyID: String): Modifier 
                 active = pinching || dragging
             }
             if (active) {
-                if (magnifyID.isNotEmpty()) sendEvent(magnifyID, "changed:$zoom")
-                if (dragID.isNotEmpty()) sendEvent(dragID, "changed:${pan.x / density},${pan.y / density}")
+                if (magnifyID.isNotEmpty()) events.send(magnifyID, "changed:$zoom")
+                if (dragID.isNotEmpty()) events.send(dragID, "changed:${pan.x / density},${pan.y / density}")
                 event.changes.forEach { it.consume() }
             }
         } while (event.changes.any { it.pressed })
         if (active) {
-            if (magnifyID.isNotEmpty()) sendEvent(magnifyID, "ended:$zoom")
-            if (dragID.isNotEmpty()) sendEvent(dragID, "ended:${pan.x / density},${pan.y / density}")
+            if (magnifyID.isNotEmpty()) events.send(magnifyID, "ended:$zoom")
+            if (dragID.isNotEmpty()) events.send(dragID, "ended:${pan.x / density},${pan.y / density}")
         }
     }
 }

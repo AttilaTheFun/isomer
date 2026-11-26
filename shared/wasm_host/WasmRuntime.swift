@@ -123,6 +123,48 @@ extension WasmRuntime {
     public func release() {}
 }
 
+/// An engine that can run a feature linked as a side module over a runtime
+/// module (docs/side_modules.md): `launch` starts the runtime module, then
+/// `loadSideModule` places the feature in its memory and table and runs its
+/// constructors, before the feature starts (`iso_hot_start`).
+/// `WasmKitRuntime` (interpreted) and `MixedWasmKitRuntime` (mixed mode) are
+/// two.
+@MainActor
+public protocol WasmSideModuleRuntime: WasmRuntime {
+    /// Loads `wasm`, a side module, over the launched runtime module.
+    func loadSideModule(wasm: [UInt8]) throws
+}
+
+/// The runtime module a host runs side-module features over (a bundle of
+/// kind `.sideModule(runtime:)`), given to `WasmFeatureRuntime` (and the
+/// views over it) once: its name, which a side module's bundle names; where
+/// its bytes are; and the engine to make for each launch.
+///
+/// A side module can't be unloaded, so each bundle loaded (a reload too) is
+/// a new engine with the runtime module launched again in it, and only the
+/// side module differs. The engine modules make the usual ones:
+/// `WasmRuntimeModule.interpreted(…)` (IsomerWasmKitRuntime) and
+/// `.mixed(…)` (IsomerMixedRuntime: native code while the process's native
+/// part is free, interpreted otherwise).
+public struct WasmRuntimeModule {
+    /// The runtime build's name: a side module's bundle names the runtime
+    /// module it was linked against (`.sideModule(runtime:)`).
+    public var name: String
+    /// Where the runtime module's bytes are: read at each launch, not kept.
+    public var source: WasmModuleSource
+    /// Makes the engine for one launch, after the running engine was
+    /// released (so one holding what a process has one of finds it free).
+    public var makeEngine: @MainActor () -> any WasmSideModuleRuntime
+
+    public init(
+        name: String, source: WasmModuleSource, engine: @escaping @MainActor () -> any WasmSideModuleRuntime
+    ) {
+        self.name = name
+        self.source = source
+        self.makeEngine = engine
+    }
+}
+
 /// The engine registration point: the host app picks the wasm engine once
 /// (e.g. at startup), and everything that launches features
 /// (`WasmFeatureRuntime`) makes fresh instances through it. Third-party
