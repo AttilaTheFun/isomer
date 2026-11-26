@@ -670,7 +670,10 @@ final class MixedGuest: @unchecked Sendable {
     }
 
     func setUp(runtime runtimeBytes: [UInt8]) throws {
-        let engine = Engine(configuration: EngineConfiguration(stackSize: stackSize, memoryBoundsChecking: .mprotect))
+        var configuration = EngineConfiguration(stackSize: stackSize, memoryBoundsChecking: .mprotect)
+        // The features its runtime module was parsed with (WasmKitModules).
+        WasmKitModules.useFeatures(in: &configuration)
+        let engine = Engine(configuration: configuration)
         let store = Store(engine: engine)
         let b = MixedBridge(engine: engine, store: store)
         mixedBridge = b
@@ -678,7 +681,9 @@ final class MixedGuest: @unchecked Sendable {
         let wasi = try WASIBridgeToHost(args: ["app"])
         self.wasi = wasi
 
-        let runtimeModule = try parseWasm(bytes: runtimeBytes)
+        // Parsed once a process (WasmKitModules): a reload of the same
+        // runtime module skips most of its launch.
+        let runtimeModule = try WasmKitModules.module(runtimeBytes)
         var imports = Imports()
         wasi.link(to: &imports, store: store)
         bindHostImports(for: runtimeModule, into: &imports, store: store)
