@@ -41,10 +41,11 @@
 #   never a proof); bazel8, bazel8-apple. A broken Apple main is said in an
 #   issue (apple-failed).
 # - by hand (`run:`): verify (the builds and tests, no proof: verify,
-#   verify-apple, verify-windows, container-verify, apple,
-#   android); proof (the screenshot proof alone: proof, proof-apple,
-#   proof-android, proof-shoot, proof-compare); prerelease (main: the
-#   Alphas, alpha-apple and alpha, signed with the `release` environment's
+#   verify-apple, verify-windows, container-verify, apple (iphone),
+#   apple (mac), android); proof (the screenshot proof alone: proof,
+#   verify-apple, proof-android, proof-shoot, the apple jobs,
+#   proof-compare); prerelease (main: the Alphas, built by apple (mac) and
+#   signed by alpha with the `release` environment's
 #   keys by build_tools' `sign` and drafted); release (main: verify's
 #   jobs and the proof, then the Alphas and a draft proposed for release;
 #   the one run that proves and verifies at once, which tools/ci/verified.sh
@@ -496,18 +497,30 @@ jobs:
           path: .ci/platforms/headful
           retention-days: 3
 
+  # Every Apple app a run tests or pictures, built on one Nimbus runner in
+  # one Bazel output base: verify's (the test apps, the headful apps and
+  # their tests) and the proof's (its stage build, proof-apple's until the
+  # two were folded together). They run in the apple jobs: the iPhone's
+  # pictures on agent-sim's phones, everything else of the iPhone's and the
+  # Mac's in one macOS VM.
   verify-apple:
-    if: github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release')
+    if: github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release' || inputs.run == 'proof')
     runs-on: [self-hosted, isomer-ci]
     timeout-minutes: 180
     env:
       ISOMER_PLATFORMS: apple
+      PROOF_KIND: ${{ inputs.kind || 'full' }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          # A quick proof's stories include those of the story files a branch touches.
+          fetch-depth: 0
       - uses: ./.github/actions/nimbus_bazel
-      - name: Build, on Linux (the Mac's tests run in the apple job's VMs)
-        run: exec tools/ci/container_build.sh
+      - name: Build, on Linux
+        if: inputs.run != 'proof'
+        run: tools/ci/container_build.sh
       - uses: actions/upload-artifact@v4
+        if: inputs.run != 'proof'
         with:
           name: apple-test-apps
           path: |
@@ -516,10 +529,34 @@ jobs:
             .ci/platforms/*webview_ios*.ipa
           retention-days: 3
       - uses: actions/upload-artifact@v4
+        if: inputs.run != 'proof'
         with:
           name: headful-apps-apple
           path: .ci/platforms/headful
           retention-days: 3
+      - name: The proof's iPhone and Mac apps, on Linux
+        if: inputs.run != 'verify'
+        run: >-
+          tools/ci/proof.sh --stage build --platform ios,macos --kind "$PROOF_KIND"
+          --apps "$RUNNER_TEMP/proof-apps" --review "$RUNNER_TEMP/proof-review"
+      - uses: actions/upload-artifact@v4
+        if: inputs.run != 'verify'
+        with:
+          name: proof-apps-ios
+          path: ${{ runner.temp }}/proof-apps/ios
+          retention-days: 1
+      - uses: actions/upload-artifact@v4
+        if: inputs.run != 'verify'
+        with:
+          name: proof-apps-macos
+          path: ${{ runner.temp }}/proof-apps/macos
+          retention-days: 1
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && inputs.run != 'verify' }}
+        with:
+          name: proof-part-build-apple
+          path: ${{ runner.temp }}/proof-review
+          retention-days: 7
 
   verify-windows:
     if: github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release')
@@ -573,71 +610,162 @@ jobs:
           ISOMER_EXECUTION_LOGS: ${{ runner.temp }}/execution-logs
         run: exec tools/ci/container_build.sh headful
 
-  apple:
-    # The iPhone and Mac Storybooks' tests in Nimbus' macOS VMs (Xcode
-    # 27.2), two at once, as many as Nimbus lends: a job on a Nimbus runner
-    # leasing one each (.github/actions/mac_vm), against the apps
-    # verify-apple built on Linux, with their tests beside them. The
-    # iPhone's: the pictures (tools/ci/hosted_apple_test.sh: a simulator
-    # made for the run, and the Mac's own screen) and the Storybook's tests
-    # headful (tools/ci/hosted_headful_test.sh) driving the iPhone app
-    # (ios). The Mac's: the tests hosted in the iPhone app (hosted), those
-    # driving the Mac app (macos), and mixed mode's render tests on the Mac
-    # (built by Bazel in the VM, as container_build.sh ran them on a Mac).
+  # The Apple apps tested and pictured, two jobs a run, one macOS VM at most
+  # (Nimbus lends two VMs to everyone): what an iPhone simulator does on
+  # agent-sim's phones in a Linux container, everything that needs macOS
+  # in one VM. Named apple (…), which tools/ci/verified.sh asks for.
+  apple-iphone:
+    # The iPhone's pictures on an agent-sim phone (its `xcrun simctl`, on a
+    # Nimbus runner with Apple's runtime, `[self-hosted, isomer-ios]`):
+    # the test stories (tools/ci/hosted_apple_test.sh's iPhone half, the
+    # web-view app's too) at verify, the proof's at a proof.
+    name: apple (iphone)
     needs: verify-apple
-    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release') }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - part: iphone
-            pictures: "true"
-            headful: ios
-            mixed: "false"
-          - part: mac
-            pictures: "false"
-            headful: hosted macos
-            mixed: "true"
-    runs-on: [self-hosted, isomer-ci]
-    timeout-minutes: 180
+    if: ${{ !cancelled() && needs.verify-apple.result == 'success' }}
+    runs-on: [self-hosted, isomer-ios]
+    timeout-minutes: 120
+    env:
+      PROOF_KIND: ${{ inputs.kind || 'full' }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
+        if: inputs.run != 'proof'
         with:
           name: apple-test-apps
           path: .ci/apple
       - uses: actions/download-artifact@v4
+        if: inputs.run != 'verify'
+        with:
+          name: proof-apps-ios
+          path: ${{ runner.temp }}/apps/ios
+      - name: A phone
+        run: agent-sim phones up 1
+      - name: The iPhone Storybook's test stories
+        if: inputs.run != 'proof'
+        env:
+          HOSTED_APPLE_PLATFORMS: ios
+        run: >-
+          tools/ci/hosted_apple_test.sh "$(ls .ci/apple/*storybook_ios*.ipa | head -1)" ""
+          .ci/platform-tests/apple "$(ls .ci/apple/*webview_ios*.ipa 2>/dev/null | head -1)"
+      - name: The proof's iPhone pictures
+        if: ${{ !cancelled() && inputs.run != 'verify' }}
+        run: >-
+          tools/ci/proof.sh --stage shoot --platform ios --kind "$PROOF_KIND"
+          --apps "$RUNNER_TEMP/apps" --review "$RUNNER_TEMP/review"
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && inputs.run != 'proof' }}
+        with:
+          name: platform-tests-apple-iphone
+          path: .ci/platform-tests/apple
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && inputs.run != 'verify' }}
+        with:
+          name: proof-part-ios
+          path: ${{ runner.temp }}/review
+          retention-days: 7
+
+  apple-mac:
+    # Everything that needs macOS, in one Nimbus macOS VM (Xcode 27.2) this
+    # job leases (.github/actions/mac_vm): at verify, the Mac's test stories
+    # (tools/ci/hosted_apple_test.sh's Mac half, its own screen), the
+    # Storybook's headful tests (tools/ci/hosted_headful_test.sh: driving
+    # the iPhone app, hosted in it, driving the Mac app; their runner a Mac
+    # command, as verify-apple built it) and mixed mode's render tests on
+    # the Mac (built by Bazel in the VM); at a proof, the proof's Mac
+    # pictures; at a prerelease or release, then, the Alphas, built with
+    # Xcode for its own rendering of their icons (unsigned, without the
+    # builder's values: alpha stamps and signs them on GitHub's runner).
+    name: apple (mac)
+    needs: [verify-apple, alpha-version]
+    if: >-
+      ${{ !cancelled() && github.event_name == 'workflow_dispatch' &&
+      (needs.verify-apple.result == 'success' || (inputs.run == 'prerelease' && needs.verify-apple.result == 'skipped')) &&
+      (needs.alpha-version.result == 'success' || needs.alpha-version.result == 'skipped') &&
+      (inputs.run == 'verify' || inputs.run == 'proof' || inputs.run == 'prerelease' || inputs.run == 'release') }}
+    runs-on: [self-hosted, isomer-ci]
+    timeout-minutes: 240
+    env:
+      TESTS: ${{ (inputs.run == 'verify' || inputs.run == 'release') && 'true' || 'false' }}
+      PROOF: ${{ (inputs.run == 'proof' || inputs.run == 'release') && 'true' || 'false' }}
+      ALPHA: ${{ (inputs.run == 'prerelease' || inputs.run == 'release') && 'true' || 'false' }}
+      PROOF_KIND: ${{ inputs.kind || 'full' }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Version
+        if: env.ALPHA == 'true'
+        env:
+          VERSION: ${{ needs.alpha-version.outputs.version }}
+        run: tools/ci/stamp_apps.sh "$VERSION"
+      - uses: actions/download-artifact@v4
+        if: env.TESTS == 'true'
+        with:
+          name: apple-test-apps
+          path: .ci/apple
+      - uses: actions/download-artifact@v4
+        if: env.TESTS == 'true'
         with:
           name: headful-apps-apple
           path: .ci/headful
-      - name: The Storybook's tests, in a macOS VM
+      - uses: actions/download-artifact@v4
+        if: env.PROOF == 'true'
+        with:
+          name: proof-apps-macos
+          path: .ci/proof-apps/macos
+      - name: The Mac's tests and pictures, and the Alphas, in a macOS VM
         uses: ./.github/actions/mac_vm
         with:
+          git: "true"
           env: |
-            PICTURES=${{ matrix.pictures }}
-            HEADFUL_APPLE_PARTS=${{ matrix.headful }}
-            MIXED=${{ matrix.mixed }}
-          out: .ci/platform-tests
+            TESTS=${{ env.TESTS }}
+            PROOF=${{ env.PROOF }}
+            ALPHA=${{ env.ALPHA }}
+            PROOF_KIND=${{ env.PROOF_KIND }}
+            PUBLISHED_APPLE=${{ env.PUBLISHED_APPLE }}
+          out: .ci/platform-tests .ci/proof-review .ci/packages
           run: |
             status=0
-            if [ "$PICTURES" = true ]; then
-              tools/ci/hosted_apple_test.sh "$(ls .ci/apple/*storybook_ios*.ipa | head -1)" \
-                "$(ls .ci/apple/*storybook_macos*.zip | head -1)" .ci/platform-tests/apple \
-                "$(ls .ci/apple/*webview_ios*.ipa 2>/dev/null | head -1)" || status=1
-            fi
-            tools/ci/hosted_headful_test.sh apple "$(ls .ci/headful/*storybook_ios*.ipa | head -1)" \
-              "$(ls .ci/headful/*storybook_macos*.zip | head -1)" .ci/platform-tests/apple/headful || status=1
-            if [ "$MIXED" = true ]; then
+            if [ "$TESTS" = true ]; then
+              HOSTED_APPLE_PLATFORMS=macos tools/ci/hosted_apple_test.sh "" \
+                "$(ls .ci/apple/*storybook_macos*.zip | head -1)" .ci/platform-tests/apple || status=1
+              tools/ci/hosted_headful_test.sh apple "$(ls .ci/headful/*storybook_ios*.ipa | head -1)" \
+                "$(ls .ci/headful/*storybook_macos*.zip | head -1)" .ci/platform-tests/apple/headful || status=1
               (cd examples && bazel test --test_output=errors //tests/side_modules:mixed_render_test \
                 //tests/side_modules:mixed_interpreted_render_test) || status=1
             fi
+            if [ "$PROOF" = true ]; then
+              tools/ci/proof.sh --stage shoot --platform macos --kind "$PROOF_KIND" \
+                --apps "$PWD/.ci/proof-apps" --review "$PWD/.ci/proof-review" || status=1
+            fi
+            if [ "$ALPHA" = true ]; then
+              ISOMER_PLATFORMS=apple tools/ci/container_build.sh package .ci/packages --config=alpha $=PUBLISHED_APPLE || status=1
+            fi
             exit $status
       - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && env.TESTS == 'true' }}
         with:
-          name: platform-tests-apple-${{ matrix.part }}
+          name: platform-tests-apple-mac
           path: .ci/platform-tests/apple
           retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && env.PROOF == 'true' }}
+        with:
+          name: proof-part-macos
+          path: .ci/proof-review
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: env.ALPHA == 'true'
+        with:
+          name: alpha-apple
+          path: |
+            .ci/packages/*.ipa
+            .ci/packages/*.zip
+          retention-days: 1
+          if-no-files-found: error
 
   android:
     # The Android Storybook's tests on GitHub's own Ubuntu runner, Android 13
@@ -719,36 +847,6 @@ jobs:
           path: ${{ runner.temp }}/proof-review
           retention-days: 7
 
-  proof-apple:
-    if: github.event_name == 'workflow_dispatch' && (inputs.run == 'release' || inputs.run == 'proof')
-    runs-on: [self-hosted, isomer-ci]
-    timeout-minutes: 180
-    env:
-      PROOF_KIND: ${{ inputs.kind || 'full' }}
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - uses: ./.github/actions/nimbus_bazel
-      - name: The iPhone and Mac apps built, on Linux
-        run: exec tools/ci/proof.sh --stage build --platform ios,macos --kind "$PROOF_KIND" --apps "$RUNNER_TEMP/proof-apps" --review "$RUNNER_TEMP/proof-review"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: proof-apps-ios
-          path: ${{ runner.temp }}/proof-apps/ios
-          retention-days: 1
-      - uses: actions/upload-artifact@v4
-        with:
-          name: proof-apps-macos
-          path: ${{ runner.temp }}/proof-apps/macos
-          retention-days: 1
-      - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
-        with:
-          name: proof-part-build-apple
-          path: ${{ runner.temp }}/proof-review
-          retention-days: 7
-
   proof-android:
     if: github.event_name == 'workflow_dispatch' && (inputs.run == 'release' || inputs.run == 'proof')
     runs-on: ubuntu-24.04
@@ -783,33 +881,20 @@ jobs:
           path: ${{ runner.temp }}/proof-review
           retention-days: 7
 
-  # The proof pictured (tools/ci/proof.sh --stage shoot, tools/proof/proof.py
-  # --here): the iPhone (a simulator made for the run) and the Mac in Nimbus'
-  # macOS VMs (Xcode 27.2), from a job on a Nimbus runner that leases one
-  # (.github/actions/mac_vm); the Android Storybook under Waydroid on
-  # GitHub's Ubuntu's own kernel (ISOMER_ANDROID_PHONE: emulator for the
-  # emulator on its KVM), the web in its Chrome. Each its own part,
-  # whatever came back: a broken screen is what the proof is for.
+  # The proof pictured on GitHub's own Ubuntu runners (tools/ci/proof.sh
+  # --stage shoot, tools/proof/proof.py --here): the Android Storybook under
+  # Waydroid on the runner's own kernel (ISOMER_ANDROID_PHONE: emulator for
+  # the emulator on its KVM), the web in its Chrome. The iPhone's and the
+  # Mac's are the apple jobs'. Each its own part, whatever came back: a
+  # broken screen is what the proof is for.
   proof-shoot:
-    needs: [proof, proof-apple, proof-android]
+    needs: [proof, proof-android]
     if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.run == 'release' || inputs.run == 'proof') }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: ios
-            runner: [self-hosted, isomer-ci]
-            vm: true
-          - platform: macos
-            runner: [self-hosted, isomer-ci]
-            vm: true
-          - platform: android
-            runner: ubuntu-24.04
-            vm: false
-          - platform: web
-            runner: ubuntu-24.04
-            vm: false
-    runs-on: ${{ matrix.runner }}
+        platform: [android, web]
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
       ISOMER_ANDROID_PHONE: waydroid
@@ -822,26 +907,11 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: proof-apps-${{ matrix.platform }}
-          path: ${{ matrix.vm && '.ci/proof-apps' || format('{0}/apps', runner.temp) }}/${{ matrix.platform == 'android' && 'hosted/android' || matrix.platform }}
+          path: ${{ runner.temp }}/apps/${{ matrix.platform == 'android' && 'hosted/android' || matrix.platform }}
       - name: The apps pictured here
-        if: ${{ !matrix.vm }}
         run: >-
           exec tools/ci/proof.sh --stage shoot --platform ${{ matrix.platform }} --kind "$PROOF_KIND"
           --apps "$RUNNER_TEMP/apps" --review "$RUNNER_TEMP/review"
-      - name: The apps pictured in a macOS VM
-        if: ${{ matrix.vm }}
-        uses: ./.github/actions/mac_vm
-        with:
-          git: "true"
-          env: |
-            PROOF_KIND=${{ env.PROOF_KIND }}
-          out: .ci/proof-review
-          run: >-
-            tools/ci/proof.sh --stage shoot --platform ${{ matrix.platform }} --kind "$PROOF_KIND"
-            --apps "$PWD/.ci/proof-apps" --review "$PWD/.ci/proof-review"
-      - name: The VM's pictures, where the upload takes them
-        if: ${{ matrix.vm && !cancelled() }}
-        run: mkdir -p "$RUNNER_TEMP/review" && cp -R .ci/proof-review/. "$RUNNER_TEMP/review/"
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
@@ -854,7 +924,7 @@ jobs:
   # back (a missing platform's pictures fail it). Nothing is compared: the
   # job keeps its name, which verified.sh asks for.
   proof-compare:
-    needs: [proof, proof-apple, proof-android, proof-shoot]
+    needs: [proof, verify-apple, proof-android, proof-shoot, apple-iphone, apple-mac]
     if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && (inputs.run == 'release' || inputs.run == 'proof') }}
     runs-on: ubuntu-24.04-arm
     container: ghcr.io/attilathefun/visor-agent@sha256:849dcf6aeb16119e3b769b4f0c410b93ac58ed1e3b3ef2801f7534def3fbaaf0
@@ -917,20 +987,15 @@ jobs:
   # --- By hand on main: a proposal (prerelease, or release once verified) -
 
   # The proposal's version, counted from the releases (drafts too, which
-  # only a token that writes lists), on GitHub's runner: no such token
-  # reaches Nimbus'.
+  # only a token that writes lists), on GitHub's runner at the run's start
+  # (no token that writes reaches Nimbus'): apple (mac) builds the Alphas
+  # at it, alpha signs and drafts them.
   alpha-version:
-    needs: [verify, verify-apple, container-verify, apple, android, proof-compare]
     if: >-
-      always() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
-      (inputs.run == 'prerelease' || (inputs.run == 'release' &&
-      needs.verify.result == 'success' &&
-      needs.verify-apple.result == 'success' && needs.container-verify.result == 'success' &&
-      needs.apple.result == 'success' && needs.android.result == 'success' &&
-      needs.proof-compare.result == 'success'))
+      github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
+      (inputs.run == 'prerelease' || inputs.run == 'release')
     runs-on: ubuntu-24.04
     permissions:
-      # The releases' drafts, which the version is counted from.
       contents: write
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -942,51 +1007,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: tools/ci/stamp_apps.sh
 
-  alpha-apple:
-    # The Apple Alphas, built unsigned (alpha signs them) with Xcode 27.2
-    # in a Nimbus macOS VM, from a job on a Nimbus runner that leases it
-    # (.github/actions/mac_vm): a release's apps carry Xcode's own rendering
-    # of their icons, which the clean-room actool on Linux flattens. At
-    # alpha-version's version, handed on to alpha. Built without the
-    # builder's values (the distributor's app group and bundle ids, the
-    # shared sign-in's keys), which are secrets: alpha stamps them in on
-    # GitHub's runner before it signs (build_tools' `sign apple
-    # --add-infoplist`, `--add-groups`).
-    needs: alpha-version
-    if: ${{ !cancelled() && needs.alpha-version.result == 'success' }}
-    runs-on: [self-hosted, isomer-ci]
-    timeout-minutes: 180
-    outputs:
-      version: ${{ needs.alpha-version.outputs.version }}
-    steps:
-      - uses: actions/checkout@v5
-      - name: Version
-        env:
-          VERSION: ${{ needs.alpha-version.outputs.version }}
-        run: tools/ci/stamp_apps.sh "$VERSION"
-      - name: Build, with Xcode in a macOS VM
-        uses: ./.github/actions/mac_vm
-        with:
-          env: |
-            ISOMER_PLATFORMS=apple
-            PUBLISHED_APPLE=${{ env.PUBLISHED_APPLE }}
-          out: .ci/packages
-          run: tools/ci/container_build.sh package .ci/packages --config=alpha $=PUBLISHED_APPLE
-      - uses: actions/upload-artifact@v4
-        with:
-          name: alpha-apple
-          path: |
-            .ci/packages/*.ipa
-            .ci/packages/*.zip
-          retention-days: 1
-          if-no-files-found: error
-
   alpha:
     # The proposal: Android's Alpha and the site built, every build signed
     # (build_tools' `sign`: a platform whose keys aren't set is
     # skipped, saying so), the draft made and the builds attached.
-    needs: alpha-apple
-    if: ${{ !cancelled() && needs.alpha-apple.result == 'success' }}
+    # A prerelease: the version and apple (mac)'s Alphas. A release: those
+    # once every check and the proof passed.
+    needs: [alpha-version, apple-mac, verify, verify-apple, container-verify, apple-iphone, android, proof-compare]
+    if: >-
+      ${{ !cancelled() && needs.alpha-version.result == 'success' && needs.apple-mac.result == 'success' &&
+      (inputs.run == 'prerelease' || (needs.verify.result == 'success' && needs.verify-apple.result == 'success' &&
+      needs.container-verify.result == 'success' && needs.apple-iphone.result == 'success' &&
+      needs.android.result == 'success' && needs.proof-compare.result == 'success')) }}
     runs-on: ubuntu-24.04
     container:
       image: swift:6.4.2-noble@sha256:23d9b28ad97fb1cf1999edc3a0cb265ee915ed42299a9344e7173d5a6d2b05f4
@@ -1010,7 +1042,7 @@ jobs:
         run: tools/ci/job_tools.sh
       - name: Version
         env:
-          VERSION: ${{ needs.alpha-apple.outputs.version }}
+          VERSION: ${{ needs.alpha-version.outputs.version }}
         run: tools/ci/stamp_apps.sh "$VERSION"
       # The owner's line rule: no proposal on a line that already has a
       # published release (tools/ci/check_version_line.sh), before anything
@@ -1018,7 +1050,7 @@ jobs:
       - name: The version's line is open
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ needs.alpha-apple.outputs.version }}
+          VERSION: ${{ needs.alpha-version.outputs.version }}
         run: tools/ci/check_version_line.sh "$VERSION"
       - uses: ./.github/actions/bazel_cache
         with:
@@ -1126,7 +1158,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           KIND: ${{ inputs.run }}
-          VERSION: ${{ needs.alpha-apple.outputs.version }}
+          VERSION: ${{ needs.alpha-version.outputs.version }}
         run: |
           tools/ci/draft_release.sh "$VERSION" "$KIND" .ci/packages/isomer-site.tar.gz
           tools/ci/attach_release.sh "v$VERSION" "$RUNNER_TEMP/assets"
