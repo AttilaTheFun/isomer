@@ -139,36 +139,6 @@ public final class WasmViewModel: ObservableObject {
         }
     }
 
-    /// The runtime module side-module bundles run over (see
-    /// `WasmFeatureRuntime.runtimeModule`): set once, before the first load
-    /// of one. Its engines get the guest's home and bundle identifier as the
-    /// registry's do (a `WasmKitRuntime`'s; mixed mode's has no home yet).
-    public var runtimeModule: WasmRuntimeModule? {
-        didSet {
-            let home = self.home
-            core.runtimeModule = runtimeModule.map { module in
-                WasmRuntimeModule(name: module.name, source: module.source) {
-                    let made = module.makeEngine()
-                    if let engine = made as? WasmKitRuntime { Self.configure(engine, home: home) }
-                    return made
-                }
-            }
-        }
-    }
-
-    /// A WasmKit engine's guest home: the app's container and identifier,
-    /// or the host's own (`guestHomeDirectory`, made when missing).
-    private static func configure(_ engine: WasmKitRuntime, home: HomeRelay) {
-        if let directory = home.directory {
-            try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
-            engine.homeDirectory = directory
-            engine.bundleIdentifier = home.bundleIdentifier ?? engine.bundleIdentifier
-        } else if engine.homeDirectory == nil {
-            engine.homeDirectory = NSHomeDirectory()
-            engine.bundleIdentifier = engine.bundleIdentifier ?? Bundle.main.bundleIdentifier
-        }
-    }
-
     /// The small assets shipped with the running bundle, keyed by relative path.
     public var assets: [String: Data] { core.assets }
 
