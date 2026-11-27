@@ -734,6 +734,8 @@ def isomer_android_app(
         bound_libraries = [],
         wasm_view = False,
         permissions = [],
+        queries_packages = [],
+        queries_intents = [],
         uses_cleartext_traffic = False,
         version_name = None,
         version_code = None,
@@ -786,6 +788,14 @@ def isomer_android_app(
     the app's Kotlin loads (@isomer_android//wasm_view:engine_native,
     WasmKit for WasmView). `extra_application` is manifest XML placed
     inside `<application>`: a second activity the app's Kotlin declares.
+    `queries_packages` are the other apps' packages the app looks up
+    through PackageManager (their installed versions): Android 11 and later
+    shows an app only those its manifest's `<queries>` names.
+    `queries_intents` names apps by an intent they answer instead, for an
+    app that can't list them: each a dict of `action`, and optionally
+    `category` and `scheme` (`{"action": "android.intent.action.MAIN",
+    "category": "android.intent.category.LAUNCHER"}`, every app with a
+    launcher entry).
     App-authored host views (`kind` of a PlatformViewRepresentable) are
     composables the services installer puts in `AppHostViews.factories`.
 
@@ -915,6 +925,22 @@ def isomer_android_app(
         for permission in permissions
         if permission not in ["android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE"]
     ])
+    # The other apps the app looks up (PackageManager: their installed
+    # versions, whether they're there): Android 11 and later shows an app
+    # only the packages its manifest's <queries> names, a child of
+    # <manifest>, where the permissions are.
+    if queries_packages or queries_intents:
+        entries = ['\n        <package android:name="%s" />' % package_name for package_name in queries_packages]
+        for intent in queries_intents:
+            # An intent the apps it looks for answer (MAIN in LAUNCHER: any
+            # app with a launcher entry), where it can't name them.
+            lines = ['\n        <intent>', '\n            <action android:name="%s" />' % intent["action"]]
+            if intent.get("category"):
+                lines.append('\n            <category android:name="%s" />' % intent["category"])
+            if intent.get("scheme"):
+                lines.append('\n            <data android:scheme="%s" />' % intent["scheme"])
+            entries.append("".join(lines) + "\n        </intent>")
+        extra_permissions += "\n\n    <queries>" + "".join(entries) + "\n    </queries>"
     application_attrs = ""
     if uses_cleartext_traffic:
         application_attrs = '\n        android:usesCleartextTraffic="true"'

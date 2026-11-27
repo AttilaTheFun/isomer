@@ -156,6 +156,36 @@ library (SwiftUI, Foundation, libswiftCore, libobjc, libSystem), and count
 how many Isomer already provides under the same mangled names. That turns
 "theoretically possible" into a number. After 0.62.
 
+## Dispatch, for apps as they are
+
+Isomer's own code, its examples and its advice use Swift Concurrency
+(`Task`, actors, `@MainActor`), not `DispatchQueue`, and that stays the
+answer for new code. But Isomer's aim is an app's iOS source building for
+the other platforms as it is, and real apps and the libraries they take
+(gRPC callback queues, database executors) use Dispatch. Where it stands:
+
+- **Apple's platforms:** Apple's Dispatch.
+- **Android, Linux and Windows:** the toolchain's libdispatch, whose main
+  queue each host drains (on Android the main looper watches its wake
+  handle), so a library's `DispatchQueue.main.async` runs there.
+- **The web (wasm):** none (`#if canImport(Dispatch)`). Until there is one,
+  code that must build for the web moves its queues to actors and tasks.
+
+The plan, in two steps:
+
+1. **`DispatchQueue` over the host's event loop on single-threaded wasm**:
+   Dispatch's interface (serial and concurrent queues, `async`, `asyncAfter`,
+   groups, work items, `DispatchQueue.main`), its work run on the one thread
+   in order, from the same loop that runs Swift Concurrency's jobs.
+   Concurrency in name only, as a single-threaded reactor has, but the same
+   source builds.
+2. **libdispatch on the threaded wasm target** once Isomer's Swift SDKs
+   have one (wasm32-wasip1-threads, with Swift 6.5's threads support, carried
+   in Isomer's 6.4.2 SDK build ahead of it): queues on the guest's threads,
+   as on Android.
+
+Not started.
+
 ## Also open
 
 - **Partial frames where the renderer draws its own chrome** (the GPU

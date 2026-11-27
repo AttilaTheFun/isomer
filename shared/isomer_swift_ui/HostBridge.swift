@@ -158,12 +158,17 @@ public protocol HostBridge {
     /// A value the host holds, read synchronously ("pasteboard": the system
     /// clipboard's text); nil where it has none or can't say. Default: nil.
     func hostValue(_ key: String) -> String?
+    /// The app's window as it is on screen, a PNG (the Isomer module's
+    /// `IsomerScreenshot.capture()`); nil where the host can't take one.
+    /// Default: nil.
+    func captureScreenshot() async -> [UInt8]?
 }
 
 extension HostBridge {
     public func measureText(_ text: String, fontSize: Double, weight: Int, family: String?, wrapWidth: Double?) -> CGSize {
         measureText(text, fontSize: fontSize, weight: weight, wrapWidth: wrapWidth)
     }
+    public func captureScreenshot() async -> [UInt8]? { nil }
     public func registerImage(_ source: String, bytes: [UInt8]) {}
     /// "env:<NAME>" is the process's environment variable (the runtime's
     /// debug switches: ISO_FRAME_LOG, ISO_RENDER_LOG, ISO_VERIFY_PARTIAL,

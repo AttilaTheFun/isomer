@@ -1369,7 +1369,9 @@ deleting the stub); tools/parity/stubs_skip.txt keeps one out.
 - **The Isomer module** holds what Isomer adds (WebView, MetalView, Map,
   PlatformViewRepresentable and its per-platform refinements, BridgedView,
   `Color.dynamic(light:dark:)`, `swipeGesture`, `onShake` (iOS's shake
-  gesture, Android's accelerometer while a view has one), `cameraCapture`,
+  gesture, Android's accelerometer while a view has one),
+  `IsomerScreenshot.capture()` (the window as a PNG: Apple's renderers,
+  Android's PixelCopy; nil on the web and desktops), `cameraCapture`,
   `VideoPlayer(url:)`, Platform, platform modifiers, JSON, the platform
   bridge) and is the umbrella over the Isomer* modules (shared/isomer/
   Exports.swift). Its names before 0.31, SwiftUIExtensions and

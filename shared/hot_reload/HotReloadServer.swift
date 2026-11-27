@@ -1,17 +1,28 @@
-// A portable hot-reload server for the desktop (Linux / Windows) wasm cells —
-// the cross-platform peer of the macOS `HotReloadServer` (which uses Apple's
-// Network.framework). This one is plain Foundation + BSD sockets, so ONE server
-// process can drive a Linux wasm app and a Windows wasm app at the same time:
+// A hot-reload server for any wasm feature or reactor, on macOS and Linux
+// (and Windows' sockets, not yet exercised): plain Foundation + BSD sockets,
+// so ONE server process can drive an iPhone simulator, an Android emulator,
+// a Linux wasm app and a Windows one at the same time:
 // each polls `GET /version` and re-fetches `GET /wasm` when the build counter
 // bumps. The server watches the reactor's source dir, rebuilds the wasm on every
 // edit, and serves the immutable byte snapshot to any number of clients at once.
 //
-//   bazel run //shared/hot_reload:hot_reload_server
+//   bazel run @isomer//shared/hot_reload:hot_reload_server -- \
+//     --target=//app/feature:feature.wasm --watch=app/feature [--flag=--config=…]
 //
-// Config (env):
-//   ISO_HOT_RELOAD_PORT    listen port (default 8787)
-//   ISO_HOT_RELOAD_TARGET  bazel wasm target (default the full example reactor)
-//   ISO_HOT_RELOAD_WATCH   source dir to watch, workspace-relative
+// From any workspace that depends on isomer: it builds in the workspace it's
+// run from (BUILD_WORKSPACE_DIRECTORY), and finds the output with `bazel
+// cquery --output=files`, so the flags given decide its configuration.
+// Config (arguments, else env):
+//   --port=, ISO_HOT_RELOAD_PORT      listen port (default 8787)
+//   --host=, ISO_HOT_RELOAD_HOST      the address it listens on (default
+//                                     127.0.0.1: this machine alone, which a
+//                                     simulator shares and an Android emulator
+//                                     reaches as 10.0.2.2; 0.0.0.0 for a phone
+//                                     on the network, which can then fetch the
+//                                     module and read /clients)
+//   --target=, ISO_HOT_RELOAD_TARGET  the wasm target (default the full example reactor)
+//   --watch=, ISO_HOT_RELOAD_WATCH    source dir to watch, workspace-relative
+//   --flag= (repeated), ISO_HOT_RELOAD_FLAGS (space-separated)  build flags
 //
 // Endpoints: GET /version -> build counter (text); GET /wasm -> reactor bytes
 // (application/wasm); GET /clients -> recently-polled clients (text).
@@ -21,7 +32,9 @@
 // serial queue — so a multi-second rebuild never blocks a polling client.
 
 import Foundation
-#if canImport(Glibc)
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
 import Glibc
 #elseif canImport(WinSDK)
 import WinSDK
@@ -47,10 +60,22 @@ struct HotReloadServerMain {
             exit(1)
         }
         let env = ProcessInfo.processInfo.environment
-        let port = UInt16(env["ISO_HOT_RELOAD_PORT"] ?? "") ?? 8787
-        let target = env["ISO_HOT_RELOAD_TARGET"] ?? "//examples/wasm/example_full_feature:example_full.wasm"
-        let watch = env["ISO_HOT_RELOAD_WATCH"] ?? "examples/shared/example_application"
-        let server = Server(workspace: workspace, port: port, target: target, watchDir: watch)
+        // Arguments first (`--target=`, `--watch=`, `--port=`, `--host=`,
+        // `--flag=` each a further build flag), then the environment, then the
+        // example's.
+        var arguments: [String: String] = [:]
+        var flags = (env["ISO_HOT_RELOAD_FLAGS"] ?? "").split(separator: " ").map(String.init)
+        for argument in CommandLine.arguments.dropFirst() {
+            guard argument.hasPrefix("--"), let equals = argument.firstIndex(of: "=") else { continue }
+            let key = String(argument[argument.index(argument.startIndex, offsetBy: 2)..<equals])
+            let value = String(argument[argument.index(after: equals)...])
+            if key == "flag" { flags.append(value) } else { arguments[key] = value }
+        }
+        let port = UInt16(arguments["port"] ?? env["ISO_HOT_RELOAD_PORT"] ?? "") ?? 8787
+        let host = arguments["host"] ?? env["ISO_HOT_RELOAD_HOST"] ?? "127.0.0.1"
+        let target = arguments["target"] ?? env["ISO_HOT_RELOAD_TARGET"] ?? "//examples/wasm/example_full_feature:example_full.wasm"
+        let watch = arguments["watch"] ?? env["ISO_HOT_RELOAD_WATCH"] ?? "examples/shared/example_application"
+        let server = Server(workspace: workspace, host: host, port: port, target: target, watchDir: watch, flags: flags)
         server.run()
         dispatchMain()
     }
@@ -95,6 +120,7 @@ final class Clients {
 
 final class Server {
     private let workspace: String
+    private let host: String
     private let port: UInt16
     private let target: String
     private let watchDir: String
@@ -104,18 +130,24 @@ final class Server {
     private let buildQueue = DispatchQueue(label: "hot-reload.build")
     private var lastStamp: TimeInterval = 0
 
-    /// Resolves the target `//pkg:name.wasm` to its bazel-bin artifact path.
-    private var wasmPath: String {
-        let body = target.hasPrefix("//") ? String(target.dropFirst(2)) : target
-        let parts = body.split(separator: ":", maxSplits: 1).map(String.init)
-        let pkg = parts.first ?? ""
-        let name = parts.count > 1 ? parts[1] : pkg
-        return workspace + "/bazel-bin/" + pkg + "/" + name
+    /// Build flags given after the target (a `--config`, a platform).
+    private let flags: [String]
+
+    /// The target's .wasm, as Bazel names it for these flags (`cquery
+    /// --output=files`): not `bazel-bin`'s, which follows whatever
+    /// configuration was built last.
+    private var wasmPath: String? {
+        let (ok, output) = runBazel(["cquery", "--output=files", target] + flags)
+        guard ok else { return nil }
+        guard let file = output.split(separator: "\n").map(String.init).last(where: { $0.hasSuffix(".wasm") }) else { return nil }
+        return file.hasPrefix("/") ? file : workspace + "/" + file
     }
     private var sourceDir: String { workspace + "/" + watchDir }
 
-    init(workspace: String, port: UInt16, target: String, watchDir: String) {
+    init(workspace: String, host: String, port: UInt16, target: String, watchDir: String, flags: [String] = []) {
+        self.flags = flags
         self.workspace = workspace
+        self.host = host
         self.port = port
         self.target = target
         self.watchDir = watchDir
@@ -126,9 +158,9 @@ final class Server {
         rebuild()
         startHTTP()
         startWatching()
-        log("Serving on http://0.0.0.0:\(port) — any number of clients at once.")
+        log("Serving on http://\(host):\(port) — any number of clients at once.")
         log("  Linux / Windows wasm cell:  ISO_HOT_RELOAD_SERVER=http://localhost:\(port)")
-        log("  (a peer on another host uses this machine's LAN IP)")
+        log("  (an Android emulator: http://10.0.2.2:\(port); a phone on the network needs --host=0.0.0.0 and this machine's LAN IP)")
         log("Watching \(sourceDir) — edit a source file and every connected app re-renders.")
     }
 
@@ -160,8 +192,12 @@ final class Server {
             log("Build FAILED (\(elapsed)) — keeping build \(build.version):\n\(result.log)")
             return
         }
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: wasmPath)), !data.isEmpty else {
-            log("Build ok but could not read \(wasmPath)")
+        guard let path = wasmPath else {
+            log("Build ok but bazel cquery named no .wasm for \(target)")
+            return
+        }
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)), !data.isEmpty else {
+            log("Build ok but could not read \(path)")
             return
         }
         build.update(data)
@@ -181,10 +217,10 @@ final class Server {
         return newest
     }
 
-    private func runBazel() -> (ok: Bool, log: String) {
+    private func runBazel(_ arguments: [String]? = nil) -> (ok: Bool, log: String) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["bazel", "build", target]
+        process.arguments = ["bazel"] + (arguments ?? ["build", target] + flags)
         process.currentDirectoryURL = URL(fileURLWithPath: workspace)
         let pipe = Pipe()
         process.standardOutput = pipe
@@ -215,15 +251,23 @@ final class Server {
             _ = setsockopt(listenSocket, SOL_SOCKET, SO_REUSEADDR, p, socklen_t(MemoryLayout<Int32>.size))
         }
         var addr = sockaddr_in()
+        #if canImport(Darwin)
+        addr.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        #endif
         addr.sin_family = sa_family_t(AF_INET)
         addr.sin_port = port.bigEndian
-        addr.sin_addr.s_addr = INADDR_ANY  // 0 — all interfaces (LAN peers can reach it)
+        // The address asked for (`--host=`): loopback by default, so a
+        // machine on a shared network doesn't hand its module to anyone on it.
+        guard inet_pton(AF_INET, host, &addr.sin_addr) == 1 else {
+            log("Not an IPv4 address to listen on: \(host)")
+            exit(2)
+        }
         let bound = withUnsafePointer(to: &addr) { p in
             p.withMemoryRebound(to: sockaddr.self, capacity: 1) { sp in
                 bind(listenSocket, sp, socklen_t(MemoryLayout<sockaddr_in>.size))
             }
         }
-        guard bound == 0 else { log("Failed to bind port \(port)"); exit(1) }
+        guard bound == 0 else { log("Failed to bind \(host):\(port)"); exit(1) }
         guard listen(listenSocket, 64) == 0 else { log("Failed to listen"); exit(1) }
 
         // Accept loop on its own thread; each connection is served concurrently.
@@ -288,9 +332,10 @@ final class Server {
     }
 }
 
-// SOCK_STREAM is an enum on Glibc but a raw Int32 on Windows; normalize.
-#if canImport(WinSDK)
-private let sockStreamType = Int32(SOCK_STREAM)
-#else
+// SOCK_STREAM is an enum on Glibc but a raw Int32 on Darwin and Windows;
+// normalize.
+#if canImport(Glibc)
 private let sockStreamType = Int32(SOCK_STREAM.rawValue)
+#else
+private let sockStreamType = Int32(SOCK_STREAM)
 #endif

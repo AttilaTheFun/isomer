@@ -220,6 +220,42 @@ with the platform too (the archive is linked into the app's library, which
 binds to the platform). With `--config=android_release` the linker drops
 what of the archive the app doesn't reach, as it does Isomer's.
 
+**`swift_import` links its archives whole.** rules_swift's `swift_import`
+links every archive it is given with `alwayslink` (rules_swift 4.3.0, with no
+attribute to turn it off): every object of the archive goes into the app's
+library, whether anything reaches it or not. A library whose archive carries
+objects the app also links another way (generated protobuf code compiled
+into both, say) then fails with duplicate symbols, and one that pulls in
+large unused code keeps it. Give the archive as a `cc_import` instead,
+linked lazily, and the module alone through `swift_import`:
+
+```starlark
+cc_import(
+    name = "greeter_archive",
+    static_library = "android/arm64-v8a/libGreeter.a",
+    # Lazily: only the objects something reaches, as a cc_library's archive.
+    alwayslink = False,
+)
+
+swift_import(
+    name = "greeter",
+    module_name = "Greeter",
+    swiftmodule = "android/arm64-v8a/Greeter.swiftmodule",
+    deps = [":greeter_archive", "@isomer//:foundation"],
+)
+```
+
+Lazily linked, an archive's object the app's code never names is left out,
+so a library that registers itself at load (a static initializer, an
+`@_cdecl` the host looks up by name) must be linked whole, or named by
+something that is.
+
+**Debug information stays in the archive's objects.** The app's link
+carries the objects' DWARF into its unstripped library (what a symbolicated
+crash reads); an archive stripped before it ships leaves the library's
+frames without lines. Ship the objects with their debug information, and
+let the app's release build strip its own `.so` as it does Isomer's.
+
 **The `.swiftinterface`, not yet through Bazel on Android.** rules_swift's
 `swift_import(swiftinterface = ...)` compiles the interface into a module
 with its SwiftCompileModuleInterface action, which rules_swift 4.2.2's
