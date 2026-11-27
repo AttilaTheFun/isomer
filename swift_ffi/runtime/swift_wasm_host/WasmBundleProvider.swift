@@ -84,18 +84,34 @@ public enum WasmModuleSource: Sendable, Hashable {
         let seeked = fseeko(file, off_t(offset), SEEK_SET)
         #endif
         guard seeked == 0 else { throw ReadError(path: path, reason: "it has no offset \(offset)") }
+        // A region of known length (an asset in its APK): read straight into
+        // one buffer of that size, the module held once.
+        if let length {
+            var got = 0
+            let bytes = [UInt8](unsafeUninitializedCapacity: length) { buffer, count in
+                // (Unwrapped: a buffer of a non-zero length has an address,
+                // and fread's isn't optional.)
+                while got < length {
+                    let read = fread(buffer.baseAddress! + got, 1, length - got, file)
+                    if read == 0 { break }
+                    got += read
+                }
+                count = got
+            }
+            guard got == length else {
+                throw ReadError(path: path, reason: "it ends \(length - got) bytes before the region does")
+            }
+            return bytes
+        }
+        // To the file's end, from the offset: in chunks.
         var bytes: [UInt8] = []
         var chunk = [UInt8](repeating: 0, count: 1 << 20)
-        while length.map({ bytes.count < $0 }) ?? true {
-            let wanted = min(chunk.count, length.map { $0 - bytes.count } ?? chunk.count)
+        while true {
             // (Unwrapped: Glibc's, Bionic's and the CRT's fread take a pointer
             // that isn't optional; a chunk of 1 MiB always has one.)
-            let got = chunk.withUnsafeMutableBytes { fread($0.baseAddress!, 1, wanted, file) }
+            let got = chunk.withUnsafeMutableBytes { fread($0.baseAddress!, 1, $0.count, file) }
             if got == 0 { break }
             bytes.append(contentsOf: chunk[0..<got])
-        }
-        if let length, bytes.count != length {
-            throw ReadError(path: path, reason: "it ends \(length - bytes.count) bytes before the region does")
         }
         return bytes
     }

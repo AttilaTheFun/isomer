@@ -893,6 +893,20 @@ swift.wasm_sdk(
 )
 ```
 
+If you build threaded reactors (`@isomer//swift_ffi/rules:wasm32-wasip1-threads`:
+Swift's Concurrency on guest threads, shared memory, C++ exceptions; run by
+WasmKit's WASI Threads, plain, no ICU), take the threads SDK beside your wasm
+one, and register its toolchains (`@swift_toolchain//:cc_toolchain_wasm32_threads_<host>`
+and `:swift_toolchain_wasm32_threads_<host>`, as examples/MODULE.bazel does):
+
+```starlark
+swift.wasm_sdk(
+    threads = True,
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.4/swift-6.4.2-RELEASE_wasm-threads.artifactbundle.tar.gz",
+    sha256 = "1767e9a2d2bb542c5efaf2090d690e1d0d42aa1692967d5156df8aa72e2de8eb",
+)
+```
+
 The SDKs move on their own cadence (isomer_hermetic_toolchains' releases,
 whose notes carry these lines); each is the Swift release isomer's toolchain
 is (6.4.2), which `swift.toolchain`'s `swift_version` must match.
@@ -1014,8 +1028,9 @@ Each release's notes have an Upgrading section; these things are easy to miss:
 - **Isomer's Swift SDKs isomer-6.4.2.4 (0.63): a wasm threads SDK, and
   downloads to a file.** Move `swift.android_sdk` and `swift.wasm_sdk` to its
   lines. It adds `swift-6.4.2-RELEASE_wasm-threads.artifactbundle.tar.gz`
-  (Swift's threads and C++ exceptions on wasm32-unknown-wasip1-threads), and
-  `URLSession`'s download tasks write their body to a file as it arrives
+  (Swift's threads and C++ exceptions on wasm32-unknown-wasip1-threads;
+  isomer registers it, and builds and tests its threaded reactors again,
+  "Isomer's Swift SDKs" above has the line), and `URLSession`'s download tasks write their body to a file as it arrives
   where the host's transport can (IsomerFoundation's
   `HTTPTransport.download(_:to:)`; its default sends, then writes).
 - **Isomer's Swift SDKs isomer-6.4.2.3 (0.63): Swift's C++ interop on

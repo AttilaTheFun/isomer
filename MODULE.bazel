@@ -512,10 +512,21 @@ swift.wasm_sdk(
     url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.4/swift-6.4.2-RELEASE_wasm-i18n.artifactbundle.tar.gz",
     sha256 = "f00bd04a717c7c8289bb0d4253d5c1a365a9fd71323b4d90b5eeb915211fe7fa",
 )
-# No wasi-threads SDK beside it since 0.41: Isomer's was a build of
-# Swift 6.3.2 with swiftlang/swift#92018, which reaches a release in 6.5;
-# reactors built for `@isomer//swift_ffi/rules:wasm32-wasip1-threads` wait
-# for it (TODO.md).
+# The wasi-threads SDK beside it (wasm32-unknown-wasip1-threads): what a
+# reactor built for `@isomer//swift_ffi/rules:wasm32-wasip1-threads` compiles
+# with (rules_swift#1990: its toolchains `*_wasm32_threads_*`, chosen by
+# `@rules_swift//swift/toolchains/wasm:threaded`). Isomer's Swift SDKs' third
+# wasm bundle (isomer-6.4.2.4): Swift 6.4.2 with swiftlang/swift#92018
+# (Concurrency on a pool of guest threads; a release has it from 6.5), libc++,
+# libc++abi and libunwind with threads and WebAssembly exceptions, and its
+# toolset's shared, imported and exported memory. Plain: no ICU. Its
+# programs run on WasmKit's WASI Threads (0.33's threaded reactors, set aside
+# from 0.41 until this SDK).
+swift.wasm_sdk(
+    threads = True,
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.4/swift-6.4.2-RELEASE_wasm-threads.artifactbundle.tar.gz",
+    sha256 = "1767e9a2d2bb542c5efaf2090d690e1d0d42aa1692967d5156df8aa72e2de8eb",
+)
 swift.android_sdk(
     url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.4/swift-6.4.2-RELEASE_android-i18n.artifactbundle.tar.gz",
     sha256 = "dfe6095d83fe478590730ce5ce55cb25e7c6a99b97f868d2cde14702ea787907",
@@ -535,6 +546,8 @@ use_repo(
 register_toolchains(
     "@swift_toolchain//:cc_toolchain_wasm32_xcode",
     "@swift_toolchain//:swift_toolchain_wasm32_xcode",
+    "@swift_toolchain//:cc_toolchain_wasm32_threads_xcode",
+    "@swift_toolchain//:swift_toolchain_wasm32_threads_xcode",
     # SPIKE: android C/C++ + linking now go through @androidndk//:all (registered
     # below); only the Swift toolchain comes from rules_swift.
     "@swift_toolchain//:swift_toolchain_android_aarch64_xcode",
@@ -559,12 +572,16 @@ register_toolchains(
     "@swift_toolchain//:swift_toolchain_exec_ubuntu24.04",
     "@swift_toolchain//:cc_toolchain_wasm32_ubuntu24.04",
     "@swift_toolchain//:swift_toolchain_wasm32_ubuntu24.04",
+    "@swift_toolchain//:cc_toolchain_wasm32_threads_ubuntu24.04",
+    "@swift_toolchain//:swift_toolchain_wasm32_threads_ubuntu24.04",
     # SPIKE: android C/C++ via @androidndk//:all; only Swift from rules_swift.
     "@swift_toolchain//:swift_toolchain_android_aarch64_ubuntu24.04",
     "@swift_toolchain//:swift_toolchain_android_x86_64_ubuntu24.04",
     "@swift_toolchain//:swift_toolchain_exec_ubuntu24.04-aarch64",
     "@swift_toolchain//:cc_toolchain_wasm32_ubuntu24.04-aarch64",
     "@swift_toolchain//:swift_toolchain_wasm32_ubuntu24.04-aarch64",
+    "@swift_toolchain//:cc_toolchain_wasm32_threads_ubuntu24.04-aarch64",
+    "@swift_toolchain//:swift_toolchain_wasm32_threads_ubuntu24.04-aarch64",
     "@swift_toolchain//:swift_toolchain_android_aarch64_ubuntu24.04-aarch64",
     "@swift_toolchain//:swift_toolchain_android_x86_64_ubuntu24.04-aarch64",
     dev_dependency = True,

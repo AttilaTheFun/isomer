@@ -138,6 +138,7 @@ final class SideModuleRenderTests: XCTestCase {
         XCTAssertEqual(
             try WasmModuleSource.file(path: file, offset: 1000, length: 3000).read(), Array(bytes[1000..<4000]))
         XCTAssertEqual(try WasmModuleSource.file(path: file, offset: 1000).read(), Array(bytes[1000...]))
+        XCTAssertEqual(try WasmModuleSource.file(path: file, offset: 1000, length: 0).read(), [])
         XCTAssertThrowsError(try WasmModuleSource.file(path: file, offset: bytes.count - 10, length: 20).read())
         XCTAssertThrowsError(try WasmModuleSource.file(path: file + ".missing").read())
         // The bundle's bytes, as hosts that read `wasm` see them.

@@ -20,6 +20,8 @@ import android.net.ConnectivityManager
 import android.system.ErrnoException
 import android.system.OsConstants
 import java.io.EOFException
+import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.InterruptedIOException
@@ -151,6 +153,23 @@ object IsomerHTTP {
         }
     }
 
+    /** The same exchange with its body written to `file` as it arrives
+     *  (URLSession's download tasks): the response's body empty. */
+    fun download(
+        method: String, url: String, headers: List<Pair<String, String>>, body: ByteArray, timeout: Double,
+        file: File, done: (Result<Response>) -> Unit,
+    ) {
+        exchanges.execute {
+            val result = try {
+                Result.success(exchange(method, url, headers, body, timeout, file))
+            } catch (error: Throwable) {
+                file.delete()
+                Result.failure(NetworkHostException.from(error))
+            }
+            done(result)
+        }
+    }
+
     /**
      * One exchange, blocking. `timeout` (seconds) bounds the connection and
      * each wait for more of the answer, as `URLRequest.timeoutInterval`
@@ -158,6 +177,7 @@ object IsomerHTTP {
      */
     fun exchange(
         method: String, url: String, headers: List<Pair<String, String>>, body: ByteArray, timeout: Double,
+        file: File? = null,
     ): Response {
         var current = try { URL(url) } catch (_: MalformedURLException) {
             throw NetworkHostException("unknown", "not a URL: $url")
@@ -222,8 +242,13 @@ object IsomerHTTP {
                 continue
             }
             val answer = fields(connection)
+            val ended = if (redirects > 0) current.toString() else ""
+            if (file != null) {
+                write(connection, status, answer, file)
+                return Response(status, answer, ByteArray(0), ended)
+            }
             val raw = read(connection, status)
-            return Response(status, answer, decoded(raw, answer), if (redirects > 0) current.toString() else "")
+            return Response(status, answer, decoded(raw, answer), ended)
         }
     }
 
@@ -252,6 +277,22 @@ object IsomerHTTP {
     private fun read(connection: HttpURLConnection, status: Int): ByteArray {
         val stream: InputStream? = if (status >= 400) connection.errorStream else connection.inputStream
         return stream?.use { it.readBytes() } ?: ByteArray(0)
+    }
+
+    /** The body streamed to `file` as it arrives, its content coding undone
+     *  as `decoded` undoes it, never held whole. */
+    private fun write(connection: HttpURLConnection, status: Int, fields: List<Pair<String, String>>, file: File) {
+        val stream: InputStream = (if (status >= 400) connection.errorStream else connection.inputStream)
+            ?: ByteArray(0).inputStream()
+        val coding = fields.lastOrNull { it.first.equals("Content-Encoding", ignoreCase = true) }
+            ?.second?.trim()?.lowercase()
+        val body = when (coding) {
+            "gzip", "x-gzip" -> GZIPInputStream(stream)
+            "deflate" -> InflaterInputStream(stream)
+            else -> stream
+        }
+        file.parentFile?.mkdirs()
+        body.use { input -> FileOutputStream(file).use { output -> input.copyTo(output, 1 shl 16) } }
     }
 
     /**

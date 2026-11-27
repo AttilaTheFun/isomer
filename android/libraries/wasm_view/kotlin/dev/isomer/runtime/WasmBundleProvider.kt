@@ -112,9 +112,23 @@ internal fun resolveModule(source: WasmModuleSource, context: Context?): Resolve
     }
 }
 
+/** Makes ready, off the main thread, what [resolveModule] would otherwise
+ *  do on it: a compressed asset's copy (tens of megabytes, once per
+ *  install). Anything else is ready as it is. */
+internal fun prepareModule(source: WasmModuleSource, context: Context?) {
+    if (source !is WasmModuleSource.Asset || context == null) return
+    try {
+        context.assets.openFd(source.name).close()
+    } catch (compressed: java.io.FileNotFoundException) {
+        copiedAsset(context, source.name)
+    }
+}
+
 /** A compressed asset streamed into the app's no-backup files, once per
  *  install of the app (the copy is named by the APK's time; older copies of
- *  the asset go). */
+ *  the asset go). Each copy is written to a temporary file of its own and
+ *  renamed into place, so two views copying it at once each end with a
+ *  whole copy. */
 private fun copiedAsset(context: Context, name: String): java.io.File {
     // The APK's time: a new install's APK is a new file.
     val installed = java.io.File(context.applicationInfo.sourceDir).lastModified()
@@ -123,10 +137,20 @@ private fun copiedAsset(context: Context, name: String): java.io.File {
     val copy = java.io.File(directory, "$installed$suffix")
     if (copy.isFile) return copy
     directory.mkdirs()
-    directory.listFiles()?.filter { it.name.endsWith(suffix) }?.forEach { it.delete() }
-    val partial = java.io.File(directory, copy.name + ".partial")
-    context.assets.open(name).use { input -> partial.outputStream().use { input.copyTo(it, 1 shl 16) } }
-    if (!partial.renameTo(copy)) throw java.io.IOException("can't keep the copy of the asset $name")
+    // Older installs' copies, and what an interrupted copy of theirs left.
+    directory.listFiles()
+        ?.filter { !it.name.startsWith("$installed-") && (it.name.endsWith(suffix) || it.name.endsWith(".partial")) }
+        ?.forEach { it.delete() }
+    val partial = java.io.File.createTempFile("${copy.name}.", ".partial", directory)
+    try {
+        context.assets.open(name).use { input -> partial.outputStream().use { input.copyTo(it, 1 shl 16) } }
+        // rename(2) replaces a copy another view finished first: the same bytes.
+        if (!partial.renameTo(copy) && !copy.isFile) {
+            throw java.io.IOException("can't keep the copy of the asset $name")
+        }
+    } finally {
+        partial.delete()
+    }
     return copy
 }
 

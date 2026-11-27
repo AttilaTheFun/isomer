@@ -272,6 +272,13 @@ pairs and its command line the arguments, and ends it when stopped (SIGTERM,
 or a file named `stop` among its requests, which `quit()` leaves, then
 signals: drive/launchers/requests.sh).
 
+- **The time to attach.** The app has 60 s on its first launch (half of
+  `timeout`, 120 s by default), then the whole on one launch more, for a
+  launch a simulator lost. A job whose machines start apps slowly sets
+  ISO_DRIVE_ATTACH_SECONDS in the test's environment (`--test_env=…`): the
+  first launch's time, the retry's at least twice it. An iPhone simulator
+  freshly booted on Linux (agent-sim) attaches in 80-90 s.
+
 - **Fresh by default.** A launch starts with none of the app's data from
   before, as an app built headless does (`fresh: true`, the launcher's
   ISOMER_FRESH=1): the iPhone's launcher clears the app's defaults (through
