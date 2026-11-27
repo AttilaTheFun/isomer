@@ -50,7 +50,7 @@ Every non-dev directive, by the platform that needs it.
 | `protobuf` 27.0 | core | the wire protos (shared/wire); rules_swift asks for 34 anyway |
 | `rules_cc` 0.2.18 | core | C in swift_ffi, the web's and Linux's and Windows' libraries |
 | `rules_shell` 0.8.0 | core, Android | the web's server and checks, `apk_install_run` |
-| **`rules_apple` 5.3.1.applecross.6** | **Apple** | isomer_application's `ios_application`/`macos_application`, swift_map's Apple example apps and XCFramework (the only loads of it) |
+| **`rules_apple` 5.3.1.applecross.7** | **Apple** | isomer_application's `ios_application`/`macos_application`, swift_map's Apple example apps and XCFramework (the only loads of it) |
 | **`apple_support` 2.11.0** | **Apple** (and a Mac host) | nothing loads it; rules_applecross asks for 2.11.0. Declared before rules_cc so its C toolchain ranks above rules_cc's on a Mac, which any build on a Mac needs (the build's own Swift tools) |
 | `hermetic_android_toolchains` 0.5.0.isomer.1 | Android | only to raise every consumer to the patched version (MVS): its extension is the root's |
 | `rules_android` 0.7.3, `rules_java` 9.3.0, `rules_kotlin` 2.2.2 | Android | `isomer_android_app` and the rest of tools/android, android/libraries, swift_ffi's `kt_swift_library` (rules_kotlin) |
@@ -124,7 +124,7 @@ the NDK's modules.
 | Module | Directory | Carries | Status |
 | --- | --- | --- | --- |
 | `isomer` | `.` | the Swift package, the platforms' Swift libraries, swift_ffi, the web's rules; bazel_skylib, platforms, rules_swift, rules_swift_package_manager, rules_cc, rules_shell, protobuf, swift_argument_parser, apple_support at rules_swift's version | (core) |
-| `isomer_apple` | `apple/module` | rules_apple 5.3.1.applecross.6, rules_applecross, apple_support 2.11.0, isomer_application with the iPhone's and the Mac's apps | 0.58 |
+| `isomer_apple` | `apple/module` | rules_apple 5.3.1.applecross.7, rules_applecross, apple_support 2.11.0, isomer_application with the iPhone's and the Mac's apps | 0.58 |
 | `isomer_android` | `android/module` | rules_android 0.7.3, rules_java 9.3.0, rules_kotlin 2.2.2, hermetic_android_toolchains 0.5.0.isomer.3; Android's macros and rules (tools/android's defs.bzl), `kt_swift_library`, swift_ffi's Kotlin runtime, the Kotlin targets of android/libraries; `ANDROID` for isomer_application. isomer_android_maven stays beside it | 0.59 |
 | `isomer_web` | — | not worth a module: wabt alone (above); mixed mode's tools could be prebuilt `http_archive`s instead (lazy), Binaryen's are already | not proposed |
 | `isomer_linux`, `isomer_windows` | — | nothing to carry: their libraries need rules_cc and rules_swift alone, the Windows SDK is a repository rule | not proposed |
@@ -224,8 +224,8 @@ as isomer_android_maven is:
 ## isomer_apple (0.58)
 
 - apple/module: MODULE.bazel (isomer_apple at isomer's version; apple_support
-  2.11.0 before the rest, rules_apple 5.3.1.applecross.6 as
-  `build_bazel_rules_apple`, rules_applecross 0.0.3.382f8c3, bazel_skylib,
+  2.11.0 before the rest, rules_apple 5.3.1.applecross.7 as
+  `build_bazel_rules_apple`, rules_applecross 0.0.3.1f03f48, bazel_skylib,
   rules_swift, isomer), defs.bzl (`isomer_application`), and the web-view
   and remote shells' templates.
 - isomer: rules_apple is a dev dependency (swift_ffi's iOS example);

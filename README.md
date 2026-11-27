@@ -742,7 +742,7 @@ version, and loads the macro from it (`@isomer_apple//:defs.bzl`):
 bazel_dep(name = "isomer_apple", version = "0.58.1")
 ```
 
-It brings rules_apple 5.3.1.applecross.6 (as `build_bazel_rules_apple`),
+It brings rules_apple 5.3.1.applecross.7 (as `build_bazel_rules_apple`),
 rules_applecross and apple_support 2.11.0; the root still registers the
 bundling toolchains ("Upgrading isomer", 0.40). An app that declares its
 Apple applications with rules_apple itself needs no isomer_apple.
@@ -1169,7 +1169,7 @@ Each release's notes have an Upgrading section; these things are easy to miss:
   moves into the package's output directory, and a stale one left elsewhere
   by an earlier build can shadow it (Swift compiles run unsandboxed).
 - **Apple apps bundle through rules_applecross (since 0.40).** The
-  registry's rules_apple (5.3.1.applecross.6) bundles through
+  registry's rules_apple (5.3.1.applecross.7) bundles through
   `@rules_applecross//toolchain:apple_bundling_toolchain_type`, and
   rules_applecross registers its toolchains only as a dev dependency. A root
   that builds iOS or Mac apps depends on rules_applecross and registers the
@@ -1177,7 +1177,7 @@ Each release's notes have an Upgrading section; these things are easy to miss:
   found for …apple_bundling_toolchain_type":
 
   ```starlark
-  bazel_dep(name = "rules_applecross", version = "0.0.3.382f8c3")
+  bazel_dep(name = "rules_applecross", version = "0.0.3.1f03f48")
   register_toolchains("@rules_applecross//toolchain:apple_bundling_on_macos")
   # Building Apple apps on Linux too: also
   # "@rules_applecross//toolchain:apple_bundling_on_linux" (examples/MODULE.bazel).

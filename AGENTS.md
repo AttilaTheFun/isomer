@@ -45,7 +45,7 @@ management. The repo is ONE Bazel module, `isomer`, plus the examples:
 | `metal/` | (isomer) | Isomer's `Metal` (`//metal/metal`), IsomerMetal (`//metal/isomer_metal`: the MSL→WGSL translator, the backend interface), the web backend (`//metal/web`, `//metal/runtime`) |
 | `swift_gpu/` | (isomer) | the GPU abstraction (`//swift_gpu/{core,metal,apple,android,wasm,linux,windows}`) |
 | `swift_map/` | (isomer) | the OpenStreetMap renderer (`//swift_map/swift_map/{core,renderer}`, platform libraries under `//swift_map/<platform>/libraries/...`, its example apps and their small tools) |
-| `apple/module/` | `isomer_apple` | the iPhone's and the Mac's apps, a module of its own since 0.58 (docs/platform_modules.md): rules_apple 5.3.1.applecross.6, rules_applecross, apple_support 2.11.0, and isomer_application's `IOS` and `MACOS` (`@isomer_apple//:defs.bzl`; isomer_application is isomer's `@isomer//tools/application:defs.bzl`, taking platforms as values since 0.59). Released with isomer at its version, as isomer_android_maven is; the examples take it by `local_path_override` |
+| `apple/module/` | `isomer_apple` | the iPhone's and the Mac's apps, a module of its own since 0.58 (docs/platform_modules.md): rules_apple 5.3.1.applecross.7, rules_applecross, apple_support 2.11.0, and isomer_application's `IOS` and `MACOS` (`@isomer_apple//:defs.bzl`; isomer_application is isomer's `@isomer//tools/application:defs.bzl`, taking platforms as values since 0.59). Released with isomer at its version, as isomer_android_maven is; the examples take it by `local_path_override` |
 | `android/module/` | `isomer_android` | Android's macros and rules, a module of its own since 0.59 (docs/platform_modules.md): rules_android, rules_kotlin, rules_java, hermetic_android_toolchains; `@isomer_android//:defs.bzl` (`isomer_android_app` and its family, `apk_install_run`, isomer_application's `ANDROID`), `//swift_ffi:kt_swift_library.bzl` and swift_ffi's Kotlin runtime, and the Kotlin targets of android/libraries (`//swift_ui:compose_compiler_plugin`, `:isomer_platform`, `//wasm_view:wasm_engine_bindings`, `:engine_native`). Android's Swift libraries stay isomer's. Released with isomer at its version; isomer's own builds and the examples take it by `local_path_override` |
 | `examples/` | `isomer_examples` | Isomer's applications: the Storybook (`examples/storybook`, its apps `examples/<platform>/storybook_<platform>_application`), and the example apps and probes. A module of its own: it consumes isomer the way an outside application does. |
 
@@ -619,12 +619,12 @@ SwiftUI libraries  →  swift_map/  →  swift_gpu/  →  metal/  →  swift_ffi
   override in any root (until 0.40 the fork was 4.1.0.isomer.N, held by an
   override every consumer repeated).
 - **The Apple targets build on Linux too** (rules_applecross, 2026-10-26;
-  the project registry's 0.0.3.382f8c3, its main at 382f8c3, until it has a
+  the project registry's 0.0.3.1f03f48, its main at 1f03f48, until it has a
   release in the BCR): Xcode 27.0's SDKs from an SDK archive, the Swift
   that built them (6.4.0) for the Apple targets alone (the rest is on
   swift.org's 6.4.2), its clean-room actool, ibtool and codesign, and its
   ported tools from its main (tools/applecross/ported_tools.sha256: their codesign signs
-  a Mac app's nested code). rules_apple is the registry's preset 5.3.1.applecross.6
+  a Mac app's nested code). rules_apple is the registry's preset 5.3.1.applecross.7
   (rules_apple 5.3.1 with rules_applecross's patches, asking for that
   rules_applecross, which asks for it back), apple_support the BCR's
   2.11.0: no override of either in any root, since 0.40. Since 0.58 they

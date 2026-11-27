@@ -174,10 +174,10 @@ register_toolchains(
 # placeholder each builder's .bazelrc.user resolves (`--distdir`, or a
 # `--downloader_config` to a Shireworks server's /files/sha256/<hex>), and its
 # toolchains turned on by .bazelrc's apple_on_linux. A Mac builds as before.
-# The project registry's 0.0.3.382f8c3: rules_applecross's main at 382f8c3
+# The project registry's 0.0.3.1f03f48: rules_applecross's main at 1f03f48
 # (#289: an imported dynamic framework's lipo on Linux), with the preset
 # rules_apple above.
-bazel_dep(name = "rules_applecross", version = "0.0.3.382f8c3")
+bazel_dep(name = "rules_applecross", version = "0.0.3.1f03f48")
 apple_cross_toolchain = use_extension("@rules_applecross//toolchain:extensions.bzl", "apple_cross_toolchain")
 apple_cross_toolchain.swift(
     name = "applecross_swift",
@@ -258,10 +258,10 @@ use_repo(signing, "isomer_signing")
 bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "platforms", version = "1.1.0")
 # rules_apple and apple_support at rules_applecross's versions: the
-# registry's preset rules_apple 5.3.1.applecross.6 (rules_applecross's
+# registry's preset rules_apple 5.3.1.applecross.7 (rules_applecross's
 # patches) and the BCR's apple_support 2.11.0, as isomer_apple asks for
 # (the examples' own Apple apps load rules_apple directly).
-bazel_dep(name = "rules_apple", version = "5.3.1.applecross.6", repo_name = "build_bazel_rules_apple")
+bazel_dep(name = "rules_apple", version = "5.3.1.applecross.7", repo_name = "build_bazel_rules_apple")
 bazel_dep(name = "apple_support", version = "2.11.0")
 
 # Declared after apple_support so apple_support's apple cc toolchain keeps
