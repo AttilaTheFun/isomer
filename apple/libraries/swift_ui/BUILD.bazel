@@ -13,6 +13,7 @@ swift_library(
     name = "isomer",
     package_name = "isomer",
     srcs = [
+        "AppleAppPackages.swift",
         "AppleClipboard.swift",
         "AppleMacStandIns.swift",
         "AppleMetalView.swift",

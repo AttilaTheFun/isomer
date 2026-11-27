@@ -1,7 +1,7 @@
 // The Isomer module: what Isomer adds to SwiftUI, on every platform
 // (`import Isomer`): the platform, web views, maps, video, the clipboard,
-// colors by appearance, swipes, shakes, screenshots, and a platform's own
-// views.
+// colors by appearance, swipes, shakes, screenshots, other apps, and a
+// platform's own views.
 
 import Foundation
 import Isomer
@@ -48,6 +48,10 @@ extension StoryCatalog {
             "isomer.screenshot", "Screenshot",
             summary: "A picture of the app's window, as a PNG, for a bug report: Apple's own drawing on iOS and the Mac, Android's PixelCopy. None on the web or desktops yet."
         ) { ScreenshotStory() },
+        Story(
+            "isomer.packages", "App packages",
+            summary: "Other apps on the device: whether one is installed and at what version, opening it, installing one from a package. Android's package manager, a Mac's workspace; iOS and the web see none."
+        ) { PackagesStory() },
     ])
 }
 
@@ -245,6 +249,20 @@ struct ScreenshotStory: View {
             }
             .buttonStyle(.bordered)
             Text(result)
+                .font(.footnote)
+                .foregroundColor(.secondary)
+        }
+    }
+}
+// end story
+
+// story: isomer.packages
+struct PackagesStory: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            let identifier = Bundle.main.bundleIdentifier ?? ""
+            Text(AppPackages.installed(identifier) != nil ? "The Storybook is installed" : "Installed apps can't be seen here")
+            Text(AppPackages.mayInstall ? "It may install apps" : "It may not install apps")
                 .font(.footnote)
                 .foregroundColor(.secondary)
         }
