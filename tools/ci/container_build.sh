@@ -8,11 +8,12 @@
 #   GitHub's arm64 runners have nothing to run (no Rosetta), and the
 #   project's own image (ghcr.io/attilathefun/visor-agent, which an agent's
 #   arm64 container runs this in) is built for arm64 alone;
-# - apple: on GitHub's `xcode-27` Macs (a standard runner, free for a public
-#   repository), with their own Xcode (the owner, 2026-11-15): Apple's SDKs
-#   may not be redistributed, so CI never takes the SDK archive the Apple
-#   targets take on Linux (rules_applecross; tools/linux/build.sh
-#   --apple-sdks, for an agent that has it);
+# - apple: on Nimbus' self-hosted Linux runners (the owner, 2026-11-27: no
+#   paid GitHub runners), with rules_applecross (.bazelrc's apple_on_linux)
+#   and Xcode 27.2's SDK served by Nimbus (ISOMER_APPLE_ON_LINUX=1, which
+#   .github/actions/nimbus_bazel sets): Apple's SDKs may not be
+#   redistributed, so no GitHub runner takes the archive; or on a Mac, with
+#   its own Xcode;
 # - windows: on Linux, with ISOMER_WINDOWS_SDKS alone (Microsoft's sysroot,
 #   which may not be redistributed either: tools/windows/README.md); CI
 #   builds Windows on Windows instead (tools/ci/windows_build.ps1).
@@ -81,8 +82,8 @@ for platform in $platforms; do
     if [ "$(uname -s)" = Darwin ] && [ "$platform" != apple ]; then
         echo "container_build.sh: a Mac builds the Apple platforms alone here; $platform is built on Linux" >&2; exit 2
     fi
-    if [ "$(uname -s)" != Darwin ] && [ "$platform" = apple ]; then
-        echo "container_build.sh: the Apple platforms are built on a Mac, with its Xcode" >&2; exit 2
+    if [ "$(uname -s)" != Darwin ] && [ "$platform" = apple ] && [ "${ISOMER_APPLE_ON_LINUX:-}" != 1 ]; then
+        echo "container_build.sh: the Apple platforms are built on a Mac, or on Linux with Xcode's SDK served (ISOMER_APPLE_ON_LINUX=1: a Nimbus runner)" >&2; exit 2
     fi
 done
 if [ "$(uname -s)" != Darwin ]; then

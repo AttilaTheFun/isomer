@@ -170,7 +170,7 @@ register_toolchains(
 
 # The Apple apps built on Linux (a container, a VM): rules_applecross, as in
 # isomer's MODULE.bazel (which says why each piece): the Swift that built
-# Xcode 27.0's SDKs for the Apple targets alone, the SDK archive by a
+# Xcode 27.2's SDKs (6.4.2, as the other targets'), the SDK archive by a
 # placeholder each builder's .bazelrc.user resolves (`--distdir`, or a
 # `--downloader_config` to a Shireworks server's /files/sha256/<hex>), and its
 # toolchains turned on by .bazelrc's apple_on_linux. A Mac builds as before.
@@ -182,15 +182,15 @@ apple_cross_toolchain = use_extension("@rules_applecross//toolchain:extensions.b
 apple_cross_toolchain.swift(
     name = "applecross_swift",
     platform_sha256 = {
-        "ubuntu24.04": "69f7b2b4dbce6090b6c92194b71149a057e16269093b5a9dded38afc4a05094e",
-        "ubuntu24.04-aarch64": "21eacfe571194717d269cc1e0030533bbee6131dfde82cd4f9cfbc2512e354a9",
-        "xcode": "8fd03185b98fe27f54a54631c2449decf75d5b466ce8e34abbd414141063c6aa",
+        "ubuntu24.04": "2e9ebec040ad459dd89a6d093a02d8314939135104850fae4d5c0f174fb3ba8c",
+        "ubuntu24.04-aarch64": "307772afcc0b9501faa4797eb4197076facf5768593a0d8d2b83615c95b0040e",
+        "xcode": "0a7d8489900d21dbf5f0187cb570e646a4c0226d0ddef2cbde8c7f54dfe79736",
     },
-    swift_version = "6.4.0",
+    swift_version = "6.4.2",
 )
 apple_cross_toolchain.configure(
     name = "apple_cross_toolchain",
-    apple_sdk_urls = ["https://apple-sdks.invalid/apple-sdks-27.0.tar.gz"],
+    apple_sdk_urls = ["https://apple-sdks.invalid/apple-sdks-27.2.tar.gz"],
     local_xcode = True,
     # Its ported tools from its main, ahead of a release (tools/applecross).
     ported_tools_manifest = "//tools/applecross:ported_tools.sha256",
@@ -200,7 +200,7 @@ apple_cross_toolchain.configure(
         "x86_64": "@applecross_swift_ubuntu24.04//:tools",
     },
     swift_tools_macos = "@applecross_swift_xcode//:tools",
-    xcode_version = "27.0",
+    xcode_version = "27.2",
 )
 use_repo(apple_cross_toolchain, "apple_cross_toolchain")
 register_toolchains(
