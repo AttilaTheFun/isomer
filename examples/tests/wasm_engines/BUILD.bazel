@@ -12,7 +12,9 @@ swift_test(
     data = [
         "//wasm/example_full_feature:example_full.wasm",
         "//wasm/network_probe_feature:network_probe.wasm",
+        "//wasm/network_probe_feature:network_probe_threads.wasm",
         "//wasm/tap_counter_feature:tap_counter_release.wasm",
+        "//wasm/tap_counter_feature:tap_counter_threads_release.wasm",
     ],
     linkopts = [
         "-Wl,-rpath,/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",  # keep
@@ -29,5 +31,29 @@ swift_test(
         "//apple/platform_services_host",
         "//shared/platform_services:platform_services_host",
         "@isomer//shared/isomer_network_host:wasm_host",
+    ],
+)
+
+# The threaded reactor on WasmKit alone, wherever WasmKit runs natively (the
+# Mac and Linux: CI's container): `canRunThreads`, and the tap counter built
+# with the threads SDK (wasm32-unknown-wasip1-threads) running as the
+# single-threaded build does, frame for frame.
+swift_test(
+    name = "wasmkit_threads_test",
+    size = "small",
+    srcs = ["WasmKitThreadsTests.swift"],
+    data = [
+        "//wasm/tap_counter_feature:tap_counter_release.wasm",
+        "//wasm/tap_counter_feature:tap_counter_threads_release.wasm",
+    ],
+    module_name = "WasmKitThreadsTests",
+    target_compatible_with = select({
+        "@platforms//os:macos": [],
+        "@platforms//os:linux": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    deps = [
+        "@isomer//shared/wasm_host:wasm_runtime",
+        "@isomer//shared/wasm_host:wasmkit_runtime",
     ],
 )

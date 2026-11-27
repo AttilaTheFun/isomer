@@ -882,21 +882,38 @@ no wamrc, no `.aot`, no `--define wamr_*`). The engine work Isomer did
   and WASI Threads for a module that imports a shared memory: the threaded
   SQLite check's (a page's shared memory needs it served cross-origin
   isolated), until WasmKit goes.
-- **The threads SDK beside the stock one (none until Swift 6.5).**
+- **The threads SDK beside the stock one (Isomer's, from isomer-6.4.2.4).**
   rules_swift takes one `swift.wasm_sdk`; rules_swift#1990 (on #1860; in
-  the registry's rules_swift) takes two, the
-  threads one's toolchains requiring
+  the registry's rules_swift) takes two, the threads one's toolchains
+  (`@swift_toolchain//:{cc,swift}_toolchain_wasm32_threads_<host>`, registered
+  beside the stock ones for the Mac and both Linuxes) requiring
   `@rules_swift//swift/toolchains/wasm:threaded`. A reactor transitioned to
-  `@isomer//swift_ffi/rules:wasm32-wasip1-threads` built with
-  AttilaTheFun/swift's threads-sdk-6.3.2-1 (#92018 and the
-  platform-executors thread pool) until 0.41. #92018 reaches a release in
-  Swift 6.5, so since the move to 6.4.2 no threads SDK is registered
-  (MODULE.bazel): the threaded reactors aren't built and their tests are
-  set aside until then (TODO.md); everything else stays single-threaded.
-  A threaded reactor links its memory imported, exported and shared with a
-  maximum (`--import-memory --export-memory --shared-memory
-  --max-memory=…`); examples' tap_counter_threads_release.wasm and
-  example_full_threads.wasm are the test cells.
+  `@isomer//swift_ffi/rules:wasm32-wasip1-threads` builds with the third
+  wasm bundle of Isomer's Swift SDKs,
+  `swift-6.4.2-RELEASE_wasm-threads.artifactbundle.tar.gz`
+  (AttilaTheFun/isomer_hermetic_toolchains, its sdk/README.md's "The threads
+  SDK"): Swift 6.4.2 with swiftlang/swift#92018 patched in (a release has it
+  from 6.5), Isomer's Foundation, and libc++, libc++abi and libunwind built
+  with threads and WebAssembly exceptions (the standard exnref proposal:
+  C++ `throw` and `catch` work in a threaded reactor; a C++ exception that
+  escapes into Swift still ends the program). It was AttilaTheFun/swift's
+  threads-sdk-6.3.2-1 until 0.41, then none until this one (0.63): the
+  threaded reactors and their tests were set aside meanwhile. Its toolset
+  adds, for every compile, `-matomics -mbulk-memory -pthread` and the rest;
+  for C and C++ `-fwasm-exceptions -mllvm -wasm-use-legacy-eh=false`; for
+  Swift `-Xllvm -wasm-enable-eh -Xllvm -wasm-use-legacy-eh=false`; and for
+  the link `--import-memory --export-memory --shared-memory
+  --max-memory=1073741824 -lunwind`. rules_swift#1860 hands the C options
+  to clang's links as well as its compiles, so each threaded link warns
+  "argument unused during compilation: '-mllvm -wasm-use-legacy-eh=false'":
+  harmless (no warning is an error in a wasm link), and #1860's to fix (a
+  compile-only `cc_args` for the toolset's C options), not the toolset's.
+  A threaded reactor still names its
+  memory flags itself; examples' tap_counter_threads_release.wasm,
+  network_probe_threads.wasm and example_full_threads.wasm are the test
+  cells, the examples' //tests/sqlite_wasi:sqlite_file_threads_test and
+  //tests/wasm_engines:wasmkit_threads_test (the Mac and Linux, in CI's
+  container) their tests, with wasm_engine_tests' threaded cases on the Mac.
 - **The guest's threads.** In a threaded reactor swift_ffi's executor is
   the main actor's only: the platform's default executor, the SDK's pool of
   guest threads, runs everything else (`SwiftFFIExecutorFactory` under
@@ -907,17 +924,17 @@ no wamrc, no `.aot`, no `--define wamr_*`). The engine work Isomer did
   thread that ran the constructors. WasmKit's WASI Threads is
   process-scoped: a threaded instance is kept for the life of the process
   (no teardown, no hot reload), and a trap on a guest thread ends the app.
-- **No ICU in the threads SDK** (it carries the standard library only, and
-  the stock SDK's lib_FoundationICU.a has no atomics): a threaded reactor
-  is built without FoundationInternationalization (visor_isomer's
-  `threads_wasm_resource`). Visor formats its dates and numbers itself;
+- **No ICU in the threads SDK** (the bundle is plain: swift.org's
+  lib_FoundationICU.a has no atomics, and none is built for the threads
+  triple): a threaded reactor is built without
+  FoundationInternationalization (visor_isomer's `threads_wasm_resource`). Visor formats its dates and numbers itself;
   its screens match the ICU build's.
 - **Shared memory needs WasmKit's guard pages**: a 4 GiB reservation per
   memory and signal-trapped bounds checks, on macOS, Linux, iOS and
   (WasmKit 0.5.0's #527) 64-bit Android, whose reactors run on guard pages
   by default; `canRunThreads` should pass there too (WasmKit makes shared
-  memory on Android), unchecked while no threaded reactor is built (Swift
-  6.5's threads SDK).
+  memory on Android), unchecked there: no Android test runs a threaded
+  reactor yet (wasmkit_threads_test runs on the Mac and Linux).
   Windows checks bounds in software and runs no threaded reactor. `WasmKitRuntime.canRunThreads` tries one; a host
   with both builds of its reactor picks the threaded one only then (an
   iPhone's address space may refuse it; nothing here has run on a device).
