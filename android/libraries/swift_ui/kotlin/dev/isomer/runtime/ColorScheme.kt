@@ -13,8 +13,18 @@ import androidx.compose.ui.graphics.Color
  * grey), seeded from the accent SwiftUI resolves (`Color.accentColor`, the
  * system blue) so Material's own controls and the app's tinted views agree.
  * Swift's named grounds (a grouped list's, a cell's, a sheet's) are drawn in
- * these roles too (`MaterialGrounds`). */
-fun isoColorScheme(dark: Boolean): ColorScheme =
+ * these roles too (`MaterialGrounds`).
+ *
+ * One instance for each appearance, made once: the tree's root composable
+ * recomposes with every patch, and a new scheme each time is a new value for
+ * MaterialTheme's composition locals, which recomposes everything that reads
+ * them instead of only the patched nodes. */
+fun isoColorScheme(dark: Boolean): ColorScheme = if (dark) darkScheme else lightScheme
+
+private val darkScheme: ColorScheme by lazy { makeColorScheme(dark = true) }
+private val lightScheme: ColorScheme by lazy { makeColorScheme(dark = false) }
+
+private fun makeColorScheme(dark: Boolean): ColorScheme =
     if (dark) darkColorScheme(
         primary = Color(0xFF9ECAFF), onPrimary = Color(0xFF003258),
         primaryContainer = Color(0xFF00497D), onPrimaryContainer = Color(0xFFD1E4FF),

@@ -116,16 +116,10 @@ object FlatTree {
 
     /**
      * Decodes one `Node` message into a [UNode]. Attributes go into the
-     * JSONObject; children (field 45) become retained [UNode]s. The
-     * [StringBuilder] `sig` accumulates a deterministic own-signature: each
-     * present field appends `slot:value;` in field order (slot = field - 1,
-     * as in the FlatBuffers format before), so two nodes with equal own
-     * attributes produce byte-identical sigs regardless of hash-map order.
+     * JSONObject; children (field 45) become retained [UNode]s.
      */
     private fun node(r: Reader): UNode {
         val n = JSONObject()
-        val sig = StringBuilder()
-        fun sig(slot: Int, value: Any) { sig.append(slot).append(':').append(value).append(';') }
 
         var kind = "box"
         var numeric: Double? = null
@@ -138,27 +132,27 @@ object FlatTree {
             val (field, type) = r.tag()
             when (field) {
                 1 -> kind = KINDS.getOrElse(r.int32()) { "box" }
-                2 -> { val s = r.string(); n.put("v", s); sig(1, s) }
+                2 -> { val s = r.string(); n.put("v", s) }
                 3 -> numeric = r.double()
-                4 -> { val s = r.string(); n.put("id", s); sig(3, s) }
-                5 -> { val d = r.double(); n.put("size", d); sig(4, d) }
-                6 -> { val i = r.int32(); n.put("weight", i); sig(5, i) }
-                7 -> { val c = color(r.sub(r.span())); n.put("color", c); sig(6, c) }
-                8 -> { val i = r.int32(); n.put("lines", i); sig(7, i) }
-                9 -> { val s = SHAPES[r.int32()]; n.put("shape", s); sig(8, s) }
-                10 -> { val c = color(r.sub(r.span())); n.put("fill", c); sig(9, c) }
-                11 -> { val c = color(r.sub(r.span())); n.put("stroke", c); sig(10, c) }
-                12 -> { val d = r.double(); n.put("strokeWidth", d); sig(11, d) }
-                13 -> { val s = AXES[r.int32()]; n.put("axis", s); sig(12, s); hasAxis = true }
-                14 -> { val d = r.double(); n.put("spacing", d); sig(13, d) }
-                15 -> { val d = r.double(); n.put("min", d); sig(14, d) }
-                16 -> { val s = r.string(); n.put("src", s); sig(15, s) }
-                17 -> { val b = r.bool(); n.put("remote", b); sig(16, b) }
-                18 -> { val b = r.bool(); n.put("resizable", b); sig(17, b) }
-                19 -> { val b = r.bool(); n.put("fit", b); sig(18, b) }
-                20 -> { val s = r.string(); n.put("placeholder", s); sig(19, s) }
-                21 -> { val s = r.string(); n.put("edit", s); sig(20, s) }
-                22 -> { val s = r.string(); n.put("view", s); sig(21, s) }
+                4 -> { val s = r.string(); n.put("id", s) }
+                5 -> { val d = r.double(); n.put("size", d) }
+                6 -> { val i = r.int32(); n.put("weight", i) }
+                7 -> { val c = color(r.sub(r.span())); n.put("color", c) }
+                8 -> { val i = r.int32(); n.put("lines", i) }
+                9 -> { val s = SHAPES[r.int32()]; n.put("shape", s) }
+                10 -> { val c = color(r.sub(r.span())); n.put("fill", c) }
+                11 -> { val c = color(r.sub(r.span())); n.put("stroke", c) }
+                12 -> { val d = r.double(); n.put("strokeWidth", d) }
+                13 -> { val s = AXES[r.int32()]; n.put("axis", s); hasAxis = true }
+                14 -> { val d = r.double(); n.put("spacing", d) }
+                15 -> { val d = r.double(); n.put("min", d) }
+                16 -> { val s = r.string(); n.put("src", s) }
+                17 -> { val b = r.bool(); n.put("remote", b) }
+                18 -> { val b = r.bool(); n.put("resizable", b) }
+                19 -> { val b = r.bool(); n.put("fit", b) }
+                20 -> { val s = r.string(); n.put("placeholder", s) }
+                21 -> { val s = r.string(); n.put("edit", s) }
+                22 -> { val s = r.string(); n.put("view", s) }
                 23 -> (options ?: JSONArray().also { options = it }).put(r.string())
                 24 -> {
                     val kv = r.sub(r.span())
@@ -174,11 +168,11 @@ object FlatTree {
                     }
                     (params ?: JSONObject().also { params = it }).put(key, value)
                 }
-                25 -> { val b = r.bool(); n.put("growW", b); sig(24, b) }
-                26 -> { val b = r.bool(); n.put("growH", b); sig(25, b) }
-                27 -> { val s = ALIGN_H[r.int32()]; n.put("alignH", s); sig(26, s) }
-                28 -> { val s = ALIGN_V[r.int32()]; n.put("alignV", s); sig(27, s) }
-                29 -> { val s = shadow(r.sub(r.span())); n.put("shadow", s); sig(28, s) }
+                25 -> { val b = r.bool(); n.put("growW", b) }
+                26 -> { val b = r.bool(); n.put("growH", b) }
+                27 -> { val s = ALIGN_H[r.int32()]; n.put("alignH", s) }
+                28 -> { val s = ALIGN_V[r.int32()]; n.put("alignV", s) }
+                29 -> { val s = shadow(r.sub(r.span())); n.put("shadow", s) }
                 30 -> {
                     val list = padding ?: JSONArray().also { padding = it }
                     if (type == 2) {
@@ -188,43 +182,37 @@ object FlatTree {
                         list.put(r.double())
                     }
                 }
-                31 -> { val d = r.double(); n.put("width", d); sig(30, d) }
-                32 -> { val d = r.double(); n.put("height", d); sig(31, d) }
-                33 -> { val b = r.bool(); n.put("expandW", b); sig(32, b) }
-                34 -> { val b = r.bool(); n.put("expandH", b); sig(33, b) }
-                35 -> { val d = r.double(); n.put("radius", d); sig(34, d) }
-                36 -> { val d = r.double(); n.put("opacity", d); sig(35, d) }
-                37 -> { val c = color(r.sub(r.span())); n.put("bg", c); sig(36, c) }
-                38 -> { val s = r.string(); n.put("gradient", s); sig(37, s) }
-                39 -> { val s = r.string(); n.put("tap", s); sig(38, s) }
-                40 -> { val i = r.int32(); n.put("feedback", i); sig(39, i) }
-                41 -> { val s = STYLES[r.int32()]; n.put("style", s); sig(40, s) }
-                42 -> { val s = r.string(); n.put("title", s); sig(41, s) }
-                43 -> { val s = r.string(); n.put("message", s); sig(42, s) }
-                44 -> { val s = r.string(); n.put("dismiss", s); sig(43, s) }
+                31 -> { val d = r.double(); n.put("width", d) }
+                32 -> { val d = r.double(); n.put("height", d) }
+                33 -> { val b = r.bool(); n.put("expandW", b) }
+                34 -> { val b = r.bool(); n.put("expandH", b) }
+                35 -> { val d = r.double(); n.put("radius", d) }
+                36 -> { val d = r.double(); n.put("opacity", d) }
+                37 -> { val c = color(r.sub(r.span())); n.put("bg", c) }
+                38 -> { val s = r.string(); n.put("gradient", s) }
+                39 -> { val s = r.string(); n.put("tap", s) }
+                40 -> { val i = r.int32(); n.put("feedback", i) }
+                41 -> { val s = STYLES[r.int32()]; n.put("style", s) }
+                42 -> { val s = r.string(); n.put("title", s) }
+                43 -> { val s = r.string(); n.put("message", s) }
+                44 -> { val s = r.string(); n.put("dismiss", s) }
                 45 -> children.add(node(r.sub(r.span())))
-                46 -> { val d = r.double(); n.put("offsetX", d); sig(45, d) }
-                47 -> { val d = r.double(); n.put("offsetY", d); sig(46, d) }
-                48 -> { val d = r.double(); n.put("scale", d); sig(47, d) }
-                49 -> { val s = r.string(); n.put("drag", s); sig(48, s) }
+                46 -> { val d = r.double(); n.put("offsetX", d) }
+                47 -> { val d = r.double(); n.put("offsetY", d) }
+                48 -> { val d = r.double(); n.put("scale", d) }
+                49 -> { val s = r.string(); n.put("drag", s) }
                 // Identity among its siblings: what composables key on.
                 50 -> n.put("key", r.string())
                 else -> r.skip(type)
             }
         }
         n.put("k", kind)
-        sig.insert(0, "0:$kind;")
-        numeric?.let { n.put("v", it); sig(2, it) } // numeric value
-        if (!hasAxis && (kind == "stack" || kind == "scroll")) { n.put("axis", "h"); sig(12, "h") }
-        options?.let { n.put("options", it); sig(22, it) }
-        params?.let { p ->
-            n.put("params", p)
-            // JSONObject iteration is unordered; sign each entry in a stable
-            // key order.
-            for (k in p.keys().asSequence().sorted()) sig.append("23.").append(k).append(':').append(p.opt(k)).append(';')
-        }
-        padding?.let { n.put("padding", it); sig(29, it) }
-        return UNode(n, children, sig.toString())
+        numeric?.let { n.put("v", it) } // numeric value
+        if (!hasAxis && (kind == "stack" || kind == "scroll")) n.put("axis", "h")
+        options?.let { n.put("options", it) }
+        params?.let { n.put("params", it) }
+        padding?.let { n.put("padding", it) }
+        return UNode(n, children)
     }
 
     /**
@@ -274,7 +262,7 @@ object FlatTree {
         }
         // Non-null after the first (root) op; the empty box guards a degenerate
         // empty-ops patch against a still-empty retained tree.
-        return root ?: UNode(JSONObject().apply { put("k", "box") }, emptyList(), "k0;")
+        return root ?: UNode(JSONObject().apply { put("k", "box") }, emptyList())
     }
 
     /** Splices [decoded] into [root] at positional [path] ("n", "n.0.1", ...).
@@ -283,7 +271,7 @@ object FlatTree {
     private fun applyOp(root: UNode?, path: String, decoded: UNode, attrsOnly: Boolean): UNode {
         val segments = path.split('.').drop(1).map { it.toInt() } // drop leading "n"
         if (segments.isEmpty()) {
-            return if (attrsOnly) UNode(decoded.json, root?.children ?: emptyList(), decoded.sig)
+            return if (attrsOnly) UNode(decoded.json, root?.children ?: emptyList())
             else decoded
         }
         return replaceAt(root!!, segments, 0, decoded, attrsOnly)
@@ -300,12 +288,12 @@ object FlatTree {
                 val kids = order.map { index ->
                     if (index >= 0 && index < cur.children.size) cur.children[index] else inserts[next++]
                 }
-                return UNode(cur.json, kids, cur.sig)
+                return UNode(cur.json, kids)
             }
             val index = segments[depth]
             val kids = ArrayList(cur.children)
             kids[index] = rebuild(cur.children[index], depth + 1)
-            return UNode(cur.json, kids, cur.sig)
+            return UNode(cur.json, kids)
         }
         return rebuild(root, 0)
     }
@@ -316,13 +304,13 @@ object FlatTree {
         val index = segments[depth]
         val child = cur.children[index]
         val newChild = if (depth == segments.lastIndex) {
-            if (attrsOnly) UNode(decoded.json, child.children, decoded.sig) else decoded
+            if (attrsOnly) UNode(decoded.json, child.children) else decoded
         } else {
             replaceAt(child, segments, depth + 1, decoded, attrsOnly)
         }
         val newChildren = ArrayList(cur.children)
         newChildren[index] = newChild
-        return UNode(cur.json, newChildren, cur.sig)
+        return UNode(cur.json, newChildren)
     }
 
 }

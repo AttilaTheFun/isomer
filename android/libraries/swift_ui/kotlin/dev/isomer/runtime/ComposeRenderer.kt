@@ -1486,7 +1486,7 @@ private fun BoxScope.IsoLayer(c: UNode, bw: Boolean, bh: Boolean) {
             (c.json.optDouble("offsetY", 0.0) * density).roundToInt())
         val unmoved = remember(c) {
             val names = c.json.keys().asSequence().filter { it != "offsetX" && it != "offsetY" }.toList().toTypedArray()
-            UNode(JSONObject(c.json, names), c.children, c.sig)
+            UNode(JSONObject(c.json, names), c.children)
         }
         Box(Modifier.matchParentSize()) {
             Popup(alignment = alignment, offset = moved, properties = PopupProperties(focusable = false, clippingEnabled = false)) {

@@ -6,8 +6,7 @@ import org.json.JSONObject
 /**
  * A retained render-tree node. `json` holds the node's OWN attributes (the
  * former {k, v, ...} shape the interpreters walk — never the children);
- * `children` are the retained child nodes; `sig` is a deterministic signature of
- * the own attributes (children excluded) used to diff cheaply.
+ * `children` are the retained child nodes.
  *
  * Marked [Immutable] so `IsoNode(n: UNode, ...)` is a *skippable* composable:
  * when the diff/reconcile keeps a subtree's `UNode` reference unchanged, Compose
@@ -21,7 +20,6 @@ import org.json.JSONObject
 class UNode(
     val json: JSONObject,
     val children: List<UNode>,
-    val sig: String,
 ) {
     /** A GeometryReader is this node or in its content (not in a
      *  `.background`/`.overlay` layer): it takes all the space it is
