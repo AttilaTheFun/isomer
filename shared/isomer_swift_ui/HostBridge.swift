@@ -162,6 +162,10 @@ public protocol HostBridge {
     /// `IsomerScreenshot.capture()`); nil where the host can't take one.
     /// Default: nil.
     func captureScreenshot() async -> [UInt8]?
+    /// Something the host does and answers when it is done ("package.install":
+    /// an app installed from a file, the Isomer module's `AppPackages`); nil
+    /// where the host does no such thing. Default: nil.
+    func hostRequest(_ key: String, _ value: String) async -> String?
 }
 
 extension HostBridge {
@@ -170,6 +174,7 @@ extension HostBridge {
     }
     public func captureScreenshot() async -> [UInt8]? { nil }
     public func registerImage(_ source: String, bytes: [UInt8]) {}
+    public func hostRequest(_ key: String, _ value: String) async -> String? { nil }
     /// "env:<NAME>" is the process's environment variable (the runtime's
     /// debug switches: ISO_FRAME_LOG, ISO_RENDER_LOG, ISO_VERIFY_PARTIAL,
     /// ISO_PARTIAL), set on Android from the launch intent's ISO_ extras;

@@ -75,6 +75,18 @@ object NativeBridge {
 
         override suspend fun captureScreen(): ByteArray = ScreenCapture.capture(activity?.get())
 
+        override fun hostValue(key: String): String = when {
+            key == "pasteboard" -> appContext?.getSystemService(android.content.ClipboardManager::class.java)
+                ?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString() ?: ""
+            key.startsWith("package.") -> AppPackages.value(key)
+            else -> ""
+        }
+
+        override suspend fun hostRequest(key: String, value: String): String = when {
+            key.startsWith("package.") -> AppPackages.request(key, value)
+            else -> ""
+        }
+
         override fun platformCommand(key: String, value: String) {
             platformCommandHandler?.invoke(key, value)
         }

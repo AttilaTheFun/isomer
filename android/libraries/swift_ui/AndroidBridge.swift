@@ -77,6 +77,12 @@ package protocol AndroidHost {
     /// The app's window as it is on screen, a PNG (`IsomerScreenshot`);
     /// empty when it can't be taken.
     func captureScreen() async -> [UInt8]
+    /// A value the host holds, read now (HostBridge's `hostValue`:
+    /// "pasteboard", "package.installed:<id>"…); empty for none.
+    func hostValue(key: String) -> String
+    /// Something the host does and answers when done (HostBridge's
+    /// `hostRequest`: "package.install"…).
+    func hostRequest(key: String, value: String) async -> String
 }
 
 /// The active host, installed by `nativeStart`. The generated foreign proxy

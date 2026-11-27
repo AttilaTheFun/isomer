@@ -24,12 +24,24 @@ object NetworkHosts {
     fun install() {
         if (installed) return
         installed = true
-        SwiftUIBridge.installIsomerNetworkHosts(http = AndroidHTTPHost(), webSocket = AndroidWebSocketHost())
+        val http = AndroidHTTPHost()
+        SwiftUIBridge.installIsomerNetworkHosts(http = http, webSocket = AndroidWebSocketHost())
+        // URLSession's download tasks: the body to its file as it arrives.
+        SwiftUIBridge.installIsomerDownloadHost(download = http)
     }
 }
 
-/** `HTTPHost` over HttpURLConnection (IsomerHTTP). */
-class AndroidHTTPHost : HTTPHost {
+/** `HTTPHost` over HttpURLConnection (IsomerHTTP), and `HTTPDownloadHost`:
+ *  the same exchange, its body streamed to a file. */
+class AndroidHTTPHost : HTTPHost, HTTPDownloadHost {
+    override suspend fun download(
+        method: String, url: String, headers: String, body: ByteArray, timeout: Double, path: String,
+    ): HTTPHostResponse = suspendCoroutine { continuation ->
+        IsomerHTTP.download(method, url, NetworkHeaders.parse(headers), body, timeout, java.io.File(path)) { result ->
+            continuation.resumeWith(result.map { HTTPHostResponse(it.status, NetworkHeaders.json(it.headers), it.body, it.url) })
+        }
+    }
+
     override suspend fun send(
         method: String, url: String, headers: String, body: ByteArray, timeout: Double,
     ): HTTPHostResponse = suspendCoroutine { continuation ->

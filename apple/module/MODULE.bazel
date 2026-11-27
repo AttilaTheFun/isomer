@@ -30,13 +30,13 @@ module(
 bazel_dep(name = "apple_support", version = "2.11.0")
 
 # rules_apple at rules_applecross's version, from the project's registry:
-# 5.3.1.applecross.6 is rules_apple 5.3.1 with rules_applecross's patches
-# (bundling and signing on Linux), asking for rules_applecross 0.0.3.382f8c3,
+# 5.3.1.applecross.7 is rules_apple 5.3.1 with rules_applecross's patches
+# (bundling and signing on Linux), asking for rules_applecross 0.0.3.1f03f48,
 # which asks for it back (a preset pair: no override, and no copies of the
 # patches, in any root). Named build_bazel_rules_apple, as isomer's Apple
 # BUILD files have always named it.
-bazel_dep(name = "rules_apple", version = "5.3.1.applecross.6", repo_name = "build_bazel_rules_apple")
-bazel_dep(name = "rules_applecross", version = "0.0.3.382f8c3")
+bazel_dep(name = "rules_apple", version = "5.3.1.applecross.7", repo_name = "build_bazel_rules_apple")
+bazel_dep(name = "rules_applecross", version = "0.0.3.1f03f48")
 
 bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "rules_swift", version = "4.3.0.isomer.2")
