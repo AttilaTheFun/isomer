@@ -22,7 +22,7 @@ esac
 
 # Each command, by the package that has it.
 wanted=(git:git curl:curl python3:python3 unzip:unzip zip:zip zstd:zstd xz:xz-utils openssl:openssl
-        file:file gzip:gzip sha256sum:coreutils sudo:sudo)
+        file:file gzip:gzip sha256sum:coreutils sudo:sudo jq:jq)
 packages=(ca-certificates)
 for pair in "${wanted[@]}"; do
     command -v "${pair%%:*}" > /dev/null || packages+=("${pair#*:}")

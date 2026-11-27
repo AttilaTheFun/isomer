@@ -297,11 +297,13 @@ if has android; then
         //tests/library_evolution:library_evolution_test
     results+=($?)
 fi
-if has apple; then
+if has apple && [ "$(uname -s)" = Darwin ]; then
     # Mixed mode on the Mac (docs/side_modules.md): the Storybook as a side
     # module over its runtime module, native code beside WasmKit, and
     # interpreted throughout (ISO_MIXED_NATIVE=0), each rendering what its
-    # reactor renders, byte for byte. Nothing drawn.
+    # reactor renders, byte for byte. Nothing drawn. A Mac's alone: on Linux
+    # (a Nimbus runner) Bazel's analysis of them finds a cycle through the
+    # side module's wasm build, so the apple job runs them in its macOS VM.
     run_tests --test_output=errors //tests/side_modules:mixed_render_test //tests/side_modules:mixed_interpreted_render_test
     results+=($?)
 fi
