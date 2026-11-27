@@ -76,11 +76,16 @@ package final class SwiftGPURenderer: HostBridge, TreeRenderer {
     private var transformStack: [(Double, Double, Double, Double, Double, Double)] = []
     private var clipStack: [CGRect] = []
 
-    // Host-rasterized textures (text runs, gradients, shadows, images),
-    // keyed by their spec; evicted LRU beyond the budget.
-    private var rasterCache: [String: GPUTexture] = [:]
-    private var rasterOrder: [String] = []
+    // Host-rasterized textures (text runs, gradients, shadows, images,
+    // paths), by what they are of, each with the frame that last drew it.
+    // Beyond the budget the least recently drawn go, never one this frame
+    // drew: a frame of more rasters than the budget keeps them all (the
+    // cache over budget until a later frame needs less), where evicting in
+    // the order they were made had such a frame rasterize every one again,
+    // every frame.
+    private var rasterCache: [RasterKey: CachedRaster] = [:]
     private let rasterBudget = 512
+    private var frameNumber = 0
 
     #if canImport(SwiftMap)
     // One SwiftMap engine + scene per `Map` node (keyed by the node's
@@ -96,6 +101,7 @@ package final class SwiftGPURenderer: HostBridge, TreeRenderer {
     // MARK: - Frame lifecycle
 
     public func beginFrame(width: Double, height: Double) {
+        frameNumber &+= 1
         frameWidth = width
         frameHeight = height
         transformStack = []
@@ -214,10 +220,12 @@ package final class SwiftGPURenderer: HostBridge, TreeRenderer {
     // MARK: - Rasterized content (host raster -> texture -> quad)
 
     public func drawText(_ text: String, in rect: CGRect, fontSize: Double, weight: Int, color: HostColor) {
-        let spec = "{\"kind\":\"text\",\"text\":\"\(jsonEscapedGPU(text))\",\"size\":\(fontSize),\"weight\":\(weight)"
-            + ",\"wrap\":\(rect.width),\"r\":\(color.red),\"g\":\(color.green),\"b\":\(color.blue),\"a\":\(color.opacity)}"
         flushRects()
-        guard let pass, let texture = rasterTexture(spec: spec) else { return }
+        let key = RasterKey.text(text, size: fontSize, weight: weight, wrap: Double(rect.width), color: color)
+        guard let pass, let texture = rasterTexture(key: key, spec: {
+            "{\"kind\":\"text\",\"text\":\"\(jsonEscapedGPU(text))\",\"size\":\(fontSize),\"weight\":\(weight)"
+                + ",\"wrap\":\(rect.width),\"r\":\(color.red),\"g\":\(color.green),\"b\":\(color.blue),\"a\":\(color.opacity)}"
+        }) else { return }
         // The raster is the text's natural size, which can differ from the
         // frame: narrower (a placeholder in a wide field — draw leading-
         // aligned, vertically centered) or taller (wrapped lines capped by
@@ -240,23 +248,29 @@ package final class SwiftGPURenderer: HostBridge, TreeRenderer {
     }
 
     public func fillGradient(_ rect: CGRect, cornerRadius: Double, gradientJSON: String) {
-        let spec = "{\"kind\":\"gradient\",\"w\":\(rect.width),\"h\":\(rect.height)"
-            + ",\"radius\":\(cornerRadius),\"gradient\":\(gradientJSON)}"
-        drawRaster(spec: spec, in: rect)
+        let key = RasterKey.gradient(
+            width: Double(rect.width), height: Double(rect.height), radius: cornerRadius, gradient: gradientJSON)
+        drawRaster(key: key, in: rect) {
+            "{\"kind\":\"gradient\",\"w\":\(rect.width),\"h\":\(rect.height)"
+                + ",\"radius\":\(cornerRadius),\"gradient\":\(gradientJSON)}"
+        }
     }
 
     public func drawShadow(_ rect: CGRect, cornerRadius: Double, color: HostColor, radius: Double, x: Double, y: Double) {
         // The raster includes the blur margin; draw it around the rect.
         let margin = radius * 2
-        let spec = "{\"kind\":\"shadow\",\"w\":\(rect.width),\"h\":\(rect.height),\"corner\":\(cornerRadius)"
-            + ",\"blur\":\(radius),\"r\":\(color.red),\"g\":\(color.green),\"b\":\(color.blue),\"a\":\(color.opacity)}"
         let dest = CGRect(
             x: rect.minX - margin + x,
             y: rect.minY - margin + y,
             width: rect.width + margin * 2,
             height: rect.height + margin * 2
         )
-        drawRaster(spec: spec, in: dest)
+        let key = RasterKey.shadow(
+            width: Double(rect.width), height: Double(rect.height), corner: cornerRadius, blur: radius, color: color)
+        drawRaster(key: key, in: dest) {
+            "{\"kind\":\"shadow\",\"w\":\(rect.width),\"h\":\(rect.height),\"corner\":\(cornerRadius)"
+                + ",\"blur\":\(radius),\"r\":\(color.red),\"g\":\(color.green),\"b\":\(color.blue),\"a\":\(color.opacity)}"
+        }
     }
 
     public func drawImage(
@@ -265,8 +279,8 @@ package final class SwiftGPURenderer: HostBridge, TreeRenderer {
     ) {
         flushRects()
         guard let pass else { return }
-        let spec = "{\"kind\":\"image\",\"source\":\"\(jsonEscapedGPU(source))\",\"remote\":\(isRemote)}"
-        guard let texture = rasterTexture(spec: spec) else { return }
+        let key = RasterKey.image(source: source, isRemote: isRemote, template: nil)
+        guard let texture = rasterTexture(key: key, spec: { imageSpec(source, isRemote: isRemote) }) else { return }
         // Clip via scissor while this quad draws (rounded corners
         // approximated, as before).
         pushClip(clip, cornerRadius: cornerRadius)
@@ -281,9 +295,9 @@ package final class SwiftGPURenderer: HostBridge, TreeRenderer {
     ) {
         flushRects()
         guard let pass else { return }
-        let spec = "{\"kind\":\"image\",\"source\":\"\(jsonEscapedGPU(source))\",\"remote\":\(isRemote)}"
-        let key = spec + "|template \(tint.red) \(tint.green) \(tint.blue) \(tint.opacity)"
-        guard let texture = rasterTexture(spec: spec, key: key, recolor: tint) else { return }
+        let key = RasterKey.image(source: source, isRemote: isRemote, template: tint)
+        guard let texture = rasterTexture(
+            key: key, spec: { imageSpec(source, isRemote: isRemote) }, recolor: tint) else { return }
         pushClip(clip, cornerRadius: cornerRadius)
         pass.drawTextured(vertices: quadVertices(dest), texture: texture)
         popClip()
@@ -324,10 +338,10 @@ package final class SwiftGPURenderer: HostBridge, TreeRenderer {
         hasher.combine(lineWidth)
         hasher.combine(width)
         hasher.combine(height)
-        let key = "path \(hasher.finalize())"
+        let key = RasterKey.path(hasher.finalize())
         flushRects()
         guard let pass else { return }
-        let texture = rasterCache[key] ?? {
+        let texture = cachedRaster(key) ?? {
             // The points in device pixels, from the raster's corner.
             let rings = subpaths.map { $0.map { (Double($0.x) - minX) * scale } }
             let ringsY = subpaths.map { $0.map { (Double($0.y) - minY) * scale } }
@@ -367,9 +381,9 @@ package final class SwiftGPURenderer: HostBridge, TreeRenderer {
         pass.drawTextured(vertices: quadVertices(rect), texture: texture)
     }
 
-    private func drawRaster(spec: String, in rect: CGRect) {
+    private func drawRaster(key: RasterKey, in rect: CGRect, spec: () -> String) {
         flushRects()
-        guard let pass, let texture = rasterTexture(spec: spec) else { return }
+        guard let pass, let texture = rasterTexture(key: key, spec: spec) else { return }
         pass.drawTextured(vertices: quadVertices(rect), texture: texture)
     }
 
@@ -377,13 +391,13 @@ package final class SwiftGPURenderer: HostBridge, TreeRenderer {
     /// returns [width u32 LE][height u32 LE][rgba…]; empty means "not ready"
     /// (e.g. an image still loading — the host re-renders when it lands).
     /// `recolor`: a template's, the raster's alpha filled with that colour
-    /// (cached under `key`, the spec and the colour).
-    private func rasterTexture(spec: String, key: String? = nil, recolor: HostColor? = nil) -> GPUTexture? {
-        let key = key ?? spec
-        if let cached = rasterCache[key] {
+    /// (the colour part of `key`). `spec`, the host's JSON, is made only
+    /// when the raster isn't cached.
+    private func rasterTexture(key: RasterKey, spec: () -> String, recolor: HostColor? = nil) -> GPUTexture? {
+        if let cached = cachedRaster(key) {
             return cached
         }
-        let payload = services.rasterize(spec)
+        let payload = services.rasterize(spec())
         guard payload.count > 8 else { return nil }
         let width = Int(payload[0]) | Int(payload[1]) << 8 | Int(payload[2]) << 16 | Int(payload[3]) << 24
         let height = Int(payload[4]) | Int(payload[5]) << 8 | Int(payload[6]) << 16 | Int(payload[7]) << 24
@@ -404,16 +418,29 @@ package final class SwiftGPURenderer: HostBridge, TreeRenderer {
         return texture
     }
 
-    /// Caches a raster's texture, evicting the oldest beyond the budget.
-    private func keepRaster(_ texture: GPUTexture, key: String) {
-        rasterCache[key] = texture
-        rasterOrder.append(key)
-        if rasterOrder.count > rasterBudget {
-            let evicted = rasterOrder.removeFirst()
-            if let texture = rasterCache.removeValue(forKey: evicted) {
-                surface.device.destroyTexture(texture)
-            }
+    /// A cached raster's texture, marked as drawn this frame.
+    private func cachedRaster(_ key: RasterKey) -> GPUTexture? {
+        guard let index = rasterCache.index(forKey: key) else { return nil }
+        rasterCache.values[index].lastUsed = frameNumber
+        return rasterCache.values[index].texture
+    }
+
+    /// Caches a raster's texture. Beyond the budget, evicts the least
+    /// recently drawn down to three quarters of it (so a run of misses
+    /// doesn't sort the cache for each), sparing what this frame drew.
+    private func keepRaster(_ texture: GPUTexture, key: RasterKey) {
+        rasterCache[key] = CachedRaster(texture: texture, lastUsed: frameNumber)
+        guard rasterCache.count > rasterBudget else { return }
+        let stale = rasterCache.filter { $0.value.lastUsed != frameNumber }
+            .sorted { $0.value.lastUsed < $1.value.lastUsed }
+        for (key, entry) in stale.prefix(rasterCache.count - rasterBudget * 3 / 4) {
+            rasterCache.removeValue(forKey: key)
+            surface.device.destroyTexture(entry.texture)
         }
+    }
+
+    private func imageSpec(_ source: String, isRemote: Bool) -> String {
+        "{\"kind\":\"image\",\"source\":\"\(jsonEscapedGPU(source))\",\"remote\":\(isRemote)}"
     }
 
     private func quadVertices(_ rect: CGRect) -> [Float] {
@@ -706,6 +733,22 @@ private func jsonEscapedGPU(_ text: String) -> String {
         }
     }
     return out
+}
+
+/// What a cached raster is of (`SwiftGPURenderer.rasterCache`): made on every
+/// draw, hits included, so a struct rather than the host's JSON spec.
+private enum RasterKey: Hashable {
+    case text(String, size: Double, weight: Int, wrap: Double, color: HostColor)
+    case gradient(width: Double, height: Double, radius: Double, gradient: String)
+    case shadow(width: Double, height: Double, corner: Double, blur: Double, color: HostColor)
+    /// A template's tint is part of its key.
+    case image(source: String, isRemote: Bool, template: HostColor?)
+    case path(Int)
+}
+
+private struct CachedRaster {
+    var texture: GPUTexture
+    var lastUsed: Int
 }
 
 #endif
