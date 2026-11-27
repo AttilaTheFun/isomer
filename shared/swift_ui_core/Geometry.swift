@@ -99,7 +99,7 @@ enum StackAxis {
 }
 
 /// A size proposal where either dimension may be unspecified.
-struct ProposedSize {
+struct ProposedSize: Equatable {
     var width: CGFloat?
     var height: CGFloat?
 

@@ -75,6 +75,15 @@ struct TextFieldRegion {
 /// Mutable per-frame output of the draw pass.
 final class RenderPass {
     let host: HostBridge
+    /// The images' statuses, asked of the host once a pass.
+    private var imageStatuses: [_ImageInfoKey: ImageStatus] = [:]
+    func imageInfo(_ source: String, isRemote: Bool) -> ImageStatus {
+        let key = _ImageInfoKey(source: source, isRemote: isRemote)
+        if let known = imageStatuses[key] { return known }
+        let status = host.imageInfo(source, isRemote: isRemote)
+        imageStatuses[key] = status
+        return status
+    }
     var tapRegions: [TapRegion] = []
     var scrollRegions: [ScrollRegion] = []
     var sliderRegions: [SliderRegion] = []
@@ -414,7 +423,12 @@ package final class Runtime {
     public var wantsFrame: Bool {
         needsRender || animator.isAnimating || navTransitionActive
     }
-    var measureCache: [String: CGSize] = [:]
+    /// Text sizes the host measured, by what was measured. Kept across
+    /// frames (cleared on a resize) and bounded: a label whose text changes
+    /// each frame (a clock, a counter) would otherwise grow it for ever.
+    var measureCache: [_MeasureKey: CGSize] = [:]
+    /// This layout's image statuses (`frameImageInfo`).
+    var frameImageStatuses: [_ImageInfoKey: ImageStatus] = [:]
 
     // Pointer-gesture state (tap vs drag-scroll vs slider disambiguation).
     var pointerIsDown = false
@@ -766,9 +780,22 @@ package final class Runtime {
                 self?.cachedMeasure(text: text, font: font, wrapWidth: wrapWidth) ?? .zero
             },
             imageInfo: { [weak self] source, isRemote in
-                self?.host?.imageInfo(source, isRemote: isRemote) ?? .loading
+                self?.frameImageInfo(source, isRemote: isRemote) ?? .loading
             }
         )
+    }
+
+    /// An image's status as the host has it, asked once a layout: layout
+    /// measures a node again under each container that places it, each a
+    /// call into the host (across the bridge in a reactor). Within one
+    /// layout the answer stands; `layoutTree` starts each afresh (and the
+    /// drawing asks once a pass, `RenderPass.imageInfo`).
+    func frameImageInfo(_ source: String, isRemote: Bool) -> ImageStatus {
+        let key = _ImageInfoKey(source: source, isRemote: isRemote)
+        if let known = frameImageStatuses[key] { return known }
+        let status = host?.imageInfo(source, isRemote: isRemote) ?? .loading
+        frameImageStatuses[key] = status
+        return status
     }
 
     /// Monotonic time of the current frame (seconds); read by animations.
@@ -1024,6 +1051,7 @@ package final class Runtime {
     /// make its guest draw again).
     @MainActor
     package func layoutTree(root: RenderNode) -> [() -> Void] {
+        frameImageStatuses.removeAll(keepingCapacity: true)
         expandDrawnChrome(root)
         let layoutCtx = layoutContext()
         let proposal = ProposedSize(width: width, height: height)
@@ -1048,6 +1076,7 @@ package final class Runtime {
     /// transition is over: the headless head's, which draws no transition.
     @MainActor
     package func layoutPresentations() -> [RenderNode] {
+        frameImageStatuses.removeAll(keepingCapacity: true)
         let layoutCtx = layoutContext()
         let screen = CGRect(x: 0, y: 0, width: width, height: height)
         return pendingPresentations.map { presentation in
@@ -1321,10 +1350,16 @@ package final class Runtime {
     }
 
     func cachedMeasure(text: String, font: Font, wrapWidth: CGFloat?) -> CGSize {
-        let key = "\(text)|\(font.size)|\(font.weight.value)|\(font.family ?? "")|\(wrapWidth ?? -1)"
+        // A struct, not a string made of the numbers: the key is made on
+        // every measure, hits included, and formatting a Double is slow
+        // (more so in a reactor run by an interpreter).
+        let key = _MeasureKey(
+            text: text, size: font.size, weight: font.weight.value, family: font.family,
+            wrapWidth: wrapWidth ?? -1)
         if let cached = measureCache[key] {
             return cached
         }
+        if measureCache.count >= 4096 { measureCache.removeAll(keepingCapacity: true) }
         guard let host else { return .zero }
         // `Font.custom`'s family: the host measures with the font the
         // renderer draws (Android's bundled typeface, HostServices).
@@ -1972,7 +2007,7 @@ private func _draw(_ node: RenderNode, pass: RenderPass) {
         }
 
     case .image(let source, let isRemote, _, let fit):
-        switch host.imageInfo(source, isRemote: isRemote) {
+        switch pass.imageInfo(source, isRemote: isRemote) {
         case .ready(let intrinsic):
             let dest = fit
                 ? aspectFitRect(intrinsic, in: node.frame)
@@ -2266,3 +2301,18 @@ func aspectFillRect(_ intrinsic: CGSize, in frame: CGRect) -> CGRect {
 
 
 
+
+/// What a text was measured as (`Runtime.cachedMeasure`).
+struct _MeasureKey: Hashable {
+    var text: String
+    var size: CGFloat
+    var weight: Int
+    var family: String?
+    var wrapWidth: CGFloat
+}
+
+/// An image asked about (`Runtime.frameImageInfo`).
+struct _ImageInfoKey: Hashable {
+    var source: String
+    var isRemote: Bool
+}
