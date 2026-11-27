@@ -102,9 +102,15 @@ released as `isomer-6.4.2.N` (from .1), at
 `https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.N/<name>`.
 isomer registered isomer-6.4.2.1 in 0.56 and 0.57, isomer-6.4.2.2
 (its Android SDKs at API 23, "The SDKs' checks") from 0.58, and
-isomer-6.4.2.3 since 0.63: Swift's C++ interop on wasm (the wasi-libc
-module map's cycle with libc++'s broken, libswiftCxx.a beside the static
-stdlib) and `NSLog` on Android (logcat) and wasm (standard error).
+isomer-6.4.2.3, then isomer-6.4.2.4, in 0.63. .3: Swift's C++ interop on
+wasm (the wasi-libc module map's cycle with libc++'s broken, libswiftCxx.a
+beside the static stdlib) and `NSLog` on Android (logcat) and wasm (standard
+error). .4: a third wasm bundle,
+`swift-6.4.2-RELEASE_wasm-threads.artifactbundle.tar.gz`
+(wasm32-unknown-wasip1-threads: Swift 6.4.2 with swiftlang/swift#92018's
+multi-threaded Concurrency, libc++ with threads and WebAssembly exceptions;
+plain, no ICU), and `URLSession`'s downloads written to a file as they
+arrive (IsomerFoundation's `HTTPTransport.download(_:to:)`).
 
 - **Minimum**: the Android SDKs' is API 23, swift.org's: every library in
   them is compiled for `<arch>-unknown-linux-android23` (from
@@ -258,12 +264,12 @@ has them with their checksums):
 ```starlark
 # If you build for Android:
 swift.android_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.3/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.4/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz",
     sha256 = "…",
 )
 # If you build for the web:
 swift.wasm_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.3/swift-6.4.2-RELEASE_wasm.artifactbundle.tar.gz",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.4/swift-6.4.2-RELEASE_wasm.artifactbundle.tar.gz",
     sha256 = "…",
 )
 ```
