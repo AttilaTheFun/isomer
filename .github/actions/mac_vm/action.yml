@@ -19,7 +19,7 @@ inputs:
     description: "NAME=VALUE lines set for the command"
     default: ""
   out:
-    description: A path in the folder copied back after the command, whatever it returned
+    description: Paths in the folder (space-separated) copied back after the command, whatever it returned; those it didn't make are skipped
     default: ""
   git:
     description: "true: the checkout's .git copied in too (a quick proof reads the branch's history)"
@@ -49,5 +49,8 @@ runs:
         envs=(); while IFS= read -r line; do [ -n "$line" ] && envs+=("$line"); done <<< "$RUN_ENV"
         command="cd ~/w && sudo launchctl asuser \$(id -u) sudo -u \$(id -un) env ${envs[*]+$(printf '%q ' "${envs[@]}")}zsh -lc $(printf '%q' "$RUN")"
         status=0; vm "$command" || status=$?
-        if [ -n "$OUT" ]; then vm "cd ~/w && tar -chf - $(printf '%q' "$OUT")" | tar -xf - || echo "::warning::nothing at $OUT"; fi
+        for path in $OUT; do
+          vm "cd ~/w && [ -e $(printf '%q' "$path") ] && tar -chf - $(printf '%q' "$path")" | tar -xf - 2>/dev/null ||
+            echo "::warning::nothing at $path"
+        done
         exit "$status"
