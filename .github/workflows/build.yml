@@ -57,8 +57,8 @@ on:
   # The Apple cache's builds (populate-apple, bazel8-apple), nightly: a
   # public repository has five macOS runners, which two Apple builds on
   # every merge kept from the pull requests' container-apple.
-  schedule:
-    - cron: "23 8 * * *"
+  # The nightly schedule is off: it ran populate-apple on a paid larger runner (xcode-27), and
+  # No paid GitHub runners (2026-11-27). populate-apple moves to Nimbus.
   release:
     types: [published]
   workflow_dispatch:
