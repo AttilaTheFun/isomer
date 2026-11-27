@@ -347,7 +347,12 @@ public final class HeadlessApp: @unchecked Sendable {
     /// to the URL and ISO_DRIVER_NAME to the name (a web page's ISO_ query,
     /// an Android intent's extras), then run until it is stopped (SIGTERM,
     /// or a file named `stop` among its requests), when it ends the app.
-    /// `quit()` stops it. The app has `timeout` seconds to attach.
+    /// `quit()` stops it. The app has `timeout` seconds to attach: half on
+    /// its first launch, all of it on the one try more. A job whose machines
+    /// start apps slowly raises the first launch's time with
+    /// ISO_DRIVE_ATTACH_SECONDS in the test's environment (an iPhone
+    /// simulator freshly booted on Linux attaches in 80-90 s; the retry then
+    /// has at least twice it).
     ///
     /// `fresh` (the default) starts the app with none of its data from
     /// before, as an app built headless always starts: the launcher's
@@ -362,7 +367,9 @@ public final class HeadlessApp: @unchecked Sendable {
         // and then loses a launch made just as the app before it quits. The
         // first try has half the time.
         var failure: HeadlessError?
-        for (attempt, wait) in [timeout / 2, timeout].enumerated() {
+        let first = ProcessInfo.processInfo.environment["ISO_DRIVE_ATTACH_SECONDS"].flatMap(Double.init)
+            .map { max($0, 1) } ?? timeout / 2
+        for (attempt, wait) in [first, max(timeout, first * 2)].enumerated() {
             let name = HeadfulHub.nextName()
             let (process, requests) = try Self.startLauncher(launcher, hub: hub.url, name: name, environment: environment,
                                                              arguments: arguments, fresh: fresh)

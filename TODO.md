@@ -372,14 +372,22 @@ JavaScript engine, and WasmKit goes:
   every view, gone since 0.52 (#189); the Storybook's layout.centred holds
   it.)
 
-## wasi-threads (Swift 6.5)
+## wasi-threads
 
-Swift 6.5 is the first release with swiftlang/swift#92018 (multi-threaded
-Concurrency on `wasm32-unknown-wasip1-threads`). When it is out: register its
-threads SDK, build the threaded reactors and their tests again, and serve a
-web view's page cross-origin isolated (`Cross-Origin-Opener-Policy` and
-`Cross-Origin-Embedder-Policy`), which `SharedArrayBuffer`, and so a shared
-memory, needs.
+Back in 0.63: Isomer's Swift SDKs isomer-6.4.2.4 have a threads bundle
+(`swift-6.4.2-RELEASE_wasm-threads`: Swift 6.4.2 with swiftlang/swift#92018
+patched in, libc++ with threads and WebAssembly exceptions), registered
+beside the wasm SDK; the threaded reactors build and their tests run again
+(the examples' //tests/sqlite_wasi:sqlite_file_threads_test and
+//tests/wasm_engines:wasmkit_threads_test in CI's container, the threaded
+cases of wasm_engine_tests on the Mac). Left:
+
+- serve a web view's page cross-origin isolated (`Cross-Origin-Opener-Policy`
+  and `Cross-Origin-Embedder-Policy`), which `SharedArrayBuffer`, and so a
+  shared memory, needs, and run a threaded reactor in a browser;
+- a threaded reactor on Android's WasmView (`canRunThreads` unchecked there);
+- swift.org's own threads SDK from Swift 6.5, the first release with #92018:
+  then Isomer's bundle builds over it rather than patching 6.4.2.
 
 ## Linux and Windows on x86-64 and arm64 (owner, 2026-11-11)
 
@@ -648,8 +656,9 @@ has it.
   three workarounds stay in rules_applecross until upstream fixes exist.
 - **apple_support**: its patch is upstream in 2.11.0 (#669): move to 2.11.0
   and drop it.
-- **The threads Swift SDK** for wasm: swiftlang/swift#92018 is merged; the
-  fork goes when swift.org publishes a wasip1-threads SDK.
+- **The threads Swift SDK** for wasm: swiftlang/swift#92018 is merged;
+  Isomer's Swift SDKs patch it into 6.4.2 (isomer-6.4.2.4's threads bundle)
+  until swift.org publishes a wasip1-threads SDK (6.5).
 
 ## Swift, not Python
 
@@ -715,8 +724,10 @@ Electron's own Node, part of the Electron app rather than the build.
   and apple_support had moved in 0.40. rules_applecross still brings
   swift.org's 6.4.0 (the Swift that built Xcode 27.0's SDKs) for the Apple
   targets alone. Left from it:
-  - the wasi-threads SDK: none until Swift 6.5, the first release with
-    swiftlang/swift#92018; the threaded reactors and their tests wait;
+  - the wasi-threads SDK: none from 0.41 until Isomer's Swift SDKs
+    isomer-6.4.2.4 (0.63), whose threads bundle patches
+    swiftlang/swift#92018 into 6.4.2; the threaded reactors and their tests
+    are back;
   - swift-syntax is still 603.0.2 (BCR) for swift_ffi's plugin and
     analyzer.
 - **Building on a Mac without Xcode.**

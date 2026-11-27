@@ -742,7 +742,7 @@ version, and loads the macro from it (`@isomer_apple//:defs.bzl`):
 bazel_dep(name = "isomer_apple", version = "0.58.1")
 ```
 
-It brings rules_apple 5.3.1.applecross.6 (as `build_bazel_rules_apple`),
+It brings rules_apple 5.3.1.applecross.7 (as `build_bazel_rules_apple`),
 rules_applecross and apple_support 2.11.0; the root still registers the
 bundling toolchains ("Upgrading isomer", 0.40). An app that declares its
 Apple applications with rules_apple itself needs no isomer_apple.
@@ -893,6 +893,20 @@ swift.wasm_sdk(
 )
 ```
 
+If you build threaded reactors (`@isomer//swift_ffi/rules:wasm32-wasip1-threads`:
+Swift's Concurrency on guest threads, shared memory, C++ exceptions; run by
+WasmKit's WASI Threads, plain, no ICU), take the threads SDK beside your wasm
+one, and register its toolchains (`@swift_toolchain//:cc_toolchain_wasm32_threads_<host>`
+and `:swift_toolchain_wasm32_threads_<host>`, as examples/MODULE.bazel does):
+
+```starlark
+swift.wasm_sdk(
+    threads = True,
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.4/swift-6.4.2-RELEASE_wasm-threads.artifactbundle.tar.gz",
+    sha256 = "1767e9a2d2bb542c5efaf2090d690e1d0d42aa1692967d5156df8aa72e2de8eb",
+)
+```
+
 The SDKs move on their own cadence (isomer_hermetic_toolchains' releases,
 whose notes carry these lines); each is the Swift release isomer's toolchain
 is (6.4.2), which `swift.toolchain`'s `swift_version` must match.
@@ -1014,8 +1028,9 @@ Each release's notes have an Upgrading section; these things are easy to miss:
 - **Isomer's Swift SDKs isomer-6.4.2.4 (0.63): a wasm threads SDK, and
   downloads to a file.** Move `swift.android_sdk` and `swift.wasm_sdk` to its
   lines. It adds `swift-6.4.2-RELEASE_wasm-threads.artifactbundle.tar.gz`
-  (Swift's threads and C++ exceptions on wasm32-unknown-wasip1-threads), and
-  `URLSession`'s download tasks write their body to a file as it arrives
+  (Swift's threads and C++ exceptions on wasm32-unknown-wasip1-threads;
+  isomer registers it, and builds and tests its threaded reactors again,
+  "Isomer's Swift SDKs" above has the line), and `URLSession`'s download tasks write their body to a file as it arrives
   where the host's transport can (IsomerFoundation's
   `HTTPTransport.download(_:to:)`; its default sends, then writes).
 - **Isomer's Swift SDKs isomer-6.4.2.3 (0.63): Swift's C++ interop on
@@ -1154,7 +1169,7 @@ Each release's notes have an Upgrading section; these things are easy to miss:
   moves into the package's output directory, and a stale one left elsewhere
   by an earlier build can shadow it (Swift compiles run unsandboxed).
 - **Apple apps bundle through rules_applecross (since 0.40).** The
-  registry's rules_apple (5.3.1.applecross.6) bundles through
+  registry's rules_apple (5.3.1.applecross.7) bundles through
   `@rules_applecross//toolchain:apple_bundling_toolchain_type`, and
   rules_applecross registers its toolchains only as a dev dependency. A root
   that builds iOS or Mac apps depends on rules_applecross and registers the
@@ -1162,7 +1177,7 @@ Each release's notes have an Upgrading section; these things are easy to miss:
   found for …apple_bundling_toolchain_type":
 
   ```starlark
-  bazel_dep(name = "rules_applecross", version = "0.0.3.382f8c3")
+  bazel_dep(name = "rules_applecross", version = "0.0.3.1f03f48")
   register_toolchains("@rules_applecross//toolchain:apple_bundling_on_macos")
   # Building Apple apps on Linux too: also
   # "@rules_applecross//toolchain:apple_bundling_on_linux" (examples/MODULE.bazel).

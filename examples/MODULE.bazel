@@ -115,10 +115,21 @@ swift.wasm_sdk(
     url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.4/swift-6.4.2-RELEASE_wasm.artifactbundle.tar.gz",
     sha256 = "0d9f6dfc4dd288f3bd634ee36dcfb6f7e8b6fa5cb74e55f6a4e3848ebb4c5926",
 )
-# No wasi-threads SDK beside it since 0.41: Isomer's was a build of
-# Swift 6.3.2 with swiftlang/swift#92018, which reaches a release in 6.5;
-# reactors built for `@isomer//swift_ffi/rules:wasm32-wasip1-threads` wait
-# for it (TODO.md).
+# The wasi-threads SDK beside it (wasm32-unknown-wasip1-threads): what a
+# reactor built for `@isomer//swift_ffi/rules:wasm32-wasip1-threads` compiles
+# with (rules_swift#1990: its toolchains `*_wasm32_threads_*`, chosen by
+# `@rules_swift//swift/toolchains/wasm:threaded`). Isomer's Swift SDKs' third
+# wasm bundle (isomer-6.4.2.4): Swift 6.4.2 with swiftlang/swift#92018
+# (Concurrency on a pool of guest threads; a release has it from 6.5), libc++,
+# libc++abi and libunwind with threads and WebAssembly exceptions, and its
+# toolset's shared, imported and exported memory. Plain: no ICU. Its
+# programs run on WasmKit's WASI Threads (0.33's threaded reactors, set aside
+# from 0.41 until this SDK).
+swift.wasm_sdk(
+    threads = True,
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.4/swift-6.4.2-RELEASE_wasm-threads.artifactbundle.tar.gz",
+    sha256 = "1767e9a2d2bb542c5efaf2090d690e1d0d42aa1692967d5156df8aa72e2de8eb",
+)
 swift.android_sdk(
     url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.4/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz",
     sha256 = "10d59835319276b5de6395da25b9dbb90424fbf59533b50e3f013a6cc2d8e5d4",
@@ -133,6 +144,8 @@ use_repo(
 register_toolchains(
     "@swift_toolchain//:cc_toolchain_wasm32_xcode",
     "@swift_toolchain//:swift_toolchain_wasm32_xcode",
+    "@swift_toolchain//:cc_toolchain_wasm32_threads_xcode",
+    "@swift_toolchain//:swift_toolchain_wasm32_threads_xcode",
     "@swift_toolchain//:swift_toolchain_android_aarch64_xcode",
     "@swift_toolchain//:swift_toolchain_android_x86_64_xcode",
 )
@@ -141,12 +154,16 @@ register_toolchains(
     "@swift_toolchain//:swift_toolchain_exec_ubuntu24.04",
     "@swift_toolchain//:cc_toolchain_wasm32_ubuntu24.04",
     "@swift_toolchain//:swift_toolchain_wasm32_ubuntu24.04",
+    "@swift_toolchain//:cc_toolchain_wasm32_threads_ubuntu24.04",
+    "@swift_toolchain//:swift_toolchain_wasm32_threads_ubuntu24.04",
     "@swift_toolchain//:swift_toolchain_android_aarch64_ubuntu24.04",
     "@swift_toolchain//:swift_toolchain_android_x86_64_ubuntu24.04",
     # arm64 Linux (and the Shireworks containers tools/linux/build.sh and CI build in).
     "@swift_toolchain//:swift_toolchain_exec_ubuntu24.04-aarch64",
     "@swift_toolchain//:cc_toolchain_wasm32_ubuntu24.04-aarch64",
     "@swift_toolchain//:swift_toolchain_wasm32_ubuntu24.04-aarch64",
+    "@swift_toolchain//:cc_toolchain_wasm32_threads_ubuntu24.04-aarch64",
+    "@swift_toolchain//:swift_toolchain_wasm32_threads_ubuntu24.04-aarch64",
     "@swift_toolchain//:swift_toolchain_android_aarch64_ubuntu24.04-aarch64",
     "@swift_toolchain//:swift_toolchain_android_x86_64_ubuntu24.04-aarch64",
 )
@@ -157,10 +174,10 @@ register_toolchains(
 # placeholder each builder's .bazelrc.user resolves (`--distdir`, or a
 # `--downloader_config` to a Shireworks server's /files/sha256/<hex>), and its
 # toolchains turned on by .bazelrc's apple_on_linux. A Mac builds as before.
-# The project registry's 0.0.3.382f8c3: rules_applecross's main at 382f8c3
+# The project registry's 0.0.3.1f03f48: rules_applecross's main at 1f03f48
 # (#289: an imported dynamic framework's lipo on Linux), with the preset
 # rules_apple above.
-bazel_dep(name = "rules_applecross", version = "0.0.3.382f8c3")
+bazel_dep(name = "rules_applecross", version = "0.0.3.1f03f48")
 apple_cross_toolchain = use_extension("@rules_applecross//toolchain:extensions.bzl", "apple_cross_toolchain")
 apple_cross_toolchain.swift(
     name = "applecross_swift",
@@ -241,10 +258,10 @@ use_repo(signing, "isomer_signing")
 bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "platforms", version = "1.1.0")
 # rules_apple and apple_support at rules_applecross's versions: the
-# registry's preset rules_apple 5.3.1.applecross.6 (rules_applecross's
+# registry's preset rules_apple 5.3.1.applecross.7 (rules_applecross's
 # patches) and the BCR's apple_support 2.11.0, as isomer_apple asks for
 # (the examples' own Apple apps load rules_apple directly).
-bazel_dep(name = "rules_apple", version = "5.3.1.applecross.6", repo_name = "build_bazel_rules_apple")
+bazel_dep(name = "rules_apple", version = "5.3.1.applecross.7", repo_name = "build_bazel_rules_apple")
 bazel_dep(name = "apple_support", version = "2.11.0")
 
 # Declared after apple_support so apple_support's apple cc toolchain keeps
