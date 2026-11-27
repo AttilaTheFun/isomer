@@ -861,8 +861,8 @@ If you build for Android:
 
 ```starlark
 swift.android_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.3/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz",
-    sha256 = "4dedbd4df358ba83478649f7a9ad9c6f865e9496e57f3088403df1f68e589487",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.4/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz",
+    sha256 = "10d59835319276b5de6395da25b9dbb90424fbf59533b50e3f013a6cc2d8e5d4",
 )
 ```
 
@@ -870,8 +870,8 @@ If you build for the web:
 
 ```starlark
 swift.wasm_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.3/swift-6.4.2-RELEASE_wasm.artifactbundle.tar.gz",
-    sha256 = "6ad399ae30c74adb55bf7de0861537579d3964f1b0427e156187773c5a3570a9",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.4/swift-6.4.2-RELEASE_wasm.artifactbundle.tar.gz",
+    sha256 = "0d9f6dfc4dd288f3bd634ee36dcfb6f7e8b6fa5cb74e55f6a4e3848ebb4c5926",
 )
 ```
 
@@ -883,13 +883,27 @@ and ICU (tens of megabytes of data, which `icu_locales` trims on the web):
 ```starlark
 # Android, formatting:
 swift.android_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.3/swift-6.4.2-RELEASE_android-i18n.artifactbundle.tar.gz",
-    sha256 = "b9d31edf5ea51a7a7756d9fbff2627364fac30ad6fd8f29c25abe8f00956cf2c",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.4/swift-6.4.2-RELEASE_android-i18n.artifactbundle.tar.gz",
+    sha256 = "dfe6095d83fe478590730ce5ce55cb25e7c6a99b97f868d2cde14702ea787907",
 )
 # The web, formatting:
 swift.wasm_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.3/swift-6.4.2-RELEASE_wasm-i18n.artifactbundle.tar.gz",
-    sha256 = "32d49aa8ef4a7f125b9ca24c976a557089c57d30e066881ba4f2edd1390fc19c",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.4/swift-6.4.2-RELEASE_wasm-i18n.artifactbundle.tar.gz",
+    sha256 = "f00bd04a717c7c8289bb0d4253d5c1a365a9fd71323b4d90b5eeb915211fe7fa",
+)
+```
+
+If you build threaded reactors (`@isomer//swift_ffi/rules:wasm32-wasip1-threads`:
+Swift's Concurrency on guest threads, shared memory, C++ exceptions; run by
+WasmKit's WASI Threads, plain, no ICU), take the threads SDK beside your wasm
+one, and register its toolchains (`@swift_toolchain//:cc_toolchain_wasm32_threads_<host>`
+and `:swift_toolchain_wasm32_threads_<host>`, as examples/MODULE.bazel does):
+
+```starlark
+swift.wasm_sdk(
+    threads = True,
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.4/swift-6.4.2-RELEASE_wasm-threads.artifactbundle.tar.gz",
+    sha256 = "1767e9a2d2bb542c5efaf2090d690e1d0d42aa1692967d5156df8aa72e2de8eb",
 )
 ```
 
@@ -1011,6 +1025,14 @@ Each release's notes have an Upgrading section; these things are easy to miss:
   - swift_map's Apple example apps and XCFramework are the examples'
     (`examples/swift_map/…`), not `@isomer//swift_map/apple/applications`
     and `@isomer//swift_map/apple/xcframework`.
+- **Isomer's Swift SDKs isomer-6.4.2.4 (0.63): a wasm threads SDK, and
+  downloads to a file.** Move `swift.android_sdk` and `swift.wasm_sdk` to its
+  lines. It adds `swift-6.4.2-RELEASE_wasm-threads.artifactbundle.tar.gz`
+  (Swift's threads and C++ exceptions on wasm32-unknown-wasip1-threads;
+  isomer registers it, and builds and tests its threaded reactors again,
+  "Isomer's Swift SDKs" above has the line), and `URLSession`'s download tasks write their body to a file as it arrives
+  where the host's transport can (IsomerFoundation's
+  `HTTPTransport.download(_:to:)`; its default sends, then writes).
 - **Isomer's Swift SDKs isomer-6.4.2.3 (0.63): Swift's C++ interop on
   wasm, and `NSLog`.** Move `swift.android_sdk` and `swift.wasm_sdk` to its
   lines ("Isomer's Swift SDKs" above, or the release's notes). A Swift

@@ -1,6 +1,7 @@
 // The Isomer module: what Isomer adds to SwiftUI, on every platform
 // (`import Isomer`): the platform, web views, maps, video, the clipboard,
-// colors by appearance, swipes, shakes, and a platform's own views.
+// colors by appearance, swipes, shakes, screenshots, and a platform's own
+// views.
 
 import Foundation
 import Isomer
@@ -43,6 +44,10 @@ extension StoryCatalog {
             "isomer.shake", "Shake",
             summary: "Something done when the phone is shaken: an iPhone's shake gesture, Android's accelerometer. Nothing to shake on a Mac or the web."
         ) { ShakeStory() },
+        Story(
+            "isomer.screenshot", "Screenshot",
+            summary: "A picture of the app's window, as a PNG, for a bug report: Apple's own drawing on iOS and the Mac, Android's PixelCopy. None on the web or desktops yet."
+        ) { ScreenshotStory() },
     ])
 }
 
@@ -214,6 +219,35 @@ struct ShakeStory: View {
               systemImage: "iphone")
             .font(.headline)
             .onShake { shakes += 1 }
+    }
+}
+// end story
+
+// story: isomer.screenshot
+struct ScreenshotStory: View {
+    @State private var result = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button("Take a screenshot") {
+                Task {
+                    guard let png = await IsomerScreenshot.capture() else {
+                        result = "No screenshot on this platform"
+                        return
+                    }
+                    // A PNG's width and height: bytes 16 to 23, big-endian.
+                    let bytes = [UInt8](png.prefix(24))
+                    func number(at i: Int) -> Int {
+                        bytes.count < i + 4 ? 0 : bytes[i..<i + 4].reduce(0) { $0 << 8 | Int($1) }
+                    }
+                    result = "A PNG of \(number(at: 16)) × \(number(at: 20)) pixels, \(png.count / 1024) KB"
+                }
+            }
+            .buttonStyle(.bordered)
+            Text(result)
+                .font(.footnote)
+                .foregroundColor(.secondary)
+        }
     }
 }
 // end story

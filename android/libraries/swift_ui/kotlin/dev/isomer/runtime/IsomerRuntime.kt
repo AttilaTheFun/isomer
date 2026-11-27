@@ -67,6 +67,7 @@ object IsomerRuntime {
      * Embedded surfaces (`embedded = true`, the default for the composable /
      * fragment) don't reconfigure the host's window title. */
     fun attach(activity: Activity, embedded: Boolean = true) {
+        NativeBridge.activity = java.lang.ref.WeakReference(activity)
         NativeBridge.platformCommandHandler = { key, value ->
             if (!(embedded && key == "windowTitle")) {
                 activity.runOnUiThread { apply(activity, key, value) }
