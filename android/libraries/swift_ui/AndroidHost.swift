@@ -36,6 +36,11 @@ struct AndroidHostBridge: HostBridge {
         androidHost?.rasterize(spec: spec) ?? []
     }
 
+    func captureScreenshot() async -> [UInt8]? {
+        guard let png = await androidHost?.captureScreen(), !png.isEmpty else { return nil }
+        return png
+    }
+
     func registerImage(_ source: String, bytes: [UInt8]) {
         androidHost?.registerImage(source: source, bytes: bytes)
     }
