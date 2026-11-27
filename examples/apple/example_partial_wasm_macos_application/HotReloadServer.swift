@@ -189,8 +189,16 @@ final class Server {
     private var listener: NWListener?
 
     private func startHTTP() {
-        guard let nwPort = NWEndpoint.Port(rawValue: port),
-              let listener = try? NWListener(using: .tcp, on: nwPort)
+        // This machine alone (the simulator shares its loopback, an Android
+        // emulator reaches it as 10.0.2.2): on a shared network, nobody else
+        // can fetch the module.
+        let parameters = NWParameters.tcp
+        guard let nwPort = NWEndpoint.Port(rawValue: port) else {
+            log("Not a port: \(port)")
+            exit(1)
+        }
+        parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: nwPort)
+        guard let listener = try? NWListener(using: parameters)
         else {
             log("Failed to listen on port \(port)")
             exit(1)
