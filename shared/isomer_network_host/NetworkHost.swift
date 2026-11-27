@@ -44,6 +44,19 @@ public protocol HTTPHost {
         -> HTTPHostResponse
 }
 
+/// One HTTP exchange whose body the host writes to a file as it arrives,
+/// never holding it whole: `URLSession`'s download tasks, for a file of any
+/// size. Only a host whose paths are the app's own installs one (Android's
+/// compiled runtime): a wasm guest's paths aren't its host's, so there
+/// `URLSession` writes the body it was sent.
+@ExportedInterface(namespace: "isomer")
+public protocol HTTPDownloadHost {
+    /// As `HTTPHost.send`, the body (an error status's too) written to the
+    /// file at `path`, which it replaces; the answer's `body` empty.
+    func download(method: String, url: String, headers: String, body: [UInt8], timeout: Double, path: String)
+        async throws -> HTTPHostResponse
+}
+
 /// What a WebSocket received: `kind` 0 text, 1 data, 2 closed (then `code`
 /// and `text`, the reason).
 @ExportedStruct
@@ -78,6 +91,36 @@ public protocol WebSocketHost {
 public func installIsomerNetworkHosts(http: any HTTPHost, webSocket: any WebSocketHost) {
     IsomerNetwork.http = HostHTTPTransport(host: http)
     IsomerNetwork.webSocket = HostWebSocketTransport(host: webSocket)
+}
+
+/// Installs the host's downloads to a file (what a Kotlin host calls before
+/// the runtime starts): `URLSession`'s download tasks then go through it,
+/// whatever HTTP host is installed.
+@ExportedFunction(namespace: "isomer")
+public func installIsomerDownloadHost(download: any HTTPDownloadHost) {
+    downloadHost.set(download)
+}
+
+/// The host's downloads to a file, when one was installed. (A lock, not
+/// Synchronization's Mutex, which Apple's platforms have from iOS 18 and
+/// macOS 15 alone.)
+private let downloadHost = InstalledDownloadHost()
+
+private final class InstalledDownloadHost: @unchecked Sendable {
+    private let lock = NSLock()
+    private var host: (any HTTPDownloadHost)?
+
+    func set(_ host: any HTTPDownloadHost) {
+        lock.lock()
+        defer { lock.unlock() }
+        self.host = host
+    }
+
+    func get() -> (any HTTPDownloadHost)? {
+        lock.lock()
+        defer { lock.unlock() }
+        return host
+    }
 }
 
 /// Installs what the host injected under `NetworkHostKey`'s keys, keeping
@@ -138,6 +181,29 @@ final class HostHTTPTransport: HTTPTransport, @unchecked Sendable {
         return HTTPTransportResponse(
             statusCode: Int(answer.status), headerFields: headerFields(answer.headers),
             body: Data(answer.body), url: answer.url.isEmpty ? nil : URL(string: answer.url))
+    }
+
+    /// Through the host's downloads to a file when it has them (the body
+    /// written as it arrives); else sent, and the body written here.
+    func download(_ request: HTTPTransportRequest, to file: URL) async throws -> HTTPTransportResponse {
+        guard let downloads = downloadHost.get() else {
+            var response = try await send(request)
+            try response.body.write(to: file)
+            response.body = Data()
+            return response
+        }
+        let answer: HTTPHostResponse
+        do {
+            answer = try await downloads.download(
+                method: request.method, url: request.url.absoluteString,
+                headers: headersJSON(request.headerFields), body: [UInt8](request.body),
+                timeout: request.timeoutInterval, path: file.path)
+        } catch {
+            throw transportError(error)
+        }
+        return HTTPTransportResponse(
+            statusCode: Int(answer.status), headerFields: headerFields(answer.headers),
+            body: Data(), url: answer.url.isEmpty ? nil : URL(string: answer.url))
     }
 }
 
