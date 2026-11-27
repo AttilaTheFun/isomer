@@ -102,9 +102,15 @@ released as `isomer-6.4.2.N` (from .1), at
 `https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.N/<name>`.
 isomer registered isomer-6.4.2.1 in 0.56 and 0.57, isomer-6.4.2.2
 (its Android SDKs at API 23, "The SDKs' checks") from 0.58, and
-isomer-6.4.2.3 since 0.63: Swift's C++ interop on wasm (the wasi-libc
-module map's cycle with libc++'s broken, libswiftCxx.a beside the static
-stdlib) and `NSLog` on Android (logcat) and wasm (standard error).
+isomer-6.4.2.3, then isomer-6.4.2.4, in 0.63. .3: Swift's C++ interop on
+wasm (the wasi-libc module map's cycle with libc++'s broken, libswiftCxx.a
+beside the static stdlib) and `NSLog` on Android (logcat) and wasm (standard
+error). .4: a third wasm bundle,
+`swift-6.4.2-RELEASE_wasm-threads.artifactbundle.tar.gz`
+(wasm32-unknown-wasip1-threads: Swift 6.4.2 with swiftlang/swift#92018's
+multi-threaded Concurrency, libc++ with threads and WebAssembly exceptions;
+plain, no ICU), and `URLSession`'s downloads written to a file as they
+arrive (IsomerFoundation's `HTTPTransport.download(_:to:)`).
 
 - **Minimum**: the Android SDKs' is API 23, swift.org's: every library in
   them is compiled for `<arch>-unknown-linux-android23` (from
@@ -133,6 +139,23 @@ stdlib) and `NSLog` on Android (logcat) and wasm (standard error).
   FoundationXML, and, on Android, curl, libxml2 and OpenSSL, which only
   corelibs' FoundationNetworking used. The Android SDKs' dynamic resources
   stay swift.org's: rules_swift links Swift statically.
+- **What `import Foundation` links**: a library that imports nothing of
+  Isomer's but Foundation still links some of Isomer's modules, because the
+  SDK's Foundation is built on them, as Apple's is on its neighbours:
+  - CoreGraphics, which Foundation re-exports (`CGFloat`, `CGPoint`…);
+  - Combine, whose `ObservableObject` and `Published` Foundation names;
+  - IsomerFoundation (the host's network transports and UserDefaults' store)
+    and IsomerDispatchTime (Dispatch's time types), folded into Foundation's
+    own archive;
+  - in the -i18n SDKs, IsomerFoundationInternationalization (and through it
+    swift-foundation's FoundationInternationalization and the SDK's ICU).
+
+  That is the SDK's Foundation itself, not an app's Isomer: a library on
+  these SDKs links them whether or not the app uses Isomer's SwiftUI, and
+  `--config=android_release`'s linker drops what of them nothing reaches. A
+  library that must link only the toolchain's runtime imports neither
+  Foundation nor anything that imports it (FoundationEssentials stays
+  swift-foundation's own, with no Isomer modules beneath it).
 
 ## The SDKs' checks (0.58)
 
@@ -241,12 +264,12 @@ has them with their checksums):
 ```starlark
 # If you build for Android:
 swift.android_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.3/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.4/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz",
     sha256 = "…",
 )
 # If you build for the web:
 swift.wasm_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.3/swift-6.4.2-RELEASE_wasm.artifactbundle.tar.gz",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.4/swift-6.4.2-RELEASE_wasm.artifactbundle.tar.gz",
     sha256 = "…",
 )
 ```

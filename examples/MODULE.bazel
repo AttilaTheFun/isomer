@@ -112,16 +112,16 @@ swift.toolchain(
 # (swift-6.4.2-RELEASE_<platform>-i18n.artifactbundle.tar.gz, with their
 # sha256 from the release's notes).
 swift.wasm_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.3/swift-6.4.2-RELEASE_wasm.artifactbundle.tar.gz",
-    sha256 = "6ad399ae30c74adb55bf7de0861537579d3964f1b0427e156187773c5a3570a9",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.4/swift-6.4.2-RELEASE_wasm.artifactbundle.tar.gz",
+    sha256 = "0d9f6dfc4dd288f3bd634ee36dcfb6f7e8b6fa5cb74e55f6a4e3848ebb4c5926",
 )
 # No wasi-threads SDK beside it since 0.41: Isomer's was a build of
 # Swift 6.3.2 with swiftlang/swift#92018, which reaches a release in 6.5;
 # reactors built for `@isomer//swift_ffi/rules:wasm32-wasip1-threads` wait
 # for it (TODO.md).
 swift.android_sdk(
-    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.3/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz",
-    sha256 = "4dedbd4df358ba83478649f7a9ad9c6f865e9496e57f3088403df1f68e589487",
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.4/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz",
+    sha256 = "10d59835319276b5de6395da25b9dbb90424fbf59533b50e3f013a6cc2d8e5d4",
 )
 use_repo(
     swift,

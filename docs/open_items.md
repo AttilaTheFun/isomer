@@ -127,6 +127,26 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
   (`maskClipPath`'s `circle()`).
 - Browsers cannot speak gRPC: a web client goes through gRPC-Web and a
   proxy (Envoy).
+- **`URLSession` on the web is the browser's `fetch`**
+  (wasm/libraries/swift_ui/runtime/network.js), with fetch's limits:
+  - the browser sets the headers the Fetch standard keeps for itself (`Host`,
+    `Cookie`, `Origin`, `Referer`, `Content-Length` and the rest), and Chrome
+    also ignores `User-Agent`, so a service that requires its own
+    `User-Agent` must be reached through a server of the app's own (a page
+    gives `boot()` its own `fetch`, or injects its own `isomerHTTP`);
+  - a cross-origin request needs the server's CORS headers;
+  - bodies are whole: a request's body is sent, and a response's read, in
+    one piece, through Isomer's `HTTPTransport`, so there is no
+    `URLSession.bytes(for:)` progress, and a large download is held in
+    memory;
+  - no bidirectional streaming: WebSocket (`URLSessionWebSocketTask`) or
+    gRPC-Web through a proxy instead.
+
+  Planned: responses streamed and downloads written to a file as they
+  arrive (the transport gains a streaming exchange: fetch's body is a
+  `ReadableStream`; Android's HTTP host the same). Not planned: streamed
+  request bodies, which fetch allows only half-duplex, in Chromium, over
+  HTTP/2 or later.
 
 ## Apple's interfaces (all platforms but Apple's)
 
@@ -178,11 +198,11 @@ Linux and Windows are T3, wasm and Android T2, iOS and macOS T1 (2026-10-13).
 - **Link runs' own colours**: the Apple host draws a link run in its own
   colour when it has one (as SwiftUI does an attributed link with a
   foreground colour); whether the React and Compose hosts do is unchecked.
-- **Combine's side of SwiftUI is not planned** (`ObservableObject`,
-  `@StateObject`, `onReceive`): Observation and Swift concurrency instead.
-  On Android a library's `DispatchQueue.main.async` still runs (the host
-  drains libdispatch's main queue); wasm has no Dispatch at all (`#if
-  canImport(Dispatch)`).
+- **Dispatch:** on Android a library's `DispatchQueue.main.async` runs (the
+  host drains libdispatch's main queue); wasm has no Dispatch at all (`#if
+  canImport(Dispatch)`). docs/roadmap.md, "Dispatch, for apps as they are",
+  has the plan. (Combine's side of SwiftUI, `ObservableObject`,
+  `@StateObject` and `onReceive`, is in since 0.42.)
 - Later, not 0.31 (docs/isomer_031_plan.md): Metal backends for Android,
   Windows and Linux; wasm to native Metal on Apple platforms; SwiftUI's
   shader effects; Metal 4; a MapKit subset for `Map`; `URLSession` and

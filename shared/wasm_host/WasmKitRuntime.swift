@@ -51,6 +51,67 @@ import SwiftFFIWasmHost
 import WasmKitWASI
 import WasmKitWASIThreads
 
+/// Wasm modules parsed once a process. Parsing is most of a launch (a 29 MB
+/// runtime module takes WasmKit 230 to 300 ms on a Mac, longer on a phone),
+/// and a parsed `Module` is stateless, instantiated afresh in each store: a
+/// reload of the same build, or a second page over the same runtime module,
+/// takes the one already parsed. The last two modules parsed are kept.
+public enum WasmKitModules {
+    /// The features every module here is parsed with: WasmKit's default,
+    /// and threads (shared memory and atomics), which `WasmKitRuntime`
+    /// enables and a single-threaded module simply doesn't use. (Kept in a
+    /// configuration: their type is WasmParser's, which isn't imported here.)
+    private static let parsing: EngineConfiguration = {
+        var configuration = EngineConfiguration()
+        configuration.features.insert(.threads)
+        return configuration
+    }()
+
+    /// Gives `configuration` the features modules here are parsed with, as
+    /// an engine that runs them needs.
+    public static func useFeatures(in configuration: inout EngineConfiguration) {
+        configuration.features = parsing.features
+    }
+
+    private final class Parsed: @unchecked Sendable {
+        let lock = NSLock()
+        // The most recent last. Array equality is a pointer check for the
+        // same buffer, a memcmp otherwise: milliseconds against the parse.
+        var entries: [(bytes: [UInt8], module: Module)] = []
+    }
+    private static let parsed = Parsed()
+    private static let kept = 2
+
+    /// `bytes` parsed, or the module already parsed from the same bytes.
+    public static func module(_ bytes: [UInt8]) throws -> Module {
+        parsed.lock.lock()
+        if let index = parsed.entries.lastIndex(where: { $0.bytes == bytes }) {
+            let entry = parsed.entries.remove(at: index)
+            parsed.entries.append(entry)
+            parsed.lock.unlock()
+            return entry.module
+        }
+        parsed.lock.unlock()
+        // Parsed outside the lock: another thread may parse the same bytes
+        // meanwhile, and the later one is kept; both are the same module.
+        let module = try parseWasm(bytes: bytes, features: parsing.features)
+        parsed.lock.lock()
+        parsed.entries.removeAll { $0.bytes == bytes }
+        parsed.entries.append((bytes, module))
+        if parsed.entries.count > kept { parsed.entries.removeFirst(parsed.entries.count - kept) }
+        parsed.lock.unlock()
+        return module
+    }
+
+    /// Parses `bytes` on a thread of its own, so a launch on the main thread
+    /// afterwards finds it parsed: `await WasmKitModules.prepare(bundle.wasm)`
+    /// before `load(bundle:)`. A module that fails to parse is left for the
+    /// launch to report.
+    public static func prepare(_ bytes: [UInt8]) async {
+        _ = try? await Task.detached(priority: .userInitiated) { try module(bytes) }.value
+    }
+}
+
 public enum WasmKitRuntimeError: Error, CustomStringConvertible {
     case launchFailed(String)
     case missingExport(String)
@@ -154,12 +215,12 @@ public final class WasmKitRuntime: WasmRuntime {
     public func launch(wasm: [UInt8], hostImports: WasmHostImports) throws {
         self.hostImports = hostImports
         var configuration = EngineConfiguration(stackSize: stackSize)
-        configuration.features.insert(.threads)
+        WasmKitModules.useFeatures(in: &configuration)
         let engine = Engine(configuration: configuration, interceptor: profile)
         self.engine = engine
         let module: Module
         do {
-            module = try parseWasm(bytes: wasm, features: configuration.features)
+            module = try WasmKitModules.module(wasm)
         } catch {
             throw WasmKitRuntimeError.launchFailed("parse: \(error)")
         }
