@@ -28,7 +28,7 @@ toolchains (see the `swift` extension below); the wasm/android targets are plain
 
 module(
     name = "isomer",
-    version = "0.62.0",
+    version = "0.63.0",
     # The oldest Bazel a consumer builds with (isomer itself takes
     # .bazelversion's): 8.5 has module_ctx.facts, which windows_support (the
     # MSVC runtime, a dependency's) reads. CI's bazel8 job builds the
@@ -404,7 +404,7 @@ bazel_dep(name = "rules_shell", version = "0.8.0")
 bazel_dep(name = "rules_android", version = "0.7.3", dev_dependency = True)
 bazel_dep(name = "rules_java", version = "9.3.0", dev_dependency = True)
 bazel_dep(name = "rules_kotlin", version = "2.2.2", dev_dependency = True)
-bazel_dep(name = "isomer_android", version = "0.62.0", dev_dependency = True)
+bazel_dep(name = "isomer_android", version = "0.63.0", dev_dependency = True)
 local_path_override(
     module_name = "isomer_android",
     path = "android/module",
@@ -437,7 +437,7 @@ use_repo(rules_java_toolchains, "remote_java_tools")
 android_maven = use_extension("//android/maven:extensions.bzl", "android_maven")
 use_repo(android_maven, "isomer_android_maven_set")
 
-bazel_dep(name = "isomer_android_maven", version = "0.62.0", dev_dependency = True)
+bazel_dep(name = "isomer_android_maven", version = "0.63.0", dev_dependency = True)
 local_path_override(
     module_name = "isomer_android_maven",
     path = "android/maven_module",

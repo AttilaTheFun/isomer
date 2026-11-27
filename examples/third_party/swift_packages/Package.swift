@@ -28,7 +28,7 @@ let package = Package(
         // Mac), for someone signed in to the shared GitHub sign-in; only in
         // builds that carry its keys (CI's, //tools/signing). It replaced
         // UpdateKit and ShakeKit. At 0.1.0.
-        .package(url: "https://github.com/AttilaTheFun/shireworks_kit.git", exact: "0.1.0"),
+        .package(url: "https://github.com/AttilaTheFun/shireworks_kit.git", exact: "0.3.0"),
         // build_tools: CI's shared tools, built here and run by the release
         // jobs: `sign` (an APK, a Mac app, an
         // iPhone app, with the release environment's keys) and `proof-diff`

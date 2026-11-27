@@ -50,8 +50,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AttilaTheFun/shireworks_kit.git",
       "state" : {
-        "revision" : "d86f1ca1989d8ad30a1d78b7682d0e5cd4f30cf7",
-        "version" : "0.1.0"
+        "revision" : "ad0a314212859541e9d1c2bb5ff1424309bccc42",
+        "version" : "0.3.0"
       }
     },
     {
