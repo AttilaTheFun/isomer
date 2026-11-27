@@ -47,6 +47,13 @@ export function connectIsomer({
     sendKey: (id, value) => { send(clientMessage.key(id, value)); return false; },
   });
   let retained = null;
+  // The retained tree as JSON for headless smoke tests (`window.__isoLastTree`),
+  // made when read: stringifying the whole tree after every patch made a
+  // one-node frame walk the whole tree. Undefined until the first frame.
+  Object.defineProperty(window, "__isoLastTree", {
+    configurable: true,
+    get: () => (retained === null ? undefined : JSON.stringify(retained)),
+  });
   let frame = 0;
   const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
 
@@ -64,7 +71,6 @@ export function connectIsomer({
     const message = readServerMessage(event.data);
     if (message.patch) {
       retained = applyPatch(retained, message.patch);
-      window.__isoLastTree = JSON.stringify(retained); // for headless smoke tests
       // A frame an animation frame: patches that arrive together draw once.
       if (!frame) frame = requestAnimationFrame(() => { frame = 0; reactTree.render(retained, false); });
     } else if (message.command) {

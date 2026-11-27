@@ -108,6 +108,13 @@ export async function boot({
   let reactTree = null;
   // The retained render tree; each renderTree() buffer is a Patch against it.
   let retainedTree = null;
+  // The retained tree as JSON for headless smoke tests (`window.__isoLastTree`),
+  // made when read: stringifying the whole tree after every patch made a
+  // one-node frame walk the whole tree. Undefined until the first frame.
+  Object.defineProperty(window, "__isoLastTree", {
+    configurable: true,
+    get: () => (retainedTree === null ? undefined : JSON.stringify(retainedTree)),
+  });
   let treeContainer = null;
   let mapSurface = null;
   let metalViews = null;
@@ -579,7 +586,6 @@ export async function boot({
       // arrival order to the retained plain-object tree the React interpreter
       // walks (the first patch after start is a full-tree op at "n").
       retainedTree = applyPatch(retainedTree, tree);
-      window.__isoLastTree = JSON.stringify(retainedTree); // for headless smoke tests
       reactTree.render(retainedTree, renderingInGesture);
       // A mounted map redraws with every tree frame (camera moves arrive as
       // new frames; tile completions schedule one through the image drain).
