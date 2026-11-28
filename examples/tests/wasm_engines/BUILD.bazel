@@ -57,3 +57,20 @@ swift_test(
         "@isomer//shared/wasm_host:wasmkit_runtime",
     ],
 )
+
+# The parsed modules WasmKit keeps (WasmKitModules): kept while a view
+# shows pages, dropped with the last view and when the system is short of
+# memory. WasmKit alone, wherever it runs natively (the Mac and Linux).
+swift_test(
+    name = "wasmkit_modules_test",
+    size = "small",
+    srcs = ["WasmKitModulesTests.swift"],
+    data = ["//wasm/tap_counter_feature:tap_counter_release.wasm"],
+    module_name = "WasmKitModulesTests",
+    target_compatible_with = select({
+        "@platforms//os:macos": [],
+        "@platforms//os:linux": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    deps = ["@isomer//shared/wasm_host:wasmkit_runtime"],
+)

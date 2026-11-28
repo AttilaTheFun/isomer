@@ -157,6 +157,26 @@ fun WasmView(
         holder.runtime?.setColorScheme(darkTheme)
     }
 
+    // The parsed modules (WasmKitModules) are kept while a WasmView lives,
+    // dropped with the last one and when the system trims the app's memory.
+    DisposableEffect(Unit) {
+        WasmEngineBridge.wasmKitViewOpened()
+        val trims = object : android.content.ComponentCallbacks2 {
+            override fun onTrimMemory(level: Int) {
+                @Suppress("DEPRECATION")
+                if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) WasmEngineBridge.wasmKitForgetModules()
+            }
+            override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {}
+            @Deprecated("onTrimMemory is called instead")
+            override fun onLowMemory() {}
+        }
+        context.applicationContext.registerComponentCallbacks(trims)
+        onDispose {
+            context.applicationContext.unregisterComponentCallbacks(trims)
+            WasmEngineBridge.wasmKitViewClosed()
+        }
+    }
+
     // Node events go straight to THIS reactor on the main thread while alive.
     DisposableEffect(Unit) {
         val events = treeState.events
