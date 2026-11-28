@@ -35,24 +35,30 @@ final class WasmKeyEventTests: XCTestCase {
 
         XCTAssertFalse(feature.sendKey(id: keys, value: "d\u{1F}a\u{1F}a"), "a key the field doesn't take")
         XCTAssertTrue(feature.sendKey(id: keys, value: "d\u{1F}\r\u{1F}\r"), "Return, which the field takes")
+        let drawn = stream.count
         _ = try runtime.call("iso_hot_render", [])
-        XCTAssertTrue(Self.contains(stream, "Returns: 1"), "the page didn't draw the key it took")
+        XCTAssertTrue(Self.contains(Array(stream[drawn...]), "Returns: 1"), "the page didn't draw the key it took")
     }
 
     /// The id a field's keys are reported under (TreeEncoder's
-    /// `<handle>.keys` parameter), as the tree's bytes carry it.
+    /// `<handle>.keys` parameter, its handle lowercase letters and digits),
+    /// as the tree's bytes carry it.
     static func keysID(in stream: [UInt8]) -> String? {
         let suffix = Array(".keys".utf8)
         var index = 0
         while index + suffix.count <= stream.count {
             if Array(stream[index..<index + suffix.count]) == suffix {
                 var start = index
-                while start > 0, (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(stream[start - 1]) { start -= 1 }
+                while start > 0, isHandle(stream[start - 1]) { start -= 1 }
                 if start < index { return String(decoding: stream[start..<index + suffix.count], as: UTF8.self) }
             }
             index += 1
         }
         return nil
+    }
+
+    static func isHandle(_ byte: UInt8) -> Bool {
+        (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(byte) || (UInt8(ascii: "a")...UInt8(ascii: "z")).contains(byte)
     }
 
     static func contains(_ stream: [UInt8], _ text: String) -> Bool {
