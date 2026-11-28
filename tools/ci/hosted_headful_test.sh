@@ -6,10 +6,11 @@
 # each started by its launcher and dialling out to the test's own hub.
 #
 #   tools/ci/hosted_headful_test.sh apple <the iPhone simulator .ipa> <the Mac .zip> <out>
-#       (xcode-27) a simulator made for the run, then the Mac's own screen;
-#       HEADFUL_APPLE_PARTS picks some of them (default "ios hosted macos":
-#       the tests driving the iPhone app, the tests hosted in it, the Mac's),
-#       so CI runs them on Macs of their own at once
+#       (a Nimbus macOS VM) a simulator made for the run, then the Mac's own
+#       screen; HEADFUL_APPLE_PARTS picks some of them (default "ios hosted
+#       macos": the tests driving the iPhone app, the tests hosted in it, the
+#       Mac's). `hosted` runs on Linux too, on agent-sim's phones (a Nimbus
+#       runner with Apple's runtime), so CI runs it there and the rest in the VM
 #   tools/ci/hosted_headful_test.sh android <the x86_64 .apk> <out>
 #       (Ubuntu with KVM) tools/ci/hosted_android_emulator.sh's phone
 #   tools/ci/hosted_headful_test.sh windows <the windows-headful folder> <out>
@@ -88,10 +89,20 @@ apple_runner() {
 # The tests hosted in the iPhone app as CI's container built them (their
 # XCTest bundle and the app hosting it, beside the .ipa in hosted/): run
 # with an xctestrun as rules_apple's runner writes one, by xcodebuild, on
-# the job's simulator.
+# the job's simulator; on Linux (a Nimbus runner with agent-sim's phones)
+# by `agent-sim xctest`, which installs the host itself and logs as
+# xcodebuild does.
 hosted_xctest() {
     local out="$1" name=storybook_hosted_ios_test root="$work/hosted"
     mkdir -p "$root" "$out/$name"
+    if [ "$(uname -s)" != Darwin ]; then
+        agent-sim xctest "$(ls "$hosted_dir"/*.zip | head -1)" --app "$(ls "$hosted_dir"/*.ipa | head -1)" \
+            --junit "$out/$name/junit.xml" --out "$out/$name" > "$out/$name/test.log" 2>&1
+        local status=$?
+        grep -E "Test run with|✘|passed after|failed after|TEST (SUCCEEDED|FAILED)" "$out/$name/test.log" | tail -40
+        [ "$status" -eq 0 ] || { tail -30 "$out/$name/test.log"; failures=$((failures + 1)); }
+        return
+    fi
     unzip -q "$(ls "$hosted_dir"/*.ipa | head -1)" -d "$root/ipa" && unzip -q "$(ls "$hosted_dir"/*.zip | head -1)" -d "$root" ||
         { failures=$((failures + 1)); return; }
     local app bundle host executable identifier developer
