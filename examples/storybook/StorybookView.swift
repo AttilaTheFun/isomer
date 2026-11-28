@@ -4,7 +4,7 @@
 //
 // Launch hooks (the process environment natively, a reactor's WASI
 // environment, an Android intent's ISO_ extras, the web page's ISO_ query):
-// ISO_STORYBOOK_STORY=<id> opens that story; ISO_STORYBOOK_CONTROL=<file>
+// ISO_STORYBOOK_STORY=<id> opens that story; ISO_STORYBOOK_CONTROL=<file> (relative: the home's)
 // opens whichever story the file names ("stories": the list, as at
 // launch), read four times a second, and
 // writes `<file>.shown` with the story once it is open; and the URL
@@ -94,17 +94,29 @@ public struct StorybookView: View {
 
     /// ISO_STORYBOOK_CONTROL: the story its file names, opened as it
     /// changes; `<file>.shown` names it once its page has had a moment to
-    /// build.
+    /// build. A relative path is the app's home's (an iPhone app's data
+    /// container, which the host finds with simctl's get_app_container).
     private func followControl() async {
-        guard let path = launchEnvironment("ISO_STORYBOOK_CONTROL") else { return }
+        guard let named = launchEnvironment("ISO_STORYBOOK_CONTROL") else { return }
+        let path = named.hasPrefix("/") ? named : NSHomeDirectory() + "/" + named
         var shown: String?
         while !Task.isCancelled {
             let named = (try? String(contentsOfFile: path, encoding: .utf8))?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if let id = named, id != shown, id == "stories" || StoryCatalog.story(id) != nil {
+                // A phone goes back to the list first, as a tap would: Apple's
+                // split view can keep drawing the last story's page when the
+                // selection changes under an open one (Toolbar and Sheet did).
+                // On a phone every story is pushed over the list.
+                let pushed = compact && id != "stories"
+                if pushed, shown != nil, shown != "stories" {
+                    show("stories")
+                    try? await Task.sleep(for: .milliseconds(500))
+                }
                 shown = id
                 show(id)
-                try? await Task.sleep(for: .milliseconds(300))
+                // A page pushed over the list has its slide in to finish first (slower on a simulator under load).
+                try? await Task.sleep(for: .milliseconds(pushed ? 1200 : 300))
                 // Atomically where it can be; Wine's file replacement fails
                 // on its Unix drive, so plainly there (whoever reads it
                 // reads until it names the story).

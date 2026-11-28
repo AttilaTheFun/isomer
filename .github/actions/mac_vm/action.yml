@@ -1,0 +1,56 @@
+# A step that needs macOS itself (an iPhone simulator, a Mac app on
+# screen), from a job on a Nimbus runner (`[self-hosted, isomer-ci]`): a
+# macOS VM with Xcode 27.2 leased from Nimbus in the job's name
+# (`nimbus job lease macos`, renewed while it runs, released however the
+# step ends), the job's folder copied in (its checkout and what it
+# downloaded), `run` run there in the VM's desktop session, and `out`
+# copied back. Nimbus lends two such VMs to everyone at once, so a job
+# holds one for as little as it can. No secret goes in: the VMs aren't
+# network-locked yet (Nimbus' docs/vm-egress.md).
+# A port to a Swift tool of build_tools' (as the house's tools are) is a
+# follow-up; this is Nimbus' own recipe (its tools/ci/mac_vm_tests.sh).
+name: A macOS VM's step
+description: Runs a command in a Nimbus macOS VM, the job's folder copied in and its results out
+inputs:
+  run:
+    description: The command, run in the copied folder with zsh -lc (Homebrew's tools, Xcode 27.2)
+    required: true
+  env:
+    description: "NAME=VALUE lines set for the command"
+    default: ""
+  out:
+    description: Paths in the folder (space-separated) copied back after the command, whatever it returned; those it didn't make are skipped
+    default: ""
+  git:
+    description: "true: the checkout's .git copied in too (a quick proof reads the branch's history)"
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        RUN: ${{ inputs.run }}
+        RUN_ENV: ${{ inputs.env }}
+        OUT: ${{ inputs.out }}
+        WITH_GIT: ${{ inputs.git }}
+      run: |
+        set -euo pipefail
+        nimbus=/opt/nimbus/bin/nimbus k="$RUNNER_TEMP/mac_vm_key"
+        rm -f "$k" "$k.pub"; ssh-keygen -q -t ed25519 -N '' -f "$k"
+        eval "$("$nimbus" job lease macos --config=xcode_27_2 --minutes=60 --key="$k.pub" --label="$GITHUB_REPOSITORY $GITHUB_JOB")"
+        ( while sleep 600; do "$nimbus" job renew "$NIMBUS_ID" --minutes=60 >/dev/null || true; done ) & renew=$!
+        trap 'kill "$renew" 2>/dev/null || true; "$nimbus" job release "$NIMBUS_ID"' EXIT
+        vm() { ssh -p "$NIMBUS_SSH_PORT" -i "$k" -o IdentitiesOnly=yes -o BatchMode=yes -o ServerAliveInterval=30 \
+                 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$RUNNER_TEMP/mac_vm_known_hosts" \
+                 "$NIMBUS_SSH_USER@$NIMBUS_HOST" "$@"; }
+        for _ in $(seq 60); do vm true 2>/dev/null && break; sleep 5; done
+        exclude=(--exclude=.bazelrc.user --exclude=./.git); [ "$WITH_GIT" = true ] && exclude=(--exclude=.bazelrc.user)
+        tar -cf - "${exclude[@]}" . | vm 'rm -rf ~/w && mkdir ~/w && tar -xf - -C ~/w'
+        envs=(); while IFS= read -r line; do [ -n "$line" ] && envs+=("$line"); done <<< "$RUN_ENV"
+        command="cd ~/w && sudo launchctl asuser \$(id -u) sudo -u \$(id -un) env ${envs[*]+$(printf '%q ' "${envs[@]}")}zsh -lc $(printf '%q' "$RUN")"
+        status=0; vm "$command" || status=$?
+        for path in $OUT; do
+          vm "cd ~/w && [ -e $(printf '%q' "$path") ] && tar -chf - $(printf '%q' "$path")" | tar -xf - 2>/dev/null ||
+            echo "::warning::nothing at $path"
+        done
+        exit "$status"

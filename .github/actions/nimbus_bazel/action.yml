@@ -1,0 +1,45 @@
+# Bazel's settings for a job on a Nimbus runner (`[self-hosted, isomer-ci]`:
+# a single-use Linux container of Nimbus' ci-github controller), as the
+# .bazelrc.user of isomer's module and of the examples' (both try-import
+# it), so every Bazel the job runs reads them, its scripts' alike:
+# - Nimbus' bazelrc (`nimbus job bazel-config`, the runner's own
+#   /opt/nimbus/bin/nimbus): its downloader config, which sends
+#   MODULE.bazel's placeholders (apple-sdks.invalid: Xcode 27.2's SDK
+#   archive; ported-tools.invalid: rules_applecross's clean-room tools, by
+#   their SHA-256) to Nimbus' files, never to a GitHub runner, as Apple's
+#   SDKs may not be redistributed; `--config=apple_on_linux`; and a small
+#   runner's flags;
+# - no bazel-* convenience links in the checkout, and the downloads retried,
+#   as tools/ci/ci_bazel.sh has them on GitHub's runners;
+# - ISOMER_APPLE_ON_LINUX=1, so tools/ci/container_build.sh builds the
+#   Apple platforms here.
+# Nimbus' Bazel cache is read through the runner's ~/.bazelrc, which Nimbus
+# writes; with cache-write (populate-apple's alone) it is written too, once
+# Nimbus has checked the job's OIDC token (a push to main, a job its
+# `ci.populate` names): the job needs `id-token: write`. Nothing of
+# BuildBuddy's or GitHub's cache, and no secret.
+name: Nimbus' Bazel settings
+description: Writes Bazel's settings for a job on a Nimbus runner
+inputs:
+  cache-write:
+    description: "true: this job writes Nimbus' Bazel cache (populate-apple's, at a push to main)"
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - name: Nimbus' Bazel cache, written by this job
+      if: inputs.cache-write == 'true'
+      shell: bash
+      run: /opt/nimbus/bin/nimbus job cache-write
+    - name: Bazel's settings
+      shell: bash
+      run: |
+        rc="$(/opt/nimbus/bin/nimbus job bazel-config --dir "$RUNNER_TEMP/nimbus")"
+        for module in . examples; do
+          printf '%s\n' "# .github/actions/nimbus_bazel's: CI's Bazel settings on a Nimbus runner" \
+            "import $rc" \
+            "common --experimental_convenience_symlinks=ignore" \
+            "common --experimental_repository_downloader_retries=5" > "$module/.bazelrc.user"
+        done
+        echo "ISOMER_APPLE_ON_LINUX=1" >> "$GITHUB_ENV"
+        sed 's/^/  /' .bazelrc.user "$rc"

@@ -603,7 +603,18 @@ class LocalSimulator:
         sh(["xcrun", "simctl", "io", self.udid, "screenshot", "--mask=black", path])
 
     def control(self, app):
-        control = os.path.join(tempfile.mkdtemp(prefix=f"proof-ios-{app}-"), "control")
+        """The control file in the app's own data container (simctl's
+        get_app_container), which the app reads relative to its home: the
+        same on a Mac's simulator and agent-sim's phone, whose apps see the
+        host's other paths differently."""
+        bundle = ISOMER_STORYBOOK["bundle"] if app == "storybook-isomer" else APPS[app]["bundle"]
+        home = sh(["xcrun", "simctl", "get_app_container", self.udid, bundle, "data"]).stdout.strip()
+        relative = f"tmp/proof-{app}-control"
+        control = os.path.join(home, relative)
+        os.makedirs(os.path.dirname(control), exist_ok=True)
+        for stale in (control, control + ".shown"):
+            if os.path.exists(stale):
+                os.remove(stale)
 
         def request(story):
             with open(control, "w") as file:
@@ -612,7 +623,7 @@ class LocalSimulator:
         def shown():
             path = control + ".shown"
             return open(path).read().strip() if os.path.exists(path) else None
-        return control, request, shown
+        return relative, request, shown
 
 
 def here_simulator():

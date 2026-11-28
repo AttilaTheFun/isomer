@@ -20,7 +20,7 @@
 #                                              # Isomer: reviews), built the same way in
 #                                              # /work/<its name>
 #   tools/linux/build.sh --apple-sdks <dir> …  # also the Apple targets (rules_applecross): the
-#                                              # SDK archive in <dir> (apple-sdks-27.0.tar.gz)
+#                                              # SDK archive in <dir> (apple-sdks-27.2.tar.gz)
 #                                              # and the ported tools' archives (named by their
 #                                              # SHA-256, in <dir> or a folder in it) copied onto
 #                                              # the volume once, Bazel given them by

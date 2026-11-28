@@ -180,15 +180,20 @@ build() {
 }
 
 # --stage shoot, before anything else: what the platform's machine needs.
-# GitHub's runners: Python's own (Pillow in a venv of the run's), Xcode
-# 27.2 for the simulator, the Mac's screen made the proof's 1920 by 1200
-# (its own is 1024 by 768), an emulator booted on the Ubuntu runner's KVM,
-# its Chrome.
+# Python with Pillow (the machine's own where it has it, as a Nimbus
+# runner's image does, else in a venv of the run's), Xcode 27.2 or
+# agent-sim's `xcrun simctl` for the simulator, the Mac's screen made the
+# proof's 1920 by 1200 (its own is 1024 by 768), an emulator booted on the
+# Ubuntu runner's KVM, its Chrome.
 shoot_setup() {
     echo "::group::This machine, for $platform's pictures"
-    python3 -m venv "$work/venv"
-    "$work/venv/bin/pip" install -q pillow
-    shoot_python="$work/venv/bin/python3"
+    if python3 -c 'import PIL' 2> /dev/null; then
+        shoot_python="$(command -v python3)"
+    else
+        python3 -m venv "$work/venv"
+        "$work/venv/bin/pip" install -q pillow
+        shoot_python="$work/venv/bin/python3"
+    fi
     case "$platform" in
         ios)
             if [ -z "${DEVELOPER_DIR:-}" ] && [ -d /Applications/Xcode_27.2.app ]; then

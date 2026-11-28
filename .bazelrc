@@ -112,7 +112,7 @@ build:windows --action_env=PATH
 common --lockfile_mode=off
 
 # The Apple targets built on Linux with rules_applecross (MODULE.bazel), on
-# a builder that has Xcode 27.0's SDK archive: its .bazelrc.user says where
+# a builder that has Xcode 27.2's SDK archive: its .bazelrc.user says where
 # (`--distdir`, or a `--downloader_config` to a Shireworks server) and turns this on
 # with `build:linux --config=apple_on_linux`. Without it (GitHub's runners)
 # Linux builds what runs on Linux alone, and nothing fetches the SDKs. Its
