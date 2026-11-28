@@ -183,6 +183,13 @@ public func wasmKitEvent(handle: Int, id: String, value: String) {
     MainActor.assumeIsolated { WasmKitEngine.engines[handle]?.running?.send(id: id, value: value) }
 }
 
+/// A field's key (`.onKeyPress`) by node id: true when the page took it, so
+/// the field doesn't type it.
+@ExportedFunction(namespace: "wasm_engine")
+public func wasmKitKeyEvent(handle: Int, id: String, value: String) -> Bool {
+    MainActor.assumeIsolated { WasmKitEngine.engines[handle]?.running?.sendKey(id: id, value: value) ?? false }
+}
+
 /// The app's export `name` called with `scalars` (little-endian Int32s) and,
 /// when `payload` is not empty, the payload staged in the guest's memory as a
 /// trailing (pointer, length): how an async dependency answers

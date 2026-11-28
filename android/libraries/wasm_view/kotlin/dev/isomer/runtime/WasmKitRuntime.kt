@@ -137,6 +137,9 @@ class WasmKitRuntime(
         if (handle != 0L) WasmEngineBridge.wasmKitEvent(handle, id, value)
     }
 
+    override fun keyEvent(id: String, value: String): Boolean =
+        handle != 0L && WasmEngineBridge.wasmKitKeyEvent(handle, id, value)
+
     /** See [WasmEngine.ffiCall]. Call on the main thread. */
     override fun ffiCall(suffix: String, scalars: IntArray, payload: ByteArray?) {
         if (handle == 0L) return

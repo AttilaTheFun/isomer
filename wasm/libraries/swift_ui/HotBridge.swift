@@ -18,6 +18,8 @@
 //     iso_hot_alloc(len) -> ptr               scratch for marshalling strings
 //     iso_hot_free(ptr)
 //     iso_hot_event(idPtr,idLen,valPtr,valLen) host-view / tap event by id
+//     iso_hot_key_event(idPtr,idLen,valPtr,valLen) -> i32
+//                                             a field's key (.onKeyPress): 1 if taken
 //   imports (@_extern(wasm), wasm calls out):
 //     iso_hot.render_tree(ptr, len)           push the serialized tree
 //     iso_hot.log(ptr, len)
@@ -344,6 +346,17 @@ public func iso_hot_event(
     // window or a scroll's geometry: rendering for each of those made a
     // scroll rebuild the app ten times a second).
     Runtime.shared.hostViewEvent(id: id, value: value)
+}
+
+/// A field's key (`.onKeyPress`) by node id, answered at once: 1 when the
+/// app took it, so the host keeps it from the field (the web's
+/// `isoKeyEvent`, for the hosts on this ABI).
+@_cdecl("iso_hot_key_event")
+public func iso_hot_key_event(
+    _ idPtr: UnsafePointer<UInt8>?, _ idLen: Int32,
+    _ valPtr: UnsafePointer<UInt8>?, _ valLen: Int32
+) -> Int32 {
+    Runtime.shared.keyPressEvent(id: _hotString(idPtr, idLen), value: _hotString(valPtr, valLen)) ? 1 : 0
 }
 
 private func _hotString(_ ptr: UnsafePointer<UInt8>?, _ len: Int32) -> String {

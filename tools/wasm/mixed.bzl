@@ -35,6 +35,7 @@ MIXED_ENTRIES = [
     "iso_hot_render",
     "iso_hot_render_pending",
     "iso_hot_event",
+    "iso_hot_key_event",
     "iso_hot_resize",
     "iso_hot_alloc",
     "iso_hot_free",

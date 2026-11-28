@@ -304,6 +304,34 @@ public final class WasmFeatureRuntime {
         }
     }
 
+    /// A field's key (`.onKeyPress`) by node id, answered at once: true when
+    /// the feature took it, so the host keeps it from the field. False from
+    /// a feature built before the export (`iso_hot_key_event`), which takes
+    /// no keys.
+    public func sendKey(id: String, value: String) -> Bool {
+        guard let runtime, !isShutDown else { return false }
+        do {
+            let idBytes = Array(id.utf8), valBytes = Array(value.utf8)
+            let idPtr = try runtime.call("iso_hot_alloc", [.i32(Int32(idBytes.count))])?.u32Value ?? 0
+            runtime.writeBytes(idPtr, idBytes)
+            let valPtr = try runtime.call("iso_hot_alloc", [.i32(Int32(valBytes.count))])?.u32Value ?? 0
+            runtime.writeBytes(valPtr, valBytes)
+            defer {
+                _ = try? runtime.call("iso_hot_free", [.i32(Int32(bitPattern: idPtr))])
+                _ = try? runtime.call("iso_hot_free", [.i32(Int32(bitPattern: valPtr))])
+            }
+            let taken = try runtime.call("iso_hot_key_event", [
+                .i32(Int32(bitPattern: idPtr)), .i32(Int32(idBytes.count)),
+                .i32(Int32(bitPattern: valPtr)), .i32(Int32(valBytes.count)),
+            ])?.boolValue ?? false
+            requestRender()
+            return taken
+        } catch {
+            log("key event failed: \(error)")
+            return false
+        }
+    }
+
     /// Note the new size and re-run the feature — DEBOUNCED. Under the
     /// SwiftUIRenderer the serialized tree is the semantic hierarchy and the host
     /// lays it out natively, so a live resize just needs a native re-layout of

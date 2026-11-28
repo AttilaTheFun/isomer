@@ -157,17 +157,21 @@ fun WasmView(
         holder.runtime?.setColorScheme(darkTheme)
     }
 
-    // Node events go straight to THIS reactor on the main thread while alive.
+    // Node events go straight to THIS reactor on the main thread while alive,
+    // its fields' keys (`.onKeyPress`) too, answered at once.
     DisposableEffect(Unit) {
         val events = treeState.events
         val previous = events.sink
+        val previousKeys = events.keySink
         events.sink = { id, value ->
             val t0 = if (WasmPerf.on) System.nanoTime() else 0L
             holder.runtime?.event(id, value)
             if (WasmPerf.on) WasmPerf.call("event", System.nanoTime() - t0)
         }
+        events.keySink = { id, value -> holder.runtime?.keyEvent(id, value) ?: false }
         onDispose {
             events.sink = previous
+            events.keySink = previousKeys
             holder.runtime?.destroy()
             holder.runtime = null
         }
