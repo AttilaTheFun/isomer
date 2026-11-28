@@ -104,6 +104,13 @@ public struct StorybookView: View {
             let named = (try? String(contentsOfFile: path, encoding: .utf8))?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if let id = named, id != shown, id == "stories" || StoryCatalog.story(id) != nil {
+                // A phone goes back to the list first, as a tap would: Apple's
+                // split view can keep drawing the last story's page when the
+                // selection changes under an open one (Toolbar and Sheet did).
+                if compact, shown != nil, shown != "stories", id != "stories" {
+                    show("stories")
+                    try? await Task.sleep(for: .milliseconds(500))
+                }
                 shown = id
                 show(id)
                 try? await Task.sleep(for: .milliseconds(300))
