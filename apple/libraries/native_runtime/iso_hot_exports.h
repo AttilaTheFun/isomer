@@ -19,5 +19,6 @@ void iso_hot_set_color_scheme(int32_t dark);
 void iso_hot_set_scene_phase(int32_t phase);
 void iso_hot_set_size_classes(int32_t horizontal, int32_t vertical);
 void iso_hot_event(const uint8_t *id, int32_t id_length, const uint8_t *value, int32_t value_length);
+int32_t iso_hot_key_event(const uint8_t *id, int32_t id_length, const uint8_t *value, int32_t value_length);
 
 #endif

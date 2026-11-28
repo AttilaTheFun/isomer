@@ -310,11 +310,12 @@ if has web; then
     # verify. The web-view session test drives a page in Chrome that draws
     # nothing. Beside them the builds of the threads SDK (wasm32-wasip1-threads,
     # run under the WASI Threads of WasmKit): the SQLite check, and the
-    # threaded tap counter frame for frame with the single-threaded one. And
-    # the parsed modules WasmKit keeps, dropped with the last view.
+    # threaded tap counter frame for frame with the single-threaded one. And a
+    # text field key reaching a wasm page under WasmKit (iso_hot_key_event),
+    # and the parsed modules WasmKit keeps, dropped with the last view.
     run_tests --test_output=errors //tests/sqlite_wasi:sqlite_file_test //tests/webview_session:session_test \
         //tests/sqlite_wasi:sqlite_file_threads_test //tests/wasm_engines:wasmkit_threads_test \
-        //tests/wasm_engines:wasmkit_modules_test
+        //tests/wasm_key_event:wasm_key_event_test //tests/wasm_engines:wasmkit_modules_test
     results+=($?)
 fi
 if has linux; then
