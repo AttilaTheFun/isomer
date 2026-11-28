@@ -129,6 +129,14 @@ public final class NativeFeatureRuntime: WasmRuntime {
                     }
                 }
             }
+        case "iso_hot_key_event":
+            let first = buffers[UInt32(bitPattern: i32(0))] ?? []
+            let second = buffers[UInt32(bitPattern: i32(2))] ?? []
+            return .i32(first.withUnsafeBufferPointer { a in
+                second.withUnsafeBufferPointer { b in
+                    iso_hot_key_event(a.baseAddress, Int32(a.count), b.baseAddress, Int32(b.count))
+                }
+            })
         default:
             throw NativeFeatureError.noExport(name)
         }

@@ -78,9 +78,43 @@ public enum WasmKitModules {
         // The most recent last. Array equality is a pointer check for the
         // same buffer, a memcmp otherwise: milliseconds against the parse.
         var entries: [(bytes: [UInt8], module: Module)] = []
+        // The views showing a page now (viewOpened, viewClosed).
+        var views = 0
     }
     private static let parsed = Parsed()
     private static let kept = 2
+
+    /// How many parsed modules are kept now.
+    public static var keptCount: Int {
+        parsed.lock.lock()
+        defer { parsed.lock.unlock() }
+        return parsed.entries.count
+    }
+
+    /// Every parsed module dropped: they're kept only so the next launch
+    /// needn't parse again, so they go when the system is short of memory
+    /// (a memory warning, Android's trim) and when no view shows a page any
+    /// more. A running instance keeps what it was made from.
+    public static func forget() {
+        parsed.lock.lock()
+        parsed.entries.removeAll()
+        parsed.lock.unlock()
+    }
+
+    /// A view that shows pages (Apple's and Android's WasmView) came and
+    /// went: when the last goes, the parsed modules go with it.
+    public static func viewOpened() {
+        parsed.lock.lock()
+        parsed.views += 1
+        parsed.lock.unlock()
+    }
+
+    public static func viewClosed() {
+        parsed.lock.lock()
+        parsed.views = max(parsed.views - 1, 0)
+        if parsed.views == 0 { parsed.entries.removeAll() }
+        parsed.lock.unlock()
+    }
 
     /// `bytes` parsed, or the module already parsed from the same bytes.
     public static func module(_ bytes: [UInt8]) throws -> Module {

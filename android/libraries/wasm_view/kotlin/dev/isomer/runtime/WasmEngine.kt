@@ -11,6 +11,10 @@ interface WasmEngine {
      * ignore it. */
     fun setColorScheme(dark: Boolean) {}
     fun event(id: String, value: String)
+    /** A field's key (`.onKeyPress`), answered at once: true when the page
+     *  took it, so the field doesn't type it. Engines without the export
+     *  take no keys. */
+    fun keyEvent(id: String, value: String): Boolean = false
     /** Generic app-export call — the FULL export name
      *  (`swift_ffi_[<ns>_]<name>(scalars..., [ptr, len])`) with an optional
      *  staged byte payload, then a re-render (the shape of any async

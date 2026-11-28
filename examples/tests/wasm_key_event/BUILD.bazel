@@ -1,0 +1,92 @@
+load("@isomer//swift_ffi/rules:swift_wasm_reactor.bzl", "transition_binary")
+load("@rules_swift//swift:swift.bzl", "swift_binary", "swift_library")
+load("@rules_swift//swift:swift_test.bzl", "swift_test")
+
+# A field's key reaching a wasm page (iso_hot_key_event): a page whose text
+# field takes Return (`.onKeyPress(.return)`), as a reactor, and a test that
+# sends it keys through WasmFeatureRuntime.sendKey, as Android's WasmView
+# does, on WasmKit wherever it runs natively (the Mac and Linux: CI's
+# container).
+
+swift_library(
+    name = "key_press_lib",
+    srcs = ["KeyPressApp.swift"],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "KeyPressApp",
+    tags = ["manual"],
+    deps = ["@isomer//wasm/libraries/hot_swift_ui"],
+)
+
+swift_binary(
+    name = "key_press_reactor",
+    copts = [
+        "-enable-experimental-feature",
+        "Extern",
+    ],
+    linkopts = [
+        "-Xlinker",
+        "--gc-sections",
+        "-Xlinker",
+        "--export=_initialize",
+        "-Xlinker",
+        "--export=iso_hot_start",
+        "-Xlinker",
+        "--export=iso_hot_render",
+        "-Xlinker",
+        "--export=iso_hot_resize",
+        "-Xlinker",
+        "--export=iso_hot_configure",
+        "-Xlinker",
+        "--export=iso_hot_set_color_scheme",
+        "-Xlinker",
+        "--export=iso_hot_event",
+        "-Xlinker",
+        "--export=iso_hot_key_event",
+        "-Xlinker",
+        "--export=iso_hot_alloc",
+        "-Xlinker",
+        "--export=iso_hot_free",
+        "-Xlinker",
+        "--export=iso_hot_shutdown",
+        "-Xlinker",
+        "--export=iso_hot_pending_tasks",
+        "-Xlinker",
+        "-z",
+        "-Xlinker",
+        "stack-size=16777216",
+    ],
+    linkshared = True,
+    module_name = "key_press_reactor",
+    tags = ["manual"],
+    deps = [
+        "@isomer//wasm/libraries/hot_swift_ui:hot_bridge",
+        ":key_press_lib",
+        "@isomer//wasm/libraries/hot_swift_ui",
+    ],
+)
+
+transition_binary(
+    name = "key_press.wasm",
+    binary = ":key_press_reactor",
+    platform = "@isomer//swift_ffi/rules:wasm32-wasip1",
+    tags = ["manual"],
+)
+
+swift_test(
+    name = "wasm_key_event_test",
+    size = "small",
+    srcs = ["WasmKeyEventTests.swift"],
+    data = [":key_press.wasm"],
+    target_compatible_with = select({
+        "@platforms//os:macos": [],
+        "@platforms//os:linux": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    deps = [
+        "@isomer//shared/wasm_host",
+        "@isomer//shared/wasm_host:wasm_runtime",
+        "@isomer//shared/wasm_host:wasmkit_runtime",
+        "@isomer//swift_ffi/runtime/swift_wasm_host",
+    ],
+)

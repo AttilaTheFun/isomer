@@ -157,17 +157,41 @@ fun WasmView(
         holder.runtime?.setColorScheme(darkTheme)
     }
 
-    // Node events go straight to THIS reactor on the main thread while alive.
+    // The parsed modules (WasmKitModules) are kept while a WasmView lives,
+    // dropped with the last one and when the system trims the app's memory.
+    DisposableEffect(Unit) {
+        WasmEngineBridge.wasmKitViewOpened()
+        val trims = object : android.content.ComponentCallbacks2 {
+            override fun onTrimMemory(level: Int) {
+                @Suppress("DEPRECATION")
+                if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) WasmEngineBridge.wasmKitForgetModules()
+            }
+            override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {}
+            @Deprecated("onTrimMemory is called instead")
+            override fun onLowMemory() {}
+        }
+        context.applicationContext.registerComponentCallbacks(trims)
+        onDispose {
+            context.applicationContext.unregisterComponentCallbacks(trims)
+            WasmEngineBridge.wasmKitViewClosed()
+        }
+    }
+
+    // Node events go straight to THIS reactor on the main thread while alive,
+    // its fields' keys (`.onKeyPress`) too, answered at once.
     DisposableEffect(Unit) {
         val events = treeState.events
         val previous = events.sink
+        val previousKeys = events.keySink
         events.sink = { id, value ->
             val t0 = if (WasmPerf.on) System.nanoTime() else 0L
             holder.runtime?.event(id, value)
             if (WasmPerf.on) WasmPerf.call("event", System.nanoTime() - t0)
         }
+        events.keySink = { id, value -> holder.runtime?.keyEvent(id, value) ?: false }
         onDispose {
             events.sink = previous
+            events.keySink = previousKeys
             holder.runtime?.destroy()
             holder.runtime = null
         }

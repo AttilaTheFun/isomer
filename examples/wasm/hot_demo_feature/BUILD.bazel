@@ -109,6 +109,8 @@ swift_binary(
         "-Xlinker",
         "--export=iso_hot_event",
         "-Xlinker",
+        "--export=iso_hot_key_event",
+        "-Xlinker",
         "--export=iso_hot_alloc",
         "-Xlinker",
         "--export=iso_hot_free",
