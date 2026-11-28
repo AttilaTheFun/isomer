@@ -612,7 +612,10 @@ class LocalSimulator:
         def shown():
             path = control + ".shown"
             return open(path).read().strip() if os.path.exists(path) else None
-        return control, request, shown
+        # On Linux the phone is agent-sim's, whose apps see Linux's files
+        # under /Volumes/SystemRoot (its Darling); a Mac's see the Mac's own.
+        seen = "/Volumes/SystemRoot" + control if sys.platform.startswith("linux") else control
+        return seen, request, shown
 
 
 def here_simulator():
