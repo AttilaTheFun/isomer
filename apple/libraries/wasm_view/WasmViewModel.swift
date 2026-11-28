@@ -148,6 +148,12 @@ public final class WasmViewModel: ObservableObject {
     /// `WasmRuntime`), defaulting to the registry: a host that wants to pick
     /// or configure the engine per feature passes its own.
     public init(runtime: @escaping @MainActor ([UInt8]) -> any WasmRuntime = { WasmRuntimeRegistry.make(for: $0) }) {
+        // Parsed modules (WasmKitModules) are kept while a model lives,
+        // dropped with the last one and when the system is short of memory.
+        WasmKitModules.viewOpened()
+        #if canImport(UIKit)
+        _ = Self.memoryWarnings
+        #endif
         // The Apple host's default engine: WasmKit, unless the app registered
         // its own (WasmRuntimeRegistry.register { ... }) before the first
         // feature launches. The engine seam is //shared/wasm_host's
@@ -289,7 +295,18 @@ public final class WasmViewModel: ObservableObject {
     deinit {
         // The engine instance goes with the model (see the runtimes' deinit).
         NSLog("[wasm-view] model released")
+        WasmKitModules.viewClosed()
     }
+
+    #if canImport(UIKit)
+    /// One observer for the process: a memory warning drops the parsed
+    /// modules, which only spare the next launch its parse.
+    private static let memoryWarnings: Void = {
+        _ = NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: nil
+        ) { _ in WasmKitModules.forget() }
+    }()
+    #endif
 
     /// Parses what `bundle` launches on a thread of its own, so that
     /// `load(bundle:)` on the main thread then skips the parse, most of a

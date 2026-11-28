@@ -183,6 +183,25 @@ public func wasmKitEvent(handle: Int, id: String, value: String) {
     MainActor.assumeIsolated { WasmKitEngine.engines[handle]?.running?.send(id: id, value: value) }
 }
 
+/// A WasmView came or went (WasmKitModules: the parsed modules go with the
+/// last one).
+@ExportedFunction(namespace: "wasm_engine")
+public func wasmKitViewOpened() {
+    WasmKitModules.viewOpened()
+}
+
+@ExportedFunction(namespace: "wasm_engine")
+public func wasmKitViewClosed() {
+    WasmKitModules.viewClosed()
+}
+
+/// The system is short of memory (Android's trim): the parsed modules go,
+/// which only spare the next launch its parse.
+@ExportedFunction(namespace: "wasm_engine")
+public func wasmKitForgetModules() {
+    WasmKitModules.forget()
+}
+
 /// A field's key (`.onKeyPress`) by node id: true when the page took it, so
 /// the field doesn't type it.
 @ExportedFunction(namespace: "wasm_engine")
