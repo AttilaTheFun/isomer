@@ -615,10 +615,12 @@ jobs:
   # agent-sim's phones in a Linux container, everything that needs macOS
   # in one VM. Named apple (…), which tools/ci/verified.sh asks for.
   apple-iphone:
-    # The iPhone's pictures on an agent-sim phone (its `xcrun simctl`, on a
-    # Nimbus runner with Apple's runtime, `[self-hosted, isomer-ios]`):
-    # the test stories (tools/ci/hosted_apple_test.sh's iPhone half, the
-    # web-view app's too) at verify, the proof's at a proof.
+    # The iPhone's on an agent-sim phone (its `xcrun simctl` and `agent-sim
+    # xctest`, on a Nimbus runner with Apple's runtime, `[self-hosted,
+    # isomer-ios]`): at verify, the test stories (tools/ci/hosted_apple_test.sh's
+    # iPhone half, the web-view app's too) and the Storybook's tests hosted
+    # in the iPhone app (tools/ci/hosted_headful_test.sh's `hosted`); at a
+    # proof, the proof's pictures.
     name: apple (iphone)
     needs: verify-apple
     if: ${{ !cancelled() && needs.verify-apple.result == 'success' }}
@@ -636,6 +638,11 @@ jobs:
           name: apple-test-apps
           path: .ci/apple
       - uses: actions/download-artifact@v4
+        if: inputs.run != 'proof'
+        with:
+          name: headful-apps-apple
+          path: .ci/headful
+      - uses: actions/download-artifact@v4
         if: inputs.run != 'verify'
         with:
           name: proof-apps-ios
@@ -647,6 +654,13 @@ jobs:
         run: >-
           tools/ci/hosted_apple_test.sh "$(ls .ci/apple/*storybook_ios*.ipa | head -1)" ""
           .ci/platform-tests/apple "$(ls .ci/apple/*webview_ios*.ipa 2>/dev/null | head -1)"
+      - name: The Storybook's tests hosted in the iPhone app
+        if: ${{ !cancelled() && inputs.run != 'proof' }}
+        env:
+          HEADFUL_APPLE_PARTS: hosted
+        run: >-
+          tools/ci/hosted_headful_test.sh apple "$(ls .ci/headful/*storybook_ios*.ipa | head -1)"
+          "$(ls .ci/headful/*storybook_macos*.zip | head -1)" .ci/platform-tests/apple/headful
       - name: The proof's iPhone pictures
         if: ${{ !cancelled() && inputs.run != 'verify' }}
         run: >-
@@ -670,8 +684,8 @@ jobs:
     # job leases (.github/actions/mac_vm): at verify, the Mac's test stories
     # (tools/ci/hosted_apple_test.sh's Mac half, its own screen), the
     # Storybook's headful tests (tools/ci/hosted_headful_test.sh: driving
-    # the iPhone app, hosted in it, driving the Mac app; their runner a Mac
-    # command, as verify-apple built it) and mixed mode's render tests on
+    # the iPhone app and the Mac app; their runner a Mac command, as
+    # verify-apple built it) and mixed mode's render tests on
     # the Mac (built by Bazel in the VM); at a proof, the proof's Mac
     # pictures; at a prerelease or release, then, the Alphas, built with
     # Xcode for its own rendering of their icons (unsigned, without the
@@ -730,7 +744,7 @@ jobs:
             if [ "$TESTS" = true ]; then
               HOSTED_APPLE_PLATFORMS=macos tools/ci/hosted_apple_test.sh "" \
                 "$(ls .ci/apple/*storybook_macos*.zip | head -1)" .ci/platform-tests/apple || status=1
-              tools/ci/hosted_headful_test.sh apple "$(ls .ci/headful/*storybook_ios*.ipa | head -1)" \
+              HEADFUL_APPLE_PARTS="ios macos" tools/ci/hosted_headful_test.sh apple "$(ls .ci/headful/*storybook_ios*.ipa | head -1)" \
                 "$(ls .ci/headful/*storybook_macos*.zip | head -1)" .ci/platform-tests/apple/headful || status=1
               (cd examples && bazel test --test_output=errors //tests/side_modules:mixed_render_test \
                 //tests/side_modules:mixed_interpreted_render_test) || status=1
