@@ -107,13 +107,16 @@ public struct StorybookView: View {
                 // A phone goes back to the list first, as a tap would: Apple's
                 // split view can keep drawing the last story's page when the
                 // selection changes under an open one (Toolbar and Sheet did).
-                if compact, shown != nil, shown != "stories", id != "stories" {
+                // On a phone every story is pushed over the list.
+                let pushed = compact && id != "stories"
+                if pushed, shown != nil, shown != "stories" {
                     show("stories")
                     try? await Task.sleep(for: .milliseconds(500))
                 }
                 shown = id
                 show(id)
-                try? await Task.sleep(for: .milliseconds(300))
+                // A page pushed over the list has its slide in to finish first (slower on a simulator under load).
+                try? await Task.sleep(for: .milliseconds(pushed ? 1200 : 300))
                 // Atomically where it can be; Wine's file replacement fails
                 // on its Unix drive, so plainly there (whoever reads it
                 // reads until it names the story).
