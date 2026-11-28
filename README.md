@@ -1651,7 +1651,7 @@ host (logcat's `Isomer` tag on Android, the console on the web, standard
 error elsewhere), with no profiler:
 
 ```
-[render] frame 7 partial (SecureFieldStory) | written 1 | built 1 | diffed 51 nodes, 2 ops | events text | 3.9 ms
+[render] frame 7 partial (SecureFieldStory) | written 1 | built 1 | diffed 51 nodes, 2 ops | events text | 3.9 ms (build 2710 µs, render 1190 µs)
 ```
 
 the frame built in place (only the views reading what changed:
@@ -1659,7 +1659,9 @@ shared/swift_ui_core/InPlace.swift) or whole (and why), the state written
 since the frame before, the composite views built, the nodes the
 component-system renderer's encoder compared and the patch operations it
 sent, and the host's events that asked for it ("text" a field's edit,
-"tap", "geo" a geometry report). A run of frames with nothing written is a
+"tap", "geo" a geometry report), and its time, then the build's (the
+views' bodies) and the renderer's (the encoder's diff, or the layout and
+drawing) apart. A run of frames with nothing written is a
 render loop, and its events say what keeps asking. `ISO_FRAME_LOG` adds,
 per frame, which views were built and why. On Android they are the launch
 intent's extras (`am start … --es ISO_RENDER_LOG 1`), on the web the page's

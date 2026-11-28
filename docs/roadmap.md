@@ -62,7 +62,9 @@ Its phases:
 Retain, release, deallocation and malloc were about a fifth of an Android
 profile's samples in a downstream app on 0.58. Each step is measured with
 the headless Storybook (whole and partial frames, `-c opt`) against the same
-stories, before and after.
+stories, before and after: tools/bench/headless_frames.py runs two builds
+through the same workloads, rotated round by round, from the render log's
+build and render times.
 
 1. **`borrowing` and `consuming` on the hot paths** (tried for 0.61:
    neutral, 0.98–1.03 of the time before). The copies the compiler made were
